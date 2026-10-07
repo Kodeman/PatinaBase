@@ -29,6 +29,15 @@
 --   read PS's four child tables and record a quote on O's PS request; M and X
 --   do not. Before 00721, nobody but O did: neither U nor N is O's co-member.
 --
+-- Migration 00725 (SQ-468, R1 F10) extends the matrix:
+--   H. vendor_quote_requests, purchase_order_changes, install_windows and
+--      damage_claims read the same way on PB, PN and PS (before 00725, M read
+--      PB's rows in all four, and U and N did not read PS's). A quote request
+--      with no project keeps the co-member read on its requester: U, M and N
+--      read U's, X does not. C, PB's client, reads none of the four, before
+--      and after (none of them has a client policy). M cannot write a PB
+--      quote request; N cannot re-attribute one to X.
+--
 -- How to run (after `supabase db reset`):
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
 --     -X -v ON_ERROR_STOP=1 -f supabase/tests/procurement/studio_scoped_reads_test.sql
@@ -49,14 +58,16 @@ VALUES
   ('69717000-0000-4000-8000-0000000000a1', 'ssr-owner@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'), -- U
   ('69717000-0000-4000-8000-0000000000a2', 'ssr-member-a@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'), -- M
   ('69717000-0000-4000-8000-0000000000a3', 'ssr-member-b@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'), -- N
-  ('69717000-0000-4000-8000-0000000000a4', 'ssr-outsider@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'); -- X
+  ('69717000-0000-4000-8000-0000000000a4', 'ssr-outsider@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'), -- X
+  ('69717000-0000-4000-8000-0000000000a6', 'ssr-client@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'); -- C (00725: PB's client)
 
 INSERT INTO profiles (id, email, full_name, created_at, updated_at)
 VALUES
   ('69717000-0000-4000-8000-0000000000a1', 'ssr-owner@test.invalid',    'SSR Owner',    NOW(), NOW()),
   ('69717000-0000-4000-8000-0000000000a2', 'ssr-member-a@test.invalid', 'SSR Member A', NOW(), NOW()),
   ('69717000-0000-4000-8000-0000000000a3', 'ssr-member-b@test.invalid', 'SSR Member B', NOW(), NOW()),
-  ('69717000-0000-4000-8000-0000000000a4', 'ssr-outsider@test.invalid', 'SSR Outsider', NOW(), NOW())
+  ('69717000-0000-4000-8000-0000000000a4', 'ssr-outsider@test.invalid', 'SSR Outsider', NOW(), NOW()),
+  ('69717000-0000-4000-8000-0000000000a6', 'ssr-client@test.invalid',   'SSR Client',   NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO organizations (id, type, name, slug)
@@ -73,10 +84,10 @@ VALUES
 
 -- PB names studio B; PN names none (U holds no designer-domain role, so no
 -- studio is derived for it).
-INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+INSERT INTO projects (id, name, designer_id, client_id, created_by, studio_id)
 VALUES
-  ('69717000-0000-4000-8000-000000000001', 'SSR Project B',    '69717000-0000-4000-8000-0000000000a1', '69717000-0000-4000-8000-0000000000a1', '69717000-0000-4000-8000-0000000000f2'),
-  ('69717000-0000-4000-8000-000000000002', 'SSR Project None', '69717000-0000-4000-8000-0000000000a1', '69717000-0000-4000-8000-0000000000a1', NULL);
+  ('69717000-0000-4000-8000-000000000001', 'SSR Project B',    '69717000-0000-4000-8000-0000000000a1', '69717000-0000-4000-8000-0000000000a6', '69717000-0000-4000-8000-0000000000a1', '69717000-0000-4000-8000-0000000000f2'),
+  ('69717000-0000-4000-8000-000000000002', 'SSR Project None', '69717000-0000-4000-8000-0000000000a1', NULL,                                   '69717000-0000-4000-8000-0000000000a1', NULL);
 
 DO $$
 BEGIN
@@ -502,6 +513,153 @@ BEGIN
     'FAIL: an acknowledgment survived its undo';
   ASSERT NOT EXISTS (SELECT 1 FROM vendor_quotes WHERE vendor_id = '69717000-0000-4000-8000-000000000011'),
     'FAIL: a vendor quote survived its undo';
+END $$;
+
+-- ─── H (00725): procurement tables read through the project's studio ───────
+-- Fixtures land here, after A–G have counted, so the damage-claim notice
+-- trigger cannot touch an earlier count. Suffix 1 = PB, 2 = PN, 3 = PS.
+
+INSERT INTO designer_clients (id, designer_id, client_id, status)
+VALUES ('69717000-0000-4000-8000-0000000000d1', '69717000-0000-4000-8000-0000000000a1', '69717000-0000-4000-8000-0000000000a6', 'active');
+
+INSERT INTO purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern, total_cents, status, is_patina_catalog)
+VALUES ('69717000-0000-4000-8000-000000000103', '69717000-0000-4000-8000-0000000000a5', '69717000-0000-4000-8000-000000000003', '69717000-0000-4000-8000-000000000011', 'net_30', 10000, 'confirmed', false);
+
+INSERT INTO receiving_inspections (id, purchase_order_id, inspected_by, outcome)
+VALUES ('69717000-0000-4000-8000-000000000603', '69717000-0000-4000-8000-000000000103', '69717000-0000-4000-8000-0000000000a5', 'clean');
+
+INSERT INTO damage_claims (id, receiving_inspection_id, description)
+VALUES
+  ('69717000-0000-4000-8000-000000000931', '69717000-0000-4000-8000-000000000601', 'SSR claim B'),
+  ('69717000-0000-4000-8000-000000000932', '69717000-0000-4000-8000-000000000602', 'SSR claim None'),
+  ('69717000-0000-4000-8000-000000000933', '69717000-0000-4000-8000-000000000603', 'SSR claim Studio');
+
+INSERT INTO purchase_order_changes (id, project_id, purchase_order_id, change_kind, reason, prior_snapshot, created_by)
+VALUES
+  ('69717000-0000-4000-8000-000000000941', '69717000-0000-4000-8000-000000000001', '69717000-0000-4000-8000-000000000101', 'vendor_change', 'SSR change B', '{}'::jsonb, '69717000-0000-4000-8000-0000000000a1'),
+  ('69717000-0000-4000-8000-000000000942', '69717000-0000-4000-8000-000000000002', '69717000-0000-4000-8000-000000000102', 'vendor_change', 'SSR change None', '{}'::jsonb, '69717000-0000-4000-8000-0000000000a1'),
+  ('69717000-0000-4000-8000-000000000943', '69717000-0000-4000-8000-000000000003', '69717000-0000-4000-8000-000000000103', 'vendor_change', 'SSR change Studio', '{}'::jsonb, '69717000-0000-4000-8000-0000000000a5');
+
+INSERT INTO install_windows (id, project_id, starts_on, ends_on)
+VALUES
+  ('69717000-0000-4000-8000-000000000951', '69717000-0000-4000-8000-000000000001', CURRENT_DATE + 30, CURRENT_DATE + 31),
+  ('69717000-0000-4000-8000-000000000952', '69717000-0000-4000-8000-000000000002', CURRENT_DATE + 30, CURRENT_DATE + 31),
+  ('69717000-0000-4000-8000-000000000953', '69717000-0000-4000-8000-000000000003', CURRENT_DATE + 30, CURRENT_DATE + 31);
+
+-- U's request with no project: the co-member read on its requester decides.
+INSERT INTO vendor_quote_requests (id, vendor_id, designer_id, project_id, status)
+VALUES ('69717000-0000-4000-8000-000000000804', '69717000-0000-4000-8000-000000000011', '69717000-0000-4000-8000-0000000000a1', NULL, 'sent');
+
+-- C reads nothing of any project in these four tables; projectless 0.
+CREATE TEMP TABLE ssr_proc_expect (who text, uid uuid, pb int, pn int, ps int, pq int) ON COMMIT DROP;
+INSERT INTO ssr_proc_expect
+SELECT who, uid, pb, pn, pb, pn FROM ssr_expect
+UNION ALL
+SELECT 'C (PB''s client)', '69717000-0000-4000-8000-0000000000a6', 0, 0, 0, 0;
+GRANT SELECT ON ssr_proc_expect TO authenticated;
+
+CREATE TEMP TABLE ssr_proc_seen (who text, tbl text, pb int, pn int, ps int, pq int) ON COMMIT DROP;
+GRANT INSERT, SELECT ON ssr_proc_seen TO authenticated;
+
+DO $$
+DECLARE e record;
+BEGIN
+  FOR e IN SELECT who, uid FROM ssr_proc_expect ORDER BY who LOOP
+    PERFORM set_config('request.jwt.claims',
+      json_build_object('sub', e.uid, 'role', 'authenticated')::text, true);
+    SET LOCAL ROLE authenticated;
+    INSERT INTO ssr_proc_seen
+    SELECT e.who, t.tbl, t.pb, t.pn, t.ps, t.pq FROM (
+      SELECT 'vendor_quote_requests' AS tbl,
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000801')::int AS pb,
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000802')::int AS pn,
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000803')::int AS ps,
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000804')::int AS pq
+      FROM vendor_quote_requests
+      UNION ALL
+      SELECT 'purchase_order_changes',
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000941')::int,
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000942')::int,
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000943')::int,
+             NULL
+      FROM purchase_order_changes
+      UNION ALL
+      SELECT 'install_windows',
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000951')::int,
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000952')::int,
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000953')::int,
+             NULL
+      FROM install_windows
+      UNION ALL
+      SELECT 'damage_claims',
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000931')::int,
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000932')::int,
+             count(*) FILTER (WHERE id = '69717000-0000-4000-8000-000000000933')::int,
+             NULL
+      FROM damage_claims
+    ) t;
+    RESET ROLE;
+  END LOOP;
+  PERFORM set_config('request.jwt.claims', NULL, true);
+END $$;
+
+DO $$
+DECLARE r record; v_rows int;
+BEGIN
+  SELECT count(*) INTO v_rows FROM ssr_proc_seen;
+  ASSERT v_rows = 20, 'FAIL: expected 20 procurement observations (5 callers x 4 tables), got ' || v_rows;
+  FOR r IN
+    SELECT s.who, s.tbl, s.pb, s.pn, s.ps, s.pq,
+           e.pb AS want_pb, e.pn AS want_pn, e.ps AS want_ps, e.pq AS want_pq
+    FROM ssr_proc_seen s JOIN ssr_proc_expect e USING (who)
+    ORDER BY s.who, s.tbl
+  LOOP
+    ASSERT r.pb = r.want_pb,
+      format('FAIL: %s sees %s row(s) of project B in %s, want %s', r.who, r.pb, r.tbl, r.want_pb);
+    ASSERT r.pn = r.want_pn,
+      format('FAIL: %s sees %s row(s) of the no-studio project in %s, want %s', r.who, r.pn, r.tbl, r.want_pn);
+    ASSERT r.ps = r.want_ps,
+      format('FAIL: %s sees %s row(s) of the lone owner''s studio-B project in %s, want %s',
+             r.who, r.ps, r.tbl, r.want_ps);
+    ASSERT r.pq IS NULL OR r.pq = r.want_pq,
+      format('FAIL: %s sees %s projectless quote request(s), want %s', r.who, r.pq, r.want_pq);
+  END LOOP;
+END $$;
+
+-- H (writes): M, U's co-member through A, cannot write PB's quote request; N,
+-- B's member, can, but cannot hand it to X (who would then read it through
+-- the owner policy). An RLS refusal on UPDATE is a silent 0-row match under
+-- USING, and insufficient_privilege under WITH CHECK.
+DO $$
+DECLARE v_rows int; v_refused boolean := false;
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    '{"sub": "69717000-0000-4000-8000-0000000000a2", "role": "authenticated"}', true);
+  SET LOCAL ROLE authenticated;
+  UPDATE vendor_quote_requests SET message = 'SSR M write'
+  WHERE id = '69717000-0000-4000-8000-000000000801';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  RESET ROLE;
+  ASSERT v_rows = 0, 'FAIL: M updated PB''s quote request (' || v_rows || ' row)';
+
+  PERFORM set_config('request.jwt.claims',
+    '{"sub": "69717000-0000-4000-8000-0000000000a3", "role": "authenticated"}', true);
+  SET LOCAL ROLE authenticated;
+  UPDATE vendor_quote_requests SET message = 'SSR N write'
+  WHERE id = '69717000-0000-4000-8000-000000000801';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  BEGIN
+    UPDATE vendor_quote_requests SET designer_id = '69717000-0000-4000-8000-0000000000a4'
+    WHERE id = '69717000-0000-4000-8000-000000000801';
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_refused := true;
+  END;
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claims', NULL, true);
+  ASSERT v_rows = 1, 'FAIL: N (B''s member) could not update PB''s quote request';
+  ASSERT v_refused, 'FAIL: N re-attributed PB''s quote request to the outsider X';
+  ASSERT (SELECT message FROM vendor_quote_requests WHERE id = '69717000-0000-4000-8000-000000000801') = 'SSR N write',
+    'FAIL: N''s update did not land';
 END $$;
 
 -- Errors keep their text: a refused caller still reads the 404 idiom.
