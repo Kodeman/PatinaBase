@@ -406,7 +406,7 @@ function RecordChangeLineAct({ itemId }: { itemId: string }) {
       actionKey="record-a-change-line"
       surfaceKey="project"
       regionKey="ffe-line-record-change"
-      variant="primary"
+      variant="secondary"
       className="mt-1"
       onClick={() => openRecordAChange({ origin: 'line', itemId })}
     >
