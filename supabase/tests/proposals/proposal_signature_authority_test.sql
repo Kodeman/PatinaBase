@@ -47,7 +47,10 @@ VALUES
 -- Seed the fixture's original + backup owners through the same service-role
 -- bypass used by trusted provisioning. The backup lets the lifecycle test
 -- model the historical author's departure without violating last-owner truth.
+-- 00484 moved guard_org_membership_changes' bypass from the JWT role claim to
+-- the active service_role DATABASE role, so a claim alone no longer bypasses.
 SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true);
+SET LOCAL ROLE service_role;
 INSERT INTO public.organization_members (
   id, user_id, organization_id, role, status, joined_at
 )
@@ -62,7 +65,19 @@ VALUES
   ('fa110000-0000-4000-8000-000000000003',
    'fa000000-0000-4000-8000-000000000004',
    'fa100000-0000-4000-8000-000000000001', 'owner', 'active', now());
+RESET ROLE;
 SELECT set_config('request.jwt.claims', '{}', true);
+
+-- 00511_public_sd_hardening.sql: set_project_studio_id now requires the lead
+-- to hold a designer-domain role (has_designer_domain_role) before a signed
+-- proposal can stamp its project's studio.
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT designer.user_id, role.id, 'fa000000-0000-4000-8000-000000000001'
+FROM (VALUES
+  ('fa000000-0000-4000-8000-000000000001'::uuid, 'studio_owner'),
+  ('fa000000-0000-4000-8000-000000000003'::uuid, 'studio_designer')
+) AS designer(user_id, role_name)
+JOIN public.roles AS role ON role.name = designer.role_name;
 
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, status, source
@@ -289,6 +304,8 @@ BEGIN
   );
 END;
 $$;
+-- Called while SET LOCAL ROLE authenticated/service_role is in force (pg_temp family).
+GRANT EXECUTE ON FUNCTION pg_temp.assume_signature_actor(uuid, text) TO PUBLIC;
 
 -- Exact callable surface: the legacy caller-controlled overload is absent,
 -- browser execution is authenticated-only, trusted IP is service-only, and the
@@ -401,6 +418,7 @@ $$;
 
 RESET ROLE;
 SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true);
+SET LOCAL ROLE service_role;  -- 00484: the guard bypass is the database role
 DELETE FROM public.organization_members
 WHERE id = 'fa110000-0000-4000-8000-000000000001';
 UPDATE public.organization_members
@@ -409,6 +427,7 @@ WHERE id = 'fa110000-0000-4000-8000-000000000002';
 UPDATE public.organizations
 SET status = 'suspended'
 WHERE id = 'fa100000-0000-4000-8000-000000000001';
+RESET ROLE;
 SELECT set_config('request.jwt.claims', '{}', true);
 
 SET LOCAL ROLE authenticated;
@@ -432,6 +451,9 @@ END;
 $$;
 
 RESET ROLE;
+-- 00556's guard_organization_admin_columns refuses a status change while a
+-- user JWT is still in force; restore as the claim-free fixture session.
+SELECT set_config('request.jwt.claims', '{}', true);
 UPDATE public.organizations
 SET status = 'active'
 WHERE id = 'fa100000-0000-4000-8000-000000000001';

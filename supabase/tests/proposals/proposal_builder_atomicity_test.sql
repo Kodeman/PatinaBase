@@ -117,9 +117,6 @@ VALUES
    'f8930000-0000-4000-8000-000000000001', 'Source board',
    'f8940000-0000-4000-8000-000000000001', 0,
    '[{"id":"section-a","name":"Seating"}]'::jsonb, 'active'),
-  ('f8980000-0000-4000-8000-000000000002',
-   'f8930000-0000-4000-8000-000000000001', 'Invalid room board',
-   'f8940000-0000-4000-8000-000000000002', 1, '[]'::jsonb, 'active'),
   ('f8980000-0000-4000-8000-000000000003',
    'f8930000-0000-4000-8000-000000000001', 'Invalid palette board',
    NULL, 2, '[]'::jsonb, 'active'),
@@ -132,6 +129,30 @@ VALUES
   ('f8980000-0000-4000-8000-000000000006',
    'f8930000-0000-4000-8000-000000000002', 'Foreign board',
    'f8940000-0000-4000-8000-000000000002', 0, '[]'::jsonb, 'active');
+
+-- A board whose scope room belongs to another proposal can no longer be
+-- stored: 00434's guard_project_board_ownership trigger refuses it at write
+-- time, so the old 'Invalid room board' fixture (…0002) is asserted here
+-- instead of being seeded for duplicate_proposal_board to reject.
+DO $$
+DECLARE
+  v_rejected boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO public.proposal_boards (
+      id, proposal_id, name, scope_room_id, sort_order, sections, status
+    )
+    VALUES (
+      'f8980000-0000-4000-8000-000000000002',
+      'f8930000-0000-4000-8000-000000000001', 'Invalid room board',
+      'f8940000-0000-4000-8000-000000000002', 1, '[]'::jsonb, 'active'
+    );
+  EXCEPTION WHEN integrity_constraint_violation THEN
+    v_rejected := SQLERRM = 'proposal board room belongs to another proposal';
+  END;
+  ASSERT v_rejected, 'cross-proposal room board must be refused at write time';
+END;
+$$;
 
 INSERT INTO public.proposal_board_items (
   id, board_id, type, x, y, width, height, z_index, rotation, locked,
@@ -175,6 +196,8 @@ BEGIN
   );
 END;
 $$;
+-- Called while SET LOCAL ROLE authenticated is in force (pg_temp family).
+GRANT EXECUTE ON FUNCTION pg_temp.assume_atomic_actor(uuid, text) TO PUBLIC;
 
 -- ACL contract: browser callers are authenticated only. PUBLIC grants would
 -- make anon true too, so the anon assertion also proves PUBLIC is absent.
@@ -419,8 +442,9 @@ BEGIN
 END;
 $$;
 
--- Board relationship validation: missing/foreign board, cross-proposal room,
--- palette, and capture all reject without creating a copy.
+-- Board relationship validation: missing/foreign board, cross-proposal
+-- palette, and capture all reject without creating a copy (cross-proposal
+-- room is refused at write time, asserted after the fixtures).
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_atomic_actor('f8900000-0000-4000-8000-000000000001');
 DO $$
@@ -435,7 +459,6 @@ BEGIN
 
   FOREACH v_board IN ARRAY ARRAY[
     'f8980000-0000-4000-8000-000000000006'::uuid,
-    'f8980000-0000-4000-8000-000000000002'::uuid,
     'f8980000-0000-4000-8000-000000000003'::uuid,
     'f8980000-0000-4000-8000-000000000004'::uuid,
     'f8980000-0000-4000-8000-000000000099'::uuid
