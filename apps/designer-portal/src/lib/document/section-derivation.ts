@@ -127,7 +127,9 @@ function activeSub(key: SectionKey, f: SectionFacts): string {
     case 'install':
       return prettyPhase(row.current_phase) || 'Install';
     case 'care':
-      return 'Ongoing';
+      // 0a-1: Care is active only on a completed project (00590), so the rail
+      // says what the body's closed sentence says — D1's `CARE · CLOSED`.
+      return 'Closed';
   }
 }
 

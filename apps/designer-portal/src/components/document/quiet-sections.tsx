@@ -69,13 +69,9 @@ export function CareSection({
 
   return (
     <section>
-      <div className="mb-1.5 mt-5 flex items-baseline justify-between">
-        <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">Care</h2>
-        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-          Ongoing
-        </span>
-      </div>
-      <p className="text-[12px] leading-relaxed text-[var(--text-body)]">{closedLine}</p>
+      {/* 0a-1: no heading here — the region's own `Care` heading (FFESection,
+          mode="install", sectionKey="care") is the one the paper prints. */}
+      <p className="mt-5 text-[12px] leading-relaxed text-[var(--text-body)]">{closedLine}</p>
 
       {/* The snapshot the designer wrote at close — the project as it will be
           remembered (R80). Quiet: type only, no card furniture. */}

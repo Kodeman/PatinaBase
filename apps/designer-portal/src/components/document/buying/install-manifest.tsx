@@ -414,17 +414,15 @@ export function InstallManifest({
   const shown = lines.filter((line) => line.status === 'delivered' || line.status === 'installed');
   if (shown.length === 0) return null;
   const rowFor = new Map((manifest.data ?? []).map((row) => [row.ffe_item_id, row]));
-  const placed = shown.filter((line) => line.status === 'installed').length;
 
+  // 0a-2 (D6): no count here — the region's rows print each piece's state word.
   return (
     <section
       aria-label="Install manifest"
       data-testid="install-manifest"
       className="mt-3 border-t border-[var(--color-pearl)] pt-2"
     >
-      <p className={LABEL_CLS}>
-        Install manifest · {placed} of {shown.length} placed
-      </p>
+      <p className={LABEL_CLS}>Install manifest</p>
       {manifest.isError && <CellSub>The manifest could not be read.</CellSub>}
       <ul>
         {shown.map((line) => {

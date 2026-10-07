@@ -148,6 +148,11 @@ import { MakerReading, ReadingLens } from './buying/maker-reading';
 import { NextActReading } from './buying/next-act-reading';
 import { InstallManifest } from './buying/install-manifest';
 import type { BuyingReading } from '@/lib/document/buying-readings';
+import {
+  STATE_WORDS,
+  pieceInstallState,
+  type PieceInstallState,
+} from '@/lib/document/install-state';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
 import {
@@ -407,9 +412,12 @@ function FFELine({
   canEditSelection,
   showArtifactPlate,
   purchase,
+  installState,
 }: LineRow & {
   /** C-25: the purchase record the line was bought on, if any. */
   purchase?: StudioPurchaseRow | null;
+  /** 0a-2 (D6): Install's per-row state word, from `pieceInstallState`. */
+  installState?: PieceInstallState;
   projectId: string;
   projectName: string;
   highlightId: string | null;
@@ -444,6 +452,14 @@ function FFELine({
   const body = (
     <>
       <div className="flex items-center gap-3.5">
+        {installState && (
+          <span
+            data-install-state={installState}
+            className="w-[68px] shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
+          >
+            {STATE_WORDS[installState]}
+          </span>
+        )}
         {thumbSrc ? (
           <img
             src={thumbSrc}
@@ -1099,7 +1115,6 @@ function FFESectionBody({
   });
   const total = rows.length;
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
-  const installed = rows.filter((r) => r.stamp.kind === 'installed').length;
   // record_project_ffe_installed moves delivered lines only (00691).
   const deliveredCount = rows.filter(
     (r) => r.item.status === 'delivered',
@@ -1184,11 +1199,12 @@ function FFESectionBody({
   const currentScheduledCents =
     !isMixed(scheduled) && scheduled.currency === DEFAULT_CURRENCY ? scheduled.cents : null;
 
+  // 0a-2 (D6): Install's head prints no count — each row prints its state
+  // word from `pieceInstallState` instead, and the reading sentence that
+  // fills this line is slice 1's, read through the same selector.
   const meta =
     mode === 'install'
-      ? total > 0
-        ? `${installed} of ${total} installed`
-        : ''
+      ? ''
       : total > 0
         ? `${underway} of ${total} underway`
         : '';
@@ -1238,6 +1254,7 @@ function FFESectionBody({
     },
     canEditSelection: mode === 'project',
     showArtifactPlate: mode === 'project',
+    installState: mode === 'install' ? pieceInstallState(row.item) : undefined,
   });
 
   // The maker and next-act readings open the same unfold the room reading does.

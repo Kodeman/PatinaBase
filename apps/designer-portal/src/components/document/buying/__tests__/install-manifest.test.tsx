@@ -165,7 +165,9 @@ describe('InstallManifest', () => {
       />,
     );
     expect(screen.getAllByTestId('install-manifest-line')).toHaveLength(2);
-    expect(screen.getByText(/Install manifest · 1 of 2 placed/)).toBeInTheDocument();
+    // 0a-2 (D6): the heading carries no count.
+    expect(screen.getByText('Install manifest')).toBeInTheDocument();
+    expect(screen.queryByText(/\d+ of \d+/)).not.toBeInTheDocument();
     expect(screen.queryByText('Sconce pair')).not.toBeInTheDocument();
   });
 

@@ -152,6 +152,28 @@ describe('FF&E section · mark several installed (C-04)', () => {
     ];
   });
 
+  it('each row prints its state word, and no ratio prints anywhere (0a-2, D6)', () => {
+    const { container } = renderInstall();
+    const words = Array.from(container.querySelectorAll('[data-install-state]')).map(
+      (node) => node.textContent,
+    );
+    expect(words).toEqual(['Here', 'Not here', 'Here', 'Installed']);
+    // The head's count (`1 of 4 installed`) is gone, not merged.
+    expect(container.textContent).not.toMatch(/\d+\s+of\s+\d+/);
+  });
+
+  it("a line whose order is delivered reads Here, through the same selector", () => {
+    mockItems = [
+      { ...line('line-b', 'Linen drapery', 'shipped'), purchase_order: { delivered_date: '2026-10-02' } },
+    ];
+    const { container } = renderInstall();
+    expect(container.querySelector('[data-install-state]')).toHaveAttribute(
+      'data-install-state',
+      'here',
+    );
+    expect(container.querySelector('[data-install-state]')).toHaveTextContent('Here');
+  });
+
   it('offers no selection while nothing is delivered', () => {
     mockItems = [
       line('line-b', 'Linen drapery', 'shipped'),

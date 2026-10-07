@@ -110,7 +110,7 @@ describe('deriveSections (§4)', () => {
     expect(s[4].state).toBe('settled');
   });
 
-  it('completed project: Care active and permanent', () => {
+  it('completed project: Care active and closed, never "Ongoing" (0a-1)', () => {
     const s = deriveSections(
       {
         row: { ...baseRow, active_section: 'care', project_status: 'completed' },
@@ -119,7 +119,8 @@ describe('deriveSections (§4)', () => {
         schedule: null,
       },
     );
-    expect(s[6]).toMatchObject({ state: 'active', sub: 'Ongoing' });
+    expect(s[6]).toMatchObject({ state: 'active', sub: 'Closed' });
+    expect(s.map((section) => section.sub)).not.toContain('Ongoing');
   });
 
   it('sent proposal: Proposal active "Awaiting signature", Direction settled at sent date', () => {
