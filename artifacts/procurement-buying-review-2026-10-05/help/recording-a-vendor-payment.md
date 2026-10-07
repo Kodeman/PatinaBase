@@ -15,6 +15,6 @@ Orders placed through Patina checkout settle there. Their payments show as **Set
 
 **Refunds and credits.** When a maker sends money back, record it from the exception that caused it, a damage claim or a price change, for example. It lands on the same order as a negative amount, so what the studio has paid net stays honest. A refund can't be larger than what the studio has actually paid that maker.
 
-**Freight and other riders.** When the studio pays a carrier, a receiver or a crater rather than the maker, that payment is recorded against the rider on the order paper and marked with who was paid. It never counts as money paid to the maker.
+**Freight and other riders.** When the studio pays a carrier, a receiver or a crater rather than the maker, that payment is recorded against the rider on the order paper and marked with who was paid. It never counts as money paid to the maker, and it doesn't lock the maker's payment schedule.
 
 The Ledger's **Due to makers this week** reads straight from these rows. It's a list of what's due, not a running score.

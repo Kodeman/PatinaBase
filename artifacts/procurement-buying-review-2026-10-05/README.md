@@ -139,8 +139,31 @@ The whole change list shipped as story US-16 with **no feature flags**, in three
 
 **Carried, not built:**
 - **R1 / F4:** margin visibility is a display preference, not a security boundary. The studio notice says so.
-- **R3:** a release covers an order's total and is not tied to later edits.
-- **R4:** the release threshold applies per order; splitting an order can stay under it.
-- **R6:** previewing a held order still assigns its number.
-- **Payee history:** rider payments recorded before 00718 stay attributed to the vendor; no reliable link existed to backfill them.
+- **US-17 review R1, F4 (one maker under two vendor rows):** the release group is keyed on the vendor row, so a maker entered twice forms two groups.
+- **F6:** `send-email` still sends when its log insert fails. The fix belongs in `_shared` and is carried.
+- **SQ-469 census:** 75 non-procurement policies still read `is_studio_comember`, not `projects.studio_id`. Carried to Kody.
 - **Side journeys** are parked in `docs/vision/VISION-DECISIONS.md`.
+
+**Closed by US-17 (00719 / po-send):**
+- **R3:** a release now covers the order's content, not only its total. Lines, header, ship-to, supplies, payment schedule and riders are stamped at release; a change re-holds the order until an owner or admin releases it again.
+- **R4:** the threshold reads the job's open orders to the same maker, plus those sent or acknowledged in the last 7 days. Splitting an order no longer stays under it.
+- **R6:** a preview of a held or unnumbered order shows "Draft order" and takes no number; the order is numbered when it is released.
+- **Payee history:** nothing to backfill. Production had no vendor payments when 00718 shipped.
+
+**US-17 (2026-10-06), as built:**
+
+| Ticket | Migration or function | What changed |
+|---|---|---|
+| T1 · SQ-449 | 00719 | The release stamps a fingerprint of the paper (R3); the gate reads the group total of the job's orders to the same maker (R4); `po_release_state` feeds the paper's release slot. |
+| T2 · SQ-450 | `po-send` | A held or unnumbered preview takes no number and writes no document (R6). |
+| T3 · SQ-451 | 00720 | A carrier, receiver or refund payment no longer locks the maker's payment schedule; a stalled draft send can be recovered; a job-site shipment composes no receiver notice. |
+| T4 · SQ-452 | — | A shipped line with an open claim reads **Claim open**, not Shipped. |
+| T5 · SQ-453 | 00721 | Item, room, phase and milestone studio legs, ack v1 and vendor quotes honour `projects.studio_id`. |
+| S4 · SQ-457 | 00722 | Configured placement reads the v2 receipt keys. |
+| S1–S8 · SQ-454–459, SQ-464, SQ-465 | — | SQL suite back to green, tests re-pinned to shipped behaviour. |
+| H1 · SQ-466 | 00723 | An acknowledged order counts as sent for grouping; a changed, gated resend is refused (409 `changed_since_release`), so open a change order; no blank-sidemark allowance, and po-send's default sidemark keeps the release; a gated unsent draft takes no number; rider actuals are off the fingerprint. |
+| H2 · SQ-467 | 00724 | A stalled draft settles only on provider proof; a `sending` log row is not a send on record. |
+| H3 · SQ-468 | 00725 | Quote requests, PO changes, install windows and damage claims honour `projects.studio_id`. |
+| H4 · SQ-470 | 00726 | `po_release_preview`: a new, unsaved paper shows the group total. |
+
+Review R1: SQ-460. Walks: SQ-461, SQ-462.
