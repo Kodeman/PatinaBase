@@ -148,7 +148,9 @@ deliberate, shipped migration changed the policy set and the test was stale.
 inbox ones). `proposals/proposal_policy_locking_integrity_test.sql` now pins
 eleven installed-client SELECT policies by name and asserts the two legacy and
 two project-client board reads stay absent: `00462_workflow_privacy_authority`
-§2 dropped them on purpose (working board rows are never raw client surfaces).
+§2 dropped them on purpose (working board rows are never raw client surfaces),
+and `00434_ffe_privacy_domain_foundation` had already dropped the two
+project-client ones.
 
 ## Fixed during this pass (for context, not failures)
 
