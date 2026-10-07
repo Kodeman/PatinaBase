@@ -1032,6 +1032,12 @@ export function deriveNext({
   };
 }
 
+/** The household as line 1 prints it: through the placeholder guard (FR1 F9),
+ *  so a seeded `Client User` reads `the client`; nothing when there is none. */
+function printedHousehold(household: string): string {
+  return household.trim() ? familyLabel(household) : '';
+}
+
 export function deriveLensBand(input: LensBandInput): LensBandModel {
   const ranked = rankStanding(input.ticket, input.needs, input.now);
   // D2 / D10 — setup (class 3) never takes line 2: it stands in the sheet's
@@ -1091,7 +1097,7 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
   );
 
   const line1: LensBandLine1 = {
-    identity: input.household.trim().toUpperCase(),
+    identity: printedHousehold(input.household).toUpperCase(),
     stage: stagePhrase(input),
     rightFlush,
     moneyOnly,
@@ -1268,7 +1274,7 @@ function deriveVoice(
   const { stage, detail } = stageEyebrow(
     input.spreadKind,
     input.projectStatus ?? null,
-    household,
+    printedHousehold(household),
   );
 
   // D2 / I154 — the measure picks the form, as the three forms already are.

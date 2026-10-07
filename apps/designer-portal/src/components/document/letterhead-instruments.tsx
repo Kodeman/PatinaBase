@@ -468,34 +468,62 @@ export function LetterheadInstruments({
         // the row needed to fit 327. An attribute-qualified selector, (0,2,0),
         // so it beats `ActionRegionFrame`'s own single-class `gap-x-3` on
         // specificity rather than on stylesheet order.
-        className="[&_.da-act]:text-[11px] min-[1180px]:[&_.da-act]:text-[12px] max-[1179px]:[&[data-action-region]]:gap-x-[9px]"
+        // F4 — while Message is held its column is taller than one act, so the
+        // row tops its acts rather than centring them on the reason's line.
+        className={`[&_.da-act]:text-[11px] min-[1180px]:[&_.da-act]:text-[12px] max-[1179px]:[&[data-action-region]]:gap-x-[9px]${
+          messageHeld ? ' [&[data-action-region]]:items-start' : ''
+        }`}
         aria-label="Document letterhead actions"
       >
         {/* W3-R4: the family word is dropped from the PRINT at every width —
             the household chip says it 20px above, and repeating it cost the
             ledger ~200px it was taking out of the title's measure. The
             accessible name keeps the whole sentence. */}
-        {(canSendNote || messageHeld) && (
-          <DocumentAction
-            actionKey="message-family"
-            variant="primary"
-            aria-label={messageHeld ? 'Message the client' : `Message ${family}`}
-            disabled={messageHeld}
-            held={messageHeld}
-            aria-describedby={messageHeld ? messageReasonId : undefined}
-            onClick={() => setComposing((v) => !v)}
-          >
-            Message
-          </DocumentAction>
-        )}
-        {messageHeld && (
-          <DocumentAction
-            actionKey="link-client"
-            variant="secondary"
-            onClick={() => setLinking(true)}
-          >
-            Link a client
-          </DocumentAction>
+        {messageHeld ? (
+          // FR1 F4 (R15, R16) — the held act prints its accessible name, and
+          // its reason stands directly beneath it in the act's own column,
+          // left edge on the label's (the act's own `px-[6px]`); the repair
+          // stands beside it. The cluster wraps as one, so at 390 the reason
+          // still follows its own act. `gap-x-[inherit]` keeps the row's gap.
+          <span className="inline-flex items-start gap-x-[inherit]">
+            <span className="inline-flex flex-col items-start">
+              <DocumentAction
+                actionKey="message-family"
+                variant="primary"
+                aria-label={messageLabel(null)}
+                disabled
+                held
+                aria-describedby={messageReasonId}
+                onClick={() => setComposing((v) => !v)}
+              >
+                {messageLabel(null)}
+              </DocumentAction>
+              <span
+                id={messageReasonId}
+                className="px-[6px] text-[11.5px] leading-tight text-[var(--text-muted)]"
+              >
+                {MESSAGE_WITHHELD.reason}
+              </span>
+            </span>
+            <DocumentAction
+              actionKey="link-client"
+              variant="secondary"
+              onClick={() => setLinking(true)}
+            >
+              {MESSAGE_WITHHELD.repair}
+            </DocumentAction>
+          </span>
+        ) : (
+          canSendNote && (
+            <DocumentAction
+              actionKey="message-family"
+              variant="primary"
+              aria-label={`Message ${family}`}
+              onClick={() => setComposing((v) => !v)}
+            >
+              Message
+            </DocumentAction>
+          )
         )}
         {canMirror && (
           <DocumentAction
@@ -524,14 +552,6 @@ export function LetterheadInstruments({
           <SharingTierInstrument projectId={projectId} openAsk={sharingAsk} />
         )}
         {projectId && <CallSheetInstrument projectId={projectId} />}
-        {messageHeld && (
-          <p
-            id={messageReasonId}
-            className="basis-full text-[11.5px] text-[var(--text-muted)]"
-          >
-            Link a client first.
-          </p>
-        )}
       </DocumentActionGroup>
 
       {/* The repair opens the same sheet the household chip opens — mounted

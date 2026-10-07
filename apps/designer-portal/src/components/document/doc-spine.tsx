@@ -24,6 +24,8 @@ import { StrataMark } from './strata-mark';
 import { LensLadder } from './spine/lens-ladder';
 import { fillStateAtSection } from '@/lib/document/fill-state';
 import type { DocumentIndexKey } from '@/lib/document/document-index';
+import { stageEyebrow } from '@/lib/document/act-names';
+import { familyLabel } from '@/lib/document/family-label';
 import type {
   LadderDoor,
   LadderSegment,
@@ -91,6 +93,9 @@ export interface DocSpineProps {
   /** Who this document is for — the same name the letterhead's HouseholdChip
    *  prints (`row.client_name`). Absent on documents that carry no household. */
   household?: string;
+  /** The project's own status (`on_hold`, `completed`, …). A held or closed
+   *  job prints its state on the stamp, read through `stageEyebrow` (R9). */
+  projectStatus?: string | null;
   /** C-1 · the room lens. The room taken in hand, named in the head and put
    *  down from it, so the release is reachable at every offset. */
   roomInHand?: { id: string; name: string } | null;
@@ -110,17 +115,28 @@ export function DocSpine({
   stagePhase = null,
   preWork = false,
   household,
+  projectStatus = null,
   roomInHand = null,
   onReleaseRoom,
 }: DocSpineProps) {
   const activeSection = sections.find((s) => s.state === 'active');
+  // F9 — the letterhead's placeholder guard: `Client User` reads `the client`.
+  const householdLine = household?.trim() ? familyLabel(household) : null;
+  // R9 / F10 — a held or closed job's state is the stamp: `stageEyebrow`
+  // supplies a detail only then (`On hold`, `Closed`), and it outranks the
+  // phase, which is not where a paused job stands.
+  const held = activeSection
+    ? stageEyebrow(activeSection.key, projectStatus, '')
+    : null;
   // US-19 D2 (`one-voice`) — the word alone: no `N OF M` beside the stage.
   // The strata mark keeps its fill.
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const ordinal =
     stagePhase && !oneVoice ? `${stagePhase.position} OF ${stagePhase.of}` : null;
   const stagePhrase =
-    stageWord != null
+    held?.detail
+      ? { top: held.stage, bottom: held.detail }
+      : stageWord != null
       ? { top: stageWord, bottom: ordinal }
       : activeSection
         ? { top: activeSection.label, bottom: preWork ? null : activeSection.sub }
@@ -130,8 +146,9 @@ export function DocSpine({
   // keeps its box rather than claiming progress the job has not made.
   const markFill: [number, number, number] =
     preWork || !activeSection ? [0, 0, 0] : fillStateAtSection(activeSection.key);
+  const markTail = held?.detail || ordinal;
   const markLabel = stagePhrase
-    ? `${stagePhrase.top}${ordinal ? ` — ${ordinal.toLowerCase()}` : ''}`
+    ? `${stagePhrase.top}${markTail ? ` — ${markTail.toLowerCase()}` : ''}`
     : 'Document progress';
   return (
     <aside
@@ -172,7 +189,7 @@ export function DocSpine({
           // from 1440, where it does not. Was 126 / 117 with the arc.
           className="doc-rule-mid mb-3 min-h-[107px] shrink-0 pb-3 min-[1440px]:min-h-[93px]"
         >
-          {household && (
+          {householdLine && (
             <p
               data-rail-label
               className={`truncate text-[13px] leading-tight transition-colors motion-reduce:transition-none ${
@@ -181,7 +198,7 @@ export function DocSpine({
                   : 'text-[var(--text-primary)]'
               }`}
             >
-              {household}
+              {householdLine}
             </p>
           )}
 

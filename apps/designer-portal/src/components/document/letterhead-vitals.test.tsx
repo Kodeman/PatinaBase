@@ -20,33 +20,45 @@ jest.mock('@/hooks/use-project-lifecycle', () => ({
 // FolioCalendar's SET (onCommit) and the clear affordance into `save()`
 // correctly, not the Folio's own grid/preset behavior (covered by the
 // date/__tests__ suites).
+// R21 — the Esc path is the real Folio's own, so those cases switch it in.
+let mockRealFolio = false;
 jest.mock('@/components/document/date', () => ({
-  FolioPopover: ({
-    children,
-    onClose,
-    returnFocusRef,
-  }: {
+  FolioPopover: (props: {
     children: React.ReactNode;
     onClose: () => void;
     returnFocusRef?: { current: HTMLElement | null };
-  }) => (
-    <div data-testid="folio-popover" ref={() => (mockReturnFocusRef = returnFocusRef)}>
-      {children}
-      {/* Stands in for Esc/outside-click — a dismissal, not a commit. */}
-      <button type="button" onClick={onClose}>
-        close-popover
-      </button>
-    </div>
-  ),
-  FolioCalendar: ({
-    onCommit,
-  }: {
+  }) => {
+    const { children, onClose, returnFocusRef } = props;
+    if (mockRealFolio) {
+      const { FolioPopover } = jest.requireActual('@/components/document/date');
+      return <FolioPopover {...props} />;
+    }
+    return (
+      <div data-testid="folio-popover" ref={() => (mockReturnFocusRef = returnFocusRef)}>
+        {children}
+        {/* Stands in for Esc/outside-click — a dismissal, not a commit. */}
+        <button type="button" onClick={onClose}>
+          close-popover
+        </button>
+      </div>
+    );
+  },
+  FolioCalendar: (props: {
     onCommit: (selection: { kind: 'day'; date: string }) => void;
-  }) => (
-    <button type="button" onClick={() => onCommit({ kind: 'day', date: '2026-09-21' })}>
-      commit-picked-date
-    </button>
-  ),
+  }) => {
+    if (mockRealFolio) {
+      const { FolioCalendar } = jest.requireActual('@/components/document/date');
+      return <FolioCalendar {...props} />;
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => props.onCommit({ kind: 'day', date: '2026-09-21' })}
+      >
+        commit-picked-date
+      </button>
+    );
+  },
 }));
 
 import { LetterheadTitle, LetterheadVitals, openVitalsEditor } from './letterhead-vitals';
@@ -221,6 +233,59 @@ describe('LetterheadVitals prints only what is real (D-6, amended by D-B7)', () 
     expect(
       screen.queryByRole('button', { name: 'Set a budget band' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * R21 (FR1) — a setup act from the standing sheet lands with focus on the
+ * named field, and Esc from that editor returns to the paper: the vitals row
+ * takes focus, and nothing above the editor hears the key (the shell's Esc
+ * puts the paper down, D1; the sheet is already closed and is not reopened).
+ */
+describe('Esc from the vitals editor returns to the paper (R21)', () => {
+  let shell: jest.Mock;
+  const onShellKey = (e: KeyboardEvent) => shell(e.key);
+  beforeEach(() => {
+    shell = jest.fn();
+    document.addEventListener('keydown', onShellKey);
+  });
+  afterEach(() => {
+    document.removeEventListener('keydown', onShellKey);
+    mockRealFolio = false;
+  });
+
+  function renderOpened(field: 'target' | 'budget') {
+    const { container } = render(<LetterheadVitals projectId="project-1" />);
+    const row = container.querySelector<HTMLElement>('[data-letterhead-vitals]')!;
+    row.scrollIntoView = jest.fn();
+    act(() => openVitalsEditor(field));
+    return row;
+  }
+
+  it('`Set a budget band`: focus on the minimum; Esc lands on the vitals row', () => {
+    mockProject = { ...baseProject };
+    const row = renderOpened('budget');
+    const min = screen.getByLabelText('Budget band minimum (dollars)');
+    expect(min).toHaveFocus();
+
+    fireEvent.keyDown(min, { key: 'Escape' });
+
+    expect(shell).not.toHaveBeenCalled();
+    expect(row).toHaveFocus();
+  });
+
+  it('`Set a target`: focus in the target date panel; Esc lands on the vitals row', () => {
+    mockRealFolio = true;
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
+    const row = renderOpened('target');
+    const panel = screen.getByLabelText('Target date');
+    expect(panel.contains(document.activeElement)).toBe(true);
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+
+    expect(screen.queryByLabelText('Target date')).not.toBeInTheDocument();
+    expect(shell).not.toHaveBeenCalled();
+    expect(row).toHaveFocus();
   });
 });
 

@@ -257,6 +257,40 @@ describe('Message needs a linked client (F52)', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
+  // FR1 F4 (R15, R16) — the held act prints its accessible name, and its
+  // reason stands directly beneath it in the act's own column, with the
+  // repair beside it: never a full-width sentence under the whole row. jsdom
+  // lays nothing out, so the column is asserted as structure and the left
+  // edge as the act's own inline padding (`px-[6px]`) repeated on the reason.
+  it.each([
+    ['≥1180', true],
+    ['390', false],
+  ] as const)('with no client at %s: the reason sits beneath its own act', (_tier, wide) => {
+    installTier(wide);
+    renderFor(null);
+
+    const message = screen.getByRole('button', { name: 'Message the client' });
+    expect(message.querySelector('.da-label')).toHaveTextContent(/^Message the client$/);
+
+    const reason = document.getElementById(message.getAttribute('aria-describedby')!)!;
+    expect(reason).toHaveTextContent(/^Link a client first\.$/);
+    expect(reason.className).not.toContain('basis-full');
+
+    // One column: the act, then its reason, left-aligned, nothing between.
+    const column = message.parentElement!;
+    expect(reason.parentElement).toBe(column);
+    expect(message.nextElementSibling).toBe(reason);
+    expect(column.className).toContain('flex-col');
+    expect(column.className).toContain('items-start');
+    expect(message.className).toContain('px-[6px]');
+    expect(reason.className).toContain('px-[6px]');
+
+    // The repair stands beside the held act, in the same cluster.
+    const repair = screen.getByRole('button', { name: 'Link a client' });
+    expect(column.nextElementSibling).toBe(repair);
+    expect(repair.parentElement!.className).toContain('items-start');
+  });
+
   it('with no client: the repair act opens the household sheet', () => {
     renderFor(null);
     expect(screen.queryByTestId('household-sheet')).not.toBeInTheDocument();

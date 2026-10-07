@@ -206,6 +206,30 @@ describe('deriveLensBand · line 1, per spread kind (OD-1)', () => {
   );
 });
 
+// FR1 F9 (0a-7) — the placeholder guard reaches the sticky eyebrow: a seeded
+// `Client User` never prints on line 1, in either voice.
+describe('deriveLensBand · the placeholder guard on line 1 (F9)', () => {
+  it.each(['Client User', 'client', '  CLIENT  USER '])(
+    'prints `the client` for the placeholder %p',
+    (household) => {
+      const model = deriveLensBand(input({ household }));
+      expect(model.line1.identity).toBe('THE CLIENT');
+      expect(model.voice.eyebrow).toBe('Project · the client');
+    },
+  );
+
+  it('keeps an authored household verbatim', () => {
+    const model = deriveLensBand(input({ household: 'Vandersteen residence' }));
+    expect(model.voice.eyebrow).toBe('Project · Vandersteen residence');
+  });
+
+  it('prints no name at all when there is no household', () => {
+    const model = deriveLensBand(input({ household: '  ' }));
+    expect(model.line1.identity).toBe('');
+    expect(model.voice.eyebrow).toBe('Project');
+  });
+});
+
 describe('deriveLensBand · line 2 (L-1)', () => {
   it('names the worst standing exception with its act, and counts the rest', () => {
     const model = deriveLensBand(input({ needs: VANDERSTEEN_NEEDS }));

@@ -297,6 +297,7 @@ function VitalMoney({
   ariaLabel,
   placeholder,
   inputRef,
+  escapeTo,
 }: {
   projectId: string;
   column: 'budget_min' | 'budget_max';
@@ -304,6 +305,8 @@ function VitalMoney({
   ariaLabel: string;
   placeholder: string;
   inputRef?: React.Ref<HTMLInputElement>;
+  /** R21 — Esc hands focus here (the paper's vitals row), never to <body>. */
+  escapeTo: RefObject<HTMLElement | null>;
 }) {
   const serverDollars = centsToDollarString(serverCents);
   const [value, setValue] = useState(serverDollars);
@@ -342,7 +345,9 @@ function VitalMoney({
             e.currentTarget.blur();
           } else if (e.key === 'Escape') {
             e.stopPropagation();
-            e.currentTarget.blur();
+            // Moving focus blurs, and blur commits, as Esc always has.
+            if (escapeTo.current) escapeTo.current.focus();
+            else e.currentTarget.blur();
           }
         }}
         disabled={state === 'saving'}
@@ -363,12 +368,14 @@ function VitalBand({
   minCents,
   maxCents,
   revealAsk = 0,
+  escapeTo,
 }: {
   projectId: string;
   minCents: number | null;
   maxCents: number | null;
   /** D10 — bumped when the band's SETUP act asks for the editors. */
   revealAsk?: number;
+  escapeTo: RefObject<HTMLElement | null>;
 }) {
   const bandSet = minCents != null || maxCents != null;
   const [revealed, setRevealed] = useState(false);
@@ -400,6 +407,7 @@ function VitalBand({
         ariaLabel="Budget band minimum (dollars)"
         placeholder="from"
         inputRef={minRef}
+        escapeTo={escapeTo}
       />
       <span className="font-mono text-[11px] text-[var(--text-primary)]">–</span>
       <VitalMoney
@@ -408,6 +416,7 @@ function VitalBand({
         serverCents={maxCents}
         ariaLabel="Budget band maximum (dollars)"
         placeholder="to"
+        escapeTo={escapeTo}
       />
     </span>
   );
@@ -506,6 +515,7 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           minCents={project.budget_min ?? null}
           maxCents={project.budget_max ?? null}
           revealAsk={bandAsk}
+          escapeTo={rowRef}
         />
         {totalSet && (
           <span data-part="f3" className="font-mono text-[11px]">

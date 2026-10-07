@@ -217,3 +217,66 @@ describe('DocSpine · the rail head (R127 W1; W7-R1 §1)', () => {
     );
   });
 });
+
+// FR1 F9 (0a-7) — the rail's household line goes through the placeholder
+// guard the letterhead uses: a seeded `Client User` reads `the client`.
+describe('DocSpine · the placeholder guard on the household (F9)', () => {
+  function railHousehold(household: string): string | null {
+    const { container } = render(
+      <DocSpine sections={sections} onJump={jest.fn()} household={household} />,
+    );
+    const line = container.querySelector('[data-spine-head] > p[data-rail-label]');
+    const text = line?.textContent ?? null;
+    cleanup();
+    return text;
+  }
+
+  it.each(['Client User', 'client', 'CLIENT USER'])('prints `the client` for %p', (name) => {
+    expect(railHousehold(name)).toBe('the client');
+  });
+
+  it('keeps an authored household verbatim', () => {
+    expect(railHousehold('Vandersteen')).toBe('Vandersteen');
+  });
+
+  it('prints no household line for a blank name', () => {
+    expect(railHousehold('  ')).toBeNull();
+  });
+});
+
+// FR1 F10 (R9) — the stamp under the mark reads `stageEyebrow`: a held job
+// prints `PROJECT · ON HOLD`, not `PROJECT · ACTIVE`.
+describe('DocSpine · the stamp reads the held state (F10)', () => {
+  function stamp(props: Partial<Parameters<typeof DocSpine>[0]>): string[] {
+    const { container } = render(
+      <DocSpine sections={sections} onJump={jest.fn()} household="Harrow" {...props} />,
+    );
+    const phrase = container.querySelector('[data-spine-stage-phrase]');
+    const lines = Array.from(phrase?.children ?? []).map((el) => el.textContent ?? '');
+    cleanup();
+    return lines;
+  }
+
+  it('on hold: the stage word over `On hold`', () => {
+    expect(stamp({ projectStatus: 'on_hold' })).toEqual(['Project', 'On hold']);
+  });
+
+  it('on hold with a phase placed: still the stage word over `On hold`', () => {
+    expect(
+      stamp({
+        projectStatus: 'on_hold',
+        stageWord: 'DESIGN DEVELOPMENT',
+        stagePhase: { name: 'Design Development', position: 2, of: 5 },
+      }),
+    ).toEqual(['Project', 'On hold']);
+  });
+
+  it('active: unchanged — the section label over its own line', () => {
+    expect(stamp({ projectStatus: 'active' })).toEqual(['Project', 'Active']);
+    expect(stamp({})).toEqual(['Project', 'Active']);
+  });
+
+  it('completed: `Care · Closed`', () => {
+    expect(stamp({ projectStatus: 'completed' })).toEqual(['Care', 'Closed']);
+  });
+});
