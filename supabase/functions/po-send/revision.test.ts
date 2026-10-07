@@ -79,5 +79,10 @@ Deno.test("index.ts renders the PDF once, after the snapshot, and prints the rev
   assert(snapshotAt > shipToGuardAt, "the snapshot sits after the refusal guards");
   assert(snapshotAt > 0 && snapshotAt < renderAt, "the snapshot precedes the render");
   assert(source.includes("if (snapshotsSpecOnSend(mode))"), "only send and mark_sent snapshot");
-  assert(source.includes("poNumber: revisionedPoNumber(poNumber, revision)"));
+  assert(
+    source.includes(
+      "poNumber: poNumber ? revisionedPoNumber(poNumber, revision) : DRAFT_PO_NUMBER_LABEL",
+    ),
+    "a numbered PO prints the revisioned number; a draft preview prints the draft label (R6)",
+  );
 });
