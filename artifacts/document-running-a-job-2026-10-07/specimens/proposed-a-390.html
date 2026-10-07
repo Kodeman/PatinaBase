@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One Voice · 390</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Source: artifacts/agreement-room-2026-09-10/deck/src/index.html (lines 14-91) */
+:root {
+  color-scheme: light dark;
+
+  /* paper, three stocks */
+  --paper:            #FAF7F2;
+  --paper-doc:        #FCFAF6;
+  --rail:             #E8E3DB;
+
+  /* ink */
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --ink-paper:        #FAF7F2;
+
+  /* hairlines */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* the rest rule pigment */
+  --oak:              #8B7355;
+
+  /* state pigments: material value / paper ink */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* rhythm */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* motion */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+}
+
+/* ── base ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+[hidden] { display: none !important; }
+p, h2, h3, ol, ul { margin: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; }
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.t-head { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); }
+.t-meta { font-family: var(--font-meta); font-size: 11px; letter-spacing: .04em; color: var(--ink-subtle); }
+
+/* ── frame bar ────────────────────────────────────────── */
+.framebar {
+  background: var(--rail);
+  font-family: var(--font-meta);
+  font-size: 11px;
+  color: var(--ink-muted);
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 0 24px;
+  padding: 12px 12px 0;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+.framebar .fb-acts { display: flex; gap: 12px; }
+.framebar .act { font-size: 11px; }
+.framebar .act[aria-pressed="true"] { color: var(--ink); }
+.framebar .act[aria-pressed="true"] .w {
+  padding-bottom: 6px;
+  background:
+    linear-gradient(var(--oak), var(--oak)) left calc(100% - 3px) / 100% 1px no-repeat,
+    linear-gradient(var(--clay), var(--clay)) left bottom / 100% 1px no-repeat;
+}
+
+/* ── frames: side by side, wrapping ───────────────────── */
+.frames { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 48px; padding: 24px; }
+.fw { width: 390px; }
+.cap { padding: 24px 12px 12px; }
+body.nobar .cap { display: none; }
+.notes { padding: 24px 12px 0; }
+.notes ol { list-style: none; padding: 0; margin-top: 12px; display: grid; gap: 12px; }
+.notes li { display: grid; grid-template-columns: 22px 1fr; gap: 3px 12px; font-size: 14px; line-height: 1.5; color: var(--ink); }
+.notes li .pin { margin: 0; grid-row: span 2; }
+.notes li .t-meta { grid-column: 2; }
+@media (max-width: 486px) {
+  .frames { padding: 0; }
+}
+
+/* ── pins ─────────────────────────────────────────────── */
+.pin {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: none;
+  width: 22px; height: 22px;
+  margin-left: 12px;
+  border: 1px solid var(--clay-ink);
+  border-radius: 2px;
+  background: var(--paper);
+  color: var(--clay-ink);
+  font-family: var(--font-meta);
+  font-size: 11px;
+  font-weight: 500;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  vertical-align: middle;
+}
+body.nopins .pin { display: none; }
+
+/* ── acts (Scored Ink) ────────────────────────────────── */
+.act {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; min-width: 44px;
+  padding: 0 2px;
+  font-family: var(--font-meta);
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  transition: color var(--press-out) var(--ease);
+}
+.act .w { padding-bottom: 4px; background: linear-gradient(var(--oak), var(--oak)) left bottom / 100% 1px no-repeat; }
+.act--inked { color: var(--ink); }
+.act--inked .w {
+  padding-bottom: 6px;
+  background:
+    linear-gradient(var(--oak), var(--oak)) left calc(100% - 3px) / 100% 1px no-repeat,
+    linear-gradient(var(--clay), var(--clay)) left bottom / 100% 1px no-repeat;
+}
+.act--quiet { color: var(--ink-faint); }
+.act:focus-visible, .more-act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* ── strata mark ──────────────────────────────────────── */
+.strata { display: inline-flex; flex-direction: column; gap: 3px; width: 120px; flex: none; }
+.strata i { display: block; height: 3px; border-radius: 999px; background: var(--hairline); position: relative; overflow: hidden; }
+.strata i:nth-child(1) { width: 100%; }
+.strata i:nth-child(2) { width: 80%; }
+.strata i:nth-child(3) { width: 60%; }
+.strata i b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--ink-faint); }
+
+/* ── the phone frame ──────────────────────────────────── */
+.phone {
+  width: 390px; height: 844px;
+  position: relative;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline-strong);
+}
+.notice { flex: none; padding: 12px 18px 12px; border-bottom: 1px solid var(--hairline); font-size: 15px; line-height: 1.6; color: var(--ink); }
+.notice .act { font-size: 11px; color: var(--clay-ink); margin-top: 0; }
+.body { flex: 1; min-height: 0; overflow: hidden; padding: 0 32px; }
+.lh { padding-top: 48px; padding-bottom: 12px; border-bottom: 1px solid var(--ink); }
+.eyebrow { display: flex; align-items: center; gap: 12px; min-height: 22px; font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); }
+.eyebrow .strata { width: 88px; }
+.eyebrow .pin { margin-left: 0; }
+.lh-title { margin-top: 12px; font-family: var(--font-display); font-size: 34px; font-weight: 400; line-height: 1.2; color: var(--ink); }
+.lh-gap { display: flex; align-items: center; height: 24px; }
+.lh-gap .pin { margin-left: 0; }
+.lh-acts { display: flex; align-items: center; gap: 0 12px; flex-wrap: wrap; }
+.lh-acts .act { font-size: 11px; letter-spacing: .06em; min-height: 44px; }
+.lh-acts .act--quiet { min-height: 36px; }
+
+.band { padding: 12px 0; border-bottom: 1px solid var(--ink); display: grid; justify-items: start; }
+.band-k { font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-subtle); display: flex; align-items: center; min-height: 22px; }
+.band-s { margin-top: 6px; font-size: 15px; line-height: 1.45; color: var(--ink); }
+.band-standing { display: flex; align-items: center; gap: 6px; font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-subtle); }
+.band-standing .act { font-size: 11px; letter-spacing: .1em; }
+
+.region { margin-top: 24px; }
+.rrule { height: 5px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--hairline); }
+.rh-eye { margin-top: 6px; font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); }
+.rh-name { font-family: var(--font-display); font-size: 24px; font-weight: 400; line-height: 1.2; color: var(--ink); }
+.rh-status { font-size: 13px; color: var(--ink-muted); }
+.region .act { font-size: 11px; letter-spacing: .1em; margin-top: 6px; }
+.rtext { margin-top: 12px; font-size: 15px; line-height: 1.65; color: var(--ink); }
+
+/* the dock: the last row of the frame, never fixed */
+.dock {
+  flex: none;
+  height: 64px;
+  display: grid; grid-template-columns: 1fr 150px 1fr; align-items: center; gap: 12px;
+  padding: 0 12px 0 18px;
+  background: var(--ink);
+  color: var(--ink-paper);
+}
+.dock-left { display: grid; line-height: 1.25; min-width: 0; }
+.dock-left .dl-k { font-family: var(--font-meta); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: color-mix(in srgb, var(--ink-paper) 70%, var(--ink)); }
+.dock-left .dl-n { font-family: var(--font-display); font-size: 15px; color: var(--ink-paper); }
+.dock-left .dl-s { font-family: var(--font-meta); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: color-mix(in srgb, var(--clay) 65%, var(--ink-paper)); white-space: nowrap; }
+.dock-mid { display: flex; align-items: center; justify-content: center; }
+.dock .act { color: var(--ink-paper); white-space: normal; text-align: center; line-height: 1.35; font-size: 12px; }
+.dock .act--inked .w { background:
+    linear-gradient(var(--clay), var(--clay)) left calc(100% - 3px) / 100% 1px no-repeat,
+    linear-gradient(var(--clay), var(--clay)) left bottom / 100% 1px no-repeat; }
+.dock .pin { margin-left: 6px; }
+.dock-right { justify-self: end; }
+.dock-right .act { display: inline-grid; justify-items: center; font-size: 11px; letter-spacing: .1em; color: color-mix(in srgb, var(--ink-paper) 80%, var(--ink)); }
+.dock-right .act .w { background: none; padding-bottom: 0; }
+.dots { font-size: 15px; letter-spacing: .1em; line-height: 1; }
+
+/* a5: the More sheet over a dimmed a4 */
+.under { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.dim { position: absolute; inset: 0; background: color-mix(in srgb, var(--paper) 80%, transparent); }
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--paper);
+  border-top: 1px solid var(--hairline-strong);
+  border-radius: 3px 3px 0 0;
+  padding: 12px 24px 24px;
+}
+.sheet-grip { width: 48px; height: 3px; border-radius: 999px; background: var(--hairline-strong); margin: 0 auto 12px; }
+.sheet .t-head { padding-bottom: 12px; border-bottom: 1px solid var(--ink); }
+.more { list-style: none; padding: 0; }
+.more > li { border-bottom: 1px solid var(--hairline); }
+.more-act { display: flex; align-items: center; width: 100%; min-height: 52px; font-size: 16px; color: var(--ink); text-align: left; }
+.more-act[aria-disabled="true"] { color: var(--ink-faint); cursor: not-allowed; min-height: 44px; padding-top: 12px; }
+.more-gated { padding-bottom: 6px; }
+.more-gated .row1 { display: flex; align-items: center; }
+.reason { font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+@media (forced-colors: active) {
+  .pin, .act--terminal, .stamp { border: 1px solid ButtonText; }
+  .act:focus-visible, .more-act:focus-visible { outline: 2px solid Highlight; }
+  .act .w { text-decoration: underline; }
+}
+</style>
+</head>
+<body>
+<h1 class="vh">Proposed: Direction A, One Voice, at 390</h1>
+
+<div class="framebar" id="bar">
+  <span>Proposed · Direction A, One Voice · Wed 7 Oct 2026 · seed data from the local walk · illustrative values marked in the notes</span>
+  <span class="fb-acts">
+    <button class="act" type="button" data-go="frame-a4" aria-pressed="false"><span class="w">a4</span></button>
+    <button class="act" type="button" data-go="frame-a5" aria-pressed="false"><span class="w">a5</span></button>
+  </span>
+</div>
+<p class="vh" id="announce" role="status" aria-live="polite"></p>
+
+<main class="frames">
+
+<!-- ═══════════════ a4 · Chen Residence on the phone ═══════════════ -->
+<section class="fw" data-frame="frame-a4" aria-labelledby="cap-a4">
+  <h2 class="t-head cap" id="cap-a4">a4 · Chen Residence on the phone</h2>
+  <div class="phone">
+    <div class="notice">
+      <p>While a document is open, Patina keeps the time for you. You can turn that off on your profile — the clock is then yours to start.</p>
+      <button class="act" type="button"><span class="w">Understood</span></button>
+    </div>
+    <div class="body">
+      <article aria-labelledby="t-a4">
+        <header class="lh">
+          <p class="eyebrow"><span class="strata" aria-hidden="true"><i></i><i></i><i><b style="width:12px"></b></i></span><span>Project · 5 of 7</span><span class="pin" aria-hidden="true">1</span></p>
+          <h2 class="lh-title" id="t-a4">Chen Residence</h2>
+          <div class="lh-gap"><span class="pin" aria-hidden="true">2</span></div>
+          <div class="lh-acts">
+            <button class="act" type="button"><span class="w">Set dates</span></button>
+            <button class="act" type="button"><span class="w">Set a budget band</span></button>
+          </div>
+          <div class="lh-acts">
+            <span><button class="act" type="button"><span class="w">Message</span></button><span class="pin" aria-hidden="true" style="margin-left:6px">5</span></span>
+            <button class="act" type="button"><span class="w">Preview</span></button>
+            <button class="act act--quiet" type="button"><span class="w">Sharing</span></button>
+            <button class="act act--quiet" type="button"><span class="w">Call sheet</span></button>
+          </div>
+        </header>
+
+        <section class="band" aria-label="The band">
+          <span class="band-k">Next<span class="pin" aria-hidden="true">3</span></span>
+          <p class="band-s">Pay Woodward &amp; Sons the WS-188 balance — 148 days overdue.</p>
+          <button class="act act--inked" type="button"><span class="w">Record the payment</span></button>
+          <span class="band-standing">Standing · 3 · <button class="act" type="button" aria-label="See all 3 standing"><span class="w">See all</span></button></span>
+        </section>
+
+        <section class="region" aria-labelledby="r-a4-ca">
+          <div class="rrule"></div>
+          <p class="rh-eye">Exact artifact · named authority</p>
+          <h3 class="rh-name" id="r-a4-ca">Client approvals</h3>
+          <p class="rh-status">0 decided · no decision lead</p>
+          <button class="act act--quiet" type="button"><span class="w">Fold ↑</span></button>
+          <p class="rtext">Bind each request to one issued plan, client-ready specification, or published budget checkpoint. Discussion stays in the project thread; only the recorded outcome settles an</p>
+        </section>
+      </article>
+    </div>
+    <nav class="dock" aria-label="The dock">
+      <div class="dock-left"><span class="dl-k">In this document</span><span class="dl-n">Client</span><span class="dl-s">At client app…</span></div>
+      <div class="dock-mid"><button class="act act--inked" type="button"><span class="w">Record the payment</span></button><span class="pin" aria-hidden="true">4</span></div>
+      <div class="dock-right"><button class="act" type="button"><span class="dots" aria-hidden="true">•••</span><span class="w">More</span></button></div>
+    </nav>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>The stage in words in the letterhead eyebrow: <em>Project · 5 of 7</em>.</span><span class="t-meta">R1-02 · R1-03 · R2-01 · R3-04</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>“No client linked — attach one” leaves the letterhead and becomes a setup item under Standing.</span><span class="t-meta">R1-08 · R2-07 · R3-06</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>The band stacks Next, the full sentence, the act and Standing. Today’s phone keeps only the bare verb “RECORD” after “OVERDUE 148D · WS-188”; the act keeps its object here.</span><span class="t-meta">R1-12 · R1-01</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>The dock’s centre is the Next act, in the same words as the band. Today it is MESSAGE THE CLIENT on every stage, even with no client linked; Message moves into More.</span><span class="t-meta">R1-11 · R2-08</span></li>
+      <li><span class="pin" aria-hidden="true">5</span><span>Weight by role: MESSAGE loses its inked rule. Only Next is heavy.</span><span class="t-meta">R1-08 · R1-09 · R2-07 · R3-06</span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══════════════ a5 · the More sheet ═══════════════ -->
+<section class="fw" data-frame="frame-a5" aria-labelledby="cap-a5">
+  <h2 class="t-head cap" id="cap-a5">a5 · The More sheet on the phone</h2>
+  <div class="phone">
+    <div class="under" inert aria-hidden="true">
+      <div class="notice">
+        <p>While a document is open, Patina keeps the time for you. You can turn that off on your profile — the clock is then yours to start.</p>
+        <span class="act"><span class="w">Understood</span></span>
+      </div>
+      <div class="body">
+        <div class="lh">
+          <p class="eyebrow"><span class="strata"><i></i><i></i><i><b style="width:12px"></b></i></span><span>Project · 5 of 7</span></p>
+          <p class="lh-title">Chen Residence</p>
+          <div class="lh-gap"></div>
+          <div class="lh-acts"><span class="act"><span class="w">Set dates</span></span><span class="act"><span class="w">Set a budget band</span></span></div>
+          <div class="lh-acts"><span class="act"><span class="w">Message</span></span><span class="act"><span class="w">Preview</span></span><span class="act act--quiet"><span class="w">Sharing</span></span><span class="act act--quiet"><span class="w">Call sheet</span></span></div>
+        </div>
+        <div class="band">
+          <span class="band-k">Next</span>
+          <p class="band-s">Pay Woodward &amp; Sons the WS-188 balance — 148 days overdue.</p>
+          <span class="act act--inked"><span class="w">Record the payment</span></span>
+          <span class="band-standing">Standing · 3 · <span class="act"><span class="w">See all</span></span></span>
+        </div>
+        <div class="region">
+          <div class="rrule"></div>
+          <p class="rh-eye">Exact artifact · named authority</p>
+          <p class="rh-name">Client approvals</p>
+        </div>
+      </div>
+      <div class="dock">
+        <div class="dock-left"><span class="dl-k">In this document</span><span class="dl-n">Client</span><span class="dl-s">At client app…</span></div>
+        <div class="dock-mid"><span class="act act--inked"><span class="w">Record the payment</span></span></div>
+        <div class="dock-right"><span class="act"><span class="dots">•••</span><span class="w">More</span></span></div>
+      </div>
+      <div class="dim"></div>
+    </div>
+
+    <div class="sheet" role="dialog" aria-modal="false" aria-labelledby="more-h">
+      <div class="sheet-grip" aria-hidden="true"></div>
+      <h3 class="t-head" id="more-h">More</h3>
+      <ul class="more">
+        <li class="more-gated">
+          <div class="row1"><button class="more-act" type="button" aria-disabled="true" aria-describedby="why-msg" style="width:auto">Message the client</button><span class="pin" aria-hidden="true">1</span></div>
+          <p class="reason" id="why-msg">Link a client to this job first.</p>
+          <button class="act" type="button"><span class="w">Link a client</span></button>
+        </li>
+        <li><button class="more-act" type="button">Preview the client’s copy</button></li>
+        <li><button class="more-act" type="button">Sharing</button></li>
+        <li><button class="more-act" type="button">Set dates</button></li>
+        <li><button class="more-act" type="button">Set a budget band</button></li>
+      </ul>
+    </div>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>Message lives in More and is withheld while no client is linked: it stays focusable, prints its reason, and offers LINK A CLIENT. Today Message is offered with no client linked (F52, <code>letterhead-instruments.tsx:296</code>).</span><span class="t-meta">F52 · R1-11 · R2-08</span></li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var FRAMES = {
+    'frame-a4': 'a4, Chen Residence on the phone',
+    'frame-a5': 'a5, the More sheet on the phone'
+  };
+  var has = function (k) { return Object.prototype.hasOwnProperty.call(FRAMES, k); };
+  var state = { frame: null, nobar: false, nopins: false };
+
+  function parse(hash) {
+    var toks = String(hash || '').replace(/^#/, '').split('&');
+    var out = { frame: null, nobar: false, nopins: false };
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i].trim();
+      if (!out.frame && t.indexOf('frame-') === 0) out.frame = t;
+      if (t === 'nobar') out.nobar = true;
+      if (t === 'nopins') out.nopins = true;
+    }
+    return out;
+  }
+
+  function apply() {
+    var one = !!state.frame && has(state.frame);
+    var secs = document.querySelectorAll('[data-frame]');
+    for (var i = 0; i < secs.length; i++) secs[i].hidden = one && secs[i].getAttribute('data-frame') !== state.frame;
+    document.getElementById('bar').hidden = state.nobar;
+    document.body.classList.toggle('nobar', state.nobar);
+    document.body.classList.toggle('nopins', state.nopins);
+    var notes = document.querySelectorAll('.notes');
+    for (var n = 0; n < notes.length; n++) notes[n].hidden = state.nopins;
+    var btns = document.querySelectorAll('[data-go]');
+    for (var b = 0; b < btns.length; b++) btns[b].setAttribute('aria-pressed', one && btns[b].getAttribute('data-go') === state.frame ? 'true' : 'false');
+    document.getElementById('announce').textContent = one ? 'Showing frame ' + FRAMES[state.frame] : 'Showing all frames';
+  }
+
+  function fromHash() { state = parse(location.hash); apply(); }
+
+  document.addEventListener('DOMContentLoaded', fromHash);
+  window.addEventListener('hashchange', fromHash);
+  window.addEventListener('message', function (e) {
+    var d = e && e.data;
+    if (!d || typeof d !== 'object' || typeof d.frame !== 'string') return;
+    var f = d.frame.indexOf('frame-') === 0 ? d.frame : 'frame-' + d.frame;
+    if (!has(f)) return;
+    state.frame = f;
+    apply();
+  });
+  document.addEventListener('click', function (e) {
+    var go = e.target.closest && e.target.closest('[data-go]');
+    if (!go) return;
+    var toks = [go.getAttribute('data-go')];
+    if (state.nopins) toks.push('nopins');
+    var next = '#' + toks.join('&');
+    if (location.hash === next) fromHash(); else location.hash = next;
+  });
+})();
+</script>
+</body>
+</html>
+<!-- specimen-complete -->

@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask the Paper 390</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Source: artifacts/agreement-room-2026-09-10/deck/src/index.html (lines 14-91) */
+:root {
+  color-scheme: light dark;
+
+  /* paper, three stocks */
+  --paper:            #FAF7F2;
+  --paper-doc:        #FCFAF6;
+  --rail:             #E8E3DB;
+
+  /* ink */
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --ink-paper:        #FAF7F2;
+
+  /* hairlines */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* the rest rule pigment */
+  --oak:              #8B7355;
+
+  /* state pigments: material value / paper ink */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* rhythm */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* motion */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+}
+
+/* ── base ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5; overflow-x: hidden; }
+p, h2, h3, h4, ol, ul { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+button, input { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; }
+:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.t-head { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); }
+.t-meta { font-family: var(--font-meta); font-size: 11px; letter-spacing: .04em; color: var(--ink-faint); }
+.mono { font-family: var(--font-meta); }
+
+/* ── acts (Scored Ink) ────────────────────────────────── */
+.act { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; font-family: var(--font-meta); font-size: 13px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); white-space: nowrap; line-height: 1.2; }
+.act > span { position: relative; display: inline-block; padding-bottom: 3px; border-bottom: 1px solid var(--oak); }
+.act--inked { color: var(--ink); }
+.act--inked > span::after { content: ""; position: absolute; left: 0; right: 0; bottom: -4px; height: 1px; background: var(--clay); }
+.act--small { font-size: 11px; }
+
+/* ── pins and notes ───────────────────────────────────── */
+.pin { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 22px; height: 22px; margin-left: 6px; border: 1px solid var(--clay-ink); border-radius: 2px; background: var(--paper); font-family: var(--font-meta); font-size: 11px; font-weight: 500; line-height: 1; letter-spacing: 0; text-transform: none; font-style: normal; color: var(--clay-ink); vertical-align: middle; }
+.notes { padding: 24px 16px 0; }
+.notes ol { margin-top: 12px; display: grid; gap: 12px; }
+.notes li { display: grid; grid-template-columns: 22px 1fr; gap: 0 12px; font-size: 15px; color: var(--ink); }
+.notes li .pin { margin-left: 0; margin-top: 1px; }
+.notes li .t-meta { grid-column: 2; margin-top: 2px; }
+html.nopins .pin, html.nopins .notes { display: none; }
+
+/* ── frame bar and page ───────────────────────────────── */
+.framebar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 12px 16px; background: var(--rail); border-bottom: 1px solid var(--hairline-strong); font-family: var(--font-meta); font-size: 11px; color: var(--ink-muted); }
+.framebar .fb-caption { flex: 1 1 300px; letter-spacing: .04em; }
+.framebar .fb-acts { display: flex; flex-wrap: wrap; gap: 0 24px; }
+.framebar .act { font-size: 11px; }
+.framebar .act[aria-pressed="true"] { color: var(--ink); }
+.framebar .act[aria-pressed="true"] > span::after { content: ""; position: absolute; left: 0; right: 0; bottom: -4px; height: 1px; background: var(--clay); }
+html.nobar .framebar { display: none; }
+.phones { display: flex; flex-wrap: wrap; justify-content: center; gap: 48px; padding: 48px 0 72px; }
+.specimen { width: 390px; max-width: 100%; }
+.specimen > .caption { padding: 0 16px 24px; }
+
+/* ── the phone frame ──────────────────────────────────── */
+.phone { position: relative; width: 390px; height: 844px; overflow: hidden; display: grid; grid-template-rows: 780px 64px; background: var(--paper-doc); border: 1px solid var(--hairline); }
+.p-doc { position: relative; overflow: hidden; padding: 60px 32px 0; }
+.lh-mark { display: flex; flex-direction: column; gap: 4px; width: 120px; }
+.lh-mark i { display: block; height: 3px; border-radius: 2px; background: var(--hairline-strong); }
+.lh-mark i:nth-child(2) { width: 80%; }
+.lh-mark i:nth-child(3) { width: 60%; background: linear-gradient(to right, var(--ink-faint) 0 var(--fill, 16%), var(--hairline-strong) var(--fill, 16%) 100%); }
+.lh-eyebrow { margin-top: 12px; display: flex; align-items: center; font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); }
+.lh-title { margin-top: 4px; font-family: var(--font-display); font-size: 36px; font-weight: 400; line-height: 1.2; letter-spacing: -.01em; color: var(--ink); }
+.lh-for { margin-top: 6px; font-family: var(--font-display); font-style: italic; font-size: 22px; line-height: 1.3; color: var(--clay-ink); }
+.lh-for small { font-size: 12px; font-style: normal; margin-left: 4px; }
+.lh-vitals { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; font-size: 12px; color: var(--ink); }
+.lh-vitals .mono { font-size: 11px; letter-spacing: .06em; }
+.lh-acts { display: flex; gap: 0 18px; margin-top: 6px; }
+.lh-acts .act { font-size: 12px; }
+.ink-rule { border: 0; border-top: 1px solid var(--ink); margin: 12px 0 0; }
+
+/* stacked band */
+.band { padding: 12px 0; border-bottom: 1px solid var(--ink); }
+.next-label { font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-subtle); }
+.band-line { margin-top: 4px; font-size: 17px; line-height: 1.4; color: var(--terracotta-ink); }
+.band-act { display: flex; align-items: center; }
+.band-standing { font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--clay-ink); }
+
+/* the install reading */
+.reading { margin-top: 24px; }
+.rd-head { display: flex; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--hairline-strong); }
+.rd-row { padding: 12px 0 12px 14px; border-bottom: 1px solid var(--hairline); }
+.rd-row--late { border-left: 2px solid var(--terracotta-ink); padding-left: 12px; }
+.rd-kind { display: block; font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); }
+.rd-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
+.rd-name { font-size: 15px; font-weight: 500; color: var(--ink); }
+.rd-sub { display: block; margin-top: 4px; font-size: 14px; color: var(--ink-muted); }
+.rd-when { display: block; font-size: 14px; color: var(--ink); }
+.rd-quiet { display: block; margin-top: 4px; font-size: 14px; color: var(--ink-subtle); }
+.rd-foot { display: flex; gap: 24px; padding-left: 14px; }
+.price { font-family: var(--font-display); font-size: 15px; color: var(--ink); }
+
+/* stamps */
+.stamp { display: inline-block; transform: rotate(-1.5deg); white-space: nowrap; border-radius: 3px; border: 1.5px solid currentColor; background: var(--paper); padding: 3px 9px; font-family: var(--font-meta); font-weight: 500; text-transform: uppercase; font-size: 12px; letter-spacing: .08em; line-height: 1.3; }
+.stamp--sage { color: var(--sage-ink); }
+.stamp--production { color: var(--ink); border-color: var(--golden); }
+
+/* ⌘K, full-height sheet (c4) */
+.p-under { position: relative; overflow: hidden; background: color-mix(in srgb, var(--paper) 70%, var(--rail)); }
+.k-sheet { position: absolute; left: 0; right: 0; top: 16px; bottom: 0; display: flex; flex-direction: column; background: var(--paper); border-top: 1px solid var(--hairline-strong); border-radius: 3px 3px 0 0; }
+.k-handle { width: 36px; height: 4px; margin: 10px auto 0; border-radius: 2px; background: var(--hairline-strong); }
+.k-top { display: flex; align-items: center; gap: 12px; padding: 6px 16px 0; border-bottom: 1px solid var(--hairline); }
+.k-input { flex: 1; min-width: 0; min-height: 48px; border: 0; background: transparent; padding: 0; font-size: 17px; color: var(--ink); }
+.k-input:focus-visible { outline-offset: -2px; }
+.k-group { padding: 6px 0; }
+.k-group + .k-group { border-top: 1px solid var(--hairline); }
+.k-label { display: flex; align-items: center; min-height: 32px; padding: 4px 16px 0; font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--clay-ink); }
+.k-row { display: block; min-height: 56px; padding: 8px 16px 8px 14px; border-left: 2px solid transparent; }
+.k-row[aria-selected="true"] { border-left-color: var(--clay); background: color-mix(in srgb, var(--clay) 16%, var(--paper)); }
+.k-title { display: block; font-size: 15px; font-weight: 500; color: var(--ink); }
+.k-sub { display: block; font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); }
+.k-foot { margin-top: auto; display: flex; align-items: center; min-height: 48px; padding: 0 16px; border-top: 1px solid var(--hairline); font-family: var(--font-meta); font-size: 11px; letter-spacing: .04em; color: var(--ink-muted); }
+
+/* the dock */
+.dock { --dock-ground: var(--ink); --dock-ink: var(--ink-paper); display: grid; grid-template-columns: 136px 1fr 52px; align-items: center; gap: 12px; padding: 0 10px 0 16px; background: var(--dock-ground); color: var(--dock-ink); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dock { --dock-ground: var(--rail); --dock-ink: var(--ink); }
+}
+:root[data-theme="dark"] .dock { --dock-ground: var(--rail); --dock-ink: var(--ink); }
+.dk-where { overflow: hidden; line-height: 1.25; }
+.dk-ey { display: block; white-space: nowrap; font-family: var(--font-meta); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: color-mix(in srgb, var(--dock-ink) 62%, var(--dock-ground)); }
+.dk-name { display: block; white-space: nowrap; font-family: var(--font-display); font-size: 14px; font-weight: 500; }
+.dk-at { display: block; white-space: nowrap; font-family: var(--font-meta); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--clay); }
+.dk-mid { justify-self: center; display: flex; align-items: center; }
+.dock .act { color: var(--dock-ink); font-size: 12px; white-space: normal; text-align: center; }
+.dock .act > span { border-bottom-color: var(--clay); }
+.dk-more { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; font-family: var(--font-meta); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dock-ink); line-height: 1.1; }
+.dock .pin { background: var(--dock-ground); border-color: var(--clay); color: var(--clay); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
+@media (forced-colors: active) {
+  .pin, .act--terminal, .stamp { border: 1px solid ButtonText; }
+  :focus-visible { outline-color: Highlight; }
+  .k-row[aria-selected="true"], .rd-row--late { border-left-color: Highlight; }
+}
+</style>
+</head>
+<body>
+<h1 class="vh">Proposed: Direction C, Ask the Paper, at 390</h1>
+
+<div class="framebar" role="region" aria-label="Frames">
+  <p class="fb-caption">Proposed · Direction C, Ask the Paper · Wed 7 Oct 2026 · seed data from the local walk · illustrative values marked in the notes</p>
+  <div class="fb-acts">
+    <button type="button" class="act" data-show="frame-c4" aria-pressed="false"><span>c4 · ⌘K on the phone</span></button>
+    <button type="button" class="act" data-show="frame-c5" aria-pressed="false"><span>c5 · Install week</span></button>
+  </div>
+</div>
+<p class="vh" role="status" aria-live="polite" id="frame-status"></p>
+
+<div class="phones">
+
+<!-- ═══════════════════════════════ c4 ═══════════════════════════════ -->
+<section class="specimen" id="frame-c4" data-frame aria-labelledby="c4-cap">
+  <h2 class="t-head caption" id="c4-cap">c4 · ⌘K on Chen Residence, “WS-188” · 390</h2>
+  <div class="phone">
+    <div class="p-under">
+      <div class="k-sheet" role="dialog" aria-modal="true" aria-label="Find anything">
+        <div class="k-handle" aria-hidden="true"></div>
+        <div class="k-top">
+          <input class="k-input" type="text" value="WS-188" aria-label="Find anything on this paper" aria-controls="c4-results">
+          <button type="button" class="act act--small"><span>Close</span></button>
+        </div>
+        <div id="c4-results" role="listbox" aria-label="Results">
+          <div class="k-group" role="group" aria-labelledby="c4-g1">
+            <p class="k-label" id="c4-g1">On this paper<span class="pin" aria-hidden="true">1</span></p>
+            <div class="k-row" role="option" aria-selected="true">
+              <span class="k-title">Custom Walnut Sectional — 3 pc</span>
+              <span class="k-sub">PO WS-188 · Woodward &amp; Sons · Received</span>
+            </div>
+          </div>
+          <div class="k-group" role="group" aria-labelledby="c4-g2">
+            <p class="k-label" id="c4-g2">Acts<span class="pin" aria-hidden="true">2</span></p>
+            <div class="k-row" role="option" aria-selected="false">
+              <span class="k-title">Record a payment to Woodward &amp; Sons</span>
+            </div>
+          </div>
+        </div>
+        <p class="k-foot">? keys<span class="pin" aria-hidden="true">3</span></p>
+      </div>
+    </div>
+    <footer class="dock" inert>
+      <div class="dk-where"><span class="dk-ey">In this document</span><span class="dk-name">Client</span><span class="dk-at">At client approvals</span></div>
+      <div class="dk-mid"><button type="button" class="act"><span>Message the client</span></button></div>
+      <button type="button" class="dk-more"><span aria-hidden="true">•••</span>More</button>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>On the phone, ⌘K searches the open paper too. The PO number lands on the sectional’s line, with its maker and its state. Today a dry query points to the Help center.</span><span class="t-meta">R1-05 · R2-02 · R3-01</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>Acts read the paper as well: the payment to Woodward &amp; Sons is one press from its PO number.</span><span class="t-meta">R1-05 · R2-02</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>The sheet’s foot prints the Keys key. Today nothing prints it.</span><span class="t-meta">R1-30 · R2-19</span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ c5 ═══════════════════════════════ -->
+<section class="specimen" id="frame-c5" data-frame aria-labelledby="c5-cap">
+  <h2 class="t-head caption" id="c5-cap">c5 · Cedar Lane Study, install week · 390</h2>
+  <div class="phone">
+    <div class="p-doc">
+      <div class="lh-mark" aria-hidden="true" style="--fill:50%"><i></i><i></i><i></i></div>
+      <p class="lh-eyebrow">Install · 6 of 7<span class="pin" aria-hidden="true">1</span></p>
+      <h2 class="lh-title">Cedar Lane Study</h2>
+      <p class="lh-for">for Nora Ellison <small aria-hidden="true">↗</small></p>
+      <div class="lh-vitals">
+        <span>Installation</span>
+        <span><span class="mono">START</span> 11 June <span aria-hidden="true">×</span></span>
+        <span class="mono">$14,500</span>
+      </div>
+      <div class="lh-acts">
+        <button type="button" class="act act--inked"><span>Message</span></button>
+        <button type="button" class="act"><span>Preview</span></button>
+        <button type="button" class="act"><span>Sharing</span></button>
+        <button type="button" class="act"><span>Call sheet</span></button>
+      </div>
+      <hr class="ink-rule">
+      <div class="band">
+        <p class="next-label">Next</p>
+        <p class="band-line">Reading chair is 118 days past the 11 June start.</p>
+        <div class="band-act"><button type="button" class="act act--inked"><span>Chase Fixture Metalworks</span></button><span class="pin" aria-hidden="true">2</span></div>
+        <p class="band-standing">Standing · 1 setup</p>
+      </div>
+
+      <section class="reading" aria-labelledby="c5-reading">
+        <div class="rd-head"><p class="t-head" id="c5-reading">The install · 1 of 2 placed</p><span class="pin" aria-hidden="true">3</span></div>
+        <div class="rd-row rd-row--late">
+          <span class="rd-kind">Late · 1</span>
+          <span class="rd-line"><span class="rd-name">Reading chair</span><span class="stamp stamp--production">In production</span></span>
+          <span class="rd-sub">Fixture Metalworks · <span class="price">$7,800</span></span>
+          <span class="rd-when">118 days past start</span>
+        </div>
+        <div class="rd-row">
+          <span class="rd-kind">Placed · 1</span>
+          <span class="rd-line"><span class="rd-name">Built-in shelving</span><span class="stamp stamp--sage">Installed</span></span>
+        </div>
+        <div class="rd-row">
+          <span class="rd-kind">Arriving</span>
+          <span class="rd-quiet">Nothing dated this week.</span>
+        </div>
+        <div class="rd-foot">
+          <button type="button" class="act"><span>Hold a window</span></button>
+          <button type="button" class="act"><span>Punch</span></button>
+        </div>
+      </section>
+    </div>
+    <footer class="dock">
+      <div class="dk-where"><span class="dk-ey">In this document</span><span class="dk-name">Nora Ellison</span><span class="dk-at">At client approvals</span></div>
+      <div class="dk-mid"><button type="button" class="act act--inked"><span>Chase Fixture Metalworks</span></button><span class="pin" aria-hidden="true">4</span></div>
+      <button type="button" class="dk-more"><span aria-hidden="true">•••</span>More</button>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>The stage prints in words in the letterhead eyebrow. Today no stage word shows above the fold.</span><span class="t-meta">R1-02 · R3-04</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>The band stacks: Next, the full sentence, the act, then Standing. Lateness takes the line; setup counts once as Standing. As at 1440, the “Needs setup · 1” chip and the two setup acts leave the letterhead; today the phone band reads “Set up · Name”.</span><span class="t-meta">R1-07 · R2-09 · R3-03</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>The install reading gives one count, with the late chair first. The Arriving line, “Nothing dated this week.”, is [illustrative].</span><span class="t-meta">R1-21 · R2-10</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>The dock’s centre carries the Next act in the same words. The label wraps to two lines and is never shortened. Today it reads “Message Nora Ellison”, which moves into More.</span><span class="t-meta">R1-11 · R2-08</span></li>
+    </ol>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function () {
+  var sections = Array.prototype.slice.call(document.querySelectorAll('[data-frame]'));
+  var ids = sections.map(function (s) { return s.id; });
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.framebar [data-show]'));
+  var status = document.getElementById('frame-status');
+  var root = document.documentElement;
+
+  function tokens() { return location.hash.replace(/^#/, '').split('&').filter(Boolean); }
+  function apply() {
+    var t = tokens();
+    var pick = null;
+    for (var i = 0; i < t.length; i++) { if (t[i].indexOf('frame-') === 0) { pick = t[i]; break; } }
+    if (ids.indexOf(pick) === -1) pick = null;
+    root.classList.toggle('nobar', t.indexOf('nobar') !== -1);
+    root.classList.toggle('nopins', t.indexOf('nopins') !== -1);
+    sections.forEach(function (s) { s.hidden = pick !== null && s.id !== pick; });
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-show') === pick)); });
+    if (pick) {
+      var cap = document.getElementById(pick).querySelector('.caption');
+      status.textContent = 'Showing ' + (cap ? cap.textContent : pick);
+    } else {
+      status.textContent = 'Showing all frames';
+    }
+  }
+  function show(frame) {
+    var rest = tokens().filter(function (x) { return x.indexOf('frame-') !== 0; });
+    location.hash = [frame].concat(rest).join('&');
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-show')); }); });
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || typeof d !== 'object' || typeof d.frame !== 'string') return;
+    var f = d.frame.indexOf('frame-') === 0 ? d.frame : 'frame-' + d.frame;
+    if (ids.indexOf(f) !== -1) show(f);
+  });
+  document.addEventListener('DOMContentLoaded', apply);
+  window.addEventListener('hashchange', apply);
+  if (document.readyState !== 'loading') apply();
+})();
+</script>
+</body>
+</html>
+<!-- specimen-complete -->
