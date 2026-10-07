@@ -36,6 +36,7 @@ import {
   useOrganizations,
   useOrganizationMembers,
   useMarkFirstDocumentOpened,
+  useInstallWindow,
 } from '@patina/supabase';
 import type { DiscoveryRead } from '@patina/supabase';
 import {
@@ -146,11 +147,18 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import {
   asLegacyProposalLifecycle,
+  clientShortName,
   deriveDocumentGuide,
   needGuideAction,
   type DocumentGuideAction,
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
+import { ownAct } from '@/lib/document/act-names';
+import { familyLabel } from '@/lib/document/family-label';
+import {
+  installReading,
+  type InstallReadingPiece,
+} from '@/lib/document/install-reading';
 import {
   composeDocumentGuideInputs,
   type DocumentGuideReadinessFacts,
@@ -175,10 +183,13 @@ import {
   useRoomLens,
 } from '@/components/document/room-lens-context';
 import { LensBand } from '@/components/document/lens-band';
+import { BandTourNote } from '@/components/document/margin-note';
 import {
   deriveLensBand,
   type LensBandModel,
   type LensInputItem,
+  type LensNeedRow,
+  type LensOwnAct,
   type LensReadingStop,
   type LensSetupInput,
 } from '@/lib/document/lens-band-derivation';
@@ -1838,7 +1849,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     activateDestination(destination);
   }, [activateDestination, beginDirectionError, guideModel, runBeginDirection]);
 
-  const redLetterRows: RedLetterRow[] = useMemo(() => {
+  const redLetterRows: LensNeedRow[] = useMemo(() => {
     if (!row || row.engagement_kind !== 'project') return [];
     const needs = rankedOperationalNeeds;
     if (!needs) return [];
@@ -1854,6 +1865,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         // N-01 — the deadline the band ranks on, structured. The need already
         // holds it; the sentence it prints does not.
         dueOn: need.dueOn ?? null,
+        // D8 — custody: whose hand the next move is in, as the need recorded it.
+        owner: need.owner,
       };
     });
   }, [row, rankedOperationalNeeds, activateDestination]);
@@ -2378,6 +2391,91 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   );
   const bandProjectStatus = row?.project_status ?? null;
 
+  // US-19 D1 / D6 (`one-voice`) — the stage's own act and the install reading,
+  // from the facts the paper already reads. Read only behind the flag; a stage
+  // whose deciding fact is not read here (Brief's open inquiry, Discovery's
+  // four essentials) or not yet answered leaves `ownAct` undefined, and the
+  // guide line stands in for it as before.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const ownActProjectId =
+    oneVoice && row?.engagement_kind === 'project' ? (row.project_id ?? '') : '';
+  const ownActFfe = useProjectFFEItems(ownActProjectId, undefined, {
+    withLifecycle: true,
+  }) as {
+    data:
+      | (InstallReadingPiece & { product_id?: string | null; removed_at?: string | null })[]
+      | undefined;
+  };
+  const ownActWindow = useInstallWindow(ownActProjectId || undefined);
+  const ownActPieces = useMemo(
+    () => ownActFfe.data?.filter((item) => item.removed_at == null),
+    [ownActFfe.data],
+  );
+  // A window read in flight or failed is not "no window is held" (D6).
+  const windowHeld = !ownActWindow.isSuccess || ownActWindow.data != null;
+  const bandInstallReading = useMemo(
+    () =>
+      bandSection === 'install' && ownActPieces
+        ? installReading(ownActPieces, new Date(), windowHeld)
+        : null,
+    [bandSection, ownActPieces, windowHeld],
+  );
+  const bandOwnAct = useMemo<LensOwnAct | null | undefined>(() => {
+    if (!oneVoice || !bandSection || !guideHeadline) return undefined;
+    if (bandSection === 'brief' || bandSection === 'discovery') return undefined;
+    if ((bandSection === 'project' || bandSection === 'install') && !ownActPieces) {
+      return undefined;
+    }
+    if (bandSection === 'proposal' && !liveProposalStatus) return undefined;
+    const family = familyLabel(bandHousehold);
+    const act = ownAct(bandSection, {
+      inquiryOpen: false,
+      firstMissingEssential: null,
+      proposalState:
+        liveProposalStatus === 'draft' || liveProposalStatus === 'ready'
+          ? 'draft'
+          : liveProposalStatus === 'sent' || liveProposalStatus === 'viewed'
+            ? 'sent'
+            : liveProposalStatus === 'accepted'
+              ? 'accepted'
+              : null,
+      clientFirstName: family === 'the client' ? null : clientShortName(family),
+      unspecifiedCount: (ownActPieces ?? []).filter((item) => !item.product_id).length,
+      // DESIGN-Q (SQ-500): release eligibility is not read on this page.
+      releaseEligible: false,
+      install: bandInstallReading
+        ? { state: bandInstallReading.state, windowHeld }
+        : null,
+    });
+    if (!act) return null;
+    return {
+      key: `own:${act.targetId}`,
+      label: act.label,
+      targetId: act.targetId,
+      tier: act.tier,
+      sentence: guideHeadline,
+      shortSentence: guideShortHeadline,
+      onAct: () =>
+        activateDestination({
+          kind: 'anchor',
+          section: bandSection,
+          focusId: act.targetId,
+          activate: true,
+        }),
+    };
+  }, [
+    oneVoice,
+    bandSection,
+    guideHeadline,
+    guideShortHeadline,
+    ownActPieces,
+    liveProposalStatus,
+    bandHousehold,
+    bandInstallReading,
+    windowHeld,
+    activateDestination,
+  ]);
+
   const bandModel = useMemo<LensBandModel | null>(() => {
     if (!bandSpread) return null;
     const guideAct = guideActLabel
@@ -2443,6 +2541,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       readingStop: bandStop,
       setup: bandSetup,
       projectStatus: bandProjectStatus,
+      ownAct: bandOwnAct,
+      installReading: bandInstallReading,
     });
     // `doorFacts` and `ticketPhase` are re-created every render; the values
     // that decide the model are `inputSignature` and `bandStageIndex`.
@@ -2474,6 +2574,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     bandStop,
     bandSetup,
     bandProjectStatus,
+    bandOwnAct,
+    bandInstallReading,
   ]);
 
   // D-B22 — the lens line's telemetry fires from the page, which owns the
@@ -2865,6 +2967,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const letterheadInstruments =
     row.engagement_kind === 'project' && row.project_id ? (
       <LetterheadInstruments
+        voice={bandModel?.voice ?? null}
         projectId={row.project_id}
         clientProfileId={row.client_profile_id}
         clientName={row.client_name}
@@ -2872,6 +2975,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       />
     ) : row.engagement_kind !== 'project' && row.client_profile_id ? (
       <LetterheadInstruments
+        voice={bandModel?.voice ?? null}
         clientProfileId={row.client_profile_id}
         clientName={row.client_name}
         engagementId={row.engagement_id}
@@ -3044,6 +3148,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             onStandingOpened={onLensStandingOpened}
           />
         )}
+        {/* US-19 D8 — the one-note tour, in flow under the band. */}
+        {bandModel && <BandTourNote />}
         {/* D10 — the SETUP row's `Link a client` opens the household sheet the
             chip uses; the chip prints nothing while no client is linked. */}
         {setupHouseholdOpen && row.engagement_kind === 'project' && (

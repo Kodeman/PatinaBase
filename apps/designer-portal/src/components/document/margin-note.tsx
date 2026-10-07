@@ -36,6 +36,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import { documentEvents } from '@/lib/analytics/document-events';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import type { MarginNoteStateBackend } from '@patina/help-system';
 
 const STORAGE_PREFIX = 'patina:margin-note:';
@@ -132,12 +133,14 @@ export interface MarginNoteProps {
   children: React.ReactNode;
   /** The DM-mono footnote; defaults to the R94 idiom on a note without a
    *  `label`. A labelled note prints a footnote only when one is passed. */
-  caption?: string;
+  caption?: string | null;
   /** A DM-mono label line printed ABOVE the sentence (return teaching). */
   label?: string;
-  /** One act under the sentence, a link at 44px. Following it recedes the
-   *  note as 'acted'. */
-  act?: { label: string; href: string };
+  /** One act under the sentence at 44px — a link with `href`, else a press
+   *  that only acknowledges. Either recedes the note as 'acted'. */
+  act?: { label: string; href?: string };
+  /** When false, the act is the note's only control: no ×. */
+  dismissible?: boolean;
   /** 'anchor' sets the note in a sheet's margin column. */
   placement?: 'default' | 'anchor';
   /** When false, the primitive's own `document_margin_note` capture is off:
@@ -182,6 +185,7 @@ export function MarginNote({
   caption,
   label,
   act,
+  dismissible = true,
   placement = 'default',
   captureEvents = true,
   actionEvents,
@@ -192,7 +196,10 @@ export function MarginNote({
   onSeen,
   className,
 }: MarginNoteProps) {
-  const footnote = caption ?? (label === undefined ? DEFAULT_CAPTION : undefined);
+  const footnote =
+    caption === null
+      ? undefined
+      : (caption ?? (label === undefined ? DEFAULT_CAPTION : undefined));
   const [visible, setVisible] = useState(false);
   const [expanded, setExpanded] = useState(false);
   // 'shown' fires at most once per mount even as `suppressed` toggles.
@@ -298,29 +305,64 @@ export function MarginNote({
             </span>
           </button>
         )}
-        {act && (
-          <Link
-            href={act.href}
-            onClick={() => recedeAs('acted')}
-            className="da-score-hover mt-1 flex min-h-11 w-fit items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]"
-          >
-            {act.label}
-          </Link>
-        )}
+        {act &&
+          (act.href !== undefined ? (
+            <Link
+              href={act.href}
+              onClick={() => recedeAs('acted')}
+              className={ACT_CLASS}
+            >
+              {act.label}
+            </Link>
+          ) : (
+            <button type="button" onClick={() => recedeAs('acted')} className={ACT_CLASS}>
+              {act.label}
+            </button>
+          ))}
         {footnote !== undefined && (
           <span className="mt-2 block font-mono text-[11px] uppercase tracking-[0.11em] text-[var(--text-faint)]">
             {footnote}
           </span>
         )}
       </p>
-      <button
-        type="button"
-        onClick={() => recedeAs('dismissed')}
-        aria-label="Dismiss note"
-        className="mt-[2px] shrink-0 rounded-[3px] p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-      >
-        <X className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
-      </button>
+      {dismissible && (
+        <button
+          type="button"
+          onClick={() => recedeAs('dismissed')}
+          aria-label="Dismiss note"
+          className="mt-[2px] shrink-0 rounded-[3px] p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        >
+          <X className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
+        </button>
+      )}
     </aside>
+  );
+}
+
+const ACT_CLASS =
+  'da-score-hover mt-1 flex min-h-11 w-fit items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]';
+
+/** US-19 D8 — the one-note tour's key. A new version re-arms it once. */
+export const BAND_TOUR_NOTE_KEY = 'band-tour-v1';
+
+/**
+ * US-19 D8 — the one-note tour, re-cut from this once-only note (R131): one
+ * sentence under the band and the single act `Understood`. In flow, never
+ * modal, never focused, no count and no sequence; once per person per
+ * version. Absent unless `one-voice` is on.
+ */
+export function BandTourNote() {
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  if (!oneVoice) return null;
+  return (
+    <MarginNote
+      noteKey={BAND_TOUR_NOTE_KEY}
+      caption={null}
+      dismissible={false}
+      act={{ label: 'Understood' }}
+      className="mt-2"
+    >
+      The band says what&rsquo;s next on this job. Press it.
+    </MarginNote>
   );
 }

@@ -98,6 +98,8 @@ export function MobileBar() {
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
   const { data: unreadProcurement = 0 } = useProcurementUnreadCount();
   const unread = unreadInbox + unreadProcurement;
+  // US-19 D7 — the left zone's household and place word are never clipped.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   const [moreOpen, setMoreOpen] = useState(false);
   const barRef = useRef<HTMLElement>(null);
@@ -140,6 +142,19 @@ export function MobileBar() {
   // nothing behind it, so the door is ABSENT — it appears when the margin
   // does, and never renames itself in front of the reader.
   const marginCount = inDocument ? (activeDoc?.marginCount ?? null) : null;
+  // US-19 D7 — acts with a ruled place in More lead it, in their order. The
+  // rest keep the shelf's existing place below `Find anything`.
+  const visibleSecondary = secondaryActions.filter(
+    (action) => action.actionKey !== primaryAction?.actionKey,
+  );
+  const orderedActions = visibleSecondary.filter((action) => action.order != null);
+  const menuSecondaryActions = visibleSecondary.filter(
+    (action) => action.order == null,
+  );
+  // The ordered list carries `Call sheet` itself; one door, never two.
+  const callSheetOrdered = orderedActions.some(
+    (action) => action.actionKey === 'open-call-sheet',
+  );
   const inThisDocument: DocumentDoor[] = [
     ...(marginCount
       ? [{ key: 'margin', label: `Margin · ${marginCount}`, open: openMargin }]
@@ -161,7 +176,9 @@ export function MobileBar() {
             label: 'Boards',
             href: boardsRoutePath(documentProjectId),
           },
-          { key: 'callsheet', label: 'Call sheet', open: openCallSheet },
+          ...(callSheetOrdered
+            ? []
+            : [{ key: 'callsheet', label: 'Call sheet', open: openCallSheet }]),
         ]
       : []),
   ];
@@ -273,9 +290,6 @@ export function MobileBar() {
         children: primaryAction.label,
       }
     : null;
-  const menuSecondaryActions = secondaryActions.filter(
-    (action) => action.actionKey !== primaryAction?.actionKey,
-  );
 
   // OD-11: three lines in the left zone (overline, household, stop) need
   // more than the old two-line 64px reserve — bumped to 72px.
@@ -308,7 +322,11 @@ export function MobileBar() {
             <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.58)]">
               In this document
             </span>
-            <span className="block truncate font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
+            <span
+              className={`block font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)] ${
+                oneVoice ? 'break-words' : 'truncate'
+              }`}
+            >
               {household}
             </span>
             {/* PRE-PRINTED and swapped by `visibility`, exactly as A-01 ruled
@@ -323,9 +341,9 @@ export function MobileBar() {
                 dark-ground accent (see the elapsed-time text below). */}
             <span
               aria-hidden={stopLabel ? undefined : true}
-              className={`block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)] ${
-                stopLabel ? '' : 'invisible'
-              }`}
+              className={`block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)] ${
+                oneVoice ? 'break-words' : 'truncate'
+              } ${stopLabel ? '' : 'invisible'}`}
             >
               At {stopLabel ?? '\u00a0'}
             </span>
@@ -388,6 +406,71 @@ export function MobileBar() {
           aria-label="More studio actions"
           className="absolute bottom-[calc(100%+8px)] right-3 w-[min(19rem,calc(100vw-1.5rem))] overflow-hidden rounded-[6px] border border-[rgba(250,247,242,0.2)] bg-[var(--color-charcoal)]"
         >
+          {orderedActions.map((action, index) => {
+            const takeRef = index === 0 ? setFirstMenuItem : undefined;
+            if (action.held) {
+              // D3 — held, not hidden: it stays in the tab order with its
+              // reason beneath and the repair beside it.
+              const reasonId = `mobile-held-reason-${action.actionKey}`;
+              return (
+                <div key={action.actionKey} data-mobile-held-act={action.actionKey}>
+                  <button
+                    ref={takeRef}
+                    type="button"
+                    data-mobile-secondary-action
+                    data-mobile-secondary-key={action.actionKey}
+                    aria-disabled="true"
+                    aria-describedby={reasonId}
+                    className={`${MENU_ITEM} cursor-not-allowed !border-b-0 opacity-60`}
+                  >
+                    <span className="min-w-0 flex-1 text-[14px]">{action.label}</span>
+                  </button>
+                  <p
+                    id={reasonId}
+                    className="px-3 pb-1 text-[12px] text-[rgba(250,247,242,0.58)]"
+                  >
+                    {action.held.reason}
+                  </p>
+                  {action.held.repair && (
+                    <button
+                      type="button"
+                      data-mobile-held-repair={action.actionKey}
+                      onClick={() => closeThen(action.held!.repair!.onPress)}
+                      className={MENU_ITEM}
+                    >
+                      <span
+                        aria-hidden
+                        className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay)]"
+                      >
+                        →
+                      </span>
+                      <span className="min-w-0 flex-1 text-[14px]">
+                        {action.held.repair.label}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <button
+                key={action.actionKey}
+                ref={takeRef}
+                type="button"
+                data-mobile-secondary-action
+                data-mobile-secondary-key={action.actionKey}
+                disabled={action.disabled || action.loading}
+                aria-busy={action.loading || undefined}
+                onClick={() => closeThen(action.onPress)}
+                className={MENU_ITEM}
+              >
+                <span className="min-w-0 flex-1 text-[14px]">
+                  {action.label}
+                  {action.loading ? '…' : ''}
+                </span>
+              </button>
+            );
+          })}
           {inThisDocument.length > 0 && (
             <div role="group" aria-labelledby={IN_DOCUMENT_GROUP_LABEL_ID}>
               <div className="border-b border-[rgba(250,247,242,0.1)] px-3 pt-2">
@@ -412,7 +495,10 @@ export function MobileBar() {
                     </span>
                   </>
                 );
-                const takeRef = index === 0 ? setFirstMenuItem : undefined;
+                const takeRef =
+                  index === 0 && orderedActions.length === 0
+                    ? setFirstMenuItem
+                    : undefined;
                 return 'href' in door ? (
                   <Link
                     key={door.key}
@@ -440,7 +526,11 @@ export function MobileBar() {
             </div>
           )}
           <button
-            ref={inThisDocument.length === 0 ? setFirstMenuItem : undefined}
+            ref={
+              inThisDocument.length === 0 && orderedActions.length === 0
+                ? setFirstMenuItem
+                : undefined
+            }
             type="button"
             data-mobile-find-anything
             onClick={() => closeThen(openRegister)}

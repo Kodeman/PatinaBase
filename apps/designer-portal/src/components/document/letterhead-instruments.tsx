@@ -15,7 +15,7 @@
  *     shows (full / milestone / curated) is set where the mirror is opened.
  */
 
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -31,7 +31,21 @@ import { useSaveProjectVitals } from '@/hooks/use-project-lifecycle';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { familyLabel } from '@/lib/document/family-label';
 import { vitalsInstrumentSuffix } from '@/lib/document/roster-derivation';
-import { useMobilePrimaryAction } from './mobile/mobile-shell';
+import { clientShortName } from '@/lib/document/document-guide';
+import { MESSAGE_WITHHELD, messageLabel } from '@/lib/document/act-names';
+import {
+  standingDoorLabel,
+  type LensVoice,
+} from '@/lib/document/lens-band-derivation';
+import {
+  useMobilePrimaryAction,
+  useMobileSecondaryAction,
+  type MobileSecondaryAction,
+} from './mobile/mobile-shell';
+import { MOBILE_ACTION_PRIORITY } from './mobile/lifecycle-mobile-action';
+import { OPEN_STANDING_SHEET_EVENT } from './lens-band';
+import { openVitalsEditor } from './letterhead-vitals';
+import { openKeys } from './overlays/keys-sheet';
 import { ClientMirror } from './client-mirror';
 import {
   DocumentAction,
@@ -257,7 +271,12 @@ export function LetterheadInstruments({
   clientProfileId,
   clientName,
   engagementId = null,
+  voice = null,
 }: {
+  /** US-19 D7 (`one-voice`) — the band's Next and its door, which the phone
+   *  dock repeats: the centre is Next's act in the band's words, and More
+   *  carries `Standing · N` when the band's measure moved it there. */
+  voice?: Pick<LensVoice, 'next' | 'standingCount' | 'doorInDock'> | null;
   /** Set on a project document; null pre-project (proposal / relationship). */
   projectId?: string | null;
   /** Set when a live proposal exists — drives the pre-project client mirror. */
@@ -312,20 +331,125 @@ export function LetterheadInstruments({
   const [linking, setLinking] = useState(false);
   const messageReasonId = useId();
 
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const firstName = family === 'the client' ? null : clientShortName(family);
+
   useMobilePrimaryAction(
     canSendNote
       ? {
           actionKey: 'message-family',
           surfaceKey: 'open-document',
           regionKey: 'letterhead-actions',
-          label: `Message ${family}`,
+          label: oneVoice ? messageLabel(firstName) : `Message ${family}`,
           target: { kind: 'press', onPress: () => setComposing((v) => !v) },
         }
       : null,
   );
 
+  // US-19 D7 — under `one-voice` the dock's centre is the band's Next, in the
+  // band's exact words, at the top priority; it wraps, never shortens. Message
+  // keeps its quiet registration above, so it stands in only when no Next does.
+  const next = oneVoice ? (voice?.next ?? null) : null;
+  useMobilePrimaryAction(
+    next
+      ? {
+          actionKey: `next:${next.act.key}`,
+          surfaceKey: 'open-document',
+          regionKey: 'lens-band',
+          label: next.act.label,
+          target: { kind: 'press', onPress: () => next.act.onAct() },
+          disabled: next.act.disabled,
+        }
+      : null,
+    { priority: MOBILE_ACTION_PRIORITY.next },
+  );
+
+  // D7 — More, in its ruled order. `Standing · N` leads when the band's
+  // measure moved the door into the dock (D2 at 390).
+  const [sharingAsk, setSharingAsk] = useState(0);
+  const dockActs: MobileSecondaryAction[] = oneVoice
+    ? [
+        ...(voice?.doorInDock && voice.standingCount > 0
+          ? [
+              {
+                actionKey: 'standing',
+                label: standingDoorLabel(voice.standingCount),
+                onPress: () =>
+                  window.dispatchEvent(new Event(OPEN_STANDING_SHEET_EVENT)),
+              },
+            ]
+          : []),
+        ...(canSendNote
+          ? [
+              {
+                actionKey: 'message-family',
+                label: messageLabel(firstName),
+                onPress: () => setComposing(true),
+              },
+            ]
+          : messageHeld
+            ? [
+                {
+                  actionKey: 'message-family',
+                  label: messageLabel(null),
+                  onPress: () => {},
+                  held: {
+                    reason: MESSAGE_WITHHELD.reason,
+                    repair: {
+                      label: MESSAGE_WITHHELD.repair,
+                      onPress: () => setLinking(true),
+                    },
+                  },
+                },
+              ]
+            : []),
+        ...(canMirror
+          ? [
+              {
+                actionKey: 'preview-as-client',
+                label: "Preview the client's copy",
+                onPress: () => setMirrorOpen(true),
+              },
+            ]
+          : []),
+        ...(projectId
+          ? [
+              {
+                actionKey: 'sharing-settings',
+                label: 'Sharing',
+                onPress: () => setSharingAsk((n) => n + 1),
+              },
+              {
+                actionKey: 'open-call-sheet',
+                label: 'Call sheet',
+                onPress: () =>
+                  window.dispatchEvent(
+                    new CustomEvent('document:open-call-sheet', {
+                      detail: { mode: 'sheet' },
+                    }),
+                  ),
+              },
+              {
+                actionKey: 'set-dates',
+                label: 'Set dates',
+                onPress: () => openVitalsEditor('target'),
+              },
+              {
+                actionKey: 'set-budget-band',
+                label: 'Set a budget band',
+                onPress: () => openVitalsEditor('budget'),
+              },
+            ]
+          : []),
+        { actionKey: 'keys', label: 'Keys', onPress: () => openKeys('drawer') },
+      ].map((act, order) => ({ ...act, order }))
+    : [];
+
   return (
     <>
+      {dockActs.map((act) => (
+        <DockAct key={act.actionKey} action={act} />
+      ))}
       <DocumentActionGroup
         surfaceKey="open-document"
         regionKey="letterhead-actions"
@@ -396,7 +520,9 @@ export function LetterheadInstruments({
             {scan.owner_kind === 'designer' ? 'Your scan' : 'The scan'}
           </DocumentAction>
         )}
-        {projectId && <SharingTierInstrument projectId={projectId} />}
+        {projectId && (
+          <SharingTierInstrument projectId={projectId} openAsk={sharingAsk} />
+        )}
         {projectId && <CallSheetInstrument projectId={projectId} />}
         {messageHeld && (
           <p
@@ -496,6 +622,12 @@ export function LetterheadInstruments({
   );
 }
 
+/** One D7 act published into the dock's More; renders nothing. */
+function DockAct({ action }: { action: MobileSecondaryAction }) {
+  useMobileSecondaryAction(action);
+  return null;
+}
+
 /**
  * The Call Sheet instrument (Wave 3) — "CALL SHEET · N", plus a terracotta
  * mono "· N ON PAPER" tail when someone on the job is only reachable by
@@ -542,11 +674,24 @@ function CallSheetInstrument({ projectId }: { projectId: string }) {
  * D4) with the three tiers. Selecting writes client_visibility_tier through
  * the vitals save channel and folds the panel; failures read inline (R83).
  */
-function SharingTierInstrument({ projectId }: { projectId: string }) {
+function SharingTierInstrument({
+  projectId,
+  openAsk = 0,
+}: {
+  projectId: string;
+  /** D7 — each increment is the dock's `Sharing` asking the panel open. */
+  openAsk?: number;
+}) {
   const { data: project } = useProjectV2(projectId) as { data: any };
   const save = useSaveProjectVitals(projectId);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (openAsk === 0) return;
+    anchorRef.current?.scrollIntoView?.({ block: 'center' });
+    setOpen(true);
+  }, [openAsk]);
 
   const current = (project?.client_visibility_tier ??
     'milestone') as (typeof TIERS)[number]['value'];
@@ -573,7 +718,7 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
   };
 
   return (
-    <span className="relative">
+    <span ref={anchorRef} className="relative">
       {/* W3-R5 §1: this ONE act is both "sharing" and its tier — there is no
           separate MILESTONES instrument to fold. It prints the bare word at
           EVERY width: the tier is state the panel below prints one press away,

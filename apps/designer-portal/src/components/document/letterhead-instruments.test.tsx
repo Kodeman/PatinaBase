@@ -21,10 +21,23 @@
  * scan (no photo resolves, so the scan door never mounts and the row is the
  * four acts the budget was measured on).
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { RedLetterRow } from './red-letter-zone';
 import { LetterheadInstruments } from './letterhead-instruments';
-import { useMobilePrimaryAction } from './mobile/mobile-shell';
+import {
+  useMobilePrimaryAction,
+  useMobileSecondaryAction,
+  type MobileSecondaryAction,
+} from './mobile/mobile-shell';
+import { MOBILE_ACTION_PRIORITY } from './mobile/lifecycle-mobile-action';
+import { openKeys } from './overlays/keys-sheet';
+import { openVitalsEditor } from './letterhead-vitals';
+import {
+  deriveNext,
+  rankStanding,
+  type LensNeedRow,
+} from '@/lib/document/lens-band-derivation';
 
 // No tier recorded — the instrument's own default is `milestone`, which is
 // the tier the W3-R4 row is specified against. F52 cases set a proposal.
@@ -60,11 +73,24 @@ jest.mock('@/hooks/use-margin-items', () => ({ invalidateMarginSurfaces: jest.fn
 jest.mock('@/hooks/use-project-lifecycle', () => ({
   useSaveProjectVitals: () => ({ mutate: jest.fn(), isPending: false }),
 }));
+// Call Sheet is a flag-gated instrument; the measured row includes it. US-19's
+// `one-voice` is off unless a case turns it on.
+let mockOneVoice = false;
 jest.mock('@/hooks/use-feature-flag', () => ({
-  // Call Sheet is a flag-gated instrument; the measured row includes it.
-  useFeatureFlag: () => ({ value: true, isLoading: false }),
+  useFeatureFlag: (key: string) => ({
+    value: key === 'one-voice' ? mockOneVoice : true,
+    isLoading: false,
+  }),
 }));
-jest.mock('./mobile/mobile-shell', () => ({ useMobilePrimaryAction: jest.fn() }));
+jest.mock('./mobile/mobile-shell', () => ({
+  useMobilePrimaryAction: jest.fn(),
+  useMobileSecondaryAction: jest.fn(),
+}));
+jest.mock('./overlays/keys-sheet', () => ({ openKeys: jest.fn() }));
+jest.mock('./letterhead-vitals', () => ({ openVitalsEditor: jest.fn() }));
+jest.mock('./lens-band', () => ({
+  OPEN_STANDING_SHEET_EVENT: 'document:open-standing-sheet',
+}));
 jest.mock('./client-mirror', () => ({ ClientMirror: () => null }));
 jest.mock('./proposal-preview', () => ({ ProposalPreview: () => null }));
 jest.mock('./overlays/household-sheet', () => ({
@@ -241,7 +267,7 @@ describe('Message needs a linked client (F52)', () => {
   it('a captured household (relationship, no profile) counts as linked, as the chip says', () => {
     mockProject = { proposal: { designer_client_id: 'dc-1' } };
     renderFor(null);
-    expect(primary).toHaveBeenLastCalledWith(
+    expect(primary).toHaveBeenCalledWith(
       expect.objectContaining({ actionKey: 'message-family', label: 'Message the client' }),
     );
     expect(screen.queryByRole('button', { name: 'Link a client' })).not.toBeInTheDocument();
@@ -249,7 +275,7 @@ describe('Message needs a linked client (F52)', () => {
 
   it('with a client: Message is the primary action and prints live, unchanged', () => {
     renderFor('client-1');
-    expect(primary).toHaveBeenLastCalledWith(
+    expect(primary).toHaveBeenCalledWith(
       expect.objectContaining({ actionKey: 'message-family', label: 'Message the client' }),
     );
     const message = screen.getByRole('button', { name: 'Message the client' });
@@ -258,5 +284,177 @@ describe('Message needs a linked client (F52)', () => {
     expect(screen.queryByText('Link a client first.')).not.toBeInTheDocument();
     fireEvent.click(message);
     expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+});
+
+/**
+ * US-19 D7 (`one-voice`) — the phone dock. The centre is the band's Next in
+ * the band's words; More carries the ruled acts in the ruled order; Message
+ * with no client linked is held there, never the centre.
+ */
+describe('the phone dock under one-voice (D7, §3 2-6)', () => {
+  const primary = useMobilePrimaryAction as jest.Mock;
+  const secondary = useMobileSecondaryAction as jest.Mock;
+
+  // Chen Residence, as lens-band-derivation.test.ts states it: one balance
+  // owed to the maker (class 1) above two class-2 rows.
+  const NOW = new Date('2026-08-29T12:00:00');
+  const payOnAct = jest.fn();
+  const row = (
+    key: string,
+    kind: RedLetterRow['kind'],
+    text: string,
+    actionLabel: string,
+    dueOn: string | null,
+    owner: LensNeedRow['owner'],
+    onAct: () => void = jest.fn(),
+  ): LensNeedRow => ({ key, kind, text, actionLabel, onAct, urgent: true, dueOn, owner });
+  const CHEN_NEEDS: LensNeedRow[] = [
+    row('approval-0', 'overdue_decision', 'Primary bedroom approval overdue 6 days', 'Send a reminder', '2026-08-23', 'client'),
+    row('pay-0', 'payment_due', 'Balance to Woodward & Sons · $12,400 due Aug 20 — PO WS-188', 'Record payment', '2026-08-20', 'designer', payOnAct),
+    row('po-0', 'po_unacknowledged', 'PO-2026-0418 sent — no acknowledgment, 14 days', 'Follow up with the maker', null, 'maker'),
+  ];
+  const chenNext = () =>
+    deriveNext({
+      standing: rankStanding([], CHEN_NEEDS, NOW),
+      ownAct: null,
+      clientFirstName: null,
+      closed: false,
+    });
+
+  beforeEach(() => {
+    installTier(false);
+    primary.mockClear();
+    secondary.mockClear();
+    payOnAct.mockClear();
+    (openKeys as jest.Mock).mockClear();
+    (openVitalsEditor as jest.Mock).mockClear();
+    mockProject = {};
+    mockOneVoice = true;
+  });
+  afterAll(() => {
+    mockOneVoice = false;
+  });
+
+  function renderDock({
+    clientProfileId,
+    clientName = 'Chen Residence',
+    doorInDock = false,
+  }: {
+    clientProfileId: string | null;
+    clientName?: string;
+    doorInDock?: boolean;
+  }) {
+    const next = chenNext();
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <LetterheadInstruments
+          projectId="proj-1"
+          clientProfileId={clientProfileId}
+          clientName={clientName}
+          voice={{ next, standingCount: 2, doorInDock }}
+        />
+      </QueryClientProvider>,
+    );
+    return next;
+  }
+
+  /** More, as registered: the latest registration per act, in its order. */
+  function more(): MobileSecondaryAction[] {
+    const latest = new Map<string, MobileSecondaryAction>();
+    for (const [action] of secondary.mock.calls) {
+      if (action) latest.set(action.actionKey, action);
+    }
+    return [...latest.values()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+
+  function centreCall() {
+    return primary.mock.calls.find(
+      ([action, options]) =>
+        action !== null && options?.priority === MOBILE_ACTION_PRIORITY.next,
+    );
+  }
+
+  it('2-6: the centre reads deriveNext()’s act in full, at the top priority, and lands where the band does', () => {
+    const next = renderDock({ clientProfileId: null });
+    expect(next?.act.label).toBe('Record the payment');
+
+    const call = centreCall();
+    expect(call).toBeDefined();
+    const [action, options] = call!;
+    expect(action.label).toBe(next!.act.label);
+    expect(options.priority).toBeGreaterThan(MOBILE_ACTION_PRIORITY.lifecycle);
+
+    action.target.onPress();
+    expect(payOnAct).toHaveBeenCalledTimes(1);
+  });
+
+  it('2-6: with no client linked, Message is never the centre; More holds it with its reason and repair', () => {
+    renderDock({ clientProfileId: null });
+
+    for (const [action] of primary.mock.calls) {
+      expect(action?.actionKey).not.toBe('message-family');
+    }
+    const message = more().find((act) => act.actionKey === 'message-family');
+    expect(message).toMatchObject({
+      label: 'Message the client',
+      held: { reason: 'Link a client first.', repair: { label: 'Link a client' } },
+    });
+
+    expect(screen.queryByTestId('household-sheet')).not.toBeInTheDocument();
+    act(() => message!.held!.repair!.onPress());
+    expect(screen.getByTestId('household-sheet')).toBeInTheDocument();
+  });
+
+  it('prints More in the ruled order', () => {
+    renderDock({ clientProfileId: 'client-1' });
+    expect(more().map((act) => act.label)).toEqual([
+      'Message Chen',
+      "Preview the client's copy",
+      'Sharing',
+      'Call sheet',
+      'Set dates',
+      'Set a budget band',
+      'Keys',
+    ]);
+    const byKey = (key: string) => more().find((act) => act.actionKey === key)!;
+    expect(byKey('message-family').held).toBeUndefined();
+
+    byKey('set-dates').onPress();
+    expect(openVitalsEditor).toHaveBeenCalledWith('target');
+    byKey('set-budget-band').onPress();
+    expect(openVitalsEditor).toHaveBeenCalledWith('budget');
+    byKey('keys').onPress();
+    expect(openKeys).toHaveBeenCalledTimes(1);
+
+    const onCallSheet = jest.fn();
+    window.addEventListener('document:open-call-sheet', onCallSheet);
+    byKey('open-call-sheet').onPress();
+    window.removeEventListener('document:open-call-sheet', onCallSheet);
+    expect(onCallSheet).toHaveBeenCalledTimes(1);
+  });
+
+  it('leads More with `Standing · N` when the band moved its door to the dock, opening the one sheet', () => {
+    renderDock({ clientProfileId: 'client-1', doorInDock: true });
+    const [first] = more();
+    expect(first.label).toBe('Standing · 2');
+
+    const onOpen = jest.fn();
+    window.addEventListener('document:open-standing-sheet', onOpen);
+    first.onPress();
+    window.removeEventListener('document:open-standing-sheet', onOpen);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('flag off: no Next centre, nothing published to More, Message unchanged', () => {
+    mockOneVoice = false;
+    renderDock({ clientProfileId: 'client-1', clientName: 'The Ellsworths', doorInDock: true });
+
+    expect(centreCall()).toBeUndefined();
+    expect(secondary).not.toHaveBeenCalled();
+    expect(primary).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: 'message-family', label: 'Message The Ellsworths' }),
+    );
   });
 });

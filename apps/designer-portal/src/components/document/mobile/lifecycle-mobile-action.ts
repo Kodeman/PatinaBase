@@ -5,6 +5,8 @@ export const MOBILE_ACTION_PRIORITY = {
   letterhead: 0,
   guide: 5,
   lifecycle: 10,
+  /** US-19 D7 (`one-voice`) — the band's Next act owns the dock's centre. */
+  next: 20,
 } as const;
 
 export function signedProposalMobileAction({

@@ -207,8 +207,9 @@ jest.mock('@patina/supabase', () => ({
   useDiscovery: (id: string | null) =>
     id ? mockDiscoveryQuery : MOCK_DISCOVERY_UNASKED,
   useBeginDirection: () => ({ mutateAsync: mockBeginDirectionMutateAsync }),
-  // Read by the real MarginRail.
+  // Read by the real MarginRail, and (US-19 D1/D6) by the band's own act.
   useProjectFFEItems: () => ({ data: [] }),
+  useInstallWindow: () => ({ data: null, isSuccess: true }),
   useProjectContextualHandoffs: () => mockContextualHandoffsQuery,
   useProjectParties: () => ({ data: [] }),
   useCoordinationItems: () => ({ data: [] }),
@@ -2146,6 +2147,64 @@ describe('DocumentPage guide activation', () => {
       expect(screen.getByRole('button', { name: 'Open the task' })).toBeInTheDocument();
       // One thing stands, so there is nothing to file behind the door.
       expect(screen.queryByRole('button', { name: /MORE$/ })).not.toBeInTheDocument();
+    });
+
+    // US-19 2-3 (`one-voice`) — Chen: the balance owed to the maker is Next,
+    // named from the one table, beside the Standing door.
+    it('one-voice, Chen: line 2 reads `Next ─` the Woodward & Sons balance and `Record the payment`', () => {
+      asProjectDocument();
+      mockEnabledFlags = ['one-voice'];
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: null,
+          needs: [
+            {
+              kind: 'payment_due',
+              text: 'Balance to Woodward & Sons · $12,400 due Aug 20 — PO WS-188',
+              actionLabel: 'Record payment', urgent: false, stamp: { label: 'PAYMENT DUE' },
+              dueOn: '2026-08-20', owner: 'designer',
+            },
+            {
+              kind: 'po_unacknowledged',
+              text: 'PO-2026-0418 sent — no acknowledgment, 14 days',
+              actionLabel: 'Follow up with the maker', urgent: false, stamp: { label: 'SILENT' },
+              owner: 'maker',
+            },
+          ],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(bandLine2()?.textContent).toContain('Next ─');
+      expect(bandSentence()).toContain('Woodward & Sons');
+      expect(screen.getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
+    });
+
+    // D8 — the owner the need was raised with reaches the band: custody.
+    it('one-voice: a need in the client’s hand reads `Waiting on …:`', () => {
+      asProjectDocument();
+      mockEnabledFlags = ['one-voice'];
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: null,
+          needs: [{
+            kind: 'overdue_decision', text: 'Primary bedroom approval overdue 6 days',
+            actionLabel: 'Send a reminder', urgent: true, stamp: { label: 'OVERDUE' },
+            owner: 'client',
+          }],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(bandSentence()).toMatch(/^Waiting on .+: Primary bedroom approval overdue 6 days/);
     });
 
     it('prints the guide sentence on a non-project document', () => {

@@ -6,9 +6,12 @@ import {
   MobileShellProvider,
   useMobileActiveDoc,
   useMobilePrimaryAction,
+  useMobileSecondaryAction,
   type MobileActiveDoc,
   type MobilePrimaryAction,
+  type MobileSecondaryAction,
 } from './mobile-shell';
+import { MOBILE_ACTION_PRIORITY } from './lifecycle-mobile-action';
 
 /** W5-R4(a) — `MobileSheets` now hosts the margin's note composer, so the tree
  *  needs a query client the way every other act surface does. */
@@ -756,5 +759,115 @@ describe('the thumb edge’s one owner (D-B54)', () => {
     mockHeldProjectId = null;
     mountBar();
     expect(screen.queryByTestId('mobile-bar')).toBeNull();
+  });
+});
+
+/**
+ * US-19 D7 — the dock as the Document publishes it under `one-voice`: Next at
+ * the top priority in the centre, the ruled acts leading More in their order,
+ * and Message held there (D3) when no client is linked.
+ */
+describe('the dock · Next centre and More order (US-19 D7)', () => {
+  function Secondary({ action }: { action: MobileSecondaryAction }) {
+    useMobileSecondaryAction(action);
+    return null;
+  }
+  function Primary({
+    action,
+    priority,
+  }: {
+    action: MobilePrimaryAction;
+    priority: number;
+  }) {
+    useMobilePrimaryAction(action, { priority });
+    return null;
+  }
+  const press = (label: string, actionKey = label): MobilePrimaryAction => ({
+    actionKey,
+    surfaceKey: 'open-document',
+    regionKey: 'test',
+    label,
+    target: { kind: 'press', onPress: jest.fn() },
+  });
+  const repair = jest.fn();
+  const RULED: MobileSecondaryAction[] = [
+    {
+      actionKey: 'message-family',
+      label: 'Message the client',
+      onPress: jest.fn(),
+      held: { reason: 'Link a client first.', repair: { label: 'Link a client', onPress: repair } },
+    },
+    { actionKey: 'preview-as-client', label: "Preview the client's copy", onPress: jest.fn() },
+    { actionKey: 'sharing-settings', label: 'Sharing', onPress: jest.fn() },
+    { actionKey: 'open-call-sheet', label: 'Call sheet', onPress: jest.fn() },
+    { actionKey: 'set-dates', label: 'Set dates', onPress: jest.fn() },
+    { actionKey: 'set-budget-band', label: 'Set a budget band', onPress: jest.fn() },
+    { actionKey: 'keys', label: 'Keys', onPress: jest.fn() },
+  ].map((act, order) => ({ ...act, order }));
+
+  beforeEach(() => {
+    mockPathname = '/doc/proj-1';
+    mockCallSheetOn = true;
+    mockOffer = null;
+    mockHeldProjectId = null;
+    repair.mockClear();
+  });
+
+  function mountDock() {
+    return render(
+      <TestProviders>
+        <HoldDocument doc={heldDocument} />
+        <Primary action={press('Open the project')} priority={MOBILE_ACTION_PRIORITY.lifecycle} />
+        <Primary action={press('Record the payment', 'next:pay')} priority={MOBILE_ACTION_PRIORITY.next} />
+        {/* Registered out of order: the bar orders by the act's place. */}
+        {[...RULED].reverse().map((act) => (
+          <Secondary key={act.actionKey} action={act} />
+        ))}
+        <MobileBar />
+      </TestProviders>,
+    );
+  }
+
+  it('the centre is the act at the top priority, above a lifecycle act', () => {
+    mountDock();
+    const bar = screen.getByTestId('mobile-bar');
+    expect(within(bar).getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
+    expect(within(bar).queryByRole('button', { name: 'Open the project' })).toBeNull();
+  });
+
+  it('leads More with the ruled acts, in order, and keeps one Call sheet door', () => {
+    mountDock();
+    const menu = openMore();
+    const rows = menu
+      .getAllByRole('button')
+      .map((button) => button.textContent?.replace(/[→↗]/g, '').trim());
+    expect(rows.slice(0, 8)).toEqual([
+      'Message the client',
+      'Link a client',
+      "Preview the client's copy",
+      'Sharing',
+      'Call sheet',
+      'Set dates',
+      'Set a budget band',
+      'Keys',
+    ]);
+    expect(rows.filter((row) => row?.includes('Call sheet'))).toHaveLength(1);
+  });
+
+  it('holds Message: aria-disabled, its reason beneath, the repair beside it', () => {
+    mountDock();
+    const menu = openMore();
+    const message = menu.getByRole('button', { name: 'Message the client' });
+    expect(message).toHaveAttribute('aria-disabled', 'true');
+    expect(message).not.toHaveAttribute('disabled');
+    expect(message).toHaveFocus();
+    const reason = document.getElementById(message.getAttribute('aria-describedby')!);
+    expect(reason).toHaveTextContent('Link a client first.');
+
+    fireEvent.click(message);
+    expect(RULED[0].onPress).not.toHaveBeenCalled();
+
+    fireEvent.click(menu.getByRole('button', { name: 'Link a client' }));
+    expect(repair).toHaveBeenCalledTimes(1);
   });
 });

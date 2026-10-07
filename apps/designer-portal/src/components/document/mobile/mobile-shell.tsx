@@ -114,6 +114,12 @@ export type MobileSecondaryAction = {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
+  /** US-19 D7 — an act with a ruled place in More. Ordered acts lead the
+   *  menu, ascending; unordered ones keep the latest-first order. */
+  order?: number;
+  /** D3 — offered, but not takeable now: `aria-disabled`, the reason beneath,
+   *  the repair beside it. */
+  held?: { reason: string; repair?: { label: string; onPress: () => void } };
 };
 
 interface MobileShellValue {
@@ -210,7 +216,11 @@ export function MobileShellProvider({
       // transition. Keep the latest owner and show one menu act per action key.
       const seen = new Set<string>();
       const next = [...secondaryRegistry.current.values()]
-        .sort((a, b) => b.sequence - a.sequence)
+        .sort(
+          (a, b) =>
+            (a.action.order ?? Infinity) - (b.action.order ?? Infinity) ||
+            b.sequence - a.sequence,
+        )
         .flatMap(({ action: registered }) => {
           if (seen.has(registered.actionKey)) return [];
           seen.add(registered.actionKey);
@@ -322,19 +332,49 @@ export function useMobileSecondaryAction(action: MobileSecondaryAction | null) {
   const press = useCallback(() => {
     latest.current?.onPress();
   }, []);
+  const repair = useCallback(() => {
+    latest.current?.held?.repair?.onPress();
+  }, []);
 
   const actionKey = action?.actionKey ?? null;
   const label = action?.label ?? null;
   const disabled = action?.disabled ?? false;
   const loading = action?.loading ?? false;
+  const order = action?.order ?? null;
+  const heldReason = action?.held?.reason ?? null;
+  const repairLabel = action?.held?.repair?.label ?? null;
 
   useEffect(() => {
     const ownerId = owner.current;
     const current = latest.current;
-    const normalized = current ? { ...current, onPress: press } : null;
+    const normalized: MobileSecondaryAction | null = current
+      ? {
+          ...current,
+          onPress: press,
+          held: current.held
+            ? {
+                reason: current.held.reason,
+                repair: current.held.repair
+                  ? { label: current.held.repair.label, onPress: repair }
+                  : undefined,
+              }
+            : undefined,
+        }
+      : null;
     registerSecondaryAction(ownerId, normalized);
     return () => registerSecondaryAction(ownerId, null);
-  }, [actionKey, disabled, label, loading, press, registerSecondaryAction]);
+  }, [
+    actionKey,
+    disabled,
+    heldReason,
+    label,
+    loading,
+    order,
+    press,
+    registerSecondaryAction,
+    repair,
+    repairLabel,
+  ]);
 }
 
 /** Page-side: publish the held document to the shell while mounted, and clear
