@@ -155,6 +155,7 @@ import { useRoomLens } from './room-lens-context';
 import { MakerReading, ReadingLens } from './buying/maker-reading';
 import { NextActReading } from './buying/next-act-reading';
 import { InstallManifest } from './buying/install-manifest';
+import { InstallReadingLine } from './overlays/ask-maker-sheet';
 import type { BuyingReading } from '@/lib/document/buying-readings';
 import {
   STATE_WORDS,
@@ -1894,6 +1895,12 @@ function FFESectionBody({
             </div>
           )}
         </>
+      )}
+
+      {/* D6 (slice 1, `ask-the-paper`): the Install head's own status line —
+          the install reading and its act. Flag off, it renders nothing. */}
+      {mode === 'install' && sectionKey !== 'care' && !selecting && (
+        <InstallReadingLine projectId={projectId} items={items} />
       )}
 
       {!ffeFolded && ffeQuiet && (
