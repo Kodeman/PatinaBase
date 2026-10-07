@@ -132,6 +132,7 @@ import { ProjectApprovalDocumentMount } from '@/components/document/project-appr
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { ClientNoteComposer } from '@/components/document/client-note-composer';
 import { CallSheetMount } from '@/components/document/roster/call-sheet-mount';
+import { RecordAChangeSheet } from '@/components/document/overlays/record-a-change-sheet';
 import type { CallSheetOpenMode } from '@/components/document/roster/call-sheet';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
@@ -3567,6 +3568,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           clientProfileId={row.client_profile_id}
           openMode={callSheetMode}
         />
+      )}
+
+      {/* D5 (US-19): Record a change — the router every doorway dispatches
+          `document:open-record-a-change` to. Self-gated on `ask-the-paper`. */}
+      {row.engagement_kind === 'project' && row.project_id && (
+        <RecordAChangeSheet projectId={row.project_id} clientName={row.client_name} />
       )}
     </div>
     </>

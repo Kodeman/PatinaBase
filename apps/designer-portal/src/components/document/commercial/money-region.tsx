@@ -38,6 +38,9 @@ import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { RegionRule } from '../region/region-rule';
 import { useRegionFold, type RegionFoldKey } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { NAMED_ACTS } from '@/lib/document/act-names';
+import { openRecordAChange } from '../overlays/record-a-change-sheet';
 import { ProjectAuthorityBandForProject } from './project-authority-band';
 import { ProjectCommerceSection } from './project-commerce-section';
 import {
@@ -122,6 +125,7 @@ export function MoneyRegion({
 
   // The same word the accounts band uses for this act, derived the same way.
   const changeOnly = activeSection === 'install' || activeSection === 'care';
+  const askThePaper = useFeatureFlag('ask-the-paper').value;
 
   const account = accountQuery.data ?? null;
   const accountFailed = Boolean(accountQuery.isError);
@@ -243,6 +247,17 @@ export function MoneyRegion({
       label: 'Draw an invoice',
       onClick: () => openInvoiceComposer({ projectId }),
     },
+    // D5 (US-19) — Record a change, the head's second act: it opens the router
+    // (`What changed?`), never a sheet of its own.
+    ...(askThePaper
+      ? [
+          {
+            key: 'record-a-change-money-head',
+            label: NAMED_ACTS.recordChange,
+            onClick: () => openRecordAChange({ origin: 'money-head' }),
+          },
+        ]
+      : []),
     // R81 — the Amendment: scope changes composed from the money region (the
     // margin escalation is the other doorway). The band listens for this
     // event and opens its own AmendmentSheet.

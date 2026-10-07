@@ -1,0 +1,372 @@
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+
+let mockAskThePaper = true;
+let mockItems: Record<string, unknown>[] = [];
+
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (flag: string) => ({
+    value: flag === 'ask-the-paper' ? mockAskThePaper : false,
+    isLoading: false,
+  }),
+}));
+
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: {
+    actionShown: jest.fn(),
+    actionSelected: jest.fn(),
+    regionFolded: jest.fn(),
+  },
+}));
+
+jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
+
+// The destinations are proven in their own suites; here they only have to be
+// reached, with the right line.
+jest.mock('@/components/document/overlays/amendment-sheet', () => ({
+  AmendmentSheet: ({ open, projectId }: { open: boolean; projectId: string }) =>
+    open ? <div data-testid="amendment-sheet">{projectId}</div> : null,
+}));
+
+jest.mock('@/components/document/line-unfold/change-order', () => ({
+  ChangeOrderSheet: ({ item, poLabel }: { item: { id: string }; poLabel: string }) => (
+    <div data-testid="change-order-sheet">
+      {item.id} · {poLabel}
+    </div>
+  ),
+}));
+
+// ── The Pieces region's harness (ffe-section-spec-details-link.test.tsx) ──
+
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+}));
+
+jest.mock('@/components/document/buying/install-manifest', () => ({
+  InstallManifest: () => null,
+}));
+
+jest.mock('@patina/supabase', () => ({
+  useStudioPurchases: () => ({ data: [] }),
+  useProjectPoCostLines: () => ({ data: [] }),
+  useUnresolvedProcurementExceptions: () => ({ data: [] }),
+  useProjectFFEItems: () => ({
+    data: mockItems,
+    isLoading: false,
+    isError: false,
+    refetch: jest.fn(),
+  }),
+  useProjectFfeReadiness: () => ({
+    data: mockItems.map((item) => ({ selectionId: item.id, ready: true, missingFields: [] })),
+  }),
+  useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
+  useFfeInvoiceCoverage: () => ({ data: {} }),
+}));
+
+jest.mock('@/components/document/schedule/add-to-project-sheet', () => ({
+  AddToProjectSheet: () => null,
+  openAddToProject: jest.fn(),
+}));
+
+jest.mock('@/hooks/use-document-rooms', () => ({
+  useDocumentRooms: () => ({ data: [] }),
+  useAddDocumentRoom: () => ({ mutate: jest.fn() }),
+}));
+
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  commercialDocumentKeys: { budget: (id: string) => ['working-budget', id] },
+  useProjectInstruments: () => ({ data: [] }),
+  useTradeScopes: () => ({ data: [], isPending: false }),
+  useProjectBillingAuthority: () => ({ data: null }),
+  useWorkingBudget: () => ({ isLoading: false, data: null }),
+  useReleaseForAuthorization: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useSendFurnishingsAuthorization: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  usePublishBudgetCheckpoint: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useOverrideBudgetCheckpoint: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));
+
+jest.mock('@/components/portal/ffe/stages', () => ({
+  STAGE_CONFIG: new Proxy(
+    {},
+    {
+      get: (_target, key: string) => ({
+        key,
+        label: key.charAt(0).toUpperCase() + key.slice(1),
+        color: 'var(--text-muted)',
+      }),
+    },
+  ),
+}));
+
+jest.mock('@/components/document/accounts/invoice-overlays', () => ({
+  openInvoiceComposer: jest.fn(),
+}));
+jest.mock('@/components/document/work-block', () => ({ WorkBlock: () => null }));
+jest.mock('@/components/document/folio-strip', () => ({ FolioStrip: () => null }));
+jest.mock('@/components/document/strata-mark', () => ({ StrataMark: () => null }));
+jest.mock('@/components/document/strata-mini-rule', () => ({ StrataMiniRule: () => null }));
+jest.mock('@/components/document/line-unfold', () => ({
+  LineUnfold: ({ item }: { item: { id: string } }) => (
+    <div data-testid={`line-unfold-${item.id}`} />
+  ),
+}));
+
+jest.mock('@/hooks/use-section-work', () => {
+  const actual = jest.requireActual('@/hooks/use-section-work');
+  const idle = { mutate: jest.fn(), mutateAsync: jest.fn(), isPending: false };
+  return {
+    ...actual,
+    useSectionTasks: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+    useSectionGates: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+    useSectionLoggedMinutes: () => ({ data: 0 }),
+    useCreateSectionTask: () => idle,
+    useToggleSectionTask: () => idle,
+    useRequestSectionGate: () => idle,
+  };
+});
+
+import { FFESection } from '@/components/document/ffe-section';
+import { __setDensityForTest } from '@/hooks/use-lens-density';
+import {
+  RECORD_A_CHANGE_ON_PIECE_EVENT,
+  RecordAChangeSheet,
+  openRecordAChange,
+} from '../record-a-change-sheet';
+
+const onPO = {
+  id: 'line-sofa',
+  name: 'Linen slipcovered sofa — 96 in',
+  quantity: 1,
+  status: 'ordered',
+  blocked: false,
+  item_type: 'fixed',
+  unit_price_cents: 640_000,
+  line_total_cents: 640_000,
+  project_room_id: null,
+  received_quantity: null,
+  vendor_name: 'Nordic Atelier',
+  purchase_order: { id: 'po-1', po_number: 'NA-2026-077', status: 'confirmed' },
+};
+
+const noPO = {
+  id: 'line-lamp',
+  name: 'Brass reading lamp',
+  quantity: 1,
+  status: 'specified',
+  blocked: false,
+  item_type: 'fixed',
+  unit_price_cents: 42_000,
+  line_total_cents: 42_000,
+  project_room_id: null,
+  received_quantity: null,
+  purchase_order: null,
+};
+
+const renderRouter = () =>
+  render(<RecordAChangeSheet projectId="project-1" clientName="Halloran" />);
+
+const renderPaper = () =>
+  render(
+    <>
+      <FFESection projectId="project-1" projectName="Halloran House" mode="project" />
+      <RecordAChangeSheet projectId="project-1" clientName="Halloran" />
+    </>,
+  );
+
+const continueAct = () => screen.getByRole('button', { name: /Continue/ });
+
+beforeEach(() => {
+  mockAskThePaper = true;
+  mockItems = [onPO, noPO];
+  __setDensityForTest('full');
+});
+afterEach(() => {
+  __setDensityForTest(undefined);
+});
+
+describe('Record a change — the router (D5)', () => {
+  it('mounts nothing and hears nothing with ask-the-paper off', () => {
+    mockAskThePaper = false;
+    const { container } = renderRouter();
+    expect(container).toBeEmptyDOMElement();
+
+    act(() => openRecordAChange({ origin: 'pieces-head' }));
+    expect(screen.queryByText('What changed?')).not.toBeInTheDocument();
+  });
+
+  it('asks one question with two native radio options and their helpers', () => {
+    renderRouter();
+    act(() => openRecordAChange({ origin: 'pieces-head' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('group', { name: 'What changed?' })).toBeInTheDocument();
+    const piece = within(dialog).getByRole('radio', { name: /On a piece/ });
+    const agreement = within(dialog).getByRole('radio', { name: /On the agreement/ });
+    expect(piece).toHaveAccessibleDescription(
+      'Swap, add or remove a piece, or change its finish, size or maker.',
+    );
+    expect(agreement).toHaveAccessibleDescription('The scope, the fee or the terms.');
+  });
+
+  it('holds Continue, focusable, with its reason until a choice is made', () => {
+    const heard = jest.fn();
+    window.addEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
+    renderRouter();
+    act(() => openRecordAChange({ origin: 'pieces-head' }));
+
+    const held = continueAct();
+    expect(held).toHaveAttribute('aria-disabled', 'true');
+    expect(held).not.toBeDisabled();
+    expect(held).toHaveAccessibleDescription('Choose one to continue.');
+
+    fireEvent.click(held);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(heard).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('amendment-sheet')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
+    expect(continueAct()).not.toHaveAttribute('aria-disabled');
+    expect(screen.queryByText('Choose one to continue.')).not.toBeInTheDocument();
+    window.removeEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
+  });
+
+  it('On the agreement opens the amendment sheet', () => {
+    renderRouter();
+    act(() => openRecordAChange({ origin: 'money-head' }));
+    fireEvent.click(screen.getByRole('radio', { name: /On the agreement/ }));
+    fireEvent.click(continueAct());
+
+    expect(screen.queryByText('What changed?')).not.toBeInTheDocument();
+    expect(screen.getByTestId('amendment-sheet')).toHaveTextContent('project-1');
+  });
+
+  it('On a piece hands the Pieces region the choice, and Enter continues', () => {
+    const heard = jest.fn();
+    window.addEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
+    renderRouter();
+    act(() => openRecordAChange({ origin: 'cmdk' }));
+    const piece = screen.getByRole('radio', { name: /On a piece/ });
+    fireEvent.click(piece);
+    fireEvent.keyDown(piece, { key: 'Enter' });
+
+    expect(heard).toHaveBeenCalledTimes(1);
+    expect((heard.mock.calls[0][0] as CustomEvent).detail).toEqual({});
+    expect(screen.queryByText('What changed?')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('amendment-sheet')).not.toBeInTheDocument();
+    window.removeEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
+  });
+
+  it('a dispatch naming a line skips the question', () => {
+    const heard = jest.fn();
+    window.addEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
+    renderRouter();
+    act(() => openRecordAChange({ origin: 'line', itemId: 'line-sofa' }));
+
+    expect(screen.queryByText('What changed?')).not.toBeInTheDocument();
+    expect((heard.mock.calls[0][0] as CustomEvent).detail).toEqual({ itemId: 'line-sofa' });
+    window.removeEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
+  });
+
+  it('Esc puts the router back and returns focus to the control that opened it', async () => {
+    renderRouter();
+    const opener = document.createElement('button');
+    opener.textContent = 'Record a change';
+    opener.addEventListener('click', () => openRecordAChange({ origin: 'pieces-head' }));
+    document.body.appendChild(opener);
+    opener.focus();
+
+    act(() => opener.click());
+    const dialog = screen.getByRole('dialog');
+    await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByText('What changed?')).not.toBeInTheDocument();
+    await waitFor(() => expect(opener).toHaveFocus());
+    opener.remove();
+  });
+});
+
+describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
+  const headAct = () => screen.getByRole('button', { name: 'Record a change' });
+
+  it('prints as the head\'s second act, and not at all with the flag off', () => {
+    const { unmount } = renderPaper();
+    // The head's ledger, links and buttons alike: index 0 is the leader.
+    const acts = Array.from(
+      (document.getElementById('project-ffe') as HTMLElement).querySelectorAll(
+        '[data-action-key]',
+      ),
+    );
+    expect(acts[1]).toHaveAttribute('data-action-key', 'record-a-change-pieces-head');
+    unmount();
+
+    mockAskThePaper = false;
+    renderPaper();
+    expect(screen.queryByRole('button', { name: 'Record a change' })).not.toBeInTheDocument();
+  });
+
+  it('On the agreement opens the amendment sheet', () => {
+    renderPaper();
+    fireEvent.click(headAct());
+    fireEvent.click(screen.getByRole('radio', { name: /On the agreement/ }));
+    fireEvent.click(continueAct());
+    expect(screen.getByTestId('amendment-sheet')).toBeInTheDocument();
+  });
+
+  it('On a piece prompts Choose the piece; a line on a PO opens its change order', async () => {
+    renderPaper();
+    fireEvent.click(headAct());
+    fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
+    fireEvent.click(continueAct());
+
+    const prompt = screen.getByText('Choose the piece');
+    await waitFor(() => expect(prompt).toHaveFocus());
+
+    fireEvent.click(screen.getByRole('button', { name: /Linen slipcovered sofa/ }));
+    expect(screen.getByTestId('change-order-sheet')).toHaveTextContent(
+      'line-sofa · NA-2026-077',
+    );
+    expect(screen.getByTestId('line-unfold-line-sofa')).toBeInTheDocument();
+    expect(screen.queryByText('Choose the piece')).not.toBeInTheDocument();
+  });
+
+  it('On a piece, a line without a PO unfolds with today\'s controls', () => {
+    renderPaper();
+    fireEvent.click(headAct());
+    fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
+    fireEvent.click(continueAct());
+
+    fireEvent.click(screen.getByRole('button', { name: /Brass reading lamp/ }));
+    expect(screen.getByTestId('line-unfold-line-lamp')).toBeInTheDocument();
+    expect(screen.queryByTestId('change-order-sheet')).not.toBeInTheDocument();
+  });
+
+  it('Esc returns focus to the head\'s act', async () => {
+    renderPaper();
+    headAct().focus();
+    fireEvent.click(headAct());
+    await screen.findByRole('dialog');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(headAct()).toHaveFocus());
+  });
+
+  it('each unfolded line leads with Record a change, which goes straight to its change order', () => {
+    renderPaper();
+    fireEvent.click(screen.getByRole('button', { name: /Linen slipcovered sofa/ }));
+
+    const lineAct = document.querySelector(
+      '[data-action-key="record-a-change-line"]',
+    ) as HTMLElement;
+    expect(lineAct).toHaveTextContent('Record a change');
+    // First: before the unfold's own acts.
+    expect(
+      lineAct.compareDocumentPosition(screen.getByTestId('line-unfold-line-sofa')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.click(lineAct);
+    expect(screen.queryByText('What changed?')).not.toBeInTheDocument();
+    expect(screen.getByTestId('change-order-sheet')).toHaveTextContent('line-sofa');
+  });
+});

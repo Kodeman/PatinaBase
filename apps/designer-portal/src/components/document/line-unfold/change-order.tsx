@@ -137,7 +137,9 @@ export function changeConfirmation(
   return 'Kept on the PO’s change history.';
 }
 
-function ChangeOrderSheet({
+/** Exported for the Record a change router's `On a piece` destination (D5),
+ *  which opens this sheet for the chosen line without its cell's act. */
+export function ChangeOrderSheet({
   open,
   onClose,
   item,

@@ -98,6 +98,14 @@ import {
 import { Stamp, type StampTone } from './stamp';
 import { RowWash, useRowWash, type RowWashTone } from './row-wash';
 import { LineUnfold } from './line-unfold';
+import { ChangeOrderSheet } from './line-unfold/change-order';
+import {
+  openRecordAChange,
+  RECORD_A_CHANGE_ON_PIECE_EVENT,
+  type RecordAChangeOnPieceDetail,
+} from './overlays/record-a-change-sheet';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { NAMED_ACTS } from '@/lib/document/act-names';
 import { StrataMark } from './strata-mark';
 import { StrataMiniRule } from './strata-mini-rule';
 import { WorkBlock } from './work-block';
@@ -388,6 +396,33 @@ function TriStateTick({
   );
 }
 
+/** D5 (US-19): the unfolded line's first act. It only opens the router, naming
+ *  this line, so the router skips its question and goes to the line's own
+ *  destination. It sits beside LineUnfold, so it declares its own region. */
+function RecordChangeLineAct({ itemId }: { itemId: string }) {
+  return (
+    <DocumentAction
+      actionKey="record-a-change-line"
+      surfaceKey="project"
+      regionKey="ffe-line-record-change"
+      variant="primary"
+      className="mt-1"
+      onClick={() => openRecordAChange({ origin: 'line', itemId })}
+    >
+      {NAMED_ACTS.recordChange}
+    </DocumentAction>
+  );
+}
+
+/** Reads `ask-the-paper` in its own leaf: the flag hook's loading settle is a
+ *  state change, and in the schedule's body it would re-render every line.
+ *  Here only a changed value reaches the schedule. */
+function AskThePaperProbe({ onValue }: { onValue: (on: boolean) => void }) {
+  const on = useFeatureFlag('ask-the-paper').value;
+  useEffect(() => onValue(on), [on, onValue]);
+  return null;
+}
+
 function FFELine({
   item,
   stamp,
@@ -413,7 +448,10 @@ function FFELine({
   showArtifactPlate,
   purchase,
   installState,
+  recordChange = false,
 }: LineRow & {
+  /** D5 (US-19): the unfolded line leads with `Record a change`. */
+  recordChange?: boolean;
   /** C-25: the purchase record the line was bought on, if any. */
   purchase?: StudioPurchaseRow | null;
   /** 0a-2 (D6): Install's per-row state word, from `pieceInstallState`. */
@@ -575,6 +613,7 @@ function FFELine({
       )}
       {unfolded && !selecting && (
         <>
+          {recordChange && <RecordChangeLineAct itemId={String(item.id)} />}
           <LineUnfold
             item={item}
             projectId={projectId}
@@ -970,6 +1009,12 @@ function FFESectionBody({
 }: FFESectionProps & { instruments: InstrumentLike[] }) {
   const { heldRoomId, toggleRoom } = useRoomLens();
   const [openLineId, setOpenLineId] = useState<string | null>(null);
+  // D5 (US-19): the Record a change router's `On a piece` destination — the
+  // `Choose the piece` prompt, and the line whose change order it opened.
+  const [askThePaper, setAskThePaper] = useState(false);
+  const [choosingPiece, setChoosingPiece] = useState(false);
+  const [changeOrderLineId, setChangeOrderLineId] = useState<string | null>(null);
+  const choosePieceRef = useRef<HTMLParagraphElement | null>(null);
   const [addLineRoom, setAddLineRoom] = useState<{
     id: string | null;
     name: string;
@@ -1227,7 +1272,10 @@ function FFESectionBody({
     highlightId: highlightId ?? ffeLeader.highlightLineId,
     unfolded: openLineId === row.item.id,
     onToggle: () =>
-      setOpenLineId(openLineId === row.item.id ? null : row.item.id),
+      choosingPiece
+        ? recordChangeOnLine(String(row.item.id))
+        : setOpenLineId(openLineId === row.item.id ? null : row.item.id),
+    recordChange: askThePaper && mode === 'project',
     onAddNote,
     showRoom: !groupByRoom,
     coverage: coverage?.[row.item.id],
@@ -1259,10 +1307,14 @@ function FFESectionBody({
 
   // The maker and next-act readings open the same unfold the room reading does.
   const toggleReadingLine = (lineId: string) =>
-    setOpenLineId(openLineId === lineId ? null : lineId);
+    choosingPiece
+      ? recordChangeOnLine(String(lineId))
+      : setOpenLineId(openLineId === lineId ? null : lineId);
   const renderReadingUnfold = (row: LineRow) => {
     const props = lineProps(row);
     return (
+      <>
+      {props.recordChange && <RecordChangeLineAct itemId={String(row.item.id)} />}
       <LineUnfold
         item={row.item}
         projectId={projectId}
@@ -1276,6 +1328,7 @@ function FFESectionBody({
         showArtifactPlate={props.showArtifactPlate}
         purchase={props.purchase}
       />
+      </>
     );
   };
 
@@ -1361,6 +1414,52 @@ function FFESectionBody({
     ffeSetFolded(false);
   }, [mode, ffeSetFolded]);
   useRegionUnfoldRequest('ffe', openFfeRegion);
+  // D5 (US-19): a line's Record a change destination. On a live PO it is the
+  // line's change order (the Order cell's own sheet, under the same gate);
+  // without one, the line unfolds with today's controls.
+  const recordChangeOnLine = useCallback(
+    (itemId: string) => {
+      const item = (items ?? []).find((candidate) => String(candidate.id) === itemId);
+      if (!item) return;
+      setChoosingPiece(false);
+      openFfeRegion();
+      setOpenLineId(item.id);
+      const po = item.purchase_order ?? null;
+      if (mode === 'project' && po && po.status !== 'cancelled') {
+        setChangeOrderLineId(String(item.id));
+      }
+    },
+    [items, mode, openFfeRegion],
+  );
+  useEffect(() => {
+    if (!askThePaper) return;
+    const onPiece = (event: Event) => {
+      const itemId = (event as CustomEvent<RecordAChangeOnPieceDetail | undefined>)
+        .detail?.itemId;
+      if (itemId) {
+        recordChangeOnLine(itemId);
+        return;
+      }
+      // No line is left open while she chooses, so a line's own Fold is
+      // never mistaken for a choice.
+      setOpenLineId(null);
+      openFfeRegion();
+      setChoosingPiece(true);
+    };
+    window.addEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, onPiece);
+    return () => window.removeEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, onPiece);
+  }, [askThePaper, openFfeRegion, recordChangeOnLine]);
+  // The prompt takes focus a frame after the router's own sheet hands focus
+  // back to its opener, so the prompt is where she lands.
+  useEffect(() => {
+    if (!choosingPiece) return;
+    const frame = window.requestAnimationFrame(() => {
+      const prompt = choosePieceRef.current;
+      prompt?.focus({ preventScroll: true });
+      prompt?.scrollIntoView?.({ block: 'center' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [choosingPiece]);
   const ffeHeadingId = `ffe-region-heading-${projectId}`;
   const ffeMovementId = `ffe-movement-${projectId}`;
   const ffeBodyId = `ffe-region-body-${projectId}`;
@@ -1555,7 +1654,7 @@ function FFESectionBody({
   const atCostDoors = [ffeBillPurchasesEntry, ffeBillRidersEntry].filter(
     (entry): entry is RegionLedgerEntry => entry !== null,
   );
-  const ffeLedger: RegionLedgerEntry[] =
+  const ffeLedgerDoors: RegionLedgerEntry[] =
     atCostDoors.length > 0
       ? billAt >= 0
         ? [
@@ -1565,6 +1664,21 @@ function FFESectionBody({
           ]
         : [...ffeLedgerByKind, ...atCostDoors]
       : ffeLedgerByKind;
+  // D5 (US-19): Record a change is the head's second act, after the leader.
+  const ffeLedger: RegionLedgerEntry[] = askThePaper
+    ? [
+        ...ffeLedgerDoors.slice(0, 1),
+        {
+          key: 'record-a-change-pieces-head',
+          label: NAMED_ACTS.recordChange,
+          onClick: () => openRecordAChange({ origin: 'pieces-head' }),
+        },
+        ...ffeLedgerDoors.slice(1),
+      ]
+    : ffeLedgerDoors;
+  const changeOrderLine = changeOrderLineId
+    ? (rows.find((row) => String(row.item.id) === changeOrderLineId) ?? null)
+    : null;
   const ffeExceptions = [
     ...ffeLeader.exceptions.map((exception) => exception.text),
     ...(ffeAwaiting ? [ffeAwaiting] : []),
@@ -1758,6 +1872,17 @@ function FFESectionBody({
 
       {!ffeFolded && !ffeQuiet && (
       <div id={ffeBodyId}>
+      {choosingPiece && (
+        <p
+          ref={choosePieceRef}
+          tabIndex={-1}
+          role="status"
+          data-testid="ffe-choose-the-piece"
+          className="mb-2 font-heading text-[15px] italic text-[var(--color-charcoal)]"
+        >
+          Choose the piece
+        </p>
+      )}
       {/* The release gate reads authoritative readiness and stays closed
           without it — so a pending or failed read has to say so, or the act
           would simply be missing with no reason given. */}
@@ -2039,6 +2164,20 @@ function FFESectionBody({
           currentScheduledCents={currentScheduledCents}
           onClose={ceremony.backToSelecting}
           onReleased={ceremony.putBack}
+        />
+      )}
+
+      <AskThePaperProbe onValue={setAskThePaper} />
+      {changeOrderLine?.item.purchase_order && (
+        <ChangeOrderSheet
+          open
+          onClose={() => setChangeOrderLineId(null)}
+          item={changeOrderLine.item}
+          po={changeOrderLine.item.purchase_order}
+          projectId={projectId}
+          auth={changeOrderLine.auth}
+          vendorName={changeOrderLine.item.vendor_name ?? 'the maker'}
+          poLabel={changeOrderLine.item.purchase_order.po_number ?? 'this order'}
         />
       )}
 
