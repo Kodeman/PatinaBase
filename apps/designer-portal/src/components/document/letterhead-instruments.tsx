@@ -15,7 +15,7 @@
  *     shows (full / milestone / curated) is set where the mirror is opened.
  */
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -479,51 +479,24 @@ export function LetterheadInstruments({
             the household chip says it 20px above, and repeating it cost the
             ledger ~200px it was taking out of the title's measure. The
             accessible name keeps the whole sentence. */}
-        {messageHeld ? (
-          // FR1 F4 (R15, R16) — the held act prints its accessible name, and
-          // its reason stands directly beneath it in the act's own column,
-          // left edge on the label's (the act's own `px-[6px]`); the repair
-          // stands beside it. The cluster wraps as one, so at 390 the reason
-          // still follows its own act. `gap-x-[inherit]` keeps the row's gap.
-          <span className="inline-flex items-start gap-x-[inherit]">
-            <span className="inline-flex flex-col items-start">
-              <DocumentAction
-                actionKey="message-family"
-                variant="primary"
-                aria-label={messageLabel(null)}
-                disabled
-                held
-                aria-describedby={messageReasonId}
-                onClick={() => setComposing((v) => !v)}
-              >
-                {messageLabel(null)}
-              </DocumentAction>
-              <span
-                id={messageReasonId}
-                className="px-[6px] text-[11.5px] leading-tight text-[var(--text-muted)]"
-              >
-                {MESSAGE_WITHHELD.reason}
-              </span>
-            </span>
-            <DocumentAction
-              actionKey="link-client"
-              variant="secondary"
-              onClick={() => setLinking(true)}
-            >
-              {MESSAGE_WITHHELD.repair}
-            </DocumentAction>
-          </span>
-        ) : (
-          canSendNote && (
+        {(messageHeld || canSendNote) && (
+          <MessageCluster
+            held={messageHeld}
+            reasonId={messageReasonId}
+            onRepair={() => setLinking(true)}
+          >
             <DocumentAction
               actionKey="message-family"
               variant="primary"
-              aria-label={`Message ${family}`}
+              aria-label={messageHeld ? messageLabel(null) : `Message ${family}`}
+              disabled={messageHeld}
+              held={messageHeld}
+              aria-describedby={messageHeld ? messageReasonId : undefined}
               onClick={() => setComposing((v) => !v)}
             >
-              Message
+              {messageHeld ? messageLabel(null) : 'Message'}
             </DocumentAction>
-          )
+          </MessageCluster>
         )}
         {canMirror && (
           <DocumentAction
@@ -643,6 +616,40 @@ export function LetterheadInstruments({
 }
 
 /** One D7 act published into the dock's More; renders nothing. */
+/**
+ * FR1 F4 (R15, R16) — the held act prints its accessible name, and its reason
+ * stands directly beneath it in the act's own column, left edge on the label's
+ * (the act's own `px-[6px]`); the repair stands beside it. The cluster wraps as
+ * one, so at 390 the reason still follows its own act. `gap-x-[inherit]` keeps
+ * the row's gap. Live, the act stands alone.
+ */
+function MessageCluster({
+  held,
+  reasonId,
+  onRepair,
+  children,
+}: {
+  held: boolean;
+  reasonId: string;
+  onRepair: () => void;
+  children: ReactNode;
+}) {
+  if (!held) return <>{children}</>;
+  return (
+    <span className="inline-flex items-start gap-x-[inherit]">
+      <span className="inline-flex flex-col items-start">
+        {children}
+        <span id={reasonId} className="px-[6px] text-[11.5px] leading-tight text-[var(--text-muted)]">
+          {MESSAGE_WITHHELD.reason}
+        </span>
+      </span>
+      <DocumentAction actionKey="link-client" variant="secondary" onClick={onRepair}>
+        {MESSAGE_WITHHELD.repair}
+      </DocumentAction>
+    </span>
+  );
+}
+
 function DockAct({ action }: { action: MobileSecondaryAction }) {
   useMobileSecondaryAction(action);
   return null;
