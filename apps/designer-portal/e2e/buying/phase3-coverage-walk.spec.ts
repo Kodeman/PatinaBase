@@ -128,7 +128,12 @@ async function ensureUser(
   return data.user.id;
 }
 
-function projectSql(j: Job, ownerId: string, clientId: string, phase?: string): string {
+function projectSql(
+  j: Job,
+  ownerId: string,
+  clientId: string,
+  phase?: string,
+): string {
   return `
 INSERT INTO public.projects (id, name, designer_id, created_by, client_id, studio_id, status, site_address${phase ? ", current_phase" : ""})
 VALUES (${q(j.projectId)}, ${q(j.projectName)}, ${q(ownerId)}, ${q(ownerId)}, ${q(clientId)}, ${q(STUDIO_ID)}, 'active', ${q(SITE_ADDRESS)}${phase ? `, ${q(phase)}` : ""});
@@ -408,7 +413,9 @@ WHERE item.id = ${q(lineId)}`).split("|");
 /** The line's order paper, opened from the line. */
 async function openPaper(page: Page, j: Job, line: string) {
   await openLine(page, j, line);
-  const order = page.getByRole("button", { name: "Order", exact: true }).first();
+  const order = page
+    .getByRole("button", { name: "Order", exact: true })
+    .first();
   await expect(order).toBeEnabled({ timeout: 30_000 });
   await order.click();
   const paper = page.getByRole("dialog", { name: "The order paper" });
@@ -426,7 +433,12 @@ async function openPaper(page: Page, j: Job, line: string) {
  * Ledger page, the job's lens. A member's held order is a ledger row ("open
  * →"); the held-for-release section lists only what the seat may release.
  */
-async function openOrdersBookPaper(page: Page, j: Job, line: string, act: "send →" | "open →") {
+async function openOrdersBookPaper(
+  page: Page,
+  j: Job,
+  line: string,
+  act: "send →" | "open →",
+) {
   await openDocument(page, j, line);
   await page.getByRole("button", { name: "Brief a vendor" }).click();
   const pages = page.getByRole("navigation", { name: "Orders book pages" });
@@ -439,7 +451,9 @@ async function openOrdersBookPaper(page: Page, j: Job, line: string, act: "send 
     .getByRole("button", { name: act })
     .first()
     .click({ timeout: 30_000 });
-  const paper = page.getByRole("dialog", { name: /order paper|Purchase order/ });
+  const paper = page.getByRole("dialog", {
+    name: /order paper|Purchase order/,
+  });
   await expect(paper).toBeVisible({ timeout: 30_000 });
   return paper;
 }
@@ -508,7 +522,9 @@ test.describe("Studio buying Phase 3 — coverage walk", () => {
     await sheet.getByLabel(`Unit trade · ${QUOTE_LINE.name}`).fill("1840");
     await sheet.getByLabel(`Lead time in weeks · ${QUOTE_LINE.name}`).fill("8");
     await sheet.getByLabel(`Unit trade · ${SIGNED_LINE.name}`).fill("1500");
-    await sheet.getByLabel(`Lead time in weeks · ${SIGNED_LINE.name}`).fill("6");
+    await sheet
+      .getByLabel(`Lead time in weeks · ${SIGNED_LINE.name}`)
+      .fill("6");
     await shot(page, testInfo, "a1-record-quote");
     await sheet.getByRole("button", { name: "Record the quote" }).click();
     await expect(sheet.getByRole("status")).toHaveText(
@@ -561,7 +577,11 @@ WHERE vq.project_id = ${q(QUOTE.projectId)}`),
 
     expect(
       failures.filter(
-        (f) => !(f.includes("apply_vendor_quote_to_lines") && f.includes("change_order_required")),
+        (f) =>
+          !(
+            f.includes("apply_vendor_quote_to_lines") &&
+            f.includes("change_order_required")
+          ),
       ),
       "edge-function / RPC failures seen by the page",
     ).toEqual([]);
@@ -581,7 +601,9 @@ WHERE vq.project_id = ${q(QUOTE.projectId)}`),
     const ackCheck = page.getByTestId("line-next-act").getByTestId("ack-check");
     await expect(ackCheck).toBeVisible({ timeout: 30_000 });
     await ackCheck.getByPlaceholder("NA-2026-…").fill(`AJ-${RUN}`);
-    const finish = ackCheck.getByLabel(`${CHANGE_LINE.name} · finish, they confirmed`);
+    const finish = ackCheck.getByLabel(
+      `${CHANGE_LINE.name} · finish, they confirmed`,
+    );
     await expect(finish).toHaveValue(FINISH, { timeout: 20_000 });
     await finish.fill(THEIR_FINISH);
     await ackCheck
@@ -641,12 +663,15 @@ WHERE purchase_order_id = ${q(CHANGE_PO)} AND kind = 'ack_discrepancy_reply' AND
 SELECT change_kind || '|' || project_ffe_item_id FROM public.purchase_order_changes
 WHERE purchase_order_id = ${q(CHANGE_PO)}`),
     ).toBe(`remedy|${CHANGE_LINE.id}`);
-    expect(poOf(CHANGE_LINE.id).status, "a remedy leaves the order standing").toBe(
-      "confirmed",
-    );
+    expect(
+      poOf(CHANGE_LINE.id).status,
+      "a remedy leaves the order standing",
+    ).toBe("confirmed");
     await shot(page, testInfo, "b3-remedy-recorded");
 
-    expect(failures, "edge-function / RPC failures seen by the page").toEqual([]);
+    expect(failures, "edge-function / RPC failures seen by the page").toEqual(
+      [],
+    );
   });
 
   test("(c) install manifest and a punch item, recorded then resolved", async ({
@@ -658,7 +683,9 @@ WHERE purchase_order_id = ${q(CHANGE_PO)}`),
     await hideDevOverlays(page);
     await signIn(page, MEMBER_EMAIL);
 
-    await page.goto(`/doc/${INSTALL.projectId}`, { waitUntil: "domcontentloaded" });
+    await page.goto(`/doc/${INSTALL.projectId}`, {
+      waitUntil: "domcontentloaded",
+    });
     const manifest = page.getByTestId("install-manifest");
     await expect(manifest).toBeVisible({ timeout: 90_000 });
     const row = manifest
@@ -666,9 +693,15 @@ WHERE purchase_order_id = ${q(CHANGE_PO)}`),
       .filter({ hasText: INSTALL_LINE.name });
     await expect(row).toHaveCount(1);
     const installOn = ymd(3);
-    await row.getByLabel(`Where ${INSTALL_LINE.name} goes`).fill("Hall, north wall");
-    await row.getByLabel(`Install day for ${INSTALL_LINE.name}`).fill(installOn);
-    await row.getByLabel(`Installer for ${INSTALL_LINE.name}`).fill("Hollis crew");
+    await row
+      .getByLabel(`Where ${INSTALL_LINE.name} goes`)
+      .fill("Hall, north wall");
+    await row
+      .getByLabel(`Install day for ${INSTALL_LINE.name}`)
+      .fill(installOn);
+    await row
+      .getByLabel(`Installer for ${INSTALL_LINE.name}`)
+      .fill("Hollis crew");
     await row
       .getByLabel(`Install state for ${INSTALL_LINE.name}`)
       .selectOption("on_site");
@@ -684,7 +717,9 @@ FROM public.install_manifest_items WHERE ffe_item_id = ${q(INSTALL_LINE.id)}`),
       )
       .toBe(`Hall, north wall|${installOn}|Hollis crew|on_site`);
     // Saved: the row re-reads its record, nothing left to save.
-    await expect(row.getByRole("button", { name: "Save", exact: true })).toHaveCount(0, {
+    await expect(
+      row.getByRole("button", { name: "Save", exact: true }),
+    ).toHaveCount(0, {
       timeout: 30_000,
     });
     await expect(row.getByLabel(`Where ${INSTALL_LINE.name} goes`)).toHaveValue(
@@ -719,7 +754,9 @@ FROM public.install_punch_items WHERE ffe_item_id = ${q(INSTALL_LINE.id)}`),
     ).toBe("true|true");
     await shot(page, testInfo, "c3-punch-resolved");
 
-    expect(failures, "edge-function / RPC failures seen by the page").toEqual([]);
+    expect(failures, "edge-function / RPC failures seen by the page").toEqual(
+      [],
+    );
   });
 
   test("(d) a memo sample due back: the sweep's notice, the Desk's need, returned", async ({
@@ -751,7 +788,9 @@ FROM public.install_punch_items WHERE ffe_item_id = ${q(INSTALL_LINE.id)}`),
 SELECT id FROM public.sample_requests
 WHERE ffe_item_id = ${q(SAMPLE_LINE.id)} AND kind = 'memo' AND return_by = ${q(returnBy)}
   AND vendor_id = ${q(SAMPLE.vendorId)}`);
-    expect(sampleId, "the memo is recorded against the line's maker").not.toBe("");
+    expect(sampleId, "the memo is recorded against the line's maker").not.toBe(
+      "",
+    );
 
     // The clock sweep notices the return-by date.
     psqlRun("SELECT public.sweep_procurement_clocks();");
@@ -764,7 +803,9 @@ WHERE kind = 'memo_return_due' AND subject_sample_id = ${q(sampleId)} AND user_i
 
     await page.goto("/desk", { waitUntil: "domcontentloaded" });
     await expect(
-      page.getByText(new RegExp(`^Memo from ${SAMPLE.vendor} — return by `)).first(),
+      page
+        .getByText(new RegExp(`^Memo from ${SAMPLE.vendor} — return by `))
+        .first(),
     ).toBeVisible({ timeout: 90_000 });
     await shot(page, testInfo, "d2-desk-memo-return");
 
@@ -778,7 +819,9 @@ WHERE kind = 'memo_return_due' AND subject_sample_id = ${q(sampleId)} AND user_i
     await expect(returned.getByLabel("Returned on")).toHaveValue(ymd(0));
     await returned.getByLabel("Return tracking").fill(`1Z${RUN}`);
     await returned.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(sample.getByRole("button", { name: "Mark returned" })).toHaveCount(0, {
+    await expect(
+      sample.getByRole("button", { name: "Mark returned" }),
+    ).toHaveCount(0, {
       timeout: 30_000,
     });
     expect(
@@ -788,7 +831,9 @@ FROM public.sample_requests WHERE id = ${q(sampleId)}`),
     ).toBe(`returned|${ymd(0)}|1Z${RUN}`);
     await shot(page, testInfo, "d3-sample-returned");
 
-    expect(failures, "edge-function / RPC failures seen by the page").toEqual([]);
+    expect(failures, "edge-function / RPC failures seen by the page").toEqual(
+      [],
+    );
   });
 
   test("(e) a deposit, then its balance; the money cell reads both stages", async ({
@@ -809,7 +854,10 @@ WHERE li.ffe_item_id = ${q(DEPOSIT_LINE.id)}`);
 
     // Bill the line as a deposit of 50%.
     await openLine(page, DEPOSIT, DEPOSIT_LINE.name);
-    await page.getByRole("button", { name: "Bill", exact: true }).first().click();
+    await page
+      .getByRole("button", { name: "Bill", exact: true })
+      .first()
+      .click();
     await page
       .getByRole("radio", { name: "as a deposit of" })
       .check({ timeout: 30_000 });
@@ -820,10 +868,15 @@ WHERE li.ffe_item_id = ${q(DEPOSIT_LINE.id)}`);
 
     // The composer again: the balance is offered, ticked; draft it.
     await openLine(page, DEPOSIT, DEPOSIT_LINE.name);
-    await page.getByRole("button", { name: "Bill", exact: true }).first().click();
+    await page
+      .getByRole("button", { name: "Bill", exact: true })
+      .first()
+      .click();
     const balances = page.getByTestId("composer-balances");
     await expect(balances).toBeVisible({ timeout: 30_000 });
-    const balance = balances.getByRole("checkbox", { name: new RegExp(DEPOSIT_LINE.name) });
+    const balance = balances.getByRole("checkbox", {
+      name: new RegExp(DEPOSIT_LINE.name),
+    });
     await expect(balance).toBeChecked();
     await expect(balances).toContainText(/\$2,000/);
     await shot(page, testInfo, "e2-composer-balance");
@@ -836,10 +889,14 @@ WHERE li.ffe_item_id = ${q(DEPOSIT_LINE.id)}`);
     await openLine(page, DEPOSIT, DEPOSIT_LINE.name);
     await expect(
       page.getByTestId("line-money-out-cell").getByTestId("money-out-fronting"),
-    ).toHaveText("Client deposit in draft · balance in draft", { timeout: 30_000 });
+    ).toHaveText("Client deposit in draft · balance in draft", {
+      timeout: 30_000,
+    });
     await shot(page, testInfo, "e3-money-cell-stages");
 
-    expect(failures, "edge-function / RPC failures seen by the page").toEqual([]);
+    expect(failures, "edge-function / RPC failures seen by the page").toEqual(
+      [],
+    );
   });
 
   test("R3 · a released order edited afterwards needs release again", async ({
@@ -856,9 +913,9 @@ WHERE li.ffe_item_id = ${q(DEPOSIT_LINE.id)}`);
     await paper
       .getByRole("button", { name: "Hold for release · $6,000", exact: true })
       .click({ timeout: 30_000 });
-    await expect.poll(() => poOf(R3_LINE.id).status, { timeout: 30_000 }).toBe(
-      "held_for_release",
-    );
+    await expect
+      .poll(() => poOf(R3_LINE.id).status, { timeout: 30_000 })
+      .toBe("held_for_release");
     const poId = poOf(R3_LINE.id).id;
     await paper.getByRole("button", { name: "Done" }).click();
     await expect(paper).toBeHidden();
@@ -874,7 +931,9 @@ FROM public.purchase_orders po WHERE po.id = ${q(poId)}`),
 
     // The member edits the released paper: a note to the maker.
     paper = await openOrdersBookPaper(page, R3, R3_LINE.name, "send →");
-    await expect(paper.locator("[data-order-paper-release-reason]")).toHaveCount(0);
+    await expect(
+      paper.locator("[data-order-paper-release-reason]"),
+    ).toHaveCount(0);
     const note = paper.getByLabel(`Note to ${R3.vendor}`);
     await note.fill("Please crate the top separately.");
     await note.press("Tab");
@@ -887,22 +946,25 @@ FROM public.purchase_orders po WHERE po.id = ${q(poId)}`),
         { timeout: 30_000 },
       )
       .toBe("Please crate the top separately.|changed");
-    await page.keyboard.press("Escape");
-    await expect(paper).toBeHidden({ timeout: 20_000 });
 
-    // Reopened, the paper says so and holds again.
+    // Reopened (the Document reloads), the paper says so and holds again.
     paper = await openOrdersBookPaper(page, R3, R3_LINE.name, "send →");
     await expect(paper.locator("[data-order-paper-release-reason]")).toHaveText(
       "Changed since release — needs release again",
       { timeout: 30_000 },
     );
     await expect(
-      paper.getByRole("button", { name: "Hold for release · $6,000", exact: true }),
+      paper.getByRole("button", {
+        name: "Hold for release · $6,000",
+        exact: true,
+      }),
     ).toBeVisible();
     await shot(page, testInfo, "r3-needs-release-again");
     expect(poOf(R3_LINE.id).sentAt, "nothing went to the maker").toBe("");
 
-    expect(failures, "edge-function / RPC failures seen by the page").toEqual([]);
+    expect(failures, "edge-function / RPC failures seen by the page").toEqual(
+      [],
+    );
   });
 
   test("R4 · two half-orders to one maker on one job: the second is held", async ({
@@ -922,11 +984,18 @@ FROM public.purchase_orders po WHERE po.id = ${q(poId)}`),
         (r.request().postData() ?? "").includes('"send"'),
     );
     await paper
-      .getByRole("button", { name: `Send to ${R4.vendor} · $3,000`, exact: true })
+      .getByRole("button", {
+        name: `Send to ${R4.vendor} · $3,000`,
+        exact: true,
+      })
       .click({ timeout: 30_000 });
     const sent = await sendResponse;
-    expect(sent.status(), `po-send: ${await sent.text().catch(() => "")}`).toBe(200);
-    await expect.poll(() => poOf(R4_FIRST.id).sentAt, { timeout: 30_000 }).not.toBe("");
+    expect(sent.status(), `po-send: ${await sent.text().catch(() => "")}`).toBe(
+      200,
+    );
+    await expect
+      .poll(() => poOf(R4_FIRST.id).sentAt, { timeout: 30_000 })
+      .not.toBe("");
     await paper.getByRole("button", { name: "Done" }).click();
     await expect(paper).toBeHidden();
 
@@ -948,9 +1017,9 @@ FROM public.purchase_orders po WHERE po.id = ${q(poId)}`),
     await paper
       .getByRole("button", { name: "Save, don’t send" })
       .click({ timeout: 30_000 });
-    await expect.poll(() => poOf(R4_SECOND.id).status, { timeout: 30_000 }).toBe(
-      "draft",
-    );
+    await expect
+      .poll(() => poOf(R4_SECOND.id).status, { timeout: 30_000 })
+      .toBe("draft");
     const secondPo = poOf(R4_SECOND.id).id;
     expect(
       psqlScalar(`
@@ -958,8 +1027,6 @@ SELECT (s->>'applies') || '|' || (s->>'reason') || '|' || (s->>'group_total_cent
 FROM (SELECT public.po_release_state(${q(secondPo)}) AS s) x`),
       "the group ($6,000) is over the $5,000 line",
     ).toBe("true|group_over|600000");
-    await page.keyboard.press("Escape");
-    await expect(paper).toBeHidden({ timeout: 20_000 });
 
     paper = await openOrdersBookPaper(page, R4, R4_SECOND.name, "send →");
     await expect(paper.locator("[data-order-paper-release-reason]")).toHaveText(
@@ -977,12 +1044,14 @@ FROM (SELECT public.po_release_state(${q(secondPo)}) AS s) x`),
     ).toHaveCount(0);
     await shot(page, testInfo, "r4-second-half-held");
     await hold.click();
-    await expect.poll(() => poOf(R4_SECOND.id).status, { timeout: 30_000 }).toBe(
-      "held_for_release",
-    );
+    await expect
+      .poll(() => poOf(R4_SECOND.id).status, { timeout: 30_000 })
+      .toBe("held_for_release");
     expect(poOf(R4_SECOND.id).sentAt, "nothing went to the maker").toBe("");
 
-    expect(failures, "edge-function / RPC failures seen by the page").toEqual([]);
+    expect(failures, "edge-function / RPC failures seen by the page").toEqual(
+      [],
+    );
   });
 
   test("R6 · a held order previews as a draft order and takes no number", async ({
@@ -998,9 +1067,9 @@ FROM (SELECT public.po_release_state(${q(secondPo)}) AS s) x`),
     await paper
       .getByRole("button", { name: "Hold for release · $7,000", exact: true })
       .click({ timeout: 30_000 });
-    await expect.poll(() => poOf(R6_LINE.id).status, { timeout: 30_000 }).toBe(
-      "held_for_release",
-    );
+    await expect
+      .poll(() => poOf(R6_LINE.id).status, { timeout: 30_000 })
+      .toBe("held_for_release");
     const poId = poOf(R6_LINE.id).id;
     await paper.getByRole("button", { name: "Done" }).click();
     await expect(paper).toBeHidden();
@@ -1012,10 +1081,14 @@ FROM (SELECT public.po_release_state(${q(secondPo)}) AS s) x`),
         r.url().includes("/functions/v1/po-send") &&
         (r.request().postData() ?? "").includes('"preview"'),
     );
-    await paper.getByRole("button", { name: "See the PDF" }).click({ timeout: 30_000 });
+    await paper
+      .getByRole("button", { name: "See the PDF" })
+      .click({ timeout: 30_000 });
     const preview = await previewResponse;
     const body = await preview.json().catch(() => ({}));
-    expect(preview.status(), `po-send preview: ${JSON.stringify(body)}`).toBe(200);
+    expect(preview.status(), `po-send preview: ${JSON.stringify(body)}`).toBe(
+      200,
+    );
     expect(body).toMatchObject({ ok: true, poNumber: null, emailSent: false });
     expect(body.documentPath).toBe(`${R6.projectId}/po-preview-${poId}.pdf`);
     await expect(page.getByTitle("Purchase order PDF")).toBeVisible({
@@ -1025,7 +1098,10 @@ FROM (SELECT public.po_release_state(${q(secondPo)}) AS s) x`),
 
     // Served functions sign against the stack's internal host (kong:8000).
     const pdf = await page.request.get(
-      String(body.signedUrl).replace(/^https?:\/\/kong:8000/, "http://127.0.0.1:54321"),
+      String(body.signedUrl).replace(
+        /^https?:\/\/kong:8000/,
+        "http://127.0.0.1:54321",
+      ),
     );
     expect(pdf.ok(), "the signed preview downloads").toBe(true);
     expect(await pdfText(await pdf.body())).toContain("Draft order");
@@ -1036,7 +1112,9 @@ FROM public.purchase_orders WHERE id = ${q(poId)}`),
       "held, unnumbered, no document path",
     ).toBe("held_for_release||");
 
-    expect(failures, "edge-function / RPC failures seen by the page").toEqual([]);
+    expect(failures, "edge-function / RPC failures seen by the page").toEqual(
+      [],
+    );
   });
 
   test("G5 · a letter stuck sending for 11 minutes: Send again sends it", async ({
@@ -1093,7 +1171,9 @@ COMMIT;`);
       .toBe("sent|true");
     await shot(page, testInfo, "g5-sent-again");
 
-    expect(failures, "edge-function / RPC failures seen by the page").toEqual([]);
+    expect(failures, "edge-function / RPC failures seen by the page").toEqual(
+      [],
+    );
   });
 
   test("G6 · a shipped line with an open damage exception reads Claim open", async ({
@@ -1116,6 +1196,8 @@ COMMIT;`);
     await expect(reading.locator(`th#${headId}`)).toHaveText("Claim open · 1");
     await shot(page, testInfo, "g6-claim-open");
 
-    expect(failures, "edge-function / RPC failures seen by the page").toEqual([]);
+    expect(failures, "edge-function / RPC failures seen by the page").toEqual(
+      [],
+    );
   });
 });
