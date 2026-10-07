@@ -41,6 +41,7 @@ jest.mock('@patina/supabase', () => ({
   }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
+  useUnresolvedProcurementExceptions: () => ({ data: [] }),
 }));
 
 jest.mock('../../schedule/add-to-project-sheet', () => ({
