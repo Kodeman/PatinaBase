@@ -643,29 +643,44 @@ export function rankStanding(
   return items
     .map((entry, order) => ({ ...entry, order }))
     .sort((a, b) => {
-      const sense =
-        SENSE_ORDER[a.item.sense] - SENSE_ORDER[b.item.sense];
-      if (sense !== 0) return sense;
-      const aDistance = a.item.distance;
-      const bDistance = b.item.distance;
-      if (aDistance != null && bDistance != null && aDistance !== bDistance) {
-        return aDistance - bDistance;
-      }
-      // "Longest-standing first" is the SILENCES' order: they have no deadline
-      // to sort on, so the day they started standing is all there is.
-      if (a.item.sense === 'none') {
-        const aSince = a.item.standingSince;
-        const bSince = b.item.standingSince;
-        if (aSince !== bSince) {
-          if (aSince == null) return 1;
-          if (bSince == null) return -1;
-          return aSince < bSince ? -1 : 1;
-        }
-      }
+      const deadline = compareDeadline(a.item, b.item);
+      if (deadline !== 0) return deadline;
       if (a.tieBreak !== b.tieBreak) return a.tieBreak - b.tieBreak;
       return a.order - b.order;
     })
     .map((entry) => entry.item);
+}
+
+/**
+ * W3-R1's deadline order between two standing items: past their day first
+ * (most days first), then a deadline ahead (soonest first), then the silences
+ * (longest standing first). 0 when the deadline cannot tell them apart; the
+ * caller breaks that tie. Exported so the D2 class order (`need-class.ts`)
+ * sorts inside a class by this same order.
+ */
+export function compareDeadline(
+  a: Pick<LensStandingItem, 'sense' | 'distance' | 'standingSince'>,
+  b: Pick<LensStandingItem, 'sense' | 'distance' | 'standingSince'>,
+): number {
+  const sense = SENSE_ORDER[a.sense] - SENSE_ORDER[b.sense];
+  if (sense !== 0) return sense;
+  const aDistance = a.distance;
+  const bDistance = b.distance;
+  if (aDistance != null && bDistance != null && aDistance !== bDistance) {
+    return aDistance - bDistance;
+  }
+  // "Longest-standing first" is the SILENCES' order: they have no deadline
+  // to sort on, so the day they started standing is all there is.
+  if (a.sense === 'none') {
+    const aSince = a.standingSince;
+    const bSince = b.standingSince;
+    if (aSince !== bSince) {
+      if (aSince == null) return 1;
+      if (bSince == null) return -1;
+      return aSince < bSince ? -1 : 1;
+    }
+  }
+  return 0;
 }
 
 /** The stage phrase — `PROCUREMENT & ORDERS 4 OF 6`, `PROPOSAL`, `BRIEF`. */
