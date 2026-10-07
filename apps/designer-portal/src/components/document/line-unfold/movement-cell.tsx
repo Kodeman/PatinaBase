@@ -17,7 +17,9 @@ import { PurchaseOrderDrafts } from '../buying/draft-review';
 
 type FFERow = any;
 
-const MOVEMENT_DRAFT_KINDS = ['receiver_inbound_notice'] as const;
+/** The receiver's inbound notice, and R37's arrival date request to the maker:
+ *  the reply is a date this cell records. */
+export const MOVEMENT_DRAFT_KINDS = ['receiver_inbound_notice', 'maker_eta_request'] as const;
 
 /**
  * The status act's own component, so the mutation mounts only where a move

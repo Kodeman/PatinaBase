@@ -762,7 +762,9 @@ export type ProcurementDraftKind =
   | 'vendor_claim_notice'
   | 'client_delay_note'
   | 'client_substitution_note'
-  | 'memo_return_note';
+  | 'memo_return_note'
+  // 00727: the install reading's ask, held on the line (ffe_item_id) and its PO.
+  | 'maker_eta_request';
 /** sending: claimed by a send in flight (00718); not editable, not sendable. */
 export type ProcurementDraftStatus = 'awaiting_review' | 'sending' | 'sent' | 'discarded';
 

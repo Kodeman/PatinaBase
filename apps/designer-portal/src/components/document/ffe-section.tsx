@@ -164,6 +164,7 @@ import {
   pieceInstallState,
   type PieceInstallState,
 } from '@/lib/document/install-state';
+import { lineMaker } from '@/lib/document/install-reading';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import {
   FOCUS_FFE_LINE_EVENT,
@@ -331,7 +332,8 @@ function vendorLine(
   status: string | null = null,
 ): string {
   const parts: string[] = [];
-  const maker = item.vendor_name ?? item.product?.brand;
+  // R42: the one maker selector the ask sheet and its route print too.
+  const maker = lineMaker(item);
   if (maker) parts.push(maker);
   if (showRoom && item.room?.name) parts.push(item.room.name);
   if (status) parts.push(status);
@@ -1522,7 +1524,8 @@ function FFESectionBody({
   // US-19 D4 — ⌘K lands on a line in place. `?ffeItemId=` is read on mount
   // only, so a paper already open hears this event instead: unfold Pieces and
   // the line, bring its Order cell into view, and put focus on the PO control
-  // itself (R28). The cell mounts with the unfolded line, so the landing waits
+  // itself (R28). R37's `Add the maker` lands on the line's Maker field the
+  // same way. The cell mounts with the unfolded line, so the landing waits
   // for it. A request made before this listener existed (F1: Pieces not yet
   // mounted) waits in `focusFfeLinePending` and is landed here on mount.
   useEffect(() => {
@@ -1533,15 +1536,21 @@ function FFESectionBody({
       setOpenLineId(itemId);
       if (mode === 'project') ffeSetFolded(false);
       let waited = 0;
+      const cellSelector =
+        request?.cell === 'order'
+          ? '[data-testid="line-po-cell"]'
+          : request?.cell === 'maker'
+            ? '[data-testid="line-buy-cell"] [aria-label="Maker"]'
+            : null;
       const land = () => {
         const line = document.getElementById(`ffe-selection-${itemId}`);
-        const cell =
+        const cell = cellSelector ? line?.querySelector<HTMLElement>(cellSelector) : null;
+        const control =
           request?.cell === 'order'
-            ? line?.querySelector<HTMLElement>('[data-testid="line-po-cell"]')
+            ? (cell?.querySelector<HTMLElement>('[data-po-control]') ?? null)
             : null;
-        const control = cell?.querySelector<HTMLElement>('[data-po-control]') ?? null;
         // Up to a second: the region and the line mount before the cell does.
-        if (!control && waited++ < 60) {
+        if (!(request?.cell === 'order' ? control : cell) && waited++ < 60) {
           requestAnimationFrame(land);
           return;
         }

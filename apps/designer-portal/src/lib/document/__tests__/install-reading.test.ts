@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
   installReading,
+  lineMaker,
   pieceName,
   type InstallReading,
   type InstallReadingPiece,
@@ -117,19 +118,68 @@ describe('installReading — several pieces not here', () => {
     ).toBe("Reading chair isn't here, and no arrival date is recorded. 1 more isn't here.");
   });
 
-  it('orders by the Next deadline order: passed first (most days), then ahead, then undated', () => {
+  it('R36: passed first (most days first), then no date, then a date ahead', () => {
     const undated = piece('Rug');
     const ahead = piece('Lamp', due('2026-10-09'));
     const passedLess = piece('Desk', due('2026-10-05'));
     const passedMore = piece('Ladder', due('2026-10-01'));
     expect(read([undated, ahead, passedLess, passedMore]).firstItemId).toBe('ladder');
-    expect(read([undated, ahead]).firstItemId).toBe('lamp');
+    expect(read([ahead, passedLess]).firstItemId).toBe('desk');
+    // An unknown arrival is what the hire acts on; a known one waits behind it.
+    const reading = read([ahead, undated]);
+    expect(reading.firstItemId).toBe('rug');
+    expect(reading.sentence).toBe(
+      "Rug isn't here, and no arrival date is recorded. 1 more isn't here.",
+    );
+    expect(reading.act?.label).toBe('Ask the maker for a date');
+  });
+
+  it('R36: inside the ahead group the soonest arrival leads', () => {
+    expect(
+      read([piece('Lamp', due('2026-10-20')), piece('Desk', due('2026-10-09'))]).firstItemId,
+    ).toBe('desk');
   });
 
   it("keeps the schedule's order between pieces the deadline cannot tell apart", () => {
     expect(read([piece('Reading chair'), piece('Brass picture light')]).firstItemId).toBe(
       'reading-chair',
     );
+    expect(
+      read([piece('Lamp', due('2026-10-02')), piece('Desk', due('2026-10-02'))]).firstItemId,
+    ).toBe('lamp');
+  });
+});
+
+describe('lineMaker — R42, the one maker selector', () => {
+  it('reads the line vendor_name first', () => {
+    expect(
+      lineMaker({
+        vendor_name: 'Woodward & Sons',
+        purchase_order: { vendor: { name: 'Woodward and Sons Ltd' } },
+        product: { brand: 'Fixture Chairworks' },
+      }),
+    ).toBe('Woodward & Sons');
+  });
+
+  it("else the PO's vendor, else the line's maker (its product's brand)", () => {
+    expect(
+      lineMaker({
+        vendor_name: '  ',
+        purchase_order: { vendor: { name: 'Apparatus' } },
+        product: { brand: 'Fixture Pottery' },
+      }),
+    ).toBe('Apparatus');
+    // Cedar Lane's chair: no vendor, no PO; the row prints its brand.
+    expect(
+      lineMaker({ vendor_name: null, purchase_order: null, product: { brand: 'Fixture Metalworks' } }),
+    ).toBe('Fixture Metalworks');
+  });
+
+  it('is null only when no source is recorded', () => {
+    expect(lineMaker({})).toBeNull();
+    expect(
+      lineMaker({ vendor_name: '', purchase_order: { vendor: null }, product: { brand: null } }),
+    ).toBeNull();
   });
 });
 

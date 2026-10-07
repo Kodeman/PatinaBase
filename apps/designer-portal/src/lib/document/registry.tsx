@@ -648,7 +648,7 @@ export const FOCUS_FFE_LINE_EVENT = 'document:focus-ffe-line';
 
 export interface FocusFfeLineRequest {
   itemId: string;
-  cell: 'order';
+  cell: 'order' | 'maker';
 }
 
 /**

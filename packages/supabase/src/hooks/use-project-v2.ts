@@ -154,7 +154,8 @@ export interface FFEItemOptions {
    * Fetch the extra evidence R7's procurement lifecycle needs: the PO's
    * `delivered_date` and its nested `po_payments`, plus the Movement cell's
    * tracking columns (00698: carrier, tracking_number, bol_document_path,
-   * shipped_on, eta_history). OFF by default — it adds a
+   * shipped_on, eta_history), and the PO vendor's name that R42's maker
+   * selector reads after the line's own. OFF by default — it adds a
    * second-level embed, and only the designer portal's Document draws the
    * trail. The client portal's FF&E surfaces must not pay for it.
    */
@@ -166,7 +167,7 @@ function purchaseOrderEmbed(withLifecycle: boolean): string {
   const columns =
     'id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at';
   return withLifecycle
-    ? `purchase_order:purchase_orders!purchase_order_id(${columns}, delivered_date, carrier, tracking_number, bol_document_path, shipped_on, eta_history, payments:po_payments(kind, state, due_date, paid_date))`
+    ? `purchase_order:purchase_orders!purchase_order_id(${columns}, delivered_date, carrier, tracking_number, bol_document_path, shipped_on, eta_history, vendor:vendors!purchase_orders_vendor_id_fkey(name), payments:po_payments(kind, state, due_date, paid_date))`
     : `purchase_order:purchase_orders!purchase_order_id(${columns})`;
 }
 

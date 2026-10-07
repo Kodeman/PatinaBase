@@ -13504,6 +13504,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null
@@ -13530,6 +13531,7 @@ export type Database = {
           edited_at?: string | null
           edited_by?: string | null
           exception_id?: string | null
+          ffe_item_id?: string | null
           id?: string
           kind: string
           message_id?: string | null
@@ -13556,6 +13558,7 @@ export type Database = {
           edited_at?: string | null
           edited_by?: string | null
           exception_id?: string | null
+          ffe_item_id?: string | null
           id?: string
           kind?: string
           message_id?: string | null
@@ -13585,6 +13588,13 @@ export type Database = {
             columns: ["exception_id"]
             isOneToOne: false
             referencedRelation: "procurement_exceptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_drafts_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
             referencedColumns: ["id"]
           },
           {
@@ -35571,6 +35581,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null
@@ -38363,6 +38374,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null
@@ -38530,6 +38542,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null
@@ -38580,6 +38593,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null
@@ -38615,6 +38629,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null
@@ -38654,6 +38669,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null
@@ -38689,6 +38705,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null
@@ -39413,6 +39430,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null
@@ -41321,6 +41339,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null
@@ -42703,6 +42722,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null
@@ -45493,6 +45513,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           exception_id: string | null
+          ffe_item_id: string | null
           id: string
           kind: string
           message_id: string | null

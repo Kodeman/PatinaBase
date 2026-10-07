@@ -77,6 +77,8 @@ describe('C-28 draft review need', () => {
     ['ack_chase', 'po_unacknowledged'],
     ['receiver_inbound_notice', 'po_unsent'],
     ['vendor_claim_notice', 'exception_open'],
+    // R37: the install reading's ask, held for review, reaches the Desk drafts.
+    ['maker_eta_request', 'po_unacknowledged'],
   ])('a %s draft rides the %s need and carries the draft', (kind, needKind) => {
     const d = draft({ kind });
     const [need] = needsWith([d]);

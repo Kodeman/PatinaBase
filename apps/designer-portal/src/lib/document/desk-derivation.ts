@@ -330,6 +330,8 @@ const DRAFT_NEED: Record<string, { kind: NeedKind; text: string }> = {
   ack_chase: { kind: 'po_unacknowledged', text: 'Acknowledgment chase drafted' },
   receiver_inbound_notice: { kind: 'po_unsent', text: 'Inbound notice to the receiver drafted' },
   vendor_claim_notice: { kind: 'exception_open', text: 'Claim notice to the vendor drafted' },
+  // R37: the install reading's Ask the maker for a date, held for review.
+  maker_eta_request: { kind: 'po_unacknowledged', text: 'Arrival date request to the maker drafted' },
 };
 
 /** C-25: the return-by need rises this many days before the window closes. */

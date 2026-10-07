@@ -41,6 +41,28 @@ function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+/** What R42's maker selector reads off a line: `useProjectFFEItems`'s row, or
+ *  the ask route's read of the same record. */
+export interface LineMakerSource {
+  vendor_name?: string | null;
+  purchase_order?: { vendor?: { name?: string | null } | null } | null;
+  product?: { brand?: string | null } | null;
+}
+
+/**
+ * R42 — the one maker selector: the line's `vendor_name`, else its PO's
+ * vendor, else the line's maker (its product's brand). The schedule row, the
+ * ask sheet's `To` and the ask route all print this. Null only when none is
+ * recorded, which is R37's held form.
+ */
+export function lineMaker(line: LineMakerSource): string | null {
+  for (const name of [line.vendor_name, line.purchase_order?.vendor?.name, line.product?.brand]) {
+    const trimmed = name?.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
 /** A line's name as the reading speaks it: the piece, without the spec after
  *  its first comma (`Reading chair, oiled oak and shearling` → `Reading chair`). */
 export function pieceName(name: string): string {
@@ -78,14 +100,17 @@ function reading(
   };
 }
 
+/** R36's groups: a missed or unknown arrival is what the hire acts on; a known
+ *  one can wait behind it. */
+const PIECE_GROUP = { past: 0, none: 1, ahead: 2 } as const;
+
 /**
  * The reading for the install-stage pieces, or null when there are none.
  *
  * Several pieces not here: the sentence names the first in the Next order and
- * counts the rest. Pieces carry no need class, so the order is W3-R1's
- * deadline order (`compareDeadline`): an arrival date passed (most days first),
- * then one ahead (soonest first), then no date; the schedule's own order
- * breaks a tie.
+ * counts the rest. R36's order: an arrival date passed, then no date, then a
+ * date ahead; inside each group W3-R1 (`compareDeadline`: passed, most days
+ * first; ahead, soonest first), then the schedule's own order.
  */
 export function installReading(
   pieces: readonly InstallReadingPiece[],
@@ -105,7 +130,12 @@ export function installReading(
       const sense = days === null ? 'none' : days < 0 ? 'past' : 'ahead';
       return { piece, index, eta, sense, deadline: { sense, distance: days, standingSince: null } } as const;
     })
-    .sort((a, b) => compareDeadline(a.deadline, b.deadline) || a.index - b.index);
+    .sort(
+      (a, b) =>
+        PIECE_GROUP[a.sense] - PIECE_GROUP[b.sense] ||
+        compareDeadline(a.deadline, b.deadline) ||
+        a.index - b.index,
+    );
 
   const [first, ...rest] = waiting;
   if (!first) return reading('all_here', 'Everything is here.', null, windowHeld);

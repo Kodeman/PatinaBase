@@ -5,34 +5,39 @@ import {
   badRequest,
   serverError,
 } from '@/lib/supabase-admin';
+import { lineMaker, type LineMakerSource } from '@/lib/document/install-reading';
 
 /**
- * /api/document/ask-maker-date — "Ask the maker for a date" (US-19, ruling D6).
+ * /api/document/ask-maker-date — "Ask the maker for a date" (US-19 D6, R37).
  *
- * POST holds ONE draft on the agent queue and stops there: the task lands
- * `awaiting_review` and a person sends it later. Nothing is emailed and
- * nothing reaches the maker from here. No automated external sends is a
- * standing rule (AGENTS.md: drafts land `awaiting_review`).
+ * POST holds ONE `procurement_drafts` row (kind `maker_eta_request`) in
+ * `awaiting_review` and stops there. It lands on the line's PO, where the
+ * PO's DraftReview and the Desk's drafts list already read procurement drafts,
+ * and a studio member sends or discards it there through
+ * `procurement-draft-send`. Nothing is emailed and nothing reaches the maker
+ * from here (AGENTS.md: drafts land `awaiting_review`).
  *
- * GET reads this project's held drafts back, so "draft held for review"
- * survives a reload.
+ * Access is proven through the caller's OWN RLS: the line is read back through
+ * the caller's session client (`project_ffe_items` reads under
+ * `can_buy_for_project`), and a caller who cannot read it is refused. The
+ * existing notes are read the same way, under `procurement_drafts`' own
+ * `can_buy_for_project` policy, which is also the only reader of held notes
+ * (F4: read authority = write authority). Only then does the service-role
+ * client resolve the maker's address and insert the row: `procurement_drafts`
+ * grants INSERT to service_role only. service_role never reaches the browser.
  *
- * Same shape as `/api/people/chase-renewal`. `enqueue_agent_task` is granted
- * to `postgres`, `service_role` and `agent_writer` only, never to
- * `authenticated`, and `agent_tasks` is readable by admins only, so both
- * halves run here. Each first proves access through the caller's OWN RLS: the
- * line (POST) or the project (GET) is read back through the caller's session
- * client, and a caller who cannot read it is refused. Only then does the
- * service-role client touch the queue. service_role never reaches the browser.
- *
- * The task type has no worker: `claim_agent_tasks` is always called with an
- * explicit list of types, so nothing picks this task up and sends it.
+ * The maker, the PO and the address come from the record, never the request.
  */
 
-const TASK_TYPE = 'maker_eta_request';
+const KIND = 'maker_eta_request';
 const SUBJECT_MAX = 200;
 const BODY_MAX = 4000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A draft still on its way: held for review, or claimed by a send. */
+const OPEN = ['awaiting_review', 'sending'];
+const HELD_ERROR = 'A note for this piece is already held for review.';
+/** No studio stores a time zone yet; the studio clock is Chicago's (F6). */
+const STUDIO_TIME_ZONE = 'America/Chicago';
 
 interface HoldRequestBody {
   projectId?: unknown;
@@ -41,27 +46,41 @@ interface HoldRequestBody {
   body?: unknown;
 }
 
-interface LineRow {
+interface LineRow extends LineMakerSource {
   id: string;
   project_id: string;
-  name: string;
   vendor_id: string | null;
-  vendor_name: string | null;
   purchase_order_id: string | null;
   purchase_order: {
     id: string;
     vendor_id: string | null;
-    vendor_po_number: string | null;
-    confirmed_eta: string | null;
+    vendor?: { name?: string | null } | null;
   } | null;
+  project: { studio_id: string | null; designer_id?: string | null } | null;
+}
+
+interface DraftRow {
+  status: string;
+  created_at: string;
 }
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
+const STUDIO_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: STUDIO_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+const studioDay = (at: Date) => STUDIO_DAY.format(at);
+
+const conflict = (error: string, draft: unknown) =>
+  NextResponse.json({ error, draft }, { status: 409 });
+
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedDesignerAdmin(request);
   if ('error' in auth) return auth.error;
-  const { adminClient } = auth;
+  const { user, adminClient } = auth;
 
   let input: HoldRequestBody;
   try {
@@ -83,13 +102,12 @@ export async function POST(request: NextRequest) {
   }
 
   // The caller's own session, under RLS. Reading the line back IS the proof
-  // that the caller works on this project. The maker comes from the record,
-  // never from the request.
+  // that the caller buys for this project.
   const session = await createServerClient();
   const { data, error: lineError } = await session
     .from('project_ffe_items')
     .select(
-      'id, project_id, name, vendor_id, vendor_name, purchase_order_id, purchase_order:purchase_orders!purchase_order_id(id, vendor_id, vendor_po_number, confirmed_eta)',
+      'id, project_id, vendor_id, vendor_name, purchase_order_id, product:products!product_id(brand), purchase_order:purchase_orders!purchase_order_id(id, vendor_id, vendor:vendors!purchase_orders_vendor_id_fkey(name)), project:projects!project_id(studio_id, designer_id)',
     )
     .eq('id', ffeItemId)
     .eq('project_id', projectId)
@@ -104,94 +122,89 @@ export async function POST(request: NextRequest) {
   if (!line) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  // R37/R42: the same selector the row and the sheet print.
+  if (!lineMaker(line)) {
+    return NextResponse.json({ error: 'No maker is recorded on this line.' }, { status: 422 });
+  }
+
+  const readNotes = async () =>
+    session
+      .from('procurement_drafts')
+      .select('*')
+      .eq('kind', KIND)
+      .eq('ffe_item_id', line.id)
+      .order('created_at', { ascending: false });
+
+  const { data: notes, error: notesError } = await readNotes();
+  if (notesError) {
+    console.error('[ask-maker-date] held notes read failed', notesError);
+    return serverError('Could not read the held notes just now.');
+  }
+  const rows = (notes ?? []) as DraftRow[];
+  // F2: one open note per piece; the sheet opens the one already held.
+  const open = rows.find((row) => OPEN.includes(row.status));
+  if (open) return conflict(HELD_ERROR, open);
+  // F1/F6: one note per piece per studio day. A note already sent or
+  // discarded today is reported, never re-held over.
+  const today = studioDay(new Date());
+  const earlier = rows.find((row) => studioDay(new Date(row.created_at)) === today);
+  if (earlier) {
+    return conflict(`A note for this piece was already ${earlier.status} today.`, earlier);
+  }
 
   const po = line.purchase_order;
-  const makerName = line.vendor_name ?? null;
+  let studioId = line.project?.studio_id ?? null;
+  if (!studioId && line.project?.designer_id) {
+    // purchase_order_studio_id's fallback: the project owner's primary studio.
+    const { data: primary } = await adminClient.rpc('_primary_studio_for', {
+      p_user: line.project.designer_id,
+    });
+    studioId = (primary as string | null) ?? null;
+  }
 
-  const { data: task, error } = await adminClient.rpc('enqueue_agent_task', {
-    p_task_type: TASK_TYPE,
-    p_entity_type: 'project_ffe_item',
-    p_entity_id: line.id,
-    // A draft, and only a draft. The queue's review gate is the send gate.
-    p_status: 'awaiting_review',
-    p_source: 'document_install',
-    p_summary: `Ask ${makerName ?? 'the maker'} for an arrival date: ${line.name}`,
-    p_payload: {
+  // The PO's vendor first, as po-send addresses it; else the line's own.
+  const vendorId = po?.vendor_id ?? line.vendor_id;
+  let toEmail: string | null = null;
+  if (studioId && vendorId) {
+    const { data: email, error: emailError } = await adminClient.rpc(
+      '_procurement_vendor_email',
+      { p_org: studioId, p_vendor: vendorId },
+    );
+    if (emailError) {
+      console.error('[ask-maker-date] maker address read failed', emailError);
+      return serverError('Could not hold that note just now.');
+    }
+    toEmail = (email as string | null) ?? null;
+  }
+
+  const { data: draft, error } = await adminClient
+    .from('procurement_drafts')
+    .insert({
+      organization_id: studioId,
       project_id: line.project_id,
-      ffe_item_id: line.id,
-      ffe_item_name: line.name,
+      kind: KIND,
+      // A draft, and only a draft. DraftReview's Send is the send gate.
+      status: 'awaiting_review',
       purchase_order_id: po?.id ?? line.purchase_order_id ?? null,
-      vendor_po_number: po?.vendor_po_number ?? null,
-      confirmed_eta: po?.confirmed_eta ?? null,
-      vendor_id: po?.vendor_id ?? line.vendor_id ?? null,
-      maker_name: makerName,
+      ffe_item_id: line.id,
+      to_email: toEmail,
       subject,
       body,
-    },
-    // One held note per piece per day: pressing twice files one.
-    p_idempotency_key: `${TASK_TYPE}:${line.id}:${new Date().toISOString().slice(0, 10)}`,
-    p_on_conflict: 'ignore',
-  });
+      composed_by: user.id,
+    })
+    .select('*')
+    .single();
 
   if (error) {
-    console.error('[ask-maker-date] enqueue failed', error);
+    // Two presses at once: the one-open-note index refused the second.
+    if ((error as { code?: string }).code === '23505') {
+      const { data: again } = await readNotes();
+      const held = ((again ?? []) as DraftRow[]).find((row) => OPEN.includes(row.status));
+      return conflict(HELD_ERROR, held ?? null);
+    }
+    console.error('[ask-maker-date] hold failed', error);
     return serverError('Could not hold that note just now.');
   }
 
-  const row = task as { id?: string; created_at?: string } | null;
-  return NextResponse.json({
-    taskId: row?.id ?? null,
-    askedAt: row?.created_at ?? null,
-  });
-}
-
-export async function GET(request: NextRequest) {
-  const auth = await getAuthenticatedDesignerAdmin(request);
-  if ('error' in auth) return auth.error;
-  const { adminClient } = auth;
-
-  const projectId = request.nextUrl.searchParams.get('projectId')?.trim() ?? '';
-  if (!UUID.test(projectId)) return badRequest('projectId is required');
-
-  const session = await createServerClient();
-  const { data: project, error: projectError } = await session
-    .from('projects')
-    .select('id')
-    .eq('id', projectId)
-    .maybeSingle();
-
-  if (projectError) {
-    console.error('[ask-maker-date] project read failed', projectError);
-    return serverError('Could not read that project just now.');
-  }
-  if (!project) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const { data: tasks, error } = await adminClient
-    .from('agent_tasks')
-    .select('id, entity_id, created_at, payload')
-    .eq('task_type', TASK_TYPE)
-    .eq('status', 'awaiting_review')
-    .eq('payload->>project_id', projectId)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('[ask-maker-date] held drafts read failed', error);
-    return serverError('Could not read the held notes just now.');
-  }
-
-  return NextResponse.json({
-    drafts: (tasks ?? []).map((task) => {
-      const payload = (task.payload ?? {}) as Record<string, unknown>;
-      return {
-        taskId: task.id,
-        ffeItemId: task.entity_id,
-        askedAt: task.created_at,
-        makerName: typeof payload.maker_name === 'string' ? payload.maker_name : null,
-        subject: typeof payload.subject === 'string' ? payload.subject : '',
-        body: typeof payload.body === 'string' ? payload.body : '',
-      };
-    }),
-  });
+  return NextResponse.json({ draft });
 }

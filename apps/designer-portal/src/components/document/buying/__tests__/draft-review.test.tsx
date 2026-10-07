@@ -25,6 +25,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
 }));
 
 import { DraftReview, PurchaseOrderDrafts, type ReviewableDraft } from '../draft-review';
+import { MOVEMENT_DRAFT_KINDS } from '../../line-unfold/movement-cell';
 
 const DRAFT: ReviewableDraft = {
   id: 'draft-1',
@@ -146,5 +147,27 @@ describe('PurchaseOrderDrafts', () => {
     );
     expect(screen.getAllByTestId('draft-review')).toHaveLength(1);
     expect(screen.getByText('Reply to the maker')).toBeInTheDocument();
+  });
+
+  it("R37: the Movement cell's PO lists the held arrival date request, and a member sends it", async () => {
+    const ask = {
+      ...DRAFT,
+      id: 'draft-eta',
+      kind: 'maker_eta_request',
+      purchase_order_id: 'po-1',
+      to_email: 'orders@woodward.test',
+      subject: 'Arrival date: Library ladder and rail · PO WS-214',
+    };
+    mockDrafts.data = [ask, { ...ask, id: 'draft-other-po', purchase_order_id: 'po-2' }];
+    render(
+      <PurchaseOrderDrafts projectId="project-1" purchaseOrderId="po-1" kinds={MOVEMENT_DRAFT_KINDS} />,
+    );
+    expect(screen.getAllByTestId('draft-review')).toHaveLength(1);
+    expect(
+      screen.getByRole('region', { name: 'Arrival date request to the maker, drafted' }),
+    ).toBeInTheDocument();
+    expect(mockSend).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(mockSend).toHaveBeenCalledWith('draft-eta'));
   });
 });
