@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import {
+  OPEN_PROCUREMENT_DRAFT_STATUSES,
   useDiscardProcurementDraft,
   useProcurementDrafts,
+  useResendStalledProcurementDraft,
   useSendProcurementDraft,
   useUpdateProcurementDraft,
   type ProcurementDraftRow,
@@ -16,12 +18,26 @@ import { LABEL_CLS } from '../line-unfold/cell';
  * review. The recipient is always visible; the subject and body are editable
  * while it awaits review; Send saves any edit, then hands the stored draft to
  * procurement-draft-send. Nothing leaves without this click. Discard ends it.
+ * A draft claimed by a send reads "Sending since …"; once that send has
+ * stalled (00720: claimed over 10 minutes ago) it offers Send again.
  */
 
+/** updated_at is the claim time while a draft is sending (it refuses edits). */
 export type ReviewableDraft = Pick<
   ProcurementDraftRow,
   'id' | 'kind' | 'status' | 'to_email' | 'subject' | 'body'
->;
+> & { updated_at?: string };
+
+/** 00720: a send claimed longer ago than this has stalled. */
+const STALLED_SEND_MS = 10 * 60 * 1000;
+
+function sendingSince(iso: string): string {
+  const at = new Date(iso);
+  const time = at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return at.toDateString() === new Date().toDateString()
+    ? time
+    : `${at.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
+}
 
 export const DRAFT_KIND_LABEL: Record<string, string> = {
   ack_discrepancy_reply: 'Reply to the maker',
@@ -48,6 +64,7 @@ export function DraftReview({
   const update = useUpdateProcurementDraft({ errorSurface: 'inline' });
   const send = useSendProcurementDraft({ errorSurface: 'inline' });
   const discard = useDiscardProcurementDraft({ errorSurface: 'inline' });
+  const resend = useResendStalledProcurementDraft({ errorSurface: 'inline' });
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +72,11 @@ export function DraftReview({
 
   const status = outcome ?? draft.status;
   const editable = status === 'awaiting_review';
-  const pending = update.isPending || send.isPending || discard.isPending;
+  const stalled =
+    status === 'sending' &&
+    !!draft.updated_at &&
+    Date.now() - new Date(draft.updated_at).getTime() > STALLED_SEND_MS;
+  const pending = update.isPending || send.isPending || discard.isPending || resend.isPending;
   const recipient = draft.to_email?.trim() || null;
   const edited = subject.trim() !== draft.subject || body !== draft.body;
   const blank = !subject.trim() || !body.trim();
@@ -73,6 +94,14 @@ export function DraftReview({
     } catch (e) {
       setError((e as Error).message || 'The letter was not sent.');
     }
+  };
+
+  const sendAgain = () => {
+    setError(null);
+    resend
+      .mutateAsync(draft.id)
+      .then(() => setOutcome('sent'))
+      .catch((e: Error) => setError(e.message || 'The letter was not sent.'));
   };
 
   const discardDraft = () => {
@@ -149,13 +178,33 @@ export function DraftReview({
           </div>
         </>
       ) : (
-        <p role="status" className="text-[12px] text-[var(--text-muted)]">
-          {status === 'sent'
-            ? `Sent${recipient ? ` to ${recipient}` : ''}.`
-            : status === 'sending'
-              ? 'Sending.'
-              : 'Discarded.'}
-        </p>
+        <>
+          <p role="status" className="text-[12px] text-[var(--text-muted)]">
+            {status === 'sent'
+              ? `Sent${recipient ? ` to ${recipient}` : ''}.`
+              : status === 'sending'
+                ? draft.updated_at
+                  ? `Sending since ${sendingSince(draft.updated_at)}.`
+                  : 'Sending.'
+                : 'Discarded.'}
+          </p>
+          {stalled && (
+            <div className="flex flex-wrap items-baseline gap-x-3">
+              <DocumentAction
+                actionKey="resend-procurement-draft"
+                surfaceKey={surfaceKey}
+                regionKey={regionKey}
+                variant="primary"
+                disabled={pending}
+                loading={resend.isPending}
+                loadingLabel="Sending"
+                onClick={sendAgain}
+              >
+                Send again
+              </DocumentAction>
+            </div>
+          )}
+        </>
       )}
       {error && (
         <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
@@ -167,9 +216,9 @@ export function DraftReview({
 }
 
 /**
- * The drafts awaiting review on one purchase order, of the kinds the host cell
- * owns (the Order cell answers the acknowledgment; Movement, the receiver;
- * Receiving, the claim). Renders nothing when there are none.
+ * The drafts awaiting review (or sending) on one purchase order, of the kinds
+ * the host cell owns (the Order cell answers the acknowledgment; Movement, the
+ * receiver; Receiving, the claim). Renders nothing when there are none.
  */
 export function PurchaseOrderDrafts({
   projectId,
@@ -180,7 +229,10 @@ export function PurchaseOrderDrafts({
   purchaseOrderId: string | null | undefined;
   kinds: readonly string[];
 }) {
-  const { data } = useProcurementDrafts(purchaseOrderId ? projectId : null, 'awaiting_review');
+  const { data } = useProcurementDrafts(
+    purchaseOrderId ? projectId : null,
+    OPEN_PROCUREMENT_DRAFT_STATUSES,
+  );
   const drafts = (data ?? []).filter(
     (d) => d.purchase_order_id === purchaseOrderId && kinds.includes(d.kind),
   );

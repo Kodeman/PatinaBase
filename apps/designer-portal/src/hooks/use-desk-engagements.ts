@@ -228,7 +228,7 @@ export function buildDeskReturns(rows: any): Map<string, DeskReturnSignal[]> | u
 const DESK_DRAFT_LIMIT = 200;
 
 /**
- * C-28: procurement drafts awaiting review, keyed by project_id. A studio-level
+ * C-28: procurement drafts awaiting review (or sending), keyed by project_id. A studio-level
  * draft (no project) has no engagement to rise on, so it is dropped here.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -247,6 +247,7 @@ export function buildDeskDrafts(rows: any): Map<string, DeskDraftSignal[]> | und
         subject: row.subject,
         body: row.body,
         created_at: row.created_at,
+        updated_at: row.updated_at,
       },
     ]);
   }
@@ -638,13 +639,14 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           )
           .order('return_by')
           .limit(DESK_RETURN_LIMIT),
-        // C-28: composed letters awaiting a member's review. A sent or
-        // discarded draft drops out of the read, so the need clears with the act.
+        // C-28: composed letters awaiting a member's review, or claimed by a
+        // send (00720: a stalled one offers Send again). A sent or discarded
+        // draft drops out of the read, so the need clears with the act.
         // buildDeskDrafts drops a studio-level draft (no project).
         supabase
           .from('procurement_drafts')
-          .select('id, project_id, kind, status, to_email, subject, body, created_at')
-          .eq('status', 'awaiting_review')
+          .select('id, project_id, kind, status, to_email, subject, body, created_at, updated_at')
+          .in('status', ['awaiting_review', 'sending'])
           .order('created_at')
           .limit(DESK_DRAFT_LIMIT),
         // C-29: live quotes whose valid-until is near (R6: the date is all

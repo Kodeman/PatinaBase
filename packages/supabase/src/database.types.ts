@@ -38440,6 +38440,41 @@ export type Database = {
         }
         Returns: undefined
       }
+      complete_procurement_draft_send: {
+        Args: { p_draft_id: string }
+        Returns: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       complete_proposal_send_dispatch: {
         Args: {
           p_claim_token: string
