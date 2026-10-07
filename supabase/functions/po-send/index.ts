@@ -22,6 +22,10 @@
 //   4. Numbering: call assign_po_number (00188, widened in 00690) AS THE
 //      CALLER so the SECURITY DEFINER RPC's auth.uid() check holds for the
 //      owner and co-members alike. Idempotent + race-safe server-side.
+//      R6: a preview of an unnumbered PO, or one not sendable (held for
+//      release / po_is_sendable false), is a draft — no number ("Draft
+//      order" prints), no sidemark write, stored at
+//      {project_id}/po-preview-{po_id}.pdf, po_document_path untouched.
 //   5. Defaults: persist sidemark (Order Assistant generator convention,
 //      ported in ./lib.ts) when null.
 //   5b. Spec snapshot (C-34, ./revision.ts): 'send' and 'mark_sent' call
@@ -70,6 +74,10 @@ import {
   checkPoRepricingGate,
   checkPoTotalsCoherence,
   comArrivingSeparately,
+  DRAFT_PO_NUMBER_LABEL,
+  isDraftPreview,
+  numberPurchaseOrder,
+  persistSidemarkDefault,
   PO_OUT_OF_SYNC_DETAIL,
   type SupplyingLine,
   type SupplyingPurchaseOrder,
@@ -79,6 +87,7 @@ import {
   resolvePoShipTo,
   readStudioOrdersEmail,
   resolveVendorRecipient,
+  storePoDocument,
   vendorConfigurationLines,
   type VendorConfigurationSpec,
   type VendorProductMaster,
@@ -411,22 +420,20 @@ Deno.serve(async (req: Request) => {
   const designerName = (designerProfile as any)?.full_name?.trim() || studioName;
   const designerEmail: string | null = (designerProfile as any)?.email ?? null;
 
-  // ── Numbering — as the caller, so the RPC's studio check holds ──────────
-  const { data: numbered, error: numberError } = await userClient.rpc(
-    'assign_po_number',
-    { p_po_id: po.id },
-  );
-  if (numberError) {
-    console.error('po-send: assign_po_number failed', numberError);
-    return json({ error: 'numbering_failed', detail: numberError.message }, 500);
-  }
-  const poNumber: string | null = (numbered as any)?.po_number ?? null;
-  if (!poNumber) {
-    console.error('po-send: assign_po_number returned no po_number', numbered);
-    return json({ error: 'numbering_failed' }, 500);
-  }
+  // R6: a held or unnumbered preview is a draft — no number, no PO writes.
+  const draft = isDraftPreview(mode, po, releaseGate.sendable);
 
-  // ── Sidemark fallback (persisted when defaulted) ────────────────────────
+  // ── Numbering — as the caller, so the RPC's studio check holds ──────────
+  const numbering = await numberPurchaseOrder(userClient, po.id, draft);
+  if (!numbering.ok) {
+    return json(
+      { error: 'numbering_failed', ...(numbering.detail ? { detail: numbering.detail } : {}) },
+      500,
+    );
+  }
+  const poNumber = numbering.poNumber;
+
+  // ── Sidemark fallback (persisted when defaulted, unless a draft) ────────
   // ship_to has no fallback: it is set explicitly or printed as not set.
   let sidemark = po.sidemark?.trim() || null;
   if (!sidemark) {
@@ -437,14 +444,7 @@ Deno.serve(async (req: Request) => {
     });
     if (generated) {
       sidemark = generated;
-      const { error: defaultsError } = await admin
-        .from('purchase_orders')
-        .update({ sidemark: generated })
-        .eq('id', po.id);
-      if (defaultsError) {
-        // Non-fatal: the rendered document already uses the local value.
-        console.warn('po-send: failed to persist sidemark default', defaultsError);
-      }
+      await persistSidemarkDefault(admin, po.id, generated, draft);
     }
   }
 
@@ -494,7 +494,7 @@ Deno.serve(async (req: Request) => {
   }));
 
   const pdfData: PoPdfData = {
-    poNumber: revisionedPoNumber(poNumber, revision),
+    poNumber: poNumber ? revisionedPoNumber(poNumber, revision) : DRAFT_PO_NUMBER_LABEL,
     issuedAt: po.sent_at ?? new Date().toISOString(),
     studioName,
     studioLogoUrl,
@@ -520,30 +520,13 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'render_failed', detail }, 500);
   }
 
-  // ── Store the document (path scheme: {projectId}/po-{poNumber}.pdf) ─────
-  const documentPath = `${po.project_id}/po-${poNumber}.pdf`;
-  const { error: uploadError } = await admin.storage
-    .from(DOCUMENTS_BUCKET)
-    .upload(documentPath, pdfBytes, {
-      contentType: 'application/pdf',
-      upsert: true,
-    });
-  if (uploadError) {
-    console.error('po-send: PDF upload failed', uploadError);
-    return json({ error: 'upload_failed', detail: uploadError.message }, 500);
+  // ── Store the document ({projectId}/po-{poNumber}.pdf, or the draft's
+  //    {projectId}/po-preview-{poId}.pdf with no po_document_path write) ───
+  const stored = await storePoDocument(admin, DOCUMENTS_BUCKET, po, poNumber, pdfBytes);
+  if (!stored.ok) {
+    return json({ error: 'upload_failed', detail: stored.detail }, 500);
   }
-
-  if (po.po_document_path !== documentPath) {
-    const { error: pathError } = await admin
-      .from('purchase_orders')
-      .update({ po_document_path: documentPath })
-      .eq('id', po.id);
-    if (pathError) {
-      // Non-fatal: the object exists at a deterministic path and the
-      // response carries it; the next send re-persists.
-      console.warn('po-send: failed to persist po_document_path', pathError);
-    }
-  }
+  const documentPath = stored.documentPath;
 
   let signedUrl: string | null = null;
   const { data: signed, error: signError } = await admin.storage
@@ -569,7 +552,7 @@ Deno.serve(async (req: Request) => {
     return json({
       ok: true,
       poId: po.id,
-      poNumber,
+      poNumber: poNumber ?? po.po_number,
       documentPath,
       emailSent: false,
       signedUrl,
@@ -606,7 +589,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const rendered = buildPoSentEmail({
-      poNumber,
+      poNumber: poNumber!, // only a draft preview leaves it null
       sidemark,
       vendorName: po.vendor?.name ?? 'there',
       studioName,

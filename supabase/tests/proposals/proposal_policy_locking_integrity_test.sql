@@ -1122,24 +1122,36 @@ BEGIN
       ) = 0
   ), 'every authored child write policy must invoke the parent lock helper';
 
-  ASSERT (SELECT count(*) = 13 FROM pg_policies
-          WHERE schemaname = 'public'
-            AND policyname = ANY(ARRAY[
-              'proposals_legacy_ios_client_select',
-              'proposal_items_legacy_ios_client_select',
-              'proposal_sections_legacy_ios_client_select',
-              'proposal_scope_rooms_legacy_ios_client_select',
-              'proposal_phases_legacy_ios_client_select',
-              'proposal_exclusions_legacy_ios_client_select',
-              'proposal_payment_milestones_legacy_ios_client_select',
-              'proposal_change_order_terms_legacy_client_select',
-              'proposal_palettes_legacy_client_select',
-              'palette_swatches_legacy_client_select',
-              'proposal_boards_legacy_ios_client_select',
-              'proposal_board_items_legacy_ios_client_select',
-              'proposal_schedule_milestones_legacy_client_select'
-            ])),
-    'all thirteen installed-client SELECT-only policies must remain';
+  -- 00390 installed thirteen; 00462_workflow_privacy_authority §2 ("working
+  -- rows are never raw client surfaces") deliberately dropped the two board
+  -- ones, so eleven remain. Pinned by table + name + SELECT so any further
+  -- drift names the policy, and the two dropped ones must stay absent.
+  ASSERT (SELECT count(*) = 11 FROM pg_policies AS p
+          JOIN (VALUES
+              ('proposals', 'proposals_legacy_ios_client_select'),
+              ('proposal_items', 'proposal_items_legacy_ios_client_select'),
+              ('proposal_sections', 'proposal_sections_legacy_ios_client_select'),
+              ('proposal_scope_rooms', 'proposal_scope_rooms_legacy_ios_client_select'),
+              ('proposal_phases', 'proposal_phases_legacy_ios_client_select'),
+              ('proposal_exclusions', 'proposal_exclusions_legacy_ios_client_select'),
+              ('proposal_payment_milestones', 'proposal_payment_milestones_legacy_ios_client_select'),
+              ('proposal_change_order_terms', 'proposal_change_order_terms_legacy_client_select'),
+              ('proposal_palettes', 'proposal_palettes_legacy_client_select'),
+              ('palette_swatches', 'palette_swatches_legacy_client_select'),
+              ('proposal_schedule_milestones', 'proposal_schedule_milestones_legacy_client_select')
+            ) AS expected(tablename, policyname)
+            ON expected.tablename = p.tablename
+           AND expected.policyname = p.policyname
+          WHERE p.schemaname = 'public'
+            AND p.cmd = 'SELECT'),
+    'all eleven installed-client SELECT-only policies must remain';
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND policyname IN ('proposal_boards_legacy_ios_client_select',
+                         'proposal_board_items_legacy_ios_client_select')
+  ), 'working proposal board rows must not regain a raw client read policy (00462 §2)';
 
   ASSERT NOT EXISTS (
     SELECT 1 FROM pg_policies
@@ -1152,19 +1164,27 @@ BEGIN
       )
   ), 'the two owner-only phase-child SELECT policies must be replaced';
 
-  ASSERT (SELECT count(*) = 3
+  -- The two project-client board reads were dropped deliberately by
+  -- 00434_ffe_privacy_domain_foundation and again by 00462 §2 (working board
+  -- rows are never raw client surfaces); only the own-membership read remains.
+  ASSERT (SELECT count(*) = 1
           FROM pg_policies
           WHERE schemaname = 'public'
             AND cmd = 'SELECT'
-            AND (
-              (tablename = 'proposal_boards'
-               AND policyname = 'Clients view their project boards')
-              OR (tablename = 'proposal_board_items'
-                  AND policyname = 'Clients view items on their project boards')
-              OR (tablename = 'proposal_team_members'
-                  AND policyname = 'Members can view their own proposal membership')
-            )),
-    'the two project-client and one own-membership SELECT policies must remain';
+            AND tablename = 'proposal_team_members'
+            AND policyname = 'Members can view their own proposal membership'),
+    'the own-membership SELECT policy must remain';
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND (
+        (tablename = 'proposal_boards'
+         AND policyname = 'Clients view their project boards')
+        OR (tablename = 'proposal_board_items'
+            AND policyname = 'Clients view items on their project boards')
+      )
+  ), 'working proposal board rows must not regain a project-client read policy (00462 §2)';
 
   ASSERT NOT has_table_privilege(
     'authenticated', 'public.document_shares', 'INSERT'

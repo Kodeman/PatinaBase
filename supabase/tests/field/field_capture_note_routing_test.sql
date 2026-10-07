@@ -42,7 +42,8 @@
 --                          "explicitly cleared", and a defaulted 8th argument
 --                          would create a SECOND OVERLOAD that makes every
 --                          existing 7-argument call ambiguous.
--- 7. POLICY SHAPE        → all five field_captures policies are TO
+-- 7. POLICY SHAPE        → all nine field_captures policies (five owner/org
+--                          + 00584's four studio legs) are TO
 --                          authenticated AND carry their shipped predicates.
 --                          Section (b) of the migration DROPs and re-CREATEs
 --                          every one of them, so a typo in a USING clause is
@@ -240,7 +241,13 @@ BEGIN
         ('field_captures_owner_delete', 'DELETE', '(designer_id = auth.uid())',  '<null>'),
         ('field_captures_owner_insert', 'INSERT', '<null>',                      '(designer_id = auth.uid())'),
         ('field_captures_owner_select', 'SELECT', '(designer_id = auth.uid())',  '<null>'),
-        ('field_captures_owner_update', 'UPDATE', '(designer_id = auth.uid())',  '(designer_id = auth.uid())')
+        ('field_captures_owner_update', 'UPDATE', '(designer_id = auth.uid())',  '(designer_id = auth.uid())'),
+        -- FC-R8 resolved as built: 00584_studio_comember_rls_sweep §2 added
+        -- these four additive per-studio legs beside the five above.
+        ('field_captures_studio_delete', 'DELETE', 'is_studio_comember(designer_id)', '<null>'),
+        ('field_captures_studio_insert', 'INSERT', '<null>',                          'is_studio_comember(designer_id)'),
+        ('field_captures_studio_select', 'SELECT', 'is_studio_comember(designer_id)', '<null>'),
+        ('field_captures_studio_update', 'UPDATE', 'is_studio_comember(designer_id)', 'is_studio_comember(designer_id)')
       ) AS t(name, cmd, qual, with_check)
   LOOP
     SELECT array_to_string(p.roles, ','),
@@ -265,13 +272,13 @@ BEGIN
       || '  expected: ' || v_pol.with_check || chr(10) || '  got:      ' || COALESCE(v_check, 'NULL');
   END LOOP;
 
-  -- And no SIXTH policy has appeared alongside them.
+  -- And no TENTH policy has appeared alongside them.
   SELECT count(*) INTO v_count FROM pg_policies
    WHERE schemaname = 'public' AND tablename = 'field_captures';
-  ASSERT v_count = 5,
-    'FAIL 7f: field_captures should carry exactly five policies, got ' || v_count
-    || ' (if FC-R8 ruled per-studio and added a sixth, update this case deliberately)';
-  RAISE NOTICE 'field_capture routing: case 7 passed (5 policies, roles + predicates).';
+  ASSERT v_count = 9,
+    'FAIL 7f: field_captures should carry exactly nine policies, got ' || v_count
+    || ' (a new policy must be added to the list above deliberately)';
+  RAISE NOTICE 'field_capture routing: case 7 passed (9 policies, roles + predicates).';
 
   -- 8-11 — DEFENSIVE PROJECTION: malformed values must not raise -------------
   -- Each value below would violate a named CHECK constraint (or the jsonb type

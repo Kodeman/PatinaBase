@@ -9,8 +9,10 @@
  * One component, every home (Order Assistant Created step, unfold action
  * row, Orders ledger rows) — the only PO send UI (C-09).
  * Mount with mode 'send' for drafted/unsent POs, 'resend' for sent ones.
- * On open it calls po-send mode 'preview' (numbers + renders + stores the
- * PDF, stamps nothing) and shows the signed PDF; Send posts mode 'send',
+ * On open it calls po-send mode 'preview' (renders + stores the PDF, stamps
+ * nothing; a held or unnumbered order previews as a "Draft order" that takes
+ * no number and writes nothing to the order) and shows the signed PDF; Send
+ * posts mode 'send',
  * carrying the optional note to the vendor into the email body.
  */
 
