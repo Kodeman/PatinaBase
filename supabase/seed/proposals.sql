@@ -241,8 +241,7 @@ BEGIN
   ) VALUES (
     v_elena, uid_designer, NULL, dc_direction,
     'Elena Marlowe — Living Room Direction',
-    'Draft fixture for a no-login household: proposals.designer_client_id links '
-      || 'to the household so document_state Shape B rescues the client_name.',
+    NULL,
     'draft', 0, 0,
     now() - interval '10 days', now() - interval '10 days', 1
   )
