@@ -28,6 +28,9 @@
 --      gated order whose paper changed after release is not resent (R1-F2a,
 --      R1-F2b); an unsent draft the gate holds back takes no number (R1-F7);
 --      a rider's actual keeps the release (R1-F8).
+--      00726 (SQ-470, H4): po_release_preview reads the job's group for a new,
+--      unsaved paper, is NULL for a seat that cannot send, and the saved
+--      paper is refused.
 --   B. Billing: a deposit, then the balance, on separate slots; a full bill
 --      and a deposit never share a line (23505 naming the index); coverage
 --      stays one row per line, a deposit alone reads invoiced, both paid reads
@@ -718,6 +721,71 @@ BEGIN
   PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
   PERFORM public.set_studio_release_gate('70420000-0000-4000-8000-0000000000f1', 250000, false);
   RAISE NOTICE 'case R1-F1, R1-F7 passed: an acknowledgment is a send for the group; a held-back draft takes no number';
+END;
+$$;
+
+-- H4 (00726, SQ-470): po_release_preview answers a new, unsaved paper with
+-- the job's group, and the server refuses that paper once it is saved.
+-- Maker 014 on project A: 111 (released in A16, unsent) and 112 drafts at
+-- $600 each; 113 sent 8 days ago.
+DO $$
+DECLARE
+  v_state jsonb;
+  v_err   text;
+BEGIN
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.set_studio_release_gate('70420000-0000-4000-8000-0000000000f1', 150000);
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+
+  -- H4a group_over: a new $300 paper to 014 is $1,500 with 111 and 112; 113,
+  -- sent 8 days ago, does not count.
+  v_state := public.po_release_preview('70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000014', 30000);
+  ASSERT v_state = jsonb_build_object('applies', true, 'released', false, 'cleared', false, 'reason', 'group_over',
+                                      'group_total_cents', 150000, 'threshold_cents', 150000),
+    'FAIL H4a: a new $300 paper with the job''s two $600 drafts is group_over at $1,500, got ' || COALESCE(v_state::text, 'NULL');
+
+  -- H4b under the line: $299 more is $1,499; another job's draft to 014 does not count.
+  v_state := public.po_release_preview('70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000014', 29900);
+  ASSERT v_state = jsonb_build_object('applies', false, 'released', false, 'cleared', true, 'reason', NULL,
+                                      'group_total_cents', 149900, 'threshold_cents', 150000),
+    'FAIL H4b: a new $299 paper is under the line, got ' || COALESCE(v_state::text, 'NULL');
+  ASSERT (public.po_release_preview('70420000-0000-4000-8000-000000000003', '70420000-0000-4000-8000-000000000014', 30000)->>'group_total_cents')::bigint = 90000,
+    'FAIL H4b: on project C only 115 counts';
+  -- Over on its own total: no group reason.
+  v_state := public.po_release_preview('70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000016', 200000);
+  ASSERT (v_state->>'applies')::boolean AND NOT (v_state->>'cleared')::boolean AND v_state->'reason' = 'null'::jsonb,
+    'FAIL H4b: a paper over the line by itself carries no group reason, got ' || v_state::text;
+
+  -- H4c the access refusal is NULL: an outsider, another studio's owner, an
+  -- unknown project; the internal sum stays closed.
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a4');
+  ASSERT public.po_release_preview('70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000014', 30000) IS NULL,
+    'FAIL H4c: an outsider gets NULL';
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a5');
+  ASSERT public.po_release_preview('70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000014', 30000) IS NULL,
+    'FAIL H4c: Studio B''s owner gets NULL';
+  ASSERT public.po_release_preview('70420000-0000-4000-8000-0000000000ff', '70420000-0000-4000-8000-000000000014', 30000) IS NULL,
+    'FAIL H4c: an unknown project is NULL';
+  v_err := pg_temp.raised($q$SELECT public._release_gate_siblings_cents('70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000014', NULL)$q$);
+  ASSERT v_err LIKE '42501 %', 'FAIL H4c: authenticated cannot call _release_gate_siblings_cents, got ' || COALESCE(v_err, 'no error');
+
+  -- H4d the server refuses the paper once saved: the new draft is not
+  -- sendable (po-send's 409 held_for_release) and its stamp is refused.
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  PERFORM pg_temp.as_owner($q$INSERT INTO public.purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern, total_cents, status, created_by)
+    VALUES ('70420000-0000-4000-8000-000000000119', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001',
+            '70420000-0000-4000-8000-000000000014', 'net_30', 30000, 'draft', '70420000-0000-4000-8000-0000000000a2')$q$);
+  v_state := public.po_release_state('70420000-0000-4000-8000-000000000119');
+  ASSERT v_state->>'reason' = 'group_over' AND (v_state->>'group_total_cents')::bigint = 150000,
+    'FAIL H4d: the saved paper reads the same group as its preview, got ' || v_state::text;
+  ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000119'),
+    'FAIL H4d: po-send refuses the saved paper (po_is_sendable false)';
+  v_err := pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000119');
+  ASSERT v_err LIKE '23514 held_for_release:%', 'FAIL H4d: the saved paper''s stamp is refused, got ' || COALESCE(v_err, 'no error');
+
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.set_studio_release_gate('70420000-0000-4000-8000-0000000000f1', 250000, false);
+  RAISE NOTICE 'case H4 passed: po_release_preview reads the job''s group for a new paper; NULL for a seat that cannot send; the saved paper is refused';
 END;
 $$;
 

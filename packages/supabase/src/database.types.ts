@@ -36578,6 +36578,10 @@ export type Database = {
         Args: { p_studio_id: string; p_total_cents: number }
         Returns: boolean
       }
+      _release_gate_siblings_cents: {
+        Args: { p_exclude_po_id: string; p_project_id: string; p_vendor_id: string }
+        Returns: number
+      }
       _release_gate_total: { Args: { p_po_id: string }; Returns: number }
       _render_agreement_snapshot_html: {
         Args: { p_proposal_id: string }
@@ -41627,6 +41631,10 @@ export type Database = {
       place_product_in_project_v2: { Args: { p_request: Json }; Returns: Json }
       po_ack_state_for: { Args: { p_po_id: string }; Returns: string }
       po_is_sendable: { Args: { p_po_id: string }; Returns: boolean }
+      po_release_preview: {
+        Args: { p_project_id: string; p_total_cents: number; p_vendor_id: string }
+        Returns: Json
+      }
       po_release_state: { Args: { p_po_id: string }; Returns: Json }
       po_status_to_ffe_stage: { Args: { p_po_status: string }; Returns: string }
       prepare_configuration_quote_request: {

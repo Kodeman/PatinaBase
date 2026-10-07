@@ -19,7 +19,7 @@ import { hideDevOverlays } from "../helpers/hide-dev-overlays";
  *       both stages;
  *   R3  a released order edited afterwards needs release again;
  *   R4  two half-orders to one maker on one job: the second is held, with the
- *       group-total sentence;
+ *       group-total sentence on its new paper before save;
  *   R6  a held order's preview prints "Draft order" and takes no number;
  *   G5  a letter stuck in `sending` for 11 minutes offers Send again, and sends;
  *   G6  a shipped line with an open damage exception reads "Claim open".
@@ -999,36 +999,9 @@ FROM public.purchase_orders po WHERE po.id = ${q(poId)}`),
     await paper.getByRole("button", { name: "Done" }).click();
     await expect(paper).toBeHidden();
 
-    // The second half: a fresh paper reads its own $3,000, so it is saved as
-    // a draft; the order it makes reads the job's group.
+    // The second half: the new, unsaved paper reads the job's group
+    // (po_release_preview, 00726) before anything is saved.
     paper = await openPaper(page, R4, R4_SECOND.name);
-    // Evidence for the report: what the unsaved paper offers before the
-    // group rule can read it.
-    const freshActs = await paper
-      .getByRole("button", { name: /^(Send to|Hold for release|Release to) / })
-      .allTextContents();
-    testInfo.annotations.push({
-      type: "R4 fresh paper",
-      description: `release reason shown: ${await paper
-        .locator("[data-order-paper-release-reason]")
-        .count()}; terminal acts: ${freshActs.join(" / ")}`,
-    });
-    await shot(page, testInfo, "r4-fresh-second-paper");
-    await paper
-      .getByRole("button", { name: "Save, don’t send" })
-      .click({ timeout: 30_000 });
-    await expect
-      .poll(() => poOf(R4_SECOND.id).status, { timeout: 30_000 })
-      .toBe("draft");
-    const secondPo = poOf(R4_SECOND.id).id;
-    expect(
-      psqlScalar(`
-SELECT (s->>'applies') || '|' || (s->>'reason') || '|' || (s->>'group_total_cents')
-FROM (SELECT public.po_release_state(${q(secondPo)}) AS s) x`),
-      "the group ($6,000) is over the $5,000 line",
-    ).toBe("true|group_over|600000");
-
-    paper = await openOrdersBookPaper(page, R4, R4_SECOND.name, "send →");
     await expect(paper.locator("[data-order-paper-release-reason]")).toHaveText(
       `With your other open orders to ${R4.vendor} on this job, this comes to $6,000 — over the studio's release line ($5,000).`,
       { timeout: 30_000 },

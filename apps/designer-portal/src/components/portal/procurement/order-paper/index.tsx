@@ -293,6 +293,8 @@ function PaperSheet({
     isPatinaMaker,
     purchaseOrder: existing,
     totalCents,
+    projectId: project.id,
+    vendorId: vendor.id,
     vendorName: vendor.name,
   });
 
