@@ -36416,6 +36416,42 @@ export type Database = {
         Returns: Json
       }
       _primary_studio_for: { Args: { p_user: string }; Returns: string }
+      _procurement_draft_send_on_record: {
+        Args: { p_draft_id: string }
+        Returns: {
+          bounce_reason: string | null
+          bounce_type: string | null
+          bounced_at: string | null
+          channel: Database["public"]["Enums"]["notification_channel"]
+          clicked_at: string | null
+          created_at: string
+          delayed_at: string | null
+          deliver_after: string | null
+          delivered_at: string | null
+          error: string | null
+          id: string
+          last_event: string | null
+          last_event_at: string | null
+          metadata: Json | null
+          opened_at: string | null
+          provider_id: string | null
+          recipient: string | null
+          ref_id: string | null
+          ref_type: string | null
+          retry_count: number
+          sent_at: string | null
+          status: Database["public"]["Enums"]["notification_status"]
+          template_id: string | null
+          type: string
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "notification_log"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       _procurement_po_label: {
         Args: { p_po: Database["public"]["Tables"]["purchase_orders"]["Row"] }
         Returns: string
@@ -36579,7 +36615,11 @@ export type Database = {
         Returns: boolean
       }
       _release_gate_siblings_cents: {
-        Args: { p_exclude_po_id: string; p_project_id: string; p_vendor_id: string }
+        Args: {
+          p_exclude_po_id: string
+          p_project_id: string
+          p_vendor_id: string
+        }
         Returns: number
       }
       _release_gate_total: { Args: { p_po_id: string }; Returns: number }
@@ -41632,7 +41672,11 @@ export type Database = {
       po_ack_state_for: { Args: { p_po_id: string }; Returns: string }
       po_is_sendable: { Args: { p_po_id: string }; Returns: boolean }
       po_release_preview: {
-        Args: { p_project_id: string; p_total_cents: number; p_vendor_id: string }
+        Args: {
+          p_project_id: string
+          p_total_cents: number
+          p_vendor_id: string
+        }
         Returns: Json
       }
       po_release_state: { Args: { p_po_id: string }; Returns: Json }
@@ -42465,6 +42509,7 @@ export type Database = {
           method: string
           organization_id: string | null
           paid_on: string
+          payee: string
           payment_method_id: string | null
           po_payment_id: string | null
           purchase_order_id: string
@@ -42523,6 +42568,7 @@ export type Database = {
           method: string
           organization_id: string | null
           paid_on: string
+          payee: string
           payment_method_id: string | null
           po_payment_id: string | null
           purchase_order_id: string
@@ -45869,6 +45915,7 @@ export type Database = {
           method: string
           organization_id: string | null
           paid_on: string
+          payee: string
           payment_method_id: string | null
           po_payment_id: string | null
           purchase_order_id: string
