@@ -33,6 +33,9 @@
 --   G5  a stale claim is freed by another studio member, never a fresh one,
 --       never by a stranger; with a send on record it is completed, not
 --       freed; the sweep completes or returns stalled sends.
+-- 00724 (SQ-467):
+--   G5  a 'sending' log row is not a send on record (released, never
+--       completed, swept back to review); a delivered row is.
 --   G7  a job-site shipment composes no receiver notice (null).
 --
 -- How to run (local stack):
@@ -208,12 +211,15 @@ VALUES
 --   706 stale, a send logged           (sweep → sent)
 --   707 stale, only a failed send      (sweep → awaiting_review)
 --   708 fresh                          (release refused)
+--   709 stale, only a 'sending' row    (complete refused, release)      00724
+--   710 stale, a delivered row         (complete)                       00724
+--   711 stale, only a 'sending' row    (sweep → awaiting_review)        00724
 INSERT INTO procurement_drafts (id, organization_id, project_id, kind, purchase_order_id, to_email, subject, body, status, sent_by, updated_at)
 SELECT ('70718000-0000-4000-8000-000000000' || n)::uuid, '70718000-0000-4000-8000-0000000000f1', '70718000-0000-4000-8000-000000000001',
        'ack_chase', '70718000-0000-4000-8000-000000000102', 'orders@sq447-workroom.test.invalid', 'PO 102: please confirm',
        'Hello,\n\nPlease confirm.', 'sending', '70718000-0000-4000-8000-0000000000a2',
        CASE WHEN n = '708' THEN now() ELSE now() - interval '20 minutes' END
-  FROM unnest(ARRAY['703', '704', '705', '706', '707', '708']) AS n;
+  FROM unnest(ARRAY['703', '704', '705', '706', '707', '708', '709', '710', '711']) AS n;
 
 INSERT INTO notification_log (user_id, type, channel, status, ref_type, ref_id, provider_id, recipient, created_at)
 VALUES
@@ -222,7 +228,14 @@ VALUES
   (NULL, 'procurement_draft', 'email', 'sent',   'procurement_draft', '70718000-0000-4000-8000-000000000706', 're_sq451_706',
    'orders@sq447-workroom.test.invalid', now() - interval '18 minutes'),
   (NULL, 'procurement_draft', 'email', 'failed', 'procurement_draft', '70718000-0000-4000-8000-000000000707', NULL,
-   'orders@sq447-workroom.test.invalid', now() - interval '18 minutes');
+   'orders@sq447-workroom.test.invalid', now() - interval '18 minutes'),
+  -- send-email's row before the provider call: the send is unknown (00724).
+  (NULL, 'procurement_draft', 'email', 'sending', 'procurement_draft', '70718000-0000-4000-8000-000000000709', NULL,
+   'orders@sq447-workroom.test.invalid', now() - interval '19 minutes'),
+  (NULL, 'procurement_draft', 'email', 'delivered', 'procurement_draft', '70718000-0000-4000-8000-000000000710', 're_sq467_710',
+   'orders@sq447-workroom.test.invalid', now() - interval '17 minutes'),
+  (NULL, 'procurement_draft', 'email', 'sending', 'procurement_draft', '70718000-0000-4000-8000-000000000711', NULL,
+   'orders@sq447-workroom.test.invalid', now() - interval '19 minutes');
 
 -- A shipment on PO 102, which ships to the job site (G7).
 INSERT INTO po_shipments (id, purchase_order_id, shipped_on)
@@ -615,6 +628,20 @@ BEGIN
   ASSERT v_err LIKE '23514 draft_send_not_on_record:%', 'FAIL G5: no send on record, got ' || COALESCE(v_err, 'no error');
   ASSERT (SELECT status FROM public.procurement_drafts WHERE id = '70718000-0000-4000-8000-000000000705') = 'sending',
     'FAIL G5: a refused complete changes nothing';
+
+  -- 00724: a 'sending' row is not on record: complete refuses, release frees.
+  v_err := pg_temp.raised($q$SELECT public.complete_procurement_draft_send('70718000-0000-4000-8000-000000000709')$q$);
+  ASSERT v_err LIKE '23514 draft_send_not_on_record:%', 'FAIL G5: a sending row is not on record, got ' || COALESCE(v_err, 'no error');
+  v_draft := public.release_procurement_draft_claim('70718000-0000-4000-8000-000000000709');
+  ASSERT v_draft.status = 'awaiting_review' AND v_draft.sent_by IS NULL,
+    'FAIL G5: a claim with only a sending row is freed, got ' || v_draft.status;
+  -- A delivered row is on record.
+  v_err := pg_temp.raised($q$SELECT public.release_procurement_draft_claim('70718000-0000-4000-8000-000000000710')$q$);
+  ASSERT v_err LIKE '23514 draft_send_on_record:%', 'FAIL G5: a delivered email is not put back, got ' || COALESCE(v_err, 'no error');
+  v_draft := public.complete_procurement_draft_send('70718000-0000-4000-8000-000000000710');
+  ASSERT v_draft.status = 'sent' AND v_draft.sent_at = now() - interval '17 minutes' AND v_draft.message_id = 're_sq467_710',
+    'FAIL G5: a delivered row completes the send, got ' || v_draft.status;
+
   PERFORM pg_temp.act('70718000-0000-4000-8000-0000000000a2');
   v_err := pg_temp.raised($q$SELECT public.complete_procurement_draft_send('70718000-0000-4000-8000-000000000708')$q$);
   ASSERT v_err LIKE '23514 %not a stalled send%', 'FAIL G5: a fresh claim is not completed, got ' || COALESCE(v_err, 'no error');
@@ -671,9 +698,9 @@ BEGIN
   v_err := pg_temp.raised($q$SELECT public.mark_procurement_draft_sent('70718000-0000-4000-8000-000000000702', '70718000-0000-4000-8000-0000000000a2')$q$);
   ASSERT v_err LIKE '23514 %claim it for sending first%', 'FAIL D1: mark before claim, got ' || COALESCE(v_err, 'no error');
 
-  -- G5: the sweep settles stalled sends (705, 706, 707; 708 is fresh).
+  -- G5: the sweep settles stalled sends (705, 706, 707, 711; 708 is fresh).
   v_detail := public.sweep_procurement_clocks();
-  ASSERT (v_detail->>'draft_send_stalled')::int >= 3, 'FAIL G5: stalled sends counted, got ' || v_detail::text;
+  ASSERT (v_detail->>'draft_send_stalled')::int >= 4, 'FAIL G5: stalled sends counted, got ' || v_detail::text;
   SELECT * INTO v_draft FROM public.procurement_drafts WHERE id = '70718000-0000-4000-8000-000000000706';
   ASSERT v_draft.status = 'sent' AND v_draft.sent_by = '70718000-0000-4000-8000-0000000000a2'
      AND v_draft.sent_at = now() - interval '18 minutes' AND v_draft.message_id = 're_sq451_706',
@@ -683,6 +710,9 @@ BEGIN
     'FAIL G5: a failed send goes back to review, got ' || v_draft.status;
   SELECT * INTO v_draft FROM public.procurement_drafts WHERE id = '70718000-0000-4000-8000-000000000705';
   ASSERT v_draft.status = 'awaiting_review', 'FAIL G5: an unlogged send goes back to review, got ' || v_draft.status;
+  SELECT * INTO v_draft FROM public.procurement_drafts WHERE id = '70718000-0000-4000-8000-000000000711';
+  ASSERT v_draft.status = 'awaiting_review' AND v_draft.sent_by IS NULL AND v_draft.sent_at IS NULL,
+    'FAIL G5: the sweep returns a send with only a sending row to review (00724), got ' || v_draft.status;
   SELECT * INTO v_draft FROM public.procurement_drafts WHERE id = '70718000-0000-4000-8000-000000000708';
   ASSERT v_draft.status = 'sending', 'FAIL G5: a fresh claim is left alone, got ' || v_draft.status;
 
