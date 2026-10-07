@@ -79,6 +79,14 @@ INSERT INTO public.organization_members (
   'd9100000-0000-4000-8000-000000000001', 'owner', 'active', now()
 );
 
+-- Since 00511_public_sd_hardening the countersign's origin branch requires
+-- the agreement's designer to hold a designer-domain role.
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'd9000000-0000-4000-8000-000000000001', role.id,
+       'd9000000-0000-4000-8000-000000000001'
+FROM public.roles AS role
+WHERE role.name = 'studio_owner';
+
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, status, source
 ) VALUES (
@@ -392,13 +400,15 @@ DECLARE
   v_err text;
 BEGIN
   -- An authenticated studio member cannot mint. Handing over the link is the
-  -- send's act, not a member's.
+  -- send's act, not a member's. 00424 grants EXECUTE to service_role only
+  -- (its sole caller is the trade-rfq-send edge function's service client),
+  -- so the ACL refuses before the body's own role check is reached.
   BEGIN
     SELECT m.id, m.token INTO v_id, v_raw FROM public.mint_trade_rfq_token(v_rfq) m;
     ASSERT false, 'an authenticated caller must not mint an RFQ link';
   EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
   END;
-  ASSERT v_err = 'minting a trade RFQ link requires service_role',
+  ASSERT v_err = 'permission denied for function mint_trade_rfq_token',
     format('mint role refusal: %L', v_err);
 END $$;
 RESET ROLE;
@@ -529,10 +539,15 @@ BEGIN
     ASSERT false, 'forged service claims must not mint a trade RFQ link';
   EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
   END;
-  ASSERT v_err = 'minting a trade RFQ link requires service_role',
+  -- A forged role claim does not change the database role: the 00424 ACL
+  -- (EXECUTE to service_role only) refuses first.
+  ASSERT v_err = 'permission denied for function mint_trade_rfq_token',
     format('forged service-claim refusal: %L', v_err);
 END $$;
 RESET ROLE;
+-- Drop the forged service_role claims so later sections start from the
+-- designer's ordinary authenticated claims, as section (5)'s refusal expects.
+SELECT pg_temp.assume_user('d9000000-0000-4000-8000-000000000001');
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (4) THE GUEST READ. What the sub is shown, and — asserted twice over — what
@@ -1677,15 +1692,18 @@ BEGIN
     'and the link before the ask';
 
   -- The other side of the pair. Both retiring seams lock the proposal first and
-  -- reach the RFQ tables only through the helper.
-  ASSERT position('WHERE id = p_proposal_id FOR UPDATE' in v_exec) > 0
+  -- reach the RFQ tables only through the helper. 00511_public_sd_hardening
+  -- rewrote both execution bodies' scope lock as an aliased multi-line
+  -- `FROM public.proposals AS proposal WHERE proposal.id = p_proposal_id ...
+  -- FOR UPDATE`, so it is matched by pattern rather than one literal line.
+  ASSERT regexp_instr(v_exec, 'FROM public\.proposals AS proposal\s+WHERE proposal\.id = p_proposal_id[^;]*FOR UPDATE') > 0
      AND position('_close_trade_rfqs_for_scope' in v_exec) > 0
-     AND position('WHERE id = p_proposal_id FOR UPDATE' in v_exec)
+     AND regexp_instr(v_exec, 'FROM public\.proposals AS proposal\s+WHERE proposal\.id = p_proposal_id[^;]*FOR UPDATE')
          < position('_close_trade_rfqs_for_scope' in v_exec),
     'execution must hold the scope before it closes the asking';
-  ASSERT position('WHERE id = p_proposal_id FOR UPDATE' in v_paper) > 0
+  ASSERT regexp_instr(v_paper, 'FROM public\.proposals AS proposal\s+WHERE proposal\.id = p_proposal_id[^;]*FOR UPDATE') > 0
      AND position('_close_trade_rfqs_for_scope' in v_paper) > 0
-     AND position('WHERE id = p_proposal_id FOR UPDATE' in v_paper)
+     AND regexp_instr(v_paper, 'FROM public\.proposals AS proposal\s+WHERE proposal\.id = p_proposal_id[^;]*FOR UPDATE')
          < position('_close_trade_rfqs_for_scope' in v_paper),
     'and so must the paper execution that copies it (00425)';
   ASSERT position('WHERE id = p_proposal_id FOR UPDATE' in v_void) > 0
