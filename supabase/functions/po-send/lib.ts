@@ -275,6 +275,118 @@ export function buildFallbackSidemark(parts: FallbackSidemarkParts): string {
   return [studio, middle].filter(Boolean).join('-');
 }
 
+// ─── Draft preview (R6) ──────────────────────────────────────────────────────
+//
+// Previewing a PO with no number yet, or one that may not go out (held for
+// release, or po_is_sendable false), takes no counter number and writes
+// nothing to the PO row: the paper prints DRAFT_PO_NUMBER_LABEL, the sidemark
+// default stays in memory, and the PDF lands at a per-PO preview path that
+// po_document_path never points at. A numbered, sendable PO previews as before.
+
+export const DRAFT_PO_NUMBER_LABEL = 'Draft order';
+
+export function isDraftPreview(
+  mode: PoSendMode,
+  po: { po_number: string | null; status: string },
+  sendable: boolean,
+): boolean {
+  return mode === 'preview' &&
+    (!po.po_number || po.status === 'held_for_release' || !sendable);
+}
+
+/** The service-role writes po-send makes to the PO row and its document. */
+export interface PoWriteClient {
+  from(table: string): {
+    update(values: Record<string, unknown>): {
+      eq(column: string, value: string): PromiseLike<{ error: unknown }>;
+    };
+  };
+  storage: {
+    from(bucket: string): {
+      upload(
+        path: string,
+        body: Uint8Array,
+        options: { contentType: string; upsert: boolean },
+      ): PromiseLike<{ error: { message: string } | null }>;
+    };
+  };
+}
+
+export type PoNumbering =
+  | { ok: true; poNumber: string | null }
+  | { ok: false; detail?: string };
+
+/** assign_po_number as the caller; a draft preview never asks (poNumber null). */
+export async function numberPurchaseOrder(
+  client: CallerRpcClient,
+  poId: string,
+  draft: boolean,
+): Promise<PoNumbering> {
+  if (draft) return { ok: true, poNumber: null };
+  const { data, error } = await client.rpc('assign_po_number', { p_po_id: poId });
+  if (error) {
+    console.error('po-send: assign_po_number failed', error);
+    return { ok: false, detail: (error as { message?: string }).message };
+  }
+  const poNumber = (data as { po_number?: string | null } | null)?.po_number ?? null;
+  if (!poNumber) {
+    console.error('po-send: assign_po_number returned no po_number', data);
+    return { ok: false };
+  }
+  return { ok: true, poNumber };
+}
+
+/** Persist a defaulted sidemark; a draft preview keeps it in memory only. */
+export async function persistSidemarkDefault(
+  client: PoWriteClient,
+  poId: string,
+  sidemark: string,
+  draft: boolean,
+): Promise<void> {
+  if (draft) return;
+  const { error } = await client.from('purchase_orders').update({ sidemark }).eq('id', poId);
+  if (error) {
+    // Non-fatal: the rendered document already uses the local value.
+    console.warn('po-send: failed to persist sidemark default', error);
+  }
+}
+
+/**
+ * Upload the PDF (upsert). A numbered PO stores at {projectId}/po-{poNumber}.pdf
+ * and persists po_document_path; a draft preview (poNumber null) stores at
+ * {projectId}/po-preview-{poId}.pdf and writes no path.
+ */
+export async function storePoDocument(
+  client: PoWriteClient,
+  bucket: string,
+  po: { id: string; project_id: string; po_document_path: string | null },
+  poNumber: string | null,
+  pdfBytes: Uint8Array,
+): Promise<{ ok: true; documentPath: string } | { ok: false; detail: string }> {
+  const documentPath = poNumber
+    ? `${po.project_id}/po-${poNumber}.pdf`
+    : `${po.project_id}/po-preview-${po.id}.pdf`;
+  const { error: uploadError } = await client.storage
+    .from(bucket)
+    .upload(documentPath, pdfBytes, { contentType: 'application/pdf', upsert: true });
+  if (uploadError) {
+    console.error('po-send: PDF upload failed', uploadError);
+    return { ok: false, detail: uploadError.message };
+  }
+  if (poNumber && po.po_document_path !== documentPath) {
+    const { error: pathError } = await client
+      .from('purchase_orders')
+      .update({ po_document_path: documentPath })
+      .eq('id', po.id);
+    if (pathError) {
+      // Non-fatal: the object exists at a deterministic path and the
+      // response carries it; the next send re-persists.
+      console.warn('po-send: failed to persist po_document_path', pathError);
+    }
+  }
+  return { ok: true, documentPath };
+}
+
 // ─── Send-time consistency guard (W4-T4) ─────────────────────────────────────
 //
 // Pre-00186 purchase orders were created with CLIENT-price total_cents, and
