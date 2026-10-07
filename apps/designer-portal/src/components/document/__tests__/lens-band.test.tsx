@@ -945,7 +945,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     // Deadline order inside the group: the dated decision before the silence.
     const needsYou = Array.from(group('needs-you').querySelectorAll('[data-standing-row]'));
     expect(needsYou.map((row) => row.querySelector('button')?.textContent)).toEqual([
-      'Review decisions',
+      'Nudge the client',
       'Follow up with the maker',
     ]);
     // SETUP stays clay and plain.
