@@ -186,6 +186,10 @@ body.nopins .pin { display: none; }
 .act--quiet { color: var(--ink-faint); }
 .act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
 .lands { display: inline-flex; align-items: center; border-left: 2px solid var(--clay); padding-left: 12px; }
+.gated { display: inline-grid; justify-items: start; gap: 3px; }
+.act[aria-disabled="true"] { color: var(--ink-faint); cursor: not-allowed; }
+.act[aria-disabled="true"] .w { background: none; }
+.why { font-size: 12px; line-height: 1.4; color: var(--ink-muted); }
 
 /* ── stamp ────────────────────────────────────────────── */
 .stamp {
@@ -455,7 +459,7 @@ body.nopins .pin { display: none; }
                 <button class="act" type="button"><span class="w">Set a budget band</span></button>
               </div>
               <div class="lh-acts">
-                <button class="act" type="button"><span class="w">Message</span></button><span class="pin" aria-hidden="true">6</span>
+                <span class="gated"><button class="act" type="button" aria-disabled="true" aria-describedby="why-a1-msg"><span class="w">Message</span></button><span class="why" id="why-a1-msg">Link a client first</span></span><span class="pin" aria-hidden="true">6</span>
                 <button class="act" type="button"><span class="w">Preview</span></button>
                 <button class="act" type="button"><span class="w">Sharing</span></button>
                 <button class="act act--quiet" type="button"><span class="w">Call sheet · 0</span></button>
@@ -515,6 +519,7 @@ body.nopins .pin { display: none; }
                 <p class="rh-status">3 lines <span class="skel" aria-hidden="true"></span></p>
               </div>
               <div class="rh-acts">
+                <span><button class="act" type="button"><span class="w">Open the FF&amp;E schedule</span></button><span class="pin" aria-hidden="true">7</span></span>
                 <span><button class="act" type="button"><span class="w">Spec the 3 unspecified →</span></button><span class="pin" aria-hidden="true">6</span></span>
                 <button class="act act--quiet" type="button"><span class="w">Fold ↑</span></button>
               </div>
@@ -584,9 +589,10 @@ body.nopins .pin { display: none; }
       <li><span class="pin" aria-hidden="true">1</span><span>The stage is written in words in the letterhead eyebrow: the strata mark now carries <em>Project · 5 of 7</em>, using only the seven stage words.</span><span class="t-meta">R1-02 · R1-03 · R2-01 · R3-04</span></li>
       <li><span class="pin" aria-hidden="true">2</span><span>“No client linked — attach one” leaves the letterhead. It is now one of the two setup items under Standing, so it no longer prints at the same weight on a live overdue job as on a closed one.</span><span class="t-meta">R1-08 · R2-07 · R3-06</span></li>
       <li><span class="pin" aria-hidden="true">3</span><span>The band’s left position is Next: the one act, said as a full sentence, with the act named for the control it lands on. Today the slot prints RECORD PAYMENT under a faded line and the guide’s own act prints nowhere.</span><span class="t-meta">R1-01 · R1-10 · R2-04 · R3-12</span></li>
-      <li><span class="pin" aria-hidden="true">4</span><span>Standing takes the band’s right position, counted and summarised by kind instead of “+1 MORE”. Next is ranked by kind: money or signature first, then dated needs, then the stage’s own step, then setup. Standing never takes Next’s slot. (The Standing count and its kind split are the spec’s figures for Chen.)</span><span class="t-meta">R1-15 · R2-06 · R3-14</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>Standing takes the band’s right position, counted and summarised by kind instead of “+1 MORE”. Next is ranked by consequence (see 7). Standing never takes Next’s slot. The Standing count and its kind split (3 · 1 blocks money · 2 setup) are [illustrative]: the walk recorded Chen’s open items, not this classification, and no consequence rule yet decides what blocks money.</span><span class="t-meta">R1-15 · R2-06 · R3-14</span></li>
       <li><span class="pin" aria-hidden="true">5</span><span>Pressing Next lands here, with focus on this act. The Money head carries the same words, RECORD THE PAYMENT, marked by a 2px clay rule. The frame runs past the fold so the landing shows.</span><span class="t-meta">R1-10 · R2-04 · R3-12</span></li>
-      <li><span class="pin" aria-hidden="true">6</span><span>Weight by role: only Next and its twin at the Money head are heavy. MESSAGE loses its inked rule, and SPEC THE 3 UNSPECIFIED and DRAW AN INVOICE leave the filled charcoal tier for plain scored words. The filled tier is kept for money or signature, with its consequence sentence.</span><span class="t-meta">R1-08 · R1-09 · R2-07 · R2-32 · R3-06</span></li>
+      <li><span class="pin" aria-hidden="true">6</span><span>Weight by role: only Next and its twin at the Money head are heavy. SPEC THE 3 UNSPECIFIED and DRAW AN INVOICE leave the filled charcoal tier for plain scored words. The filled tier is kept for money or signature, with its consequence sentence. MESSAGE is withheld, not offered: no client is linked, so it prints its reason, “Link a client first”. Today it is the inked act on this job (F52).</span><span class="t-meta">R1-08 · R1-09 · R2-07 · R2-32 · R3-06 · F52</span></li>
+      <li><span class="pin" aria-hidden="true">7</span><span>What Next means: Next is the highest-consequence act open on the paper (money or a signature first, then anything that blocks another person, then the stage’s own step). Whatever Next is, the stage’s own step always prints as the leading act on its region head. Here Next is the payment, so OPEN THE FF&amp;E SCHEDULE, Project’s own step, leads the Pieces head. Today it prints nowhere.</span><span class="t-meta">synthesis §4 A · SPEC §4 Chen · ADV-17</span></li>
     </ol>
   </div>
 </section>
@@ -598,7 +604,7 @@ body.nopins .pin { display: none; }
     <div class="cols">
       <nav class="spine" aria-label="The spine">
         <button class="act putdown" type="button" style="margin-top:-12px"><span class="ar" aria-hidden="true">⟵</span><span class="w">Put down</span></button>
-        <p class="spine-name" style="margin-top:12px;font-size:13px;white-space:nowrap">Elena Marlowe (no-login…</p>
+        <p class="spine-name" style="margin-top:12px;font-size:13px">Elena Marlowe</p>
         <span class="strata strata--sm" aria-hidden="true" style="margin-top:8px"><i style="background:var(--hairline-strong)"></i><i style="background:var(--hairline-strong)"></i><i></i></span>
         <div class="spine-rule"></div>
         <ul class="spine-list">
@@ -612,7 +618,7 @@ body.nopins .pin { display: none; }
           <header class="lh" style="padding-top:28px">
             <p class="eyebrow"><span class="strata" aria-hidden="true"><i><b class="f-ink" style="width:100px"></b></i><i></i><i></i></span><span>Direction · 3 of 7</span><span class="pin" aria-hidden="true">1</span></p>
             <h2 class="lh-title" id="t-a2">Elena Marlowe — Living Room Direction</h2>
-            <p class="lh-sub">for Elena Marlowe (no-login household)<span class="ne" aria-hidden="true">↗</span></p>
+            <p class="lh-sub">for Elena Marlowe<span class="ne" aria-hidden="true">↗</span></p>
             <div class="lh-acts" style="margin-top:6px"><button class="act" type="button"><span class="w">Add a subject line</span></button></div>
             <p class="lh-figure unpriced">Not priced yet<span class="pin" aria-hidden="true">2</span></p>
           </header>
@@ -682,7 +688,7 @@ body.nopins .pin { display: none; }
       <li><span class="pin" aria-hidden="true">1</span><span>The stage in words in the letterhead eyebrow: <em>Direction · 3 of 7</em> beside the strata mark.</span><span class="t-meta">R1-02 · R1-03 · R2-01 · R3-04</span></li>
       <li><span class="pin" aria-hidden="true">2</span><span>“$0 proposed” becomes “Not priced yet”, in subtle ink, with no figure. A draft with no pieces has no price; it is not a zero.</span><span class="t-meta">R3-21</span></li>
       <li><span class="pin" aria-hidden="true">3</span><span>Next names the act in a sentence and in the control’s own words. Nothing stands on this draft, so the right side of the band is silent.</span><span class="t-meta">R1-01 · R1-15 · R2-06 · R3-14</span></li>
-      <li><span class="pin" aria-hidden="true">4</span><span>Today one door has four labels on one screen: the guide’s “Draw up the direction”, OPEN THE CONTRACT ROOM, the card’s DRAFTING THE PROPOSAL and its CONTINUE DRAFTING (<code>document-guide.ts:169,226</code>, <code>proposal-instruments.tsx:373,397</code>). The act and the control now share one name, WRITE THE PROPOSAL. The card says the state in a word box and keeps one act; CONTINUE DRAFTING is deleted.</span><span class="t-meta">R1-10 · R2-04 · R2-05 · R3-12 · R3-13</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>Today one door has four labels on one screen: the band’s “Draft up the direction” with its act OPEN THE CONTRACT ROOM, the card’s DRAFTING THE PROPOSAL and its CONTINUE DRAFTING (<code>document-guide.ts:169,226</code>, <code>proposal-instruments.tsx:373,397</code>). The act and the control now share one name, WRITE THE PROPOSAL. The card says the state in a word box and keeps one act; CONTINUE DRAFTING is deleted.</span><span class="t-meta">R1-10 · R2-04 · R2-05 · R3-12 · R3-13</span></li>
       <li><span class="pin" aria-hidden="true">5</span><span>Weight by role: OPEN THE RECORD leaves the filled charcoal tier for a plain scored word. Opening the record is not money or a signature.</span><span class="t-meta">R1-08 · R1-09 · R2-07 · R3-06</span></li>
       <li><span class="pin" aria-hidden="true">6</span><span>The leaked engineering note (“Draft fixture for a no-login household: proposals.designer_client_id links…”) is gone from the body. This was Worst Moment 1 in WALK.md.</span><span class="t-meta">WALK Worst Moment 1 · R1-17 · R2-26</span></li>
     </ol>
@@ -701,27 +707,27 @@ body.nopins .pin { display: none; }
           <tr>
             <th scope="col" class="t-head" style="width:18%">Stage</th>
             <th scope="col" class="t-head" style="width:26%">Today the guide says</th>
-            <th scope="col" class="t-head" style="width:28%">Today the control says</th>
+            <th scope="col" class="t-head" style="width:28%">Today the other device says</th>
             <th scope="col" class="t-head">One name<span class="pin" aria-hidden="true">2</span></th>
           </tr>
         </thead>
         <tbody>
-          <tr><td class="stage">Direction</td><td class="today">Open the Contract Room</td><td class="today">Continue drafting</td><td class="one">Write the proposal</td></tr>
-          <tr class="cite"><td colspan="4" class="t-meta">Contradiction 4 · document-guide.ts:169 · proposal-instruments.tsx:397 · also “Send the agreement” (document-guide.ts:226) and inline “open the Contract Room” (proposal-instruments.tsx:373), on one screen</td></tr>
+          <tr><td class="stage">Direction</td><td class="today">Draft up the direction<span class="who-dev">band sentence</span><br>Open the Contract Room<span class="who-dev">band act</span></td><td class="today">Continue drafting<span class="who-dev">the control</span></td><td class="one">Write the proposal</td></tr>
+          <tr class="cite"><td colspan="4" class="t-meta">Contradiction 4 · walk/direction-1440.jpg · document-guide.ts:169 · proposal-instruments.tsx:397 · also “Send the agreement” (document-guide.ts:226) and inline “open the Contract Room” (proposal-instruments.tsx:373), on one screen</td></tr>
 
-          <tr><td class="stage">Proposal · draft</td><td class="today">Open Contract Room</td><td class="today">Continue drafting</td><td class="one">Write the proposal</td></tr>
+          <tr><td class="stage">Proposal · draft</td><td class="today">Open Contract Room</td><td class="today">Continue drafting<span class="who-dev">the control</span></td><td class="one">Write the proposal</td></tr>
           <tr class="cite"><td colspan="4" class="t-meta">Contradiction 6 · document-guide.ts:722 · proposal-instruments.tsx:386-398 · same destination</td></tr>
 
-          <tr><td class="stage">Proposal · accepted</td><td class="today">Review signing controls</td><td class="today">Open the project</td><td class="one">Open the project</td></tr>
+          <tr><td class="stage">Proposal · accepted</td><td class="today">Review signing controls</td><td class="today">Open the project<span class="who-dev">the control</span></td><td class="one">Open the project</td></tr>
           <tr class="cite"><td colspan="4" class="t-meta">Contradiction 7 · document-guide.ts:751 · proposal-watch.tsx:452-472</td></tr>
 
-          <tr><td class="stage">Project · Install · Care</td><td class="today">Chase the approval</td><td class="today">Review decisions<span class="who-dev">the Desk</span></td><td class="one">Chase the approval</td></tr>
-          <tr class="cite"><td colspan="4" class="t-meta">Contradiction 9 · overdue_decision · document-guide.ts:604-635 · desk-derivation.ts:160-189</td></tr>
+          <tr><td class="stage">Project · Install · Care</td><td class="today">Chase the approval</td><td class="today">Review decisions<span class="who-dev">the Desk card</span></td><td class="one">Chase the approval</td></tr>
+          <tr class="cite"><td colspan="4" class="t-meta">Contradiction 9 · overdue_decision · a Desk label, not a control · document-guide.ts:604-635 · desk-derivation.ts:160-189</td></tr>
 
-          <tr><td class="stage">Project · Install · Care</td><td class="today">File the claim</td><td class="today">Review the claim<span class="who-dev">the Desk</span></td><td class="one">File the claim</td></tr>
-          <tr class="cite"><td colspan="4" class="t-meta">Contradiction 9 · damage_claim · document-guide.ts:604-635 · desk-derivation.ts:160-189</td></tr>
+          <tr><td class="stage">Project · Install · Care</td><td class="today">File the claim</td><td class="today">Review the claim<span class="who-dev">the Desk card</span></td><td class="one">File the claim</td></tr>
+          <tr class="cite"><td colspan="4" class="t-meta">Contradiction 9 · damage_claim · a Desk label, not a control · document-guide.ts:604-635 · desk-derivation.ts:160-189</td></tr>
 
-          <tr><td class="stage">Project</td><td class="today">Release the next room</td><td class="today">Release for authorization</td><td class="one">Release the room for authorization</td></tr>
+          <tr><td class="stage">Project</td><td class="today">Release the next room</td><td class="today">Release for authorization<span class="who-dev">the control</span></td><td class="one">Release for authorization</td></tr>
           <tr class="cite"><td colspan="4" class="t-meta">Contradiction 10 · document-guide.ts:228 · ffe-section.tsx:1409-1410</td></tr>
         </tbody>
       </table>
@@ -731,8 +737,8 @@ body.nopins .pin { display: none; }
   <div class="notes">
     <p class="t-head">What changed</p>
     <ol>
-      <li><span class="pin" aria-hidden="true">1</span><span>One table names every next act. Today the guide and the control disagree in thirteen pairs; the six clearest are shown, copied verbatim from the briefing’s contradictions table.</span><span class="t-meta">briefing/current-state.md:126 · R1-10 · R2-04 · R2-05 · R3-12 · R3-13</span></li>
-      <li><span class="pin" aria-hidden="true">2</span><span>The One name column is proposed wording for the founders to rule. Only the Direction row’s WRITE THE PROPOSAL is fixed by the spec; the other five names are [illustrative].</span><span class="t-meta">A5 · R127 OD-11</span></li>
+      <li><span class="pin" aria-hidden="true">1</span><span>One table names every next act. Today the guide and the control disagree in thirteen pairs; the six clearest are shown, copied verbatim from the briefing’s contradictions table. The third column names which device prints each string: a control on the paper, or a Desk card. The Direction row quotes the band as the walk shows it, “Draft up the direction”, with its act.</span><span class="t-meta">briefing/current-state.md:126 · R1-10 · R2-04 · R2-05 · R3-12 · R3-13</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>The One name column is proposed wording for the founders to rule. Only the Direction row’s WRITE THE PROPOSAL is fixed by the spec; the other five names are [illustrative]. Where a control already exists, the one name is that control’s label (Open the project, Release for authorization).</span><span class="t-meta">A5 · R127 OD-11</span></li>
     </ol>
   </div>
 </section>

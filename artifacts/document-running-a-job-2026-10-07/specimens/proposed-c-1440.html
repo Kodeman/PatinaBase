@@ -282,6 +282,12 @@ html.nobar .framebar { display: none; }
 .cs-foot { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
 .cs-reason { font-size: 13px; color: var(--ink-muted); }
 .pieces-gap { height: 24px; }
+.gated { display: inline-grid; justify-items: start; }
+.act[aria-disabled="true"] { color: var(--ink-faint); cursor: not-allowed; }
+.act[aria-disabled="true"] > span { border-bottom-color: transparent; }
+.why { font-size: 12px; line-height: 1.4; color: var(--ink-muted); }
+.band-line--long { flex: 1 1 auto; min-width: 0; font-size: 16px; line-height: 1.45; padding: 12px 0; }
+.band > .act, .band > .pin, .band > .band-standing { flex: none; }
 
 /* install week (c3) */
 .reading { margin-top: 24px; }
@@ -361,7 +367,7 @@ html.nobar .framebar { display: none; }
           </div>
         </div>
         <div class="lh-acts">
-          <button type="button" class="act act--inked"><span>Message</span></button>
+          <span class="gated"><button type="button" class="act" aria-disabled="true" aria-describedby="c1-why-msg"><span>Message</span></button><span class="why" id="c1-why-msg">Link a client first</span></span><span class="pin" aria-hidden="true">3</span>
           <button type="button" class="act"><span>Preview</span></button>
           <button type="button" class="act"><span>Sharing</span></button>
           <button type="button" class="act"><span>Call sheet · 0</span></button>
@@ -418,7 +424,7 @@ html.nobar .framebar { display: none; }
           <p class="cmdk-label" id="c1-g1">On this paper · Chen Residence<span class="pin" aria-hidden="true">1</span></p>
           <div class="cmdk-row" role="option" aria-selected="true">
             <span><span class="cmdk-title">Custom Walnut Sectional — 3 pc</span><span class="cmdk-sub">Woodward &amp; Sons · Received · PO WS-188</span></span>
-            <span class="cmdk-go">↵ Open the line</span>
+            <span class="cmdk-go">↵ Open the order</span>
           </div>
           <div class="cmdk-row" role="option" aria-selected="false">
             <span><span class="cmdk-title">Woodward &amp; Sons</span><span class="cmdk-sub">maker · PO WS-188 · balance overdue 148 days</span></span>
@@ -460,7 +466,8 @@ html.nobar .framebar { display: none; }
   <div class="notes">
     <p class="t-head">What changed</p>
     <ol>
-      <li><span class="pin" aria-hidden="true">1</span><span>⌘K searches the open paper first: the piece, its maker and its PO number, with the line one press away and <em>Record a change</em> offered as an act. Today the same query prints “No match” and the recovery points to the Help center.</span><span class="t-meta">R1-05 · R2-02 · R3-01</span></li>
+      <li><span class="pin" aria-hidden="true">1</span><span>⌘K searches the open paper first: the piece, its maker and its PO number, with <em>Record a change</em> offered as an act. The selected row’s act is OPEN THE ORDER: it is meant to land on the unfolded line with its Order cell open, focus on the PO. That landing is proposed and untested: the walk’s order trail stopped at the line, and no PO, blocked or not, was opened. Today the same query prints “No match” and the recovery points to the Help center.</span><span class="t-meta">R1-05 · R2-02 · R3-01 · ADV-10 · ADV-32</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>Under the overlay, Message is withheld with its reason, “Link a client first”: Chen has no client linked. Today it is the inked act here.</span><span class="t-meta">F52 · ADV-21</span></li>
       <li><span class="pin" aria-hidden="true">2</span><span>The drawer prints <span class="mono">?</span> beside <span class="mono">⌘K</span>, as its own act named Keys. The Keys sheet exists today, but nothing prints its key.</span><span class="t-meta">R1-30 · R2-19</span></li>
     </ol>
   </div>
@@ -509,7 +516,7 @@ html.nobar .framebar { display: none; }
             <p class="rg-status" style="color:var(--clay-ink)">3 lines · 3 not yet specified</p>
           </div>
           <div class="rg-acts">
-            <button type="button" class="act"><span>Add a piece</span></button>
+            <button type="button" class="act"><span>Spec the 3 unspecified</span></button>
             <span style="display:inline-flex;align-items:center"><button type="button" class="act act--inked" aria-expanded="true" aria-controls="c2-sheet"><span>Record a change</span></button><span class="pin" aria-hidden="true">1</span></span>
             <button type="button" class="act"><span>Fold ↑</span></button>
           </div>
@@ -520,7 +527,7 @@ html.nobar .framebar { display: none; }
           <h4 class="cs-q" id="c2-q">What changed?<span class="pin" aria-hidden="true">2</span></h4>
           <div role="radiogroup" aria-labelledby="c2-q">
             <button type="button" class="choice" role="radio" aria-checked="false"><b>On a piece</b><span>Swap, add or remove a piece, or change its finish, size or maker. The maker gets a change order.</span></button>
-            <button type="button" class="choice" role="radio" aria-checked="false"><b>On the agreement</b><span>Change the scope, the fee or the terms. Chen signs the amendment.</span></button>
+            <button type="button" class="choice" role="radio" aria-checked="false"><b>On the agreement</b><span>Change the scope, the fee or the terms. The client signs an amendment.</span></button>
           </div>
           <div class="cs-foot">
             <button type="button" class="act" aria-disabled="true" aria-describedby="c2-why"><span>Continue</span></button>
@@ -575,8 +582,8 @@ html.nobar .framebar { display: none; }
   <div class="notes">
     <p class="t-head">What changed</p>
     <ol>
-      <li><span class="pin" aria-hidden="true">1</span><span><em>Record a change</em> sits on the Pieces head, beside Add a piece, and the head’s count reads in clay ink. Today there is no entry point above the line unfold, and ⌘K offers “Add a change” only in Install and Care (<span class="mono">command-bar.tsx:706-717</span>).</span><span class="t-meta">R1-04 · R2-03 · R3-02</span></li>
-      <li><span class="pin" aria-hidden="true">2</span><span>A 640px sheet unfolds in place and asks one question first: on a piece, or on the agreement. The answer opens the right sheet; this specimen stops at the question. Continue stays focusable and says why it waits.</span><span class="t-meta">R1-04 · R2-03 · R3-02</span></li>
+      <li><span class="pin" aria-hidden="true">1</span><span><em>Record a change</em> sits on the Pieces head as its second act, after today’s act, SPEC THE 3 UNSPECIFIED, which is unchanged; the head’s count reads in clay ink. Today there is no entry point above the line unfold, and ⌘K offers “Add a change” only in Install and Care (<span class="mono">command-bar.tsx:706-717</span>).</span><span class="t-meta">R1-04 · R2-03 · R3-02</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>A 640px sheet unfolds in place and asks one question first: on a piece, or on the agreement. The answer opens the right sheet; this specimen stops at the question. Continue stays focusable and says why it waits. The two outcome sentences (a change order to the maker; an amendment the client signs) are proposed, not verified: the walk did not exercise the change path, and Chen has no client linked today.</span><span class="t-meta">R1-04 · R2-03 · R3-02</span></li>
       <li><span class="pin" aria-hidden="true">3</span><span>The folded Money seam prints its verbs: Record a payment and Record a change, the same name as on the Pieces head. Today folded seams name state, not acts.</span><span class="t-meta">Q5</span></li>
     </ol>
   </div>
@@ -613,7 +620,7 @@ html.nobar .framebar { display: none; }
       <div class="lh-row">
         <div>
           <p class="lh-for">for Nora Ellison <small aria-hidden="true">↗</small></p>
-          <div class="lh-sub" style="margin-top:6px">
+          <div class="lh-sub" style="margin-top:12px">
             <span class="lh-vital">Installation</span>
             <span class="lh-vital"><span class="mono">START</span> 11 June <span aria-hidden="true">×</span></span>
             <span class="lh-vital mono">$14,500</span>
@@ -630,29 +637,29 @@ html.nobar .framebar { display: none; }
       <hr class="ink-rule">
       <div class="band">
         <span class="next-label">Next ─</span>
-        <p class="band-line">Reading chair is 118 days past the 11 June start.</p>
-        <button type="button" class="act act--inked"><span>Chase Fixture Metalworks</span></button><span class="pin" aria-hidden="true">3</span>
+        <p class="band-line band-line--long">Behind the install start · Reading chair isn’t here, and the install began 11 June. No arrival date recorded</p>
+        <button type="button" class="act act--inked"><span>Ask the maker for a date</span></button><span class="pin" aria-hidden="true">3</span>
         <span class="band-standing">Standing · 1 setup</span>
       </div>
 
       <section class="reading" aria-labelledby="c3-reading">
-        <div class="rd-head"><p class="t-head" id="c3-reading">The install · 1 of 2 placed</p><span class="pin" aria-hidden="true">4</span></div>
+        <div class="rd-head"><p class="t-head" id="c3-reading">The install</p><span class="pin" aria-hidden="true">4</span></div>
         <div class="rd-row rd-row--late">
-          <span class="rd-kind">Late · 1</span>
+          <span class="rd-kind">Not here</span>
           <span class="rd-name">Reading chair</span>
           <span><span class="stamp stamp--production">In production</span></span>
           <span class="rd-maker">Fixture Metalworks</span>
           <span class="price">$7,800</span>
-          <span class="rd-when">118 days past start</span>
+          <span class="rd-when">No arrival date recorded</span>
         </div>
         <div class="rd-row">
-          <span class="rd-kind">Placed · 1</span>
+          <span class="rd-kind">Here</span>
           <span class="rd-name">Built-in shelving</span>
           <span><span class="stamp stamp--sage">Installed</span></span>
         </div>
         <div class="rd-row">
           <span class="rd-kind">Arriving</span>
-          <span class="rd-quiet">Nothing dated this week.</span>
+          <span class="rd-quiet">No arrival dates recorded</span>
         </div>
         <div class="rd-foot">
           <button type="button" class="act"><span>Hold a window</span></button>
@@ -706,9 +713,9 @@ html.nobar .framebar { display: none; }
     <p class="t-head">What changed</p>
     <ol>
       <li><span class="pin" aria-hidden="true">1</span><span>The stage prints in words in the letterhead eyebrow, as Direction A prints it. Today no stage word shows above the fold.</span><span class="t-meta">R1-02 · R3-04</span></li>
-      <li><span class="pin" aria-hidden="true">2</span><span>Six acts sat above the fold today: Open the schedule, Set target, Set a budget band, Message, Preview and Sharing. Set target and Set a budget band move into the Setup group below, and the “Needs setup · 1” chip is gone. Message stays, because Nora is linked.</span><span class="t-meta">R1-07 · R3-03</span></li>
-      <li><span class="pin" aria-hidden="true">3</span><span>Lateness is now a need kind, so the late chair takes the Next line with the act that answers it. Setup never takes the line; it counts once, on the right, as Standing.</span><span class="t-meta">R1-07 · R2-09 · R3-03</span></li>
-      <li><span class="pin" aria-hidden="true">4</span><span>One dated reading sits directly under the band and gives one count. Today the region prints two counts that disagree: “0 of 2 installed” and “Install manifest · 1 of 1 placed”. The Arriving line, “Nothing dated this week.”, is [illustrative].</span><span class="t-meta">R1-21 · R2-10</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>Six acts sat above the fold today: Open the schedule, Set target, Set a budget band, Message, Preview and Sharing. Set target and Set a budget band move into the Setup group below, and the “Needs setup · 1” chip is gone. Message stays, because Nora is linked. The $14,500 figure is [illustrative]: it is not among the walk’s Cedar Lane facts.</span><span class="t-meta">R1-07 · R3-03 · ADV-35</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>The reading says only what the record shows: the install began 11 June, the chair isn’t here, and no arrival date is recorded. It never calls the chair late; lateness needs a piece-level due date, and the seed has none. The act, ASK THE MAKER FOR A DATE, drafts a message to Fixture Metalworks that is held for review and never sent on its own. Setup never takes the line; it counts once, on the right, as Standing (the count is [illustrative]).</span><span class="t-meta">R1-07 · R2-09 · R3-03 · ADV-11 · ADV-34</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>One reading sits directly under the band, with a state on each row and no ratio. Today the region prints two counts that disagree, “0 of 2 installed” and “Install manifest · 1 of 1 placed”, and they may count different things, so the reading does not merge them into one figure. The Arriving line, “No arrival dates recorded”, is [illustrative]: the walk saw no arrival date, which is not proof that none is recorded.</span><span class="t-meta">R1-21 · R2-10 · ADV-12 · ADV-20 · walk/s4-step2-install-section.jpg</span></li>
       <li><span class="pin" aria-hidden="true">5</span><span>Setup chores collect at the foot in clay ink, never on the terracotta line: name the phases, set a target, set a budget band.</span><span class="t-meta">R1-07 · R3-03</span></li>
     </ol>
   </div>

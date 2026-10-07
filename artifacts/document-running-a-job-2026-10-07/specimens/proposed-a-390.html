@@ -276,6 +276,13 @@ body.nopins .pin { display: none; }
 .more-gated { padding-bottom: 6px; }
 .more-gated .row1 { display: flex; align-items: center; }
 .reason { font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+.gated { display: inline-grid; justify-items: start; }
+.lh-acts .gated .act { min-height: 30px; }
+.act[aria-disabled="true"] { color: var(--ink-faint); cursor: not-allowed; }
+.act[aria-disabled="true"] .w { background: none; }
+.why { font-size: 12px; line-height: 1.4; color: var(--ink-muted); padding-bottom: 6px; }
+.rh-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 18px; }
+.dock-left .dl-s { white-space: normal; line-height: 1.3; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
@@ -305,10 +312,6 @@ body.nopins .pin { display: none; }
 <section class="fw" data-frame="frame-a4" aria-labelledby="cap-a4">
   <h2 class="t-head cap" id="cap-a4">a4 · Chen Residence on the phone</h2>
   <div class="phone">
-    <div class="notice">
-      <p>While a document is open, Patina keeps the time for you. You can turn that off on your profile — the clock is then yours to start.</p>
-      <button class="act" type="button"><span class="w">Understood</span></button>
-    </div>
     <div class="body">
       <article aria-labelledby="t-a4">
         <header class="lh">
@@ -320,7 +323,7 @@ body.nopins .pin { display: none; }
             <button class="act" type="button"><span class="w">Set a budget band</span></button>
           </div>
           <div class="lh-acts">
-            <span><button class="act" type="button"><span class="w">Message</span></button><span class="pin" aria-hidden="true" style="margin-left:6px">5</span></span>
+            <span class="gated"><span><button class="act" type="button" aria-disabled="true" aria-describedby="why-a4-msg"><span class="w">Message</span></button><span class="pin" aria-hidden="true" style="margin-left:6px">5</span></span><span class="why" id="why-a4-msg">Link a client first</span></span>
             <button class="act" type="button"><span class="w">Preview</span></button>
             <button class="act act--quiet" type="button"><span class="w">Sharing</span></button>
             <button class="act act--quiet" type="button"><span class="w">Call sheet</span></button>
@@ -339,13 +342,22 @@ body.nopins .pin { display: none; }
           <p class="rh-eye">Exact artifact · named authority</p>
           <h3 class="rh-name" id="r-a4-ca">Client approvals</h3>
           <p class="rh-status">0 decided · no decision lead</p>
-          <button class="act act--quiet" type="button"><span class="w">Fold ↑</span></button>
-          <p class="rtext">Bind each request to one issued plan, client-ready specification, or published budget checkpoint. Discussion stays in the project thread; only the recorded outcome settles an</p>
+          <button class="act act--quiet" type="button"><span class="w">Unfold ↓</span></button>
+        </section>
+
+        <section class="region" aria-labelledby="r-a4-pc">
+          <div class="rrule"></div>
+          <h3 class="rh-name" id="r-a4-pc">Pieces</h3>
+          <p class="rh-status">3 lines</p>
+          <div class="rh-acts">
+            <span><button class="act" type="button"><span class="w">Open the FF&amp;E schedule</span></button><span class="pin" aria-hidden="true" style="margin-left:6px">6</span></span>
+            <button class="act" type="button"><span class="w">Spec the 3 unspecified →</span></button>
+          </div>
         </section>
       </article>
     </div>
     <nav class="dock" aria-label="The dock">
-      <div class="dock-left"><span class="dl-k">In this document</span><span class="dl-n">Client</span><span class="dl-s">At client app…</span></div>
+      <div class="dock-left"><span class="dl-k">In this document</span><span class="dl-n">Client</span><span class="dl-s">At approvals</span></div>
       <div class="dock-mid"><button class="act act--inked" type="button"><span class="w">Record the payment</span></button><span class="pin" aria-hidden="true">4</span></div>
       <div class="dock-right"><button class="act" type="button"><span class="dots" aria-hidden="true">•••</span><span class="w">More</span></button></div>
     </nav>
@@ -355,9 +367,10 @@ body.nopins .pin { display: none; }
     <ol>
       <li><span class="pin" aria-hidden="true">1</span><span>The stage in words in the letterhead eyebrow: <em>Project · 5 of 7</em>.</span><span class="t-meta">R1-02 · R1-03 · R2-01 · R3-04</span></li>
       <li><span class="pin" aria-hidden="true">2</span><span>“No client linked — attach one” leaves the letterhead and becomes a setup item under Standing.</span><span class="t-meta">R1-08 · R2-07 · R3-06</span></li>
-      <li><span class="pin" aria-hidden="true">3</span><span>The band stacks Next, the full sentence, the act and Standing. Today’s phone keeps only the bare verb “RECORD” after “OVERDUE 148D · WS-188”; the act keeps its object here.</span><span class="t-meta">R1-12 · R1-01</span></li>
-      <li><span class="pin" aria-hidden="true">4</span><span>The dock’s centre is the Next act, in the same words as the band. Today it is MESSAGE THE CLIENT on every stage, even with no client linked; Message moves into More.</span><span class="t-meta">R1-11 · R2-08</span></li>
-      <li><span class="pin" aria-hidden="true">5</span><span>Weight by role: MESSAGE loses its inked rule. Only Next is heavy.</span><span class="t-meta">R1-08 · R1-09 · R2-07 · R3-06</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>The band stacks Next, the full sentence, the act and Standing. Today’s phone keeps only the bare verb “RECORD” after “OVERDUE 148D · WS-188”; the act keeps its object here. The Standing count (3) is [illustrative]: the walk recorded Chen’s open items, not this classification.</span><span class="t-meta">R1-12 · R1-01</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>The dock’s centre is the Next act, in the same words as the band. Today it is MESSAGE THE CLIENT on every stage, even with no client linked; Message moves into More. The dock’s place line is a short place word, “At approvals”, that fits without clipping; today it clips to “AT CLIENT APP…”.</span><span class="t-meta">R1-11 · R2-08</span></li>
+      <li><span class="pin" aria-hidden="true">5</span><span>Weight by role: only Next is heavy. MESSAGE is withheld, not offered: no client is linked, so it prints its reason, “Link a client first”. Today it is the inked act on this job (F52).</span><span class="t-meta">R1-08 · R1-09 · R2-07 · R3-06 · F52</span></li>
+      <li><span class="pin" aria-hidden="true">6</span><span>What Next means: Next is the payment here, so Project’s own step, OPEN THE FF&amp;E SCHEDULE, still prints as the leading act on its region head and can never disappear. Client approvals is shown folded, and the one-time timekeeping notice already dismissed, so the Pieces head fits the phone; both are unchanged from today.</span><span class="t-meta">synthesis §4 A · ADV-17</span></li>
     </ol>
   </div>
 </section>
@@ -377,7 +390,7 @@ body.nopins .pin { display: none; }
           <p class="lh-title">Chen Residence</p>
           <div class="lh-gap"></div>
           <div class="lh-acts"><span class="act"><span class="w">Set dates</span></span><span class="act"><span class="w">Set a budget band</span></span></div>
-          <div class="lh-acts"><span class="act"><span class="w">Message</span></span><span class="act"><span class="w">Preview</span></span><span class="act act--quiet"><span class="w">Sharing</span></span><span class="act act--quiet"><span class="w">Call sheet</span></span></div>
+          <div class="lh-acts"><span class="gated"><span class="act" aria-disabled="true"><span class="w">Message</span></span><span class="why">Link a client first</span></span><span class="act"><span class="w">Preview</span></span><span class="act act--quiet"><span class="w">Sharing</span></span><span class="act act--quiet"><span class="w">Call sheet</span></span></div>
         </div>
         <div class="band">
           <span class="band-k">Next</span>
@@ -392,7 +405,7 @@ body.nopins .pin { display: none; }
         </div>
       </div>
       <div class="dock">
-        <div class="dock-left"><span class="dl-k">In this document</span><span class="dl-n">Client</span><span class="dl-s">At client app…</span></div>
+        <div class="dock-left"><span class="dl-k">In this document</span><span class="dl-n">Client</span><span class="dl-s">At approvals</span></div>
         <div class="dock-mid"><span class="act act--inked"><span class="w">Record the payment</span></span></div>
         <div class="dock-right"><span class="act"><span class="dots">•••</span><span class="w">More</span></span></div>
       </div>

@@ -190,7 +190,10 @@ body.nopins .pin, body.nopins .notes { display: none; }
 .tour { margin-top: 12px; padding: 16px 16px 4px; background: var(--paper-doc); border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); }
 .tour .t-head { display: flex; align-items: center; }
 .tour-lead { margin-top: 6px; font: 400 18px/1.4 var(--font-display); color: var(--ink); }
-.tour-body { margin-top: 6px; font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+.gated { display: inline-grid; justify-items: start; }
+.act[aria-disabled="true"] { color: var(--ink-faint); cursor: not-allowed; }
+.act[aria-disabled="true"] .w { background: none; }
+.why { font-size: 12px; line-height: 1.4; color: var(--ink-muted); padding-bottom: 6px; }
 
 .region { margin-top: 24px; }
 .region-rule { height: 6px; margin-bottom: 12px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--hairline-strong); }
@@ -249,13 +252,12 @@ body.nopins .pin, body.nopins .notes { display: none; }
         <p class="lh-eyebrow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><span class="stage">Project · 5 of 7</span><span class="pin" aria-hidden="true">1</span></p>
         <h2 class="lh-title" id="title-b3">Olsen Lake House</h2>
         <p class="handoff">Leah put this down Tue 6 Oct. Yours now, Maya.<span class="pin" aria-hidden="true">2</span></p>
-        <p class="noclient"><a href="#">No client linked — attach one ↗</a></p>
         <div class="acts">
           <button class="act" type="button"><span class="w">Set dates</span></button>
           <button class="act" type="button"><span class="w">Set a budget band</span></button>
         </div>
         <div class="acts lh-acts">
-          <button class="act act--inked" type="button"><span class="w">Message</span></button>
+          <span class="gated"><span><button class="act" type="button" aria-disabled="true" aria-describedby="why-b3-msg"><span class="w">Message</span></button><span class="pin" aria-hidden="true">6</span></span><span class="why" id="why-b3-msg">Link a client first</span></span>
           <button class="act" type="button"><span class="w">Preview</span></button>
           <button class="act act--faint" type="button"><span class="w">Sharing</span></button>
           <button class="act act--faint" type="button"><span class="w">Call sheet</span></button>
@@ -306,10 +308,11 @@ body.nopins .pin, body.nopins .notes { display: none; }
     <h3 class="t-head">What changed</h3>
     <ol>
       <li><span class="pin" aria-hidden="true">1</span>The stage prints in words above the title, as on b1.<span class="t-meta">R1-03 · WALK scenario 5</span></li>
-      <li><span class="pin" aria-hidden="true">2</span>The handoff line, said once on Maya's first open. Maya Reyes is the one invented person, a reused fixture from the procurement deck. The date Tue 6 Oct is [illustrative].<span class="t-meta">R2-31 · direction §4 B</span></li>
-      <li><span class="pin" aria-hidden="true">3</span>The ownership sentence takes the band in full, in Discovery's shape. Today's phone band shortens the need to a code and a verb.<span class="t-meta">R2-31</span></li>
-      <li><span class="pin" aria-hidden="true">4</span>The standing sheet unfolds once, grouped by kind, at the phone's full width. Setup prints in clay ink, never terracotta. The delivery-window row is [illustrative].<span class="t-meta">Q3 · Q6</span></li>
+      <li><span class="pin" aria-hidden="true">2</span>The handoff line, said once on Maya's first open. Maya Reyes is the one invented person, a reused fixture from the procurement deck. The handoff, the assignment to Maya and the date Tue 6 Oct are all [illustrative]: the seed has no handoff or assignment records.<span class="t-meta">R2-31 · direction §4 B · ADV-13</span></li>
+      <li><span class="pin" aria-hidden="true">3</span>The ownership sentence takes the band in full, in Discovery's shape. Today's phone band shortens the need to a code and a verb. "Waiting on: no one" is [illustrative].<span class="t-meta">R2-31 · ADV-13</span></li>
+      <li><span class="pin" aria-hidden="true">4</span>The standing sheet unfolds once, grouped by kind, at the phone's full width. Setup prints in clay ink, never terracotta. The "blocks money or a signature" class on AP-012, the delivery-window row and the count of 3 are [illustrative]. Whether this list is a task list is founder question Q9.<span class="t-meta">Q3 · Q6 · Q9 · ADV-14 · ADV-19</span></li>
       <li><span class="pin" aria-hidden="true">5</span>The dock's centre carries the band's act, File the claim. Today the centre is Message the client, though no client is linked.<span class="t-meta">R1-11 · R2-08</span></li>
+      <li><span class="pin" aria-hidden="true">6</span>Message is withheld with its reason, "Link a client first", instead of the heavy act. The letterhead's "No client linked — attach one" leaves; it lives only in the Setup group.<span class="t-meta">F52 · ADV-21 · ADV-38</span></li>
     </ol>
   </div>
 </section>
@@ -322,13 +325,12 @@ body.nopins .pin, body.nopins .notes { display: none; }
       <header>
         <p class="lh-eyebrow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><span class="stage">Project · 5 of 7</span><span class="pin" aria-hidden="true">1</span></p>
         <h2 class="lh-title" id="title-b4">Olsen Lake House</h2>
-        <p class="noclient"><a href="#">No client linked — attach one ↗</a></p>
         <div class="acts">
           <button class="act" type="button"><span class="w">Set dates</span></button>
           <button class="act" type="button"><span class="w">Set a budget band</span></button>
         </div>
         <div class="acts lh-acts">
-          <button class="act act--inked" type="button"><span class="w">Message</span></button>
+          <span class="gated"><button class="act" type="button" aria-disabled="true" aria-describedby="why-b4-msg"><span class="w">Message</span></button><span class="why" id="why-b4-msg">Link a client first</span></span>
           <button class="act" type="button"><span class="w">Preview</span></button>
           <button class="act act--faint" type="button"><span class="w">Sharing</span></button>
           <button class="act act--faint" type="button"><span class="w">Call sheet</span></button>
@@ -344,12 +346,10 @@ body.nopins .pin, body.nopins .notes { display: none; }
       </div>
 
       <aside class="tour" aria-labelledby="tour-b4">
-        <h3 class="t-head" id="tour-b4">1 of 3<span class="pin" aria-hidden="true">3</span></h3>
-        <p class="tour-lead" id="tour-b4-lead">This is a job Leah handed you. The band says what's yours.</p>
-        <p class="tour-body">Press File the claim to start. Two more notes follow as you work.</p>
+        <h3 class="t-head" id="tour-b4">A note, once<span class="pin" aria-hidden="true">3</span></h3>
+        <p class="tour-lead" id="tour-b4-lead">Here's a job Leah put down for you. The band says what's yours. Press it.</p>
         <div class="acts">
-          <button class="act act--ink" type="button"><span class="w">Next note</span></button>
-          <button class="act" type="button"><span class="w">Skip the tour</span></button>
+          <button class="act" type="button"><span class="w">Understood</span></button>
         </div>
       </aside>
 
@@ -372,8 +372,8 @@ body.nopins .pin, body.nopins .notes { display: none; }
     <h3 class="t-head">What changed</h3>
     <ol>
       <li><span class="pin" aria-hidden="true">1</span>The stage prints in words above the title, as on b3.<span class="t-meta">R1-03</span></li>
-      <li><span class="pin" aria-hidden="true">2</span>The second visit: the standing sheet stays folded and the band carries it, with +2 more for the rest. The handoff line was said once, on the first open, and does not print again.<span class="t-meta">R2-31 · Q6</span></li>
-      <li><span class="pin" aria-hidden="true">3</span>A one-time note, anchored under the band in the flow, not a modal. Today's tour names the rooms; this one walks the act on a real job.<span class="t-meta">R1-37 · R2-24</span></li>
+      <li><span class="pin" aria-hidden="true">2</span>The second visit: the standing sheet stays folded and the band carries it, with +2 more for the rest. The handoff line was said once, on the first open, and does not print again. Message is withheld with its reason, as on b3. The ownership and "Waiting on: no one" are [illustrative].<span class="t-meta">R2-31 · Q6 · ADV-13 · ADV-21</span></li>
+      <li><span class="pin" aria-hidden="true">3</span>One dismissible note, anchored under the band in the flow, not a modal. No step count and no sequence: it says one thing on a real job and goes when dismissed. Today's tour names the rooms in six steps.<span class="t-meta">R1-37 · R2-24 · ADV-16</span></li>
       <li><span class="pin" aria-hidden="true">4</span>The band's File the claim carries a 2px clay rule: the act the note points at.<span class="t-meta">R2-24</span></li>
       <li><span class="pin" aria-hidden="true">5</span>The dock's centre is File the claim, as on b3.<span class="t-meta">R1-11 · R2-08</span></li>
     </ol>

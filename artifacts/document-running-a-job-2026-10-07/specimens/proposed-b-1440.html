@@ -123,6 +123,10 @@ button { font: inherit; color: inherit; }
 .act--ink { color: var(--ink); }
 .act--faint { color: var(--ink-faint); }
 .act--bare .w { background: none; padding-bottom: 0; }
+.gated { display: inline-grid; justify-items: start; gap: 3px; }
+.act[aria-disabled="true"] { color: var(--ink-faint); cursor: not-allowed; }
+.act[aria-disabled="true"] .w { background: none; }
+.why { font-size: 12px; line-height: 1.4; color: var(--ink-muted); }
 .act:active { transition-duration: var(--press-in); color: var(--ink); }
 .act:focus-visible, a:focus-visible, .mg-close:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
 .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 24px; }
@@ -352,14 +356,13 @@ kbd { font: 400 10px/1 var(--font-meta); padding: 3px 5px; border: 1px solid var
         <p class="handoff">Leah put this down Tue 6 Oct. Yours now, Maya.<span class="pin" aria-hidden="true">2</span></p>
         <div class="lh-row">
           <div>
-            <p class="noclient"><a href="#">No client linked — attach one ↗</a></p>
             <div class="acts">
               <button class="act" type="button"><span class="w">Set dates</span></button>
               <button class="act" type="button"><span class="w">Set a budget band</span></button>
             </div>
           </div>
           <div class="acts lh-acts">
-            <button class="act act--inked" type="button"><span class="w">Message</span></button>
+            <span class="gated"><button class="act" type="button" aria-disabled="true" aria-describedby="why-b1-msg"><span class="w">Message</span></button><span class="why" id="why-b1-msg">Link a client first</span></span><span class="pin" aria-hidden="true">7</span>
             <button class="act" type="button"><span class="w">Preview</span></button>
             <button class="act act--faint" type="button"><span class="w">Sharing</span></button>
             <button class="act act--faint" type="button"><span class="w">Call sheet · 0</span></button>
@@ -459,11 +462,12 @@ kbd { font: 400 10px/1 var(--font-meta); padding: 3px 5px; border: 1px solid var
     <h3 class="t-head">What changed</h3>
     <ol>
       <li><span class="pin" aria-hidden="true">1</span>The stage prints in words in the letterhead eyebrow. Today a reader who arrives cold sees only the rail's ACTIVE and an unlabeled bar, and must guess the stage (WALK scenario 5).<span class="t-meta">R1-03 · WALK scenario 5</span></li>
-      <li><span class="pin" aria-hidden="true">2</span>The handoff line, said once under the title on Maya's first open of a job Leah put down. The date Tue 6 Oct is [illustrative].<span class="t-meta">R2-31 · direction §4 B</span></li>
-      <li><span class="pin" aria-hidden="true">3</span>The ownership sentence takes the band. Discovery's sentence is the only ownership sentence in the product today; this generalises it to every stage.<span class="t-meta">R2-31</span></li>
-      <li><span class="pin" aria-hidden="true">4</span>The standing sheet unfolds in place on the first open, grouped by kind: blocks money or a signature, then needs you, then setup. Ranked by kind, so the damage claim reads ahead of the missing client link, which prints in clay ink, never terracotta. The delivery-window row is [illustrative].<span class="t-meta">Q3 · Q6</span></li>
+      <li><span class="pin" aria-hidden="true">2</span>The handoff line, said once under the title on Maya's first open of a job Leah put down. The handoff itself, the assignment to Maya and the date Tue 6 Oct are all [illustrative]: the seed has no handoff or assignment records, and in the walk neither persona had touched Olsen. This shows what the paper would say, not what the Document knows today.<span class="t-meta">R2-31 · direction §4 B · ADV-13</span></li>
+      <li><span class="pin" aria-hidden="true">3</span>The ownership sentence takes the band. Discovery's sentence is the only ownership sentence in the product today; this generalises it to every stage. "Yours" rests on the illustrative assignment, and "Waiting on: no one" is [illustrative]: nothing in the walk records who else holds a part of this job.<span class="t-meta">R2-31 · ADV-13</span></li>
+      <li><span class="pin" aria-hidden="true">4</span>The standing sheet unfolds in place on the first open, grouped by kind: blocks money or a signature, then needs you, then setup. The missing client link prints in clay ink, never terracotta. Three things here are [illustrative]: the "blocks money or a signature" class on AP-012 (the walk could not judge the claim's consequence, and no consequence rule exists yet), the delivery-window row (invented), and the count of 3. Whether a list unfolded once stays inside VISION's "no task manager" is founder question Q9.<span class="t-meta">Q3 · Q6 · Q9 · ADV-14 · ADV-19</span></li>
       <li><span class="pin" aria-hidden="true">5</span>The "EXACT ARTIFACT · NAMED AUTHORITY" eyebrow is gone from this head, and "No active phase handoffs need attention." is gone from under Schedule dates, below this fold. One prints machinery, the other prints an absence.<span class="t-meta">R1-16 · R1-17</span></li>
       <li><span class="pin" aria-hidden="true">6</span>Signed in as Maya Reyes (MR), design assistant. Maya is the one invented person in this deck, a reused fixture from the procurement deck.<span class="t-meta">fixture · SPEC §4</span></li>
+      <li><span class="pin" aria-hidden="true">7</span>Message is withheld, not offered: no client is linked, so it prints its reason, "Link a client first", instead of the heavy act. The letterhead's "No client linked — attach one" leaves too; it lives only in the Setup group, so the warning prints once.<span class="t-meta">F52 · R1-11 · R2-08 · ADV-21 · ADV-38</span></li>
     </ol>
   </div>
 </section>
@@ -501,7 +505,7 @@ kbd { font: 400 10px/1 var(--font-meta); padding: 3px 5px; border: 1px solid var
         <p>With Maya: <a class="scored" href="#">Olsen Lake House</a> — she has the damage claim.</p>
       </div>
       <hr class="dk-rule">
-      <p class="dk-more">New inquiries · 5 — <button class="act" type="button"><span class="w">Show all</span></button><span class="pin" aria-hidden="true">2</span></p>
+      <p class="dk-more">In brief · 5 — <button class="act" type="button"><span class="w">Show all</span></button><span class="pin" aria-hidden="true">2</span></p>
 
       <div class="cards">
         <div class="card card--tall">
@@ -566,8 +570,8 @@ kbd { font: 400 10px/1 var(--font-meta); padding: 3px 5px; border: 1px solid var
   <div class="notes">
     <h3 class="t-head">What changed</h3>
     <ol>
-      <li><span class="pin" aria-hidden="true">1</span>The prose says whose each line is: Leah's three leads with their days, the two overdue jobs, and the job Maya holds. Today's prose reads as the whole worklist and hides the third lead, Lily Tanaka, below "and 7 more below".<span class="t-meta">WALK scenario 1 · R3-16 · R2-16 · R1-24</span></li>
-      <li><span class="pin" aria-hidden="true">2</span>"and 7 more below" becomes a counted line with its act. The count is the In brief figure.<span class="t-meta">R1-24 · R3-16</span></li>
+      <li><span class="pin" aria-hidden="true">1</span>The prose says whose each line is: Leah's three leads with their days, the two overdue jobs, and the job Maya holds. Today's prose reads as the whole worklist and hides the third lead, Lily Tanaka, below "and 7 more below". The "With Maya" line is [illustrative]: the seed has no assignment records.<span class="t-meta">WALK scenario 1 · R3-16 · R2-16 · R1-24 · ADV-13</span></li>
+      <li><span class="pin" aria-hidden="true">2</span>"and 7 more below" becomes a named, counted line with its act: In brief · 5, the Desk's own In brief figure, and SHOW ALL. It no longer stands in for the cards below the fold, which stay where they are. Today's controls above it (Capture a lead, Open a project, Find anything, Begin a brief, No proposal needed, Only what needs me, By person) are unchanged.<span class="t-meta">R1-24 · R3-16 · ADV-30 · ADV-31</span></li>
       <li><span class="pin" aria-hidden="true">3</span>The folder cards keep their YOUR PEN marks; the Olsen card prints MAYA'S PEN. The pen now reaches the paper (b1). The Olsen card's place in the second row and its lines are [illustrative]; the second row's other cards follow the fixture.<span class="t-meta">R2-31</span></li>
     </ol>
   </div>

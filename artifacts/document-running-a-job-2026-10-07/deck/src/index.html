@@ -333,7 +333,11 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
 .pager button { min-width: 44px; min-height: 44px; background: transparent; border: 0; color: var(--ink); cursor: pointer; font-family: var(--font-meta); font-size: 14px; border-radius: var(--radius-hair); }
 .pager button:hover { background: var(--rail); }
 .pager .where { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-muted); padding: 0 8px; white-space: nowrap; max-width: 46vw; overflow: hidden; }
-@media (max-width: 760px) { .pager { left: 16px; right: 16px; justify-content: space-between; } .pager .where { max-width: none; flex: 1; text-align: center; } }
+/* On a narrow screen a floating pager would sit over the frames, so it goes;
+   the sheets scroll by touch, and the keys still page. */
+@media (max-width: 760px) { .pager { display: none; } }
+.slide h1:focus, .slide h2:focus { outline: none; }
+.slide h1:focus-visible, .slide h2:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 4px; }
 
 .skip { position: absolute; left: -9999px; top: 0; }
 .skip:focus { left: 12px; top: 12px; z-index: 70; background: var(--paper-doc); color: var(--ink); padding: 12px; border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); font-family: var(--font-meta); font-size: 12px; }
@@ -344,7 +348,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
 @media (forced-colors: active) {
   .word, .spec__stage, .shot__stage, .pager, .devices li, .diagram__q { border-color: CanvasText; }
   table.sheet .mark::before { border-color: CanvasText; background: CanvasText; }
-  a:focus-visible, button:focus-visible { outline-color: Highlight; }
+  a:focus-visible, button:focus-visible, .slide h1:focus-visible, .slide h2:focus-visible { outline-color: Highlight; }
 }
 </style>
 
@@ -367,7 +371,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
           <p class="t-d3 ink-muted measure">Why designers get lost in The Document, and three ways to show them the way.</p>
         </div>
         <div class="stack">
-          <p class="t-head ink-faint">Five tasks every reviewer walked</p>
+          <p class="t-head ink-faint">Five scenarios, reviewed against one local walk</p>
           <ol class="lanes">
             <li>A new inquiry arrives. What do I do first, and how do I know?</li>
             <li>The client asks for a change after signing. Where do I record it?</li>
@@ -392,7 +396,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
     </div>
     <div class="main">
       <blockquote class="said">
-        <p>Designers are getting lost and don&rsquo;t know what to do.</p>
+        <p>The designers are getting lost and not knowing what to do.</p>
         <footer>Kody, the ask behind this review</footer>
       </blockquote>
       <h2 class="t-d1">Who is lost: the first hire, opening a job someone else wrote</h2>
@@ -465,7 +469,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
           </li>
         </ol>
       </div>
-      <p class="t-body prose">The one device built to answer, the band, has room for one sentence. On any live job something is late, so that sentence goes to the late thing and the stage&rsquo;s next step prints nowhere. Leah fills the gaps from memory. A first hire, opening someone else&rsquo;s job, can&rsquo;t.</p>
+      <p class="t-body prose">The one device built to answer, the band, has room for one sentence. On a busy job a standing item takes that sentence, and the stage&rsquo;s next step then prints nowhere. Chen Residence and Cedar Lane Study both show this in the walk. Leah fills the gaps from memory. A first hire, opening someone else&rsquo;s job, can&rsquo;t.</p>
       <p class="t-meta ink-faint">Sources: synthesis/direction.md &sect;1 &middot; briefing/current-state.md &sect;2, contradictions 4, 5 and 9 of 13 &middot; walk/WALK.md.</p>
     </div>
   </div>
@@ -490,7 +494,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
         </ol>
         <div class="stack">
           <h3 class="t-head ink-faint">Why it didn&rsquo;t land</h3>
-          <p class="t-body">Every acceptance gate in R127 was geometric: band height, CLS, first-head position, blank frames. No gate asked a person to finish a task: find the next act, record a change, find a PO.</p>
+          <p class="t-body">R1 reads R127&rsquo;s acceptance gates as geometric: band height, CLS, first-head position, blank frames. None of the gates R1 found asks a person to finish a task: find the next act, record a change, find a PO. We found no record of a task test after release, though one may exist outside the repo.</p>
           <p class="t-body">The one structural answer, Direction B&rsquo;s job ticket, was gone before anyone set it beside the band.</p>
         </div>
       </div>
@@ -519,17 +523,17 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
     </div>
     <div class="main">
       <h2 class="t-d1">Five tasks, two people</h2>
-      <p class="t-body-sm ink-subtle prose">Walked on 7 October against local Supabase with seeded data, signed in as Leah. Each task is read twice: by Leah, who wrote the job, and by the first hire, who didn&rsquo;t. Steps are what the walk recorded.</p>
+      <p class="t-body-sm ink-subtle prose">Five scenarios reviewed against one local walk: on 7 October, against local Supabase with seeded data, signed in as Leah. Steps are what the walk recorded. The Leah and first-hire columns are persona reads of that walk, not separate sessions.</p>
       <div class="scroller stackable">
         <table class="sheet wide">
           <thead><tr><th>Task</th><th>What the walk found</th><th>Steps</th><th>Leah</th><th>The first hire</th><th class="col-thumb">Key screen</th></tr></thead>
           <tbody>
             <tr>
               <td class="id" data-label="Task">1 &middot; A new inquiry</td>
-              <td data-label="What the walk found"><span class="word word--current">Found immediately</span><span class="cite">The Desk. The third new lead is found only after search, and <code>?</code> only via the key.</span></td>
-              <td data-label="Steps">0 clicks to the Desk; one more to reach Lily Tanaka (&ldquo;and 7 more below&rdquo; or &#8984;K)</td>
+              <td data-label="What the walk found"><span class="word word--current">Found immediately</span><span class="cite">Two new leads on the Desk. Lily Tanaka, a third, sits outside the first three cards. <code>?</code> is found only via the key.</span></td>
+              <td data-label="Steps">0 clicks to the Desk. Lily was opened directly by id; &ldquo;and 7 more below&rdquo; and &#8984;K were identified as paths, not timed</td>
               <td data-label="Leah">Reads the Desk fast. She knows who Chen and Aspen are.</td>
-              <td data-label="The first hire">The Desk prose reads as the whole worklist. Nothing on the page points to the 7 more or to &#8984;K.</td>
+              <td data-label="The first hire">The Desk prose reads as the whole worklist. The &ldquo;7 more&rdquo; link is visible, but nothing says a new lead is behind it.</td>
               <td data-label="Key screen"><img class="thumb" src="{{WALK:s1-step1-desk-landing.jpg}}" alt="The Desk: Good morning, Leah, two things are overdue, Chen and Aspen, then folder cards for new leads." width="1440" height="900" loading="lazy" decoding="async"></td>
             </tr>
             <tr>
@@ -542,15 +546,15 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
             </tr>
             <tr>
               <td class="id" data-label="Task">3 &middot; The PO for the sofa</td>
-              <td data-label="What the walk found"><span class="word word--blocked">Not found</span><span class="cite">&#8984;K returns No match. Browsing Pieces finds it after search.</span></td>
-              <td data-label="Steps">1 failed search, 2 clicks, still one tab from the PO</td>
+              <td data-label="What the walk found"><span class="word word--blocked">Search: not found</span> <span class="word word--pending">Line: found after search</span><span class="cite">&#8984;K returns No match. Browsing Pieces finds the line. The PO itself was not opened. What blocks it was not testable: the piece reads RECEIVED, and the seed has no blocked PO.</span></td>
+              <td data-label="Steps">1 failed search, 2 clicks to the line, still one tab from the PO</td>
               <td data-label="Leah">Reads the No match as a product failure, then goes to Pieces from memory.</td>
               <td data-label="The first hire">&ldquo;Ask about &lsquo;sectional&rsquo;&rdquo; looks like the only next step offered.</td>
               <td data-label="Key screen"><img class="thumb" src="{{WALK:s3-step1-cmdk-no-match.jpg}}" alt="The command bar with sectional typed: No match, try the help center." width="1440" height="900" loading="lazy" decoding="async"></td>
             </tr>
             <tr>
               <td class="id" data-label="Task">4 &middot; Install week</td>
-              <td data-label="What the walk found"><span class="word word--pending">Found after search</span><span class="cite">Not at the top. Nothing says late or arriving in those words.</span></td>
+              <td data-label="What the walk found"><span class="word word--pending">Found after search</span><span class="cite">Not at the top. Nothing says late or arriving in those words. In the region, &ldquo;0 of 2 installed&rdquo; sits beside &ldquo;1 of 1 placed&rdquo; (walk/s4-step2-install-section.jpg).</span></td>
               <td data-label="Steps">1 click to the Install region; PUNCH and HOLD A WINDOW one more</td>
               <td data-label="Leah">Mildly annoyed by the setup chore; scrolls past it.</td>
               <td data-label="The first hire">Takes the setup chore as the task, and may start a configuration detour.</td>
@@ -610,7 +614,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
       <div class="cols-2">
         <figure class="shot">
           <div class="shot__stage"><img src="{{WALK:install-1440.jpg}}" alt="Cedar Lane Study in install week. The loudest line is a Needs setup chip and Name the phases for this project, beside Open the schedule and five more acts." width="1440" height="900" loading="lazy" decoding="async"></div>
-          <figcaption class="t-meta">Install week on Cedar Lane Study. The loudest line is &ldquo;NEEDS SETUP &middot; 1 &mdash; Name the phases for this project&rdquo;, with six acts above the fold. Nothing says late or arriving, and further down the region&rsquo;s two counts disagree. A4 &middot; walk/install-1440.jpg</figcaption>
+          <figcaption class="t-meta">Install week on Cedar Lane Study. The loudest line is &ldquo;NEEDS SETUP &middot; 1 &mdash; Name the phases for this project&rdquo;, with six acts above the fold. Nothing says late or arriving. A4 &middot; walk/install-1440.jpg. Further down, the region&rsquo;s two counts disagree: &ldquo;0 of 2 installed&rdquo; beside &ldquo;1 of 1 placed&rdquo; (walk/s4-step2-install-section.jpg).</figcaption>
         </figure>
         <figure class="shot">
           <div class="shot__stage"><img src="{{WALK:care-1440.jpg}}" alt="Lindqvist kitchen in Care. The rail says Ongoing while the body says Project completed, and the heading Care prints twice." width="1440" height="900" loading="lazy" decoding="async"></div>
@@ -641,7 +645,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
     </div>
     <div class="main">
       <h2 class="t-d1">Where all three reviewers agreed</h2>
-      <p class="t-body-sm ink-subtle prose">Three reviews by three models. Each row was found by all three. A filled square marks a reviewer&rsquo;s finding, with its ids. Severity is the highest any reviewer gave: S1 blocks the job, S2 costs real time or causes errors, S3 is friction.</p>
+      <p class="t-body-sm ink-subtle prose">Three reviews by three models. Each row&rsquo;s bold claim is the observation all three made. Sub-details that only some reviewers reported carry their names in brackets. A filled square marks a reviewer&rsquo;s finding, with its ids. Severity is the highest any reviewer gave to the shared claim: S1 blocks the job, S2 costs real time or causes errors, S3 is friction.</p>
       <div class="scroller stackable">
         <table class="sheet wide">
           <thead><tr><th>#</th><th>Finding</th><th class="col-rev">R1 &middot; Opus</th><th class="col-rev">R2 &middot; Fable</th><th class="col-rev">R3 &middot; Sol</th><th>Sev</th></tr></thead>
@@ -649,12 +653,12 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
             <tr><td class="id" data-label="#">A1</td><td data-label="Finding"><strong>The stage is not written in words at the top of the page.</strong> Band, spine and letterhead each yield to another; the last prints an unlabelled mark. The rail says ACTIVE, ONGOING or INSTALLATION, never the stage.</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-02, R1-03</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-01</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-04</span></span></td><td class="sev" data-label="Severity">S1</td></tr>
             <tr><td class="id" data-label="#">A2</td><td data-label="Finding"><strong>&#8984;K can&rsquo;t find what&rsquo;s on the open paper.</strong> &ldquo;sectional&rdquo; returns No match from inside the Document listing &ldquo;Custom Walnut Sectional&rdquo;, then recovers to Help, not to Pieces.</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-05</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-02</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-01, R3-07</span></span></td><td class="sev" data-label="Severity">S1</td></tr>
             <tr><td class="id" data-label="#">A3</td><td data-label="Finding"><strong>Recording a client&rsquo;s change after signing has no visible door.</strong> It&rsquo;s an &ldquo;Amendment&rdquo; in a folded accounts band, or a maker-side change order three levels into a line. &#8984;K offers &ldquo;Add a change&rdquo; only in Install and Care.</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-04</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-03</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-02</span></span></td><td class="sev" data-label="Severity">S1</td></tr>
-            <tr><td class="id" data-label="#">A4</td><td data-label="Finding"><strong>Install week leads with a setup chore.</strong> &ldquo;Name the phases&rdquo; takes the band in terracotta. Nothing says late or arriving. The two counts in the Install region disagree.</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-07, R1-21</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-09, R2-10</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-03</span></span></td><td class="sev" data-label="Severity">S2</td></tr>
-            <tr><td class="id" data-label="#">A5</td><td data-label="Finding"><strong>The guide&rsquo;s words differ from the control it lands on.</strong> There are 13 such pairs. Direction shows four labels for one door on one screen. The Desk&rsquo;s and the paper&rsquo;s verbs differ for six need kinds, by design.</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-10</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-04, R2-05</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-12, R3-13</span></span></td><td class="sev" data-label="Severity">S2</td></tr>
+            <tr><td class="id" data-label="#">A4</td><td data-label="Finding"><strong>Install week leads with a setup chore, and nothing says what&rsquo;s late or arriving.</strong> &ldquo;Name the phases&rdquo; takes the band in terracotta. [The two counts in the Install region disagree: R1, R2.]</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-07, R1-21</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-09, R2-10</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-03</span></span></td><td class="sev" data-label="Severity">S2</td></tr>
+            <tr><td class="id" data-label="#">A5</td><td data-label="Finding"><strong>The guide&rsquo;s words differ from the control they land on.</strong> Direction shows four labels for one door on one screen. The briefing lists 13 cross-device contradictions, which include these. [The Desk&rsquo;s and the paper&rsquo;s verbs differ for six need kinds, by design: R1, R2.]</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-10</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-04, R2-05</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-12, R3-13</span></span></td><td class="sev" data-label="Severity">S2</td></tr>
             <tr><td class="id" data-label="#">A6</td><td data-label="Finding"><strong>Weight and colour follow category, not consequence.</strong> &ldquo;No client linked&rdquo; prints the same on a live overdue job and a closed one. &ldquo;5 unspecified&rdquo; in drafting uses the overdue-money terracotta.</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-08, R1-09, R1-29</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-07, R2-22</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-06, R3-19</span></span></td><td class="sev" data-label="Severity">S2</td></tr>
-            <tr><td class="id" data-label="#">A7</td><td data-label="Finding"><strong>Care contradicts itself.</strong> The rail says ONGOING, the body says &ldquo;Project completed.&rdquo;, and the heading &ldquo;Care&rdquo; prints twice.</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-03, R1-35</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-10</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-05, R3-20</span></span></td><td class="sev" data-label="Severity">S2</td></tr>
-            <tr><td class="id" data-label="#">A8</td><td data-label="Finding"><strong>The paper leaks machinery and prints empty regions.</strong> <code>BAND</code>, &ldquo;EXACT ARTIFACT &middot; NAMED AUTHORITY&rdquo;, &ldquo;No active phase handoffs need attention.&rdquo;, four &ldquo;Nothing yet&rdquo; heads before the Pieces, and a seeded engineering note as body copy.</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-16, R1-17, R1-18</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-11, R2-12, R2-15, R2-26</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-10</span></span></td><td class="sev" data-label="Severity">S2</td></tr>
-            <tr><td class="id" data-label="#">A9</td><td data-label="Finding"><strong><code>?</code> and the <code>g</code> keys are printed nowhere.</strong> The tour teaches nouns, and Workshop Notes render nothing until published.</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-30, R1-37, R1-38</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-19, R2-24, R2-25</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-17</span></span></td><td class="sev" data-label="Severity">S3</td></tr>
+            <tr><td class="id" data-label="#">A7</td><td data-label="Finding"><strong>Care contradicts itself.</strong> The rail says ONGOING; the body says &ldquo;Project completed.&rdquo; [The heading &ldquo;Care&rdquo; prints twice: R1, R3.]</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-03, R1-35</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-10</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-05, R3-20</span></span></td><td class="sev" data-label="Severity">S2</td></tr>
+            <tr><td class="id" data-label="#">A8</td><td data-label="Finding"><strong>The paper prints its own machinery as copy.</strong> A seeded engineering note renders as body text on Direction. [Further leaks: <code>BAND</code>, &ldquo;EXACT ARTIFACT &middot; NAMED AUTHORITY&rdquo;, &ldquo;No active phase handoffs need attention.&rdquo;, four &ldquo;Nothing yet&rdquo; heads before the Pieces: R1, R2.]</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-16, R1-17, R1-18</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-11, R2-12, R2-15, R2-26</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-10</span></span></td><td class="sev" data-label="Severity">S2</td></tr>
+            <tr><td class="id" data-label="#">A9</td><td data-label="Finding"><strong>The <code>?</code> key is printed nowhere, so the Keys sheet can&rsquo;t be found.</strong> [The <code>g</code> keys are unprinted too; the tour teaches nouns; Workshop Notes render nothing until published: R1, R2.]</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-30, R1-37, R1-38</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-19, R2-24, R2-25</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-17</span></span></td><td class="sev" data-label="Severity">S3</td></tr>
             <tr><td class="id" data-label="#">A10</td><td data-label="Finding"><strong>One line, then a door.</strong> Every other open item sits behind <code>+N MORE</code>, a count with no kind and no order explained.</td><td data-label="R1 &middot; Opus"><span class="mark"><span class="cite">R1-15</span></span></td><td data-label="R2 &middot; Fable"><span class="mark"><span class="cite">R2-06</span></span></td><td data-label="R3 &middot; Sol"><span class="mark"><span class="cite">R3-14</span></span></td><td class="sev" data-label="Severity">S2</td></tr>
           </tbody>
         </table>
@@ -689,7 +693,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
         <div class="stack">
           <h3 class="t-d3">Install</h3>
           <p class="t-body-sm">R1 and R2 say R124 item 3 (&ldquo;install stays a label&rdquo;) can stand: the fix is a lateness need kind plus the leader rule. R3 frames it as a founder question.</p>
-          <p class="t-body-sm"><strong>Taken:</strong> no mode. The Install region leads with a dated reading. R3&rsquo;s question is kept, and the answer is &ldquo;no ruling needed&rdquo;.</p>
+          <p class="t-body-sm"><strong>Taken:</strong> no mode. The Install region leads with a dated reading of what hasn&rsquo;t arrived against the install start. The local seed records no arrival dates, so the reading says so in words; it never invents lateness. R3&rsquo;s question is kept, and the answer is &ldquo;no ruling needed&rdquo;.</p>
         </div>
         <div class="stack">
           <h3 class="t-d3">Whose move</h3>
@@ -727,7 +731,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
         <div class="phase-col">
           <span class="dir-letter">A</span>
           <h3 class="t-d2">One Voice</h3>
-          <p class="t-body-sm">The next-act contract. One label table feeds every device that prints a next act, and the band carries Next and Standing side by side.</p>
+          <p class="t-body-sm">The next-act contract. One label table feeds every device that prints a next act, and the band carries Next and Standing side by side. Next is the highest-consequence act open on the paper; the stage&rsquo;s own step always leads its region head.</p>
           <dl class="reg">
             <dt>Surface</dt><dd>The Document</dd>
             <dt>Moment</dt><dd>Every open of a live job</dd>
@@ -764,6 +768,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
       <hr class="rule-strong">
       <p class="layers">These are layers, not rivals.</p>
       <p class="t-body-sm prose">All three keep the canon that holds: one Document (V7 D1, no tabs), NG1 (no persistent global nav), NG2 (the shadow budget), V11&rsquo;s ledger test, R126&rsquo;s register and V12&rsquo;s arrival. None adds a dashboard, a task manager or a badge. Each passes the VISION feature test.</p>
+      <p class="t-body-sm prose"><strong>About the frames on sheets 11 to 18.</strong> They show each direction&rsquo;s changes only, not the slice-0 repairs, so some machinery the repairs remove (the <code>BAND</code> eyebrow, &ldquo;No active phase handoffs need attention.&rdquo;) still prints in some of them. Each frame is a static state, not a working prototype. Values the walk didn&rsquo;t record are marked illustrative in the frame&rsquo;s notes.</p>
       <blockquote class="said">
         <p>The remedy is not another place to manage work.</p>
         <footer>R3 &middot; GPT-6 Sol</footer>
@@ -785,6 +790,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
       <div class="caption-grid">
         <ul class="look">
           <li>One label table. Every device that prints a next act reads it: band, Desk card, &#8984;K, region head, dock. The act&rsquo;s name is the name of the control it lands on, and the press lands with focus on that control.</li>
+          <li>What Next means. Next is the highest-consequence act open on the paper: money or a signature first, then anything that blocks another person, then the stage&rsquo;s own step. Whatever Next is, the stage&rsquo;s own step always prints as the leading act on its region head, so it can never disappear.</li>
           <li>The band gets two fixed positions: <code>Next &#9472; &lt;act&gt;</code> on the left, <code>Standing &middot; &lt;worst&gt; +N</code> on the right. Silence on the right when nothing stands.</li>
           <li>The stage in words in the letterhead eyebrow: <code>PROJECT &middot; 5 OF 7</code>, using the seven document words only.</li>
           <li>Weight by role. Only the Next act and its twin at the head of the active region are heavy. The filled tier stays for money or signature. A gated act prints its reason under it.</li>
@@ -803,7 +809,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
           <div class="shot__stage"><img src="{{WALK:project-1440.jpg}}" alt="Chen Residence today. Under the title, No client linked, attach one, in italic terracotta. Above the fold: Record payment, Set dates, Set a budget band. Two vendor payment due cards in the margin." width="1440" height="900" loading="lazy" decoding="async"></div>
           <figcaption class="t-meta">Chen Residence, top of the paper. The loudest line is &ldquo;No client linked &mdash; attach one&rdquo;. Four acts compete above the fold; the stage&rsquo;s own step prints nowhere.</figcaption>
         </figure>
-        <figure class="spec" id="fig-a1" data-w="1440" data-h="900" data-s="frame-a1">
+        <figure class="spec" id="fig-a1" data-w="1440" data-h="1746" data-s="frame-a1">
           <p class="t-head pair-label">Proposed <span class="src">frame a1</span></p>
           <div class="spec__stage"><div class="spec__scaler">
             <iframe class="spec-frame" sandbox="allow-scripts" name="frame-a1" title="Proposed, frame a1: Chen Residence, top of the paper, with the band split into Next and Standing" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
@@ -831,14 +837,14 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
           <div class="shot__stage"><img src="{{WALK:direction-1440.jpg}}" alt="Elena Marlowe's Direction paper today: $0 proposed, Draft up the direction with Open the Contract Room, a card reading Drafting the proposal, not started yet, and Continue drafting." width="1440" height="900" loading="lazy" decoding="async"></div>
           <figcaption class="t-meta">Elena Marlowe, Living Room Direction. One door, four labels. <span class="cite">document-guide.ts:169,226 &middot; proposal-instruments.tsx:373,397</span></figcaption>
         </figure>
-        <figure class="spec" id="fig-a2" data-w="1440" data-h="900" data-s="frame-a2">
+        <figure class="spec" id="fig-a2" data-w="1440" data-h="1410" data-s="frame-a2">
           <p class="t-head pair-label">Proposed <span class="src">frame a2</span></p>
           <div class="spec__stage"><div class="spec__scaler">
             <iframe class="spec-frame" sandbox="allow-scripts" name="frame-a2" title="Proposed, frame a2: Elena Marlowe's Direction paper, with one name for the proposal act" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
           </div></div>
           <figcaption class="t-meta">The band says Write the proposal; the card&rsquo;s act says the same.</figcaption>
         </figure>
-        <figure class="spec" id="fig-a3" data-w="1440" data-h="900" data-s="frame-a3">
+        <figure class="spec" id="fig-a3" data-w="1440" data-h="1232" data-s="frame-a3">
           <p class="t-head pair-label">Proposed <span class="src">frame a3</span></p>
           <div class="spec__stage"><div class="spec__scaler">
             <iframe class="spec-frame" sandbox="allow-scripts" name="frame-a3" title="Proposed, frame a3: the label table, one name for each act" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
@@ -866,14 +872,14 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
           <div class="shot__stage"><img src="{{WALK:project-390.jpg}}" alt="Chen Residence on the phone today, top of the paper with the mobile bar." width="390" height="844" loading="lazy" decoding="async"></div>
           <figcaption class="t-meta">Chen Residence at 390.</figcaption>
         </figure>
-        <figure class="spec" id="fig-a4" data-w="390" data-h="844" data-s="frame-a4">
+        <figure class="spec" id="fig-a4" data-w="390" data-h="1682" data-s="frame-a4">
           <p class="t-head pair-label">Proposed <span class="src">frame a4</span></p>
           <div class="spec__stage"><div class="spec__scaler">
             <iframe class="spec-frame" sandbox="allow-scripts" name="frame-a4" title="Proposed, frame a4: Chen Residence on the phone, with Next in the band and the dock" srcdoc="{{SPECIMEN_A_390}}"></iframe>
           </div></div>
           <figcaption class="t-meta">The band stacked; the dock&rsquo;s centre is RECORD THE PAYMENT.</figcaption>
         </figure>
-        <figure class="spec" id="fig-a5" data-w="390" data-h="844" data-s="frame-a5">
+        <figure class="spec" id="fig-a5" data-w="390" data-h="1022" data-s="frame-a5">
           <p class="t-head pair-label">Proposed <span class="src">frame a5</span></p>
           <div class="spec__stage"><div class="spec__scaler">
             <iframe class="spec-frame" sandbox="allow-scripts" name="frame-a5" title="Proposed, frame a5: the More sheet on the phone" srcdoc="{{SPECIMEN_A_390}}"></iframe>
@@ -898,15 +904,16 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
         <ul class="look">
           <li>An ownership sentence on every stage, in Discovery&rsquo;s shape: <code>Yours: file the claim on AP-012 &middot; Waiting on the Harpers: nothing</code>.</li>
           <li>On a handoff, said once: &ldquo;Leah put this down Tuesday. Yours now.&rdquo;</li>
-          <li>The first open of a paper by a person shows the standing sheet unfolded once, grouped by kind: blocks money or a signature, needs you, setup. After that, the band alone.</li>
-          <li>The Desk prose takes the same shape, and the teammate tour walks one real job instead of naming rooms.</li>
+          <li>The first open of a paper by a person shows the standing sheet unfolded once, grouped by kind: blocks money or a signature, needs you, setup. After that, the band alone. This is close to a task list; whether it stays inside canon is founder question Q9.</li>
+          <li>The Desk prose takes the same shape. The teammate tour becomes one dismissible note on one real job, instead of naming rooms. No step count, no &ldquo;next note&rdquo;.</li>
+          <li>Illustrative in the frames: the handoff line, the assignment, &ldquo;Waiting on: no one&rdquo;, the blocks-money class on AP-012 and the Standing counts. The seed has no handoff or assignment records.</li>
         </ul>
         <dl class="reg">
           <dt>Surface</dt><dd>The Document and the Desk</dd>
           <dt>Moment</dt><dd>Leah hands a job to her first hire</dd>
           <dt>Stream</dt><dd>Subscription, and margin</dd>
           <dt>Promise</dt><dd>No new system to learn</dd>
-          <dt>Canon</dt><dd>R127 L-11; one reading sentence in VISION &sect;4</dd>
+          <dt>Canon</dt><dd>R127 L-11; Q9; one reading sentence in VISION &sect;4</dd>
         </dl>
       </div>
       <div class="pair">
@@ -915,7 +922,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
           <div class="shot__stage"><img src="{{WALK:s5-step1-olsen-opened.jpg}}" alt="Olsen Lake House opened cold today: no stage word, the rail says Active, and two needs at equal terracotta weight." width="1440" height="900" loading="lazy" decoding="async"></div>
           <figcaption class="t-meta">Olsen Lake House, opened cold. No stage, no owner, and two needs at equal weight.</figcaption>
         </figure>
-        <figure class="spec" id="fig-b1" data-w="1440" data-h="900" data-s="frame-b1">
+        <figure class="spec" id="fig-b1" data-w="1440" data-h="1769" data-s="frame-b1">
           <p class="t-head pair-label">Proposed <span class="src">frame b1</span></p>
           <div class="spec__stage"><div class="spec__scaler">
             <iframe class="spec-frame" sandbox="allow-scripts" name="frame-b1" title="Proposed, frame b1: Olsen Lake House on Maya's first open, with the handoff line, the ownership sentence and the standing sheet" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
@@ -936,14 +943,14 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
     </div>
     <div class="main">
       <h2 class="t-d1">B &middot; The Desk hands work out</h2>
-      <p class="t-body prose">Today&rsquo;s Desk prose reads as the whole worklist and hides the third lead. Under B it says what is yours today, what is overdue, and what is with Maya. The folder card&rsquo;s pen word reaches the paper. On the phone, the first open and the tour walk the same job.</p>
+      <p class="t-body prose">Today&rsquo;s Desk prose reads as the whole worklist and hides the third lead. Under B it says what is yours today, what is overdue, and what is with Maya. The folder card&rsquo;s pen word reaches the paper. On the phone, the tour is one note on the same job, dismissed once.</p>
       <div class="pair">
         <figure class="shot">
           <p class="t-head pair-label">Today <span class="src">walk/s1-step1-desk-landing.jpg</span></p>
           <div class="shot__stage"><img src="{{WALK:s1-step1-desk-landing.jpg}}" alt="The Desk today: Good morning, Leah, two things are overdue, Chen and Aspen, then folder cards and and 7 more below." width="1440" height="900" loading="lazy" decoding="async"></div>
           <figcaption class="t-meta">The Desk on landing. &ldquo;Two things are overdue &mdash; Chen and Aspen&rdquo;, then three cards and &ldquo;and 7 more below&rdquo;.</figcaption>
         </figure>
-        <figure class="spec" id="fig-b2" data-w="1440" data-h="900" data-s="frame-b2">
+        <figure class="spec" id="fig-b2" data-w="1440" data-h="1382" data-s="frame-b2">
           <p class="t-head pair-label">Proposed <span class="src">frame b2</span></p>
           <div class="spec__stage"><div class="spec__scaler">
             <iframe class="spec-frame" sandbox="allow-scripts" name="frame-b2" title="Proposed, frame b2: the Desk, read as the owner hands work out" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
@@ -951,19 +958,19 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
           <figcaption class="t-meta">Yours today, overdue, and with Maya. The overflow line names what it holds.</figcaption>
         </figure>
         <div class="phones">
-          <figure class="spec" id="fig-b3" data-w="390" data-h="844" data-s="frame-b3">
+          <figure class="spec" id="fig-b3" data-w="390" data-h="1702" data-s="frame-b3">
             <p class="t-head pair-label">Proposed <span class="src">frame b3</span></p>
             <div class="spec__stage"><div class="spec__scaler">
               <iframe class="spec-frame" sandbox="allow-scripts" name="frame-b3" title="Proposed, frame b3: Olsen on Maya's phone, first open" srcdoc="{{SPECIMEN_B_390}}"></iframe>
             </div></div>
             <figcaption class="t-meta">Olsen on Maya&rsquo;s phone, first open. The dock&rsquo;s centre is FILE THE CLAIM.</figcaption>
           </figure>
-          <figure class="spec" id="fig-b4" data-w="390" data-h="844" data-s="frame-b4">
+          <figure class="spec" id="fig-b4" data-w="390" data-h="1485" data-s="frame-b4">
             <p class="t-head pair-label">Proposed <span class="src">frame b4</span></p>
             <div class="spec__stage"><div class="spec__scaler">
               <iframe class="spec-frame" sandbox="allow-scripts" name="frame-b4" title="Proposed, frame b4: the teammate tour walks this job" srcdoc="{{SPECIMEN_B_390}}"></iframe>
             </div></div>
-            <figcaption class="t-meta">The second visit. The tour points at the act, in the flow, not in a modal.</figcaption>
+            <figcaption class="t-meta">The tour is one note on this job, in the flow, not in a modal. Understood dismisses it for good.</figcaption>
           </figure>
         </div>
       </div>
@@ -982,7 +989,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
       <h2 class="t-d1">C &middot; Ask the Paper: &#8984;K searches the open page</h2>
       <div class="caption-grid">
         <ul class="look">
-          <li>&#8984;K searches the open paper: pieces, makers, PO numbers, rooms, and verbs with synonyms. &ldquo;sectional&rdquo; and &ldquo;WS-188&rdquo; land on the unfolded line with its Order cell open. A dry query suggests Pieces, not Help.</li>
+          <li>&#8984;K searches the open paper: pieces, makers, PO numbers, rooms, and verbs with synonyms. &ldquo;sectional&rdquo; and &ldquo;WS-188&rdquo; are meant to land on the unfolded line with its Order cell open. That landing is proposed and untested: the walk&rsquo;s order trail stopped at the line. A dry query suggests Pieces, not Help.</li>
           <li><code>?</code> is printed beside &#8984;K.</li>
           <li>&ldquo;Record a change&rdquo; on the Pieces head and the Money head, with one question first. Folded regions print their verbs on the seam.</li>
           <li>Install reads as install week: a dated reading under the band, setup demoted, one count.</li>
@@ -1001,13 +1008,22 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
           <div class="shot__stage"><img src="{{WALK:s3-step1-cmdk-no-match.jpg}}" alt="The command bar today with sectional typed: No match, try the help center, ask about sectional." width="1440" height="900" loading="lazy" decoding="async"></div>
           <figcaption class="t-meta">&ldquo;sectional&rdquo;: No match, from inside the paper that lists it.</figcaption>
         </figure>
-        <figure class="spec" id="fig-c1" data-w="1440" data-h="900" data-s="frame-c1">
+        <figure class="spec" id="fig-c1" data-w="1440" data-h="1351" data-s="frame-c1">
           <p class="t-head pair-label">Proposed <span class="src">frame c1</span></p>
           <div class="spec__stage"><div class="spec__scaler">
             <iframe class="spec-frame" sandbox="allow-scripts" name="frame-c1" title="Proposed, frame c1: the command bar on Chen Residence finds the sectional on the open paper" srcdoc="{{SPECIMEN_C_1440}}"></iframe>
           </div></div>
-          <figcaption class="t-meta">On this paper first: the sectional, its maker and PO, then the acts, then everywhere else.</figcaption>
+          <figcaption class="t-meta">On this paper first: the sectional, its maker and PO, then the acts, then everywhere else. Landing on the Order cell is proposed and untested.</figcaption>
         </figure>
+        <div class="phones">
+          <figure class="spec" id="fig-c4" data-w="390" data-h="1362" data-s="frame-c4">
+            <p class="t-head pair-label">Proposed <span class="src">frame c4</span></p>
+            <div class="spec__stage"><div class="spec__scaler">
+              <iframe class="spec-frame" sandbox="allow-scripts" name="frame-c4" title="Proposed, frame c4: the command bar on the phone finds WS-188" srcdoc="{{SPECIMEN_C_390}}"></iframe>
+            </div></div>
+            <figcaption class="t-meta">&#8984;K on the phone: &ldquo;WS-188&rdquo; finds the sectional by its PO number.</figcaption>
+          </figure>
+        </div>
       </div>
     </div>
   </div>
@@ -1029,7 +1045,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
           <div class="shot__stage"><img src="{{WALK:s2-step1-chen-opened.jpg}}" alt="Chen Residence today: the top acts are Record payment, Set dates and Set a budget band. Nothing reads as recording a client's change." width="1440" height="900" loading="lazy" decoding="async"></div>
           <figcaption class="t-meta">Chen Residence, signed. No act at the top reads as &ldquo;the client asked for something different&rdquo;.</figcaption>
         </figure>
-        <figure class="spec" id="fig-c2" data-w="1440" data-h="900" data-s="frame-c2">
+        <figure class="spec" id="fig-c2" data-w="1440" data-h="1395" data-s="frame-c2">
           <p class="t-head pair-label">Proposed <span class="src">frame c2</span></p>
           <div class="spec__stage"><div class="spec__scaler">
             <iframe class="spec-frame" sandbox="allow-scripts" name="frame-c2" title="Proposed, frame c2: Record a change on the Pieces head, unfolded in place" srcdoc="{{SPECIMEN_C_1440}}"></iframe>
@@ -1050,19 +1066,19 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
     </div>
     <div class="main">
       <h2 class="t-d1">C &middot; Install reads as install week</h2>
-      <p class="t-body prose">A dated reading sits under the band: what is late, what is placed, what is arriving. Setup chores drop to setup and never take the terracotta line. The two counts in the region become one. On the phone, &#8984;K finds a PO by its number.</p>
+      <p class="t-body prose">A dated reading sits under the band: what hasn&rsquo;t arrived, against the install start. &ldquo;Behind the install start &middot; Reading chair isn&rsquo;t here, and the install began 11 June. No arrival date recorded.&rdquo; The local seed records no arrival dates, so the reading says so in words and never invents lateness. Its act, Ask the maker for a date, drafts a note to the maker that is held for review, never sent. Placement shows as a state on each row, never as a ratio. Setup chores drop to setup and never take the terracotta line, and the region&rsquo;s two counts become one.</p>
       <div class="pair">
         <figure class="shot">
           <p class="t-head pair-label">Today <span class="src">walk/install-1440.jpg</span></p>
           <div class="shot__stage"><img src="{{WALK:install-1440.jpg}}" alt="Cedar Lane Study today: Needs setup, name the phases for this project, open the schedule, and six acts above the fold." width="1440" height="900" loading="lazy" decoding="async"></div>
           <figcaption class="t-meta">Cedar Lane Study. The setup chore leads install week.</figcaption>
         </figure>
-        <figure class="spec" id="fig-c3" data-w="1440" data-h="900" data-s="frame-c3">
+        <figure class="spec" id="fig-c3" data-w="1440" data-h="1547" data-s="frame-c3">
           <p class="t-head pair-label">Proposed <span class="src">frame c3</span></p>
           <div class="spec__stage"><div class="spec__scaler">
             <iframe class="spec-frame" sandbox="allow-scripts" name="frame-c3" title="Proposed, frame c3: Cedar Lane Study in install week, with the install reading under the band" srcdoc="{{SPECIMEN_C_1440}}"></iframe>
           </div></div>
-          <figcaption class="t-meta">Next names the late piece and its maker. Setup sits in its own group at the foot.</figcaption>
+          <figcaption class="t-meta">The band reads Behind the install start and asks the maker for a date. Each row in the reading states its piece: not here, here, or no arrival dates recorded.</figcaption>
         </figure>
         <div class="phones">
           <figure class="shot">
@@ -1070,14 +1086,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
             <div class="shot__stage"><img src="{{WALK:install-390.jpg}}" alt="Cedar Lane Study on the phone today, top of the paper with the mobile bar." width="390" height="844" loading="lazy" decoding="async"></div>
             <figcaption class="t-meta">Cedar Lane Study at 390.</figcaption>
           </figure>
-          <figure class="spec" id="fig-c4" data-w="390" data-h="844" data-s="frame-c4">
-            <p class="t-head pair-label">Proposed <span class="src">frame c4</span></p>
-            <div class="spec__stage"><div class="spec__scaler">
-              <iframe class="spec-frame" sandbox="allow-scripts" name="frame-c4" title="Proposed, frame c4: the command bar on the phone finds WS-188" srcdoc="{{SPECIMEN_C_390}}"></iframe>
-            </div></div>
-            <figcaption class="t-meta">&#8984;K on the phone: &ldquo;WS-188&rdquo; finds the sectional.</figcaption>
-          </figure>
-          <figure class="spec" id="fig-c5" data-w="390" data-h="844" data-s="frame-c5">
+          <figure class="spec" id="fig-c5" data-w="390" data-h="1769" data-s="frame-c5">
             <p class="t-head pair-label">Proposed <span class="src">frame c5</span></p>
             <div class="spec__stage"><div class="spec__scaler">
               <iframe class="spec-frame" sandbox="allow-scripts" name="frame-c5" title="Proposed, frame c5: Cedar Lane Study on the phone, install week" srcdoc="{{SPECIMEN_C_390}}"></iframe>
@@ -1099,16 +1108,17 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
       <span class="t-head chapter">Recommendation</span>
     </div>
     <div class="main">
-      <h2 class="t-d1">Build A as the foundation, C next, then B</h2>
-      <p class="t-body prose">These three directions are layers of one move, not rivals. Repairs ship first, with no design debate. C ships before A because it has the highest yield and touches the least canon.</p>
+      <h2 class="t-d1">Repairs first, then C&rsquo;s task fixes, then A as the foundation, then B</h2>
+      <p class="t-body prose">These three directions are layers of one move, not rivals. C ships before A because it fixes the failed tasks with the least canon. C&rsquo;s frames borrow A&rsquo;s band only to show the end state; slice 1 ships C&rsquo;s devices without A&rsquo;s band.</p>
       <div class="scroller stackable">
         <table class="sheet wide">
-          <thead><tr><th>Slice</th><th>What ships</th><th>Canon needed</th><th>Why first</th></tr></thead>
+          <thead><tr><th>Slice</th><th>What ships</th><th>Canon needed</th><th>Why in this order</th></tr></thead>
           <tbody>
-            <tr><td class="id" data-label="Slice">0 &middot; Repairs</td><td data-label="What ships">Care ONGOING versus completed, and the double heading. The Install count. F52 (Message with no client). &ldquo;No client linked&rdquo; suppressed on closed jobs and moved into the standing list. Machinery eyebrows removed. &ldquo;No active phase handoffs&hellip;&rdquo; deleted. &ldquo;Not priced yet&rdquo; replaces $0. Placeholder-name guard. A named reason on Send and Release. Phases for setup no longer in terracotta.</td><td data-label="Canon needed">None</td><td data-label="Why first">Each is a defect against canon already in force (V9, VISION &sect;6).</td></tr>
-            <tr><td class="id" data-label="Slice">1 &middot; Ask the Paper (C)</td><td data-label="What ships">&#8984;K on the open paper. Record a change. The install reading. <code>?</code> printed.</td><td data-label="Canon needed">The V9 gloss</td><td data-label="Why first">Fixes the three S1 task failures all three models found (A2, A3, A4). It has the highest yield and touches the least canon.</td></tr>
-            <tr><td class="id" data-label="Slice">2 &middot; One Voice (A)</td><td data-label="What ships">The label table, the Next and Standing band, the stage word, weight by role, the dock.</td><td data-label="Canon needed">OD-11, L-6, I114</td><td data-label="Why first">Ends the contradictions at the source, so later work doesn&rsquo;t drift.</td></tr>
-            <tr><td class="id" data-label="Slice">3 &middot; Whose Move (B)</td><td data-label="What ships">The ownership sentence, the handoff line, first-open standing, Desk prose, the tour that walks a job.</td><td data-label="Canon needed">L-11, VISION &sect;4 reading</td><td data-label="Why first">Needs A&rsquo;s single source to print &ldquo;yours&rdquo; truthfully. This is the studio-moment payoff.</td></tr>
+            <tr><td class="id" data-label="Slice">0a &middot; Pure repairs</td><td data-label="What ships">Care ONGOING versus &ldquo;Project completed.&rdquo; and the double Care heading. The disagreeing Install counts. F52 (Message offered with no client linked). Machinery eyebrows and the leaked engineering note removed. &ldquo;No active phase handoffs&hellip;&rdquo; deleted. &ldquo;Not priced yet&rdquo; replaces $0. Placeholder-name guard. A named reason on Send and Release.</td><td data-label="Canon needed">None</td><td data-label="Why in this order">Each is a defect against canon already in force (V9, VISION &sect;6). No design debate.</td></tr>
+            <tr><td class="id" data-label="Slice">0b &middot; Repairs that wait on a ruling</td><td data-label="What ships">&ldquo;No client linked&rdquo; suppressed on closed jobs and moved into the standing list (Q3, Q5). Setup phases no longer painted terracotta (Q3).</td><td data-label="Canon needed">Q3, Q5</td><td data-label="Why in this order">Small, but each one changes what the paper treats as an exception.</td></tr>
+            <tr><td class="id" data-label="Slice">1 &middot; Ask the Paper (C)</td><td data-label="What ships">&#8984;K on the open paper. Record a change. The install reading. <code>?</code> printed.</td><td data-label="Canon needed">The V9 gloss</td><td data-label="Why in this order">Fixes the two S1 task failures (A2, A3) and the S2 install failure (A4) that all three reviewers found. It has the highest yield and touches the least canon.</td></tr>
+            <tr><td class="id" data-label="Slice">2 &middot; One Voice (A)</td><td data-label="What ships">The label table, the Next and Standing band, the stage word, weight by role, the dock.</td><td data-label="Canon needed">OD-11, L-6, I114</td><td data-label="Why in this order">Ends the contradictions at the source, so later work doesn&rsquo;t drift.</td></tr>
+            <tr><td class="id" data-label="Slice">3 &middot; Whose Move (B)</td><td data-label="What ships">The ownership sentence, the handoff line, first-open standing, Desk prose, the one-note tour.</td><td data-label="Canon needed">L-11, Q9, VISION &sect;4 reading</td><td data-label="Why in this order">Needs A&rsquo;s single source to print &ldquo;yours&rdquo; truthfully. This is the studio-moment payoff.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1128,19 +1138,20 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
     </div>
     <div class="main">
       <h2 class="t-d1">How we&rsquo;ll know: a person finishes the five tasks</h2>
-      <p class="t-body prose">Acceptance for every slice is the five scenarios, walked by a person who did not build the job, at 1440 and 390, with the step count recorded. That replaces geometry-only gates. Today&rsquo;s walk is the baseline.</p>
+      <p class="t-body prose">Acceptance for every slice is the five scenarios, performed by a person who did not build the job, at 1440 and 390. A step count alone could pass a faster wrong answer, so each scenario records four things. That replaces geometry-only gates. Today&rsquo;s walk is the baseline.</p>
       <div class="caption-grid">
         <ol class="steps">
-          <li><strong>A new inquiry arrives.</strong> Today: found on the Desk at 0 clicks; the third lead needs one more.</li>
+          <li><strong>A new inquiry arrives.</strong> Today: two new leads on the Desk at 0 clicks; the third was opened directly by id.</li>
           <li><strong>A change after signing.</strong> Today: not found. One click landed on the Schedule.</li>
-          <li><strong>The PO for the sofa.</strong> Today: one failed search, two clicks, still one tab from the PO.</li>
+          <li><strong>The PO for the sofa.</strong> Today: search found nothing; the line was found by browsing, two clicks; the PO was not opened, and the blocker was not testable.</li>
           <li><strong>Install week.</strong> Today: one click to the Install region; nothing says late or arriving.</li>
           <li><strong>A cold open.</strong> Today: 0 clicks to two needs at equal weight; no stage word.</li>
         </ol>
         <dl class="kv">
-          <dt>Who walks</dt><dd>Someone who didn&rsquo;t build the job. Leah&rsquo;s first hire, or whoever is closest to that.</dd>
+          <dt>Who</dt><dd>Someone who didn&rsquo;t build the job. Leah&rsquo;s first hire, or whoever is closest to that.</dd>
           <dt>Where</dt><dd>1440 and 390.</dd>
-          <dt>Record</dt><dd>The step count for each scenario.</dd>
+          <dt>Record</dt><dd>Whether the task succeeded, and the step count. Whether the answer was accurate: the right PO, the right piece, the right date. One named refusal met along the way, and whether its reason was read. The return path to the paper afterwards.</dd>
+          <dt>Fixtures</dt><dd>Two are added to the seed: a blocked PO, and a change after signature.</dd>
           <dt>Replaces</dt><dd>Geometry-only gates, like R127&rsquo;s band height, CLS, first-head position and blank frames.</dd>
         </dl>
       </div>
@@ -1158,17 +1169,23 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
       <span class="t-head chapter">Questions</span>
     </div>
     <div class="main">
-      <h2 class="t-d1">Eight questions for the founders</h2>
-      <p class="t-body-sm ink-subtle prose">Each needs a ruling before its slice ships. The numbers are real: the rest of the work refers to them as Q1 to Q8.</p>
+      <h2 class="t-d1">Ten questions for the founders, three first</h2>
+      <p class="t-body-sm ink-subtle prose">Each needs a ruling before its slice ships. The short list, decided first, is Q1, Q2 and Q8; the rest can follow the first slice. The numbers are real: the rest of the work refers to them as Q1 to Q10.</p>
+      <h3 class="t-head ink-faint">Decide first</h3>
       <ol class="qcards">
-        <li><span class="qno">Q1</span><p class="qrule">The stage word &middot; R127 L-6</p><p class="qtext">Should the stage print in words at the top of every paper? Yield the count, never the word. All three reviewers ask for this.</p><p class="qno-cost"><b>If no</b>A cold reader still can&rsquo;t tell the stage from the paper (A1, scenario 5).</p></li>
-        <li><span class="qno">Q2</span><p class="qrule">Next and Standing &middot; R127 OD-11 / L-11</p><p class="qtext">May the band carry the next act and the worst standing item side by side, instead of making them share one slot?</p><p class="qno-cost"><b>If no</b>On any live job the next step keeps losing its one slot to the late thing (R1-01).</p></li>
+        <li><span class="qno">Q1</span><p class="qrule">The stage word &middot; R127 L-6</p><p class="qtext">Should the stage print in words at the top of every paper? Yield the count, never the word. All three reviewers identify the missing stage; printing it as a word at the top is this synthesis&rsquo;s choice.</p><p class="qno-cost"><b>If no</b>A cold reader still can&rsquo;t tell the stage from the paper (A1, scenario 5).</p></li>
+        <li><span class="qno">Q2</span><p class="qrule">Next and Standing &middot; R127 OD-11 / L-11</p><p class="qtext">May the band carry the next act and the worst standing item side by side, instead of making them share one slot?</p><p class="qno-cost"><b>If no</b>On a busy job the next step keeps losing its one slot to a standing item (R1-01).</p></li>
+        <li><span class="qno">Q8</span><p class="qrule">Process</p><p class="qtext">Make the five scenarios, performed by someone who didn&rsquo;t build the job, the acceptance gate for wayfinding work.</p><p class="qno-cost"><b>If no</b>The next program can pass every gate again without anyone finishing a task, as August did.</p></li>
+      </ol>
+      <h3 class="t-head ink-faint">Can follow the first slice</h3>
+      <ol class="qcards">
         <li><span class="qno">Q3</span><p class="qrule">Ranking by kind &middot; R127 W3-R1</p><p class="qtext">Keep deadline order within a class, but put &ldquo;blocks money or a signature&rdquo; ahead of everything else. Setup is never painted as an exception.</p><p class="qno-cost"><b>If no</b>A setup chore and a damage claim keep competing on one scale, and install week keeps leading with a chore (A4).</p></li>
         <li><span class="qno">Q4</span><p class="qrule">The stage vocabulary &middot; R124 item 7 / I114</p><p class="qtext">Should only the seven document words ever print as stage on a studio surface, with the eleven-stage workflow names kept in data?</p><p class="qno-cost"><b>If no</b>One stage keeps printing under several names, and an open gate swaps in the other vocabulary (R1-03, contradiction 13).</p></li>
         <li><span class="qno">Q5</span><p class="qrule">&ldquo;Absence is silence&rdquo; &middot; V9 &sect;5</p><p class="qtext">Is a missing expected act a named sentence rather than silence (for example &ldquo;Only the owner can close the book&rdquo;, &ldquo;Held since 2 Oct&rdquo;)?</p><p class="qno-cost"><b>If no</b>A held job stays silent and a non-owner sees no control and no reason (R1-22, R1-23).</p></li>
         <li><span class="qno">Q6</span><p class="qrule">The first open &middot; R127 L-11</p><p class="qtext">May a paper show its full standing list once, the first time a person opens it?</p><p class="qno-cost"><b>If no</b>The first hire meets one line and a <code>+N MORE</code> door with no kind and no order (A10).</p></li>
-        <li><span class="qno">Q7</span><p class="qrule">VISION &sect;4, read for the first hire</p><p class="qtext">Add one sentence: the paper says where it is and whose move it is before she asks.</p><p class="qno-cost"><b>If no</b>Direction B has no canon to stand on, and the Document stays tuned for its author (R2 &sect;2).</p></li>
-        <li><span class="qno">Q8</span><p class="qrule">Process</p><p class="qtext">Make the five scenarios, walked by someone who didn&rsquo;t build the job, the acceptance gate for wayfinding work.</p><p class="qno-cost"><b>If no</b>The next program can pass every gate again without anyone finishing a task, as August did.</p></li>
+        <li><span class="qno">Q7</span><p class="qrule">VISION &sect;4, read for the first hire</p><p class="qtext">Would a sentence like &ldquo;the paper says where it is and whose move it is before she asks&rdquo; belong in VISION &sect;4? This is offered for discussion, not as a drafted edit.</p><p class="qno-cost"><b>If no</b>B still rests on VISION &sect;2&rsquo;s moment, a studio adding its first hands. It loses an explicit reading line, not its footing.</p></li>
+        <li><span class="qno">Q9</span><p class="qrule">B&rsquo;s first open &middot; VISION, no task manager</p><p class="qtext">Is B&rsquo;s first-open list a task list? Grouped and unfolded once, it reads close to one. Does it stay inside VISION&rsquo;s &ldquo;no task manager&rdquo;, or does B need a lighter first open?</p><p class="qno-cost"><b>If ruled out</b>B needs a lighter first open, and until then the first hire meets one line and a <code>+N MORE</code> door (A10).</p></li>
+        <li><span class="qno">Q10</span><p class="qrule">The stage mark &middot; V11</p><p class="qtext">Is the stage mark a progress bar? <code>PROJECT &middot; 5 OF 7</code> and the strata mark show position in a sequence. Does V11&rsquo;s &ldquo;no progress bars&rdquo; rule them out, or does a count of words pass where a filled bar would not?</p><p class="qno-cost"><b>If ruled out</b>The stage prints as a word alone, without its place in the seven; Q1 is answered, but a cold reader can&rsquo;t tell how far along the job is.</p></li>
       </ol>
       <p class="t-meta ink-faint">Source: synthesis/direction.md &sect;6. The cost lines draw on &sect;2, &sect;3 and the review findings cited.</p>
     </div>
@@ -1188,7 +1205,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
       <div class="cols-2">
         <div class="stack">
           <h3 class="t-d3">Thirty minutes with her first hire</h3>
-          <p class="t-body">Her first hire, or whoever is closest to that, walking the five scenarios on a real job. That&rsquo;s 30 minutes, and it is the test August never ran.</p>
+          <p class="t-body">Her first hire, or whoever is closest to that, walking the five scenarios on a real job. That&rsquo;s 30 minutes, and it is the kind of test we found no record of after August.</p>
           <h3 class="t-d3">How often, and how held</h3>
           <ul class="look">
             <li>Which of the five scenarios happen weekly, and which yearly.</li>
@@ -1220,20 +1237,25 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
     </div>
     <div class="main">
       <h2 class="t-d1">Repairs, whatever we choose</h2>
-      <p class="t-body-sm ink-subtle prose">Slice 0. Each is a defect against canon already in force (V9, VISION &sect;6), so none waits on a direction.</p>
+      <h3 class="t-head ink-faint">0a &middot; Pure repairs</h3>
+      <p class="t-body-sm ink-subtle prose">Each is a defect against canon already in force (V9, VISION &sect;6), so none waits on a direction or a ruling.</p>
       <ul class="repairs">
         <li><p>Care says ONGOING beside &ldquo;Project completed.&rdquo;, and prints &ldquo;Care&rdquo; twice.</p><span class="cite">A7 &middot; R1-35 &middot; R2-10 &middot; R3-05, R3-20</span></li>
-        <li><p>One count in the Install region, not &ldquo;0 of 2 installed&rdquo; beside &ldquo;1 of 1 placed&rdquo;.</p><span class="cite">A4 &middot; R1-21 &middot; R2-10</span></li>
+        <li><p>One count in the Install region, not &ldquo;0 of 2 installed&rdquo; beside &ldquo;1 of 1 placed&rdquo;.</p><span class="cite">A4 &middot; R1-21 &middot; R2-10 &middot; walk/s4-step2-install-section.jpg</span></li>
         <li><p>Message the client is not offered with no client linked.</p><span class="cite">F52 &middot; R1-11 &middot; R2-08 &middot; letterhead-instruments.tsx:296</span></li>
-        <li><p>&ldquo;No client linked&rdquo; is suppressed on closed jobs and moved into the standing list.</p><span class="cite">A6 &middot; WALK worst moment 3</span></li>
-        <li><p>Machinery eyebrows removed (&ldquo;EXACT ARTIFACT &middot; NAMED AUTHORITY&rdquo;, <code>BAND</code>).</p><span class="cite">A8 &middot; R1-17 &middot; R2-11</span></li>
+        <li><p>Machinery eyebrows (&ldquo;EXACT ARTIFACT &middot; NAMED AUTHORITY&rdquo;, <code>BAND</code>) and the leaked engineering note removed.</p><span class="cite">A8 &middot; R1-17 &middot; R2-11</span></li>
         <li><p>&ldquo;No active phase handoffs need attention.&rdquo; deleted.</p><span class="cite">A8 &middot; R1-16</span></li>
         <li><p>&ldquo;Not priced yet&rdquo; replaces &ldquo;$0 proposed&rdquo;.</p><span class="cite">R3-21</span></li>
         <li><p>A placeholder name never reaches an act (&ldquo;NUDGE CLIENT USER&rdquo;).</p><span class="cite">R2-21</span></li>
         <li><p>Send and Release say why they are refused, in a sentence.</p><span class="cite">R2-32 &middot; R1-39</span></li>
-        <li><p>Phases for setup no longer print in terracotta.</p><span class="cite">A4 &middot; A6 &middot; R2-09</span></li>
       </ul>
-      <p class="t-meta ink-faint">Source: synthesis/direction.md &sect;5, slice 0. Evidence ids from &sect;2 and &sect;3.</p>
+      <h3 class="t-head ink-faint">0b &middot; Repairs that wait on a ruling</h3>
+      <p class="t-body-sm ink-subtle prose">Small, but each one changes what the paper treats as an exception, so each waits on Q3 or Q5.</p>
+      <ul class="repairs">
+        <li><p>&ldquo;No client linked&rdquo; is suppressed on closed jobs and moved into the standing list.</p><span class="cite">Q3, Q5 &middot; A6 &middot; WALK worst moment 3</span></li>
+        <li><p>Phases for setup are no longer painted terracotta.</p><span class="cite">Q3 &middot; A4 &middot; A6 &middot; R2-09</span></li>
+      </ul>
+      <p class="t-meta ink-faint">Source: synthesis/direction.md &sect;5, slices 0a and 0b. Evidence ids from &sect;2 and &sect;3.</p>
     </div>
   </div>
 </section>
@@ -1261,7 +1283,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
           </tbody>
         </table>
       </div>
-      <p class="t-body prose">Evidence is code on main plus a local seeded walk, signed in as Leah against local Supabase. Nothing touched production. The synthesis reconciles the three reviews; where they split, sheet 9 says what we took.</p>
+      <p class="t-body prose">Five scenarios reviewed against one local walk. Evidence is code on main plus that walk, signed in as Leah against local Supabase with seeded data; only the walk performed interactions, and the three reviewers read its record. Nothing touched production. The synthesis reconciles the three reviews; where they split, sheet 9 says what we took.</p>
       <dl class="kv">
         <dt>Reviews</dt><dd>artifacts/document-running-a-job-2026-10-07/review/r1-opus.md<br>artifacts/document-running-a-job-2026-10-07/review/r2-fable.md<br>artifacts/document-running-a-job-2026-10-07/review/r3-sol.md</dd>
         <dt>Synthesis</dt><dd>artifacts/document-running-a-job-2026-10-07/synthesis/direction.md</dd>
@@ -1269,7 +1291,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
         <dt>Mockups</dt><dd>specimens/SPEC.md and the six proposed-*.html specimens</dd>
       </dl>
       <hr class="rule-strong">
-      <p class="t-meta ink-faint">Rebuild with node deck/build.mjs. Maya Reyes, the first hire in the mockups, is an invented fixture; every other name comes from the local seed.</p>
+      <p class="t-meta ink-faint">Rebuild with node deck/build.mjs. Maya Reyes, the first hire in the mockups, is an invented fixture. Some facts in the frames are invented too: the handoff and assignment, &ldquo;Waiting on: no one&rdquo;, the blocks-money class, the Standing counts, the delivery-window row, the install total, and five of the six proposed names in the label table. Each is marked illustrative in its frame&rsquo;s notes. Every other name comes from the local seed.</p>
     </div>
   </div>
 </section>
@@ -1294,7 +1316,8 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
      bar is also hidden by the bootstrap's stylesheet), and a postMessage repeats
      the frame after load, which is the contract specimens/SPEC.md 3 publishes. The
      bootstrap posts the specimen's content height back, so each frame shows its
-     whole frame and its notes. */
+     whole frame and its notes. Each data-h starts at that measured height, so the
+     first layout is already close and a deep link barely moves. */
   var figs = Array.prototype.slice.call(document.querySelectorAll('figure.spec'));
   function num(fig, attr, d) { var v = parseInt(fig.getAttribute(attr), 10); return isNaN(v) ? d : v; }
   function fit(fig) {
@@ -1328,7 +1351,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
       var frame = figs[i].querySelector('.spec-frame');
       if (frame && frame.contentWindow === e.source) {
         var h = Math.max(320, Math.min(6000, Math.ceil(d.deckSpecH)));
-        if (Math.abs(h - num(figs[i], 'data-h', 0)) > 2) { figs[i].setAttribute('data-h', String(h)); fit(figs[i]); talls(); }
+        if (Math.abs(h - num(figs[i], 'data-h', 0)) > 2) { figs[i].setAttribute('data-h', String(h)); fit(figs[i]); talls(); hold(); }
         break;
       }
     }
@@ -1349,7 +1372,23 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
   }
 
   var t = null;
-  function refit() { figs.forEach(fit); cues(); talls(); }
+  function refit() { figs.forEach(fit); cues(); talls(); hold(); }
+
+  /* A deep link (#s-questions) is placed once, then held while the frames above it
+     settle their heights, until the reader scrolls, taps or presses a key. */
+  function hashSlide() {
+    var id = (location.hash || '').slice(1);
+    if (!/^s-[a-z0-9-]+$/.test(id)) return null;
+    var el = document.getElementById(id);
+    return el && (' ' + el.className + ' ').indexOf(' slide ') >= 0 ? el : null;
+  }
+  var settle = hashSlide(), settleUntil = Date.now() + 8000;
+  function holding() { return !!settle && Date.now() < settleUntil; }
+  function hold() { if (holding() && Math.abs(deck.scrollTop - settle.offsetTop) > 1) { deck.scrollTop = settle.offsetTop; } }
+  function letGo() { settle = null; }
+  ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function (ev) {
+    window.addEventListener(ev, letGo, { passive: true, capture: true });
+  });
   window.addEventListener('resize', function () { if (t) { clearTimeout(t); } t = setTimeout(refit, 120); });
   window.addEventListener('load', refit);
   if (document.fonts && document.fonts.ready) { document.fonts.ready.then(refit); }
@@ -1362,9 +1401,25 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
     for (var i = 0; i < slides.length; i++) { if (slides[i].offsetTop <= top) { idx = i; } }
     return idx;
   }
+  /* Each sheet's heading takes focus when the keys or the pager move to it. */
+  slides.forEach(function (s) { var h = s.querySelector('h1, h2'); if (h) { h.setAttribute('tabindex', '-1'); } });
   function go(i) {
     i = Math.max(0, Math.min(slides.length - 1, i));
     deck.scrollTo({ top: slides[i].offsetTop, behavior: reduce ? 'auto' : 'smooth' });
+    var h = slides[i].querySelector('h1, h2');
+    if (h) { try { h.focus({ preventScroll: true }); } catch (e) { h.focus(); } }
+  }
+  /* Keys belong to whatever holds focus when it can use them: a control, a frame,
+     or a box that scrolls on its own. */
+  function ownsKeys(el) {
+    if (!el || el === deck || el === document.body || el === document.documentElement) return false;
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A|IFRAME|SUMMARY)$/.test(el.tagName) || el.isContentEditable) return true;
+    for (var n = el; n && n !== deck; n = n.parentElement) {
+      var cs = getComputedStyle(n);
+      if ((/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1)
+        || (/(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1)) return true;
+    }
+    return false;
   }
   /* Down moves within a tall sheet first, then to the next sheet. */
   function step(dir) {
@@ -1383,13 +1438,11 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
   }
   document.addEventListener('keydown', function (e) {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
-    var tag = (e.target && e.target.tagName) || '';
-    if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
-    var onButton = tag === 'BUTTON' || tag === 'A';
+    if (ownsKeys(e.target)) return;
     switch (e.key) {
       case 'ArrowDown': case 'PageDown': step(1); e.preventDefault(); break;
       case 'ArrowUp': case 'PageUp': step(-1); e.preventDefault(); break;
-      case ' ': if (onButton) return; step(e.shiftKey ? -1 : 1); e.preventDefault(); break;
+      case ' ': step(e.shiftKey ? -1 : 1); e.preventDefault(); break;
       case 'ArrowRight': case 'j': go(current() + 1); e.preventDefault(); break;
       case 'ArrowLeft': case 'k': go(current() - 1); e.preventDefault(); break;
       case 'Home': go(0); e.preventDefault(); break;
@@ -1406,20 +1459,23 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-subtle); }
     if (i === last) return;
     last = i;
     where.textContent = pad(i + 1) + ' / ' + slides.length + ' ' + String.fromCharCode(183) + ' ' + slides[i].getAttribute('data-label');
+    /* While a deep link is held, the address keeps the reader's target. */
+    if (holding()) return;
     if (history.replaceState) { try { history.replaceState(null, '', '#' + slides[i].id); } catch (e) {} }
   }
   deck.addEventListener('scroll', function () { if (!raf) { raf = requestAnimationFrame(mark); } }, { passive: true });
 
   function place() {
-    var id = (location.hash || '').slice(1);
-    if (!/^s-[a-z0-9-]+$/.test(id)) return;
-    var el = document.getElementById(id);
-    if (el && (' ' + el.className + ' ').indexOf(' slide ') >= 0) { deck.scrollTop = el.offsetTop; }
+    var el = hashSlide();
+    if (el) { deck.scrollTop = el.offsetTop; }
   }
+  window.addEventListener('hashchange', function () {
+    settle = hashSlide(); settleUntil = Date.now() + 8000; place();
+  });
   try { deck.focus({ preventScroll: true }); } catch (e) { deck.focus(); }
   place();
-  setTimeout(function () { place(); mark(); }, 400);
-  window.addEventListener('hashchange', place);
+  setTimeout(function () { hold(); mark(); }, 400);
+  setTimeout(function () { hold(); settle = null; last = -1; mark(); }, 8100);
   mark();
 })();
 </script>
