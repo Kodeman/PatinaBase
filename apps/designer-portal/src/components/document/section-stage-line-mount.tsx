@@ -132,10 +132,6 @@ export function SectionStageLineMount({
   }
 
   return (
-    <SectionStageLine
-      model={model}
-      fidelity={projectId ? resolverFacts.fidelity : null}
-      hosted={hosted}
-    />
+    <SectionStageLine model={model} hosted={hosted} />
   );
 }

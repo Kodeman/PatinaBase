@@ -688,7 +688,6 @@ export function ProjectApprovalDocument({
         headingId="project-approvals-title"
         name="Client approvals"
         status={quiet ? quietStatus : headStatus}
-        eyebrow="Exact artifact · named authority"
         surfaceKey="open-document"
         regionKey="approvals-head"
         actions={quietLedger}
@@ -704,12 +703,6 @@ export function ProjectApprovalDocument({
         </div>
       ) : (
       <div id={APPROVALS_BODY_ID}>
-      <p className="mt-2 max-w-[66ch] text-[14px] leading-relaxed text-[var(--text-muted)]">
-        Bind each request to one issued plan, client-ready specification, or
-        published budget checkpoint. Discussion stays in the project thread;
-        only the recorded outcome settles an approval.
-      </p>
-
       {!clientProfileId && (
         <p role="status" className="mt-4 text-[13px] text-[var(--text-muted)]">
           Add the project client before assigning decision authority.
@@ -969,6 +962,10 @@ export function ProjectApprovalDocument({
         </form>
       )}
 
+      {(approvals.length > 0 ||
+        approvalsQuery.isLoading ||
+        authorityQuery.isLoading ||
+        approvalsQuery.isError) && (
       <div className="mt-6 min-w-0 border-t border-[var(--color-pearl)] pt-4">
         <h3 className="font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Approval record
@@ -982,11 +979,6 @@ export function ProjectApprovalDocument({
             className="mt-3 text-[13px] text-[var(--color-terracotta-ink)]"
           >
             Approvals could not be read.
-          </p>
-        )}
-        {!approvalsQuery.isLoading && approvals.length === 0 && (
-          <p className="mt-3 text-[13px] italic text-[var(--text-muted)]">
-            No exact-artifact approvals have been authored.
           </p>
         )}
         <ol className="mt-2 min-w-0">
@@ -1510,6 +1502,7 @@ export function ProjectApprovalDocument({
           })}
         </ol>
       </div>
+      )}
       </div>
       )}
     </section>

@@ -666,7 +666,11 @@ export function SendSheet({
     }
   };
 
-  const total = ((proposal?.total_amount || 0) / 100).toLocaleString();
+  // 0a-6: an unpriced draft states that, never `$0`.
+  const total =
+    (proposal?.total_amount ?? 0) > 0
+      ? `$${(proposal.total_amount / 100).toLocaleString()}`
+      : 'Not priced yet';
 
   // R4's three-layer enforcement (composer, route, DB CHECK) applies to this
   // textarea's content only on the path where it becomes the letter's `note`
@@ -693,7 +697,7 @@ export function SendSheet({
       <div ref={sheetRef} className="mx-auto max-w-xl">
         <p className={labelCls}>
           {proposal?.title ?? 'Proposal'} &middot; v{proposal?.version || 1}.0
-          &middot; ${total}
+          &middot; {total}
         </p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
           Send proposal

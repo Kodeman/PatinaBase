@@ -352,9 +352,12 @@ function vitalsFor(
       .join(' · ');
   }
   if (row.engagement_kind === 'proposal') {
-    return [proposal?.total_amount != null ? `${fmtUsd(proposal.total_amount)} proposed` : null]
-      .filter(Boolean)
-      .join(' · ');
+    // 0a-6: an unpriced draft (0 or null) states that, never `$0 proposed`.
+    // While the proposal is still being read, say nothing.
+    if (!proposal) return '';
+    return proposal.total_amount > 0
+      ? `${fmtUsd(proposal.total_amount)} proposed`
+      : 'Not priced yet';
   }
   // A5 — the lead and relationship branches printed the client name under a
   // title that IS the client name, beside a position the band already states.

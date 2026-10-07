@@ -11,8 +11,6 @@
 
 import { useId, type CSSProperties } from "react";
 import type { ResidentialWorkflowTrackKey } from "@patina/types";
-import { FIDELITY_WORD, type Fidelity } from "@patina/utils";
-
 import type { SectionStageLineModel } from "@/lib/document/section-stage-line";
 
 const TRACK_HUE: Record<ResidentialWorkflowTrackKey, string> = {
@@ -25,13 +23,11 @@ const META =
   "font-mono text-[12px] uppercase tracking-[0.09em] text-[var(--text-muted)]";
 
 export interface SectionStageLineProps {
-  model: SectionStageLineModel | null;
   /**
-   * R113 — an unanchored engagement is a legitimate Band, not an error. With no
-   * model to name a stage, the line states the register it does know, or stays
-   * silent when it knows nothing at all.
+   * With no model to name a stage the line renders nothing (0a-4: the bare
+   * register word `Band` was machinery printed as an eyebrow).
    */
-  fidelity?: Fidelity | null;
+  model: SectionStageLineModel | null;
   /**
    * W5 follow-up — the strip is HOSTED by a stop that already names it.
    *
@@ -46,7 +42,6 @@ export interface SectionStageLineProps {
 
 export function SectionStageLine({
   model,
-  fidelity,
   hosted = false,
 }: SectionStageLineProps) {
   const headingId = useId();
@@ -55,6 +50,8 @@ export function SectionStageLine({
   // sitting inside the stop that already carries that name is one more thing
   // to walk past.
   const Frame = hosted ? 'div' : 'section';
+
+  if (!model) return null;
 
   return (
     <Frame
@@ -71,59 +68,51 @@ export function SectionStageLine({
         </h2>
       )}
 
-      {model ? (
-        <>
-          {!hosted && model.subLabel && (
-            <p className="min-w-0 break-words font-mono text-[12px] font-semibold uppercase tracking-[0.09em] text-[var(--color-aged-oak)]">
-              {model.subLabel}
-            </p>
-          )}
-
-          {model.tracks.length > 0 && (
-            // A1 e2e follow-up: at 320px the bare `max-w-[21rem]` (336px) was
-            // wider than the viewport and the label column was a fixed
-            // `6.5rem` with nowhere to shrink to. `w-full` + `max-w` resolves
-            // to `min(100%, 21rem)`, so the 336px cap still holds on the wide
-            // paper, and `min-w-0 break-words` lets a long `label ·
-            // stageNumber` pairing wrap instead of forcing the row past the
-            // section's own edge.
-            <ul
-              id={tracksId}
-              aria-label="Live workflow tracks"
-              className="mt-3 w-full min-w-0 max-w-[21rem] space-y-1.5"
-            >
-              {model.tracks.map((track) => (
-                <li
-                  key={track.key}
-                  data-workflow-track={track.key}
-                  className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,6.5rem)] items-center gap-x-3"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="h-[3px] w-full rounded-full bg-[var(--track-hue)]"
-                    style={
-                      { "--track-hue": TRACK_HUE[track.key] } as CSSProperties
-                    }
-                  />
-                  <span className={`${META} min-w-0 break-words text-right`}>
-                    {track.label} · {track.stageNumber}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {model.provenance && (
-            <p className={`mt-3 min-w-0 break-words ${META}`}>
-              {model.provenance}
-            </p>
-          )}
-        </>
-      ) : fidelity ? (
-        <p role="status" className={`min-w-0 break-words ${META}`}>
-          {FIDELITY_WORD[fidelity]}
+      {!hosted && model.subLabel && (
+        <p className="min-w-0 break-words font-mono text-[12px] font-semibold uppercase tracking-[0.09em] text-[var(--color-aged-oak)]">
+          {model.subLabel}
         </p>
-      ) : null}
+      )}
+
+      {model.tracks.length > 0 && (
+        // A1 e2e follow-up: at 320px the bare `max-w-[21rem]` (336px) was
+        // wider than the viewport and the label column was a fixed
+        // `6.5rem` with nowhere to shrink to. `w-full` + `max-w` resolves
+        // to `min(100%, 21rem)`, so the 336px cap still holds on the wide
+        // paper, and `min-w-0 break-words` lets a long `label ·
+        // stageNumber` pairing wrap instead of forcing the row past the
+        // section's own edge.
+        <ul
+          id={tracksId}
+          aria-label="Live workflow tracks"
+          className="mt-3 w-full min-w-0 max-w-[21rem] space-y-1.5"
+        >
+          {model.tracks.map((track) => (
+            <li
+              key={track.key}
+              data-workflow-track={track.key}
+              className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,6.5rem)] items-center gap-x-3"
+            >
+              <span
+                aria-hidden="true"
+                className="h-[3px] w-full rounded-full bg-[var(--track-hue)]"
+                style={
+                  { "--track-hue": TRACK_HUE[track.key] } as CSSProperties
+                }
+              />
+              <span className={`${META} min-w-0 break-words text-right`}>
+                {track.label} · {track.stageNumber}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {model.provenance && (
+        <p className={`mt-3 min-w-0 break-words ${META}`}>
+          {model.provenance}
+        </p>
+      )}
     </Frame>
   );
 }

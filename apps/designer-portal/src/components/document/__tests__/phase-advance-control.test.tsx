@@ -474,7 +474,7 @@ describe('PhaseAdvanceControl', () => {
       (_variables: unknown, options: MutationOptions) =>
         options.onSuccess(terminalMainReceipt),
     );
-    const { rerender } = render(
+    const { rerender, container } = render(
       <PhaseAdvanceControl projectId="project-1" phases={[mainActive]} />,
     );
     fireEvent.click(completeDevelopmentButton());
@@ -498,9 +498,11 @@ describe('PhaseAdvanceControl', () => {
         ]}
       />,
     );
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'No active phase handoffs need attention.',
-    );
+    // 0a-5: with no handoff to act on, the control renders nothing.
+    expect(container).toBeEmptyDOMElement();
+    expect(
+      screen.queryByText('No active phase handoffs need attention.'),
+    ).not.toBeInTheDocument();
   });
 
   it('ignores a late receipt from a project that is no longer authoritative', () => {

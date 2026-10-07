@@ -137,25 +137,19 @@ describe("SectionStageLine", () => {
     expect(container.innerHTML).not.toMatch(/not classified/);
   });
 
-  it("R113: with no model at all, an unanchored engagement reads as a Band", () => {
-    render(<SectionStageLine model={null} fidelity="band" />);
-
-    expect(screen.getByText("Band")).toBeVisible();
-    expect(
-      screen.queryByText("No active or delayed phase is configured"),
-    ).toBeNull();
-  });
-
-  it("renders nothing at all when it knows nothing at all", () => {
+  it("0a-4: with no model it renders nothing — no bare Band eyebrow", () => {
     const { container } = render(<SectionStageLine model={null} />);
 
-    expect(container.textContent).toBe("Workflow stage");
-    // D4 — the sr-only name is an <h2>. The document's <h1> is the letterhead
-    // and every region head is an <h2>, so an <h3> here read h1 → h3 → h2.
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText("Band")).toBeNull();
+  });
+
+  it("D4: the sr-only name is an <h2>", () => {
+    render(<SectionStageLine model={modelFor([phase()])} />);
+
+    // The document's <h1> is the letterhead and every region head is an
+    // <h2>, so an <h3> here read h1 → h3 → h2.
     expect(screen.getByText("Workflow stage").tagName).toBe("H2");
-    expect(
-      screen.queryByText("No active or delayed phase is configured"),
-    ).toBeNull();
   });
 
   it("omits the provenance line entirely when no template recorded one", () => {

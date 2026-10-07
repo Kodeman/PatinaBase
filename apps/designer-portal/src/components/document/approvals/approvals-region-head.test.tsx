@@ -208,9 +208,7 @@ describe('Client approvals region head', () => {
       screen.getByRole('heading', { name: 'Client approvals' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        /Bind each request to one issued plan, client-ready specification/,
-      ),
+      screen.getByText('This project does not have a designated decision lead yet.'),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /unfold/i }),
@@ -272,9 +270,7 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
     ).toHaveClass('sr-only');
 
     expect(
-      screen.queryByText(
-        /Bind each request to one issued plan, client-ready specification/,
-      ),
+      screen.queryByRole('heading', { name: 'Approval record' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('Issued drawing set 02')).not.toBeInTheDocument();
   });
@@ -369,9 +365,7 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
       screen.queryByText(/not yet on the paper/),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        /Bind each request to one issued plan, client-ready specification/,
-      ),
+      screen.getByRole('heading', { name: 'Approval record' }),
     ).toBeInTheDocument();
     // The same outer box on the other side of the promotion: same
     // margins, same border, same reserve, same rules. A stop that grew a

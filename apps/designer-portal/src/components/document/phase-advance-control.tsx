@@ -364,15 +364,8 @@ export function PhaseAdvanceControl({
     );
   }
 
-  if (actions.length === 0) {
-    return (
-      <section aria-label="Phase handoffs" className={shellCls}>
-        <p role="status" className="text-[12px] text-[var(--text-muted)]">
-          No active phase handoffs need attention.
-        </p>
-      </section>
-    );
-  }
+  // V9 §5: absence of state is silence.
+  if (actions.length === 0) return null;
 
   const transitionPending = pendingPhaseId !== null || updatePhase.isPending;
 

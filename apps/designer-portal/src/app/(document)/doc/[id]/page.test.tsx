@@ -83,6 +83,26 @@ const NO_RESOLVED_SCHEDULE = {
   isError: false,
 };
 let mockResolvedSchedule: Record<string, unknown> = NO_RESOLVED_SCHEDULE;
+// 0a-4: the stage line renders only when the workflow names a stage, so the
+// placement cases (OD-9) seed one classified, active phase.
+let mockWorkflowData: Array<Record<string, unknown>> = [];
+const STAGE_LINE_PHASE: Record<string, unknown> = {
+  phase_id: 'phase-1',
+  phase_name: 'Design development',
+  phase_status: 'active',
+  phase_key: null,
+  canonical_stage_key: 'design_development',
+  workflow_track: 'core',
+  sort_order: 0,
+  lane: 'main',
+  follows_phase_id: null,
+  gate_note: null,
+  deliverables: [],
+  template_provenance: null,
+  current_blockers: null,
+  advance_blocker_count: 0,
+  blocks_advance: false,
+};
 // Ruling V: the nearest open gate feeds the guide. Empty by default so the
 // existing guide branches keep asserting the derivations they were written for.
 let mockContextualHandoffsQuery: Record<string, unknown> = { data: [], isError: false };
@@ -194,7 +214,7 @@ jest.mock('@patina/supabase', () => ({
   useCoordinationItems: () => ({ data: [] }),
   useDesignerClientForClientUser: () => ({ data: null }),
   useProjectWorkflow: () => ({
-    data: [],
+    data: mockWorkflowData,
     isLoading: false,
     isError: false,
   }),
@@ -676,6 +696,7 @@ describe('DocumentPage guide activation', () => {
     mockProjectQuery = { data: undefined, isLoading: false, isError: false };
     mockProjectApprovalsQuery = { data: [] };
     mockResolvedSchedule = NO_RESOLVED_SCHEDULE;
+    mockWorkflowData = [];
     mockContextualHandoffsQuery = { data: [], isError: false };
     mockDeskData = { folders: [], chips: [], composed: {} };
     mockInvoices = [];
@@ -1027,6 +1048,28 @@ describe('DocumentPage guide activation', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/drafting/proposal-1');
     // `Input needed · phases & fees` is deleted with the guide strip (see the
     // Discovery case above); the gap still elects the act.
+  });
+
+  it('0a-6 — an unpriced Direction draft reads Not priced yet, never $0 proposed', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'direction',
+        engagement_id: 'proposal-1', proposal_id: 'proposal-1', lead_id: null,
+        client_profile_id: 'client-1', proposal_status: 'draft',
+      } },
+    };
+    mockProposalData = {
+      id: 'proposal-1', status: 'draft', document_kind: 'design_services',
+      commercial_state: 'draft', project_id: null, total_amount: 0,
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    const vitals = screen.getByTestId('doc-vitals').textContent ?? '';
+    expect(vitals).toBe('Not priced yet');
+    expect(vitals).not.toMatch(/\$0|proposed/);
   });
 
   it('US-14 — "Open the project" on an executed agreement is the same engagement: announced, so no arrival plays', () => {
@@ -1607,6 +1650,7 @@ describe('DocumentPage guide activation', () => {
   describe('the stage line mount is contained by the active section (OD-9)', () => {
     it('nests [data-section-stage-line] inside [data-active-section], after it in document order', () => {
       asProjectDocument();
+      mockWorkflowData = [STAGE_LINE_PHASE];
 
       render(<DocumentPage params={fulfilledParams} />);
 
@@ -2798,6 +2842,7 @@ describe('DocumentPage guide activation', () => {
     // schedule resolver actually anchors, still prints exactly one, inside the
     // open section (OD-9).
     it('the project spread prints exactly one strip, inside the active section', () => {
+      mockWorkflowData = [STAGE_LINE_PHASE];
       openSpread({
         engagement_kind: 'project',
         active_section: 'project',
