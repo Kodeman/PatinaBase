@@ -771,16 +771,16 @@ WHERE c.purchase_order_id = ${q(poId)}`),
       "Not selected yet · 1",
       "Ready to order · 2",
       "Ordered · 1",
-      "Shipped · 1",
+      "Claim open · 1",
     ]);
     // The alternate is not selected; the COM pair waits to be ordered; the
-    // find, bought outright, is ordered; line A shipped (1 of 2). Its damage
-    // reads "Claim open" only once the line is delivered.
+    // find, bought outright, is ordered; line A shipped (1 of 2) with its
+    // damage exception open, so it reads "Claim open" (US-17 G6).
     expect(await groupOf(ALT_ID)).toBe("Not selected yet · 1");
     expect(await groupOf(FRAME_ID)).toBe("Ready to order · 2");
     expect(await groupOf(FABRIC_ID)).toBe("Ready to order · 2");
     expect(await groupOf(FIND_ID)).toBe("Ordered · 1");
-    expect(await groupOf(LINE_A_ID)).toBe("Shipped · 1");
+    expect(await groupOf(LINE_A_ID)).toBe("Claim open · 1");
 
     expect(failures, "edge-function / RPC failures seen by the pages").toEqual(
       [],
