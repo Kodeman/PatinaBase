@@ -51,6 +51,13 @@ INSERT INTO public.organization_members (
   'd5100000-0000-4000-8000-000000000001', 'owner', 'active', now()
 );
 
+-- 00511's countersign check also requires the agreement's designer to hold a
+-- designer-domain role (is_designer alone provisions only app_user).
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'd5000000-0000-4000-8000-000000000001'::uuid, role.id,
+       'd5000000-0000-4000-8000-000000000001'::uuid
+FROM public.roles AS role WHERE role.name = 'studio_owner';
+
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, status, source
 ) VALUES (
@@ -523,17 +530,18 @@ BEGIN
     format('cross-project release blocked by the wrong guard: %L', v_err);
 END;
 $$;
--- The line the whole wave walk below is drawn over.
+-- The line the whole wave walk below is drawn over. 00445's readiness gate
+-- requires design_disposition = 'selected' (the column defaults to 'candidate').
 INSERT INTO public.project_ffe_items (
   id, project_id, project_room_id, assignment_scope, name, ffe_category, item_type, status,
   quantity, unit_price_cents, trade_price_cents, markup_percent,
-  line_total_cents, vendor_id, vendor_name, sort_order
+  line_total_cents, vendor_id, vendor_name, sort_order, design_disposition
 ) SELECT
   'd5720000-0000-4000-8000-000000000001', p.id,
   'd5600000-0000-4000-8000-000000000001', 'room',
   'Test lounge chair', 'Seating', 'fixed', 'specified', 1, 100000, 60000,
   66.67, 100000, 'd5710000-0000-4000-8000-000000000001',
-  'Commercial Test Vendor', 0
+  'Commercial Test Vendor', 0, 'selected'
 FROM public.projects p
 WHERE p.proposal_id = 'd5300000-0000-4000-8000-000000000001';
 
