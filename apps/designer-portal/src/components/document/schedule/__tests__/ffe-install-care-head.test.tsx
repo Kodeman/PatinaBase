@@ -27,6 +27,7 @@ jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManif
 jest.mock('@patina/supabase', () => ({
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
+  useUnresolvedProcurementExceptions: () => ({ data: [] }),
   useProjectFFEItems: () => ({
     data: mockItems,
     isLoading: false,

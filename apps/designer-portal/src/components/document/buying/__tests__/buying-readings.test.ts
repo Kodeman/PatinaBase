@@ -235,6 +235,37 @@ describe('readByNextAct (C-33)', () => {
     ]);
   });
 
+  it('reads a shipped line with an open claim exception as Claim open, not Shipped (T4 G6)', () => {
+    expect(
+      heads([
+        row(
+          { id: 'claimed', status: 'shipped', open_claim: true, ...hale, ...onPo({ ...po1042, status: 'shipped' }) },
+        ),
+      ]),
+    ).toEqual(['Claim open: claimed']);
+  });
+
+  it('reads a shipped line with no claim as Shipped (T4 G6)', () => {
+    expect(
+      heads([row({ id: 'moving', status: 'shipped', ...hale, ...onPo({ ...po1042, status: 'shipped' }) })]),
+    ).toEqual(['Shipped: moving']);
+  });
+
+  it('still reads a delivered line with an open item_claims row as Claim open (T4 G6)', () => {
+    expect(
+      heads([
+        row({
+          id: 'damaged',
+          status: 'delivered',
+          received_quantity: 1,
+          item_claims: [{ state: 'drafted' }],
+          ...hale,
+          ...onPo(po1042),
+        }),
+      ]),
+    ).toEqual(['Claim open: damaged']);
+  });
+
   it('reads a line on a PO by its lifecycle, never by the "Already on" reason', () => {
     expect(
       heads([row({ id: 'ack', status: 'ordered', ...ardent, ...onPo(po1046) }, ['Already on PO-1046'])]),
