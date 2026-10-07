@@ -180,7 +180,11 @@ import {
   type LensBandModel,
   type LensInputItem,
   type LensReadingStop,
+  type LensSetupInput,
 } from '@/lib/document/lens-band-derivation';
+import { classOfNeed } from '@/lib/document/need-class';
+import { openVitalsEditor } from '@/components/document/letterhead-vitals';
+import { HouseholdSheet } from '@/components/document/overlays/household-sheet';
 import type { LensTier } from '@/lib/document/lens-constants';
 import { useLensFrame } from '@/hooks/use-lens-frame';
 import {
@@ -1041,6 +1045,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         : undefined,
     [enrichedOperationalNeeds, gateNow],
   );
+  // D10 — setup (class 3) is never the guide's sentence: on a quiet job line 2
+  // is the stage's own act and setup stands behind the band's door. `null`
+  // ("nothing") and `undefined` ("not answered") keep their meanings.
+  const guideNeedCandidate =
+    rankedOperationalNeeds?.find((need) => classOfNeed(need.kind) !== 3) ??
+    enrichedOperationalNeed;
+  const guideOperationalNeed =
+    guideNeedCandidate && classOfNeed(guideNeedCandidate.kind) === 3
+      ? null
+      : guideNeedCandidate;
   // Ruling V: the guide speaks for the nearest open gate. `undefined` while the
   // projection has not answered — the guide then keeps its own derivation
   // rather than claiming there is no gate.
@@ -1739,7 +1753,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         schedule: scheduleFacts,
         inputFacts: guideInputs,
         inputsPending: guideInputsPending,
-        operationalNeed: rankedOperationalNeeds?.[0] ?? enrichedOperationalNeed,
+        operationalNeed: guideOperationalNeed,
         gate: nearestGate,
         closureReady,
         ticketRows,
@@ -2338,6 +2352,32 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     [bandStopKey, bandStopLabel, bandStopCount],
   );
 
+  // D10 — the band's SETUP rows on a project document, each printed only while
+  // its value is unset and only once the project has answered (a read still in
+  // flight is not an unset value). "Linked" is the household chip's own rule.
+  const [setupHouseholdOpen, setSetupHouseholdOpen] = useState(false);
+  const setupReady =
+    row?.engagement_kind === 'project' && Boolean(row.project_id) && Boolean(project);
+  const noClientLinked = setupReady && !(row?.client_profile_id || designerClientId);
+  const targetUnset = setupReady && !project?.target_end_date;
+  const budgetBandUnset =
+    setupReady && project?.budget_min == null && project?.budget_max == null;
+  const bandSetup = useMemo<LensSetupInput[]>(
+    () => [
+      ...(noClientLinked
+        ? [{ kind: 'no_client_linked' as const, onAct: () => setSetupHouseholdOpen(true) }]
+        : []),
+      ...(targetUnset
+        ? [{ kind: 'target_date_unset' as const, onAct: () => openVitalsEditor('target') }]
+        : []),
+      ...(budgetBandUnset
+        ? [{ kind: 'budget_band_unset' as const, onAct: () => openVitalsEditor('budget') }]
+        : []),
+    ],
+    [noClientLinked, targetUnset, budgetBandUnset],
+  );
+  const bandProjectStatus = row?.project_status ?? null;
+
   const bandModel = useMemo<LensBandModel | null>(() => {
     if (!bandSpread) return null;
     const guideAct = guideActLabel
@@ -2401,6 +2441,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       proposalInvestment: bandInvestment,
       sentDate: bandSent,
       readingStop: bandStop,
+      setup: bandSetup,
+      projectStatus: bandProjectStatus,
     });
     // `doorFacts` and `ticketPhase` are re-created every render; the values
     // that decide the model are `inputSignature` and `bandStageIndex`.
@@ -2430,6 +2472,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     bandSent,
     bandInvestment,
     bandStop,
+    bandSetup,
+    bandProjectStatus,
   ]);
 
   // D-B22 — the lens line's telemetry fires from the page, which owns the
@@ -2603,21 +2647,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     sections.find((s) => s.state === 'active')?.label ?? '';
   const heldRoomName =
     (docRooms ?? []).find((r) => r.id === heldRoomId)?.name ?? null;
-  // W1 — the letterhead's setup chip. deriveNeed returns at most one need per
-  // document, so this list holds one entry or none; `undefined` (the Desk has
-  // not answered) and `null` (it answered "nothing") both render nothing. The
-  // remedy anchors to the active section directly rather than borrowing the
-  // guide's action, which an open workflow gate can point somewhere else.
-  const needsSetup =
-    enrichedOperationalNeed?.kind === 'schedule_unconfigured'
-      ? [
-          {
-            text: enrichedOperationalNeed.text,
-            remedyLabel: enrichedOperationalNeed.actionLabel ?? 'Review',
-            onActivate: () => jumpToSection(row.active_section),
-          },
-        ]
-      : [];
   // W4 — drafted approvals that have not been published to the client. Null
   // while the read is unanswered: a recap line that grows a clause after first
   // paint is the same lie as a figure that softens.
@@ -2977,7 +3006,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               />
             ) : undefined
           }
-          needsSetup={needsSetup}
           /* R27 / R63: the letterhead instruments — one quiet DM-mono row,
              STAGE-CONSISTENT. Send-a-note (and, where there's something to
              mirror, View-as) ride the letterhead across stages, not
@@ -3014,6 +3042,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             onPinChange={onLensPinChange}
             onActed={onLensActed}
             onStandingOpened={onLensStandingOpened}
+          />
+        )}
+        {/* D10 — the SETUP row's `Link a client` opens the household sheet the
+            chip uses; the chip prints nothing while no client is linked. */}
+        {setupHouseholdOpen && row.engagement_kind === 'project' && (
+          <HouseholdSheet
+            open
+            onClose={() => setSetupHouseholdOpen(false)}
+            engagementKind="project"
+            projectId={row.project_id}
+            proposalId={row.proposal_id}
+            clientProfileId={row.client_profile_id}
+            designerClientId={designerClientId}
+            clientName={row.client_name}
+            proposalStatus={liveProposal?.status ?? null}
           />
         )}
 

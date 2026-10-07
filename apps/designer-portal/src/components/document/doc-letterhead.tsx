@@ -29,7 +29,6 @@
 import type { ReactNode } from 'react';
 import { StrataMark } from './strata-mark';
 import { LetterheadTitle, LetterheadVitals } from './letterhead-vitals';
-import { NeedsSetupChip, type NeedsSetupEntry } from './needs-setup-chip';
 import type { FillState } from '@/lib/document/fill-state';
 
 export function DocLetterhead({
@@ -39,7 +38,6 @@ export function DocLetterhead({
   client,
   subject,
   projectId = null,
-  needsSetup = null,
   instruments = null,
 }: {
   title: string;
@@ -55,9 +53,6 @@ export function DocLetterhead({
   /** R80: set on project documents — the title + vitals become self-save
    *  fields writing the projects row (blur-save, quiet per-field status). */
   projectId?: string | null;
-  /** W1: the open setup needs, each with its own remedy. Empty, null and
-   *  undefined all render nothing — the chip never announces a zero. */
-  needsSetup?: NeedsSetupEntry[] | null;
   /** W3: the letterhead instruments' ledger — its own column at ≥1180. */
   instruments?: ReactNode;
 }) {
@@ -115,7 +110,6 @@ export function DocLetterhead({
               </p>
             )
           )}
-          <NeedsSetupChip count={needsSetup?.length ?? 0} entries={needsSetup ?? []} />
         </div>
         {/* Row 2, right — the ledger, MOUNTED at every width (D-B20): below
             1180 the single column simply stacks it under the vitals. */}

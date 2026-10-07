@@ -1,10 +1,12 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 let mockProject: Record<string, unknown> | undefined;
 // A shared spy (reset in beforeEach) so the D5 date-vitals tests can assert
 // on the writes `VitalDate` sends through `save()`, unlike the fresh-fn
 // factory the pre-existing suite above never needed to inspect.
 let mockMutateAsync: jest.Mock;
+// D10 — where the open Folio would hand focus back on dismissal.
+let mockReturnFocusRef: { current: HTMLElement | null } | undefined;
 
 jest.mock('@patina/supabase', () => ({
   useProjectV2: () => ({ data: mockProject }),
@@ -22,11 +24,13 @@ jest.mock('@/components/document/date', () => ({
   FolioPopover: ({
     children,
     onClose,
+    returnFocusRef,
   }: {
     children: React.ReactNode;
     onClose: () => void;
+    returnFocusRef?: { current: HTMLElement | null };
   }) => (
-    <div data-testid="folio-popover">
+    <div data-testid="folio-popover" ref={() => (mockReturnFocusRef = returnFocusRef)}>
       {children}
       {/* Stands in for Esc/outside-click — a dismissal, not a commit. */}
       <button type="button" onClick={onClose}>
@@ -45,7 +49,7 @@ jest.mock('@/components/document/date', () => ({
   ),
 }));
 
-import { LetterheadTitle, LetterheadVitals } from './letterhead-vitals';
+import { LetterheadTitle, LetterheadVitals, openVitalsEditor } from './letterhead-vitals';
 
 beforeEach(() => {
   mockMutateAsync = jest.fn().mockResolvedValue(undefined);
@@ -75,31 +79,29 @@ describe('LetterheadVitals prints only what is real (D-6, amended by D-B7)', () 
       screen.queryByLabelText('Budget band minimum (dollars)'),
     ).not.toBeInTheDocument();
 
-    // D-B7 — the write path survives the suppression: one act per unset
-    // vital, and the two empty dates share the single `Set dates` door.
+    // D-B7 — the write path survives the suppression: the two empty dates
+    // share the single `Set dates` door. D10 — `Set a target` and `Set a
+    // budget band` are the band's SETUP rows, never letterhead acts.
     expect(screen.getByRole('button', { name: 'Set dates' })).toBeVisible();
     expect(
       screen.queryByRole('button', { name: 'Set start' }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Set target' }),
+      screen.queryByRole('button', { name: /Set (a )?target/ }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Set a budget band' }),
-    ).toBeVisible();
+      screen.queryByRole('button', { name: 'Set a budget band' }),
+    ).not.toBeInTheDocument();
 
     // The phase word is the one fact this project carries, so the row stays.
     expect(screen.getByText('Design Development')).toBeVisible();
   });
 
-  it('still offers both acts when the project carries none of the vitals', () => {
+  it('still offers `Set dates` when the project carries none of the vitals', () => {
     mockProject = { ...baseProject, current_phase: null };
     render(<LetterheadVitals projectId="project-1" />);
 
     expect(screen.getByRole('button', { name: 'Set dates' })).toBeVisible();
-    expect(
-      screen.getByRole('button', { name: 'Set a budget band' }),
-    ).toBeVisible();
   });
 
   it('`Set dates` opens the start editor rather than printing a placeholder', () => {
@@ -110,19 +112,44 @@ describe('LetterheadVitals prints only what is real (D-6, amended by D-B7)', () 
     expect(screen.getByTestId('folio-popover')).toBeInTheDocument();
   });
 
-  it('`Set a budget band` reveals the band editors in place', () => {
+  it('`Set a budget band` (the SETUP act) reveals the band editors in place', () => {
     mockProject = { ...baseProject };
-    render(<LetterheadVitals projectId="project-1" />);
+    const { container } = render(<LetterheadVitals projectId="project-1" />);
+    const row = container.querySelector<HTMLElement>('[data-letterhead-vitals]')!;
+    row.scrollIntoView = jest.fn();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Set a budget band' }));
+    act(() => openVitalsEditor('budget'));
 
+    expect(row.scrollIntoView).toHaveBeenCalled();
     const min = screen.getByLabelText('Budget band minimum (dollars)');
     expect(min).toBeVisible();
     expect(min).toHaveFocus();
     expect(screen.getByLabelText('Budget band maximum (dollars)')).toBeVisible();
-    expect(
-      screen.queryByRole('button', { name: 'Set a budget band' }),
-    ).not.toBeInTheDocument();
+  });
+
+  it('`Set a target` (the SETUP act) opens the target editor with no letterhead act', async () => {
+    mockProject = { ...baseProject, start_date: '2026-01-15' };
+    const { container } = render(<LetterheadVitals projectId="project-1" />);
+    const row = container.querySelector<HTMLElement>('[data-letterhead-vitals]')!;
+    row.scrollIntoView = jest.fn();
+    expect(screen.queryByTestId('folio-popover')).not.toBeInTheDocument();
+
+    act(() => openVitalsEditor('target'));
+
+    expect(row.scrollIntoView).toHaveBeenCalled();
+    expect(screen.getByTestId('folio-popover')).toBeInTheDocument();
+    // No trigger is printed for an unset target, so a dismissal hands focus to
+    // the vitals row rather than dropping it on <body>.
+    expect(mockReturnFocusRef?.current).toBe(row);
+    expect(row).toHaveAttribute('tabindex', '-1');
+    fireEvent.click(screen.getByText('commit-picked-date'));
+
+    await waitFor(() =>
+      expect(mockMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ target_end_date: '2026-09-21' }),
+      ),
+    );
+    expect(screen.getByLabelText('Target')).toHaveTextContent('21 September');
   });
 
   it('prints a date only once it has one — never `NO DATE YET`', () => {
@@ -135,7 +162,10 @@ describe('LetterheadVitals prints only what is real (D-6, amended by D-B7)', () 
       screen.queryByRole('button', { name: 'Set start' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Target')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Set target' })).toBeVisible();
+    // D10 — the unset target is the band's SETUP row, not a letterhead act.
+    expect(
+      screen.queryByRole('button', { name: /Set (a )?target/ }),
+    ).not.toBeInTheDocument();
     expect(container).not.toHaveTextContent(/NO DATE YET/i);
     expect(container).not.toHaveTextContent(/NOT KNOWN YET/i);
   });

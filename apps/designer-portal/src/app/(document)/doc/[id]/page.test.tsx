@@ -393,13 +393,11 @@ jest.mock('@/components/document/doc-letterhead', () => ({
     title,
     vitals,
     subject,
-    needsSetup,
     instruments,
   }: {
     title: string;
     vitals?: string;
     subject?: ReactNode;
-    needsSetup?: Array<{ text: string; remedyLabel: string; onActivate: () => void }> | null;
     instruments?: ReactNode;
   }) => (
     <header id="document-project-status">
@@ -409,14 +407,16 @@ jest.mock('@/components/document/doc-letterhead', () => ({
       <span data-testid="doc-subject">{subject}</span>
       {/* W3 — the instruments' ledger stands INSIDE the letterhead now. */}
       <span data-testid="letterhead-instruments">{instruments}</span>
-      <span data-testid="doc-needs-setup-count">{needsSetup?.length ?? 0}</span>
-      {(needsSetup ?? []).map((entry) => (
-        <button key={entry.text} type="button" onClick={entry.onActivate}>
-          {`${entry.text} · ${entry.remedyLabel}`}
-        </button>
-      ))}
     </header>
   ),
+}));
+// D10 — the page mounts the household sheet for the SETUP row's `Link a
+// client`; its own suite owns what it prints.
+jest.mock('@/components/document/overlays/household-sheet', () => ({
+  HouseholdSheet: ({ open, engagementKind }: { open: boolean; engagementKind: string }) =>
+    open ? (
+      <div role="dialog" aria-label="The household" data-engagement-kind={engagementKind} />
+    ) : null,
 }));
 jest.mock('@/components/document/brief-section', () => ({
   BriefSection: () => <div>Brief work</div>,
@@ -1406,32 +1406,102 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByTestId('doc-vitals').textContent ?? '').not.toMatch(/Target/);
   });
 
-  // ── W1: the letterhead's needs-setup chip ──
-  it('states no setup need when the Desk reports none', () => {
+  // ── D10 (US-19 0b): setup is a SETUP row in the band's standing sheet —
+  // never the letterhead, never line 2. ──
+  const openStanding = () =>
+    fireEvent.click(screen.getByRole('button', { name: /MORE$/ }));
+  const setupRows = () =>
+    Array.from(
+      document.querySelectorAll('[data-standing-setup-row]'),
+      (setupRow) => setupRow.textContent ?? '',
+    );
+  const unlinkedProject = (projectStatus: string) => {
     asProjectDocument();
-    mockDeskData = {
-      folders: [{ row: { engagement_id: 'project-1' }, need: null }],
-      chips: [],
-      composed: { 'project-1': true },
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: {
+        kind: 'engagement',
+        row: { ...current, client_profile_id: null, project_status: projectStatus },
+      },
+    };
+    mockProjectQuery = {
+      data: {
+        status: projectStatus,
+        target_end_date: '2026-12-01',
+        budget_min: 5_000_00,
+        budget_max: 9_000_00,
+        proposal: { designer_client_id: null },
+      },
+      isLoading: false,
+      isError: false,
+    };
+  };
+
+  it('prints `No client linked` once, as a SETUP row with `Link a client` (0b-1, Chen)', () => {
+    unlinkedProject('active');
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(
+      screen.getByRole('region', { name: 'The job' }),
+    ).not.toHaveTextContent('No client linked');
+    openStanding();
+    expect(setupRows()).toEqual([expect.stringContaining('No client linked')]);
+    expect(screen.getAllByText(/No client linked/)).toHaveLength(1);
+    // `Link a client` opens the household sheet over the standing sheet.
+    fireEvent.click(screen.getByRole('button', { name: 'Link a client' }));
+    expect(screen.getByRole('dialog', { name: 'The household' })).toHaveAttribute(
+      'data-engagement-kind',
+      'project',
+    );
+  });
+
+  it.each(['completed', 'on_hold'])(
+    'prints `No client linked` nowhere on a %s job (0b-1)',
+    (projectStatus) => {
+      unlinkedProject(projectStatus);
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.queryByText(/No client linked/)).toBeNull();
+      expect(screen.queryByRole('button', { name: /MORE$/ })).toBeNull();
+    },
+  );
+
+  it('files an unset target and budget band as SETUP rows with their acts', () => {
+    asProjectDocument();
+    mockProjectQuery = {
+      data: { status: 'active', target_end_date: null, budget_min: null, budget_max: null },
+      isLoading: false,
+      isError: false,
     };
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('0');
+    openStanding();
+    expect(setupRows()).toEqual([
+      expect.stringContaining('No target date set'),
+      expect.stringContaining('No budget band set'),
+    ]);
+    expect(screen.getByRole('button', { name: 'Set a target' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set a budget band' })).toBeInTheDocument();
   });
 
-  it('carries the one unconfigured-schedule need to the letterhead with its remedy', () => {
+  it('files the unconfigured-schedule need under SETUP, never on line 2 (Cedar Lane)', () => {
     asProjectDocument();
+    const nameThePhases = {
+      kind: 'schedule_unconfigured',
+      text: 'Name the phases for this project',
+      actionLabel: 'Open the schedule',
+      urgent: false,
+      stamp: { label: 'BAND' },
+    };
     mockDeskData = {
       folders: [{
         row: { engagement_id: 'project-1' },
-        need: {
-          kind: 'schedule_unconfigured',
-          text: 'Name the phases for this project',
-          actionLabel: 'Open the schedule',
-          urgent: false,
-          stamp: { label: 'BAND' },
-        },
+        need: nameThePhases,
+        needs: [nameThePhases],
       }],
       chips: [],
       composed: { 'project-1': true },
@@ -1439,21 +1509,21 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('1');
-    const activeSection = document.querySelector<HTMLElement>('[data-active-section]');
-    activeSection!.scrollIntoView = jest.fn();
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Name the phases for this project · Open the schedule',
-      }),
+    const band = screen.getByRole('region', { name: 'The job' });
+    expect(band).not.toHaveTextContent('Name the phases for this project');
+    // Line 2 is the stage's own guide line; setup stands behind the door.
+    expect(band.querySelector('[data-lens-line2-kind]')).toHaveAttribute(
+      'data-lens-line2-kind',
+      'guide',
     );
-
-    expect(activeSection!.scrollIntoView).toHaveBeenCalled();
-    expect(activeSection).toHaveFocus();
+    expect(band.innerHTML).not.toMatch(/terracotta/);
+    openStanding();
+    expect(setupRows()).toEqual([
+      expect.stringContaining('Name the phases for this project'),
+    ]);
   });
 
-  it('leaves every other kind of need to the guide', () => {
+  it('leaves every other kind of need out of SETUP', () => {
     asProjectDocument();
     mockDeskData = {
       folders: [{
@@ -1472,7 +1542,10 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('0');
+    expect(
+      screen.getByRole('region', { name: 'The job' }),
+    ).toHaveTextContent('Confirm the site measure');
+    expect(document.querySelector('[data-standing-setup-row]')).toBeNull();
   });
 
   // ── W2 (C-3, F14/C11) — the ladder mounts on every project-backed spread,

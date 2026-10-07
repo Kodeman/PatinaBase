@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createRef } from 'react';
 import type { LensStandingItem } from '@/lib/document/lens-band-derivation';
 import { StandingSheet } from '../standing-sheet';
@@ -143,6 +143,7 @@ describe('StandingSheet (OD-6 / L-11)', () => {
             setup: 'no_client_linked',
             sentence: 'No client linked',
             act: { key: 'setup:no_client_linked', label: 'Link a client', onAct },
+            opensSheet: true,
           },
         ]}
       />,
@@ -161,6 +162,32 @@ describe('StandingSheet (OD-6 / L-11)', () => {
     expect(row.innerHTML).not.toMatch(/terracotta/);
     fireEvent.click(within(row).getByRole('button', { name: 'Link a client' }));
     expect(onAct).toHaveBeenCalledTimes(1);
+  });
+
+  it('D10 — a setup act that lands on the paper puts the sheet back before it runs', async () => {
+    const onAct = jest.fn();
+    const onClose = jest.fn();
+    render(
+      <StandingSheet
+        open
+        onClose={onClose}
+        items={[]}
+        setup={[
+          {
+            key: 'setup:target_date_unset',
+            setup: 'target_date_unset',
+            sentence: 'No target date set',
+            act: { key: 'setup:target_date_unset', label: 'Set a target', onAct },
+            opensSheet: false,
+          },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Set a target' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // Not yet: the sheet's door takes focus a frame after the close.
+    expect(onAct).not.toHaveBeenCalled();
+    await waitFor(() => expect(onAct).toHaveBeenCalledTimes(1));
   });
 
   it('mounts nothing while closed', () => {

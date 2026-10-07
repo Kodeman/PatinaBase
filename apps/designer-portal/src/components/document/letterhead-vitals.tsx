@@ -17,18 +17,23 @@
  * no `Start —`, no `Band $ – $`, no fallback string in the live-figure
  * register, and a zero contract total prints nothing. But an unset vital is
  * still SETTABLE from the paper: it prints as one scored-ink act (`Set dates`
- * / `Set start` / `Set target`, `Set a budget band`) that opens the very
- * editor the recorded field uses. The act is the door D-6's suppression would
- * otherwise have bricked up — clearing a date with × cannot strand the
- * designer, and focus lands on the act that replaced the field rather than
- * dropping to <body>. The `Phases ▸` fold went with the placeholders (the
- * proposal wins; per-phase hour estimates are not a letterhead fact).
+ * / `Set start`) that opens the very editor the recorded field uses. The act
+ * is the door D-6's suppression would otherwise have bricked up — clearing a
+ * date with × cannot strand the designer, and focus lands on the act that
+ * replaced the field rather than dropping to <body>. The `Phases ▸` fold went
+ * with the placeholders (the proposal wins; per-phase hour estimates are not a
+ * letterhead fact).
+ *
+ * D10 (US-19 0b) — an unset target date and an unset budget band are SETUP
+ * rows in the band's standing sheet, not letterhead acts. Their `Set a target`
+ * / `Set a budget band` acts dispatch `OPEN_VITALS_EDITOR_EVENT`, and this
+ * component opens the same editor the recorded field uses.
  *
  * Zero shadows (D4); failures read inline at the field (R83). Renders only on
  * project documents (the page passes projectId).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useProjectV2 } from '@patina/supabase';
 import {
   useSaveProjectVitals,
@@ -43,6 +48,16 @@ import type { Part } from '@/lib/arrival/types';
 type AnyRecord = any;
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+/** D10 — the band's SETUP acts ask the letterhead to open a vital's editor. */
+export const OPEN_VITALS_EDITOR_EVENT = 'document:open-vitals-editor';
+export type VitalsEditorField = 'target' | 'budget';
+
+export function openVitalsEditor(field: VitalsEditorField) {
+  window.dispatchEvent(
+    new CustomEvent(OPEN_VITALS_EDITOR_EVENT, { detail: { field } }),
+  );
+}
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -123,6 +138,8 @@ function VitalDate({
   label,
   emptyAct,
   part,
+  openAsk = 0,
+  emptyReturnRef,
 }: {
   projectId: string;
   column: 'start_date' | 'target_end_date';
@@ -131,6 +148,10 @@ function VitalDate({
   emptyAct: string | null;
   /** US-14 — the arrival mark for the recorded value; the empty act is never one. */
   part?: Part;
+  /** D10 — bumped when the band's SETUP act asks for this editor. */
+  openAsk?: number;
+  /** D10 — where a dismissal returns focus when no trigger is printed. */
+  emptyReturnRef?: RefObject<HTMLElement | null>;
 }) {
   const [value, setValue] = useState(serverValue ?? '');
   const [open, setOpen] = useState(false);
@@ -147,6 +168,10 @@ function VitalDate({
     restoreFocus.current = false;
     triggerRef.current?.focus();
   }, [value]);
+
+  useEffect(() => {
+    if (openAsk > 0) setOpen(true);
+  }, [openAsk]);
 
   useEffect(() => {
     const incoming = serverValue ?? '';
@@ -185,7 +210,11 @@ function VitalDate({
   };
 
   const folio = open && (
-    <FolioPopover onClose={() => setOpen(false)} aria-label={`${label} date`} returnFocusRef={triggerRef}>
+    <FolioPopover
+      onClose={() => setOpen(false)}
+      aria-label={`${label} date`}
+      returnFocusRef={!value && !emptyAct && emptyReturnRef ? emptyReturnRef : triggerRef}
+    >
       <FolioCalendar
         value={value ? { kind: 'day', date: value } : null}
         today={todayYmd()}
@@ -197,7 +226,8 @@ function VitalDate({
   );
 
   if (!value) {
-    if (!emptyAct) return null;
+    // D10 — no act printed, but the band's SETUP act can still open the editor.
+    if (!emptyAct) return folio ? <span className="relative inline-flex">{folio}</span> : null;
     return (
       <span className="relative inline-flex items-baseline gap-1">
         {/* Never disabled while a save is in flight: this act only opens the
@@ -324,18 +354,21 @@ function VitalMoney({
   );
 }
 
-/** The budget band — two blur-save dollar fields behind one act. With no
- *  bound recorded the band prints `Set a budget band` (D-B7) rather than an
- *  empty `Band $ – $`; pressing it reveals the same two editors a recorded
- *  band uses and puts the caret in the first of them. */
+/** The budget band — two blur-save dollar fields. With no bound recorded the
+ *  letterhead prints nothing (never an empty `Band $ – $`): the band's SETUP
+ *  act `Set a budget band` (D10) reveals the same two editors a recorded band
+ *  uses and puts the caret in the first of them. */
 function VitalBand({
   projectId,
   minCents,
   maxCents,
+  revealAsk = 0,
 }: {
   projectId: string;
   minCents: number | null;
   maxCents: number | null;
+  /** D10 — bumped when the band's SETUP act asks for the editors. */
+  revealAsk?: number;
 }) {
   const bandSet = minCents != null || maxCents != null;
   const [revealed, setRevealed] = useState(false);
@@ -345,19 +378,14 @@ function VitalBand({
     if (revealed) minRef.current?.focus();
   }, [revealed]);
 
-  if (!bandSet && !revealed) {
-    return (
-      <button
-        type="button"
-        onClick={() => setRevealed(true)}
-        className="group inline-flex items-baseline text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-      >
-        <span className="da-score-hover font-mono text-[11px] uppercase tracking-[0.06em] group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
-          Set a budget band
-        </span>
-      </button>
-    );
-  }
+  useEffect(() => {
+    if (revealAsk === 0) return;
+    setRevealed(true);
+    // Already printed (a recorded band): the reveal effect will not run again.
+    minRef.current?.focus();
+  }, [revealAsk]);
+
+  if (!bandSet && !revealed) return null;
 
   return (
     <span className="inline-flex items-baseline gap-0.5">
@@ -400,6 +428,22 @@ function contractTotal(cents: number): string {
 
 export function LetterheadVitals({ projectId }: { projectId: string }) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [targetAsk, setTargetAsk] = useState(0);
+  const [bandAsk, setBandAsk] = useState(0);
+
+  // D10 — the band's `Set a target` / `Set a budget band` SETUP acts.
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const field = (event as CustomEvent<{ field?: VitalsEditorField }>).detail?.field;
+      if (field !== 'target' && field !== 'budget') return;
+      rowRef.current?.scrollIntoView({ block: 'center' });
+      if (field === 'target') setTargetAsk((n) => n + 1);
+      else setBandAsk((n) => n + 1);
+    };
+    window.addEventListener(OPEN_VITALS_EDITOR_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_VITALS_EDITOR_EVENT, onOpen);
+  }, []);
 
   if (!project) return null;
 
@@ -425,6 +469,10 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           here cannot swallow a calendar. Below 1180 the row may still wrap
           rather than hide a `Set dates` act behind the ellipsis. */}
       <div
+        ref={rowRef}
+        // D10 — where an editor the SETUP act opened returns focus when no
+        // trigger is printed for it.
+        tabIndex={-1}
         data-letterhead-vitals
         // N-07 — `overflow-clip` with a margin, not `overflow-hidden`: the row
         // holds real focusable acts (`Set dates`), and a hidden overflow clips
@@ -447,13 +495,17 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           column="target_end_date"
           serverValue={targetDate}
           label="Target"
-          emptyAct={noDates ? null : 'Set target'}
+          // D10 — an unset target is the band's SETUP row, not a letterhead act.
+          emptyAct={null}
           part="f2"
+          openAsk={targetAsk}
+          emptyReturnRef={rowRef}
         />
         <VitalBand
           projectId={projectId}
           minCents={project.budget_min ?? null}
           maxCents={project.budget_max ?? null}
+          revealAsk={bandAsk}
         />
         {totalSet && (
           <span data-part="f3" className="font-mono text-[11px]">

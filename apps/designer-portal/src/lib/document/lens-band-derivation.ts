@@ -166,6 +166,9 @@ export interface LensSetupItem {
   setup: SetupRowKind | 'schedule_unconfigured';
   sentence: string;
   act: LensAct | null;
+  /** `Link a client` opens the HouseholdSheet over this one. Every other
+   *  setup act lands on the paper, so the sheet is put back before it runs. */
+  opensSheet: boolean;
 }
 
 /** A setup fact the caller holds, with the press its act makes. The words are
@@ -799,6 +802,7 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
           setup: 'schedule_unconfigured',
           sentence: item.sentence,
           act: item.act,
+          opensSheet: false,
         }),
       ),
     ...(input.setup ?? [])
@@ -817,6 +821,7 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
             label: SETUP_WORDS[row.kind].act,
             onAct: row.onAct,
           },
+          opensSheet: row.kind === 'no_client_linked',
         }),
       ),
   ];

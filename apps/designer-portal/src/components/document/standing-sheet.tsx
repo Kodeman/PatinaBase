@@ -56,6 +56,20 @@ export function StandingSheet({
    *  the `+N MORE` button, else the act line 2 is printing, else the band. */
   triggerRef?: RefObject<HTMLElement | null>;
 }) {
+  // A setup act that lands on the paper (the vitals editor, the schedule)
+  // puts the sheet back first. The sheet unlocks the page's scroll as it
+  // closes and hands focus to its door one frame later, so the act runs a
+  // frame after that, or the door would take focus back from it.
+  const pressSetup = (item: LensSetupItem) => {
+    if (!item.act) return;
+    if (item.opensSheet) {
+      item.act.onAct();
+      return;
+    }
+    const run = item.act.onAct;
+    onClose();
+    window.requestAnimationFrame(() => window.requestAnimationFrame(run));
+  };
   return (
     <DocSheet
       open={open}
@@ -162,7 +176,7 @@ export function StandingSheet({
                     <DocumentAction
                       actionKey={`standing-setup-${item.key}`}
                       variant="secondary"
-                      onClick={item.act.onAct}
+                      onClick={() => pressSetup(item)}
                     >
                       {item.act.label}
                     </DocumentAction>
