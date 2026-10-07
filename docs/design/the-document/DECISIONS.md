@@ -11263,3 +11263,101 @@ This retires the ambient-motion ban and every restatement of it: **R15**'s "noth
 **Motion-concepts deck rulings.** R-DM1 in the motion-concepts deck (`artifacts/designer-portal-motion-2026-09-25/design/concepts.md`) — how to amend R15 — is resolved by this ruling, which goes further than any of its three options. R-DM2–R-DM7 and the cinematic-arrival rulings R-DM8+ are not about the ambient ban and remain open for Kody.
 
 *Entries add: R154 · last id = R154*
+
+### R155 · The stage prints as a word on every paper — Running a Job, Q1 · Q4 · Q10 — 2026-10-07
+
+**Ruled by the Fable design council (delegated by Kody, 2026-10-07)** — three members ruled blind (SQ-485 vision, SQ-486 interaction, SQ-487 risk), merged by the chair (SQ-488) against the code recon (SQ-481–484). Binding record: `artifacts/document-running-a-job-2026-10-07/delivery/rulings.md` (§1 Q1, Q4, Q10; §2 D1). The walk's fifth scenario — a first hire opening a job she did not write — found no stage named anywhere above the fold: the rail says ACTIVE, ONGOING or INSTALLATION, the letterhead prints an unlabelled mark, and ⌘K's `STAGE_LABELS` says "In procurement".
+
+**One.** The stage prints as one of seven words — `Brief · Discovery · Direction · Proposal · Project · Install · Care` — on band line 1 of every paper, left, in the mono eyebrow register: `PROJECT · Chen Residence`; held, `PROJECT · ON HOLD`; closed, `CARE · CLOSED`. Only these seven ever print as stage on a studio surface; the eleven workflow names stay data and behind R150 R1's door. **AMENDS R150 R1**: the clause "only where a resolver anchors it" is dropped for the seven document words, which need no resolver; the eleven-stage vocabulary keeps the clause. R127 **L-6** is untouched: the rail head still yields at s0, and wherever its stage phrase prints it prints the same word — the `Ongoing`/`Active`/`Installation` sub-labels retire as stage words. R111's stage-phrase shape stands for the eleven-stage register only. R124 item 7's I114 mapping is not resolved; nothing built depends on it.
+
+**Two.** The count is cut. `5 OF 7` shows position in a sequence, which V11 names a progress bar. The word prints alone, with no plate, no fill and no stage badge. The existing strata/arc mark (R111, I114) is **untouched by this delivery**; whether it is a progress bar under V11 is logged for Kody, not resolved here. If Kody rules the mark a bar, the mark goes and the word stays.
+
+**Reversal.** Leah's own stage words may rename any of the seven, in the one table (R162), and never add an eighth. The word never leaves.
+
+*Entries add: R155 · last id = R155*
+
+### R156 · Next and Standing — two fixed positions on band line 2 — Q2 — 2026-10-07
+
+**Ruled by the Fable design council (delegated by Kody, 2026-10-07)**; record `delivery/rulings.md` §1 Q2, §2 D2. Today `deriveLensBand` is winner-take-all: any standing item takes line 2 and the stage's own step prints nowhere (`lens-band-derivation.ts:729-736`; Chen Residence and Cedar Lane in the walk). The band's one sentence is the only device built to answer "what now?", and on a busy job it answers something else.
+
+**Ruled.** Band line 2 gains two fixed positions inside R127's unchanged 56px: left, `Next ─ <sentence> <ACT>` — the `NEXT` eyebrow, one 15px sentence, the act as a scored word; right, the door `Standing · N` — the word and the count, nothing else. Nothing stands: the right side is silent. At 390 the short form stacks eyebrow, sentence, act, with the door after the act; where the measure cannot hold the door unclipped it moves to the first row of the dock's More and the band prints Next alone — chosen by the measure, as I154's three forms already are. **AMENDS R127 L-11**: the `+N MORE` string is retired; the door is always `Standing · N`, and the sheet it opens groups its rows under `BLOCKS MONEY OR A SIGNATURE` · `NEEDS YOU` · `SETUP` (R157), each row with its own act (I154 D1 unchanged). **AMENDS R127 OD-11** as the synthesis asked: the stage's own act gets two printings — it leads its region head whatever Next is. **Refused**: a kind split in the band (`1 blocks money · 2 setup`) — unverified (ADV-18) and a classified total in a band is a dashboard in miniature; the count is permitted as the front matter of the sheet's rows one press away (V11), and the sheet carries the groups.
+
+**Reversal.** If the hire walk (R160) fails scenario 5 at 390 with two positions, line 2 prints Next alone and the door moves to More — the risk seat's sequenced form, kept as the fallback rather than the opening move.
+
+*Entries add: R156 · last id = R156*
+
+### R157 · Next is ranked by class from a static need-kind table; deadline order inside a class — Q3 — 2026-10-07
+
+**Ruled by the Fable design council (delegated by Kody, 2026-10-07)**; record `delivery/rulings.md` §1 Q3, §2 D2 (the class table). **AMENDS R127 W3-R1** ("line 2 and the standing sheet rank by deadline distance, never by kind"). A first hire cannot weigh a damage claim against a missing client link; the paper must.
+
+**Ruled.** Next is the top of this order that the signed-in person can take — a gated act is never Next: **1** blocks money or a signature · **2** needs you · **3** the stage's own act · **4** setup, which is never Next while anything in 1–3 stands. W3-R1's deadline order (past, most days first; ahead, soonest first; none, longest standing first) is kept **inside** each class. The class is read from a **hand-written table keyed on `NeedKind`** (`desk-derivation.ts:109-156`), recorded in rulings.md D2 and nowhere else; a kind not in the table is class 2; the class is never inferred from a row's state, amount or tier (ADV-14 — a damage claim is class 2 because the table says so, not class 1 because a mockup wanted it). The four `LensStandingTier` words stay eyebrow words and never the sort key. The risk seat's objection — no field defines consequence — is met by the table itself, which is a consequence rule derivable from existing state, its own stated reversal condition.
+
+**Reversal.** If Leah asks for pure date order back after a month on it, W3-R1 is restored whole and only the setup rule survives.
+
+*Entries add: R157 · last id = R157*
+
+### R158 · Absence is silence — one gloss: a withheld act prints its reason — Q5 — 2026-10-07
+
+**Ruled by the Fable design council (delegated by Kody, 2026-10-07)**; record `delivery/rulings.md` §1 Q5, §2 D3. A reading of **V9 §5** ("a region with nothing to say renders nothing"), not an amendment to it. Absence of **state** is silence. A **withheld act** — offered, but gated for this person now — prints one reason sentence directly beneath it in muted ink, linked by `aria-describedby`, with the repair act beside it as a plain act where one exists: `Message the client` · *Link a client first.* · `Link a client`. The act stays in tab order as `held` (`aria-disabled="true"`), never native `disabled`, never tooltip-only, never terracotta (V9 P3 already requires the named reason; this rules where it prints). A held job is recorded state and prints `PROJECT · ON HOLD` — never "Held since 2 Oct", because `projects` carries `on_hold` with no held-since timestamp and no date is invented. Nothing else earns a sentence: "No active phase handoffs need attention." and its kind are deleted in slice 0a.
+
+**Reversal.** If the paper starts explaining things it does not offer, or Leah's answer on held jobs asks for a different held reading.
+
+*Entries add: R158 · last id = R158*
+
+### R159 · No first-open list; a first open is every open; Whose Move cut to one note — Q6 · Q9 · D8 — 2026-10-07
+
+**Ruled by the Fable design council (delegated by Kody, 2026-10-07)**; record `delivery/rulings.md` §1 Q6, Q9; §2 D8. The synthesis's Direction B proposed that a person's first open of a paper unfold the standing sheet once, grouped by kind, with a handoff line ("Leah put this down Tuesday. Yours now.") and an ownership sentence ("Yours: file the claim on AP-012 · Waiting on: no one").
+
+**Ruled, 3–0.** No. It is a task list (ADV-15, VISION §5), a thing shown once teaches nothing, and R127 L-11's door is the same rows one press away. **R127 L-11 is not relaxed.** A first open is identical to every open. The handoff line, the ownership sentence naming a person, "Yours", "Waiting on: no one" and the Desk's "With Maya" prose are **cut**: no assignment or handoff record exists at job or stage grain — `Put down` writes nothing, `NeedLine.owner` is a derived role, and the only reassignment record is whole-project `reassign_project_lead` (SQ-484). They return when such a record ships, which is a migration and a follow-on, not this delivery. R143 D6's four custody words stand; no fifth (`MAYA'S PEN`) is added. Custody reaches the band only as a recorded owner already allows: R150 R2's `Waiting on {first name}:` where the need's owner is the client, `With the maker` where it is the maker; "yours" is the studio's pen, never a named person.
+
+**What ships of Direction B:** the stage word (R155), Message withheld with its reason (R158), and one note — the existing once-only margin note re-cut on a versioned key per **R131**: *The band says what's next on this job. Press it.* with the act `Understood`; in flow under the band, not modal, not focus-stealing, no count, no sequence, once per person per version. R133's handoff conversation, run by Kody, remains the handoff.
+
+**Reversal.** If a real first hire fails scenario 5 at the door in the R160 walk, the door prints in words and still no list unfolds.
+
+*Entries add: R159 · last id = R159*
+
+### R160 · The five scenarios are the acceptance gate for wayfinding work — Q8 — 2026-10-07
+
+**Ruled by the Fable design council (delegated by Kody, 2026-10-07)**; record `delivery/rulings.md` §1 Q8, §3. R127's acceptance gates measured geometry — band height, CLS, first-head position, blank frames — and no record of a task test after August was found. **Ruled, 3–0.** For every flagged slice of this delivery and for wayfinding work after it, the five scenarios in `artifacts/document-running-a-job-2026-10-07/walk/WALK.md` are performed by someone who did not build the job, at 1440 and 390, recording for each: whether the task succeeded and the step count; whether the answer was accurate (the right PO, piece, date); one named refusal met and whether its reason was read; and the return path to the paper (ADV-26). Two seed fixtures land first: a **blocked PO** and a **change after signature**. A flag advances only after its walk passes; a flag that fails its walk goes off, not forward. The R127 e2e measures keep running as regression; they no longer stand in for a person finishing a task.
+
+*Entries add: R160 · last id = R160*
+
+### R161 · VISION §4 — the first hire is already there; intent recorded, no edit — Q7 — 2026-10-07
+
+**Ruled by the Fable design council (delegated by Kody, 2026-10-07)**; record `delivery/rulings.md` §1 Q7. The synthesis offered a sentence for VISION §4 — "the paper says where it is and whose move it is before she asks." **Ruled, 3–0: not needed.** §2 (a studio at the moment it adds its first hands) and §4 (prompts and collects information when and where you need it) already carry the first hire (ADV-46); the sentence would restate, not rule. Nobody edits `VISION.md` or `VISION-DECISIONS.md` in this delivery; Kody may log a reading in VISION-DECISIONS if he wants the line. No build depends on it.
+
+*Entries add: R161 · last id = R161*
+
+### R162 · One name for every act — the act-name and vocabulary table — D1 — 2026-10-07
+
+**Ruled by the Fable design council (delegated by Kody, 2026-10-07)**; record `delivery/rulings.md` §2 D1 (the full table, which is the authority; this entry records the rule and the headline names). The code says so itself: `document-guide.ts:596-602` admits its `needVerb` table and `desk-derivation.ts`'s `NEED_ACTION_LABELS` consciously diverge, and the briefing counts thirteen cross-device contradictions — Direction alone prints four labels for one door on one screen.
+
+**The rule.** An act's name is the label of the control it lands on, verbatim, on every surface that prints it — band, Desk card, ⌘K, region head, phone dock — and the press lands with focus on that control (L-10). One table in one isomorphic module feeds all five consumers; a new test asserts cross-device agreement. Where today prints several names for one control, the control's label wins, so unchanged controls copy today's string verbatim.
+
+**The stage's own acts** (each leads its region head, R156): Brief `Respond to the inquiry` · Discovery `Add the {first missing essential}` · Direction `Write the proposal` (`Continue drafting` deleted) · Proposal `Send the proposal` / sent `Nudge {first name}` / accepted `Open the project` · Project `Spec the {N} unspecified` → `Release for authorization` → `Open the pieces` (`FF&E schedule` retires as a printed name; the region is Pieces) · Install the reading's act (R163) · Care `Run the closeout checklist`. **The named acts:** `Record a change` · `Ask the maker for a date` · `Open the order` · `Message {first name}` (fallback `Message the client`; withheld per R158) · `File the claim` · `Record the payment` · `Open the punch list` · `Preview the client's copy` (ADV-52: an act names its object). The placeholder guard gains `Client User` (R2-21).
+
+**Weight follows the table, not the page** (V9 P3, R139). **AMENDS R139's four verbs narrowly**: the `terminal` tier is spent where money moves **or is recorded as moved**, or a paper is signed **or sent for signature** — `Record the payment` · `Release for authorization` · `Send the proposal` · `Send the invoice` — each with its consequence sentence above (R141). Scored: the Next act when not terminal, the stage's own act on its head, and the four named acts. Plain: everything else; `Spec the N unspecified`, `Draw an invoice` and `Open the record` leave the filled tier. No new tier.
+
+**Words to revisit when Leah's arrive** (synthesis §7), each swapped in this one table: `change`, the fact sentence that stands in for `late`, `Standing`, `Pieces`, the seven stage words (rename, never add), the install words. Not revisited: `Record`, `Open`, `Message`, `Ask`, and the rule itself.
+
+*Entries add: R162 · last id = R162*
+
+### R163 · The install reading never infers lateness; a maker note is a draft held for review — D6 — 2026-10-07
+
+**Ruled by the Fable design council (delegated by Kody, 2026-10-07)**; record `delivery/rulings.md` §2 D6. The specimens printed "Behind the install start · 118 days" by comparing an unreceived piece with the project's start (ADV-11, S1) — the exact inference R3 warned against. R124 item 3 stands: install stays a label, not a mode.
+
+**Ruled.** One reading, on the Install region head's own status line (W4-R1; one answer to "where is Install", ADV-24), quoted by the band when its act is Next. Its anchor is a **piece-level recorded date only**: `purchase_orders.confirmed_eta`. The install start is never the anchor; the system never writes "late" or "behind"; it prints the fact. Four states: *Reading chair isn't here, and no arrival date is recorded.* → `Ask the maker for a date` · *Reading chair was due 2 October and isn't here.* → `Ask the maker for a date` · *Reading chair arrives Thursday 9 October.* → `Hold a window` · *Everything is here.* → `Open the punch list`. The region's two disagreeing counts (`0 of 2 installed`, `1 of 1 placed`) are **deleted, not merged** (ADV-20): each row prints a state word — `Not here` · `Here` · `Installed` — and no ratio; "here" is one selector both head and rows read.
+
+**`Ask the maker for a date`** opens a sheet with the note drafted (to the maker, subject, body) and two acts, `Hold for review` and `Discard`. **No Send exists on this surface.** The draft lands `awaiting_review` through the existing server-side `enqueue_agent_task` route pattern; a person sends it from the Post; the row then reads *Asked 7 October · draft held for review* and its act becomes `Open the held draft`. Hard rule, no exception — the Agent OS rule that no external send is automated, applied to the paper. **Dissent recorded**: the risk seat would have cut the act this delivery and anchored on `po_acknowledgments.ack_ship_date`; overruled because `confirmed_eta` is a recorded arrival date (a ship date is not one) and the held-draft route already exists.
+
+*Entries add: R163 · last id = R163*
+
+### R164 · Two flags, four slices, and where 0b sits — D9 · D10 — 2026-10-07
+
+**Ruled by the Fable design council (delegated by Kody, 2026-10-07)**; record `delivery/rulings.md` §2 D9, D10; §3 scope. Build order, after the synthesis and the risk seat's "smallest delivery that passes the five scenarios": **0a** pure repairs (eight, anchored in SQ-481) → **0b** repairs that waited on R157/R158 → **1** Ask the Paper → **2** One Voice, carrying what survives of Whose Move (R159).
+
+**Flags.** Two PostHog flags, fail-closed (`useFeatureFlag` defaults `false`; `NEXT_PUBLIC_FLAG_OVERRIDES` for local and CI): **`ask-the-paper`** gates slice 1 (⌘K on the paper, Record a change, the install reading, `?` printed); **`one-voice`** gates slice 2 (the one-name table, the Next/Standing band, the stage word, weight by role, the dock, the one note). Slices 0a and 0b ship **unflagged**: each removes a defect against canon already in force, and a revert is its rollback. Order on: 0a → 0b → `ask-the-paper` for Leah's studio → walk (R160) → `one-voice` for Leah's studio → walk → both to 100%. Flags target by user id, never by email. R124's `job-ticket` is the precedent that the no-flag law of R125/R127 bound their programs, not every program.
+
+**Slice 0b** is its own unflagged slice between 0a and 1 — after 0a because it depends on R157 and R158, before 1 because the install reading assumes setup is already off the band. Its two repairs: `No client linked — attach one` leaves the letterhead and becomes one `SETUP` row in the standing sheet on live jobs, suppressed on `completed` and `on_hold`, its words repeated once as Message's reason; and setup paints clay ink, plain tier, under `SETUP` at the sheet's foot — never terracotta, never Next while any other act is open, the `NEEDS SETUP · 1` chip deleted. **Deferred**, named so they are not re-proposed blind: the handoff line and any ownership sentence naming a person (needs a record); Desk prose; verbs on the folded seam (`FoldSeam` is one button with no sibling slot); `ack_ship_date` in the reading; the strata mark's V11 status; the I114 mapping. The full dissent table is `delivery/rulings.md` §6.
+
+*Entries add: R164 · last id = R164*
