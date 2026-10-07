@@ -579,3 +579,64 @@ export function shortcutsForSurface(surfaceKey: string): SurfaceShortcut[] {
 
   return rows;
 }
+
+// ── ⌘K paper synonyms (US-19 D4) ─────────────────────────────────────────────
+
+/** What a synonym group resolves to on the paper in hand. `each-other` groups
+ *  widen a piece search to their own words; the rest name one paper target. */
+export type PaperSynonymTarget =
+  | 'record-a-change'
+  | 'install-reading'
+  | 'open-the-order'
+  | 'money-acts'
+  | 'each-other'
+  | 'household'
+  | 'keys';
+
+export interface PaperSynonymGroup {
+  words: readonly string[];
+  resolves: PaperSynonymTarget;
+}
+
+/**
+ * D4's synonym table, verbatim: one hand-written table, at most twelve groups,
+ * no inference. ⌘K reads it only while a paper is in hand. The install group
+ * resolves on Install papers only; that rule is the reader's, not the table's.
+ */
+export const PAPER_SYNONYMS: readonly PaperSynonymGroup[] = [
+  {
+    words: ['change', 'revision', 'amendment', 'change order', 'swap', 'reselect'],
+    resolves: 'record-a-change',
+  },
+  {
+    words: ['late', 'behind', 'arriving', 'eta', 'lead time', 'delivery'],
+    resolves: 'install-reading',
+  },
+  { words: ['po', 'purchase order', 'order', 'order number'], resolves: 'open-the-order' },
+  {
+    words: ['pay', 'payment', 'balance', 'deposit', 'invoice', 'owed'],
+    resolves: 'money-acts',
+  },
+  { words: ['sofa', 'couch', 'sectional', 'settee', 'loveseat'], resolves: 'each-other' },
+  { words: ['chair', 'armchair'], resolves: 'each-other' },
+  { words: ['table', 'desk'], resolves: 'each-other' },
+  { words: ['lamp', 'light'], resolves: 'each-other' },
+  { words: ['rug', 'carpet'], resolves: 'each-other' },
+  { words: ['shelving', 'built-in'], resolves: 'each-other' },
+  { words: ['client', 'homeowner', 'household'], resolves: 'household' },
+  { words: ['keys', 'shortcuts'], resolves: 'keys' },
+];
+
+/**
+ * The groups a query names. A group matches when one of its words stands in
+ * the query as a whole word or phrase (`couch` names the sofa group; `couc`
+ * names nothing), so a half-typed word never guesses.
+ */
+export function matchPaperSynonyms(query: string): PaperSynonymGroup[] {
+  const q = query.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!q) return [];
+  const padded = ` ${q} `;
+  return PAPER_SYNONYMS.filter((group) =>
+    group.words.some((word) => padded.includes(` ${word} `)),
+  );
+}

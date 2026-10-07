@@ -44,6 +44,8 @@ import { fmtMinutes } from '@/lib/document/time-derivation';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { AccountNameplate } from './account/account-nameplate';
 import { openCommandBar, type OpenLedgerContext } from './command-bar';
+import { openKeys } from './overlays/keys-sheet';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 /** R93/R107 — the six doors, sourced from the Studio Surface Registry: label,
  *  icon, and weight all come from one place now, so a rename or re-icon
@@ -131,6 +133,8 @@ function presenceSentence(others: string[]): string | null {
 export function StudioDrawer() {
   const router = useRouter();
   const pathname = usePathname();
+  // US-19 slice 1 — the printed `Keys ?` act, fail-closed.
+  const { value: askThePaperOn } = useFeatureFlag('ask-the-paper');
   const [openLedger, setOpenLedger] = useState<SheetKey | null>(null);
   const [booksOpen, setBooksOpen] = useState(false);
   const [recentBook, setRecentBook] = useState<SheetKey | null>(null);
@@ -454,6 +458,20 @@ export function StudioDrawer() {
               ⌘K
             </span>
           </button>
+          {/* US-19 D4 — `?` printed: its own act after `Find anything ⌘K`,
+              words and key at every width the drawer stands at. */}
+          {askThePaperOn && (
+            <button
+              type="button"
+              onClick={() => openKeys('drawer')}
+              className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+            >
+              <span>Keys</span>
+              <kbd className="rounded-[3px] border border-[var(--border-default)] px-1.5 py-px font-mono text-[12px] text-[var(--text-muted)]">
+                ?
+              </kbd>
+            </button>
+          )}
         </div>
 
         {/* Right — in-hand state, notifications, identity. */}

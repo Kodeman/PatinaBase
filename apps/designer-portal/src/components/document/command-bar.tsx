@@ -32,6 +32,7 @@ import { FolderPlus, History, Keyboard, LifeBuoy, Presentation, Type } from 'luc
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import {
   usePeopleDirectory,
+  useProjectFFEItems,
   useRecentBoards,
   type PeopleDirectoryRow,
   type RecentBoard,
@@ -65,9 +66,22 @@ import {
   STUDIO_LEDGERS,
   STUDIO_VERBS,
   boardsRoutePath,
+  matchPaperSynonyms,
   matchSurfaces,
   type StudioSurface,
 } from '@/lib/document/registry';
+import { NAMED_ACTS, ownAct } from '@/lib/document/act-names';
+import {
+  deriveLineStamp,
+  lineStampLabel,
+  type LineStampInput,
+} from '@/lib/document/stamp-derivation';
+import {
+  paperRegionsForSection,
+  regionHeadingId,
+  requestRegionUnfold,
+  type DocumentIndexKey,
+} from '@/lib/document/document-index';
 import { openDraftingRoom } from '@/lib/document/open-drafting-room';
 import {
   documentEvents,
@@ -127,11 +141,77 @@ type PaletteRow =
       match: string;
     }
   | { kind: 'person'; key: string; label: string; sub: string; run: () => void; match: string }
-  | { kind: 'engine'; key: string; label: string; sub: string; match: string };
+  | { kind: 'engine'; key: string; label: string; sub: string; match: string }
+  | {
+      // US-19 D4 — a line, region or reading on the paper in hand. `act` is
+      // the act Enter takes, printed `↵ {act}` at the row's end.
+      kind: 'paper';
+      key: string;
+      label: string;
+      sub: string;
+      act?: string;
+      run: () => void;
+      match: string;
+    };
 
 interface PaletteSection {
   eyebrow: string | null;
   rows: PaletteRow[];
+  /** US-19 D4 — a printed line above the rows (the dry query's sentence). */
+  note?: string;
+}
+
+/** US-19 slice 1 — ⌘K searches the open paper, fail-closed. */
+const ASK_THE_PAPER_FLAG = 'ask-the-paper';
+
+/** The FF&E row fields ⌘K reads off `useProjectFFEItems` (an untyped hook). */
+type PaperLine = LineStampInput & {
+  id: string;
+  name: string | null;
+  vendor_name: string | null;
+  po_number?: string | null;
+  doc_code?: string | null;
+  product?: { brand?: string | null } | null;
+  room?: { name?: string | null } | null;
+  purchase_order?: { po_number?: string | null; vendor_po_number?: string | null } | null;
+};
+
+/** D1's own act for a project paper with nothing to spec or release — the
+ *  dry query's first row. Read from act-names, never retyped. */
+const OPEN_THE_PIECES = ownAct('project', {
+  inquiryOpen: false,
+  firstMissingEssential: null,
+  proposalState: null,
+  clientFirstName: null,
+  unspecifiedCount: 0,
+  releaseEligible: false,
+  install: null,
+})!.label;
+
+/** The PO a line prints, in the Order cell's own precedence. */
+function linePoNumber(line: PaperLine): string | null {
+  const po = line.purchase_order;
+  return po?.po_number ?? po?.vendor_po_number ?? line.po_number ?? null;
+}
+
+/** Lift the in-hand paper's lines into the palette. A child, not a hook call
+ *  in `CommandBar`, so the query runs only while the flag is on and a project
+ *  paper is in hand — flag off, ⌘K fetches nothing new. Same arguments as
+ *  `FFESection`, so it reads that query's cache entry. */
+function PaperLinesSource({
+  projectId,
+  onLines,
+}: {
+  projectId: string;
+  onLines: (lines: { projectId: string; lines: PaperLine[] } | null) => void;
+}) {
+  const { data } = useProjectFFEItems(projectId, undefined, { withLifecycle: true }) as {
+    data: PaperLine[] | undefined;
+  };
+  useEffect(() => {
+    onLines(data ? { projectId, lines: data } : null);
+  }, [data, onLines, projectId]);
+  return null;
 }
 
 // The two context-boosted THIS-SURFACE icons, pulled from the registry so they
@@ -247,7 +327,8 @@ export const callSheetPending = { value: false };
    list it moves through, so the active row has to be NAMED (aria-activedescendant
    against these ids) rather than merely tinted; the arrow keys below are
    unchanged, and focus never leaves the input. */
-const optionId = (index: number) => `command-bar-option-${index}`;
+const OPTION_ID_PREFIX = 'command-bar-option-';
+const optionId = (index: number) => `${OPTION_ID_PREFIX}${index}`;
 
 /* The list is a DOM sibling of the input, so the active option is not a
    descendant of the element that holds focus. ARIA's containment rule for
@@ -283,10 +364,20 @@ export function CommandBar() {
   const { value: teachingNotesOn } = useFeatureFlag(TEACHING_SYSTEM_FLAG);
   // US-15 — "Bring in a deck", fail-closed on its own flag.
   const { value: deckImportOn } = useFeatureFlag(DECK_IMPORT_FLAG);
+  // US-19 D4 — ⌘K searches the open paper first. Fail-closed.
+  const { value: askThePaperOn } = useFeatureFlag(ASK_THE_PAPER_FLAG);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [asking, setAsking] = useState<string | null>(null);
+  // The in-hand paper's lines (PaperLinesSource), and whether the designer
+  // chose `Search all jobs` for this query — the studio-wide list, as today.
+  const [paperLines, setPaperLines] = useState<{
+    projectId: string;
+    lines: PaperLine[];
+  } | null>(null);
+  const [searchAll, setSearchAll] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
   // The recent-documents MRU (localStorage) — re-read on each open so a fresh
   // "Recent" group reflects where the designer has actually been.
   const [recent, setRecent] = useState<RecentDocumentInHand[]>([]);
@@ -349,6 +440,7 @@ export function CommandBar() {
       pendingQueryRef.current = null;
       setActive(0);
       setAsking(null);
+      setSearchAll(false);
       setRecent(readRecentDocumentsInHand());
       requestAnimationFrame(() => inputRef.current?.focus());
       return;
@@ -703,7 +795,30 @@ export function CommandBar() {
           match: 'add to project selection ffe furniture library product link import board need',
         }
       : null;
-    const addChangeRow: PaletteRow | null = inHandRow?.project_id &&
+    // US-19 D5 — under `ask-the-paper` the act is `Record a change`, offered at
+    // project as well as install and care, and it opens the router (SQ-1B
+    // listens) rather than the amendment sheet directly.
+    const addChangeRow: PaletteRow | null = askThePaperOn
+      ? inHandRow?.project_id &&
+        (inHandRow.active_section === 'project' ||
+          inHandRow.active_section === 'install' ||
+          inHandRow.active_section === 'care')
+        ? {
+            kind: 'verb',
+            key: 'record-a-change-here',
+            label: NAMED_ACTS.recordChange,
+            sub: 'on a piece or on the agreement',
+            icon: FolderPlus,
+            run: () =>
+              window.dispatchEvent(
+                new CustomEvent('document:open-record-a-change', {
+                  detail: { origin: 'cmdk' },
+                }),
+              ),
+            match: NAMED_ACTS.recordChange.toLowerCase(),
+          }
+        : null
+      : inHandRow?.project_id &&
       (inHandRow.active_section === 'install' || inHandRow.active_section === 'care')
       ? {
           kind: 'verb',
@@ -980,38 +1095,222 @@ export function CommandBar() {
       // to `No match`.
       const typedStageRows = stageRows.filter((r) => r.match.includes(q));
       matches = list.length + typedStageRows.length;
-
-      if (matches === 0) {
-        list.push({
-          kind: 'help',
-          key: 'help-center-recovery',
-          icon: LifeBuoy,
-          label: 'No match',
-          sub: 'Try the Help Center',
-          run: () => router.push('/help'),
-          match: '',
-        });
-      }
-      // R38: the ask is always offered for a non-empty query — destinations
-      // jump, a question asks. No mode.
-      list.push({
+      // The Engine's ask (R38), offered for every non-empty query.
+      const engineRow: PaletteRow = {
         kind: 'engine',
         key: 'engine',
         label: `Ask about “${query.trim()}”`,
         sub: 'ASK & PLACE',
         match: '',
-      });
-      sections = typedStageRows.length
-        ? [
-            { eyebrow: 'Where the work stands', rows: typedStageRows },
-            { eyebrow: null, rows: list },
-          ]
-        : [{ eyebrow: null, rows: list }];
+      };
+      // US-19 D4 — the dry query never prints Help alone: the recovery row is
+      // retired, and the Help Center stands last, after the rows that act.
+      const helpCenterRow = utilityRows.find((r) => r.key === 'help-center')!;
+
+      // US-19 D4 — with a project paper in hand, the paper answers first:
+      // `On this paper` → `Acts on this paper` → `Elsewhere` → Help, last.
+      // `Search all jobs` steps back to the studio-wide list below.
+      const paperProject = askThePaperOn && !searchAll ? inHandRow : null;
+      const paperProjectId = paperProject?.project_id ?? null;
+      if (paperProject && paperProjectId) {
+        const synonyms = matchPaperSynonyms(q);
+        const resolves = new Set(synonyms.map((group) => group.resolves));
+        const terms = [
+          q,
+          ...synonyms
+            .filter((group) => group.resolves === 'each-other')
+            .flatMap((group) => group.words),
+        ];
+        const hits = (text: string) => terms.some((term) => text.includes(term));
+        const lines = paperLines?.projectId === paperProjectId ? paperLines.lines : [];
+        const section = paperProject.active_section;
+
+        // A region head is `focusRegionHeading`'s target; ask the region to
+        // unfold, then land two frames later, once its body has painted.
+        const jumpToRegion = (key: DocumentIndexKey) => {
+          requestRegionUnfold(key);
+          const headingId = regionHeadingId(key, paperProjectId);
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              const heading = document.getElementById(headingId);
+              heading?.scrollIntoView?.({ block: 'start' });
+              heading?.focus({ preventScroll: true });
+            }),
+          );
+        };
+
+        const lineRows: PaletteRow[] = lines.flatMap((line) => {
+          const po = linePoNumber(line);
+          const maker = line.vendor_name ?? line.product?.brand ?? null;
+          const stampWord = lineStampLabel(deriveLineStamp(line).kind) || null;
+          const label = line.name ?? '';
+          const match = [label, maker, stampWord, po ? `po ${po}` : null, line.room?.name, line.doc_code]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          if (!hits(match) && !(po && resolves.has('open-the-order'))) return [];
+          return [
+            {
+              kind: 'paper' as const,
+              key: `paper-line:${line.id}`,
+              label,
+              sub: [maker, stampWord, po ? `PO ${po}` : null].filter(Boolean).join(' · '),
+              act: po ? NAMED_ACTS.openOrder : undefined,
+              // ffe-section.tsx listens: unfold the line, Order cell in view,
+              // focus on the PO.
+              run: () =>
+                window.dispatchEvent(
+                  new CustomEvent('document:focus-ffe-line', {
+                    detail: { itemId: String(line.id), cell: 'order' },
+                  }),
+                ),
+              match,
+            },
+          ];
+        });
+        // People on the job: a seat on this project, or the household itself.
+        const peopleOnJob = (people ?? []).filter(
+          (p) =>
+            p.project_id === paperProjectId ||
+            (p.role === 'client' && p.display_name === paperProject.client_name),
+        );
+        const personHits = peopleOnJob
+          .filter(
+            (p) =>
+              hits(`${p.display_name} ${p.role}`.toLowerCase()) ||
+              (resolves.has('household') && p.role === 'client'),
+          )
+          .map(personRow);
+        const regionRows: PaletteRow[] = paperRegionsForSection(section)
+          .filter(
+            (region) =>
+              hits(region.label.toLowerCase()) ||
+              (region.key === 'money' && resolves.has('money-acts')),
+          )
+          .map((region) => ({
+            kind: 'paper' as const,
+            key: `paper-region:${region.key}`,
+            label: region.label,
+            sub: 'this paper',
+            run: () => jumpToRegion(region.key),
+            match: region.label.toLowerCase(),
+          }));
+        const paperRows = [...lineRows, ...personHits, ...regionRows].slice(0, 5);
+
+        const hereKeys = new Set([
+          ...DOCUMENT_SCOPED_SURFACES.map((s) => `${s.key}-here`),
+          'add-to-project-here',
+          'record-a-change-here',
+        ]);
+        const acts: PaletteRow[] = [];
+        if (addChangeRow && (addChangeRow.match.includes(q) || resolves.has('record-a-change'))) {
+          acts.push(addChangeRow);
+        }
+        // `late · behind · ETA …` — the Install reading, on Install papers only.
+        // SQ-1C writes the reading; this lands on the Install head.
+        if (section === 'install' && (resolves.has('install-reading') || 'the install reading'.includes(q))) {
+          acts.push({
+            kind: 'paper',
+            key: 'paper-install-reading',
+            label: 'The install reading',
+            sub: 'where Install stands',
+            run: () =>
+              window.dispatchEvent(new CustomEvent('document:open-section', { detail: 'install' })),
+            match: 'the install reading',
+          });
+        }
+        acts.push(
+          ...list.filter((r) => hereKeys.has(r.key) && r.key !== 'record-a-change-here'),
+        );
+        const drawInvoiceLabel = `Draw an invoice · ${folderTab(paperProject)}`;
+        if (resolves.has('money-acts') || drawInvoiceLabel.toLowerCase().includes(q)) {
+          acts.push({
+            kind: 'verb',
+            key: 'draw-invoice-here',
+            label: drawInvoiceLabel,
+            sub: 'this household · pre-addressed',
+            icon: DRAW_INVOICE_ICON,
+            run: () => openInvoiceComposer({ projectId: paperProjectId }),
+            match: drawInvoiceLabel.toLowerCase(),
+          });
+        }
+
+        const onPaper = new Set(paperRows.map((r) => r.key));
+        const isHelp = (r: PaletteRow) => r.kind === 'help' || r.key === 'help-panel';
+        const helpRows = list.filter(isHelp);
+        const elsewhere = list.filter(
+          (r) => !hereKeys.has(r.key) && !onPaper.has(r.key) && !isHelp(r),
+        );
+        const dry = paperRows.length === 0 && acts.length === 0;
+        const typed = query.trim();
+        const searchAllRow: PaletteRow = {
+          kind: 'action',
+          key: 'search-all-jobs',
+          label: `Search all jobs for "${typed}"`,
+          sub: '',
+          run: () => setSearchAll(true),
+          match: '',
+        };
+
+        sections = [];
+        if (dry) {
+          sections.push({
+            eyebrow: null,
+            note: `Nothing on this paper matches "${typed}".`,
+            rows: [
+              {
+                kind: 'paper',
+                key: 'paper-open-pieces',
+                label: `${OPEN_THE_PIECES} · ${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`,
+                sub: '',
+                run: () => jumpToRegion('ffe'),
+                match: '',
+              },
+            ],
+          });
+        } else {
+          if (paperRows.length) {
+            sections.push({ eyebrow: `On this paper · ${paperProject.title}`, rows: paperRows });
+          }
+          if (acts.length) sections.push({ eyebrow: 'Acts on this paper', rows: acts });
+        }
+        sections.push({
+          eyebrow: 'Elsewhere',
+          rows: [searchAllRow, ...typedStageRows, ...elsewhere, engineRow],
+        });
+        const help = helpRows.length ? helpRows : dry ? [helpCenterRow] : [];
+        if (help.length) sections.push({ eyebrow: 'Help', rows: help });
+        matches =
+          paperRows.length + acts.length + typedStageRows.length + elsewhere.length + helpRows.length;
+      } else {
+        if (matches === 0 && !askThePaperOn) {
+          list.push({
+            kind: 'help',
+            key: 'help-center-recovery',
+            icon: LifeBuoy,
+            label: 'No match',
+            sub: 'Try the Help Center',
+            run: () => router.push('/help'),
+            match: '',
+          });
+        }
+        // R38: the ask is always offered for a non-empty query — destinations
+        // jump, a question asks. No mode.
+        list.push(engineRow);
+        if (matches === 0 && askThePaperOn) list.push(helpCenterRow);
+        sections = typedStageRows.length
+          ? [
+              { eyebrow: 'Where the work stands', rows: typedStageRows },
+              { eyebrow: null, rows: list },
+            ]
+          : [{ eyebrow: null, rows: list }];
+      }
     }
 
     let idx = 0;
     const renderedSections = sections.map((s) => ({
       eyebrow: s.eyebrow,
+      note: s.note,
       items: s.rows.map((row) => ({ row, index: idx++ })),
     }));
     return {
@@ -1033,6 +1332,9 @@ export function CommandBar() {
     testerNotesOn,
     teachingNotesOn,
     deckImportOn,
+    askThePaperOn,
+    paperLines,
+    searchAll,
   ]);
 
   // F1 — queried (debounced ~300ms, not per-keystroke) + zeroResult.
@@ -1061,6 +1363,12 @@ export function CommandBar() {
   const choose = (row: PaletteRow, index: number) => {
     if (row.kind === 'engine') {
       setAsking(query.trim()); // answer inline; don't close the bar
+      return;
+    }
+    if (row.key === 'search-all-jobs') {
+      // US-19 D4 — the studio-wide list for the same query; the bar stays.
+      row.run();
+      setActive(0);
       return;
     }
     documentEvents.commandBar.selected({
@@ -1121,6 +1429,13 @@ export function CommandBar() {
   };
 
   const renderTrailing = (row: PaletteRow) => {
+    if (row.kind === 'paper' && row.act) {
+      return (
+        <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          ↵ {row.act}
+        </span>
+      );
+    }
     if (row.kind === 'document' && row.hint) {
       return (
         <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
@@ -1141,6 +1456,40 @@ export function CommandBar() {
     return null;
   };
 
+  // US-19 D4 (ADV-40) — the sheet contains focus: Tab wraps inside the panel,
+  // and a result row that holds focus moves with ↑↓ like the input does.
+  const onPanelKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Tab') {
+      const focusables = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'input, button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+      return;
+    }
+    const target = e.target as HTMLElement;
+    if (target.getAttribute('role') !== 'option') return;
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const from = Number(target.id.slice(OPTION_ID_PREFIX.length));
+    const next =
+      e.key === 'ArrowDown'
+        ? Math.min(from + 1, flatRows.length - 1)
+        : Math.max(from - 1, 0);
+    setActive(next);
+    document.getElementById(optionId(next))?.focus();
+  };
+
   if (!open) return null;
 
   return (
@@ -1156,7 +1505,14 @@ export function CommandBar() {
         className="absolute inset-0 cursor-default bg-[rgba(44,41,38,0.45)]"
         onClick={() => setOpen(false)}
       />
-      <div className="relative w-[min(560px,92vw)] overflow-hidden rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)]">
+      <div
+        ref={dialogRef}
+        onKeyDown={askThePaperOn ? onPanelKeyDown : undefined}
+        className="relative w-[min(560px,92vw)] overflow-hidden rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)]"
+      >
+        {askThePaperOn && inHandRow?.project_id && (
+          <PaperLinesSource projectId={inHandRow.project_id} onLines={setPaperLines} />
+        )}
         {/* B03 — the pattern completed. A textbox that names an active option
             in a list it controls IS a combobox; without the role, expanded
             state and autocomplete behaviour, a screen reader announces a plain
@@ -1182,6 +1538,7 @@ export function CommandBar() {
             setQuery(e.target.value);
             setActive(0);
             if (asking) setAsking(null);
+            if (searchAll) setSearchAll(false);
           }}
           onKeyDown={(e) => {
             if (asking) {
@@ -1239,6 +1596,11 @@ export function CommandBar() {
                       {section.eyebrow}
                     </div>
                   )}
+                  {section.note && (
+                    <p className="px-4 pb-1 pt-3 text-[13px] text-[var(--color-charcoal)]">
+                      {section.note}
+                    </p>
+                  )}
                   <ul role="presentation">
                     {section.items.map(({ row, index }) => (
                       <li key={row.key} role="presentation">
@@ -1271,6 +1633,13 @@ export function CommandBar() {
               ))}
             </div>
           </div>
+        )}
+        {/* US-19 D4 — `?` printed in the foot line. The `?` key itself is
+            KeysShortcut's, which never fires in a field or an open dialog. */}
+        {askThePaperOn && (
+          <p className="border-t border-[var(--color-pearl)] px-4 py-2 font-mono text-[11px] tracking-[0.06em] text-[var(--text-muted)]">
+            ↵ open · ↑↓ move · ? keys · esc close
+          </p>
         )}
       </div>
     </div>

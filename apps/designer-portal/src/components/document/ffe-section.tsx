@@ -1460,6 +1460,40 @@ function FFESectionBody({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [choosingPiece]);
+  // US-19 D4 — ⌘K lands on a line in place. `?ffeItemId=` is read on mount
+  // only, so a paper already open hears this event instead: unfold the line,
+  // bring its Order cell into view, and put focus there (the PO prints in it).
+  // The cell mounts with the unfolded line, so the landing waits for it.
+  useEffect(() => {
+    const onFocusLine = (event: Event) => {
+      const detail = (event as CustomEvent<{ itemId?: string; cell?: string }>).detail;
+      const itemId = detail?.itemId;
+      if (!itemId || !(items ?? []).some((item) => String(item.id) === itemId)) return;
+      setOpenLineId(itemId);
+      if (mode === 'project') ffeSetFolded(false);
+      let waited = 0;
+      const land = () => {
+        const line = document.getElementById(`ffe-selection-${itemId}`);
+        const cell =
+          detail?.cell === 'order'
+            ? line?.querySelector<HTMLElement>('[data-testid="line-po-cell"]')
+            : null;
+        if (!cell && waited++ < 10) {
+          requestAnimationFrame(land);
+          return;
+        }
+        const target = cell ?? line;
+        if (!target) return;
+        if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        target.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+        target.focus({ preventScroll: true });
+      };
+      requestAnimationFrame(() => requestAnimationFrame(land));
+    };
+    window.addEventListener('document:focus-ffe-line', onFocusLine);
+    return () => window.removeEventListener('document:focus-ffe-line', onFocusLine);
+  }, [items, mode, ffeSetFolded]);
   const ffeHeadingId = `ffe-region-heading-${projectId}`;
   const ffeMovementId = `ffe-movement-${projectId}`;
   const ffeBodyId = `ffe-region-body-${projectId}`;

@@ -38,8 +38,9 @@ export const KEYS_SHEET_EVENT = 'document:open-keys';
  *  never calls `openKeys()`). The contextual panel's "The keys" link
  *  (`PanelKeysBlock`) is a bare route link by design (it opens the article,
  *  not this sheet) and so carries no source of its own — cross-lane review
- *  2026-09-03, F2. */
-export type KeysOpenSource = 'key' | 'palette' | 'help_center';
+ *  2026-09-03, F2. US-19 D4 adds the Studio Drawer's printed `Keys ?` act
+ *  (`drawer`), behind `ask-the-paper`. */
+export type KeysOpenSource = 'key' | 'palette' | 'help_center' | 'drawer';
 
 export interface OpenKeysEventDetail {
   source: KeysOpenSource;
