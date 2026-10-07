@@ -28,6 +28,12 @@
 --   C1  the substitution copy follows the exception: price change, backorder.
 --   D1  drafts are claimed before they are sent; one claim at a time; only
 --       the claimer marks or releases; the service path may release.
+-- 00720 (SQ-451):
+--   G4  a carrier payment leaves the payment schedule editable.
+--   G5  a stale claim is freed by another studio member, never a fresh one,
+--       never by a stranger; with a send on record it is completed, not
+--       freed; the sweep completes or returns stalled sends.
+--   G7  a job-site shipment composes no receiver notice (null).
 --
 -- How to run (local stack):
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -195,6 +201,33 @@ VALUES
   ('70718000-0000-4000-8000-000000000702', '70718000-0000-4000-8000-0000000000f1', '70718000-0000-4000-8000-000000000001', 'ack_chase',
    '70718000-0000-4000-8000-000000000103', 'orders@sq447-workroom.test.invalid', 'PO 103: please confirm', 'Hello,\n\nPlease confirm.');
 
+-- Drafts claimed by M for sending (G5). Inserted, so updated_at is as given:
+--   703 stale, nothing logged          (release)
+--   704 stale, a send logged           (release refused, complete)
+--   705 stale, nothing logged          (complete refused)
+--   706 stale, a send logged           (sweep → sent)
+--   707 stale, only a failed send      (sweep → awaiting_review)
+--   708 fresh                          (release refused)
+INSERT INTO procurement_drafts (id, organization_id, project_id, kind, purchase_order_id, to_email, subject, body, status, sent_by, updated_at)
+SELECT ('70718000-0000-4000-8000-000000000' || n)::uuid, '70718000-0000-4000-8000-0000000000f1', '70718000-0000-4000-8000-000000000001',
+       'ack_chase', '70718000-0000-4000-8000-000000000102', 'orders@sq447-workroom.test.invalid', 'PO 102: please confirm',
+       'Hello,\n\nPlease confirm.', 'sending', '70718000-0000-4000-8000-0000000000a2',
+       CASE WHEN n = '708' THEN now() ELSE now() - interval '20 minutes' END
+  FROM unnest(ARRAY['703', '704', '705', '706', '707', '708']) AS n;
+
+INSERT INTO notification_log (user_id, type, channel, status, ref_type, ref_id, provider_id, recipient, created_at)
+VALUES
+  (NULL, 'procurement_draft', 'email', 'sent',   'procurement_draft', '70718000-0000-4000-8000-000000000704', 're_sq451_704',
+   'orders@sq447-workroom.test.invalid', now() - interval '19 minutes'),
+  (NULL, 'procurement_draft', 'email', 'sent',   'procurement_draft', '70718000-0000-4000-8000-000000000706', 're_sq451_706',
+   'orders@sq447-workroom.test.invalid', now() - interval '18 minutes'),
+  (NULL, 'procurement_draft', 'email', 'failed', 'procurement_draft', '70718000-0000-4000-8000-000000000707', NULL,
+   'orders@sq447-workroom.test.invalid', now() - interval '18 minutes');
+
+-- A shipment on PO 102, which ships to the job site (G7).
+INSERT INTO po_shipments (id, purchase_order_id, shipped_on)
+VALUES ('70718000-0000-4000-8000-000000000062', '70718000-0000-4000-8000-000000000102', CURRENT_DATE);
+
 -- Runs p_sql and returns the SQLSTATE + message it raised, or NULL.
 CREATE OR REPLACE FUNCTION pg_temp.raised(p_sql text)
 RETURNS text AS $$
@@ -298,7 +331,13 @@ BEGIN
   PERFORM public.resolve_ack_line(v_line, 'accepted');
   SELECT * INTO v_item FROM public.project_ffe_items WHERE id = '70718000-0000-4000-8000-000000000231';
   ASSERT v_item.trade_price_cents = 32000, 'FAIL M2c: the price change is accepted, got ' || v_item.trade_price_cents;
-  RAISE NOTICE 'M2 passed: payee recorded; refund cap and price block count the vendor only';
+
+  -- G4 (00720): a carrier payment leaves the schedule editable.
+  PERFORM public.update_po_payment_schedule('70718000-0000-4000-8000-000000000103',
+    '{"payments": [{"id": "70718000-0000-4000-8000-000000000031", "amountCents": 16000}]}');
+  ASSERT (SELECT amount_cents FROM public.po_payments WHERE id = '70718000-0000-4000-8000-000000000031') = 16000,
+    'FAIL G4: a carrier payment does not lock the schedule';
+  RAISE NOTICE 'M2 passed: payee recorded; refund cap, price block and schedule lock count the vendor only';
 END;
 $$;
 
@@ -540,12 +579,77 @@ BEGIN
 END;
 $$;
 
-RESET ROLE;
+-- ─── G5. A stalled send is freed or completed ──────────────────────────────
 
 DO $$
 DECLARE
   v_err   text;
   v_draft public.procurement_drafts%ROWTYPE;
+BEGIN
+  -- A stranger is refused, stale or fresh.
+  PERFORM pg_temp.act('70718000-0000-4000-8000-0000000000a4');
+  v_err := pg_temp.raised($q$SELECT public.release_procurement_draft_claim('70718000-0000-4000-8000-000000000703')$q$);
+  ASSERT v_err LIKE '42501 %', 'FAIL G5: a stranger cannot release a stale claim, got ' || COALESCE(v_err, 'no error');
+  v_err := pg_temp.raised($q$SELECT public.release_procurement_draft_claim('70718000-0000-4000-8000-000000000708')$q$);
+  ASSERT v_err LIKE '42501 %', 'FAIL G5: a stranger cannot release a fresh claim, got ' || COALESCE(v_err, 'no error');
+  v_err := pg_temp.raised($q$SELECT public.complete_procurement_draft_send('70718000-0000-4000-8000-000000000704')$q$);
+  ASSERT v_err LIKE '42501 %', 'FAIL G5: a stranger cannot complete, got ' || COALESCE(v_err, 'no error');
+
+  -- Another studio member (O) frees a stale claim, never a fresh one.
+  PERFORM pg_temp.act('70718000-0000-4000-8000-0000000000a1');
+  v_err := pg_temp.raised($q$SELECT public.release_procurement_draft_claim('70718000-0000-4000-8000-000000000708')$q$);
+  ASSERT v_err LIKE '42501 %', 'FAIL G5: a fresh claim is the claimer''s, got ' || COALESCE(v_err, 'no error');
+  v_draft := public.release_procurement_draft_claim('70718000-0000-4000-8000-000000000703');
+  ASSERT v_draft.status = 'awaiting_review' AND v_draft.sent_by IS NULL, 'FAIL G5: a stale claim is freed, got ' || v_draft.status;
+
+  -- With a send on record, release refuses and complete marks it sent.
+  v_err := pg_temp.raised($q$SELECT public.release_procurement_draft_claim('70718000-0000-4000-8000-000000000704')$q$);
+  ASSERT v_err LIKE '23514 draft_send_on_record:%', 'FAIL G5: a sent email is not put back, got ' || COALESCE(v_err, 'no error');
+  v_draft := public.complete_procurement_draft_send('70718000-0000-4000-8000-000000000704');
+  ASSERT v_draft.status = 'sent' AND v_draft.sent_by = '70718000-0000-4000-8000-0000000000a2'
+     AND v_draft.sent_at = now() - interval '19 minutes' AND v_draft.message_id = 're_sq451_704',
+    'FAIL G5: completed as sent by the claimer at the log time, got ' || v_draft.status;
+
+  -- Without one, complete refuses; a fresh claim is not a stalled send.
+  v_err := pg_temp.raised($q$SELECT public.complete_procurement_draft_send('70718000-0000-4000-8000-000000000705')$q$);
+  ASSERT v_err LIKE '23514 draft_send_not_on_record:%', 'FAIL G5: no send on record, got ' || COALESCE(v_err, 'no error');
+  ASSERT (SELECT status FROM public.procurement_drafts WHERE id = '70718000-0000-4000-8000-000000000705') = 'sending',
+    'FAIL G5: a refused complete changes nothing';
+  PERFORM pg_temp.act('70718000-0000-4000-8000-0000000000a2');
+  v_err := pg_temp.raised($q$SELECT public.complete_procurement_draft_send('70718000-0000-4000-8000-000000000708')$q$);
+  ASSERT v_err LIKE '23514 %not a stalled send%', 'FAIL G5: a fresh claim is not completed, got ' || COALESCE(v_err, 'no error');
+  RAISE NOTICE 'G5 passed (authenticated part): stale claims freed or completed by the studio';
+END;
+$$;
+
+-- ─── G7. A job-site shipment composes no receiver notice ───────────────────
+
+DO $$
+DECLARE
+  v_err   text;
+  v_draft public.procurement_drafts%ROWTYPE;
+BEGIN
+  PERFORM pg_temp.act('70718000-0000-4000-8000-0000000000a4');
+  v_err := pg_temp.raised($q$SELECT public.compose_receiver_inbound_draft('70718000-0000-4000-8000-000000000062')$q$);
+  ASSERT v_err LIKE '42501 %', 'FAIL G7: the gate still raises, got ' || COALESCE(v_err, 'no error');
+
+  PERFORM pg_temp.act('70718000-0000-4000-8000-0000000000a2');
+  v_draft := public.compose_receiver_inbound_draft('70718000-0000-4000-8000-000000000062');
+  ASSERT v_draft.id IS NULL, 'FAIL G7: no receiver composes to null';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.procurement_drafts
+                      WHERE purchase_order_id = '70718000-0000-4000-8000-000000000102' AND kind = 'receiver_inbound_notice'),
+    'FAIL G7: no notice drafted';
+  RAISE NOTICE 'G7 passed: a job-site shipment composes no receiver notice';
+END;
+$$;
+
+RESET ROLE;
+
+DO $$
+DECLARE
+  v_err    text;
+  v_draft  public.procurement_drafts%ROWTYPE;
+  v_detail jsonb;
 BEGIN
   -- The service path marks only the claimer's claimed draft.
   v_err := pg_temp.raised($q$SELECT public.mark_procurement_draft_sent('70718000-0000-4000-8000-000000000701', '70718000-0000-4000-8000-0000000000a1')$q$);
@@ -567,7 +671,28 @@ BEGIN
   v_err := pg_temp.raised($q$SELECT public.mark_procurement_draft_sent('70718000-0000-4000-8000-000000000702', '70718000-0000-4000-8000-0000000000a2')$q$);
   ASSERT v_err LIKE '23514 %claim it for sending first%', 'FAIL D1: mark before claim, got ' || COALESCE(v_err, 'no error');
 
+  -- G5: the sweep settles stalled sends (705, 706, 707; 708 is fresh).
+  v_detail := public.sweep_procurement_clocks();
+  ASSERT (v_detail->>'draft_send_stalled')::int >= 3, 'FAIL G5: stalled sends counted, got ' || v_detail::text;
+  SELECT * INTO v_draft FROM public.procurement_drafts WHERE id = '70718000-0000-4000-8000-000000000706';
+  ASSERT v_draft.status = 'sent' AND v_draft.sent_by = '70718000-0000-4000-8000-0000000000a2'
+     AND v_draft.sent_at = now() - interval '18 minutes' AND v_draft.message_id = 're_sq451_706',
+    'FAIL G5: the sweep completes a logged send, got ' || v_draft.status;
+  SELECT * INTO v_draft FROM public.procurement_drafts WHERE id = '70718000-0000-4000-8000-000000000707';
+  ASSERT v_draft.status = 'awaiting_review' AND v_draft.sent_by IS NULL,
+    'FAIL G5: a failed send goes back to review, got ' || v_draft.status;
+  SELECT * INTO v_draft FROM public.procurement_drafts WHERE id = '70718000-0000-4000-8000-000000000705';
+  ASSERT v_draft.status = 'awaiting_review', 'FAIL G5: an unlogged send goes back to review, got ' || v_draft.status;
+  SELECT * INTO v_draft FROM public.procurement_drafts WHERE id = '70718000-0000-4000-8000-000000000708';
+  ASSERT v_draft.status = 'sending', 'FAIL G5: a fresh claim is left alone, got ' || v_draft.status;
+
   -- Grants.
+  ASSERT has_function_privilege('authenticated', 'public.complete_procurement_draft_send(uuid)', 'EXECUTE')
+     AND NOT has_function_privilege('anon', 'public.complete_procurement_draft_send(uuid)', 'EXECUTE'),
+    'FAIL G5: complete is for authenticated, not anon';
+  ASSERT NOT has_function_privilege('authenticated', 'public._procurement_draft_send_on_record(uuid)', 'EXECUTE')
+     AND NOT has_function_privilege('anon', 'public._procurement_draft_send_on_record(uuid)', 'EXECUTE'),
+    'FAIL G5: the send record lookup is service-side only';
   ASSERT has_function_privilege('authenticated', 'public.claim_procurement_draft_for_send(uuid)', 'EXECUTE')
      AND NOT has_function_privilege('anon', 'public.claim_procurement_draft_for_send(uuid)', 'EXECUTE'),
     'FAIL D1: claim is for authenticated, not anon';

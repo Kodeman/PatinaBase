@@ -580,9 +580,9 @@ export function useRecordPoShipment(options?: ErrorSurfaceOptions) {
       if (error) throw error;
       const shipment = data as PoShipmentRow;
       // C-26/C-28: a new shipment drafts the inbound notice to the PO's
-      // receiver. It lands awaiting_review and never sends on its own. The
-      // composer refuses a PO with no receiver; any refusal leaves the
-      // shipment recorded, and the notice can still be composed on demand.
+      // receiver. It lands awaiting_review and never sends on its own. A PO
+      // that ships to the job site composes nothing (00720); any refusal
+      // leaves the shipment recorded, and the notice can be composed on demand.
       if (!request.id) {
         await supabase.rpc('compose_receiver_inbound_draft', { p_shipment_id: shipment.id });
       }
@@ -760,19 +760,23 @@ export type ProcurementDraftKind =
 /** sending: claimed by a send in flight (00718); not editable, not sendable. */
 export type ProcurementDraftStatus = 'awaiting_review' | 'sending' | 'sent' | 'discarded';
 
-/** A project's procurement drafts, newest first; pass status to narrow. */
+/** A draft a member still acts on: awaiting review, or claimed by a send (00720: a stalled one is freed). */
+export const OPEN_PROCUREMENT_DRAFT_STATUSES: readonly ProcurementDraftStatus[] = ['awaiting_review', 'sending'];
+
+/** A project's procurement drafts, newest first; pass a status (or several) to narrow. */
 export function useProcurementDrafts(
   projectId: string | null | undefined,
-  status?: ProcurementDraftStatus,
+  status?: ProcurementDraftStatus | readonly ProcurementDraftStatus[],
 ) {
+  const statuses = status === undefined ? null : typeof status === 'string' ? [status] : [...status];
   return useQuery({
-    queryKey: [...buyingPhase2Keys.drafts(projectId ?? ''), status ?? 'all'],
+    queryKey: [...buyingPhase2Keys.drafts(projectId ?? ''), statuses?.join(',') ?? 'all'],
     queryFn: async (): Promise<ProcurementDraftRow[]> => {
       let query = getSupabase()
         .from('procurement_drafts')
         .select('*')
         .eq('project_id', projectId as string);
-      if (status) query = query.eq('status', status);
+      if (statuses) query = query.in('status', statuses);
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as ProcurementDraftRow[];
@@ -827,23 +831,50 @@ export function useSendProcurementDraft(options?: ErrorSurfaceOptions) {
   const queryClient = useQueryClient();
   return useMutation({
     meta: errorMeta(options),
+    mutationFn: sendProcurementDraft,
+    onSettled: () => invalidateDrafts(queryClient),
+  });
+}
+
+async function sendProcurementDraft(draftId: string): Promise<{ draftId: string; messageId: string | null }> {
+  const { data, error } = await getSupabase().functions.invoke('procurement-draft-send', {
+    body: { draftId },
+  });
+  if (error) {
+    // A non-2xx arrives as FunctionsHttpError with the raw Response as context.
+    let message = error.message || 'The draft could not be sent.';
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const body = await (error as any).context?.json?.();
+      if (body?.detail || body?.error) message = body.detail ?? body.error;
+    } catch {
+      /* keep the default message */
+    }
+    throw new Error(message);
+  }
+  return data as { draftId: string; messageId: string | null };
+}
+
+/**
+ * 00720 (G5): send again a draft whose send stalled (claimed over 10 minutes
+ * ago). Frees the claim, then sends as useSendProcurementDraft does. When the
+ * email is already on record the claim is not freed: the draft is completed
+ * as sent instead, and nothing goes out twice.
+ */
+export function useResendStalledProcurementDraft(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
     mutationFn: async (draftId: string): Promise<{ draftId: string; messageId: string | null }> => {
-      const { data, error } = await getSupabase().functions.invoke('procurement-draft-send', {
-        body: { draftId },
-      });
-      if (error) {
-        // A non-2xx arrives as FunctionsHttpError with the raw Response as context.
-        let message = error.message || 'The draft could not be sent.';
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const body = await (error as any).context?.json?.();
-          if (body?.detail || body?.error) message = body.detail ?? body.error;
-        } catch {
-          /* keep the default message */
-        }
-        throw new Error(message);
+      const supabase = getSupabase();
+      const released = await supabase.rpc('release_procurement_draft_claim', { p_draft_id: draftId });
+      if (released.error) {
+        if (!released.error.message?.startsWith('draft_send_on_record')) throw released.error;
+        const { data, error } = await supabase.rpc('complete_procurement_draft_send', { p_draft_id: draftId });
+        if (error) throw error;
+        return { draftId, messageId: (data as ProcurementDraftRow).message_id };
       }
-      return data as { draftId: string; messageId: string | null };
+      return sendProcurementDraft(draftId);
     },
     onSettled: () => invalidateDrafts(queryClient),
   });

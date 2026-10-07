@@ -320,6 +320,8 @@ export interface DeskDraftSignal {
   subject: string;
   body: string;
   created_at: string;
+  /** While sending, the claim time (00720: a stalled send offers Send again). */
+  updated_at?: string;
 }
 
 /** Which Desk need a draft rides: the act it answers. */

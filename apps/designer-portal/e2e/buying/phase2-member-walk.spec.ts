@@ -297,9 +297,6 @@ function watchFailures(page: Page, failures: string[]): void {
       .text()
       .catch(() => "")
       .then((body) => {
-        // useRecordPoShipment always tries the receiver's inbound notice and
-        // drops the refusal by design; this walk's PO ships to the job site.
-        if (body.includes("does not ship to a receiver")) return;
         failures.push(
           `${response.status()} ${new URL(url).pathname} ${body.slice(0, 300)}`,
         );
