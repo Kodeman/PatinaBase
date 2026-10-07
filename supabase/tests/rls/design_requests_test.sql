@@ -296,12 +296,15 @@ BEGIN
 
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000001');
 
-  -- no_scans
+  -- Empty scan set is a roomless request, not an error: 00314
+  -- (design_request_submit_roomless) deliberately dropped the no_scans raise,
+  -- and 00567 kept that. The sentinel rolls the accepted submit back so later
+  -- cases see an unchanged fixture.
   BEGIN
     PERFORM public.submit_design_request(ARRAY[]::uuid[], 'full_room');
-    v_err := '<none>';
+    RAISE EXCEPTION 'roomless_accepted';
   EXCEPTION WHEN OTHERS THEN v_err := SQLERRM; END;
-  ASSERT v_err = 'no_scans', 'FAIL 3b: expected no_scans, got ' || v_err;
+  ASSERT v_err = 'roomless_accepted', 'FAIL 3b: an empty scan set should submit roomless, got ' || v_err;
 
   -- primary_not_in_set
   BEGIN

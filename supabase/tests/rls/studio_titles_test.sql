@@ -161,13 +161,31 @@ BEGIN
 END
 $$;
 
--- ─── (f): 00319 guard still blocks demoting the sole active owner ──────────
+-- ─── (f): the sole active owner cannot be demoted ──────────────────────────
+-- 00484_public_rpc_authorization_contract.sql deliberately recreated
+-- "Org admins can update members" with `role <> 'owner'` in USING, so an
+-- authenticated direct UPDATE of an owner row now matches 0 rows at the RLS
+-- layer (owner transitions go through transfer_studio_ownership only). (f1)
+-- pins that boundary; (f2) proves the 00319/00484 guard trigger still raises
+-- last_owner_protected underneath it when RLS is not in the way.
 DO $$
 DECLARE
   v_raised BOOLEAN := false;
+  v_rows INTEGER;
   v_role TEXT;
 BEGIN
   PERFORM pg_temp.assume_user('5e570000-0000-4000-8000-000000000001');
+  UPDATE organization_members
+  SET role = 'member'
+  WHERE id = '5e570000-0000-4000-8000-0000000000c1';
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  PERFORM pg_temp.reset_role();
+
+  ASSERT v_rows = 0, 'FAIL f1: an authenticated direct UPDATE of the owner row should update 0 rows (00484 policy), got ' || v_rows;
+
+  -- Table-owner session (RLS bypassed, not service_role) carrying the owner's JWT.
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', '5e570000-0000-4000-8000-000000000001', 'role', 'authenticated')::text, true);
   BEGIN
     UPDATE organization_members
     SET role = 'member'
@@ -179,9 +197,9 @@ BEGIN
       RAISE;
     END IF;
   END;
-  PERFORM pg_temp.reset_role();
+  PERFORM set_config('request.jwt.claims', NULL, true);
 
-  ASSERT v_raised, 'FAIL f: demoting the sole active owner should raise last_owner_protected';
+  ASSERT v_raised, 'FAIL f2: demoting the sole active owner should raise last_owner_protected';
 
   SELECT role INTO v_role FROM organization_members WHERE id = '5e570000-0000-4000-8000-0000000000c1';
   ASSERT v_role = 'owner', 'FAIL f2: owner row should still read role=owner, got ' || v_role;

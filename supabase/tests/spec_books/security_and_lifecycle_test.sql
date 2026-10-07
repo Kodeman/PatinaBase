@@ -24,10 +24,20 @@ VALUES
   ('5b000000-0000-4000-8000-000000000003', 'spec-client@test.invalid', 'Spec Client', now(), now())
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
 
+-- 00511_public_sd_hardening.sql binds prepare_spec_book_issue to an active
+-- project in an active design_studio whose lead holds an active seat, so the
+-- owner's project needs a studio.
+INSERT INTO public.organizations (id, type, name, slug)
+VALUES ('5b000000-0000-4000-8000-0000000000a1', 'design_studio', 'Spec Studio', 'spec-studio-test');
+INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+VALUES ('5b000000-0000-4000-8000-000000000001', '5b000000-0000-4000-8000-0000000000a1', 'owner', 'active', now());
+
 INSERT INTO public.projects (id, name, designer_id, client_id, created_by)
 VALUES
   ('5b000000-0000-4000-8000-000000000101', 'Spec Project', '5b000000-0000-4000-8000-000000000001', '5b000000-0000-4000-8000-000000000003', '5b000000-0000-4000-8000-000000000001'),
   ('5b000000-0000-4000-8000-000000000102', 'Foreign Project', '5b000000-0000-4000-8000-000000000002', NULL, '5b000000-0000-4000-8000-000000000002');
+UPDATE public.projects SET studio_id = '5b000000-0000-4000-8000-0000000000a1'
+WHERE id = '5b000000-0000-4000-8000-000000000101';
 
 INSERT INTO public.project_rooms (id, project_id, name, sort_order)
 VALUES
@@ -116,6 +126,8 @@ BEGIN
   PERFORM set_config('request.jwt.claims', NULL, true);
 END;
 $$;
+-- Called while SET LOCAL ROLE authenticated is in force (pg_temp family).
+GRANT EXECUTE ON FUNCTION pg_temp.reset_user_role() TO PUBLIC;
 
 DO $$
 DECLARE
@@ -151,15 +163,20 @@ BEGIN
     'public.prepare_spec_book_issue(uuid,text[],text,text,uuid,text,jsonb)',
     'EXECUTE'
   ), 'authenticated must execute prepare';
+  -- Shipped boundary: 00380 and 00403 grant finalize to authenticated and gate
+  -- the caller in the body (design-studio co-member, every artifact durable);
+  -- the outsider block below pins that refusal. The service_role-only grant
+  -- this file once asserted came from the SD caller hardening that b5f1c9599
+  -- deferred to a follow-on by ruling; it never shipped.
   ASSERT NOT has_function_privilege(
-    'authenticated',
+    'anon',
     'public.finalize_spec_book_issue(uuid)',
     'EXECUTE'
   ) AND has_function_privilege(
     'service_role',
     'public.finalize_spec_book_issue(uuid)',
     'EXECUTE'
-  ), 'only service_role may finalize rendered issues';
+  ), 'anon must not finalize; service_role must finalize rendered issues';
   ASSERT NOT has_function_privilege(
     'anon',
     'public.resolve_spec_book_share(text)',
@@ -206,7 +223,10 @@ BEGIN
     'seating',
     '{"client":"chrome","captureId":"cap-1"}'::jsonb
   );
-  ASSERT v_place->>'placement' = 'filled_slot', 'existing slot must be filled';
+  -- 00439 (then 00441) re-pointed this N-1 RPC at place_product_in_project_v2,
+  -- whose receipt is {outcome: filled|created|reused, selectionId}; the old
+  -- {placement, ffeItemId} keys are gone.
+  ASSERT v_place->>'outcome' = 'filled', 'existing slot must be filled';
   ASSERT (
     SELECT product_id = '5b000000-0000-4000-8000-000000000401'
     FROM public.project_ffe_items
@@ -221,8 +241,8 @@ BEGIN
     'seating',
     '{"client":"field","captureId":"cap-2"}'::jsonb
   );
-  v_second_item := (v_place->>'ffeItemId')::uuid;
-  ASSERT v_place->>'placement' = 'created_line', 'NULL slot must create a line';
+  v_second_item := (v_place->>'selectionId')::uuid;
+  ASSERT v_place->>'outcome' = 'created', 'NULL slot must create a line';
   ASSERT v_second_item <> '5b000000-0000-4000-8000-000000000501',
     'duplicate product use must remain a distinct project selection';
   ASSERT (
@@ -243,7 +263,10 @@ BEGIN
       NULL,
       '{}'::jsonb
     );
-  EXCEPTION WHEN unique_violation THEN
+  -- 00435's v2 path refuses an occupied placeholder up front with
+  -- 'placeholder is unavailable or already filled' (class 23, 23000) before
+  -- any unique index can fire, so catch the class rather than 23505.
+  EXCEPTION WHEN integrity_constraint_violation THEN
     v_raised := true;
   END;
   ASSERT v_raised, 'occupied slot must reject a second placement';
@@ -258,7 +281,8 @@ BEGIN
       NULL,
       '{}'::jsonb
     );
-  EXCEPTION WHEN check_violation THEN
+  -- 00435's v2 path raises 'room does not belong to project' as 23000.
+  EXCEPTION WHEN integrity_constraint_violation THEN
     v_raised := true;
   END;
   ASSERT v_raised, 'foreign-project room must be rejected';
@@ -822,6 +846,16 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN v_raised := true;
   END;
   ASSERT v_raised, 'non-owner must not prepare another project book';
+
+  v_raised := false;
+  BEGIN
+    PERFORM public.finalize_spec_book_issue(
+      (SELECT id FROM public.spec_book_revisions
+       WHERE spec_book_id = v_book_id AND idempotency_key = 'issue-2-addendum')
+    );
+  EXCEPTION WHEN insufficient_privilege THEN v_raised := true;
+  END;
+  ASSERT v_raised, 'non-owner must not finalize another project issue';
 
   v_raised := false;
   BEGIN

@@ -137,15 +137,18 @@ BEGIN
     jsonb_build_object('role', 'service_role')::text,
     true
   );
+  -- Shipped boundary: 00392 and 00554 grant EXECUTE to service_role and admit
+  -- it in the body ("Creator/admin/service-only", 00554's COMMENT). The
+  -- service_role denial this file once asserted came from
+  -- 00486_public_sd_caller_hardening, which b5f1c9599 deferred by ruling and
+  -- which never shipped.
   EXECUTE 'SET LOCAL ROLE service_role';
-  BEGIN
-    PERFORM 1
-    FROM public.get_ab_variant_stats(v_campaign_id);
-    RAISE EXCEPTION 'active service role must not read user-owned campaign analytics';
-  EXCEPTION
-    WHEN insufficient_privilege THEN NULL;
-  END;
+  SELECT stats.sent INTO v_sent
+  FROM public.get_ab_variant_stats(v_campaign_id) AS stats
+  WHERE stats.variant = 'a';
   EXECUTE 'RESET ROLE';
+  ASSERT v_sent = 2,
+    format('service role must read the same variant a census, got %s', v_sent);
 
   ASSERT NOT has_function_privilege('anon', 'public.get_ab_variant_stats(uuid)', 'EXECUTE'),
     'anon must not execute campaign analytics';
@@ -154,11 +157,11 @@ BEGIN
     'public.get_ab_variant_stats(uuid)',
     'EXECUTE'
   ), 'authenticated campaign consumers must retain execute';
-  ASSERT NOT has_function_privilege(
+  ASSERT has_function_privilege(
     'service_role',
     'public.get_ab_variant_stats(uuid)',
     'EXECUTE'
-  ), 'service role must not execute user-owned campaign analytics';
+  ), 'service role retains execute (00554)';
 
   SELECT pg_get_expr(index_row.indpred, index_row.indrelid)
   INTO v_index_predicate

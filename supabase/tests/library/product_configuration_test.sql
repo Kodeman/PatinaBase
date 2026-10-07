@@ -485,7 +485,9 @@ BEGIN
     '4c000000-0000-4000-8000-000000000030', v_custom_config_id,
     NULL, NULL, 'casework', '{"client":"test"}'
   );
-  v_item_id := (v_place->>'ffeItemId')::uuid;
+  -- The receipt is the v2 placement receipt since 00439 ({outcome,
+  -- selectionId}); 00722 made the configured path bind and lock through it.
+  v_item_id := (v_place->>'selectionId')::uuid;
   ASSERT (SELECT configuration_locked_at IS NOT NULL
             AND configuration_snapshot_hash = (SELECT snapshot_hash FROM public.product_configurations WHERE id = v_custom_config_id)
           FROM public.project_ffe_specs WHERE ffe_item_id = v_item_id),
@@ -762,8 +764,8 @@ BEGIN
     NULL, NULL, 'bed', '{"client":"configuration-test"}'
   );
   v_bed_project_config_id := (v_place->>'configurationId')::uuid;
-  v_bed_item_id := (v_place->>'ffeItemId')::uuid;
-  v_bed_spec_id := (v_place->>'specId')::uuid;
+  v_bed_item_id := (v_place->>'selectionId')::uuid;  -- v2 receipt since 00439
+  SELECT id INTO v_bed_spec_id FROM public.project_ffe_specs WHERE ffe_item_id = v_bed_item_id;
   ASSERT v_bed_project_config_id <> v_bed_template_id
       AND (SELECT project_id IS NULL AND is_library_template AND status = 'saved'
            FROM public.product_configurations WHERE id = v_bed_template_id)
@@ -1120,8 +1122,8 @@ BEGIN
     '4c000000-0000-4000-8000-000000000030', v_com_config_b,
     NULL, NULL, 'seating', '{"placement":"com-sofa"}'
   );
-  v_com_item_id := (v_place->>'ffeItemId')::uuid;
-  v_com_spec_id := (v_place->>'specId')::uuid;
+  v_com_item_id := (v_place->>'selectionId')::uuid;  -- v2 receipt since 00439
+  SELECT id INTO v_com_spec_id FROM public.project_ffe_specs WHERE ffe_item_id = v_com_item_id;
   ASSERT (SELECT color_fabric = 'Mohair Velvet — Pierre Frey'
             AND material = 'Oak' AND finish = 'Natural'
           FROM public.project_ffe_specs WHERE id = v_com_spec_id),
@@ -1242,7 +1244,7 @@ BEGIN
     '4c000000-0000-4000-8000-000000000031', v_locked_config_id,
     NULL, NULL, 'seating', '{"placement":"already-specified"}'
   );
-  v_locked_item_id := (v_place->>'ffeItemId')::uuid;
+  v_locked_item_id := (v_place->>'selectionId')::uuid;  -- v2 receipt since 00439
   UPDATE public.project_ffe_items SET status = 'approved' WHERE id = v_locked_item_id;
   UPDATE public.project_ffe_items
   SET source_decision_id = v_locked_decision_id WHERE id = v_locked_item_id;
