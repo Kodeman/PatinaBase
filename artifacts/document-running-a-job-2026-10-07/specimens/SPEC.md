@@ -343,12 +343,10 @@ node /Users/kody/Code/patina-merged/artifacts/people-room-crm-2026-09-11/tools/r
 **Look at every PNG you render** (light and dark) and compare it with the matching walk screenshot. The gate:
 
 ```bash
-F=/Users/kody/Code/patina-merged/artifacts/document-running-a-job-2026-10-07/specimens/proposed-<x>-1440.html
-tail -n1 "$F" | grep -qx '<!-- specimen-complete -->' && \
-! grep -nE 'box-shadow|text-overflow|placeholder=|\sdisabled[\s>]|\bAI\b|curated|luxury|bespoke' "$F" && echo PASS
+cd /Users/kody/Code/patina-merged && node artifacts/document-running-a-job-2026-10-07/specimens/check.mjs <x>
 ```
 
-Run it for both of your files. Report back:
+This checks both of your files: the sentinel on the last line, no banned strings, and exactly one `<h1>`. Report back:
 - the two absolute paths
 - the PASS lines
 - the render PNG paths
