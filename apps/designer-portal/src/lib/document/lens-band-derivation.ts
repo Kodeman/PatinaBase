@@ -221,7 +221,7 @@ export interface LensSetupInput {
  *  D3's plain act for it. */
 const SETUP_WORDS: Record<SetupRowKind, { sentence: string; act: string }> = {
   no_client_linked: { sentence: 'No client linked', act: 'Link a client' },
-  target_date_unset: { sentence: 'No target date set', act: 'Set a target' },
+  target_date_unset: { sentence: 'No target date set', act: 'Set dates' },
   budget_band_unset: { sentence: 'No budget band set', act: 'Set a budget band' },
 };
 
@@ -1038,6 +1038,44 @@ function printedHousehold(household: string): string {
   return household.trim() ? familyLabel(household) : '';
 }
 
+/**
+ * F14 / R20 — on a Direction or Proposal paper the open inputs are the
+ * proposal's own missing pieces: one row, `The proposal needs N inputs`,
+ * carrying D1's Direction act where the paper offers it, never a
+ * `… · blocks Client proposal` row per gap.
+ */
+const PROPOSAL_INPUTS_KEY = 'proposal-inputs';
+const WRITE_THE_PROPOSAL = 'Write the proposal';
+
+function proposalInputs(input: LensBandInput): readonly LensInputItem[] {
+  const all = input.inputs ?? [];
+  if (all.length === 0) return all;
+  if (input.spreadKind !== 'direction' && input.spreadKind !== 'proposal') return all;
+  const write =
+    [input.ownAct, input.guide?.act].find((act) => act?.label === WRITE_THE_PROPOSAL) ?? null;
+  return [
+    {
+      key: PROPOSAL_INPUTS_KEY,
+      eyebrow: '',
+      sentence: `The proposal needs ${all.length} input${all.length === 1 ? '' : 's'}`,
+      act: write
+        ? { key: write.key, label: WRITE_THE_PROPOSAL, onAct: write.onAct, disabled: write.disabled }
+        : null,
+    },
+  ];
+}
+
+/** D1 — whether the act line 2 prints is the one this input row stands for. */
+function namesInput(
+  item: LensInputItem,
+  namedInputKey: string | null | undefined,
+  printedActLabel: string | null | undefined,
+): boolean {
+  return item.key === PROPOSAL_INPUTS_KEY
+    ? printedActLabel === WRITE_THE_PROPOSAL
+    : item.key === namedInputKey;
+}
+
 export function deriveLensBand(input: LensBandInput): LensBandModel {
   const ranked = rankStanding(input.ticket, input.needs, input.now);
   // D2 / D10 — setup (class 3) never takes line 2: it stands in the sheet's
@@ -1082,12 +1120,14 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
     : input.guide
       ? 'guide'
       : 'none';
-  const allInputs = input.inputs ?? [];
+  const allInputs = proposalInputs(input);
   // D1 — only a GUIDE line names an open input. On a standing line the guide's
   // act is not printed at all, so every input stays behind the door.
   const inputs =
-    kind === 'guide' && input.namedInputKey
-      ? allInputs.filter((item) => item.key !== input.namedInputKey)
+    kind === 'guide'
+      ? allInputs.filter(
+          (item) => !namesInput(item, input.namedInputKey, input.guide?.act?.label),
+        )
       : allInputs;
   const readingStop = input.readingStop ?? null;
   const { rightFlush, moneyOnly } = rightSlot(
@@ -1257,11 +1297,14 @@ function deriveVoice(
 
   // D1 (I154) — the input the guide's act names is not a row behind the door,
   // exactly when that act is the one line 2 prints.
+  // F14 — the proposal's collapsed row is named whenever Next is its act.
   const guideIsNext = next !== null && next.rowKey === null && input.ownAct === undefined;
-  const inputs =
-    guideIsNext && input.namedInputKey
-      ? allInputs.filter((item) => item.key !== input.namedInputKey)
-      : allInputs;
+  const nextIsOwn = next !== null && next.rowKey === null;
+  const inputs = allInputs.filter((item) =>
+    item.key === PROPOSAL_INPUTS_KEY
+      ? !(nextIsOwn && namesInput(item, null, next?.act.label))
+      : !(guideIsNext && namesInput(item, input.namedInputKey, null)),
+  );
   const standingCount =
     standing.length + inputs.length + setup.length - (next?.rowKey ? 1 : 0);
 

@@ -362,18 +362,22 @@ function vitalsFor(
       // While the schedule loads the header states no target at all — a firmer
       // claim that later softens would be the same lie, briefly.
       schedule ? targetVitalFor(schedule.target, project?.target_end_date) : null,
-      project?.total_amount_cents != null ? fmtUsd(project.total_amount_cents) : null,
+      // R18 — nothing agreed is silence: no `$0`, and not the Direction
+      // draft's `Not priced yet` either.
+      project?.total_amount_cents != null && project.total_amount_cents > 0
+        ? fmtUsd(project.total_amount_cents)
+        : null,
     ]
       .filter(Boolean)
       .join(' · ');
   }
   if (row.engagement_kind === 'proposal') {
     // 0a-6: an unpriced draft (0 or null) states that, never `$0 proposed`.
-    // While the proposal is still being read, say nothing.
+    // While the proposal is still being read, say nothing. R18: `Not priced
+    // yet` is the Direction draft's sentence only; any other paper is silent.
     if (!proposal) return '';
-    return proposal.total_amount > 0
-      ? `${fmtUsd(proposal.total_amount)} proposed`
-      : 'Not priced yet';
+    if (proposal.total_amount > 0) return `${fmtUsd(proposal.total_amount)} proposed`;
+    return row.active_section === 'direction' ? 'Not priced yet' : '';
   }
   // A5 — the lead and relationship branches printed the client name under a
   // title that IS the client name, beside a position the band already states.
@@ -2076,6 +2080,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           settled: true,
           closed: closeout.closed,
           total: closeout.total,
+          // R13 — a closed book's stop reads `Closed {day month}`.
+          closedOn: project?.completed_at ?? null,
         },
         record: {
           settled: true,

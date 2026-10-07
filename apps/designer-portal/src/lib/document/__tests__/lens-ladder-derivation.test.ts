@@ -131,7 +131,9 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
     expect(segments.schedule.value).toBe('INSTALL SEP 15 · 3 WEEKS');
     expect(segments.ffe.value).toBe('36 LINES · 1 DAMAGED AUG 26');
     expect(segments.money.value).toBe('$17,500 OUT · $12,300 UNDRAWN');
-    expect(segments.care.value).toBe('0 OF 6 CLOSED OUT');
+    // R13 — nothing closed out yet is `NOTHING YET`, never `0 OF 6`.
+    expect(segments.care.value).toBeNull();
+    expect(segments.care.fallback).toBe('NOTHING YET');
     expect(segments.record.value).toBe('12 COMPLETE');
   });
 
@@ -162,7 +164,7 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
       '2 awaiting the client · 1 overdue 6d',
     );
     expect(segments.money.countLine).toBe('$17,500 out · $12,300 not drawn');
-    expect(segments.care.countLine).toBe('0 of 6 closed out');
+    expect(segments.care.countLine).toBe('Nothing yet');
   });
 
   // D-B52 (W7-R1 §2) — the model carries NO geometry any more. OD-14's floor
@@ -570,4 +572,69 @@ describe('deriveLadderSegments · the pre-work stops', () => {
       );
     }
   });
+});
+
+// FR1 F8 / R13 — `Nothing yet` → `{n} closed out` → `Closed {day month}`;
+// never `N of M`.
+describe('deriveLadderSegments · Closing the book (R13)', () => {
+  const care = (facts: LadderInput['care']) => byKey(input({ care: facts })).care;
+
+  it('prints NOTHING YET until the first item closes', () => {
+    const segment = care({ settled: true, closed: 0, total: 6 });
+    expect(segment.value).toBeNull();
+    expect(segment.fallback).toBe('NOTHING YET');
+    expect(segment.countLine).toBe('Nothing yet');
+  });
+
+  it('then the closed-out count alone', () => {
+    const segment = care({ settled: true, closed: 2, total: 6 });
+    expect(segment.value).toBe('2 CLOSED OUT');
+    expect(segment.countLine).toBe('2 closed out');
+  });
+
+  it('then the day the book closed', () => {
+    const segment = care({
+      settled: true,
+      closed: 0,
+      total: 0,
+      closedOn: '2026-11-21T15:00:00Z',
+    });
+    expect(segment.value).toBe('CLOSED 21 NOVEMBER');
+    expect(segment.countLine).toBe('Closed 21 November');
+    expect(segment.fallback).toBeNull();
+  });
+
+  it('never prints N of M at any state', () => {
+    for (const closed of [0, 1, 5, 6]) {
+      const segment = care({ settled: true, closed, total: 6 });
+      expect(`${segment.value} ${segment.countLine}`).not.toMatch(/\d+ of \d+/i);
+    }
+  });
+});
+
+// R17 — the fidelity word the resolver answers before a run is anchored is
+// machinery; the schedule stop never prints it.
+describe('deriveLadderSegments · no fidelity word on the rail (R17)', () => {
+  it.each(['Band', 'Frame', 'Committed'])(
+    'a %s position falls back to NOT KNOWN YET',
+    (word) => {
+      const model = input({
+        ticket: ticket({
+          dates: {
+            settled: true,
+            schedule: {
+              selection: 'installation' as never,
+              fidelity: word.toLowerCase() as never,
+              positionText: word,
+              install: null,
+            },
+          },
+        }),
+      });
+      const segment = byKey(model).schedule;
+      expect(segment.value).toBeNull();
+      expect(segment.fallback).toBe('NOT KNOWN YET');
+      expect(segment.countLine).not.toMatch(/Band|Frame|Committed/);
+    },
+  );
 });

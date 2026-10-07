@@ -17,17 +17,38 @@
 
 import { useState } from 'react';
 import { useCompletedProjectsWithoutReview, useProjectV2 } from '@patina/supabase';
-import { fmtDay } from '@/lib/document/format';
+import { fmtDay, fmtMonthYear } from '@/lib/document/format';
 import { DocumentAction } from './document-action';
 import { ReviewRequestSheet } from './people/ops/review-request-sheet';
 
 type AnyRecord = any;
 
+/**
+ * R11 (FR1 F11) — the closed sentence is the Care region head's status line,
+ * printed once beneath the `Care` heading (FFESection prints the heading), as
+ * every other region head speaks — never a free paragraph above it.
+ */
+export function CareClosedLine({ projectId }: { projectId: string }) {
+  const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
+  if (!project) return null;
+  const sentence = project.completed_at
+    ? `The book closed ${fmtDay(project.completed_at)}.`
+    : project.target_end_date
+      ? `Project completed · ${fmtMonthYear(project.target_end_date)}.`
+      : 'Project completed.';
+  return (
+    <p data-care-status className="mb-2 text-[12.5px] text-[var(--color-mocha)]">
+      {sentence}
+    </p>
+  );
+}
+
 export function CareSection({
-  completedLabel,
   projectId = null,
 }: {
-  completedLabel: string | null;
+  /** Retired by R11: the closed sentence moved to the Care head
+   *  (`CareClosedLine`). Still accepted so the page mount compiles unchanged. */
+  completedLabel?: string | null;
   /** R80: set when the page knows the project — unlocks the settled read
    *  (completed_at + the portfolio snapshot written at close). */
   projectId?: string | null;
@@ -51,12 +72,6 @@ export function CareSection({
     rooms?: string;
   } | null;
 
-  const closedLine = project?.completed_at
-    ? `The book closed ${fmtDay(project.completed_at)}.`
-    : completedLabel
-      ? `Project completed · ${completedLabel}.`
-      : 'Project completed.';
-
   const snapshotFacts = snapshot
     ? [
         snapshot.value_cents != null
@@ -70,8 +85,8 @@ export function CareSection({
   return (
     <section>
       {/* 0a-1: no heading here — the region's own `Care` heading (FFESection,
-          mode="install", sectionKey="care") is the one the paper prints. */}
-      <p className="mt-5 text-[12px] leading-relaxed text-[var(--text-body)]">{closedLine}</p>
+          mode="install", sectionKey="care") is the one the paper prints, and
+          R11 put the closed sentence beneath it (`CareClosedLine`). */}
 
       {/* The snapshot the designer wrote at close — the project as it will be
           remembered (R80). Quiet: type only, no card furniture. */}

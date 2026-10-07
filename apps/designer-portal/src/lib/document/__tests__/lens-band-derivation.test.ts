@@ -1196,7 +1196,8 @@ describe('deriveLensBand · setup (D10)', () => {
       }),
     );
     expect(model.setup.map((row) => row.act?.label)).toEqual([
-      'Set a target',
+      // R19 — the act is `Set dates`; the sentence stays `No target date set`.
+      'Set dates',
       'Set a budget band',
     ]);
   });
@@ -1483,5 +1484,114 @@ describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
     expect(deriveLensBand(chen({ tier: 'mobile', needs: [CHEN_NEEDS[1]] })).voice.doorInDock).toBe(
       false,
     );
+  });
+});
+
+// FR1 F14 / R20 — a Direction or Proposal paper's open inputs are the
+// proposal's own missing pieces: one row, never a `blocks Client proposal` row
+// per gap.
+describe('deriveLensBand · the proposal’s inputs collapse to one row (F14)', () => {
+  const GAPS = [
+    'rooms in scope',
+    'phases & fees',
+    'change-order terms',
+    'payment schedule',
+    'design fee',
+    'timeline',
+    'exclusions',
+    'retainer',
+  ].map((label, index) => ({
+    key: `${index}:${label}`,
+    eyebrow: (label.split(/\s+/).pop() ?? label).toUpperCase(),
+    sentence: `${label} · Designer · blocks Client proposal`,
+    act: null,
+  }));
+  const WRITE: LensOwnAct = {
+    key: 'write-the-proposal',
+    label: 'Write the proposal',
+    targetId: 'document-act-contract-room-door',
+    tier: 'scored',
+    sentence: 'Write the proposal for Elena.',
+    onAct: jest.fn(),
+  };
+  const elena = (over: Partial<LensBandInput> = {}) =>
+    input({
+      spreadKind: 'direction',
+      household: 'Elena Marlowe',
+      inputs: GAPS,
+      ownAct: WRITE,
+      ...over,
+    });
+  const printed = (items: readonly { eyebrow: string; sentence: string; act: { label: string } | null }[]) =>
+    items.map((item) => `${item.eyebrow} ${item.sentence} ${item.act?.label ?? ''}`).join(' | ');
+
+  it('is silent on Elena Marlowe when the band already names Write the proposal', () => {
+    const { voice } = deriveLensBand(elena());
+    expect(voice.next?.act.label).toBe('Write the proposal');
+    expect(voice.inputs).toEqual([]);
+    expect(voice.standingCount).toBe(0);
+  });
+
+  it('stands as one row with one act behind `Standing · 1` when Next names something else', () => {
+    const onAct = jest.fn();
+    const { voice } = deriveLensBand(
+      elena({ needs: [CHEN_NEEDS[1]], now: NOW, ownAct: { ...WRITE, onAct } }),
+    );
+    expect(voice.next?.rowKey).toBe('need:pay-0');
+    expect(voice.inputs).toHaveLength(1);
+    expect(voice.inputs[0].sentence).toBe('The proposal needs 8 inputs');
+    expect(voice.inputs[0].act?.label).toBe('Write the proposal');
+    voice.inputs[0].act?.onAct();
+    expect(onAct).toHaveBeenCalledTimes(1);
+    expect(standingDoorLabel(voice.standingCount)).toBe('Standing · 1');
+  });
+
+  it.each<LensSpreadKind>(['direction', 'proposal'])(
+    'never prints `blocks` or `Client proposal` on a %s paper',
+    (spreadKind) => {
+      const model = deriveLensBand(elena({ spreadKind, ownAct: null }));
+      expect(model.inputs).toHaveLength(1);
+      expect(model.voice.inputs).toHaveLength(1);
+      expect(printed(model.inputs)).not.toMatch(/blocks|Client proposal/);
+      expect(printed(model.voice.inputs)).not.toMatch(/blocks|Client proposal/);
+    },
+  );
+
+  it('counts one input in the singular', () => {
+    const model = deriveLensBand(
+      elena({
+        spreadKind: 'proposal',
+        ownAct: null,
+        inputs: [
+          {
+            key: '0:Client signature',
+            eyebrow: 'SIGNATURE',
+            sentence: 'Client signature · Client · blocks Project activation',
+            act: null,
+          },
+        ],
+      }),
+    );
+    expect(model.voice.inputs.map((item) => item.sentence)).toEqual(['The proposal needs 1 input']);
+  });
+
+  it('withholds the row on the guide line when the guide’s act is Write the proposal', () => {
+    const model = deriveLensBand(
+      elena({
+        ownAct: undefined,
+        guide: {
+          text: 'Eight inputs stand between the direction and the proposal.',
+          act: { key: 'guide', label: 'Write the proposal', onAct: jest.fn() },
+        },
+      }),
+    );
+    expect(model.inputs).toEqual([]);
+    expect(model.line2.standingCount).toBe(0);
+    expect(model.voice.inputs).toEqual([]);
+  });
+
+  it('leaves every other paper’s inputs one row each', () => {
+    const model = deriveLensBand(input({ inputs: GAPS.slice(0, 2) }));
+    expect(model.inputs).toHaveLength(2);
   });
 });

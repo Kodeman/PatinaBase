@@ -18,6 +18,8 @@
  * instrument erasing its own subject.
  */
 
+import { FIDELITY_WORD } from '@patina/utils';
+
 import { LENS_COUNT_MAX_CHARS, LENS_VALUE_MAX_CHARS } from './lens-constants';
 import {
   DOCUMENT_INDEX_LABELS,
@@ -25,6 +27,7 @@ import {
   paperRegionsForSection,
   type DocumentIndexKey,
 } from './document-index';
+import { fmtDay } from './format';
 import { money } from './project-commerce';
 import type { TicketInput } from './ticket-derivation';
 
@@ -89,6 +92,8 @@ export interface LadderCareFacts {
   settled: boolean;
   closed: number;
   total: number;
+  /** R13 — the day the book closed (`projects.completed_at`), where it has. */
+  closedOn?: string | null;
 }
 
 export interface LadderRecordFacts {
@@ -147,6 +152,8 @@ export interface LadderInput {
 }
 
 const READING = 'READING…';
+
+const FIDELITY_WORDS: ReadonlySet<string> = new Set(Object.values(FIDELITY_WORD));
 
 /** Bare DATE columns must parse as LOCAL midnight, or the printed day slips
  *  back one in a negative-offset timezone. */
@@ -284,7 +291,9 @@ function scheduleRegister(input: TicketInput): Register {
     install?.date != null &&
     (install.fidelity === 'committed' || install.fidelity === 'record');
   if (!stateable || install?.date == null) {
-    if (schedule?.positionText) {
+    // R17 — an unanchored run's position is a fidelity word (`Band`), which is
+    // machinery: only a real position (`Week 3`) prints.
+    if (schedule?.positionText && !FIDELITY_WORDS.has(schedule.positionText)) {
       const value = cap(
         schedule.positionText.toUpperCase(),
         LENS_VALUE_MAX_CHARS,
@@ -411,20 +420,26 @@ function moneyRegister(input: TicketInput): Register {
   };
 }
 
+/** R13 — `Nothing yet` → `{n} closed out` → `Closed {day month}`; never
+ *  `N of M` (Q10, V11). */
 function careRegister(facts: LadderCareFacts): Register {
+  if (facts.closedOn) {
+    const day = fmtDay(facts.closedOn);
+    const value = cap(`CLOSED ${day.toUpperCase()}`, LENS_VALUE_MAX_CHARS);
+    return {
+      value,
+      narrowValue: value,
+      countLine: cap(`Closed ${day}`, LENS_COUNT_MAX_CHARS),
+      fallback: null,
+    };
+  }
   if (!facts.settled) return reading();
-  if (facts.total === 0) return empty('Nothing yet');
-  const value = cap(
-    `${facts.closed} OF ${facts.total} CLOSED OUT`,
-    LENS_VALUE_MAX_CHARS,
-  );
+  if (facts.closed === 0) return empty('Nothing yet');
+  const value = cap(`${facts.closed} CLOSED OUT`, LENS_VALUE_MAX_CHARS);
   return {
     value,
     narrowValue: value,
-    countLine: cap(
-      `${facts.closed} of ${facts.total} closed out`,
-      LENS_COUNT_MAX_CHARS,
-    ),
+    countLine: cap(`${facts.closed} closed out`, LENS_COUNT_MAX_CHARS),
     fallback: null,
   };
 }

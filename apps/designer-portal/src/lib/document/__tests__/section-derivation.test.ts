@@ -257,22 +257,16 @@ describe('deriveSections — schedule registers (R108)', () => {
       },
     )[4].sub;
 
-  it('committed: Active · Week N, straight from the resolver', () => {
-    expect(projectSub(scheduleFacts({ fidelity: 'committed', positionText: 'Week 3' }))).toBe(
-      'Active · Week 3',
-    );
-  });
-
-  it('frame: Active · Frame', () => {
-    expect(projectSub(scheduleFacts({ fidelity: 'frame', positionText: 'Frame' }))).toBe(
-      'Active · Frame',
-    );
-  });
-
-  it('band: Active · Band — a legacy project never says Week', () => {
-    const sub = projectSub(scheduleFacts({ fidelity: 'band', positionText: 'Band' }));
-    expect(sub).toBe('Active · Band');
-    expect(sub).not.toMatch(/Week/);
+  // R17 (FR1) — the spine rail reads `Active` alone: the resolver's position
+  // (a week, or the fidelity word `Band` standing in for one) never leaks.
+  it.each([
+    ['committed', 'Week 3'],
+    ['frame', 'Frame'],
+    ['band', 'Band'],
+  ] as const)('%s: Active alone, never the position', (fidelity, positionText) => {
+    const sub = projectSub(scheduleFacts({ fidelity, positionText }));
+    expect(sub).toBe('Active');
+    expect(sub).not.toMatch(/Band|Week|Frame/);
   });
 
   it('loading: bare Active, never a computed week', () => {
@@ -311,7 +305,8 @@ describe('deriveSections — schedule registers (R108)', () => {
 
   it('install: a band states a month, never a day', () => {
     const sub = installSub(scheduleFacts({ install: { date: '2026-09-02', fidelity: 'band' } }));
-    expect(sub).toBe('Band · ~September');
+    // R17 — the month, without the register word `Band`.
+    expect(sub).toBe('~September');
     // The desk refuses to put a day on an unanchored schedule; so does this.
     expect(sub).not.toMatch(/\d/);
   });

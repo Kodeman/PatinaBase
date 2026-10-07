@@ -229,6 +229,11 @@ describe('CareBand fold', () => {
 
     expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /closing the book/i })).not.toBeInTheDocument();
+    // FR1 F8 / R13 — the full head's status line is the count alone, never
+    // `N of M`.
+    const head = document.querySelector('[data-region-head="closure"]')!;
+    expect(head).toHaveTextContent('1 closed out');
+    expect(head.textContent).not.toMatch(/\d+ of \d+/);
   });
 
   it('keeps a non-install-phase band open when the remembered choice says so', () => {
@@ -299,6 +304,10 @@ describe('CareBand fold', () => {
     expect(screen.queryByRole('button', { name: 'Close the book' })).not.toBeInTheDocument();
     const seam = screen.getByRole('button', { name: /closing the book/i });
     expect(seam).toBeInTheDocument();
+    // FR1 F8 / R13 — the 390 fold line repeats the head's count, never `N of M`.
+    const seamRoot = document.querySelector('[data-fold-seam]')!;
+    expect(seamRoot).toHaveTextContent('1 closed out');
+    expect(seamRoot.textContent).not.toMatch(/\d+ of \d+/);
 
     fireEvent.click(seam);
     expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
@@ -516,13 +525,14 @@ describe('CareBand quiet body (W4)', () => {
     expect(screen.getByRole('heading', { name: 'Closing the book' })).toBeInTheDocument();
     // W4-R1: the count line IS the head's status line.
     const head = container.querySelector('[data-region-head="closure"]')!;
-    expect(head).toHaveTextContent('1 of 6 closed out');
+    expect(head).toHaveTextContent('1 closed out');
+    expect(head.textContent).not.toMatch(/\d+ of \d+/);
     expect(
       container.querySelectorAll('[data-region-count-line]'),
     ).toHaveLength(0);
     expect(
       screen.getByText(
-        '1 of 6 closed out · not yet on the paper · press Closing the book on the index to open',
+        '1 closed out · not yet on the paper · press Closing the book on the index to open',
       ),
     ).toHaveClass('sr-only');
 

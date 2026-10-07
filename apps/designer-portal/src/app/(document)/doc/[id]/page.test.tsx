@@ -1073,6 +1073,28 @@ describe('DocumentPage guide activation', () => {
     expect(vitals).not.toMatch(/\$0|proposed/);
   });
 
+  // R18 (FR1) — `Not priced yet` is the Direction draft's sentence only.
+  it('R18 — an unpriced Proposal paper is silent, not Not priced yet', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'proposal',
+        engagement_id: 'proposal-1', proposal_id: 'proposal-1', lead_id: null,
+        client_profile_id: 'client-1', proposal_status: 'sent',
+      } },
+    };
+    mockProposalData = {
+      id: 'proposal-1', status: 'sent', document_kind: 'design_services',
+      commercial_state: 'draft', project_id: null, total_amount: 0,
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    const vitals = screen.getByTestId('doc-vitals').textContent ?? '';
+    expect(vitals).not.toMatch(/Not priced yet|\$0/);
+  });
+
   it('US-14 — "Open the project" on an executed agreement is the same engagement: announced, so no arrival plays', () => {
     const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
     mockDocumentQuery = {
@@ -1407,6 +1429,37 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByTestId('doc-vitals').textContent ?? '').not.toMatch(/Target/);
   });
 
+  // R18 (FR1) — a project with nothing agreed prints no figure on line 1:
+  // neither `$0` nor the Direction draft's `Not priced yet`.
+  it('R18 — a project agreed total of 0 prints no figure', () => {
+    asProjectDocument();
+    mockProjectQuery = {
+      data: { total_amount_cents: 0, target_end_date: null, start_date: null },
+      isLoading: false,
+      isError: false,
+    };
+    mockResolvedSchedule = { ...NO_RESOLVED_SCHEDULE, isLoading: true };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    const vitals = screen.getByTestId('doc-vitals').textContent ?? '';
+    expect(vitals).not.toMatch(/\$0|Not priced yet/);
+  });
+
+  it('R18 — a priced project still states its agreed total', () => {
+    asProjectDocument();
+    mockProjectQuery = {
+      data: { total_amount_cents: 1_633_000, target_end_date: null, start_date: null },
+      isLoading: false,
+      isError: false,
+    };
+    mockResolvedSchedule = { ...NO_RESOLVED_SCHEDULE, isLoading: true };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('doc-vitals').textContent ?? '').toMatch(/\$16,330/);
+  });
+
   // ── D10 (US-19 0b): setup is a SETUP row in the band's standing sheet —
   // never the letterhead, never line 2. ──
   const openStanding = () =>
@@ -1485,7 +1538,10 @@ describe('DocumentPage guide activation', () => {
       expect.stringContaining('No target date set'),
       expect.stringContaining('No budget band set'),
     ]);
-    expect(screen.getByRole('button', { name: 'Set a target' })).toBeInTheDocument();
+    // R19 — the target row's act is `Set dates`; its sentence is unchanged.
+    const standingSheet = screen.getByRole('dialog');
+    expect(within(standingSheet).getByRole('button', { name: 'Set dates' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Set a target' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Set a budget band' })).toBeInTheDocument();
   });
 

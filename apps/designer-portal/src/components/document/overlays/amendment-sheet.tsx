@@ -25,7 +25,7 @@
  * band's entry is Track 8's to mount (post-merge wiring).
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import {
   useAcceptClientScopeChangeRequest,
   useProjectV2,
@@ -42,6 +42,7 @@ import { familyLabel } from '@/lib/document/family-label';
 import { fmtDay } from '@/lib/document/format';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DocSheet } from './doc-sheet';
+import { HouseholdSheet } from './household-sheet';
 
 type AnyRecord = any;
 
@@ -134,6 +135,13 @@ export function AmendmentSheet({
   };
   const { currentCents, newTotalCents } = computeAmendmentTotals(project, impacts);
 
+  // F5 (0a-8) — the linked-client rule the letterhead's Message uses (SQ-491):
+  // a client profile, or the canonical relationship the project's proposal
+  // carries. With neither, Send is held with its reason and the repair beside.
+  const hasClient = Boolean(project?.client_id || project?.proposal?.designer_client_id);
+  const sendHeld = Boolean(project) && !hasClient;
+  const [linking, setLinking] = useState(false);
+
   const addRoom = () => {
     const name = roomName.trim();
     if (!name) return;
@@ -178,7 +186,8 @@ export function AmendmentSheet({
     <DocSheet open={open} onClose={onClose} title="Amendment">
       <div data-overlay-amendment className="mx-auto max-w-xl">
         <p className={labelCls}>
-          {project?.name ?? 'Project'} &middot; current {fmtMoney(currentCents)}
+          {project?.name ?? 'Project'}
+          {currentCents > 0 && <> &middot; current {fmtMoney(currentCents)}</>}
         </p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
           {reviewing ? 'The amendment' : 'Amend the scope'}
@@ -252,9 +261,10 @@ export function AmendmentSheet({
               className="border-t border-[var(--color-pearl)] pt-4"
             >
               {reviewing.status === 'draft' && (
-                <DocumentAction
+                <HeldSend
+                  held={sendHeld}
+                  onLink={() => setLinking(true)}
                   actionKey="send-amendment"
-                  variant="primary"
                   disabled={sendAmendment.isPending}
                   loading={sendAmendment.isPending}
                   loadingLabel="Sending…"
@@ -273,7 +283,7 @@ export function AmendmentSheet({
                   }}
                 >
                   Send to {family}
-                </DocumentAction>
+                </HeldSend>
               )}
               {reviewing.status === 'approved' && !reviewing.applied_at && (
                 <DocumentAction
@@ -363,7 +373,7 @@ export function AmendmentSheet({
           /* ── COMPOSE a new amendment ──────────────────────────────────── */
           <div className="mt-1 space-y-5">
             <p className="text-[14px] leading-relaxed text-[var(--color-charcoal)]">
-              A scope change with its fee and timeline impacts — {family} approve it in their
+              A scope change with its fee and timeline impacts — {family} approves it in their
               portal, then one act applies it to the project.
             </p>
 
@@ -444,15 +454,21 @@ export function AmendmentSheet({
                   className={fieldCls}
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <span className={labelCls}>New project total</span>
-                <p className="min-h-11 px-3 py-2 font-mono text-[14px] text-[var(--color-charcoal)]">
-                  {fmtMoney(newTotalCents)}
-                  <span className="ml-2 text-[12px] text-[var(--text-body)]">
-                    was {fmtMoney(currentCents)}
-                  </span>
-                </p>
-              </div>
+              {/* F5 (0a-6) — a total of 0 is no figure: the block prints only
+                  once there is money to state. */}
+              {newTotalCents > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <span className={labelCls}>New project total</span>
+                  <p className="min-h-11 px-3 py-2 font-mono text-[14px] text-[var(--color-charcoal)]">
+                    {fmtMoney(newTotalCents)}
+                    {currentCents > 0 && (
+                      <span className="ml-2 text-[12px] text-[var(--text-body)]">
+                        was {fmtMoney(currentCents)}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* New rooms — the ported simple list (optional). */}
@@ -466,9 +482,11 @@ export function AmendmentSheet({
                   <span className="flex-1 text-[14px] text-[var(--color-charcoal)]">
                     {room.name}
                   </span>
-                  <span className="font-mono text-[12px] text-[var(--text-body)]">
-                    {fmtMoney(room.budgetCents)}
-                  </span>
+                  {room.budgetCents > 0 && (
+                    <span className="font-mono text-[12px] text-[var(--text-body)]">
+                      {fmtMoney(room.budgetCents)}
+                    </span>
+                  )}
                   <button
                     type="button"
                     aria-label={`Remove ${room.name}`}
@@ -533,16 +551,17 @@ export function AmendmentSheet({
               regionKey="amendment-composer"
               className="border-t border-[var(--color-pearl)] pt-5"
             >
-              <DocumentAction
+              <HeldSend
+                held={sendHeld}
+                onLink={() => setLinking(true)}
                 actionKey="compose-and-send-amendment"
-                variant="primary"
                 disabled={!title.trim() || !description.trim() || compose.isPending}
                 loading={compose.isPending}
                 loadingLabel="Composing…"
                 onClick={() => submit(true)}
               >
                 Send to {family}
-              </DocumentAction>
+              </HeldSend>
               <DocumentAction
                 actionKey="save-amendment-draft"
                 variant="secondary"
@@ -607,7 +626,83 @@ export function AmendmentSheet({
           </div>
         )}
       </div>
+
+      {/* The repair opens the sheet the household chip opens — mounted only
+          while open, so a client-less sheet issues none of its reads. */}
+      {sendHeld && linking && (
+        <HouseholdSheet
+          open
+          onClose={() => setLinking(false)}
+          engagementKind="project"
+          projectId={projectId}
+          proposalId={project?.proposal?.id ?? null}
+          clientProfileId={null}
+          clientName={clientName}
+        />
+      )}
     </DocSheet>
+  );
+}
+
+/**
+ * `Send to the client`, held on a job with no linked client (D3 Gated, R14,
+ * R16): focusable and `aria-disabled`, the reason directly beneath it in its
+ * own column, the repair act `Link a client` beside it.
+ */
+function HeldSend({
+  held,
+  onLink,
+  actionKey,
+  disabled,
+  loading,
+  loadingLabel,
+  onClick,
+  children,
+}: {
+  held: boolean;
+  onLink: () => void;
+  actionKey: string;
+  disabled: boolean;
+  loading: boolean;
+  loadingLabel: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  const reasonId = useId();
+  if (!held) {
+    return (
+      <DocumentAction
+        actionKey={actionKey}
+        variant="primary"
+        disabled={disabled}
+        loading={loading}
+        loadingLabel={loadingLabel}
+        onClick={onClick}
+      >
+        {children}
+      </DocumentAction>
+    );
+  }
+  return (
+    <>
+      <div className="flex flex-col items-start gap-1">
+        <DocumentAction
+          actionKey={actionKey}
+          variant="primary"
+          disabled
+          held
+          aria-describedby={reasonId}
+        >
+          {children}
+        </DocumentAction>
+        <p id={reasonId} className="text-[12px] text-[var(--text-body)]">
+          Link a client first.
+        </p>
+      </div>
+      <DocumentAction actionKey="link-client" variant="secondary" onClick={onLink}>
+        Link a client
+      </DocumentAction>
+    </>
   );
 }
 

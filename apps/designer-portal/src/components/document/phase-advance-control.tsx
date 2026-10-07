@@ -419,10 +419,6 @@ export function PhaseAdvanceControl({
       >
         Phase handoffs
       </h3>
-      <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
-        Completing a phase activates every direct follower in the project
-        graph. The server verifies blockers and the exact transition.
-      </p>
 
       <ul className="mt-2">
         {actions.map((action) => (

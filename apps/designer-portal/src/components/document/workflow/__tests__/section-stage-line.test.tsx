@@ -56,7 +56,7 @@ describe("SectionStageLine", () => {
 
     expect(
       screen.getByText(
-        "Design Development · Core · stage 06 of 04–09 · Week 3 · Committed",
+        "Design Development · Core · stage 06 · Week 3",
       ),
     ).toBeVisible();
     expect(screen.queryByText("Inquiry & Qualification")).toBeNull();

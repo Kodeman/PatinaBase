@@ -19,7 +19,7 @@ jest.mock('./people/ops/review-request-sheet', () => ({
     open ? <div role="dialog">Request from {clientName}</div> : null,
 }));
 
-import { CareSection } from './quiet-sections';
+import { CareClosedLine, CareSection } from './quiet-sections';
 
 beforeEach(() => {
   useProjectV2.mockReturnValue({
@@ -59,5 +59,29 @@ describe('CareSection review handoff', () => {
     render(<CareSection completedLabel={null} projectId="project-1" />);
 
     expect(screen.queryByRole('button', { name: 'Request client review' })).not.toBeInTheDocument();
+  });
+});
+
+// FR1 F11 / R11 — the closed sentence is the Care head's status line, not a
+// free paragraph above the `Care` heading.
+describe('the closed sentence (R11)', () => {
+  it('prints no free paragraph in the Care body', () => {
+    render(<CareSection completedLabel="November 2026" projectId="project-1" />);
+    expect(screen.queryByText(/The book closed|Project completed/)).toBeNull();
+  });
+
+  it('CareClosedLine states the close day once', () => {
+    render(<CareClosedLine projectId="project-1" />);
+    expect(screen.getByText('The book closed 1 August.')).toHaveAttribute('data-care-status');
+  });
+
+  it('CareClosedLine falls back to the target month, then to the bare fact', () => {
+    useProjectV2.mockReturnValue({ data: { completed_at: null, target_end_date: '2026-11-15' } });
+    const { rerender } = render(<CareClosedLine projectId="project-1" />);
+    expect(screen.getByText('Project completed · November 2026.')).toBeInTheDocument();
+
+    useProjectV2.mockReturnValue({ data: { completed_at: null, target_end_date: null } });
+    rerender(<CareClosedLine projectId="project-1" />);
+    expect(screen.getByText('Project completed.')).toBeInTheDocument();
   });
 });

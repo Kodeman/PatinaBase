@@ -148,6 +148,14 @@ describe('PhaseAdvanceControl', () => {
     mockMutate.mockReset();
   });
 
+  // FR1 F12 (D11) — the machinery paragraph is deleted; the rows stand alone.
+  it('prints no machinery paragraph about the project graph', () => {
+    const { container } = render(
+      <PhaseAdvanceControl projectId="project-1" phases={parallelPhases} />,
+    );
+    expect(container.textContent).not.toMatch(/project graph|exact transition|direct follower/);
+  });
+
   it('renders independent, accessible controls for simultaneous main and thread phases', () => {
     render(
       <PhaseAdvanceControl projectId="project-1" phases={parallelPhases} />,

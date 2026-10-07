@@ -115,7 +115,7 @@ export function CareBand({
    *  the answer once rather than the page deriving a second one.
    *
    *  W2 fix (D-B9) — it reports the CHECKLIST too, not only the gate: the
-   *  ladder's care stop prints `N OF M CLOSED OUT`, and nothing else on the
+   *  ladder's care stop prints the closed-out count, and nothing else on the
    *  page can state that pair without repeating the eight reads. */
   onCloseoutReady?: (state: CloseoutState) => void;
   /**
@@ -373,7 +373,7 @@ export function CareBand({
           headingId={HEADING_ID}
           bodyId={BODY_ID}
           name="Closing the book"
-          summary={`${done} of ${items.length} closed out`}
+          summary={careQuietStatus({ closed: done, total: items.length })}
           cause={fold.cause}
           onUnfold={() => {
             unfoldFocusRef.current = true;
@@ -437,8 +437,8 @@ export function CareBand({
             eyebrow="Care · closing the book"
             status={
               // W4-R1 — at quiet the head's own status line IS the count line,
-              // in the ratified form (`0 of 6 closed out`), with no second
-              // paragraph under it.
+              // with no second paragraph under it. R13 (FR1 F8): `Nothing yet`
+              // then `{n} closed out`, never `N of M`.
               density === 'quiet' ? (
                 careQuietStatus({ closed: done, total: items.length })
               ) : ready ? (
@@ -448,9 +448,7 @@ export function CareBand({
                 </>
               ) : (
                 <>
-                  <b>
-                    {done} of {items.length} closed out
-                  </b>{' '}
+                  <b>{careQuietStatus({ closed: done, total: items.length })}</b>{' '}
                   · the checklist settles this project
                 </>
               )

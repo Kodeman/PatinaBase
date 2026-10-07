@@ -159,7 +159,7 @@ export function StandingSheet({
   const inputRow = (item: LensInputItem) => (
     <li key={item.key} data-standing-input-row className={ROW}>
       <div className="min-w-0">
-        <p className={INPUT_EYEBROW}>{item.eyebrow}</p>
+        {item.eyebrow && <p className={INPUT_EYEBROW}>{item.eyebrow}</p>}
         <p className={SENTENCE}>{item.sentence}</p>
       </div>
       {item.act && (

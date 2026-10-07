@@ -136,9 +136,17 @@ describe('W4-R1 quiet status lines', () => {
   });
 
   describe('Closing the book and The record', () => {
-    it('prints the closure pair and the record count', () => {
-      expect(careQuietStatus({ closed: 0, total: 6 })).toBe('0 of 6 closed out');
+    it('prints the closed-out count alone and the record count', () => {
+      expect(careQuietStatus({ closed: 2, total: 6 })).toBe('2 closed out');
       expect(recordQuietStatus({ complete: 4 })).toBe('4 complete');
+    });
+
+    // R13 (FR1 F8) — `N of M` is the count Q10 cut and V11 refuses.
+    it('says Nothing yet until the first item closes, and never prints N of M', () => {
+      expect(careQuietStatus({ closed: 0, total: 6 })).toBe('Nothing yet');
+      for (const closed of [0, 1, 5, 6]) {
+        expect(careQuietStatus({ closed, total: 6 })).not.toMatch(/\d+ of \d+/);
+      }
     });
 
     it('never becomes a dash — no checklist and no record say Nothing yet', () => {
@@ -181,8 +189,8 @@ describe('W4-R1 quiet status lines', () => {
     });
 
     it('uses a one-segment line whole', () => {
-      expect(quietStateSentence('0 of 6 closed out', 'Closing the book')).toBe(
-        '0 of 6 closed out · not yet on the paper · press Closing the book on the index to open',
+      expect(quietStateSentence('2 closed out', 'Closing the book')).toBe(
+        '2 closed out · not yet on the paper · press Closing the book on the index to open',
       );
     });
 

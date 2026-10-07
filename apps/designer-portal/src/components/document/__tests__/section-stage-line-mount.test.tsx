@@ -115,7 +115,7 @@ describe("SectionStageLineMount", () => {
     ).toBeNull();
     expect(
       screen.getByText(
-        "Concept / Schematic · Core · stage 05 of 04–09 · Week 2 · Committed",
+        "Concept / Schematic · Core · stage 05 · Week 2",
       ),
     ).toBeVisible();
     expect(screen.queryByText(/Closeout & Post-Occupancy/)).toBeNull();

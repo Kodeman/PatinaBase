@@ -117,13 +117,10 @@ function activeSub(key: SectionKey, f: SectionFacts): string {
       if (status === 'expired') return 'Expired';
       return 'Awaiting signature';
     }
-    case 'project': {
-      // R108: the position comes from the resolver or it does not exist. A week
-      // computed off the project's start date was the T1 lie — it claimed a
-      // hard-anchored position for schedules that had never been anchored.
-      const position = f.schedule?.positionText;
-      return position ? `Active · ${position}` : 'Active';
-    }
+    case 'project':
+      // R17 (FR1): `Active` alone. The resolver's position — a week, or the
+      // fidelity word `Band` standing in for one — is machinery on the rail.
+      return 'Active';
     case 'install':
       return prettyPhase(row.current_phase) || 'Install';
     case 'care':
@@ -149,8 +146,9 @@ function futureSub(key: SectionKey, f: SectionFacts): string {
       return `~${fmtDay(install.date)}`;
     case 'band':
       // Month precision only: a band never states a day, matching the desk's
-      // refusal to put a date on an unanchored schedule.
-      return `Band · ~${fmtMonth(install.date)}`;
+      // refusal to put a date on an unanchored schedule. R17: the register
+      // word itself never prints.
+      return `~${fmtMonth(install.date)}`;
   }
 }
 

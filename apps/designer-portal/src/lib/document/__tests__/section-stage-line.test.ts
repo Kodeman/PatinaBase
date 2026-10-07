@@ -39,7 +39,10 @@ const selected = (id: string): ScheduleSelection => ({
 });
 
 describe("deriveSectionStageLine", () => {
-  it("states the stage, the track, the position inside the Project band, the resolver position, and the register", () => {
+  // R17 (FR1) — the word `Band` never prints: no register suffix, no
+  // fidelity word standing in for a position, and no `of 04–09` band span
+  // (which also reads as `N of M`, R13).
+  it("states the stage, the track and an anchored week — no band span, no register suffix", () => {
     const model = deriveSectionStageLine(
       deriveWorkflowStageDocument([
         phase({
@@ -53,11 +56,11 @@ describe("deriveSectionStageLine", () => {
     );
 
     expect(model?.subLabel).toBe(
-      "Design Development · FF&E · stage 06 of 04–09 · Week 3 · Committed",
+      "Design Development · FF&E · stage 06 · Week 3",
     );
   });
 
-  it("omits the Project band from a stage that lives outside 04–09", () => {
+  it("prints no fidelity word where the resolver has no anchored week", () => {
     const model = deriveSectionStageLine(
       deriveWorkflowStageDocument([
         phase({
@@ -71,7 +74,7 @@ describe("deriveSectionStageLine", () => {
     );
 
     expect(model?.subLabel).toBe(
-      "Closeout & Post-Occupancy · Core · stage 11 · Band · Band",
+      "Closeout & Post-Occupancy · Core · stage 11",
     );
   });
 
@@ -99,7 +102,7 @@ describe("deriveSectionStageLine", () => {
       deriveSectionStageLine(state, selected("p-ffe"), "committed", "Week 2")
         ?.subLabel,
     ).toBe(
-      "Delivery, Installation & Styling · FF&E · stage 10 · Week 2 · Committed",
+      "Delivery, Installation & Styling · FF&E · stage 10 · Week 2",
     );
   });
 
@@ -124,7 +127,7 @@ describe("deriveSectionStageLine", () => {
     const model = deriveSectionStageLine(state, NO_SELECTION, "band", "Band");
 
     expect(model?.subLabel).toBe(
-      "Design Development · Core · stage 06 of 04–09 · Band",
+      "Design Development · Core · stage 06",
     );
     expect(model?.subLabel).not.toMatch(/Week/);
   });
@@ -162,7 +165,7 @@ describe("deriveSectionStageLine", () => {
     );
 
     expect(model?.subLabel).toBe(
-      "Documentation / Authorization · Core · stage 07 of 04–09",
+      "Documentation / Authorization · Core · stage 07",
     );
   });
 
@@ -196,7 +199,7 @@ describe("deriveSectionStageLine", () => {
       { key: "construction", label: "Construction", stageNumber: "05" },
     ]);
     expect(model?.subLabel).toBe(
-      "Design Development · Core · stage 06 of 04–09 · Frame · Frame",
+      "Design Development · Core · stage 06",
     );
   });
 
@@ -407,6 +410,10 @@ describe("R113 string-absence contract", () => {
             for (const retired of RETIRED_STRINGS) {
               expect(rendered).not.toContain(retired);
             }
+            // R17 / R13 — no fidelity word and no `N of M` on the line.
+            const subLabel = model?.subLabel ?? '';
+            expect(subLabel).not.toMatch(/\b(Band|Frame|Committed|Record)\b/);
+            expect(subLabel).not.toMatch(/\d+ of \d+/);
           }
         }
       }

@@ -156,6 +156,7 @@ import { MakerReading, ReadingLens } from './buying/maker-reading';
 import { NextActReading } from './buying/next-act-reading';
 import { InstallManifest } from './buying/install-manifest';
 import { InstallReadingLine } from './overlays/ask-maker-sheet';
+import { CareClosedLine } from './quiet-sections';
 import type { BuyingReading } from '@/lib/document/buying-readings';
 import {
   STATE_WORDS,
@@ -1989,6 +1990,10 @@ function FFESectionBody({
             </DocumentAction>
           )}
         </div>
+      )}
+      {/* R11 — the Care head's own status line: `The book closed …`. */}
+      {mode === 'install' && sectionKey === 'care' && !selecting && (
+        <CareClosedLine projectId={projectId} />
       )}
 
       {!ffeFolded && ffeQuiet && (

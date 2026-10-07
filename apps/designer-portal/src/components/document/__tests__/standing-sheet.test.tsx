@@ -122,6 +122,35 @@ describe('StandingSheet (OD-6 / L-11)', () => {
     expect(screen.getByText('INPUT NEEDED · 1').className).toMatch(/border-t/);
   });
 
+  // FR1 F14 / R20 — the Direction's collapsed row: one sentence, one act, and
+  // no kind word of its own under the section's heading.
+  it('prints the proposal’s collapsed input row with one act and no empty eyebrow', () => {
+    const onAct = jest.fn();
+    render(
+      <StandingSheet
+        open
+        onClose={jest.fn()}
+        items={[]}
+        inputs={[
+          {
+            key: 'proposal-inputs',
+            eyebrow: '',
+            sentence: 'The proposal needs 8 inputs',
+            act: { key: 'write-the-proposal', label: 'Write the proposal', onAct },
+          },
+        ]}
+      />,
+    );
+    const panel = screen.getByRole('dialog');
+    expect(panel).toHaveAccessibleName('Standing · 1');
+    const rows = panel.querySelectorAll('[data-standing-input-row]');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].querySelectorAll('p')).toHaveLength(1);
+    expect(panel).not.toHaveTextContent(/blocks|Client proposal/);
+    fireEvent.click(within(rows[0] as HTMLElement).getByRole('button', { name: 'Write the proposal' }));
+    expect(onAct).toHaveBeenCalledTimes(1);
+  });
+
   it('D10 — files setup under a clay SETUP eyebrow at the foot, counted, never terracotta', () => {
     const onAct = jest.fn();
     render(
@@ -177,13 +206,13 @@ describe('StandingSheet (OD-6 / L-11)', () => {
             key: 'setup:target_date_unset',
             setup: 'target_date_unset',
             sentence: 'No target date set',
-            act: { key: 'setup:target_date_unset', label: 'Set a target', onAct },
+            act: { key: 'setup:target_date_unset', label: 'Set dates', onAct },
             opensSheet: false,
           },
         ]}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Set a target' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set dates' }));
     expect(onClose).toHaveBeenCalledTimes(1);
     // Not yet: the sheet's door takes focus a frame after the close.
     expect(onAct).not.toHaveBeenCalled();

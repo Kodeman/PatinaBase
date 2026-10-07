@@ -162,9 +162,11 @@ export interface CareQuietFacts {
   total: number;
 }
 
+/** R13 — `Nothing yet` until the first item closes, then `{n} closed out`;
+ *  never `N of M`, the count Q10 cut and V11 refuses. */
 export function careQuietStatus({ closed, total }: CareQuietFacts): string {
-  if (total === 0) return QUIET_NOTHING_YET;
-  return `${closed} of ${total} closed out`;
+  if (total === 0 || closed === 0) return QUIET_NOTHING_YET;
+  return `${closed} closed out`;
 }
 
 export function recordQuietStatus({ complete }: { complete: number }): string {

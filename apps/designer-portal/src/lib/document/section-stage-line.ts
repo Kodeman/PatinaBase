@@ -19,11 +19,6 @@ import type {
   WorkflowStageDocumentState,
 } from "./workflow-stage-derivation";
 
-/** Canonical stage ordinals that live inside the Project section (M1). */
-const PROJECT_BAND_FIRST_ORDINAL = 4;
-const PROJECT_BAND_LAST_ORDINAL = 9;
-const PROJECT_BAND_LABEL = "04–09";
-
 export interface SectionStageTrackBand {
   key: ResidentialWorkflowTrackKey;
   label: string;
@@ -33,7 +28,7 @@ export interface SectionStageTrackBand {
 export interface SectionStageLineModel {
   mode: "project" | "section";
   /**
-   * "Design Development · FF&E · stage 06 of 04–09 · Week 3 · Committed", or
+   * "Design Development · FF&E · stage 06 · Week 3", or
    * null when there is no stage to name.
    */
   subLabel: string | null;
@@ -51,26 +46,28 @@ export interface SectionStageLineModel {
   fidelity: Fidelity | null;
 }
 
-/** R111 — stage · position · fidelity. The position is never recomputed here. */
+/**
+ * R111 — stage · anchored week. The position is never recomputed here.
+ *
+ * R17 (FR1) — the word `Band` never prints, and neither does any rung of the
+ * fidelity ladder: the register is machinery, so no suffix carries it, and a
+ * position that is only a fidelity word (`positionText` answers `Band` until a
+ * run is anchored) says nothing. The `of 04–09` span went with it — it was the
+ * Project band again, and read as `N of M` (R13).
+ */
+const FIDELITY_WORDS: ReadonlySet<string> = new Set(Object.values(FIDELITY_WORD));
+
 function subLabelFor(
   stageTitle: string,
   stageNumber: string,
-  stageOrdinal: number,
   trackLabel: string,
   position: string | null,
-  fidelity: Fidelity | null,
 ): string {
-  const stagePosition =
-    stageOrdinal >= PROJECT_BAND_FIRST_ORDINAL &&
-    stageOrdinal <= PROJECT_BAND_LAST_ORDINAL
-      ? `stage ${stageNumber} of ${PROJECT_BAND_LABEL}`
-      : `stage ${stageNumber}`;
   return [
     stageTitle,
     trackLabel,
-    stagePosition,
-    position,
-    fidelity ? FIDELITY_WORD[fidelity] : null,
+    `stage ${stageNumber}`,
+    position && !FIDELITY_WORDS.has(position) ? position : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -188,10 +185,8 @@ export function deriveSectionStageLine(
       ? subLabelFor(
           headline.stage.title,
           headline.stage.number,
-          headline.stage.ordinal,
           headline.track.label,
           selected ? position : null,
-          fidelity,
         )
       : null,
     tracks: trackBandsFor(state),

@@ -45,7 +45,11 @@ jest.mock('@patina/supabase', () => ({
   }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
+  // R11 — the Care head's status line reads the close date off the project.
+  useProjectV2: () => ({ data: mockProject }),
 }));
+
+let mockProject: Record<string, unknown> | undefined;
 
 const openAddToProject = jest.fn();
 jest.mock('../add-to-project-sheet', () => ({
@@ -173,6 +177,27 @@ describe('FF&E install/care head — SP-01/F03, F48', () => {
     renderCare();
     expect(screen.getByRole('heading', { name: 'Care' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Install' })).not.toBeInTheDocument();
+  });
+
+  // FR1 F11 / R11 — the closed sentence is the Care head's status line,
+  // beneath the heading, printed once.
+  it('prints The book closed as the Care head status line, beneath the heading', () => {
+    mockProject = { id: 'project-1', completed_at: '2026-11-21T15:00:00Z' };
+    renderCare();
+    const heading = screen.getByRole('heading', { name: 'Care' });
+    const status = screen.getByText('The book closed 21 November.');
+    expect(screen.getAllByText(/The book closed/)).toHaveLength(1);
+    // Beneath the heading in document order.
+    expect(
+      heading.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(status.closest('[data-care-status]')).not.toBeNull();
+  });
+
+  it('prints no closed sentence on an install document', () => {
+    mockProject = { id: 'project-1', completed_at: '2026-11-21T15:00:00Z' };
+    renderInstall();
+    expect(screen.queryByText(/The book closed/)).toBeNull();
   });
 
   it('prints the SP-01 empty state verbatim on a care document with no open lines', () => {
