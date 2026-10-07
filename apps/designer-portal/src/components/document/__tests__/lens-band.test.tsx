@@ -6,11 +6,24 @@ import {
   type LensBandModel,
   type LensSpreadKind,
 } from '@/lib/document/lens-band-derivation';
-import { LensBand } from '../lens-band';
+import { LensBand, OPEN_STANDING_SHEET_EVENT } from '../lens-band';
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
+
+// Slice 2 — `one-voice` is off unless a test turns it on, so every test above
+// the slice-2 block is the flag-off band, unchanged.
+let mockOneVoice = false;
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (name: string) => ({
+    value: name === 'one-voice' ? mockOneVoice : false,
+    isLoading: false,
+  }),
+}));
+afterEach(() => {
+  mockOneVoice = false;
+});
 
 const need = (
   key: string,
@@ -831,5 +844,201 @@ describe('LensBand · the one live region (OD-7)', () => {
   it('says nothing at all while no stop is held', () => {
     render(<LensBand model={model()} docId="doc-1" />);
     expect(line('2').querySelector('[data-lens-announce]')).toHaveTextContent('');
+  });
+});
+
+// ── Slice 2 (`one-voice`) — D1's eyebrow, D2's Next ─ act and the door ───────
+
+const NOW = new Date('2026-08-29T12:00:00');
+const dueNeed = (
+  key: string,
+  kind: RedLetterRow['kind'],
+  text: string,
+  actionLabel: string,
+  dueOn: string | null,
+): RedLetterRow => ({ ...need(key, kind, text, actionLabel), dueOn });
+const CHEN_PAYMENT = 'Balance to Woodward & Sons · $12,400 due Aug 20 — PO WS-188';
+const CHEN_NEEDS: RedLetterRow[] = [
+  dueNeed('approval', 'overdue_decision', 'Primary bedroom approval overdue', 'Send a reminder', '2026-08-23'),
+  dueNeed('pay', 'payment_due', CHEN_PAYMENT, 'Record payment', '2026-08-20'),
+  dueNeed('po', 'po_unacknowledged', 'PO-2026-0418 unanswered, 14 days', 'Follow up with the maker', null),
+];
+const chen = (over: Partial<LensBandInput> = {}) =>
+  model({ household: 'Chen Residence', needs: CHEN_NEEDS, now: NOW, ...over });
+const door = () => document.querySelector('[data-lens-door]') as HTMLElement | null;
+
+describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
+  beforeEach(() => {
+    mockOneVoice = true;
+  });
+
+  it('prints `STAGE · Name` on line 1 at every stop, with no count anywhere', () => {
+    render(<LensBand model={chen()} docId="doc-1" onToTop={jest.fn()} />);
+    expect(line('1').querySelector('[data-lens-identity]')).toHaveTextContent(
+      'Project · Chen Residence',
+    );
+    expect(line('1')).toHaveClass('uppercase');
+    passSentinel();
+    expect(screen.getByRole('button', { name: 'Project · Chen Residence' })).toHaveAttribute(
+      'data-lens-to-top',
+    );
+    expect(band().textContent).not.toMatch(/\d+\s+OF\s+\d+/i);
+    expect(band().textContent).not.toMatch(/MORE/);
+  });
+
+  it('prints `Project · On hold` on the held fixture and `Care · Closed` with no Next once closed', () => {
+    const { unmount } = render(
+      <LensBand model={chen({ projectStatus: 'on_hold' })} docId="doc-1" />,
+    );
+    expect(line('1').querySelector('[data-lens-identity]')).toHaveTextContent('Project · On hold');
+    unmount();
+
+    render(<LensBand model={chen({ projectStatus: 'completed' })} docId="doc-1" />);
+    expect(line('1').querySelector('[data-lens-identity]')).toHaveTextContent('Care · Closed');
+    expect(line('2').querySelector('[data-lens-next-lead]')).toBeNull();
+  });
+
+  it('on Chen, reads `Next ─ … RECORD THE PAYMENT` left and `Standing · 2` right, in the 56px box', () => {
+    render(<LensBand model={chen()} docId="doc-1" />);
+    expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next ─');
+    expect(sentence()).toHaveTextContent(CHEN_PAYMENT);
+    expect(line('2')).toHaveClass('text-[15px]');
+    const act = screen.getByRole('button', { name: 'Record the payment' });
+    expect(act).toHaveAttribute('data-action-variant', 'primary');
+    expect(door()).toHaveTextContent('Standing · 2');
+    expect(door()).toHaveClass('ml-auto');
+    // The door follows the act on the same line.
+    expect(act.compareDocumentPosition(door() as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /MORE/ })).toBeNull();
+    expect(band().className).toContain('h-[var(--doc-band-height,56px)]');
+  });
+
+  it('is silent on the right when nothing stands beside Next', () => {
+    render(<LensBand model={chen({ needs: [CHEN_NEEDS[1]] })} docId="doc-1" />);
+    expect(screen.getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
+    expect(door()).toBeNull();
+  });
+
+  it('opens the sheet in three groups, each row with its own act, and Esc returns focus to the door', async () => {
+    const onStandingOpened = jest.fn();
+    render(
+      <LensBand
+        model={chen({ setup: [{ kind: 'no_client_linked', onAct: jest.fn() }] })}
+        docId="doc-1"
+        onStandingOpened={onStandingOpened}
+      />,
+    );
+    const word = screen.getByRole('button', { name: 'Standing · 3' });
+    word.focus();
+    fireEvent.click(word);
+    expect(onStandingOpened).toHaveBeenCalledTimes(1);
+
+    const panel = screen.getByRole('dialog');
+    const headings = Array.from(panel.querySelectorAll('[data-standing-group-heading]')).map(
+      (node) => node.textContent,
+    );
+    expect(headings).toEqual(['BLOCKS MONEY OR A SIGNATURE', 'NEEDS YOU', 'SETUP']);
+    const group = (key: string) =>
+      panel.querySelector(`[data-standing-group="${key}"]`) as HTMLElement;
+    expect(group('money')).toHaveTextContent(CHEN_PAYMENT);
+    expect(group('money').querySelector('button')).toHaveTextContent('Record the payment');
+    // Deadline order inside the group: the dated decision before the silence.
+    const needsYou = Array.from(group('needs-you').querySelectorAll('[data-standing-row]'));
+    expect(needsYou.map((row) => row.querySelector('button')?.textContent)).toEqual([
+      'Review decisions',
+      'Follow up with the maker',
+    ]);
+    // SETUP stays clay and plain.
+    expect(group('setup').querySelector('[data-standing-group-heading]')).toHaveClass(
+      'text-[var(--color-clay-ink)]',
+    );
+    expect(group('setup').querySelector('button')).toHaveAttribute(
+      'data-action-variant',
+      'secondary',
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Standing · 3' })).toHaveFocus(),
+    );
+  });
+
+  it('files the open inputs under NEEDS YOU', () => {
+    render(
+      <LensBand
+        model={chen({
+          inputs: [{ key: 'sig', eyebrow: 'SIGNATURE', sentence: 'Client signature', act: null }],
+        })}
+        docId="doc-1"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Standing · 3' }));
+    const needsYou = screen
+      .getByRole('dialog')
+      .querySelector('[data-standing-group="needs-you"]') as HTMLElement;
+    expect(needsYou.querySelector('[data-standing-input-row]')).toHaveTextContent(
+      'Client signature',
+    );
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('INPUT NEEDED');
+  });
+
+  it('shows a gated act’s reason beneath it, with the repair act beside it (D3)', () => {
+    const repair = jest.fn();
+    const base = chen();
+    const gated: LensBandModel = {
+      ...base,
+      voice: {
+        ...base.voice,
+        standing: base.voice.standing.map((item) =>
+          item.needKind === 'po_unacknowledged' && item.act
+            ? {
+                ...item,
+                act: {
+                  ...item.act,
+                  held: {
+                    reason: 'Link a client first.',
+                    repair: { key: 'link', label: 'Link a client', onAct: repair },
+                  },
+                },
+              }
+            : item,
+        ),
+      },
+    };
+    render(<LensBand model={gated} docId="doc-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Standing · 2' }));
+
+    const held = screen.getByRole('button', { name: 'Follow up with the maker' });
+    expect(held).toHaveAttribute('aria-disabled', 'true');
+    expect(held).not.toBeDisabled();
+    expect(held).toHaveAccessibleDescription('Link a client first.');
+    fireEvent.click(screen.getByRole('button', { name: 'Link a client' }));
+    expect(repair).toHaveBeenCalledTimes(1);
+  });
+
+  it('at 390, moves the door to the dock when the measure cannot fit it, and opens the sheet from there', () => {
+    const phone = chen({ tier: 'mobile' });
+    expect(phone.voice.doorInDock).toBe(true);
+    render(<LensBand model={phone} docId="doc-1" />);
+    expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next');
+    expect(screen.getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
+    expect(door()).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new Event(OPEN_STANDING_SHEET_EVENT));
+    });
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-doc-sheet-kind', 'standing');
+  });
+
+  it('leaves the band exactly as 0b printed it while the flag is off', () => {
+    mockOneVoice = false;
+    render(<LensBand model={chen()} docId="doc-1" />);
+    expect(door()).toBeNull();
+    expect(line('2').querySelector('[data-lens-next-lead]')).toBeNull();
+    expect(screen.getByRole('button', { name: '+2 MORE' })).toBeInTheDocument();
+    expect(line('1').querySelector('[data-lens-identity]')).toHaveTextContent('');
+    // The 0b act keeps its source label.
+    expect(screen.getByRole('button', { name: 'Record payment' })).toBeInTheDocument();
   });
 });

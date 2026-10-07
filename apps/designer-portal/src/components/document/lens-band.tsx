@@ -21,17 +21,24 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
   LENS_ANNOUNCE_DEDUPE_MS,
   LENS_TURN_OUT_MS,
 } from '@/lib/document/lens-constants';
-import type {
-  LensBandModel,
-  LensBandLine2,
-  LensReadingStop,
+import {
+  standingDoorLabel,
+  type LensBandModel,
+  type LensBandLine2,
+  type LensReadingStop,
+  type LensVoice,
 } from '@/lib/document/lens-band-derivation';
 import { DocumentAction } from './document-action';
 import { StandingSheet } from './standing-sheet';
+
+/** Slice 2 — the dock (SQ-2C) opens the band's standing sheet with this when
+ *  the 390 measure has moved the `Standing · N` door into More (D2). */
+export const OPEN_STANDING_SHEET_EVENT = 'document:open-standing-sheet';
 
 /** Both lines, at every width — the backstop only, after the derivation has
  *  chosen the form that fits (D-B24). */
@@ -52,10 +59,59 @@ const sameItem = (a: LensBandLine2, b: LensBandLine2) =>
   a.withheld === b.withheld &&
   a.kind === b.kind;
 
+/** The same Next, by the same rule: its whole sentence, its act and the door's
+ *  count. A flag answering late (null → a voice) is a first print, not a turn. */
+const sameVoice = (a: LensVoice | null, b: LensVoice | null) =>
+  !a ||
+  !b ||
+  ((a.next?.sentence ?? a.sentence) === (b.next?.sentence ?? b.sentence) &&
+    a.next?.act.label === b.next?.act.label &&
+    a.standingCount === b.standingCount);
+
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * L-1 — line 2 turns: the old sentence fades out for 90ms and the new one is
+ * printed in its place. The same item in new words (N-03) is adopted in place.
+ */
+function usePrintedLine<T>(line: T, same: (a: T, b: T) => boolean) {
+  const [printed, setPrinted] = useState<T>(line);
+  const [turning, setTurning] = useState(false);
+  // N-03 — the first model this band ever holds is not a turn: nothing was
+  // printed before it, and at 390 the pre-hydration model is the wide tier's,
+  // corrected one frame later. A turn there is a 90ms blank on every load.
+  const hasPrinted = useRef(false);
+  useEffect(() => {
+    if (line === printed) {
+      hasPrinted.current = true;
+      return;
+    }
+    // Same item — new handler identities, or the tier settling under it.
+    // Adopt in place, with no turn.
+    if (!hasPrinted.current || same(line, printed)) {
+      hasPrinted.current = true;
+      setPrinted(line);
+      return;
+    }
+    // L-1 reduced-motion form: the new sentence is printed instantly in place.
+    // A 90ms hold at opacity 0 is a blank line, not a shorter crossfade.
+    if (prefersReducedMotion()) {
+      setPrinted(line);
+      setTurning(false);
+      return;
+    }
+    setTurning(true);
+    const id = window.setTimeout(() => {
+      setPrinted(line);
+      setTurning(false);
+    }, LENS_TURN_OUT_MS);
+    return () => window.clearTimeout(id);
+  }, [line, printed, same]);
+  return { printed, turning };
+}
 
 export function LensBand({
   model,
@@ -78,8 +134,14 @@ export function LensBand({
   onStandingOpened?: () => void;
 }) {
   const { line1 } = model;
-  const [printed, setPrinted] = useState<LensBandLine2>(model.line2);
-  const [turning, setTurning] = useState(false);
+  // Slice 2 (D1, D2) — the stage word on line 1, Next and the door on line 2.
+  // Off, the band is exactly the 0b band.
+  const voice = useFeatureFlag('one-voice').value === true ? model.voice : null;
+  const { printed, turning } = usePrintedLine<LensBandLine2>(model.line2, sameItem);
+  const { printed: spoken, turning: voiceTurning } = usePrintedLine<LensVoice | null>(
+    voice,
+    sameVoice,
+  );
   const [sheetOpen, setSheetOpen] = useState(false);
   const moreRef = useRef<HTMLButtonElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -126,36 +188,18 @@ export function LensBand({
     onPinChange?.(!open);
   }, [onPinChange, open]);
 
-  // N-03 — the first model this band ever holds is not a turn: nothing was
-  // printed before it, and at 390 the pre-hydration model is the wide tier's,
-  // corrected one frame later. A turn there is a 90ms blank on every load.
-  const hasPrinted = useRef(false);
+  // D2 at 390 — when the measure moves the door into the dock's More, the
+  // dock opens this same sheet; there is one sheet, and it lives here.
+  const speaks = voice !== null;
   useEffect(() => {
-    if (model.line2 === printed) {
-      hasPrinted.current = true;
-      return;
-    }
-    // Same item — new handler identities, or the tier settling under it.
-    // Adopt in place, with no turn.
-    if (!hasPrinted.current || sameItem(model.line2, printed)) {
-      hasPrinted.current = true;
-      setPrinted(model.line2);
-      return;
-    }
-    // L-1 reduced-motion form: the new sentence is printed instantly in place.
-    // A 90ms hold at opacity 0 is a blank line, not a shorter crossfade.
-    if (prefersReducedMotion()) {
-      setPrinted(model.line2);
-      setTurning(false);
-      return;
-    }
-    setTurning(true);
-    const id = window.setTimeout(() => {
-      setPrinted(model.line2);
-      setTurning(false);
-    }, LENS_TURN_OUT_MS);
-    return () => window.clearTimeout(id);
-  }, [model.line2, printed]);
+    if (!speaks) return;
+    const openSheet = () => {
+      onStandingOpened?.();
+      setSheetOpen(true);
+    };
+    window.addEventListener(OPEN_STANDING_SHEET_EVENT, openSheet);
+    return () => window.removeEventListener(OPEN_STANDING_SHEET_EVENT, openSheet);
+  }, [speaks, onStandingOpened]);
 
   const [announcement, setAnnouncement] = useState('');
   const lastAnnouncedKey = useRef<string | null>(null);
@@ -173,7 +217,9 @@ export function LensBand({
   // Keyed on the WORDS, not on `printed`: the page rebuilds the model object
   // on every settling read, and keying on identity would wipe the stop line
   // the announce effect had just written, one commit later.
-  const printedWords = `${printed.kind}|${printed.sentence}|${printed.act?.label ?? ''}|${printed.standingCount}`;
+  const printedWords = spoken
+    ? `${spoken.lead ?? ''}|${spoken.sentence}|${spoken.next?.act.label ?? ''}|${spoken.standingCount}`
+    : `${printed.kind}|${printed.sentence}|${printed.act?.label ?? ''}|${printed.standingCount}`;
   useEffect(() => {
     setAnnouncement('');
   }, [printedWords]);
@@ -198,6 +244,16 @@ export function LensBand({
   const standing = printed.kind === 'standing';
   const withheld = printed.withheld;
   const moreId = `lens-band-more-${docId}`;
+
+  // D2 — Next is painted terracotta only when it names a standing exception;
+  // the stage's own act and a setup row are not something gone wrong (D10).
+  const spokenRow = spoken?.next?.rowKey ?? null;
+  const nextIsException =
+    spokenRow !== null && (spoken?.standing.some((item) => item.key === spokenRow) ?? false);
+  // D1 — the door keeps the register of what stands behind it.
+  const doorHoldsException =
+    spoken?.standing.some((item) => item.key !== spokenRow) ?? false;
+  const door = spoken && spoken.standingCount > 0 && !spoken.doorInDock ? spoken : null;
 
   return (
     <>
@@ -234,7 +290,23 @@ export function LensBand({
               stage as its arc and the date in its vitals, so both yield; the
               letterhead prints no money, so money keeps its printing. */}
           <span className={`min-w-0 ${LINE_CLIP}`} data-lens-identity>
-            {open ? null : (
+            {spoken ? (
+              // D1 — `STAGE · Name` at every stop: the letterhead prints the
+              // name but never the stage word, so line 1 does not yield it.
+              // No count, plate or badge; the caps are this line's CSS.
+              !open && onToTop ? (
+                <button
+                  type="button"
+                  onClick={onToTop}
+                  data-lens-to-top
+                  className="inline p-0 text-left uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] hover:underline"
+                >
+                  {spoken.eyebrow}
+                </button>
+              ) : (
+                spoken.eyebrow
+              )
+            ) : open ? null : (
               <>
                 {onToTop ? (
                   <button
@@ -253,7 +325,13 @@ export function LensBand({
             )}
           </span>
           <span className="shrink-0 whitespace-nowrap" data-lens-right-flush>
-            {open ? line1.moneyOnly : line1.rightFlush}
+            {spoken
+              ? open
+                ? spoken.moneyOnly
+                : spoken.rightFlush
+              : open
+                ? line1.moneyOnly
+                : line1.rightFlush}
           </span>
         </p>
 
@@ -261,6 +339,88 @@ export function LensBand({
             44px control is inset by -12px into the 19.5px line, so an
             `overflow: hidden` here would cut 12px off its box for painting and
             for hit-testing — and at 390 line 2 is that act's only printing. */}
+        {spoken ? (
+          <p
+            data-lens-line="2"
+            data-lens-line2-kind={spoken.next ? 'next' : printed.kind}
+            data-lens-line2-form={spoken.form}
+            aria-live="polite"
+            aria-atomic="true"
+            className={`flex items-center gap-2 whitespace-nowrap text-[15px] leading-[1.3] ${
+              nextIsException
+                ? 'text-[var(--color-terracotta-ink)]'
+                : 'text-[var(--text-primary)]'
+            }`}
+          >
+            {spoken.lead && (
+              <span
+                data-lens-next-lead
+                className="shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
+              >
+                {spoken.lead}
+              </span>
+            )}
+            <span
+              data-lens-sentence
+              data-part={spoken.sentence ? 'headline' : undefined}
+              data-arr-long={
+                spoken.next && spoken.form === 'short' ? spoken.next.sentence : undefined
+              }
+              className={`min-w-0 ease-[var(--ease-editorial)] transition-opacity motion-reduce:transition-none ${LINE_CLIP} ${
+                voiceTurning
+                  ? 'opacity-0 duration-[90ms]'
+                  : 'opacity-100 duration-[150ms]'
+              }`}
+            >
+              {spoken.sentence}
+            </span>
+            {spoken.next && (
+              <DocumentAction
+                ref={actRef}
+                actionKey="lens-band-next"
+                surfaceKey="open-document"
+                regionKey="lens-band"
+                // D2 — the band's act is a scored word whatever its rest tier:
+                // a filled act owes a consequence sentence the 56px band has
+                // no room for (D3, R141).
+                variant="primary"
+                data-part="act"
+                className="my-[-12px] shrink-0"
+                disabled={spoken.next.act.disabled}
+                onClick={() => {
+                  onActed?.();
+                  spoken.next?.act.onAct();
+                }}
+              >
+                {spoken.next.act.label}
+              </DocumentAction>
+            )}
+            {door && (
+              <button
+                ref={moreRef}
+                id={moreId}
+                type="button"
+                data-lens-door
+                onClick={() => {
+                  onStandingOpened?.();
+                  setSheetOpen(true);
+                }}
+                // D2 — `Standing · 3`, the word and the count, in her words:
+                // not caps, never a kind summary.
+                className={`ml-auto shrink-0 whitespace-nowrap font-mono text-[11px] tracking-[0.04em] underline underline-offset-[3px] ${
+                  doorHoldsException
+                    ? 'text-[var(--color-terracotta-ink)]'
+                    : 'text-[var(--color-clay-ink)]'
+                }`}
+              >
+                {standingDoorLabel(door.standingCount)}
+              </button>
+            )}
+            <span className="sr-only" data-lens-announce>
+              {announcement}
+            </span>
+          </p>
+        ) : (
         <p
           data-lens-line="2"
           data-lens-line2-kind={printed.kind}
@@ -340,13 +500,15 @@ export function LensBand({
             {announcement}
           </span>
         </p>
+        )}
       </section>
       <StandingSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
-        items={model.standing}
-        inputs={model.inputs}
+        items={voice ? voice.standing : model.standing}
+        inputs={voice ? voice.inputs : model.inputs}
         setup={model.setup}
+        grouped={voice !== null}
         triggerRef={fallbackFocusRef}
       />
     </>

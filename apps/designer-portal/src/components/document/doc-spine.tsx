@@ -19,6 +19,7 @@
  */
 
 import Link from 'next/link';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { StrataMark } from './strata-mark';
 import { LensLadder } from './spine/lens-ladder';
 import { fillStateAtSection } from '@/lib/document/fill-state';
@@ -113,9 +114,11 @@ export function DocSpine({
   onReleaseRoom,
 }: DocSpineProps) {
   const activeSection = sections.find((s) => s.state === 'active');
-  const ordinal = stagePhase
-    ? `${stagePhase.position} OF ${stagePhase.of}`
-    : null;
+  // US-19 D2 (`one-voice`) — the word alone: no `N OF M` beside the stage.
+  // The strata mark keeps its fill.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const ordinal =
+    stagePhase && !oneVoice ? `${stagePhase.position} OF ${stagePhase.of}` : null;
   const stagePhrase =
     stageWord != null
       ? { top: stageWord, bottom: ordinal }

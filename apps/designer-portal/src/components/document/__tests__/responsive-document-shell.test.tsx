@@ -49,9 +49,17 @@ jest.mock('@patina/supabase', () => ({
 
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
 
+// US-19 slice 2 — `one-voice` is held off unless a case turns it on, so the
+// band and spine cases below read the 0b paper; every other flag stays on.
+let mockOneVoice = false;
 jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: () => ({ value: true }),
+  useFeatureFlag: (name: string) => ({
+    value: name === 'one-voice' ? mockOneVoice : true,
+  }),
 }));
+afterEach(() => {
+  mockOneVoice = false;
+});
 
 jest.mock('@/hooks/document-time-provider', () => ({
   useDocumentTime: () => ({
@@ -817,6 +825,38 @@ describe('the band, mounted by the document', () => {
     expect(bandLine('1')!.textContent).not.toContain('PROCUREMENT');
     expect(bandLine('2')).toHaveTextContent('Name the phases for this project');
   });
+
+  // US-19 D1/D2 (`one-voice`) — the word alone: no `N OF M` on the band or the
+  // rail, and the strata mark keeps its place.
+  it.each(['project' as const, 'install' as const, 'care' as const])(
+    'prints no stage count on the band or the rail once one voice is on (%s)',
+    (section) => {
+      mockOneVoice = true;
+      render(
+        <RoomLensProvider>
+          <DocSpine
+            sections={[]}
+            household="Vandersteen"
+            stageWord={SPREAD_STAGE[section].word}
+            stagePhase={{
+              name: SPREAD_STAGE[section].word,
+              ...SPREAD_STAGE[section].index,
+            }}
+          />
+          <LensBand model={bandModelFor(section)} docId="doc-1" />
+        </RoomLensProvider>,
+      );
+      passSentinel();
+
+      const eyebrow = { project: 'Project', install: 'Install', care: 'Care' }[section];
+      expect(bandLine('1')).toHaveTextContent(`${eyebrow} · Vandersteen residence`);
+      expect(document.body.textContent).not.toMatch(/\d+\s+OF\s+\d+/i);
+      expect(document.querySelector('[data-spine-stage-phrase]')).toHaveTextContent(
+        SPREAD_STAGE[section].word,
+      );
+      expect(document.querySelector('[data-spine-mark]')).not.toBeNull();
+    },
+  );
 });
 
 describe('a room in hand, carried down the widths', () => {

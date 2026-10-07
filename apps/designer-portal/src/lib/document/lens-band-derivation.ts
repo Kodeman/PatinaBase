@@ -12,8 +12,19 @@
  */
 
 import type { RedLetterRow } from '@/components/document/red-letter-zone';
-import type { NeedKind } from './desk-derivation';
+import {
+  ACT_TIER,
+  needActLabel,
+  stageEyebrow,
+  type ActTargetId,
+  type ActTier,
+  type OwnAct,
+} from './act-names';
+import type { NeedKind, NeedLine } from './desk-derivation';
+import { clientShortName } from './document-guide';
 import type { DocumentIndexKey } from './document-index';
+import { familyLabel } from './family-label';
+import type { InstallReading } from './install-reading';
 import type { LensTier } from './lens-constants';
 import {
   LENS_LINE2_GAP_PX,
@@ -21,7 +32,13 @@ import {
   LENS_LINE2_PX_PER_CHAR,
   LENS_MONO_PX_PER_CHAR,
 } from './lens-constants';
-import { classOfStandingRow, type SetupRowKind } from './need-class';
+import {
+  classOfStandingRow,
+  selectNext,
+  type SetupRow,
+  type SetupRowKind,
+  type StandingNeedRow,
+} from './need-class';
 import { needTieBreakRank } from './need-tie-break';
 import type {
   TicketExceptionRank,
@@ -51,6 +68,25 @@ export interface LensAct {
   /** R5 — the act's own work is in flight (the seed the leader runs). The band
    *  holds the control rather than letting it be pressed twice. */
   disabled?: boolean;
+  /** D3 — offered, but this person cannot take it now. It stays in the tab
+   *  order, `aria-disabled`, with its reason beneath; it is never Next (D2). */
+  held?: LensHeld;
+}
+
+/** D3's gated act: one muted reason sentence, and the repair act beside it
+ *  where one exists (`Link a client first.` · `Link a client`). */
+export interface LensHeld {
+  reason: string;
+  repair?: LensAct;
+}
+
+/** D8 — whose hand a need's next move is in, as the desk rule recorded it. */
+export type LensNeedOwner = NeedLine['owner'];
+
+/** A red-letter row, with the owner its need was raised with where the caller
+ *  carries it (D8 custody). */
+export interface LensNeedRow extends RedLetterRow {
+  owner?: LensNeedOwner;
 }
 
 /**
@@ -136,6 +172,9 @@ export interface LensStandingItem {
    *  Null for a ticket exception, which has no kind. The short form's subject
    *  is chosen by it: a conflict's object is its DATE, an invoice's its code. */
   needKind: NeedKind | null;
+  /** D8 — the need's recorded owner; null for a ticket exception, or where
+   *  the caller did not carry one. */
+  owner?: LensNeedOwner | null;
   /** D-B24 — the item's short form, for the 390 measure. */
   short: LensShortForm;
 }
@@ -279,6 +318,73 @@ export interface LensBandModel {
   setup: readonly LensSetupItem[];
   /** `Now at Pieces · 36 lines · 4 rooms · 1 damaged` (OD-7 / DL-03). */
   announcement: string | null;
+  /** Slice 2 (`one-voice`, D2) — derived on every model, printed only behind
+   *  the flag. */
+  voice: LensVoice;
+}
+
+/**
+ * The stage's own act (D1) — Next's third place (D2) — with the sentence line
+ * 2 prints beside it when it is Next.
+ */
+export interface LensOwnAct {
+  key: string;
+  label: string;
+  /** The control a press lands on (L-10). Null where the press runs its own
+   *  landing: the guide line standing in for an own act the caller did not
+   *  pass. */
+  targetId: ActTargetId | null;
+  tier: ActTier;
+  sentence: string;
+  shortSentence?: string | null;
+  onAct: () => void;
+  disabled?: boolean;
+  held?: LensHeld;
+}
+
+/** The act Next names: the label every surface prints (D1), and its D3 tier. */
+export interface LensNextAct extends Omit<LensAct, 'shortLabel'> {
+  targetId: ActTargetId | null;
+  tier: ActTier;
+}
+
+/** D2 — the one thing the band names on line 2's left. The dock (D7) prints
+ *  the same act in the same words. */
+export interface LensNext {
+  sentence: string;
+  /** D-B24 / W6-R1 — the 390 form. The act is never shortened (D1: never the
+   *  bare `Record`). */
+  shortSentence: string;
+  act: LensNextAct;
+  /** The sheet row Next names, so the door does not count it twice. Null for
+   *  the stage's own act, which is no sheet row. */
+  rowKey: string | null;
+}
+
+export interface LensVoice {
+  /** Line 1, left (D1): `Project · Chen Residence`, `Project · On hold`,
+   *  `Care · Closed`. Caps in CSS; never a count. */
+  eyebrow: string;
+  /** Line 1, right — the agreed figure, yielding where Next names it (D-B26). */
+  rightFlush: string | null;
+  moneyOnly: string | null;
+  next: LensNext | null;
+  /** Line 2's lead word: `Next ─` beside the long sentence, `Next` beside
+   *  the short one; null where no Next prints (a closed job). */
+  lead: string | null;
+  /** The sentence line 2 prints — Next's, in the form that fit, or today's
+   *  line-2 sentence where there is no Next. */
+  sentence: string;
+  form: LensBandLine2['form'];
+  /** `Standing · N` — every sheet row minus the one Next names. 0 is silence. */
+  standingCount: number;
+  /** D2 at 390 — the measure cannot fit the door after the act, so the band
+   *  prints Next alone and the dock's More carries `Standing · N` (SQ-2C). */
+  doorInDock: boolean;
+  /** The sheet's exception rows, each act named from the one table (D1). */
+  standing: readonly LensStandingItem[];
+  /** The open inputs behind the door; they file under `NEEDS YOU` (D2). */
+  inputs: readonly LensInputItem[];
 }
 
 export interface LensBandInput {
@@ -286,7 +392,7 @@ export interface LensBandInput {
   /** `deriveTicket(input)` — read for `row.exception` only (OD-8). */
   ticket: readonly TicketRow[];
   /** The red letter's rows, as `page.tsx` composes them. */
-  needs: readonly RedLetterRow[];
+  needs: readonly LensNeedRow[];
   /** The stage's open inputs, from the guide model (C-6, W3-R2). ALL of them:
    *  the D1 exclusion is made below, against the kind line 2 resolves to. */
   inputs?: readonly LensInputItem[];
@@ -317,6 +423,12 @@ export interface LensBandInput {
   /** D10 — `project_status`. `No client linked` is suppressed on a
    *  `completed` or `on_hold` job. */
   projectStatus?: string | null;
+  /** D1 — the stage's own act, from `ownAct()` and the facts it reads. Left
+   *  out, the guide line stands in as the stage's own act; null states the
+   *  stage has none. */
+  ownAct?: LensOwnAct | null;
+  /** D6 — the install reading; line 2 quotes it when its act is Next. */
+  installReading?: InstallReading | null;
 }
 
 const STOP_WORDS = new Set(['A', 'AN', 'THE', 'OF', 'FOR', 'TO', 'WITH', 'ON']);
@@ -593,7 +705,7 @@ function deadlineOf(
  */
 export function rankStanding(
   rows: readonly TicketRow[],
-  needs: readonly RedLetterRow[],
+  needs: readonly LensNeedRow[],
   /** N-01 — injected, never read off the clock in here: a derivation that
    *  reads `Date.now()` cannot be tested at a stated day and re-renders into
    *  a different answer at midnight. */
@@ -648,6 +760,7 @@ export function rankStanding(
         standingSince: null,
         namesMoney: need.kind === 'overdue_invoice',
         needKind: need.kind,
+        owner: need.owner,
       }),
     });
   });
@@ -787,6 +900,138 @@ const sentencePx = (sentence: string) =>
 /** The act and the `+N MORE` door are mono, and neither ever truncates. */
 const monoPx = (label: string) => label.length * LENS_MONO_PX_PER_CHAR;
 
+/** D-B24 — a standing item's 390 form: `<STATE> <DAYS>D · <SUBJECT>`. */
+const shortSentenceOf = (item: LensStandingItem) =>
+  item.short.days == null
+    ? `${item.short.state} · ${item.short.subject}`
+    : `${item.short.state} ${item.short.days}D · ${item.short.subject}`;
+
+/** D2's door, in its own words: the word and the count, nothing else. */
+export const standingDoorLabel = (count: number) => `Standing · ${count}`;
+
+/** D1 — a need's act is named from the one table, whatever its source printed.
+ *  A ticket exception has no kind, and no act to rename. */
+function voiceItem(item: LensStandingItem): LensStandingItem {
+  if (!item.act || !item.needKind) return item;
+  return { ...item, act: { ...item.act, label: needActLabel(item.needKind) } };
+}
+
+/** D8 — custody, only as a recorded owner allows it. The studio's own pen
+ *  prints nothing: "yours" never names a person. */
+function withCustody(
+  sentence: string,
+  owner: LensNeedOwner | null | undefined,
+  clientFirstName: string | null,
+): string {
+  if (owner === 'client') return `Waiting on ${clientFirstName ?? 'the client'}: ${sentence}`;
+  if (owner === 'maker') return `With the maker: ${sentence}`;
+  return sentence;
+}
+
+const nextAct = (act: LensAct, targetId: ActTargetId | null, tier: ActTier): LensNextAct => ({
+  key: act.key,
+  label: act.label,
+  onAct: act.onAct,
+  disabled: act.disabled,
+  held: act.held,
+  targetId,
+  tier,
+});
+
+/** A setup row has no deadline: it is something not yet given, not late. */
+const NO_DEADLINE = { sense: 'none', distance: null, standingSince: null } as const;
+
+export interface DeriveNextInput {
+  /** The sheet's exception rows, classes 1–2, ranked (`deriveLensBand`'s). */
+  standing: readonly LensStandingItem[];
+  /** The sheet's `SETUP` rows (class 3). */
+  setup?: readonly LensSetupItem[];
+  /** The stage's own act (D1), or null where the stage has none. */
+  ownAct: LensOwnAct | null;
+  /** D6 — when the reading's act is Next, the sentence quotes the reading. */
+  installReading?: InstallReading | null;
+  /** D8 — the client's first name; null where only a placeholder stands. */
+  clientFirstName: string | null;
+  /** A closed job prints no Next (D2). */
+  closed: boolean;
+}
+
+/**
+ * D2's Next — the one act line 2 names, and the one the phone dock's centre
+ * repeats (D7). Built on `selectNext`: class 1, then class 2, then the stage's
+ * own act, then setup; the first the person can take. A row with no act, or a
+ * held one, cannot be taken, so it stands in the sheet and is never Next.
+ */
+export function deriveNext({
+  standing,
+  setup = [],
+  ownAct,
+  installReading = null,
+  clientFirstName,
+  closed,
+}: DeriveNextInput): LensNext | null {
+  type Row = (StandingNeedRow | SetupRow) & { next: LensNext | null };
+  const rows: Row[] = [
+    ...standing.map((item): Row => {
+      const { act } = voiceItem(item);
+      return {
+        needKind: item.needKind,
+        tier: item.tier,
+        sense: item.sense,
+        distance: item.distance,
+        standingSince: item.standingSince,
+        next: act
+          ? {
+              sentence: withCustody(item.sentence, item.owner, clientFirstName),
+              shortSentence: shortSentenceOf(item),
+              act: nextAct(act, null, ACT_TIER[act.label] ?? 'plain'),
+              rowKey: item.key,
+            }
+          : null,
+      };
+    }),
+    ...setup.map((item): Row => {
+      const next = item.act
+        ? {
+            sentence: item.sentence,
+            shortSentence: item.sentence,
+            act: nextAct(item.act, null, ACT_TIER[item.act.label] ?? 'plain'),
+            rowKey: item.key,
+          }
+        : null;
+      return item.setup === 'schedule_unconfigured'
+        ? { needKind: 'schedule_unconfigured', tier: 'decision-due', ...NO_DEADLINE, next }
+        : { setup: item.setup, ...NO_DEADLINE, next };
+    }),
+  ];
+
+  const choice = selectNext<Row>({
+    needs: rows,
+    // `selectNext` only places the own act; it never reads the landing, which
+    // the guide line standing in for one does not have.
+    ownAct: ownAct
+      ? ({ label: ownAct.label, tier: ownAct.tier, targetId: ownAct.targetId } as OwnAct)
+      : null,
+    canTake: (choice) =>
+      choice.kind === 'own'
+        ? !ownAct?.held
+        : Boolean(choice.row.next && !choice.row.next.act.held),
+    closed,
+  });
+  if (!choice) return null;
+  if (choice.kind === 'need') return choice.row.next;
+  if (!ownAct) return null;
+
+  const quoted = Boolean(installReading?.act && installReading.act.label === ownAct.label);
+  const sentence = quoted && installReading ? installReading.sentence : ownAct.sentence;
+  return {
+    sentence,
+    shortSentence: quoted ? sentence : (ownAct.shortSentence ?? ownAct.sentence),
+    act: nextAct(ownAct, ownAct.targetId, ownAct.tier),
+    rowKey: null,
+  };
+}
+
 export function deriveLensBand(input: LensBandInput): LensBandModel {
   const ranked = rankStanding(input.ticket, input.needs, input.now);
   // D2 / D10 — setup (class 3) never takes line 2: it stands in the sheet's
@@ -876,13 +1121,7 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
         }
       : null;
   const short: LensLine2Form | null = worst
-    ? {
-        sentence:
-          worst.short.days == null
-            ? `${worst.short.state} · ${worst.short.subject}`
-            : `${worst.short.state} ${worst.short.days}D · ${worst.short.subject}`,
-        act: shortAct(worst.act),
-      }
+    ? { sentence: shortSentenceOf(worst), act: shortAct(worst.act) }
     : input.guide?.short
       ? { sentence: input.guide.short, act: shortAct(input.guide.act) }
       : null;
@@ -958,5 +1197,118 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
     announcement: readingStop
       ? `Now at ${readingStop.label} · ${readingStop.countLine}`
       : null,
+    voice: deriveVoice(input, { standing, setup, allInputs, line2 }),
+  };
+}
+
+/**
+ * Slice 2 (`one-voice`) — D1's eyebrow on line 1; D2's two fixed positions on
+ * line 2: Next ─ sentence and act at the left, the `Standing · N` door at the
+ * right. Next and the door no longer compete for one slot (R1-01).
+ */
+function deriveVoice(
+  input: LensBandInput,
+  {
+    standing,
+    setup,
+    allInputs,
+    line2,
+  }: {
+    standing: readonly LensStandingItem[];
+    setup: readonly LensSetupItem[];
+    allInputs: readonly LensInputItem[];
+    line2: LensBandLine2;
+  },
+): LensVoice {
+  const household = input.household.trim();
+  const guideAct = input.guide?.act ?? null;
+  // Until the caller passes the D1 own act, the guide line — today's line 2
+  // when nothing stands — stands in for it, so a quiet job never prints setup.
+  const ownAct: LensOwnAct | null =
+    input.ownAct !== undefined
+      ? input.ownAct
+      : input.guide && guideAct
+        ? {
+            key: guideAct.key,
+            label: guideAct.label,
+            targetId: null,
+            tier: ACT_TIER[guideAct.label] ?? 'scored',
+            sentence: input.guide.text,
+            shortSentence: input.guide.short ?? null,
+            onAct: guideAct.onAct,
+            disabled: guideAct.disabled,
+          }
+        : null;
+  const client = familyLabel(household);
+  const next = deriveNext({
+    standing,
+    setup,
+    ownAct,
+    installReading: input.installReading,
+    clientFirstName: client === 'the client' ? null : clientShortName(client),
+    closed: input.projectStatus === 'completed',
+  });
+
+  // D1 (I154) — the input the guide's act names is not a row behind the door,
+  // exactly when that act is the one line 2 prints.
+  const guideIsNext = next !== null && next.rowKey === null && input.ownAct === undefined;
+  const inputs =
+    guideIsNext && input.namedInputKey
+      ? allInputs.filter((item) => item.key !== input.namedInputKey)
+      : allInputs;
+  const standingCount =
+    standing.length + inputs.length + setup.length - (next?.rowKey ? 1 : 0);
+
+  const named = next?.rowKey ? standing.find((item) => item.key === next.rowKey) : undefined;
+  const { rightFlush, moneyOnly } = rightSlot(
+    input,
+    input.readingStop?.key === 'money',
+    Boolean(named?.namesMoney),
+  );
+  const { stage, detail } = stageEyebrow(
+    input.spreadKind,
+    input.projectStatus ?? null,
+    household,
+  );
+
+  // D2 / I154 — the measure picks the form, as the three forms already are.
+  // The act is never shortened, so only the sentence gives way; at the
+  // phone's measure the door is the next thing to give, moving to the dock.
+  const doorPx =
+    standingCount > 0 ? monoPx(standingDoorLabel(standingCount)) + LENS_LINE2_GAP_PX : 0;
+  const actPx = next ? monoPx(next.act.label) + LENS_LINE2_GAP_PX : 0;
+  type Form = { form: LensVoice['form']; lead: string | null; sentence: string };
+  const fits = ({ lead, sentence }: Form, withDoor: boolean) =>
+    (lead ? monoPx(lead) + LENS_LINE2_GAP_PX : 0) +
+      sentencePx(sentence) +
+      actPx +
+      (withDoor ? doorPx : 0) <=
+    LENS_LINE2_MEASURE_PX[input.tier];
+  // A closed job, or one with nothing to take, keeps today's line 2 sentence.
+  const forms: Form[] = next
+    ? [
+        { form: 'long', lead: 'Next ─', sentence: next.sentence },
+        { form: 'short', lead: 'Next', sentence: next.shortSentence },
+      ]
+    : [{ form: line2.form, lead: null, sentence: line2.sentence }];
+  const withDoor = forms.find((form) => fits(form, true));
+  const doorInDock = !withDoor && standingCount > 0 && input.tier === 'mobile';
+  const printed =
+    withDoor ??
+    (doorInDock ? forms.find((form) => fits(form, false)) : undefined) ??
+    forms[forms.length - 1];
+
+  return {
+    eyebrow: detail ? `${stage} · ${detail}` : stage,
+    rightFlush,
+    moneyOnly,
+    next,
+    lead: printed.lead,
+    sentence: printed.sentence,
+    form: printed.form,
+    standingCount,
+    doorInDock,
+    standing: standing.map(voiceItem),
+    inputs,
   };
 }
