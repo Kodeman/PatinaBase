@@ -15,7 +15,7 @@
  *     shows (full / milestone / curated) is set where the mirror is opened.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -39,6 +39,7 @@ import {
   DocumentActionRow,
 } from './document-action';
 import { ProposalPreview } from './proposal-preview';
+import { HouseholdSheet } from './overlays/household-sheet';
 
 /** The three tiers the mirror honors (00084 client_visibility_tier). Copy
  *  ported from the portal's ClientViewToggle. */
@@ -291,9 +292,25 @@ export function LetterheadInstruments({
   // there's a project, else the proposal-grain mirror when there's a live
   // proposal. A pure relationship with neither has nothing to mirror — hide it.
   const canMirror = Boolean(projectId || proposalId);
-  // "Send a note" needs a thread route: a project group thread, or (pre-project)
-  // a direct thread to the client's profile. A profile-less lead has neither.
-  const canSendNote = Boolean(projectId || clientProfileId);
+  // F52 (0a-3) — a linked client is the household chip's own truth: a client
+  // profile, or the canonical relationship a captured / no-login household
+  // carries. On a project document that relationship rides the project's
+  // proposal, read here from the same `project-v2` query the page already holds
+  // (page.tsx derives the chip's `designerClientId` the same way).
+  const { data: project } = useProjectV2(projectId ?? '') as {
+    data: { proposal?: { designer_client_id?: string | null } | null } | undefined;
+  };
+  const hasClient = Boolean(
+    clientProfileId || (projectId && project?.proposal?.designer_client_id),
+  );
+  // "Send a note" needs a linked client AND a thread route: a project group
+  // thread, or (pre-project) a direct thread to the client's profile.
+  const canSendNote = hasClient && Boolean(projectId || clientProfileId);
+  // A project with nobody linked still offers Message, held with its reason and
+  // the repair beside it (D3 Gated, D7) — never as the dock's centre.
+  const messageHeld = Boolean(projectId) && !hasClient;
+  const [linking, setLinking] = useState(false);
+  const messageReasonId = useId();
 
   useMobilePrimaryAction(
     canSendNote
@@ -334,14 +351,26 @@ export function LetterheadInstruments({
             the household chip says it 20px above, and repeating it cost the
             ledger ~200px it was taking out of the title's measure. The
             accessible name keeps the whole sentence. */}
-        {canSendNote && (
+        {(canSendNote || messageHeld) && (
           <DocumentAction
             actionKey="message-family"
             variant="primary"
-            aria-label={`Message ${family}`}
+            aria-label={messageHeld ? 'Message the client' : `Message ${family}`}
+            disabled={messageHeld}
+            held={messageHeld}
+            aria-describedby={messageHeld ? messageReasonId : undefined}
             onClick={() => setComposing((v) => !v)}
           >
             Message
+          </DocumentAction>
+        )}
+        {messageHeld && (
+          <DocumentAction
+            actionKey="link-client"
+            variant="secondary"
+            onClick={() => setLinking(true)}
+          >
+            Link a client
           </DocumentAction>
         )}
         {canMirror && (
@@ -369,7 +398,29 @@ export function LetterheadInstruments({
         )}
         {projectId && <SharingTierInstrument projectId={projectId} />}
         {projectId && <CallSheetInstrument projectId={projectId} />}
+        {messageHeld && (
+          <p
+            id={messageReasonId}
+            className="basis-full text-[11.5px] text-[var(--text-muted)]"
+          >
+            Link a client first.
+          </p>
+        )}
       </DocumentActionGroup>
+
+      {/* The repair opens the same sheet the household chip opens — mounted
+          only while open, so a client-less page issues none of its reads. */}
+      {messageHeld && linking && projectId && (
+        <HouseholdSheet
+          open
+          onClose={() => setLinking(false)}
+          engagementKind="project"
+          projectId={projectId}
+          proposalId={proposalId}
+          clientProfileId={null}
+          clientName={clientName}
+        />
+      )}
 
       {composing && (
         <div

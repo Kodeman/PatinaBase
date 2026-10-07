@@ -14,4 +14,11 @@ describe('household display copy', () => {
   it('uses a neutral fallback only when there is no name', () => {
     expect(familyLabel('  ')).toBe('the client');
   });
+
+  it.each(['Client User', 'client user', '  Client   User '])(
+    'treats the seeded placeholder %p as no name',
+    (input) => {
+      expect(familyLabel(input)).toBe('the client');
+    },
+  );
 });

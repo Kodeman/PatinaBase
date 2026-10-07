@@ -25,7 +25,7 @@
  */
 
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import {
   DocumentAction,
   DocumentActionGroup,
@@ -42,6 +42,13 @@ export interface RegionLedgerEntry {
   /** Ignored at index 0, which is always the inked leader. */
   variant?: 'secondary' | 'tertiary' | 'danger';
   disabled?: boolean;
+  /**
+   * D3 Gated — why a `disabled` act cannot be taken. With a reason the act is
+   * `held` rather than natively disabled: it stays in tab order, reads
+   * `aria-disabled="true"`, swallows the press, and this one muted sentence
+   * prints beneath the ledger, linked by `aria-describedby`.
+   */
+  reason?: ReactNode;
   loading?: boolean;
   loadingLabel?: ReactNode;
   trailing?: ReactNode;
@@ -127,6 +134,11 @@ export function RegionHead({
   const printedActions =
     actsAtQuiet === 'leader' ? actions.slice(0, 1) : actions;
   const printedExceptions = silent ? [] : exceptions.slice(0, 2);
+  const reasonIdBase = useId();
+  const reasonId = (entry: RegionLedgerEntry) => `${reasonIdBase}-${entry.key}-reason`;
+  const isHeld = (entry: RegionLedgerEntry) =>
+    Boolean(entry.disabled && entry.reason);
+  const heldActions = printedActions.filter(isHeld);
   // The ledger is a NAMED action region, not an anonymous box. The Room heads
   // that predate this primitive name theirs by hand ("Library actions",
   // "People actions", "Drafting actions"); a RegionHead's ledger carried
@@ -234,6 +246,8 @@ export function RegionHead({
               actionKey: entry.key,
               variant,
               disabled: entry.disabled,
+              held: isHeld(entry),
+              'aria-describedby': isHeld(entry) ? reasonId(entry) : undefined,
               loading: entry.loading,
               loadingLabel: entry.loadingLabel,
               trailing: entry.trailing,
@@ -261,6 +275,15 @@ export function RegionHead({
               Fold ↑
             </DocumentAction>
           )}
+          {heldActions.map((entry) => (
+            <p
+              key={entry.key}
+              id={reasonId(entry)}
+              className="basis-full text-[11.5px] text-[var(--text-muted)] min-[1180px]:text-right"
+            >
+              {entry.reason}
+            </p>
+          ))}
         </DocumentActionGroup>
       )}
     </div>

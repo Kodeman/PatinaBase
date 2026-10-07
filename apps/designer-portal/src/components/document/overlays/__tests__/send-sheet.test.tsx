@@ -136,27 +136,10 @@ jest.mock('../doc-sheet', () => ({
   }) => (open ? <div>{children}</div> : null),
 }));
 
-jest.mock('../../document-action', () => ({
-  DocumentActionGroup: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  DocumentAction: ({
-    children,
-    loading,
-    loadingLabel,
-    onClick,
-    disabled,
-  }: {
-    children: React.ReactNode;
-    loading?: boolean;
-    loadingLabel?: string;
-    onClick?: React.MouseEventHandler<HTMLButtonElement>;
-    disabled?: boolean;
-  }) => (
-    <button type="button" onClick={onClick} disabled={disabled || loading}>
-      {loading ? loadingLabel : children}
-    </button>
-  ),
+// The real DocumentAction: Send's held form (0a-8) is its contract, so a stub
+// would assert nothing. Only its telemetry is silenced.
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
 
 function mirror(milestones: Array<Record<string, unknown>>) {
@@ -322,7 +305,7 @@ describe('SendSheet canonical client-copy validation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open send sheet' }));
 
     const send = await screen.findByRole('button', { name: 'Send proposal' });
-    await waitFor(() => expect(send).toBeEnabled());
+    await waitFor(() => expect(send).not.toHaveAttribute('aria-disabled'));
     expect(
       screen.queryByRole('button', { name: /different address/i }),
     ).not.toBeInTheDocument();
@@ -354,7 +337,7 @@ describe('SendSheet canonical client-copy validation', () => {
     expect(await screen.findByText(/phase save failed/i)).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Send proposal' }),
-    ).toBeDisabled();
+    ).toHaveAttribute('aria-disabled', 'true');
     expect(reviewedMirror.refetch).not.toHaveBeenCalled();
     expect(mockSend).not.toHaveBeenCalled();
   });
@@ -390,7 +373,7 @@ describe('SendSheet canonical client-copy validation', () => {
     render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
 
     const send = screen.getByRole('button', { name: 'Send proposal' });
-    await waitFor(() => expect(send).toBeEnabled());
+    await waitFor(() => expect(send).not.toHaveAttribute('aria-disabled'));
     expect(reviewedMirror.refetch).toHaveBeenCalledTimes(2);
 
     fireEvent.click(send);
@@ -418,7 +401,7 @@ describe('SendSheet canonical client-copy validation', () => {
     expect(screen.getByText(/must total 100%/i)).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Send proposal' }),
-    ).toBeDisabled();
+    ).toHaveAttribute('aria-disabled', 'true');
     expect(mockSend).not.toHaveBeenCalled();
   });
 
@@ -457,7 +440,7 @@ describe('SendSheet canonical client-copy validation', () => {
         name: /I reviewed the missing parts/i,
       }),
     );
-    await waitFor(() => expect(send).toBeEnabled());
+    await waitFor(() => expect(send).not.toHaveAttribute('aria-disabled'));
 
     fireEvent.click(send);
     await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
@@ -486,7 +469,7 @@ describe('SendSheet canonical client-copy validation', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Send proposal' }),
-    ).toBeDisabled();
+    ).toHaveAttribute('aria-disabled', 'true');
     expect(mockSend).not.toHaveBeenCalled();
   });
 
@@ -510,7 +493,7 @@ describe('SendSheet canonical client-copy validation', () => {
 
     expect(
       screen.getByRole('button', { name: 'Send proposal' }),
-    ).toBeDisabled();
+    ).toHaveAttribute('aria-disabled', 'true');
     expect(
       screen.getByText(/Checking the latest client preview/i),
     ).toBeInTheDocument();
@@ -533,7 +516,7 @@ describe('SendSheet canonical client-copy validation', () => {
     await waitFor(() =>
       expect(
         screen.getByRole('button', { name: 'Send proposal' }),
-      ).toBeEnabled(),
+      ).not.toHaveAttribute('aria-disabled'),
     );
 
     mockUseProposalMirrorData.mockReturnValue({
@@ -543,7 +526,7 @@ describe('SendSheet canonical client-copy validation', () => {
     rerender(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
 
     const send = screen.getByRole('button', { name: 'Send proposal' });
-    expect(send).toBeDisabled();
+    expect(send).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(send);
     expect(mockSend).not.toHaveBeenCalled();
   });
@@ -570,7 +553,7 @@ describe('SendSheet canonical client-copy validation', () => {
 
     expect(
       screen.getByRole('button', { name: 'Send proposal' }),
-    ).toBeDisabled();
+    ).toHaveAttribute('aria-disabled', 'true');
     expect(
       screen.getByText(/Checking the latest client preview/i),
     ).toBeInTheDocument();
@@ -603,7 +586,7 @@ describe('SendSheet canonical client-copy validation', () => {
     );
     expect(
       screen.getByRole('button', { name: 'Send proposal' }),
-    ).toBeDisabled();
+    ).toHaveAttribute('aria-disabled', 'true');
     expect(
       screen.queryByRole('button', { name: /different address/i }),
     ).not.toBeInTheDocument();
@@ -641,7 +624,9 @@ describe('SendSheet canonical client-copy validation', () => {
         name: /I reviewed the missing parts/i,
       }),
     );
-    expect(screen.getByRole('button', { name: 'Send proposal' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Send proposal' })).not.toHaveAttribute(
+      'aria-disabled',
+    );
 
     mockUseDraftingState.mockReturnValue({
       gaps: ['mood boards', 'change-order terms'],
@@ -654,7 +639,7 @@ describe('SendSheet canonical client-copy validation', () => {
     await waitFor(() =>
       expect(
         screen.getByRole('button', { name: 'Send proposal' }),
-      ).toBeDisabled(),
+      ).toHaveAttribute('aria-disabled', 'true'),
     );
     expect(
       screen.getByRole('checkbox', {
@@ -677,7 +662,7 @@ describe('SendSheet canonical client-copy validation', () => {
     render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
 
     const send = screen.getByRole('button', { name: 'Send proposal' });
-    await waitFor(() => expect(send).toBeEnabled());
+    await waitFor(() => expect(send).not.toHaveAttribute('aria-disabled'));
     mockRefreshDrafting.mockResolvedValueOnce({
       facets: {},
       state: 'Drafting',
@@ -784,7 +769,7 @@ describe('SendSheet canonical client-copy validation', () => {
 
     render(<SendSheet proposalId="proposal-1" open onClose={onClose} />);
     const send = screen.getByRole('button', { name: 'Send proposal' });
-    await waitFor(() => expect(send).toBeEnabled());
+    await waitFor(() => expect(send).not.toHaveAttribute('aria-disabled'));
     fireEvent.click(send);
 
     expect(
@@ -826,7 +811,7 @@ describe('SendSheet canonical client-copy validation', () => {
 
     render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
     const send = screen.getByRole('button', { name: 'Send proposal' });
-    await waitFor(() => expect(send).toBeEnabled());
+    await waitFor(() => expect(send).not.toHaveAttribute('aria-disabled'));
     fireEvent.click(send);
 
     expect(
@@ -880,6 +865,52 @@ describe('SendSheet canonical client-copy validation', () => {
     ).not.toBeInTheDocument();
   });
 
+  describe('a blocked Send names its refusal (0a-8, D3 Gated)', () => {
+    /** Focusable, `aria-disabled`, never native `disabled`, and its
+     *  `aria-describedby` resolves to the one reason sentence beneath it. */
+    function expectHeldWithReason(send: HTMLElement, reason: string) {
+      expect(send).toHaveAttribute('aria-disabled', 'true');
+      expect(send).not.toHaveAttribute('disabled');
+      send.focus();
+      expect(send).toHaveFocus();
+      const reasonId = send.getAttribute('aria-describedby');
+      expect(reasonId).toBeTruthy();
+      expect(document.getElementById(reasonId!)).toHaveTextContent(reason);
+    }
+
+    it('says the payment schedule blocker is what holds it', async () => {
+      mockUseProposalMirrorData.mockReturnValue(
+        mirror([
+          { id: 'milestone-1', label: 'New Milestone', percentage: 0, amount_cents: 0 },
+        ]),
+      );
+      render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+      expect(await screen.findByText('Not safe to send yet')).toBeInTheDocument();
+
+      const send = screen.getByRole('button', { name: 'Send proposal' });
+      expectHeldWithReason(send, 'Resolve what is listed above first.');
+      fireEvent.click(send);
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('says a malformed CC address is what holds it', async () => {
+      mockUseProposalMirrorData.mockReturnValue(
+        mirror([
+          { id: 'deposit', label: 'Project deposit', percentage: 100, amount_cents: 1_320_000 },
+        ]),
+      );
+      render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+      const send = await screen.findByRole('button', { name: 'Send proposal' });
+      await waitFor(() => expect(send).not.toHaveAttribute('aria-disabled'));
+      expect(send).not.toHaveAttribute('aria-describedby');
+
+      fireEvent.change(screen.getByRole('textbox', { name: 'CC (optional)' }), {
+        target: { value: 'not-an-email' },
+      });
+      expectHeldWithReason(send, 'Correct the CC address first.');
+    });
+  });
+
   it('blocks a malformed CC address before changing proposal state', async () => {
     mockUseProposalMirrorData.mockReturnValue(
       mirror([
@@ -895,7 +926,7 @@ describe('SendSheet canonical client-copy validation', () => {
     render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
 
     const send = await screen.findByRole('button', { name: 'Send proposal' });
-    await waitFor(() => expect(send).toBeEnabled());
+    await waitFor(() => expect(send).not.toHaveAttribute('aria-disabled'));
     fireEvent.change(screen.getByRole('textbox', { name: 'CC (optional)' }), {
       target: { value: 'not-an-email' },
     });
@@ -903,7 +934,7 @@ describe('SendSheet canonical client-copy validation', () => {
     expect(
       screen.getByText('Enter a valid CC email address before sending.'),
     ).toBeInTheDocument();
-    expect(send).toBeDisabled();
+    expect(send).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(send);
     expect(mockSend).not.toHaveBeenCalled();
   });
@@ -926,7 +957,7 @@ describe('SendSheet canonical client-copy validation', () => {
       target: { value: '  partner@example.com  ' },
     });
     const send = await screen.findByRole('button', { name: 'Send proposal' });
-    await waitFor(() => expect(send).toBeEnabled());
+    await waitFor(() => expect(send).not.toHaveAttribute('aria-disabled'));
     fireEvent.click(send);
 
     await waitFor(() =>

@@ -302,7 +302,9 @@ describe('the schedule ceremony', () => {
     const button = screen.getByRole('button', {
       name: /release for authorization/i,
     });
-    expect(button).toBeDisabled();
+    // 0a-8 — held with its reason, not natively disabled.
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).not.toHaveAttribute('disabled');
     expect(
       screen.getByText('No lines are currently eligible for release.'),
     ).toBeInTheDocument();

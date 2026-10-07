@@ -21,9 +21,14 @@
  * scan (no photo resolves, so the scan door never mounts and the row is the
  * four acts the budget was measured on).
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LetterheadInstruments } from './letterhead-instruments';
+import { useMobilePrimaryAction } from './mobile/mobile-shell';
+
+// No tier recorded — the instrument's own default is `milestone`, which is
+// the tier the W3-R4 row is specified against. F52 cases set a proposal.
+let mockProject: Record<string, unknown> = {};
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -45,9 +50,7 @@ jest.mock('@patina/supabase', () => ({
     },
     auth: { getUser: () => Promise.resolve({ data: { user: null } }) },
   }),
-  // No tier recorded — the instrument's own default is `milestone`, which is
-  // the tier the W3-R4 row is specified against.
-  useProjectV2: () => ({ data: {} }),
+  useProjectV2: () => ({ data: mockProject }),
   useProjectRoster: () => ({ data: [{ id: 'r1' }, { id: 'r2' }] }),
   resolveCoverPhoto: () => null,
   publicUrlToPath: () => null,
@@ -64,6 +67,10 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 jest.mock('./mobile/mobile-shell', () => ({ useMobilePrimaryAction: jest.fn() }));
 jest.mock('./client-mirror', () => ({ ClientMirror: () => null }));
 jest.mock('./proposal-preview', () => ({ ProposalPreview: () => null }));
+jest.mock('./overlays/household-sheet', () => ({
+  HouseholdSheet: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="household-sheet" /> : null,
+}));
 
 /** jsdom evaluates no media queries: this is how the tier is driven, the same
  *  shape as responsive-document-shell.test.tsx's `installMatchMedia`. */
@@ -175,4 +182,81 @@ describe('the letterhead ledger — the accessible names lose nothing', () => {
       ).toHaveAttribute('data-action-key', 'sharing-settings');
     });
   }
+});
+
+/**
+ * F52 (0a-3, D3, D7) — Message needs a linked client. With nobody linked the
+ * dock's centre is never Message, and the letterhead offers it held: focusable,
+ * `aria-disabled`, its reason beneath and the repair beside it.
+ */
+describe('Message needs a linked client (F52)', () => {
+  const primary = useMobilePrimaryAction as jest.Mock;
+  beforeEach(() => {
+    installTier(true);
+    primary.mockClear();
+    mockProject = {};
+  });
+
+  function renderFor(clientProfileId: string | null) {
+    const qc = new QueryClient();
+    return render(
+      <QueryClientProvider client={qc}>
+        <LetterheadInstruments
+          projectId="proj-1"
+          clientProfileId={clientProfileId}
+          clientName="Client User"
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  it('with no client: Message is not the primary action, and prints held with its reason', () => {
+    renderFor(null);
+
+    expect(primary).toHaveBeenCalled();
+    for (const [arg] of primary.mock.calls) expect(arg).toBeNull();
+
+    const message = screen.getByRole('button', { name: 'Message the client' });
+    expect(message).toHaveAttribute('aria-disabled', 'true');
+    expect(message).not.toHaveAttribute('disabled');
+    message.focus();
+    expect(message).toHaveFocus();
+
+    const reasonId = message.getAttribute('aria-describedby');
+    expect(reasonId).toBeTruthy();
+    expect(document.getElementById(reasonId!)).toHaveTextContent('Link a client first.');
+
+    // The press is a no-op: no composer opens.
+    fireEvent.click(message);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('with no client: the repair act opens the household sheet', () => {
+    renderFor(null);
+    expect(screen.queryByTestId('household-sheet')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Link a client' }));
+    expect(screen.getByTestId('household-sheet')).toBeInTheDocument();
+  });
+
+  it('a captured household (relationship, no profile) counts as linked, as the chip says', () => {
+    mockProject = { proposal: { designer_client_id: 'dc-1' } };
+    renderFor(null);
+    expect(primary).toHaveBeenLastCalledWith(
+      expect.objectContaining({ actionKey: 'message-family', label: 'Message the client' }),
+    );
+    expect(screen.queryByRole('button', { name: 'Link a client' })).not.toBeInTheDocument();
+  });
+
+  it('with a client: Message is the primary action and prints live, unchanged', () => {
+    renderFor('client-1');
+    expect(primary).toHaveBeenLastCalledWith(
+      expect.objectContaining({ actionKey: 'message-family', label: 'Message the client' }),
+    );
+    const message = screen.getByRole('button', { name: 'Message the client' });
+    expect(message).not.toHaveAttribute('aria-disabled');
+    expect(message).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByText('Link a client first.')).not.toBeInTheDocument();
+    fireEvent.click(message);
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
 });

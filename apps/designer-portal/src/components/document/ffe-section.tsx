@@ -1422,6 +1422,9 @@ function FFESectionBody({
     label: 'Add a line',
     onClick: () => openAddToProject('section'),
   };
+  // 0a-8 / D3 Gated — held, not natively disabled: the act stays in tab order
+  // and its reason prints beneath the ledger. Per-row reasons remain reachable
+  // via each row's own unfold.
   const ffeReleaseEntry: RegionLedgerEntry = {
     key: 'release-for-authorization',
     label: 'Release for authorization',
@@ -1433,6 +1436,7 @@ function FFESectionBody({
       !anyEligible &&
       !readinessQuery.isLoading &&
       !readinessQuery.isError,
+    reason: 'No lines are currently eligible for release.',
   };
   // The one opener, reached at press time rather than at import time: a static
   // `./command-bar` import drags @patina/help-system's @portabletext ESM into
@@ -1773,23 +1777,6 @@ function FFESectionBody({
           </DocumentAction>
         </div>
       )}
-
-      {/* The head button stays visible (never vanishes on the designer) but
-          disables itself when canRelease holds and yet no individual line
-          is currently eligible — say so here instead of a silent no-op.
-          Per-row reasons remain reachable via each row's own unfold. */}
-      {mode === 'project' &&
-        canRelease &&
-        !isLoading &&
-        !isError &&
-        total > 0 &&
-        !anyEligible &&
-        !readinessQuery.isLoading &&
-        !readinessQuery.isError && (
-          <p className="mb-2 text-[11.5px] text-[var(--text-muted)]">
-            No lines are currently eligible for release.
-          </p>
-        )}
 
       {selecting && (
         <p className="mb-2 text-[11.5px] text-[var(--text-muted)]">

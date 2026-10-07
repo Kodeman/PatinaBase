@@ -15,7 +15,7 @@
  * invalidated so the line stamp, margin, and Desk move in one act (§5).
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useIsMutating, useQueryClient } from '@tanstack/react-query';
 import { PROPOSAL_CLIENT_MUTATION_KEY, useEmailDelivery } from '@patina/supabase';
 import {
@@ -196,6 +196,7 @@ export function SendSheet({
   const [linkError, setLinkError] = useState<string | null>(null);
   const [acknowledgedIncomplete, setAcknowledgedIncomplete] = useState(false);
   const [isPreparingSend, setIsPreparingSend] = useState(false);
+  const sendReasonId = useId();
   const sendAttemptInFlight = useRef(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const [refreshedGaps, setRefreshedGaps] = useState<string[] | null>(null);
@@ -467,6 +468,42 @@ export function SendSheet({
       !hasBlockers &&
       incompleteIsAcknowledged,
   );
+
+  // 0a-8 / D3 Gated — the single condition holding Send, taken in the order
+  // `canSend` checks them, said as one sentence beneath the act. The six
+  // client-copy checks are one condition read two ways: a failed read says it
+  // failed, anything else is still being checked.
+  const clientCopyVerified = Boolean(
+    readiness &&
+      reviewFingerprint &&
+      effectiveClientData?.sendSnapshot &&
+      clientCopyReviewState === 'ready' &&
+      isProposalAutosaveSnapshotClean(autosaveBarrier) &&
+      !checkingClientCopy,
+  );
+  const sendHeldReason: string | null = canSend
+    ? null
+    : proposal?.status !== 'draft' || deliveryRecovery
+      ? 'This proposal has already been sent.'
+      : !proposal?.client_id
+        ? 'Link a client first.'
+        : !clientEmail
+          ? 'Add a client email first.'
+          : !clientCopyVerified
+            ? autosaveReviewError || clientCopyError
+              ? 'The client copy could not be checked.'
+              : 'The client copy is still being checked.'
+            : autosaveReviewError
+              ? 'Proposal edits could not be saved.'
+              : clientCopyError
+                ? 'The client copy could not be checked.'
+                : ccEmailError
+                  ? 'Correct the CC address first.'
+                  : hasBlockers
+                    ? 'Resolve what is listed above first.'
+                    : 'Confirm sending with parts still missing first.';
+  // In flight keeps its own native-disabled "Sending…" form; held is the refusal.
+  const sendHeld = sendHeldReason !== null && !sendProposal.isPending;
 
   const handleSend = async () => {
     if (!canSend || sendAttemptInFlight.current) return;
@@ -1057,6 +1094,8 @@ export function SendSheet({
                     variant="primary"
                     onClick={handleSend}
                     disabled={!canSend}
+                    held={sendHeld}
+                    aria-describedby={sendHeld ? sendReasonId : undefined}
                     loading={sendProposal.isPending}
                     loadingLabel="Sending…"
                     trailing="→"
@@ -1070,6 +1109,14 @@ export function SendSheet({
                   >
                     Send later
                   </DocumentAction>
+                  {sendHeld && (
+                    <p
+                      id={sendReasonId}
+                      className="basis-full text-[11.5px] text-[var(--text-muted)]"
+                    >
+                      {sendHeldReason}
+                    </p>
+                  )}
                 </>
               )}
             </DocumentActionGroup>

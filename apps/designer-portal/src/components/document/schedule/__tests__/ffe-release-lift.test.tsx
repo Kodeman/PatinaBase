@@ -263,10 +263,19 @@ describe('the release lift — the schedule’s half', () => {
     const entry = screen.getByRole('button', {
       name: 'Release for authorization',
     });
-    expect(entry).toBeDisabled();
-    expect(
-      screen.getByText('No lines are currently eligible for release.'),
-    ).toBeInTheDocument();
+    // 0a-8 / D3 Gated — held, never native `disabled`: focusable, marked
+    // `aria-disabled`, its reason beneath and linked, and the press a no-op.
+    expect(entry).toHaveAttribute('aria-disabled', 'true');
+    expect(entry).not.toHaveAttribute('disabled');
+    entry.focus();
+    expect(entry).toHaveFocus();
+    const reasonId = entry.getAttribute('aria-describedby');
+    expect(reasonId).toBeTruthy();
+    expect(document.getElementById(reasonId!)).toHaveTextContent(
+      'No lines are currently eligible for release.',
+    );
+    fireEvent.click(entry);
+    expect(screen.queryByText('Choose what to release')).not.toBeInTheDocument();
   });
 
   it('leaves the head alone when no other head has taken the leader', () => {

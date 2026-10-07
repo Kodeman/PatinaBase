@@ -7,7 +7,7 @@
  * the entire value is blank or a known placeholder.
  */
 
-const GENERIC = new Set(['client', 'new', 'untitled', 'proposal']);
+const GENERIC = new Set(['client', 'client user', 'new', 'untitled', 'proposal']);
 
 /** Trim/collapse whitespace while preserving the complete authored name. */
 export function householdName(clientName: string): string {

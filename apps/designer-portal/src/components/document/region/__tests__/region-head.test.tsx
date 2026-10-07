@@ -250,4 +250,31 @@ describe('RegionHead', () => {
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  // 0a-8 / D3 Gated — a disabled entry with a reason is held: focusable,
+  // `aria-disabled`, the press swallowed, the reason beneath and linked.
+  it('holds a disabled entry that carries a reason, and prints the reason beneath', () => {
+    const onClick = jest.fn();
+    renderHead({
+      actions: [
+        { key: 'lead-act', label: 'Release', onClick, disabled: true, reason: 'Nothing is ready.' },
+        { key: 'second-act', label: 'Revise', onClick: jest.fn(), disabled: true },
+      ],
+    });
+    const held = screen.getByRole('button', { name: 'Release' });
+    expect(held).toHaveAttribute('aria-disabled', 'true');
+    expect(held).not.toHaveAttribute('disabled');
+    held.focus();
+    expect(held).toHaveFocus();
+    expect(document.getElementById(held.getAttribute('aria-describedby')!)).toHaveTextContent(
+      'Nothing is ready.',
+    );
+    held.click();
+    expect(onClick).not.toHaveBeenCalled();
+
+    // Without a reason, a disabled entry keeps its native form.
+    const plain = screen.getByRole('button', { name: 'Revise' });
+    expect(plain).toBeDisabled();
+    expect(plain).not.toHaveAttribute('aria-describedby');
+  });
 });
