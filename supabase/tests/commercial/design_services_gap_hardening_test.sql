@@ -57,6 +57,13 @@ INSERT INTO public.organization_members (
   'd6100000-0000-4000-8000-000000000001', 'owner', 'active', now()
 );
 
+-- 00511's countersign check also requires the agreement's designer to hold a
+-- designer-domain role (is_designer alone provisions only app_user).
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'd6000000-0000-4000-8000-000000000001'::uuid, role.id,
+       'd6000000-0000-4000-8000-000000000001'::uuid
+FROM public.roles AS role WHERE role.name = 'studio_owner';
+
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, status, source
 ) VALUES (
@@ -182,6 +189,12 @@ BEGIN
   SELECT id INTO v_line FROM public.project_ffe_items
   WHERE project_id = v_project AND name = 'Legacy console';
   ASSERT v_line IS NOT NULL, 'fixture: legacy activation must have carried FF&E';
+  -- 00445 checks per-line readiness before the origin precondition, and the
+  -- carried line lands as a 'candidate'. Make it well-formed so the refusal
+  -- below can only come from the missing origin.
+  UPDATE public.project_ffe_items SET design_disposition = 'selected' WHERE id = v_line;
+  ASSERT (public.get_project_ffe_readiness(v_line)->>'ready')::boolean,
+    format('fixture: legacy line must be release-ready: %s', public.get_project_ffe_readiness(v_line));
   BEGIN
     PERFORM public.create_furnishings_authorization_from_schedule(
       v_project, 'Release without authority', ARRAY[v_line], NULL
@@ -429,13 +442,16 @@ INSERT INTO public.project_rooms (id, project_id, name, sort_order)
 SELECT 'd6600000-0000-4000-8000-000000000001', value, 'Living room', 0
 FROM gap_ids WHERE key = 'services_project';
 INSERT INTO public.project_ffe_items (
-  id, project_id, project_room_id, name, ffe_category, item_type, status,
+  id, project_id, project_room_id, assignment_scope, name, ffe_category, item_type, status,
   quantity, unit_price_cents, trade_price_cents, markup_percent,
-  line_total_cents, vendor_id, vendor_name, sort_order
+  line_total_cents, vendor_id, vendor_name, sort_order, design_disposition
 )
-SELECT x.id, g.value, 'd6600000-0000-4000-8000-000000000001', x.name, x.category,
+-- 00438's selection guard requires an explicit assignment_scope, and 00445's
+-- readiness gate requires 'selected' (column default 'candidate').
+SELECT x.id, g.value, 'd6600000-0000-4000-8000-000000000001', 'room', x.name, x.category,
   'fixed', 'specified', x.quantity, x.unit_price, x.trade_price, 66.67,
-  x.line_total, 'd6710000-0000-4000-8000-000000000001', 'Gap Test Vendor', x.sort_order
+  x.line_total, 'd6710000-0000-4000-8000-000000000001', 'Gap Test Vendor', x.sort_order,
+  'selected'
 FROM gap_ids g,
   (VALUES
     ('d6620000-0000-4000-8000-000000000001'::uuid, 'Wave one sofa', 'Seating', 1, 100000, 60000, 100000, 0),
@@ -829,10 +845,15 @@ UPDATE public.project_commercial_documents SET is_origin = true
 WHERE proposal_id = 'd6300000-0000-4000-8000-000000000002';
 -- Executed through the trusted-IP server rail so the signature actually
 -- carries an IP — which is what makes the mirror assertion below meaningful.
+-- 00511 binds the rail to the connection role (current_setting('role')), not to
+-- the caller-writable JWT role claim, so the call runs under SET ROLE. The wave
+-- id is stashed in a GUC because service_role cannot read the gap_ids temp table.
 SELECT pg_temp.assume_user('d6000000-0000-4000-8000-000000000002', 'service_role');
+SELECT set_config('gap_test.wave3', value::text, true) FROM gap_ids WHERE key = 'wave3';
+SET ROLE service_role;
 DO $$
 DECLARE
-  v_wave3 uuid := (SELECT value FROM gap_ids WHERE key = 'wave3');
+  v_wave3 uuid := current_setting('gap_test.wave3')::uuid;
   v_execution jsonb;
 BEGIN
   v_execution := public.execute_furnishings_authorization_with_trusted_ip(
@@ -843,6 +864,7 @@ BEGIN
   ASSERT jsonb_array_length(v_execution->'appliedItemIds') = 1,
     'executed wave must apply its snapshot';
 END $$;
+RESET ROLE;
 SELECT pg_temp.assume_user('d6000000-0000-4000-8000-000000000002');
 -- 00414: the signing IP lives on the signature row and NOWHERE else. Mirroring
 -- it onto public.proposals would hand it straight back to every studio

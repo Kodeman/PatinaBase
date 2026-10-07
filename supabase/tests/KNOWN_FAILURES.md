@@ -72,33 +72,8 @@ See "Closed by 00510" below.
 
 ## Group 3 — business-logic / fixture drift (root cause not chased to completion)
 
-The first five share a fixture bug that **was** fixed here (`INSERT INTO
-project_ffe_items` without `assignment_scope`, needed since
-`00438_ffe_release_security_hardening.sql` replaced the auto-deriving
-version of `guard_project_ffe_selection_integrity()` from
-`00434_ffe_privacy_domain_foundation.sql` with one that requires it
-explicit) — that fix is applied and these files now fail on a *different,
-deeper* assertion, unrelated to the fixture bug:
-
-**Failure points re-measured 2026-09-11** (hour-tracking W0 review round 1). Four
-of these five now abort EARLIER than the `designDisposition` readiness gate
-recorded below — inside `_countersign_design_services_agreement_impl`, at
-`design services agreement <uuid> not found or access denied`. The
-`designDisposition` diagnosis is kept in each entry because it is where the file
-stopped in 2026-08, and the new, earlier failure has not been diagnosed to a root
-cause; both are recorded so a reader does not re-diagnose the old one. Proven
-pre-existing, not hour-tracking's: the same five fail identically on a replay of
-`origin/hour-tracking/integration` (545 migrations, none of W0's) and none of
-W0's migrations touches the countersign path. **Consequence for any wave gating
-on this directory: `supabase/tests/commercial` exercises 10 of its 16 files and
-the four countersign files stop BEFORE their authority asserts — never report
-"commercial green" as coverage of the authority rate path.**
-
-- `supabase/tests/commercial/authorized_schedule_test.sql` — 2026-09-11: aborts at `:308`, `design services agreement d7300000-... not found or access denied`. Previously (2026-08) failed later at `schedule line ... is not ready for authorization: ["designDisposition"]` from `_create_furnishings_authorization_from_schedule_impl`. A readiness-gate/fixture drift in the schedule-authorization domain.
-- `supabase/tests/commercial/design_services_authority_test.sql` — 2026-09-11: aborts at `:177`, `design services agreement d5300000-... not found or access denied`, i.e. 44 lines before its three `project_unbilled_time` asserts at `:221,349,362` — so those asserts do not run. (The hour-tracking program therefore pins the repaired view's design-services arm in `supabase/tests/billing/time_unbilled_view_repair_test.sql` case (c) instead.) Previously: same `designDisposition` readiness-gate failure as above.
-- `supabase/tests/commercial/executed_on_paper_test.sql` — 2026-09-11: aborts at `:214`, `design services agreement ea300000-... not found or access denied`. Previously: same `designDisposition` readiness-gate failure, same function.
-- `supabase/tests/commercial/design_services_gap_hardening_test.sql` — 2026-09-11: aborts at `:128`, `proposal d6300000-... failed canonical project provenance`. Previously: `legacy release blocked by the wrong guard: 'schedule line ... is not ready for authorization: ["designDisposition"]'` — same family; the test's own message implies it already suspects a guard-ordering regression.
-- `supabase/tests/commercial/trade_scope_test.sql` — MOVED here from Group 2 by `00510`. Its Group 2 cause (`non-room assignment cannot carry a room`, raised inside `public.engage_trade_scope` itself, which inserted `project_ffe_items` without `assignment_scope`) is fixed: 00510 set `assignment_scope` explicitly in the RPC body. 2026-09-11: aborts at `:196`, `design services agreement d8300000-... not found or access denied`. Previously it ran the whole engagement ceremony and failed ~320 lines later at `schedule line ... is not ready for authorization: ["designDisposition"]`.
+The five commercial countersign-family files that led this group are green
+again; see "Closed by US-17 S1" below.
 
 Un-related residuals, each a genuine assertion failure whose root cause
 (a later migration changing a guard, a policy count, or an ordering) was
@@ -141,6 +116,63 @@ the list entirely. 00510 closed its storage-policy root cause; its residual
 superuser bypass — its `create_board_share` calls now run under
 `SET LOCAL ROLE authenticated`, so the edition-mint guard the file exists to
 police actually runs. Green as of 2026-08-31.
+
+## Closed by US-17 S1 (SQ-454, 2026-10-06)
+
+The same no-bullet-shape rule applies here.
+
+The five Group 3 countersign-family files in `commercial/` (authorized
+schedule, design services authority, executed on paper, design services gap
+hardening, trade scope) are green end to end. Both causes were stale fixtures,
+not product regressions, so no migration was needed:
+
+1. **Countersign "not found or access denied".** `00511_public_sd_hardening`
+   made the countersign path require the agreement's designer to hold a
+   `designer`-domain role. `is_designer = true` provisions only `app_user`
+   (domain `consumer`). Each fixture now grants `studio_owner`, as
+   `design_services_paper_issue_test.sql` already did. The gap-hardening file's
+   "failed canonical project provenance" abort had the same cause.
+2. **`designDisposition` readiness.** `00445` requires every released schedule
+   line to be `design_disposition = 'selected'` (the column defaults to
+   `'candidate'`) and to carry a vendor. The fixture lines now state both. The
+   probes that exercise a later guard first make their line otherwise ready:
+   the gap-hardening legacy line (origin guard) and the trade presence line
+   (trade-scope release refusal). Each asserts it is ready, so the refusal can
+   only come from the guard under test. Where readiness itself now names the
+   defect first (TBD item type, zero quantity), the assert also accepts that
+   exact `["itemType"]` / `["quantity"]` message. The guard order (readiness
+   first, then the 00444 checks) is 00445's.
+
+Once those two causes cleared, the files ran past their old stopping points and
+exposed later drift. Each fix names the migration it follows:
+
+- `executed_on_paper`: 00511 replaced `NOT public._can_author_proposal(...)` in
+  the furnishings and trade on-paper twins with recorder-membership
+  predicates. FALSIFY 2/6 and 3/6 now strip those predicates, and both still
+  prove the gate bites.
+- `authorized_schedule` and `trade_scope` read the client's signed payload
+  through `get_client_project_threshold`. 00433/00439/00441 narrowed
+  `get_client_project_selections`, and 00565 moved the payload to the
+  threshold reader. Each assert takes 00441's `logisticsStatus` key and
+  wording. Section 19 now expects `resolvedCents` null: 00565 resolves an
+  allowance only from a later executed authorization, never from the live row.
+- `trade_scope`: create_purchase_order's 00449 active-selected-line refusal is
+  accepted at the front door. The 00423 trigger refusal is still pinned at the
+  back door. Raw deletes take the line's 00434 selection thread in the same
+  statement. Pending deferred events are fired before the DISABLE TRIGGER
+  falsify. The budget-purity falsify targets 00661's `*_00661_impl` bodies.
+  The bundle key-set asserts take the keys that 00569 (`why`), 00575
+  (`parts`) and 00577 (`composed`, `consentSentence`, `executionSnapshot`)
+  added. The section 12 `fingerprint_00422` oracle drops 00577's fee columns,
+  which did not exist when 00422 hashed. The live body drops them too while
+  they hold pre-W2 values, so the byte-stability assert compares like with
+  like.
+- `gap_hardening`: the trusted-IP execution runs under `SET ROLE service_role`,
+  because 00511 binds that rail to the connection role, not the JWT claim. The
+  wave lines carry the `assignment_scope` that 00438 requires.
+
+The `project_unbilled_time` asserts in design services authority now run and
+pass.
 
 ## Fixed during this pass (for context, not failures)
 

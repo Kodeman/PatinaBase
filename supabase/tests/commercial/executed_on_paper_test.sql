@@ -121,6 +121,13 @@ VALUES
   ('ea110000-0000-4000-8000-000000000003', 'ea000000-0000-4000-8000-000000000004',
    'ea100000-0000-4000-8000-000000000001', 'member', 'active', now());
 
+-- 00511's countersign check also requires the agreement's designer to hold a
+-- designer-domain role (is_designer alone provisions only app_user).
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'ea000000-0000-4000-8000-000000000001'::uuid, role.id,
+       'ea000000-0000-4000-8000-000000000001'::uuid
+FROM public.roles AS role WHERE role.name = 'studio_owner';
+
 INSERT INTO public.designer_clients (id, designer_id, client_id, client_name, status, source)
 VALUES (
   'ea200000-0000-4000-8000-000000000001',
@@ -1015,7 +1022,9 @@ BEGIN
     vendor_id,
     vendor_name,
     doc_code,
-    sort_order) VALUES
+    sort_order,
+    -- 00445's readiness gate requires 'selected' (column default 'candidate').
+    design_disposition) VALUES
       (
     v_project,
     v_room,
@@ -1032,7 +1041,8 @@ BEGIN
     'ea710000-0000-4000-8000-000000000001',
     'Paper Test Vendor',
     'LR-01',
-    0
+    0,
+    'selected'
   ),
   (
     v_project,
@@ -1050,7 +1060,8 @@ BEGIN
     'ea710000-0000-4000-8000-000000000001',
     'Paper Test Vendor',
     'LR-02',
-    1
+    1,
+    'selected'
   );
   END LOOP;
 END $$;
@@ -1230,7 +1241,10 @@ BEGIN
   ASSERT a = b, format('wave binding rows differ — %s', pg_temp.jdiff(a, b));
 END $$;
 
--- FALSIFY (2/6) — the furnishings twin's actor gate.
+-- FALSIFY (2/6) — the furnishings twin's actor gate. 00511 replaced the
+-- _can_author_proposal predicate with two recorder-membership predicates (the
+-- recorder's join and its re-check under lock); both are pointed at the lead
+-- designer, which strips the recorder gate and nothing else.
 SAVEPOINT falsify_ffe_actor;
 DO $$
 DECLARE v_def text;
@@ -1239,10 +1253,12 @@ BEGIN
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public'
     AND p.proname = '_execute_furnishings_authorization_on_paper_authorized';
-  ASSERT position('NOT public._can_author_proposal(v_proposal.designer_id)' IN v_def) > 0,
+  ASSERT position('recorder_membership.user_id = v_recorder' IN v_def) > 0
+     AND position('AND membership.user_id = v_recorder' IN v_def) > 0,
     'FALSIFY setup: the actor predicate must be findable';
-  EXECUTE replace(v_def,
-    'NOT public._can_author_proposal(v_proposal.designer_id)', 'false');
+  EXECUTE replace(replace(v_def,
+    'recorder_membership.user_id = v_recorder', 'recorder_membership.user_id = project.designer_id'),
+    'AND membership.user_id = v_recorder', 'AND membership.user_id = v_project.designer_id');
 END $$;
 DO $$
 DECLARE v_result jsonb;
@@ -1441,7 +1457,7 @@ BEGIN
     'a paper retry must not issue a second deposit';
 END $$;
 
--- FALSIFY (3/6) — the trade twin's actor gate.
+-- FALSIFY (3/6) — the trade twin's actor gate. Same 00511 shape as (2/6).
 SAVEPOINT falsify_trade_actor;
 DO $$
 DECLARE v_def text;
@@ -1449,10 +1465,12 @@ BEGIN
   SELECT pg_get_functiondef(p.oid) INTO v_def
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public' AND p.proname = '_execute_trade_scope_on_paper_authorized';
-  ASSERT position('NOT public._can_author_proposal(v_proposal.designer_id)' IN v_def) > 0,
+  ASSERT position('recorder_membership.user_id = v_recorder' IN v_def) > 0
+     AND position('AND membership.user_id = v_recorder' IN v_def) > 0,
     'FALSIFY setup: the actor predicate must be findable';
-  EXECUTE replace(v_def,
-    'NOT public._can_author_proposal(v_proposal.designer_id)', 'false');
+  EXECUTE replace(replace(v_def,
+    'recorder_membership.user_id = v_recorder', 'recorder_membership.user_id = project.designer_id'),
+    'AND membership.user_id = v_recorder', 'AND membership.user_id = v_project.designer_id');
 END $$;
 DO $$
 DECLARE v_result jsonb;
@@ -1807,7 +1825,9 @@ BEGIN
     vendor_id,
     vendor_name,
     doc_code,
-    sort_order) VALUES
+    sort_order,
+    -- 00445's readiness gate requires 'selected' (column default 'candidate').
+    design_disposition) VALUES
     (
     v_project,
     v_room,
@@ -1824,7 +1844,8 @@ BEGIN
     'ea710000-0000-4000-8000-000000000001',
     'Paper Test Vendor',
     'LR-03',
-    2
+    2,
+    'selected'
   ),
   (
     v_project,
@@ -1842,7 +1863,8 @@ BEGIN
     'ea710000-0000-4000-8000-000000000001',
     'Paper Test Vendor',
     'LR-04',
-    3
+    3,
+    'selected'
   );
 
   SELECT array_agg(i.id ORDER BY i.sort_order) INTO v_ids
