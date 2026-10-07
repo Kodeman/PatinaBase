@@ -33,6 +33,26 @@ VALUES
   )
 ON CONFLICT (id) DO NOTHING;
 
+-- set_project_studio_id (head 00563) only admits an authenticated project
+-- INSERT whose designer holds a designer-domain role and an active,
+-- non-guest membership in an active design studio; the studio is derived
+-- from that membership.
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('a7010000-0000-4000-8000-000000000001', 'design_studio',
+        'Close Project Studio', 'close-project-readiness-test', 'active');
+INSERT INTO public.organization_members (
+  id, user_id, organization_id, role, status, joined_at
+) VALUES (
+  'a7020000-0000-4000-8000-000000000001',
+  'a7000000-0000-4000-8000-000000000001',
+  'a7010000-0000-4000-8000-000000000001', 'owner', 'active', NOW()
+);
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'a7000000-0000-4000-8000-000000000001', role.id,
+       'a7000000-0000-4000-8000-000000000001'
+FROM public.roles AS role
+WHERE role.name = 'studio_owner';
+
 INSERT INTO public.designer_clients (id, designer_id, client_id, status)
 VALUES (
   'a7050000-0000-4000-8000-000000000001',
@@ -115,7 +135,7 @@ VALUES
   (
     'a7200000-0000-4000-8000-000000000001',
     'a7100000-0000-4000-8000-000000000001',
-    'Closeout chair', 'specified', 1, 320000, 320000
+    'Closeout chair', 'delivered', 1, 320000, 320000
   ),
   (
     'a7200000-0000-4000-8000-000000000002',
@@ -555,9 +575,11 @@ SELECT pg_temp.expect_close_failure(
   'project cannot close: 1 FF&E item(s) are not installed'
 );
 
-UPDATE public.project_ffe_items
-SET status = 'installed'
-WHERE id = 'a7200000-0000-4000-8000-000000000001';
+-- authenticated holds only SELECT on project_ffe_items; installation goes
+-- through the app's RPC (00691), which accepts only a delivered line.
+SELECT 1 FROM public.record_project_ffe_installed(
+  ARRAY['a7200000-0000-4000-8000-000000000001'::uuid]
+);
 
 -- Installed but uninvoiced is still open work.
 SELECT pg_temp.expect_close_failure(

@@ -31,13 +31,21 @@ Deno.test("a held PO is refused 409 held_for_release for send and mark_sent", as
 
 Deno.test("a sendable PO (released, under the gate, or a resend) passes", async () => {
   const client = rpcClient({ data: true, error: null });
-  assertEquals(await checkPoReleaseGate(client, "po-1", "send"), { ok: true });
+  assertEquals(await checkPoReleaseGate(client, "po-1", "send"), { ok: true, sendable: true });
 });
 
-Deno.test("preview never asks and never refuses, so a held paper can be read", async () => {
-  const client = rpcClient({ data: false, error: null });
-  assertEquals(await checkPoReleaseGate(client, "po-1", "preview"), { ok: true });
-  assertEquals(client.calls.length, 0);
+Deno.test("preview never refuses, so a held paper can be read; it carries the sendable answer (R6)", async () => {
+  for (
+    const [answer, sendable] of [
+      [{ data: true, error: null }, true],
+      [{ data: false, error: null }, false],
+      [{ data: null, error: { message: "boom" } }, false],
+    ] as const
+  ) {
+    const client = rpcClient(answer);
+    assertEquals(await checkPoReleaseGate(client, "po-1", "preview"), { ok: true, sendable });
+    assertEquals(client.calls, [{ fn: "po_is_sendable", args: { p_po_id: "po-1" } }]);
+  }
 });
 
 Deno.test("SQ-448: a hold that lands during the render refuses the pre-email recheck with the same 409", async () => {
@@ -51,7 +59,7 @@ Deno.test("SQ-448: a hold that lands during the render refuses the pre-email rec
       return Promise.resolve({ data: answers.shift(), error: null });
     },
   };
-  assertEquals(await checkPoReleaseGate(client, "po-1", "send"), { ok: true });
+  assertEquals(await checkPoReleaseGate(client, "po-1", "send"), { ok: true, sendable: true });
   assertEquals(await checkPoReleaseGate(client, "po-1", "send"), {
     ok: false,
     status: 409,

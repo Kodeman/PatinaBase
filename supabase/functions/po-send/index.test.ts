@@ -16,6 +16,12 @@ import {
   callerMaySendPurchaseOrder,
   checkPoRepricingGate,
   checkPoTotalsCoherence,
+  DRAFT_PO_NUMBER_LABEL,
+  isDraftPreview,
+  numberPurchaseOrder,
+  persistSidemarkDefault,
+  type PoWriteClient,
+  storePoDocument,
   PO_NEEDS_REPRICING_DETAIL,
   PO_OUT_OF_SYNC_DETAIL,
   PO_SENT_NO_THREAD_PHASE_NOTE,
@@ -732,6 +738,115 @@ Deno.test("resolvePoShipTo prints an explicit ship-to in every mode", () => {
       printed: "Receiving, 22 Mill Rd",
     });
   }
+});
+
+// ─── R6: a held or unnumbered preview takes no number, writes nothing ───────
+
+/** Records every service-role write: PO-row updates and storage uploads. */
+function fakeWriteClient(uploadError: { message: string } | null = null) {
+  const writes = {
+    updates: [] as Array<{ table: string; values: Record<string, unknown>; id: string }>,
+    uploads: [] as Array<{ bucket: string; path: string; upsert: boolean }>,
+  };
+  const client: PoWriteClient = {
+    from(table) {
+      return {
+        update(values) {
+          return {
+            eq(_column, id) {
+              writes.updates.push({ table, values, id });
+              return Promise.resolve({ error: null });
+            },
+          };
+        },
+      };
+    },
+    storage: {
+      from(bucket) {
+        return {
+          upload(path, _body, options) {
+            writes.uploads.push({ bucket, path, upsert: options.upsert });
+            return Promise.resolve({ error: uploadError });
+          },
+        };
+      },
+    },
+  };
+  return { client, writes };
+}
+
+/** The preview flow's write steps, in index.ts order: number → sidemark → store. */
+async function previewWrites(
+  po: { id: string; project_id: string; po_number: string | null; status: string; po_document_path: string | null },
+  sendable: boolean,
+) {
+  const rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+  const caller = fakeCallerClient({ data: { po_number: "PO-0042" }, error: null }, rpcCalls);
+  const { client, writes } = fakeWriteClient();
+  const draft = isDraftPreview("preview", po, sendable);
+  const numbering = await numberPurchaseOrder(caller, po.id, draft);
+  assert(numbering.ok);
+  await persistSidemarkDefault(client, po.id, "KS-HALE", draft);
+  const stored = await storePoDocument(client, "project-documents", po, numbering.poNumber, new Uint8Array([1]));
+  assert(stored.ok);
+  return { draft, rpcCalls, writes, poNumber: numbering.poNumber, documentPath: stored.documentPath };
+}
+
+Deno.test("previewing a held PO takes no number, writes no sidemark or path, and stores at po-preview-<id>", async () => {
+  for (
+    const po of [
+      { id: "po-1", project_id: "proj-1", po_number: null, status: "held_for_release", po_document_path: null },
+      { id: "po-1", project_id: "proj-1", po_number: "PO-0007", status: "held_for_release", po_document_path: null },
+    ]
+  ) {
+    const result = await previewWrites(po, false);
+    assertEquals(result.draft, true);
+    assertEquals(result.rpcCalls, []);
+    assertEquals(result.writes.updates, []);
+    assertEquals(result.writes.uploads, [
+      { bucket: "project-documents", path: "proj-1/po-preview-po-1.pdf", upsert: true },
+    ]);
+    assertEquals(result.poNumber, null);
+    assertEquals(result.documentPath, "proj-1/po-preview-po-1.pdf");
+  }
+  assertEquals(DRAFT_PO_NUMBER_LABEL, "Draft order");
+});
+
+Deno.test("previewing an unnumbered or not-sendable PO is a draft; send and mark_sent never are", () => {
+  const unnumbered = { po_number: null, status: "draft" };
+  const numbered = { po_number: "PO-0007", status: "draft" };
+  assertEquals(isDraftPreview("preview", unnumbered, true), true);
+  assertEquals(isDraftPreview("preview", numbered, false), true);
+  assertEquals(isDraftPreview("preview", { po_number: "PO-0007", status: "held_for_release" }, true), true);
+  assertEquals(isDraftPreview("preview", numbered, true), false);
+  for (const mode of ["send", "mark_sent"] as const) {
+    assertEquals(isDraftPreview(mode, unnumbered, false), false);
+  }
+});
+
+Deno.test("previewing a numbered, sendable PO is unchanged: numbers, persists, stores at po-<number>", async () => {
+  const po = { id: "po-1", project_id: "proj-1", po_number: "PO-0042", status: "draft", po_document_path: null };
+  const result = await previewWrites(po, true);
+  assertEquals(result.draft, false);
+  assertEquals(result.rpcCalls, [{ fn: "assign_po_number", args: { p_po_id: "po-1" } }]);
+  assertEquals(result.poNumber, "PO-0042");
+  assertEquals(result.writes.updates, [
+    { table: "purchase_orders", values: { sidemark: "KS-HALE" }, id: "po-1" },
+    { table: "purchase_orders", values: { po_document_path: "proj-1/po-PO-0042.pdf" }, id: "po-1" },
+  ]);
+  assertEquals(result.writes.uploads, [
+    { bucket: "project-documents", path: "proj-1/po-PO-0042.pdf", upsert: true },
+  ]);
+});
+
+Deno.test("storePoDocument reports a failed upload and writes no path", async () => {
+  const { client, writes } = fakeWriteClient({ message: "bucket gone" });
+  const po = { id: "po-1", project_id: "proj-1", po_document_path: null };
+  assertEquals(await storePoDocument(client, "project-documents", po, "PO-0042", new Uint8Array([1])), {
+    ok: false,
+    detail: "bucket gone",
+  });
+  assertEquals(writes.updates, []);
 });
 
 // ─── C-07: send access, as the caller ────────────────────────────────────────

@@ -3,7 +3,9 @@
 // po_is_sendable (00710) is read AS THE CALLER before any side effect: false
 // when the PO is held_for_release, or when the studio's release gate applies
 // and no release covers the paper's total. A PO already sent stays sendable
-// (a resend). Preview stays open so a held paper can still be read.
+// (a resend). Preview stays open so a held paper can still be read: it asks,
+// never refuses, and carries the answer as `sendable` so a held preview
+// renders as a draft (R6). A failed check previews as not sendable.
 // guard_purchase_order_release refuses the sent_at stamp regardless; this
 // answer is the clean 409 the portal reads, before the email goes out.
 
@@ -20,7 +22,7 @@ export const HELD_FOR_RELEASE_DETAIL =
   'This order waits for an owner or admin to release it before it goes to the vendor.';
 
 export type PoReleaseGate =
-  | { ok: true }
+  | { ok: true; sendable: boolean }
   | {
     ok: false;
     status: 409 | 500;
@@ -33,8 +35,8 @@ export async function checkPoReleaseGate(
   purchaseOrderId: string,
   mode: PoSendMode,
 ): Promise<PoReleaseGate> {
-  if (mode !== 'send' && mode !== 'mark_sent') return { ok: true };
   const { data, error } = await client.rpc('po_is_sendable', { p_po_id: purchaseOrderId });
+  if (mode === 'preview') return { ok: true, sendable: !error && data === true };
   if (error) {
     return {
       ok: false,
@@ -46,7 +48,7 @@ export async function checkPoReleaseGate(
   if (data !== true) {
     return { ok: false, status: 409, error: 'held_for_release', detail: HELD_FOR_RELEASE_DETAIL };
   }
-  return { ok: true };
+  return { ok: true, sendable: true };
 }
 
 // SQ-448 (R2): the gate is read again right before the email, but a hold can

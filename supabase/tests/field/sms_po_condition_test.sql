@@ -72,10 +72,13 @@ BEGIN
  ASSERT (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]')=before_r FROM field_delivery_reports t),label||' reports unchanged';
 END $$;
 GRANT EXECUTE ON FUNCTION pg_temp.po_refuses(sms_prompts, uuid, jsonb, text, text) TO PUBLIC;
-DO $$ DECLARE p sms_prompts;m uuid;r jsonb;receipt jsonb;body text;kind text;before_po jsonb;before_receiving jsonb;
+DO $$ DECLARE p sms_prompts;m uuid;r jsonb;receipt jsonb;body text;kind text;before_po jsonb;before_receiving jsonb;before_time jsonb;
 BEGIN
  SELECT jsonb_agg(to_jsonb(t) ORDER BY id) INTO before_po FROM purchase_orders t;
  SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]') INTO before_receiving FROM receiving_inspections t;
+ -- Snapshot like the two above: a shared local DB can hold time entries that
+ -- other suites committed, so "no time entries" means none written here.
+ SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]') INTO before_time FROM project_time_entries t;
  FOR body,kind IN SELECT * FROM (VALUES ('OK','confirm_delivery'),('HERE','report_arrival'),('DAMAGED','report_condition'),('DAMAGE','report_condition'),('GOOD','confirm_delivery'),('FINE','confirm_delivery')) v LOOP
   p:=pg_temp.po_prompt();m:=pg_temp.po_message(body||' '||p.short_code);
   SET LOCAL ROLE service_role;
@@ -96,7 +99,7 @@ BEGIN
  ASSERT pg_temp.po_apply(p,m,pg_temp.po_effect('report_condition'))->>'status'='applied','SQ77 freeform condition applies';
  ASSERT (SELECT jsonb_agg(to_jsonb(t) ORDER BY id)=before_po FROM purchase_orders t),'SQ77 purchase orders unchanged';
  ASSERT (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]')=before_receiving FROM receiving_inspections t),'SQ77 receiving unchanged';
- ASSERT NOT EXISTS(SELECT 1 FROM project_time_entries),'SQ77 no time entries';
+ ASSERT (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]')=before_time FROM project_time_entries t),'SQ77 no time entries';
  -- Tenant and immutable-subject validation both fail before consumption.
  p:=pg_temp.po_prompt('report_condition','77000000-0000-4000-8000-000000000003');
  PERFORM pg_temp.po_refuses(p,pg_temp.po_message('DAMAGED '||p.short_code),pg_temp.po_effect('report_condition','77000000-0000-4000-8000-000000000003'),'SQ77 foreign studio PO');

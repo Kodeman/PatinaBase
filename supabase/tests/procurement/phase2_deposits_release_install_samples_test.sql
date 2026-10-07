@@ -1043,7 +1043,8 @@ BEGIN
   -- E4: idempotent.
   v_second := public.sweep_procurement_clocks();
   ASSERT v_second = jsonb_build_object('claim_window_closing', 0, 'ack_discrepancy', 0, 'backorder_reported', 0,
-                                       'quote_expiring', 0, 'cfa_reserve_expiring', 0, 'memo_return_due', 0),
+                                       'quote_expiring', 0, 'cfa_reserve_expiring', 0, 'memo_return_due', 0,
+                                       'draft_send_stalled', 0),
     'FAIL E4: a second run writes nothing, got ' || v_second::text;
   RAISE NOTICE 'case E3-E4 passed: memo_return_due and cfa_reserve_expiring fire once per subject and recipient';
 END;

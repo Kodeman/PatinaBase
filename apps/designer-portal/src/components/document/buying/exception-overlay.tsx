@@ -23,6 +23,7 @@ import {
   useComposeProcurementDraft,
   useDecision,
   useOpenProcurementException,
+  OPEN_PROCUREMENT_DRAFT_STATUSES,
   useProcurementDrafts,
   useProjectFFEItems,
   useProjectRecordedStudio,
@@ -327,7 +328,7 @@ export function ExceptionPathSheet({
   const resolve = useResolveProcurementException({ errorSurface: 'inline' });
   const recordRefund = useRecordVendorRefund({ errorSurface: 'inline' });
   const compose = useComposeProcurementDraft({ errorSurface: 'inline' });
-  const { data: drafts } = useProcurementDrafts(exception.project_id, 'awaiting_review');
+  const { data: drafts } = useProcurementDrafts(exception.project_id, OPEN_PROCUREMENT_DRAFT_STATUSES);
   const [declined, setDeclined] = useState(false);
   const paths = pathsFor(exception).filter((p) => !(declined && p.path === 'substitute'));
   const [chosen, setChosen] = useState<PathOption | null>(null);

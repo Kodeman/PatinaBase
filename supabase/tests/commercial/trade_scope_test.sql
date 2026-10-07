@@ -45,7 +45,9 @@ END;
 $$;
 
 -- The PRE-00423 fingerprint body, verbatim from 00422, kept here as the
--- byte-stability oracle for section 12.
+-- byte-stability oracle for section 12. 00577 later added the fee columns to
+-- proposal_service_terms; they did not exist when 00422 hashed, so the oracle
+-- drops them (the live body drops them too while they hold pre-W2 values).
 CREATE OR REPLACE FUNCTION pg_temp.fingerprint_00422(p_proposal_id uuid)
 RETURNS text
 LANGUAGE sql
@@ -56,6 +58,8 @@ AS $$
     'documentKind', p.document_kind,
     'serviceTerms', (
       SELECT to_jsonb(t) - 'created_at' - 'updated_at'
+               - 'fee_basis' - 'fee_amount_cents' - 'fee_schedule'
+               - 'retainer_credit_rule'
       FROM public.proposal_service_terms t WHERE t.proposal_id = p.id
     ),
     'serviceRates', COALESCE((
@@ -116,6 +120,13 @@ INSERT INTO public.organization_members (
   'd8000000-0000-4000-8000-000000000001',
   'd8100000-0000-4000-8000-000000000001', 'owner', 'active', now()
 );
+
+-- 00511's countersign check also requires the agreement's designer to hold a
+-- designer-domain role (is_designer alone provisions only app_user).
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'd8000000-0000-4000-8000-000000000001'::uuid, role.id,
+       'd8000000-0000-4000-8000-000000000001'::uuid
+FROM public.roles AS role WHERE role.name = 'studio_owner';
 
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, status, source
@@ -212,6 +223,8 @@ BEGIN
   -- assignment_scope is explicit: 00438 replaced 00434's auto-deriving
   -- guard_project_ffe_selection_integrity() with one that requires it, so a
   -- room-scoped fixture row that leaves the 'unassigned' default is rejected.
+  -- design_disposition = 'selected' on released lines: 00445's readiness gate
+  -- requires it and the column defaults to 'candidate'.
   INSERT INTO public.project_ffe_items (project_id,
     project_room_id,
     assignment_scope,
@@ -227,7 +240,7 @@ BEGIN
     vendor_id,
     vendor_name,
     doc_code,
-    sort_order) VALUES
+    sort_order, design_disposition) VALUES
     (
     v_project,
     v_kitchen,
@@ -244,7 +257,8 @@ BEGIN
     'd8710000-0000-4000-8000-000000000001',
     'Trade Test Vendor',
     'KT-01',
-    0
+    0,
+    'selected'
   ),
   (
     v_project,
@@ -262,7 +276,8 @@ BEGIN
     'd8710000-0000-4000-8000-000000000001',
     'Trade Test Vendor',
     'KT-02',
-    1
+    1,
+    'selected'
   );
 
   -- The two subs. project_parties is the studio's roster; the scope snapshots
@@ -1390,7 +1405,11 @@ BEGIN
     ASSERT false, 'create_purchase_order must not swallow a trade presence line';
   EXCEPTION WHEN OTHERS THEN v_err := SQLERRM;
   END;
-  ASSERT v_err LIKE '%not purchase-orderable%' OR v_err LIKE '%not found%',
+  -- 00449's create_purchase_order refuses a presence line at its own
+  -- active-selected-line check, before the 00423 purchase-authority trigger
+  -- above is reached; either refusal keeps the line off a PO.
+  ASSERT v_err LIKE '%not purchase-orderable%' OR v_err LIKE '%not found%'
+      OR v_err = 'every PO line must be an active selected line for the PO project and vendor',
     format('create_purchase_order trade refusal: %L', v_err);
 
   -- Provenance is immutable in both directions.
@@ -1428,6 +1447,17 @@ DECLARE
   v_clean uuid := 'd8600000-0000-4000-8000-000000000002';
   v_err text;
 BEGIN
+  -- 00445's per-line readiness gate runs before the trade-scope check, and the
+  -- engaged presence line lands as a vendorless 'candidate'. Make it otherwise
+  -- release-ready so the refusals below can only be the trade-scope check.
+  UPDATE public.project_ffe_items
+  SET design_disposition = 'selected',
+      vendor_id = 'd8710000-0000-4000-8000-000000000001',
+      vendor_name = 'Trade Test Vendor'
+  WHERE id = v_line;
+  ASSERT (public.get_project_ffe_readiness(v_line)->>'ready')::boolean,
+    format('fixture: presence line must be otherwise release-ready: %s',
+           public.get_project_ffe_readiness(v_line));
   BEGIN
     PERFORM public.create_furnishings_authorization_from_schedule(
       v_project, 'Trade release', ARRAY[v_line], 50
@@ -1453,7 +1483,7 @@ BEGIN
     quantity,
     unit_price_cents,
     line_total_cents,
-    sort_order) VALUES (
+    sort_order, design_disposition, vendor_id, vendor_name) VALUES (
     v_clean,
     v_project,
     (SELECT value FROM trade_ids WHERE key = 'kitchen'),
@@ -1465,7 +1495,10 @@ BEGIN
     1,
     40000,
     40000,
-    91
+    91,
+    'selected',
+    'd8710000-0000-4000-8000-000000000001',
+    'Trade Test Vendor'
   );
   BEGIN
     PERFORM public.create_furnishings_authorization_from_schedule(
@@ -1484,6 +1517,12 @@ BEGIN
     SELECT 1 FROM public.furnishing_authorization_items
     WHERE source_ffe_item_id = v_clean),
     'the clean companion line must not have been authorized on its own';
+  -- A 'selected' line is the primary of its own selection thread (RESTRICT
+  -- both ways), so line and thread leave in one statement.
+  WITH dropped_thread AS (
+    DELETE FROM public.project_ffe_selection_threads WHERE primary_ffe_item_id = v_clean
+    RETURNING id
+  )
   DELETE FROM public.project_ffe_items WHERE id = v_clean;
 END $$;
 
@@ -1564,6 +1603,13 @@ BEGIN
   ASSERT (SELECT line_total_cents FROM public.project_ffe_items
           WHERE id = 'd8600000-0000-4000-8000-000000000001') = 7000,
     'REGRESSION: a schedule line with no instrument must still be repriceable';
+  -- Every line is the primary of its own selection thread (00434, RESTRICT
+  -- both ways), so line and thread leave in one statement.
+  WITH dropped_thread AS (
+    DELETE FROM public.project_ffe_selection_threads
+    WHERE primary_ffe_item_id = 'd8600000-0000-4000-8000-000000000001'
+    RETURNING id
+  )
   DELETE FROM public.project_ffe_items WHERE id = 'd8600000-0000-4000-8000-000000000001';
   ASSERT NOT EXISTS (SELECT 1 FROM public.project_ffe_items
                      WHERE id = 'd8600000-0000-4000-8000-000000000001'),
@@ -1573,6 +1619,11 @@ END $$;
 -- FALSIFY (4/5) — aad_guard_trade_presence_line_lock_trg. With it off both the
 -- reprice and the delete land, proving those refusals are that guard and not
 -- some other rule on the table.
+-- ALTER TABLE refuses while deferred trigger events are pending (00434's
+-- deferred selection-thread checks), so fire them now. Every deferrable
+-- constraint in public is INITIALLY DEFERRED, so ALL DEFERRED restores defaults.
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
 SAVEPOINT falsify_presence;
 ALTER TABLE public.project_ffe_items DISABLE TRIGGER aad_guard_trade_presence_line_lock_trg;
 DO $$
@@ -1581,6 +1632,11 @@ BEGIN
   UPDATE public.project_ffe_items SET line_total_cents = 100 WHERE id = v_line;
   ASSERT (SELECT line_total_cents FROM public.project_ffe_items WHERE id = v_line) = 100,
     'FALSIFY: with the presence lock off the reprice must land, proving that guard is what refused it';
+  -- Line and its selection thread leave together (00434, RESTRICT both ways).
+  WITH dropped_thread AS (
+    DELETE FROM public.project_ffe_selection_threads WHERE primary_ffe_item_id = v_line
+    RETURNING id
+  )
   DELETE FROM public.project_ffe_items WHERE id = v_line;
   ASSERT NOT EXISTS (SELECT 1 FROM public.project_ffe_items WHERE id = v_line),
     'FALSIFY: with the presence lock off the delete must land too';
@@ -1776,11 +1832,13 @@ END $$;
 -- straight back: derive mints a 'trade work' line for the bath's whole
 -- allocation, and publish stamps it into the checkpoint. Rolling the savepoint
 -- back restores both definitions, because DDL is transactional.
+-- 00661 renamed both bodies to *_00661_impl behind USD-check wrappers, so the
+-- exclusions are stripped from the impls.
 SAVEPOINT purity_falsify;
 DO $$
 DECLARE
-  v_derive text := pg_get_functiondef('public.derive_working_budget_draft(uuid)'::regprocedure);
-  v_publish text := pg_get_functiondef('public.publish_budget_checkpoint(uuid,uuid)'::regprocedure);
+  v_derive text := pg_get_functiondef('public._derive_working_budget_draft_00661_impl(uuid)'::regprocedure);
+  v_publish text := pg_get_functiondef('public._publish_budget_checkpoint_00661_impl(uuid,uuid)'::regprocedure);
   v_derive_pre text;
   v_publish_pre text;
 BEGIN
@@ -1901,20 +1959,25 @@ BEGIN
   -- Key-set equality rather than a word search: this fixture's own cast and
   -- copy say "trade" all over (design_services_authority_test owns the
   -- word-level contract, on a fixture whose vocabulary is clean). What 00423
-  -- must prove here is that it added no key to a non-trade document.
+  -- must prove here is that it added no key to a non-trade document. The set is
+  -- 00422's plus the agreement keys later migrations added on purpose: 'why'
+  -- (00569), 'parts' (00575), 'composed'/'consentSentence'/'executionSnapshot'
+  -- (00577) -- none of them trade.
   ASSERT (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(v_bundle) k)
-         = ARRAY['document', 'furnishings', 'rates', 'replacement',
-                 'serviceTerms', 'signatures'],
-    format('a design-services bundle must carry exactly the 00422 key set; got %s',
+         = ARRAY['composed', 'consentSentence', 'document', 'executionSnapshot',
+                 'furnishings', 'parts', 'rates', 'replacement',
+                 'serviceTerms', 'signatures', 'why'],
+    format('a design-services bundle must carry exactly the current agreement key set; got %s',
            (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(v_bundle) k));
   v_bundle := public.get_client_commercial_document_bundle(
     (SELECT value FROM trade_ids WHERE key = 'furnishings'));
   ASSERT NOT (v_bundle ? 'tradeScope'),
     'a furnishings bundle must not carry a tradeScope key';
   ASSERT (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(v_bundle) k)
-         = ARRAY['document', 'furnishings', 'rates', 'replacement',
-                 'serviceTerms', 'signatures'],
-    'a furnishings bundle must carry exactly the 00422 key set';
+         = ARRAY['composed', 'consentSentence', 'document', 'executionSnapshot',
+                 'furnishings', 'parts', 'rates', 'replacement',
+                 'serviceTerms', 'signatures', 'why'],
+    'a furnishings bundle must carry exactly the current agreement key set';
 
   -- An outsider gets nothing.
   PERFORM pg_temp.assume_user('d8000000-0000-4000-8000-000000000003');
@@ -2176,7 +2239,10 @@ DECLARE
   v_furn jsonb;
 BEGIN
   PERFORM pg_temp.assume_user('d8000000-0000-4000-8000-000000000002');
-  v_selections := public.get_client_project_selections(v_project);
+  -- 00433/00439/00441 narrowed get_client_project_selections to a flat live-row
+  -- projection; 00565 carries this signed client payload on
+  -- get_client_project_threshold, with 00441's 'logisticsStatus' for 'status'.
+  v_selections := public.get_client_project_threshold(v_project);
   ASSERT v_selections->>'origin' = 'commercial', 'the project is commercial';
 
   SELECT e INTO v_furn FROM jsonb_array_elements(v_selections->'selections') e
@@ -2185,7 +2251,7 @@ BEGIN
   ASSERT v_furn ? 'quantity' AND v_furn ? 'clientUnitPriceCents'
      AND v_furn ? 'clientLineTotalCents' AND v_furn ? 'allowance'
      AND v_furn ? 'instrument' AND v_furn ? 'productId' AND v_furn ? 'imageUrl'
-     AND v_furn ? 'docCode' AND v_furn ? 'roomName' AND v_furn ? 'status',
+     AND v_furn ? 'docCode' AND v_furn ? 'roomName' AND v_furn ? 'logisticsStatus',
     'REGRESSION: every furnishings key the 00422 read projected is still there';
   ASSERT (v_furn->'instrument'->>'proposalId')::uuid
          = (SELECT value FROM trade_ids WHERE key = 'furnishings'),

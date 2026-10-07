@@ -89,6 +89,7 @@ if [[ ! -d "${TEST_DIR}" ]]; then
   exit 2
 fi
 
+PGURL_FROM_ENV="${PGURL:-}"
 PGURL="${PGURL:-postgresql://postgres:postgres@${HOST}:${PORT}/postgres}"
 
 # MS-09 / R3-m4 — a TMPDIR-rooted template. A bare `mktemp -d` resolves to
@@ -166,6 +167,27 @@ else
 fi
 
 FILE_COUNT=$(wc -l < "${RUN_LIST}" | tr -d ' ')
+
+# ---------------------------------------------------------------------------
+# EVENT 3 local-image parity (see supabase/tests/edge_api/
+# public_acl_exception_registry.sql). On staging/prod `postgres` owns
+# extensions.pg_stat_statements{,_info} and 00486 revokes PUBLIC; prod's ACL is
+# {postgres=a*r*w*d*D*x*t*m*/postgres,dashboard_user=arwdDxtm/postgres}. The
+# local CLI image makes supabase_admin the owner and the PUBLIC grantor, so
+# 00486's REVOKE is a silent no-op, and a seed cannot fix it: seeds run as
+# `postgres`, which is not a member of supabase_admin. Reproduce prod's
+# grantees as supabase_admin, against a local stack only, before edge_api runs.
+# ---------------------------------------------------------------------------
+if [[ -z "${PGURL_FROM_ENV}" && ( "${HOST}" == "127.0.0.1" || "${HOST}" == "localhost" ) ]] \
+  && grep -q '/edge_api/' "${RUN_LIST}"; then
+  if ! psql "postgresql://supabase_admin:postgres@${HOST}:${PORT}/postgres" -X -q -v ON_ERROR_STOP=1 \
+    -c 'REVOKE ALL PRIVILEGES ON TABLE extensions.pg_stat_statements, extensions.pg_stat_statements_info FROM PUBLIC, anon, authenticated' \
+    -c 'GRANT ALL PRIVILEGES ON TABLE extensions.pg_stat_statements, extensions.pg_stat_statements_info TO dashboard_user' \
+    > "${LOG_DIR}/event3-parity.log" 2>&1; then
+    echo "warning: EVENT 3 local parity step failed; edge_api ACL files will see the pg_stat_statements residual:" >&2
+    sed 's/^/  /' "${LOG_DIR}/event3-parity.log" >&2
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # Run each file

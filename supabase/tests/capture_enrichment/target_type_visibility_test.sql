@@ -14,7 +14,9 @@
 --       non-org-member designer does not.
 --   (c) field_capture target with status='inbox' and an organization_id:
 --       an ACTIVE org co-member sees the run via field_captures' org-inbox
---       policy, even though they don't own the capture.
+--       policy, even though they don't own the capture. Since 00584 the
+--       same studio co-member also sees the synced capture's run, through
+--       field_captures_studio_select; the SELECT legs are pinned by name.
 --   (d) fail-closed on an unrecognized target_type — even the run's own
 --       enqueuer-equivalent owner cannot see it once target_type doesn't
 --       match either branch.
@@ -142,12 +144,24 @@ BEGIN
   ASSERT v_count = 1, 'FAIL c1: an active org co-member must see a run targeting an inbox, org-scoped field_capture, got ' || v_count;
   PERFORM pg_temp.reset_role();
 
-  -- The SAME co-member must NOT see the synced (non-inbox) capture's run.
+  -- The SAME co-member also sees the synced (non-inbox) capture's run:
+  -- 00584_studio_comember_rls_sweep §2 deliberately added
+  -- field_captures_studio_select (is_studio_comember), which reaches every
+  -- status, not only 'inbox' (FC-R8 resolved as built). The run inherits it.
   PERFORM pg_temp.assume_user('ce000000-0000-4000-8000-000000000012');
   SELECT count(*) INTO v_count FROM public.capture_enrichment_runs
    WHERE target_type = 'field_capture' AND target_id = 'ce000000-0000-4000-8000-0000000000f3';
-  ASSERT v_count = 0, 'FAIL c2: an org co-member must not see a run targeting a non-inbox field_capture they do not own, got ' || v_count;
+  ASSERT v_count = 1, 'FAIL c2: a studio co-member must see a run targeting a non-inbox field_capture via field_captures_studio_select (00584), got ' || v_count;
   PERFORM pg_temp.reset_role();
+
+  -- Pin the field_captures SELECT legs that run visibility inherits, by name.
+  SELECT count(*) INTO v_count FROM pg_policies
+   WHERE schemaname = 'public' AND tablename = 'field_captures' AND cmd = 'SELECT';
+  ASSERT v_count = 3 AND (
+    SELECT array_agg(policyname::text ORDER BY policyname) FROM pg_policies
+     WHERE schemaname = 'public' AND tablename = 'field_captures' AND cmd = 'SELECT'
+  ) = ARRAY['field_captures_org_inbox_select', 'field_captures_owner_select', 'field_captures_studio_select'],
+    'FAIL c3: field_captures SELECT policies drifted from {org_inbox, owner, studio}, count ' || v_count;
 
   RAISE NOTICE 'target_type_visibility: case (c) passed.';
 END $$;

@@ -565,7 +565,13 @@ ROLLBACK;
 -- ════════════════════════════════════════════════════════════════════════════
 -- PART B — two real sessions racing for the last slot
 -- ════════════════════════════════════════════════════════════════════════════
-CREATE EXTENSION IF NOT EXISTS dblink WITH SCHEMA public;
+-- dblink lives in `extensions`, the schema every other two-session test in
+-- this tree uses (commercial/direct_order_idempotency, workflow/
+-- canonical_workflow_spine, edge_api/catalog_roles). Those tests leave it
+-- installed, and then a `WITH SCHEMA public` here was a no-op and every
+-- extensions.dblink_* call failed. Drop it at the end only if this test made it.
+SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='dblink') AS dblink_preexisting \gset
+CREATE EXTENSION IF NOT EXISTS dblink WITH SCHEMA extensions;
 
 -- Committed, because a lock barrier between two sessions cannot exist inside
 -- one transaction. Everything here is removed at the end and the removal is
@@ -599,7 +605,7 @@ BEGIN
   ASSERT (r->>'events_used')::int=2, r::text;
 END $spend$;
 
-SELECT public.dblink_connect('sq12b', format('dbname=%s user=%s host=%s port=%s password=%s',
+SELECT extensions.dblink_connect('sq12b', format('dbname=%s user=%s host=%s port=%s password=%s',
   current_database(), current_user, coalesce(host(inet_server_addr()),'127.0.0.1'),
   inet_server_port(), :'second_session_password')) AS connected;
 
@@ -612,12 +618,12 @@ BEGIN
     '64500000-0000-4000-8000-000000000120','64500000-0000-4000-8000-000000000130','2026-11-01','event');
   ASSERT (r->>'claimed')::boolean AND (r->>'events_used')::int=3,
     'this session took the last slot: '||r::text;
-  PERFORM public.dblink_send_query('sq12b',
+  PERFORM extensions.dblink_send_query('sq12b',
     $q$SELECT public.sms_claim_party_budget('64500000-0000-4000-8000-000000000150',
          '64500000-0000-4000-8000-000000000120','64500000-0000-4000-8000-000000000130',
          '2026-11-01','event')::text$q$);
   PERFORM pg_sleep(0.8);
-  ASSERT public.dblink_is_busy('sq12b')=1, 'the other session has not finished';
+  ASSERT extensions.dblink_is_busy('sq12b')=1, 'the other session has not finished';
   ASSERT EXISTS (SELECT 1 FROM pg_stat_activity
     WHERE pid<>pg_backend_pid() AND datname=current_database()
       AND query LIKE '%sms_claim_party_budget%' AND wait_event_type='Lock'),
@@ -628,10 +634,10 @@ COMMIT;
 DO $b1_result$
 DECLARE r jsonb; extra integer := 0;
 BEGIN
-  SELECT t.r::jsonb INTO r FROM public.dblink_get_result('sq12b') AS t(r text);
+  SELECT t.r::jsonb INTO r FROM extensions.dblink_get_result('sq12b') AS t(r text);
   ASSERT (r->>'claimed')::boolean IS FALSE AND r->>'reason'='budget',
     'the loser is refused, by the value the winner committed: '||r::text;
-  SELECT count(*) INTO extra FROM public.dblink_get_result('sq12b') AS t(r text);
+  SELECT count(*) INTO extra FROM extensions.dblink_get_result('sq12b') AS t(r text);
   ASSERT extra=0, 'and it was one statement';
   ASSERT (SELECT budget_events_used=3 FROM public.sms_conversation_context
     WHERE conversation_id='64500000-0000-4000-8000-000000000150'
@@ -647,20 +653,20 @@ BEGIN
   r := public.sms_claim_party_budget('64500000-0000-4000-8000-000000000150',
     '64500000-0000-4000-8000-000000000120','64500000-0000-4000-8000-000000000130','2026-11-02','event');
   ASSERT (r->>'claimed')::boolean, 'a new local day, so this session claims: '||r::text;
-  PERFORM public.dblink_send_query('sq12b',
+  PERFORM extensions.dblink_send_query('sq12b',
     $q$SELECT public.sms_claim_party_budget('64500000-0000-4000-8000-000000000150',
          '64500000-0000-4000-8000-000000000120','64500000-0000-4000-8000-000000000130',
          '2026-11-02','event')::text$q$);
   PERFORM pg_sleep(0.8);
-  ASSERT public.dblink_is_busy('sq12b')=1, 'and the other session waits again';
+  ASSERT extensions.dblink_is_busy('sq12b')=1, 'and the other session waits again';
 END $b2$;
 ROLLBACK;
 
 DO $b2_result$
 DECLARE r jsonb;
 BEGIN
-  SELECT t.r::jsonb INTO r FROM public.dblink_get_result('sq12b') AS t(r text);
-  PERFORM public.dblink_get_result('sq12b');
+  SELECT t.r::jsonb INTO r FROM extensions.dblink_get_result('sq12b') AS t(r text);
+  PERFORM extensions.dblink_get_result('sq12b');
   ASSERT (r->>'claimed')::boolean AND (r->>'events_used')::int=1,
     'a claim whose sender rolled back spent nothing, so the other sender gets it: '||r::text;
   ASSERT (SELECT budget_local_day=DATE '2026-11-02' AND budget_events_used=1
@@ -670,7 +676,7 @@ BEGIN
     'one text on the new day, by the session that committed';
 END $b2_result$;
 
-SELECT public.dblink_disconnect('sq12b') AS disconnected;
+SELECT extensions.dblink_disconnect('sq12b') AS disconnected;
 
 -- ── B3. Put the disposable database back the way we found it ────────────────
 BEGIN;
@@ -693,11 +699,14 @@ BEGIN
 END $b3$;
 COMMIT;
 
+\if :dblink_preexisting
+\else
 DROP EXTENSION dblink;
 DO $b4$
 BEGIN
   ASSERT NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname='dblink'),
     'the second session''s only tool is put away again';
 END $b4$;
+\endif
 
 SELECT 'sms_trade_prompts_test: PASS' AS result;

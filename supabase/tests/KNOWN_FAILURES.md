@@ -34,25 +34,13 @@ residuals split into three groups with very different confidence. One of the 23
   so left alone per the "diagnose briefly ... else document" instruction
   rather than risk a wrong fix.
 
-## Group 1 — benign local-image divergence (EVENT 3)
+## Group 1 — local-image / platform divergence
 
-`supabase/tests/edge_api/public_acl_exception_registry.sql`'s "EVENT 3"
-comment (search that file for `EVENT 3`) explains this precisely:
-`extensions.pg_stat_statements` / `.._info` are `postgres`-owned on
-staging/prod, so migration `00486_public_acl_residual_closure.sql`'s REVOKE
-closes them for real there. On the local Supabase CLI image the same two
-relations are `supabase_admin`-owned, so the same REVOKE is a silent no-op
-and they remain a live local finding (2 unregistered PUBLIC grants). All
-three files below assert against the same shared
-`public_acl_public_grant_finding` view and hit this identical residual.
+The EVENT 3 pg_stat_statements residual that used to fill this group is closed
+locally by `scripts/run-sql-tests.sh` (see "Closed by the runner's EVENT 3
+parity step" below). One file remains, for a different reason:
 
-- `supabase/tests/edge_api/catalog_roles_test.sql` — exits 3 by design on the local image: `PROVISIONING BLOCKED: ... unregistered_public_grants=2 ...` — the pg_stat_statements/local-image residual described above (EVENT 3 in public_acl_exception_registry.sql). Vars fix (-v HOST -v PORT) makes it *runnable*; this residual is what remains.
-- `supabase/tests/edge_api/catalog_roles_remote_conformance_test.sql` — same root cause: `REMOTE ACL CONFORMANCE FAILED: ... relation_acl=2 ...` then a `division by zero` in its own ratio calc once that count is nonzero. Same EVENT 3 residual.
-- `supabase/tests/edge_api/platform_acl_compatibility_test.sql` — same root cause via the same shared view: `PUBLIC holds a reachable schema, relation, sequence or column privilege that is not a signed registry exception`.
-
-Note: `catalog_roles_remote_conformance_negative_test.sql` (the third file in
-this trio per the brief) is GREEN once run with `-v HOST -v PORT` — it is not
-listed here.
+- `supabase/tests/edge_api/platform_acl_compatibility_test.sql` — 2026-10-06 (SQ-459): now gets past `$public_lockdown$` and `$platform_schema_usage$` (the two blocks Kody's PUBLIC-residual ruling re-scoped) and aborts at `:323`, `an Auth/RLS helper is missing a required named EXECUTE grant`. That is the first of the eight blocks the file's own header (`:17-36`) calls EXPECTED-RED and "a separate, un-ruled piece of work". `auth.uid/role/email/jwt` are `supabase_auth_admin`-owned with EXECUTE reaching anon/authenticated/service_role only through PUBLIC (`=X/supabase_auth_admin`); prod `bkvcixdmuyejfzcijpdg` shows the identical ACL (read-only SELECT, 2026-10-06), so this is not a local-image gap and no local step can or should change it. Going green needs that re-scope ruling, not a grant.
 
 ## Group 2 — real grant/authority gaps (migration-side, not fixed)
 
@@ -65,40 +53,13 @@ Three entries that stood in this group — `mood_boards/share_security_test.sql`
 and `00510_post_00483_grant_and_scope_repairs.sql` closed all three root causes.
 See "Closed by 00510" below.
 
-- `supabase/tests/agent_os/roles_test.sql` — `permission denied for table agent_tasks`. `agent_writer`'s direct INSERT into `agent_tasks` (the test's own documented case 1) is denied at the table-grant layer before RLS is even evaluated. Needs a grant audit for `agent_writer` against current `agent_tasks` privileges.
-- `supabase/tests/commercial/trade_rfq_test.sql` — `mint role refusal: 'permission denied for function mint_trade_rfq_token'`. The test expects `authenticated` to reach `public.mint_trade_rfq_token`'s own internal check and get its custom message (`'minting a trade RFQ link requires service_role'`); instead Postgres's ACL layer denies it first because `authenticated` has no EXECUTE on the function at all. If real app code calls this as `authenticated`, it is broken in the same way today.
-- `supabase/tests/document/close_project_readiness_test.sql` — `studio_id_not_designer_studio`, raised at `:331`. **Message corrected 2026-09-14 (hour-tracking integration round 3, finding N-10).** The entry previously read `permission denied for table project_ffe_items`; the file now aborts 100+ lines EARLIER, so a reader matching the allowlist against the live output could not tell the entry still applied. The original grant boundary is real and unchanged (`authenticated` holds only SELECT on `public.project_ffe_items`; the test does a direct `UPDATE ... SET status = 'installed'` and real app code must go through an RPC), but it is now unreachable behind the earlier raise. Neither cause is hour tracking's: `set_project_studio_id`'s head is `00563` and nothing in `00595–00620` redefines it or `has_designer_domain_role`.
-- `supabase/tests/document/journey_authority_integrity_test.sql` — same `project_ffe_items` grant boundary as above, different call site.
+The four entries that remained here were closed test-side in 2026-10 (US-17
+S2); see "Closed by test repair (US-17 S2)" below. The group is now empty.
 
 ## Group 3 — business-logic / fixture drift (root cause not chased to completion)
 
-The first five share a fixture bug that **was** fixed here (`INSERT INTO
-project_ffe_items` without `assignment_scope`, needed since
-`00438_ffe_release_security_hardening.sql` replaced the auto-deriving
-version of `guard_project_ffe_selection_integrity()` from
-`00434_ffe_privacy_domain_foundation.sql` with one that requires it
-explicit) — that fix is applied and these files now fail on a *different,
-deeper* assertion, unrelated to the fixture bug:
-
-**Failure points re-measured 2026-09-11** (hour-tracking W0 review round 1). Four
-of these five now abort EARLIER than the `designDisposition` readiness gate
-recorded below — inside `_countersign_design_services_agreement_impl`, at
-`design services agreement <uuid> not found or access denied`. The
-`designDisposition` diagnosis is kept in each entry because it is where the file
-stopped in 2026-08, and the new, earlier failure has not been diagnosed to a root
-cause; both are recorded so a reader does not re-diagnose the old one. Proven
-pre-existing, not hour-tracking's: the same five fail identically on a replay of
-`origin/hour-tracking/integration` (545 migrations, none of W0's) and none of
-W0's migrations touches the countersign path. **Consequence for any wave gating
-on this directory: `supabase/tests/commercial` exercises 10 of its 16 files and
-the four countersign files stop BEFORE their authority asserts — never report
-"commercial green" as coverage of the authority rate path.**
-
-- `supabase/tests/commercial/authorized_schedule_test.sql` — 2026-09-11: aborts at `:308`, `design services agreement d7300000-... not found or access denied`. Previously (2026-08) failed later at `schedule line ... is not ready for authorization: ["designDisposition"]` from `_create_furnishings_authorization_from_schedule_impl`. A readiness-gate/fixture drift in the schedule-authorization domain.
-- `supabase/tests/commercial/design_services_authority_test.sql` — 2026-09-11: aborts at `:177`, `design services agreement d5300000-... not found or access denied`, i.e. 44 lines before its three `project_unbilled_time` asserts at `:221,349,362` — so those asserts do not run. (The hour-tracking program therefore pins the repaired view's design-services arm in `supabase/tests/billing/time_unbilled_view_repair_test.sql` case (c) instead.) Previously: same `designDisposition` readiness-gate failure as above.
-- `supabase/tests/commercial/executed_on_paper_test.sql` — 2026-09-11: aborts at `:214`, `design services agreement ea300000-... not found or access denied`. Previously: same `designDisposition` readiness-gate failure, same function.
-- `supabase/tests/commercial/design_services_gap_hardening_test.sql` — 2026-09-11: aborts at `:128`, `proposal d6300000-... failed canonical project provenance`. Previously: `legacy release blocked by the wrong guard: 'schedule line ... is not ready for authorization: ["designDisposition"]'` — same family; the test's own message implies it already suspects a guard-ordering regression.
-- `supabase/tests/commercial/trade_scope_test.sql` — MOVED here from Group 2 by `00510`. Its Group 2 cause (`non-room assignment cannot carry a room`, raised inside `public.engage_trade_scope` itself, which inserted `project_ffe_items` without `assignment_scope`) is fixed: 00510 set `assignment_scope` explicitly in the RPC body. 2026-09-11: aborts at `:196`, `design services agreement d8300000-... not found or access denied`. Previously it ran the whole engagement ceremony and failed ~320 lines later at `schedule line ... is not ready for authorization: ["designDisposition"]`.
+The five commercial countersign-family files that led this group are green
+again; see "Closed by US-17 S1" below.
 
 Un-related residuals, each a genuine assertion failure whose root cause
 (a later migration changing a guard, a policy count, or an ordering) was
@@ -106,13 +67,8 @@ identified only down to the failing message, not chased further:
 
 - `supabase/tests/library/product_configuration_test.sql` — `issued cabinetry must lock the exact approved snapshot on the FF&E spec`.
 - `supabase/tests/notifications/unconfirmed_analytics_test.sql` — `active service role must not read user-owned campaign analytics`.
-- `supabase/tests/procurement/state_chain_test.sql` — `authentication required to link a configured line to a purchase order`. Runs as the unrestricted session owner (no actor assumed) at that point; a trigger apparently now requires `auth.uid()` to be set where it previously didn't.
 - `supabase/tests/proposals/proposal_builder_atomicity_test.sql` — `proposal board room belongs to another proposal`.
-- `supabase/tests/proposals/proposal_policy_locking_integrity_test.sql` — `all thirteen installed-client SELECT-only policies must remain` (a policy-count assertion — the live count no longer matches 13).
 - `supabase/tests/proposals/proposal_signature_authority_test.sql` — `owner_insert_requires_owner`.
-- `supabase/tests/field/field_capture_note_routing_test.sql` — `FAIL 7f: field_captures should carry exactly five policies, got 9` (at `:547`). Added 2026-09-11 (hour-tracking W0 review, finding N1): `00584_studio_comember_rls_sweep.sql` added the four `field_captures_studio_{select,insert,update,delete}` policies beside the five the assertion was written against, so the count is 9. The assertion's own message asks for a deliberate ruling (FC-R8 per-studio) rather than a silent bump — so the expected count is left alone and the file is listed here instead. Unrelated to hour tracking: W0 adds no policy to any table.
-- `supabase/tests/commercial/direct_order_attribution_test.sql` — **CLOCK-DEPENDENT: fails only between 00:00 and 02:00 UTC**, at `:488`, `two roster designers on one day must file the order uncredited`. Added 2026-09-12 (hour-tracking W2 review round 10, finding W2-R10-05 — measured, not inferred). Mechanism: the tie fixture writes two `designer_clients` rows at `NOW() - INTERVAL '2 hours'` and `NOW() - INTERVAL '1 hour'` (`:120-122`) and the attribution rule groups them **by day**, so in the first two hours after UTC midnight the two timestamps fall on different dates, the tie dissolves, and the newer row credits a designer where the assert requires none (measured at 01:0x UTC: got `da000000-…-00d2`; the same file passes in the same minute under session TZ `America/Chicago`). **Not hour-tracking's file** (absent from every W2 branch diff) and listed here because the W2 gate runs this directory and two rounds of review reported the commercial baseline as "six documented" while it is seven in that window. The one-expression repair, if a later hand wants it: date both fixture rows off `(NOW() AT TIME ZONE 'UTC')::date`, or push them to `NOW() - INTERVAL '26 hours'` / `'25 hours'` — the same treatment `supabase/tests/billing/time_rate_resolution_test.sql` and `supabase/tests/rls/time_entry_studio_stamp_test.sql` took for W2-R9-04.
-- `supabase/tests/capture_enrichment/target_type_visibility_test.sql` — `FAIL c2`. Added 2026-09-14 (hour-tracking integration round 3, finding N-06). Same cause already documented for its sibling `field/field_capture_note_routing_test.sql` above: `00584_studio_comember_rls_sweep.sql` added the four `field_captures_studio_{select,insert,update,delete}` policies beside the ones these assertions were written against. `00584` is on `origin/main`; **no migration in `00595–00620` defines a policy on those tables**, and hour tracking does not touch the test file. Like its sibling, the count is left alone pending the FC-R8 per-studio ruling rather than silently bumped.
 - `supabase/tests/rls/design_requests_test.sql` — `FAIL 3b: expected no_scans, got <none>` (a case that should raise a specific error no longer does).
 - `supabase/tests/rls/studio_titles_test.sql` — `FAIL f: demoting the sole active owner should raise last_owner_protected` (same shape — an expected guard no longer fires). Cross-ref project memory: studio co-member RLS has a documented SECURITY DEFINER requirement that may be implicated.
 - `supabase/tests/spec_books/security_and_lifecycle_test.sql` — `only service_role may finalize rendered issues` (the test's own custom ASSERT message; the finalize-lifecycle guard it exercises no longer behaves as written).
@@ -141,6 +97,145 @@ the list entirely. 00510 closed its storage-policy root cause; its residual
 superuser bypass — its `create_board_share` calls now run under
 `SET LOCAL ROLE authenticated`, so the edition-mint guard the file exists to
 police actually runs. Green as of 2026-08-31.
+
+Three policy-drift files left the list on 2026-10-06 (SQ-456), each because a
+deliberate, shipped migration changed the policy set and the test was stale.
+`field/field_capture_note_routing_test.sql` (7f) and
+`capture_enrichment/target_type_visibility_test.sql` (c2) now pin the four
+`field_captures_studio_*` legs that `00584_studio_comember_rls_sweep` added
+(FC-R8 resolved as built: a studio co-member sees every capture, not only
+inbox ones). `proposals/proposal_policy_locking_integrity_test.sql` now pins
+eleven installed-client SELECT policies by name and asserts the two legacy and
+two project-client board reads stay absent: `00462_workflow_privacy_authority`
+§2 dropped them on purpose (working board rows are never raw client surfaces),
+and `00434_ffe_privacy_domain_foundation` had already dropped the two
+project-client ones.
+
+## Closed by test repair (US-17 S2, 2026-10)
+
+The same no-bullet-shape rule applies to this section. All four former
+Group 2 files are green; in each case the platform's boundary was right and
+the test was stale, so no grant, policy or guard changed.
+
+`agent_os/roles_test.sql`: 00484 revoked every `agent_tasks` privilege from
+`agent_writer` and dropped its RLS policies on purpose. Case 2 now asserts that
+the direct INSERT is denied and that `enqueue_agent_task` writes the row and
+its audit actor. The forgery guard is now the RPC's `p_status` gate.
+
+`commercial/trade_rfq_test.sql`: the only caller of `mint_trade_rfq_token` is
+the `trade-rfq-send` edge function's service-role client, so both refusals now
+assert the 00424 ACL denial. Three more stale points sat behind it. The fixture
+lacked the designer-domain role that 00511 requires for countersign. Forged
+service_role claims leaked into section (5). The lock-order probe still
+matched the pre-00511 text of the scope lock.
+
+`document/close_project_readiness_test.sql`: the fixture now gives the
+designer a design studio, a membership and a designer role, which
+`set_project_studio_id` (head 00563) requires. Installation goes through
+`record_project_ffe_installed` (00691) from a delivered line.
+
+`document/journey_authority_integrity_test.sql`: the blocked FF&E fixture line
+is inserted as the session owner, and then the authenticated role is restored.
+
+## Closed by the runner's EVENT 3 parity step (SQ-459, 2026-10-06)
+
+`edge_api/catalog_roles_test.sql` (`unregistered_public_grants=2`) and
+`edge_api/catalog_roles_remote_conformance_test.sql` (`relation_acl=2`) are
+green and carry no entry. Their residual was the EVENT 3 local-image gap:
+`extensions.pg_stat_statements{,_info}` are `supabase_admin`-owned locally
+(`=r/supabase_admin`), so 00486's REVOKE run as `postgres` is a silent no-op.
+A seed cannot fix it either: `db reset` seeds run as `postgres`, which is not a
+member of `supabase_admin` (`SET ROLE supabase_admin` → permission denied).
+`scripts/run-sql-tests.sh` now connects as `supabase_admin` to a local stack
+only (127.0.0.1/localhost, no `PGURL` override) and reproduces prod's measured
+ACL `{postgres=a*r*w*d*D*x*t*m*/postgres,dashboard_user=arwdDxtm/postgres}`:
+PUBLIC/anon/authenticated revoked, `dashboard_user` granted. No registry row
+was added. The `division by zero` in the remote-conformance file was never a
+ratio bug: its `SELECT 1 / 0` is the file's deliberate nonzero-exit gate
+(`:400-404`) and stays.
+
+`edge_api/platform_acl_compatibility_test.sql` also had a stale allow-list in
+`$platform_schema_usage$`: `00490_scan_worker_roles.sql:361-362` grants public
+`USAGE` to `scan_worker`/`scan_reader` (prod carries both); the test now names
+them. That file remains in Group 1 for its un-ruled `$auth_helpers$` block.
+
+`procurement/state_chain_test.sql` was already repaired by `0a2c94dbb` (SQ-391):
+the file now assumes the PO's designer via `SET LOCAL "request.jwt.claims" TO
+'{"role":"service_role"}'` before the raw PO-link UPDATEs that
+`lock_configuration_snapshot_on_po_link` (00403/00422) guards, then resets.
+Confirmed green (SQ-458, 2026-10-06): `bash scripts/run-sql-tests.sh --filter
+procurement/` — 20/20, 0 unexpected-fail.
+
+`commercial/direct_order_attribution_test.sql`'s clock dependency (W2-R10-05) is
+fixed (SQ-458, 2026-10-06): the tie fixture's two `designer_clients` rows now
+anchor off `(date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')`
+instead of `NOW() - INTERVAL '2 hours'` / `'1 hour'`, so both land on the same
+UTC calendar day no matter when the suite runs — a NOW()-relative gap (2h/1h,
+or 26h/25h, which has the identical mod-24h boundary and buys nothing) can
+still straddle the session's day truncation when NOW() itself falls in the
+critical hour; anchoring the day first before adding the hours removes the
+boundary entirely. Confirmed green under the default session TimeZone and
+under `PGOPTIONS="--timezone=America/Chicago"` (both show
+`date_trunc('day', ...)` agreeing on the two rows). Verified: `bash
+scripts/run-sql-tests.sh --filter commercial/` — 11/11 green, 6 documented
+expected-fail, 0 unexpected-fail.
+
+## Closed by US-17 S1 (SQ-454, 2026-10-06)
+
+The same no-bullet-shape rule applies here.
+
+The five Group 3 countersign-family files in `commercial/` (authorized
+schedule, design services authority, executed on paper, design services gap
+hardening, trade scope) are green end to end. Both causes were stale fixtures,
+not product regressions, so no migration was needed:
+
+1. **Countersign "not found or access denied".** `00511_public_sd_hardening`
+   made the countersign path require the agreement's designer to hold a
+   `designer`-domain role. `is_designer = true` provisions only `app_user`
+   (domain `consumer`). Each fixture now grants `studio_owner`, as
+   `design_services_paper_issue_test.sql` already did. The gap-hardening file's
+   "failed canonical project provenance" abort had the same cause.
+2. **`designDisposition` readiness.** `00445` requires every released schedule
+   line to be `design_disposition = 'selected'` (the column defaults to
+   `'candidate'`) and to carry a vendor. The fixture lines now state both. The
+   probes that exercise a later guard first make their line otherwise ready:
+   the gap-hardening legacy line (origin guard) and the trade presence line
+   (trade-scope release refusal). Each asserts it is ready, so the refusal can
+   only come from the guard under test. Where readiness itself now names the
+   defect first (TBD item type, zero quantity), the assert also accepts that
+   exact `["itemType"]` / `["quantity"]` message. The guard order (readiness
+   first, then the 00444 checks) is 00445's.
+
+Once those two causes cleared, the files ran past their old stopping points and
+exposed later drift. Each fix names the migration it follows:
+
+- `executed_on_paper`: 00511 replaced `NOT public._can_author_proposal(...)` in
+  the furnishings and trade on-paper twins with recorder-membership
+  predicates. FALSIFY 2/6 and 3/6 now strip those predicates, and both still
+  prove the gate bites.
+- `authorized_schedule` and `trade_scope` read the client's signed payload
+  through `get_client_project_threshold`. 00433/00439/00441 narrowed
+  `get_client_project_selections`, and 00565 moved the payload to the
+  threshold reader. Each assert takes 00441's `logisticsStatus` key and
+  wording. Section 19 now expects `resolvedCents` null: 00565 resolves an
+  allowance only from a later executed authorization, never from the live row.
+- `trade_scope`: create_purchase_order's 00449 active-selected-line refusal is
+  accepted at the front door. The 00423 trigger refusal is still pinned at the
+  back door. Raw deletes take the line's 00434 selection thread in the same
+  statement. Pending deferred events are fired before the DISABLE TRIGGER
+  falsify. The budget-purity falsify targets 00661's `*_00661_impl` bodies.
+  The bundle key-set asserts take the keys that 00569 (`why`), 00575
+  (`parts`) and 00577 (`composed`, `consentSentence`, `executionSnapshot`)
+  added. The section 12 `fingerprint_00422` oracle drops 00577's fee columns,
+  which did not exist when 00422 hashed. The live body drops them too while
+  they hold pre-W2 values, so the byte-stability assert compares like with
+  like.
+- `gap_hardening`: the trusted-IP execution runs under `SET ROLE service_role`,
+  because 00511 binds that rail to the connection role, not the JWT claim. The
+  wave lines carry the `assignment_scope` that 00438 requires.
+
+The `project_unbilled_time` asserts in design services authority now run and
+pass.
 
 ## Fixed during this pass (for context, not failures)
 

@@ -9,12 +9,15 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 const mockUpdate = jest.fn();
 const mockSend = jest.fn();
 const mockDiscard = jest.fn();
+const mockResend = jest.fn();
 const mockDrafts: { data: Record<string, unknown>[] } = { data: [] };
 
 jest.mock('@patina/supabase', () => ({
+  OPEN_PROCUREMENT_DRAFT_STATUSES: ['awaiting_review', 'sending'],
   useUpdateProcurementDraft: () => ({ mutateAsync: mockUpdate, isPending: false }),
   useSendProcurementDraft: () => ({ mutateAsync: mockSend, isPending: false }),
   useDiscardProcurementDraft: () => ({ mutateAsync: mockDiscard, isPending: false }),
+  useResendStalledProcurementDraft: () => ({ mutateAsync: mockResend, isPending: false }),
   useProcurementDrafts: () => ({ data: mockDrafts.data }),
 }));
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -36,6 +39,7 @@ beforeEach(() => {
   mockUpdate.mockReset().mockResolvedValue({});
   mockSend.mockReset().mockResolvedValue({ draftId: 'draft-1', messageId: 'msg-1' });
   mockDiscard.mockReset().mockResolvedValue({});
+  mockResend.mockReset().mockResolvedValue({ draftId: 'draft-1', messageId: 'msg-2' });
   mockDrafts.data = [];
 });
 
@@ -100,10 +104,33 @@ describe('DraftReview', () => {
   });
 
   it('offers no send while another send has claimed it', () => {
-    render(<DraftReview draft={{ ...DRAFT, status: 'sending' }} />);
+    const claimedAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    render(<DraftReview draft={{ ...DRAFT, status: 'sending', updated_at: claimedAt }} />);
     expect(screen.queryByLabelText('Subject')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
-    expect(screen.getByRole('status')).toHaveTextContent('Sending.');
+    expect(screen.queryByRole('button', { name: 'Send again' })).toBeNull();
+    const time = new Date(claimedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    expect(screen.getByRole('status')).toHaveTextContent(/^Sending since /);
+    expect(screen.getByRole('status')).toHaveTextContent(`${time}.`);
+  });
+
+  it('offers Send again once the send has stalled, and reads sent after it', async () => {
+    const claimedAt = new Date(Date.now() - 11 * 60 * 1000).toISOString();
+    render(<DraftReview draft={{ ...DRAFT, status: 'sending', updated_at: claimedAt }} />);
+    expect(screen.getByRole('status')).toHaveTextContent(/^Sending since /);
+    fireEvent.click(screen.getByRole('button', { name: 'Send again' }));
+    await waitFor(() => expect(mockResend).toHaveBeenCalledWith('draft-1'));
+    expect(mockSend).not.toHaveBeenCalled();
+    await screen.findByText('Sent to orders@hale.test.');
+    expect(screen.queryByRole('button', { name: 'Send again' })).toBeNull();
+  });
+
+  it('says why when sending again fails', async () => {
+    mockResend.mockRejectedValueOnce(new Error('The provider refused the message.'));
+    const claimedAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    render(<DraftReview draft={{ ...DRAFT, status: 'sending', updated_at: claimedAt }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send again' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The provider refused the message.');
   });
 });
 

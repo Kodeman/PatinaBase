@@ -54,6 +54,13 @@ INSERT INTO public.organization_members (
   'd7100000-0000-4000-8000-000000000001', 'owner', 'active', now()
 );
 
+-- 00511's countersign check also requires the agreement's designer to hold a
+-- designer-domain role (is_designer alone provisions only app_user).
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'd7000000-0000-4000-8000-000000000001'::uuid, role.id,
+       'd7000000-0000-4000-8000-000000000001'::uuid
+FROM public.roles AS role WHERE role.name = 'studio_owner';
+
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, status, source
 ) VALUES (
@@ -145,6 +152,9 @@ DECLARE
   v_err text;
 BEGIN
   PERFORM pg_temp.assume_user('d7000000-0000-4000-8000-000000000001');
+  -- Every schedule line in this file states design_disposition = 'selected'
+  -- and a vendor: 00445's readiness gate requires both, and the disposition
+  -- column defaults to 'candidate'.
   INSERT INTO public.project_ffe_items (project_id,
     project_room_id,
     assignment_scope,
@@ -157,7 +167,7 @@ BEGIN
     unit_price_cents,
     trade_price_cents,
     line_total_cents,
-    sort_order) VALUES (
+    sort_order, design_disposition, vendor_id, vendor_name) VALUES (
     'd7500000-0000-4000-8000-000000000001',
     'd7600000-0000-4000-8000-000000000001',
     'room',
@@ -170,7 +180,10 @@ BEGIN
     100000,
     60000,
     100000,
-    0
+    0,
+    'selected',
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor'
   ) RETURNING id INTO v_line;
 
   PERFORM set_config('patina.configuration_spec_workflow', '00403', true);
@@ -337,7 +350,7 @@ BEGIN
     vendor_name,
     doc_code,
     sort_order,
-    notes) VALUES
+    notes, design_disposition) VALUES
     (
     v_project,
     v_living,
@@ -357,7 +370,8 @@ BEGIN
     'Schedule Test Vendor',
     'LR-01',
     0,
-    'Fabric TBC with client.'
+    'Fabric TBC with client.',
+    'selected'
   ),
   (
     v_project,
@@ -378,7 +392,8 @@ BEGIN
     'Schedule Test Vendor',
     'LR-02',
     1,
-    NULL
+    NULL,
+    'selected'
   ),
   (
     v_project,
@@ -395,11 +410,14 @@ BEGIN
     NULL,
     NULL,
     200000,
-    NULL,
-    NULL,
+    -- 00435/00445 readiness requires a vendor on every released line,
+    -- allowances included.
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor',
     'LR-03',
     2,
-    NULL
+    NULL,
+    'selected'
   ),
   (
     v_project,
@@ -416,11 +434,13 @@ BEGIN
     NULL,
     NULL,
     NULL,
-    NULL,
-    NULL,
+    -- A vendor, so the item type is the line's only unresolved field.
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor',
     'LR-04',
     3,
-    NULL
+    NULL,
+    'selected'
   ),
   (
     v_project,
@@ -441,7 +461,8 @@ BEGIN
     'Schedule Test Vendor',
     'LR-05',
     4,
-    NULL
+    NULL,
+    'selected'
   ),
   (
     v_project,
@@ -458,11 +479,12 @@ BEGIN
     66.67,
     60000,
     NULL,
-    NULL,
-    NULL,
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor',
     'LR-06',
     6,
-    NULL
+    NULL,
+    'selected'
   ),
   (
     v_project,
@@ -479,11 +501,12 @@ BEGIN
     66.67,
     60000,
     NULL,
-    NULL,
-    NULL,
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor',
     'LR-06',
     6,
-    NULL
+    NULL,
+    'selected'
   ),
   (
     v_project,
@@ -500,11 +523,12 @@ BEGIN
     66.67,
     90000,
     NULL,
-    NULL,
-    NULL,
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor',
     'LR-08',
     7,
-    NULL
+    NULL,
+    'selected'
   ),
   (
     v_project,
@@ -521,11 +545,12 @@ BEGIN
     66.67,
     40000,
     NULL,
-    NULL,
-    NULL,
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor',
     'LR-09',
     8,
-    NULL
+    NULL,
+    'selected'
   );
 
   -- Study
@@ -544,7 +569,7 @@ BEGIN
     vendor_id,
     vendor_name,
     doc_code,
-    sort_order) VALUES
+    sort_order, design_disposition) VALUES
     (
     v_project,
     v_study,
@@ -561,7 +586,8 @@ BEGIN
     'd7710000-0000-4000-8000-000000000001',
     'Schedule Test Vendor',
     'ST-01',
-    0
+    0,
+    'selected'
   ),
   (
     v_project,
@@ -576,10 +602,11 @@ BEGIN
     72000,
     66.67,
     120000,
-    NULL,
-    NULL,
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor',
     'ST-02',
-    1
+    1,
+    'selected'
   );
 
   -- A line nobody filed in a room. Section 2 proves it cannot be released.
@@ -594,7 +621,7 @@ BEGIN
     unit_price_cents,
     trade_price_cents,
     line_total_cents,
-    sort_order) VALUES (
+    sort_order, design_disposition, vendor_id, vendor_name) VALUES (
     v_project,
     NULL,
     'throughout',
@@ -606,7 +633,10 @@ BEGIN
     30000,
     18000,
     30000,
-    9
+    9,
+    'selected',
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor'
   );
 END $$;
 
@@ -959,7 +989,9 @@ BEGIN
     unit_price_cents,
     trade_price_cents,
     line_total_cents,
-    sort_order) VALUES (
+    sort_order, design_disposition,
+    -- 00435/00445 readiness requires a vendor, so coverage is the only refusal.
+    vendor_id, vendor_name) VALUES (
     v_project,
     v_pantry,
     'room',
@@ -971,7 +1003,10 @@ BEGIN
     80000,
     48000,
     80000,
-    10
+    10,
+    'selected',
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor'
   ) RETURNING id INTO v_cabinet;
   INSERT INTO sched_ids VALUES ('pantry', v_pantry), ('cabinet', v_cabinet);
 
@@ -1015,7 +1050,10 @@ BEGIN
     ASSERT false, 'a TBD line must not be releasable';
   EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
   END;
-  ASSERT v_err LIKE '%still TBD; resolve it before releasing',
+  -- 00445's readiness gate runs before the 00444 "still TBD" check and names
+  -- the unresolved item type itself.
+  ASSERT v_err LIKE '%still TBD; resolve it before releasing'
+      OR v_err LIKE '%is not ready for authorization: ["itemType"]',
     format('TBD refusal: %L', v_err);
 
   BEGIN
@@ -1359,7 +1397,7 @@ BEGIN
     unit_price_cents,
     trade_price_cents,
     line_total_cents,
-    sort_order) VALUES (
+    sort_order, design_disposition, vendor_id, vendor_name) VALUES (
     v_project,
     v_room,
     'room',
@@ -1371,7 +1409,10 @@ BEGIN
     200000,
     120000,
     200000,
-    0
+    0,
+    'selected',
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor'
   ) RETURNING id INTO v_line;
 
   v_budget := public.derive_working_budget_draft(v_project);
@@ -1433,7 +1474,7 @@ BEGIN
     unit_price_cents,
     trade_price_cents,
     line_total_cents,
-    sort_order) VALUES (
+    sort_order, design_disposition, vendor_id, vendor_name) VALUES (
     v_project,
     v_hall,
     'room',
@@ -1445,7 +1486,10 @@ BEGIN
     70000,
     42000,
     70000,
-    11
+    11,
+    'selected',
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor'
   );
 
   PERFORM public.derive_working_budget_draft(v_project);
@@ -1539,6 +1583,9 @@ END $$;
 -- (11) The client's read of their own selections: everything they authorized,
 --      nothing about what it cost the studio to buy.
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 00433/00439/00441 narrowed get_client_project_selections to a flat live-row
+-- projection; 00565 carries this signed client payload on
+-- get_client_project_threshold, so sections 11 and 19 read that.
 SELECT pg_temp.assume_user('d7000000-0000-4000-8000-000000000002');
 DO $$
 DECLARE
@@ -1549,7 +1596,7 @@ DECLARE
   v_sofa_row jsonb;
   v_rug_row jsonb;
 BEGIN
-  v_payload := public.get_client_project_selections(v_project);
+  v_payload := public.get_client_project_threshold(v_project);
   ASSERT v_payload->>'origin' = 'commercial',
     'a project with a design-services origin reads as commercial';
   ASSERT jsonb_array_length(v_payload->'selections') = 3,
@@ -1560,7 +1607,7 @@ BEGIN
   WHERE value->>'id' = v_sofa::text;
   ASSERT v_sofa_row->>'roomName' = 'Living room'
      AND (v_sofa_row->>'clientLineTotalCents')::integer = 400000
-     AND v_sofa_row->>'status' = 'ordered'
+     AND v_sofa_row->>'logisticsStatus' = 'ordered'   -- 00441 renamed 'status'
      AND v_sofa_row->>'imageUrl' = 'https://cdn.test.invalid/sofa-hero.jpg'
      AND v_sofa_row->>'docCode' = 'LR-01'
      AND v_sofa_row->'instrument'->>'name' = 'Release one'
@@ -1587,7 +1634,10 @@ BEGIN
   ASSERT (SELECT line_total_cents FROM public.project_ffe_items WHERE id = v_rug) = 180000,
     'the live price is present — the read withholds it on purpose, not by accident';
 
-  ASSERT v_payload::text !~* 'trade|markup',
+  -- "tradeJourney" is the threshold reader's client-facing trade-scope journey
+  -- key (null on furnishings lines), not a trade-side cost; anything else
+  -- matching still fails.
+  ASSERT regexp_replace(v_payload::text, '"tradeJourney"', '', 'g') !~* 'trade|markup',
     'the client selections payload leaked a trade-side field';
 END $$;
 -- (Section 19 carries the other half: once the schedule stops calling the line
@@ -1597,13 +1647,14 @@ DECLARE v_err text;
 BEGIN
   PERFORM pg_temp.assume_user('d7000000-0000-4000-8000-000000000003');
   BEGIN
-    PERFORM public.get_client_project_selections(
+    PERFORM public.get_client_project_threshold(
       (SELECT value FROM sched_ids WHERE key = 'project')
     );
     ASSERT false, 'a stranger must not read a project''s selections';
   EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
   END;
-  ASSERT v_err LIKE '%not found or access denied', format('stranger refusal: %L', v_err);
+  -- 00441's authorization preamble words it "not found or not accessible".
+  ASSERT v_err LIKE '%not found or not accessible', format('stranger refusal: %L', v_err);
 END $$;
 -- The RPC is the only client door: the raw table is closed on a commercial
 -- project (00414 narrowed the client SELECT policy to legacy-origin projects).
@@ -2255,7 +2306,7 @@ BEGIN
     unit_price_cents,
     trade_price_cents,
     line_total_cents,
-    sort_order) VALUES (
+    sort_order, design_disposition, vendor_id, vendor_name) VALUES (
     v_project,
     v_room_b,
     'room',
@@ -2267,7 +2318,10 @@ BEGIN
     150000,
     90000,
     150000,
-    1
+    1,
+    'selected',
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor'
   ) RETURNING id INTO v_line_b;
 
   v_budget := public.derive_working_budget_draft(v_project);
@@ -2345,7 +2399,7 @@ DECLARE
   v_sofa_row jsonb;
   v_rug_row jsonb;
 BEGIN
-  v_payload := public.get_client_project_selections(v_project);
+  v_payload := public.get_client_project_threshold(v_project);
   SELECT value INTO v_sofa_row FROM jsonb_array_elements(v_payload->'selections') AS value
   WHERE value->>'id' = v_sofa::text;
   ASSERT (v_sofa_row->>'clientUnitPriceCents')::integer = 400000
@@ -2356,11 +2410,16 @@ BEGIN
 
   SELECT value INTO v_rug_row FROM jsonb_array_elements(v_payload->'selections') AS value
   WHERE value->>'id' = v_rug::text;
+  -- 00565 withdrew 00423's resolution off the LIVE schedule row (an unsigned
+  -- figure the studio can move): resolvedCents now comes only from a later
+  -- EXECUTED authorization that snapshots the line as 'fixed'. None exists
+  -- here, so retyping the live line leaves the client's read unresolved.
   ASSERT (v_rug_row->>'clientLineTotalCents')::integer = 200000
      AND (v_rug_row->'allowance'->>'ceilingCents')::integer = 200000
-     AND (v_rug_row->'allowance'->>'resolvedCents')::integer = 180000,
-    format('a RESOLVED allowance signs its ceiling and reports its live '
-           || 'resolution separately: %s', v_rug_row);
+     AND v_rug_row->'allowance' ? 'resolvedCents'
+     AND v_rug_row->'allowance'->>'resolvedCents' IS NULL,
+    format('an allowance signs its ceiling, and a live retype alone must not '
+           || 'resolve it for the client: %s', v_rug_row);
 END $$;
 SELECT pg_temp.assume_user('d7000000-0000-4000-8000-000000000001');
 
@@ -2389,7 +2448,7 @@ BEGIN
     status,
     quantity,
     budget_max_cents,
-    sort_order) VALUES (
+    sort_order, design_disposition, vendor_id, vendor_name) VALUES (
     v_project,
     v_living,
     'room',
@@ -2399,7 +2458,10 @@ BEGIN
     'specified',
     0,
     50000,
-    12
+    12,
+    'selected',
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor'
   ) RETURNING id INTO v_zero;
   BEGIN
     PERFORM public.create_furnishings_authorization_from_schedule(
@@ -2408,7 +2470,10 @@ BEGIN
     ASSERT false, 'a line with no quantity must not be releasable';
   EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
   END;
-  ASSERT v_err LIKE '%has no quantity to authorize',
+  -- 00445's readiness gate runs before the 00444 quantity check and names the
+  -- missing quantity itself.
+  ASSERT v_err LIKE '%has no quantity to authorize'
+      OR v_err LIKE '%is not ready for authorization: ["quantity"]',
     format('zero-quantity refusal: %L', v_err);
 
   -- (c) Two commissions past int4 between them. The refusal names itself
@@ -2424,7 +2489,7 @@ BEGIN
     unit_price_cents,
     trade_price_cents,
     line_total_cents,
-    sort_order) VALUES
+    sort_order, design_disposition, vendor_id, vendor_name) VALUES
     (
     v_project,
     v_living,
@@ -2437,7 +2502,10 @@ BEGIN
     2000000000,
     0,
     2000000000,
-    13
+    13,
+    'selected',
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor'
   ),
   (
     v_project,
@@ -2451,7 +2519,10 @@ BEGIN
     2000000000,
     0,
     2000000000,
-    14
+    14,
+    'selected',
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor'
   );
   SELECT id INTO v_big_a FROM public.project_ffe_items
   WHERE project_id = v_project AND name = 'Grand commission A';

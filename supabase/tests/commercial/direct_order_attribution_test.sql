@@ -114,12 +114,28 @@ VALUES ('da030000-0000-4000-8000-0000000000a3', 'da000000-0000-4000-8000-0000000
         'da000000-0000-4000-8000-0000000000a3', 'Roster Client', 'active', 'direct');
 
 -- CT: two active roster designers added the same day → the tie.
+-- The attribution RPC's tie check is `date_trunc('day', v_runner_up) =
+-- date_trunc('day', v_winner_at)` (00540 :515), which truncates in the
+-- session TimeZone. The old fixture dated these NOW() - INTERVAL '2 hours'
+-- / '1 hour': a plain 1-hour gap straddles the session's own midnight
+-- whenever NOW() itself falls between 00:00 and 02:00 (a 26h/25h gap has
+-- the exact same modulo-24h boundary, so it buys nothing), dissolving the
+-- tie the assert at :293 depends on (KNOWN_FAILURES.md :114). Anchoring
+-- both rows off the truncated UTC day instead of off NOW() directly removes
+-- the boundary: the SAME day() is in both expressions, so a NOW() a
+-- microsecond past midnight still truncates to the same day it adds the
+-- hours to. Same treatment as
+-- supabase/tests/billing/time_rate_resolution_test.sql's W2-R9-04 repair
+-- (every date there is `(NOW() AT TIME ZONE 'UTC')::date`-anchored, not
+-- NOW()-relative).
 INSERT INTO public.designer_clients (id, designer_id, client_id, client_name, status, source, created_at)
 VALUES
   ('da030000-0000-4000-8000-0000000000a4', 'da000000-0000-4000-8000-0000000000d1',
-   'da000000-0000-4000-8000-0000000000a4', 'Tie Client', 'active', 'direct', NOW() - INTERVAL '2 hours'),
+   'da000000-0000-4000-8000-0000000000a4', 'Tie Client', 'active', 'direct',
+   (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') + INTERVAL '2 hours'),
   ('da030000-0000-4000-8000-0000000000a8', 'da000000-0000-4000-8000-0000000000d2',
-   'da000000-0000-4000-8000-0000000000a4', 'Tie Client', 'active', 'direct', NOW() - INTERVAL '1 hour');
+   'da000000-0000-4000-8000-0000000000a4', 'Tie Client', 'active', 'direct',
+   (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') + INTERVAL '3 hours');
 
 -- Products. BUYABLE carries all six gate fields; each of the four NOT_* rows
 -- is byte-identical except for the one field it withholds.

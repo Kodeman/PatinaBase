@@ -40,9 +40,11 @@ import {
   useProjectPoCostLines,
   useRecordFfeInstalled,
   useStudioPurchases,
+  useUnresolvedProcurementExceptions,
   type FfeItemCoverage,
   type StudioPurchaseRow,
 } from '@patina/supabase';
+import { exceptionsForLine, isClaimType } from './buying/exceptions';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { purchaseForLine } from './purchases/purchase-record';
 import {
@@ -991,6 +993,9 @@ function FFESectionBody({
   const { data: purchases } = useStudioPurchases(projectId ? { projectId } : null);
   // C-31: the project's PO riders, for the "Bill N unbilled riders" door.
   const { data: riders } = useProjectPoCostLines(projectId || null);
+  // T4 · G6 — open damage/claim exceptions, so a shipped-but-damaged line
+  // reads "Claim open" in the next-act grouping rather than its PO status.
+  const { data: procurementExceptions } = useUnresolvedProcurementExceptions(projectId);
   const authority = useProjectBillingAuthority(projectId);
   const { data: tradeScopes, isPending: tradeScopesPending } = useTradeScopes(
     projectId,
@@ -1069,6 +1074,11 @@ function FFESectionBody({
     const item = {
       ...wireItem,
       authoritative_readiness: readinessBySelection.get(String(wireItem.id)) ?? null,
+      open_claim: exceptionsForLine(
+        procurementExceptions ?? [],
+        wireItem.id,
+        wireItem.purchase_order_id,
+      ).some((e) => isClaimType(e.type)),
     };
     const auth = deriveLineAuthorization(item, instrumentIndex);
     const tradeHold = deriveTradeLineHold(item, tradeIndex);

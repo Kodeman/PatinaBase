@@ -824,6 +824,10 @@ INSERT INTO public.client_decisions (
    'f8040000-0000-4000-8000-000000000001',
    'Rollback disposable draft', 'draft', 'selection', 'client');
 
+-- Fixture only: authenticated holds just SELECT on project_ffe_items, so the
+-- blocked line is materialized as the session owner, then the authenticated
+-- caller (same JWT claims) is restored for everything under test.
+RESET ROLE;
 INSERT INTO public.project_ffe_items (
   id, project_id, name, blocked, blocked_reason, blocked_by_decision_id
 ) VALUES (
@@ -832,6 +836,7 @@ INSERT INTO public.project_ffe_items (
   'Disposable draft blocker line', true, 'Waiting on draft decision',
   'f8100000-0000-4000-8000-000000000010'
 );
+SET LOCAL ROLE authenticated;
 
 INSERT INTO public.project_tasks (
   id, project_id, title, status, created_by, blocked_by_item_id
