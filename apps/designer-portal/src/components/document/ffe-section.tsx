@@ -164,6 +164,11 @@ import {
   type PieceInstallState,
 } from '@/lib/document/install-state';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
+import {
+  FOCUS_FFE_LINE_EVENT,
+  focusFfeLinePending,
+  type FocusFfeLineRequest,
+} from '@/lib/document/registry';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
 import {
   piecesQuietStatus,
@@ -1514,38 +1519,50 @@ function FFESectionBody({
     return () => window.cancelAnimationFrame(frame);
   }, [choosingPiece]);
   // US-19 D4 — ⌘K lands on a line in place. `?ffeItemId=` is read on mount
-  // only, so a paper already open hears this event instead: unfold the line,
-  // bring its Order cell into view, and put focus there (the PO prints in it).
-  // The cell mounts with the unfolded line, so the landing waits for it.
+  // only, so a paper already open hears this event instead: unfold Pieces and
+  // the line, bring its Order cell into view, and put focus on the PO control
+  // itself (R28). The cell mounts with the unfolded line, so the landing waits
+  // for it. A request made before this listener existed (F1: Pieces not yet
+  // mounted) waits in `focusFfeLinePending` and is landed here on mount.
   useEffect(() => {
-    const onFocusLine = (event: Event) => {
-      const detail = (event as CustomEvent<{ itemId?: string; cell?: string }>).detail;
-      const itemId = detail?.itemId;
-      if (!itemId || !(items ?? []).some((item) => String(item.id) === itemId)) return;
+    const landOnLine = (request: Partial<FocusFfeLineRequest> | undefined): boolean => {
+      const itemId = request?.itemId;
+      if (!itemId || !(items ?? []).some((item) => String(item.id) === itemId)) return false;
+      if (focusFfeLinePending.request?.itemId === itemId) focusFfeLinePending.request = null;
       setOpenLineId(itemId);
       if (mode === 'project') ffeSetFolded(false);
       let waited = 0;
       const land = () => {
         const line = document.getElementById(`ffe-selection-${itemId}`);
         const cell =
-          detail?.cell === 'order'
+          request?.cell === 'order'
             ? line?.querySelector<HTMLElement>('[data-testid="line-po-cell"]')
             : null;
-        if (!cell && waited++ < 10) {
+        const control = cell?.querySelector<HTMLElement>('[data-po-control]') ?? null;
+        // Up to a second: the region and the line mount before the cell does.
+        if (!control && waited++ < 60) {
           requestAnimationFrame(land);
           return;
         }
-        const target = cell ?? line;
+        const target = control ?? cell ?? line;
         if (!target) return;
-        if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+        if (!target.hasAttribute('tabindex') && !control) target.setAttribute('tabindex', '-1');
         const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        target.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+        (cell ?? target).scrollIntoView?.({
+          block: 'center',
+          behavior: reduceMotion ? 'auto' : 'smooth',
+        });
         target.focus({ preventScroll: true });
       };
       requestAnimationFrame(() => requestAnimationFrame(land));
+      return true;
     };
-    window.addEventListener('document:focus-ffe-line', onFocusLine);
-    return () => window.removeEventListener('document:focus-ffe-line', onFocusLine);
+    const onFocusLine = (event: Event) => {
+      landOnLine((event as CustomEvent<Partial<FocusFfeLineRequest> | undefined>).detail);
+    };
+    window.addEventListener(FOCUS_FFE_LINE_EVENT, onFocusLine);
+    landOnLine(focusFfeLinePending.request ?? undefined);
+    return () => window.removeEventListener(FOCUS_FFE_LINE_EVENT, onFocusLine);
   }, [items, mode, ffeSetFolded]);
   const ffeHeadingId = `ffe-region-heading-${projectId}`;
   const ffeMovementId = `ffe-movement-${projectId}`;

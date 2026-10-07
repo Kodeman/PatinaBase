@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { StudioPurchaseRow } from '@patina/supabase';
 import { AckRecord, usePoAckSummary } from '../buying/ack-check';
 import { fmtDay } from '@/lib/document/format';
+import { NAMED_ACTS } from '@/lib/document/act-names';
 import { PurchaseFact } from '../purchases/purchase-fact';
 import type { LineAuthorization } from '@/lib/document/authorization-derivation';
 import { CellSub, CellValue, UnfoldCell } from './cell';
@@ -73,9 +74,35 @@ export function OrderCell({
     );
   }
 
+  // R28 — the PO reference is the `Open the order` control, so ⌘K's landing
+  // has a control to put focus on. Reached at press time, not import time: a
+  // static `../command-bar` import drags @patina/help-system's ESM into every
+  // suite that renders the unfold (ffe-section.tsx's `openOrdersLedger`).
+  const openTheOrder = () => {
+    void import('../command-bar').then(({ openLedger }) =>
+      openLedger('orders', { page: 'ledger', projectId, purchaseOrderId: po.id }),
+    );
+  };
+
   return (
     <UnfoldCell head="Order" testId="line-po-cell">
-      <CellValue>{poLabel ?? 'Not yet ordered'}</CellValue>
+      {po && poLabel ? (
+        <CellValue>
+          <button
+            type="button"
+            data-po-control
+            onClick={openTheOrder}
+            aria-label={`${NAMED_ACTS.openOrder}, ${
+              po.po_number || po.vendor_po_number ? `PO ${poLabel}` : poLabel
+            }`}
+            className="rounded-[2px] underline decoration-[var(--color-pearl)] underline-offset-2 hover:decoration-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          >
+            {poLabel}
+          </button>
+        </CellValue>
+      ) : (
+        <CellValue>{poLabel ?? 'Not yet ordered'}</CellValue>
+      )}
       {sub && <CellSub>{sub}</CellSub>}
       {ack.copy && (
         <p

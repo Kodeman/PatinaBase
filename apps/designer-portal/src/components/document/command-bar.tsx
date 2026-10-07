@@ -33,6 +33,7 @@ import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import {
   usePeopleDirectory,
   useProjectFFEItems,
+  useProjectInvoices,
   useRecentBoards,
   type PeopleDirectoryRow,
   type RecentBoard,
@@ -40,7 +41,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { openAccount } from './account/account-sheet';
-import { openInvoiceComposer } from './accounts/invoice-overlays';
+import { openInvoiceComposer, openInvoiceFolio } from './accounts/invoice-overlays';
 import { openPost } from './overlays/post-sheet';
 import {
   isElementRendered,
@@ -62,15 +63,18 @@ import {
 } from '@/lib/document/desk-derivation';
 import {
   DOCUMENT_SCOPED_SURFACES,
+  FOCUS_FFE_LINE_EVENT,
   STUDIO_ROOMS,
   STUDIO_LEDGERS,
   STUDIO_VERBS,
   boardsRoutePath,
+  focusFfeLinePending,
   matchPaperSynonyms,
   matchSurfaces,
   type StudioSurface,
 } from '@/lib/document/registry';
-import { NAMED_ACTS, ownAct } from '@/lib/document/act-names';
+import { NAMED_ACTS, NEED_ACT_LABELS, ownAct } from '@/lib/document/act-names';
+import { installReading } from '@/lib/document/install-reading';
 import {
   deriveLineStamp,
   lineStampLabel,
@@ -173,8 +177,16 @@ type PaperLine = LineStampInput & {
   doc_code?: string | null;
   product?: { brand?: string | null } | null;
   room?: { name?: string | null } | null;
-  purchase_order?: { po_number?: string | null; vendor_po_number?: string | null } | null;
+  purchase_order?: {
+    po_number?: string | null;
+    vendor_po_number?: string | null;
+    delivered_date?: string | null;
+    confirmed_eta?: string | null;
+  } | null;
 };
+
+/** The invoice fields ⌘K reads off `useProjectInvoices` (R29). */
+type PaperInvoice = { id: string; invoice_number: string | null; status: string };
 
 /** D1's own act for a project paper with nothing to spec or release — the
  *  dry query's first row. Read from act-names, never retyped. */
@@ -194,23 +206,29 @@ function linePoNumber(line: PaperLine): string | null {
   return po?.po_number ?? po?.vendor_po_number ?? line.po_number ?? null;
 }
 
-/** Lift the in-hand paper's lines into the palette. A child, not a hook call
- *  in `CommandBar`, so the query runs only while the flag is on and a project
- *  paper is in hand — flag off, ⌘K fetches nothing new. Same arguments as
- *  `FFESection`, so it reads that query's cache entry. */
+/** Lift the in-hand paper's lines and invoices into the palette. A child, not
+ *  a hook call in `CommandBar`, so the queries run only while the flag is on
+ *  and a project paper is in hand — flag off, ⌘K fetches nothing new. Same
+ *  arguments as `FFESection` and the Money region (R29), so it reads those
+ *  queries' cache entries. */
 function PaperLinesSource({
   projectId,
   onLines,
 }: {
   projectId: string;
-  onLines: (lines: { projectId: string; lines: PaperLine[] } | null) => void;
+  onLines: (
+    lines: { projectId: string; lines: PaperLine[]; invoices: PaperInvoice[] } | null,
+  ) => void;
 }) {
   const { data } = useProjectFFEItems(projectId, undefined, { withLifecycle: true }) as {
     data: PaperLine[] | undefined;
   };
+  const { data: invoices } = useProjectInvoices(projectId) as {
+    data: PaperInvoice[] | undefined;
+  };
   useEffect(() => {
-    onLines(data ? { projectId, lines: data } : null);
-  }, [data, onLines, projectId]);
+    onLines(data ? { projectId, lines: data, invoices: invoices ?? [] } : null);
+  }, [data, invoices, onLines, projectId]);
   return null;
 }
 
@@ -375,6 +393,7 @@ export function CommandBar() {
   const [paperLines, setPaperLines] = useState<{
     projectId: string;
     lines: PaperLine[];
+    invoices: PaperInvoice[];
   } | null>(null);
   const [searchAll, setSearchAll] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -401,7 +420,12 @@ export function CommandBar() {
         e.preventDefault();
         e.stopPropagation();
         if (asking) setAsking(null);
-        else setOpen(false);
+        else if (searchAll) {
+          // R23 — Esc steps back from all jobs to the paper's own results.
+          setSearchAll(false);
+          setActive(0);
+          inputRef.current?.focus();
+        } else setOpen(false);
       }
     };
     // The Desk header's "Find anything" button dispatches this — an affordance,
@@ -420,7 +444,7 @@ export function CommandBar() {
       window.removeEventListener('keydown', onKey, { capture: true });
       window.removeEventListener('document:open-command-bar', onAffordance);
     };
-  }, [open, asking]);
+  }, [open, asking, searchAll]);
 
   // F21 — restore focus to whatever opened ⌘K when it closes. Captured here
   // (not read fresh on close) because by close time the palette's own last
@@ -1103,13 +1127,22 @@ export function CommandBar() {
         sub: 'ASK & PLACE',
         match: '',
       };
-      // US-19 D4 — the dry query never prints Help alone: the recovery row is
-      // retired, and the Help Center stands last, after the rows that act.
-      const helpCenterRow = utilityRows.find((r) => r.key === 'help-center')!;
+      // US-19 D4 / R31 — the dry query never prints Help alone, and its Help
+      // row speaks in the paper's voice: `Open Help`, never the feature name.
+      const openHelpRow: PaletteRow = {
+        kind: 'help',
+        key: 'open-help',
+        icon: LifeBuoy,
+        label: 'Open Help',
+        sub: '',
+        run: () => router.push('/help'),
+        match: '',
+      };
+      const typed = query.trim();
 
       // US-19 D4 — with a project paper in hand, the paper answers first:
-      // `On this paper` → `Acts on this paper` → `Elsewhere` → Help, last.
-      // `Search all jobs` steps back to the studio-wide list below.
+      // `On this paper` → `Acts on this paper` → `Elsewhere` → the Engine's
+      // ask → Help, last. `Search all jobs` switches the sheet in place (R23).
       const paperProject = askThePaperOn && !searchAll ? inHandRow : null;
       const paperProjectId = paperProject?.project_id ?? null;
       if (paperProject && paperProjectId) {
@@ -1122,7 +1155,9 @@ export function CommandBar() {
             .flatMap((group) => group.words),
         ];
         const hits = (text: string) => terms.some((term) => text.includes(term));
-        const lines = paperLines?.projectId === paperProjectId ? paperLines.lines : [];
+        const onThisPaper = paperLines?.projectId === paperProjectId ? paperLines : null;
+        const lines = onThisPaper?.lines ?? [];
+        const invoices = onThisPaper?.invoices ?? [];
         const section = paperProject.active_section;
 
         // A region head is `focusRegionHeading`'s target; ask the region to
@@ -1138,6 +1173,40 @@ export function CommandBar() {
             }),
           );
         };
+
+        // R26 — on an Install paper the install synonyms find the reading
+        // itself: its own sentence, act `Open Install`. Only the sentence is
+        // read, so the window-held input (which picks the act) is moot.
+        const reading =
+          section === 'install'
+            ? installReading(
+                lines.map((line) => ({
+                  id: String(line.id),
+                  name: line.name ?? '',
+                  status: line.status,
+                  purchase_order: line.purchase_order,
+                })),
+                new Date(),
+                true,
+              )
+            : null;
+        const readingRows: PaletteRow[] =
+          reading && (resolves.has('install-reading') || hits(reading.sentence.toLowerCase()))
+            ? [
+                {
+                  kind: 'paper',
+                  key: 'paper-install-reading',
+                  label: reading.sentence,
+                  sub: '',
+                  act: 'Open Install',
+                  run: () =>
+                    window.dispatchEvent(
+                      new CustomEvent('document:open-section', { detail: 'install' }),
+                    ),
+                  match: reading.sentence.toLowerCase(),
+                },
+              ]
+            : [];
 
         const lineRows: PaletteRow[] = lines.flatMap((line) => {
           const po = linePoNumber(line);
@@ -1156,14 +1225,32 @@ export function CommandBar() {
               label,
               sub: [maker, stampWord, po ? `PO ${po}` : null].filter(Boolean).join(' · '),
               act: po ? NAMED_ACTS.openOrder : undefined,
-              // ffe-section.tsx listens: unfold the line, Order cell in view,
-              // focus on the PO.
-              run: () =>
-                window.dispatchEvent(
-                  new CustomEvent('document:focus-ffe-line', {
-                    detail: { itemId: String(line.id), cell: 'order' },
-                  }),
-                ),
+              // ffe-section.tsx lands it: Pieces and the line unfold, the Order
+              // cell in view, focus on the PO (R28). The request waits in
+              // `focusFfeLinePending` while Pieces is not yet mounted (F1).
+              run: () => {
+                const request = { itemId: String(line.id), cell: 'order' as const };
+                focusFfeLinePending.request = request;
+                window.dispatchEvent(new CustomEvent(FOCUS_FFE_LINE_EVENT, { detail: request }));
+              },
+              match,
+            },
+          ];
+        });
+        // R29 — invoice numbers, through the invoice rows the Money region
+        // already reads (`useProjectInvoices`).
+        const invoiceRows: PaletteRow[] = invoices.flatMap((invoice) => {
+          if (!invoice.invoice_number) return [];
+          const label = `Invoice ${invoice.invoice_number}`;
+          const match = label.toLowerCase();
+          if (!hits(match)) return [];
+          return [
+            {
+              kind: 'paper' as const,
+              key: `paper-invoice:${invoice.id}`,
+              label,
+              sub: invoice.status.replace(/_/g, ' '),
+              run: () => openInvoiceFolio(invoice.id),
               match,
             },
           ];
@@ -1181,12 +1268,10 @@ export function CommandBar() {
               (resolves.has('household') && p.role === 'client'),
           )
           .map(personRow);
+        // R27 — no umbrella Money row: the money synonyms name the Money head's
+        // own acts, below.
         const regionRows: PaletteRow[] = paperRegionsForSection(section)
-          .filter(
-            (region) =>
-              hits(region.label.toLowerCase()) ||
-              (region.key === 'money' && resolves.has('money-acts')),
-          )
+          .filter((region) => hits(region.label.toLowerCase()))
           .map((region) => ({
             kind: 'paper' as const,
             key: `paper-region:${region.key}`,
@@ -1195,7 +1280,13 @@ export function CommandBar() {
             run: () => jumpToRegion(region.key),
             match: region.label.toLowerCase(),
           }));
-        const paperRows = [...lineRows, ...personHits, ...regionRows].slice(0, 5);
+        const paperRows = [
+          ...readingRows,
+          ...lineRows,
+          ...invoiceRows,
+          ...personHits,
+          ...regionRows,
+        ].slice(0, 5);
 
         const hereKeys = new Set([
           ...DOCUMENT_SCOPED_SURFACES.map((s) => `${s.key}-here`),
@@ -1206,43 +1297,69 @@ export function CommandBar() {
         if (addChangeRow && (addChangeRow.match.includes(q) || resolves.has('record-a-change'))) {
           acts.push(addChangeRow);
         }
-        // `late · behind · ETA …` — the Install reading, on Install papers only.
-        // SQ-1C writes the reading; this lands on the Install head.
-        if (section === 'install' && (resolves.has('install-reading') || 'the install reading'.includes(q))) {
-          acts.push({
-            kind: 'paper',
-            key: 'paper-install-reading',
-            label: 'The install reading',
-            sub: 'where Install stands',
-            run: () =>
-              window.dispatchEvent(new CustomEvent('document:open-section', { detail: 'install' })),
-            match: 'the install reading',
-          });
-        }
         acts.push(
           ...list.filter((r) => hereKeys.has(r.key) && r.key !== 'record-a-change-here'),
         );
-        const drawInvoiceLabel = `Draw an invoice · ${folderTab(paperProject)}`;
-        if (resolves.has('money-acts') || drawInvoiceLabel.toLowerCase().includes(q)) {
+        // R27 — each Money head act as printed is its own row: `Record the
+        // payment` first when a payment is due on this job, then `Draw an
+        // invoice`. The due payment is the Desk's own `payment_due` need.
+        const moneyAsked = resolves.has('money-acts');
+        const paymentDue =
+          (data?.folders ?? [])
+            .filter((folder) => folder.row.engagement_id === paperProject.engagement_id)
+            .flatMap((folder) => folder.needs ?? [folder.need])
+            .find((need) => need.kind === 'payment_due') ?? null;
+        const recordPayment = NEED_ACT_LABELS.payment_due;
+        if (paymentDue && (moneyAsked || recordPayment.toLowerCase().includes(q))) {
+          acts.push({
+            kind: 'action',
+            key: 'record-payment-here',
+            label: recordPayment,
+            sub: paymentDue.text,
+            run: () =>
+              paymentDue.ledger
+                ? openLedger(paymentDue.ledger.name, paymentDue.ledger.context)
+                : openLedger('orders', { page: 'ledger', projectId: paperProjectId }),
+            match: recordPayment.toLowerCase(),
+          });
+        }
+        const drawInvoice = 'Draw an invoice';
+        if (moneyAsked || drawInvoice.toLowerCase().includes(q)) {
           acts.push({
             kind: 'verb',
             key: 'draw-invoice-here',
-            label: drawInvoiceLabel,
-            sub: 'this household · pre-addressed',
+            label: drawInvoice,
+            sub: '',
             icon: DRAW_INVOICE_ICON,
             run: () => openInvoiceComposer({ projectId: paperProjectId }),
-            match: drawInvoiceLabel.toLowerCase(),
+            match: drawInvoice.toLowerCase(),
+          });
+        }
+        // R30 — `Keys`, with its key hint; Enter opens the Keys sheet.
+        if (resolves.has('keys') || 'keys'.includes(q)) {
+          acts.push({
+            kind: 'verb',
+            key: 'paper-keys',
+            label: 'Keys',
+            sub: '',
+            icon: Keyboard,
+            shortcut: ['?'],
+            run: () => openKeys('palette'),
+            match: 'keys',
           });
         }
 
         const onPaper = new Set(paperRows.map((r) => r.key));
+        const actLabels = new Set(acts.map((r) => r.label));
         const isHelp = (r: PaletteRow) => r.kind === 'help' || r.key === 'help-panel';
         const helpRows = list.filter(isHelp);
+        // R25 — today's cross-paper hits; an act this paper already prints is
+        // not printed twice under another group.
         const elsewhere = list.filter(
-          (r) => !hereKeys.has(r.key) && !onPaper.has(r.key) && !isHelp(r),
+          (r) =>
+            !hereKeys.has(r.key) && !onPaper.has(r.key) && !isHelp(r) && !actLabels.has(r.label),
         );
         const dry = paperRows.length === 0 && acts.length === 0;
-        const typed = query.trim();
         const searchAllRow: PaletteRow = {
           kind: 'action',
           key: 'search-all-jobs',
@@ -1274,16 +1391,36 @@ export function CommandBar() {
           }
           if (acts.length) sections.push({ eyebrow: 'Acts on this paper', rows: acts });
         }
+        // R25 — `Elsewhere` holds these three, in this order, and nothing else.
         sections.push({
           eyebrow: 'Elsewhere',
-          rows: [searchAllRow, ...typedStageRows, ...elsewhere, engineRow],
+          rows: [searchAllRow, ...typedStageRows, ...elsewhere],
         });
-        const help = helpRows.length ? helpRows : dry ? [helpCenterRow] : [];
+        // R24 — the Engine's ask stands after Elsewhere, before Help.
+        sections.push({ eyebrow: null, rows: [engineRow] });
+        const help = helpRows.length ? helpRows : dry ? [openHelpRow] : [];
         if (help.length) sections.push({ eyebrow: 'Help', rows: help });
         matches =
           paperRows.length + acts.length + typedStageRows.length + elsewhere.length + helpRows.length;
+      } else if (askThePaperOn && searchAll && inHandRow?.project_id) {
+        // R23 — all jobs, in place: today's document and person builders.
+        // Esc steps back to the paper; the first result takes focus.
+        const allJobs = list.filter((r) => r.key.startsWith('doc:') || r.kind === 'person');
+        sections = allJobs.length
+          ? [{ eyebrow: 'All jobs', rows: allJobs }]
+          : [{ eyebrow: null, note: `Nothing matches "${typed}".`, rows: [] }];
+        matches = allJobs.length;
+      } else if (matches === 0 && askThePaperOn) {
+        // R31 — the Desk's dry query: the sentence, where the work stands,
+        // the ask, and one Help row.
+        sections = [{ eyebrow: null, note: `Nothing matches "${typed}".`, rows: [] }];
+        if (stageRows.length) {
+          sections.push({ eyebrow: 'Where the work stands', rows: stageRows });
+        }
+        sections.push({ eyebrow: null, rows: [engineRow] });
+        sections.push({ eyebrow: 'Help', rows: [openHelpRow] });
       } else {
-        if (matches === 0 && !askThePaperOn) {
+        if (matches === 0) {
           list.push({
             kind: 'help',
             key: 'help-center-recovery',
@@ -1297,7 +1434,6 @@ export function CommandBar() {
         // R38: the ask is always offered for a non-empty query — destinations
         // jump, a question asks. No mode.
         list.push(engineRow);
-        if (matches === 0 && askThePaperOn) list.push(helpCenterRow);
         sections = typedStageRows.length
           ? [
               { eyebrow: 'Where the work stands', rows: typedStageRows },
@@ -1354,6 +1490,14 @@ export function CommandBar() {
      With no query the palette is the populated set of doorways, and the rows
      ARE the count. */
   const resultCount = query.trim() ? matchCount : flatRows.length;
+
+  // R23 — `Search all jobs` switches the sheet in place, and its first result
+  // takes focus (a focused option moves with ↑↓ and Enter, ADV-40).
+  useEffect(() => {
+    if (!open || !searchAll) return;
+    const frame = requestAnimationFrame(() => document.getElementById(optionId(0))?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [open, searchAll]);
 
   // Keep the active row in range as the list changes.
   useEffect(() => {
@@ -1585,9 +1729,9 @@ export function CommandBar() {
                 : `${resultCount} ${resultCount === 1 ? 'result' : 'results'}`}
             </p>
             <div role="listbox" id={RESULTS_ID} aria-label="Results">
-              {rendered.map((section) => (
+              {rendered.map((section, sectionIndex) => (
                 <div
-                  key={section.eyebrow ?? 'results'}
+                  key={`${section.eyebrow ?? 'results'}-${sectionIndex}`}
                   role="group"
                   aria-label={section.eyebrow ?? 'Results'}
                 >

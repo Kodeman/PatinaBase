@@ -5,7 +5,7 @@
  * Pins the group order, a paper hit outranking Help, the synonym table, the
  * dry query, the `?` guard, and that flag-off ⌘K prints today's groups.
  */
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const mockPathname = jest.fn(() => '/doc/eng-chen');
 const mockPush = jest.fn();
@@ -20,10 +20,12 @@ jest.mock('next/navigation', () => ({
 }));
 
 const mockUseProjectFFEItems = jest.fn();
+let mockInvoices: Record<string, unknown>[] = [];
 jest.mock('@patina/supabase', () => ({
   usePeopleDirectory: () => ({ data: [] }),
   useRecentBoards: () => ({ data: [] }),
   useProjectFFEItems: (...args: unknown[]) => mockUseProjectFFEItems(...args),
+  useProjectInvoices: () => ({ data: mockInvoices }),
 }));
 
 function chenRow(over: Record<string, unknown> = {}) {
@@ -49,8 +51,9 @@ function chenRow(over: Record<string, unknown> = {}) {
 }
 
 let mockRow = chenRow();
+let mockFolders: Record<string, unknown>[] = [];
 jest.mock('@/hooks/use-desk-engagements', () => ({
-  useDeskEngagements: () => ({ data: { folders: [], chips: [], live: [mockRow] } }),
+  useDeskEngagements: () => ({ data: { folders: mockFolders, chips: [], live: [mockRow] } }),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -72,6 +75,7 @@ jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 import { CommandBar, openCommandBar } from '../command-bar';
 import { KeysShortcut } from '../keys-shortcut';
 import { KEYS_SHEET_EVENT } from '../overlays/keys-sheet';
+import { focusFfeLinePending } from '@/lib/document/registry';
 
 const LINES = [
   {
@@ -132,18 +136,28 @@ beforeEach(() => {
   mockPush.mockClear();
   mockUseProjectFFEItems.mockReset();
   mockUseProjectFFEItems.mockReturnValue({ data: LINES });
+  mockInvoices = [];
+  mockFolders = [];
+  focusFfeLinePending.request = null;
   window.localStorage.clear();
 });
 
+const groupOptions = (name: string | RegExp) =>
+  within(screen.getByRole('group', { name })).getAllByRole('option').map(
+    (option) => option.textContent ?? '',
+  );
+
 describe('⌘K on the paper (D4)', () => {
-  it('groups On this paper → Acts on this paper → Elsewhere → Help, in that order', () => {
+  it('groups On this paper → Acts on this paper → Elsewhere → the ask → Help, in that order', () => {
     openAndType('c');
     expect(groupNames()).toEqual([
       'On this paper · Chen Residence',
       'Acts on this paper',
       'Elsewhere',
+      'Results',
       'Help',
     ]);
+    expect(groupOptions('Results')).toEqual(['Ask about “c”ASK & PLACE']);
     // The paper's own rows are capped at five.
     const paper = screen.getByRole('group', { name: 'On this paper · Chen Residence' });
     expect(within(paper).getAllByRole('option').length).toBeLessThanOrEqual(5);
@@ -172,6 +186,8 @@ describe('⌘K on the paper (D4)', () => {
       itemId: 'line-sectional',
       cell: 'order',
     });
+    // F1 — the request also waits for a Pieces region not yet mounted.
+    expect(focusFfeLinePending.request).toEqual({ itemId: 'line-sectional', cell: 'order' });
     // The palette reads the paper through FFESection's own query arguments.
     expect(mockUseProjectFFEItems).toHaveBeenCalledWith('proj-chen', undefined, {
       withLifecycle: true,
@@ -199,13 +215,17 @@ describe('⌘K on the paper (D4)', () => {
     expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({ origin: 'cmdk' });
   });
 
-  it('resolves late to the Install reading on an Install paper only', () => {
+  it('R26 — late finds the Install reading as its own sentence, act Open Install, on an Install paper only', () => {
     mockRow = chenRow({ active_section: 'install' });
     openAndType('late');
-    const reading = within(screen.getByRole('group', { name: 'Acts on this paper' })).getByRole(
-      'option',
-      { name: /The install reading/ },
+    const paper = screen.getByRole('group', { name: 'On this paper · Chen Residence' });
+    const reading = within(paper).getAllByRole('option')[0];
+    expect(reading).toHaveTextContent(
+      "Møbler Lounge Chair — Bouclé isn't here, and no arrival date is recorded. 1 more isn't here.",
     );
+    expect(reading).toHaveTextContent('↵ Open Install');
+    expect(screen.queryByText('The install reading')).not.toBeInTheDocument();
+
     const section = jest.fn();
     window.addEventListener('document:open-section', section);
     fireEvent.click(reading);
@@ -213,15 +233,135 @@ describe('⌘K on the paper (D4)', () => {
     expect((section.mock.calls[0][0] as CustomEvent).detail).toBe('install');
   });
 
-  it('prints the dry query: the sentence, Open the pieces first, Help last, never Help alone', () => {
+  it('R26 — late prints no reading on a Project paper', () => {
+    openAndType('late');
+    expect(screen.queryByText(/isn't here/)).not.toBeInTheDocument();
+  });
+
+  it('prints the dry query: the sentence, Open the pieces first, Open Help last, never Help alone', () => {
     openAndType('zzz');
     expect(screen.getByText('Nothing on this paper matches "zzz".')).toBeInTheDocument();
     const options = optionNames();
     expect(options[0]).toBe('Open the pieces · 3 lines');
     expect(options).toContain('Search all jobs for "zzz"');
-    expect(options[options.length - 1]).toMatch(/Browse the Help Center/);
+    expect(options[options.length - 1]).toBe('Open Help');
+    expect(screen.queryByText(/Browse the Help Center/)).not.toBeInTheDocument();
     expect(screen.queryByText('No match')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Nothing matches.');
+  });
+
+  it('R23 — Search all jobs switches the sheet in place, focus on the first result; Esc returns to the paper', async () => {
+    openAndType('chen');
+    fireEvent.click(screen.getByRole('option', { name: 'Search all jobs for "chen"' }));
+
+    expect(screen.getByRole('dialog', { name: 'Command bar' })).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(groupNames()).toEqual(['All jobs']);
+    const first = within(screen.getByRole('group', { name: 'All jobs' })).getAllByRole(
+      'option',
+    )[0];
+    expect(first).toHaveTextContent('Chen Residence');
+    await waitFor(() => expect(first).toHaveFocus());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: 'Command bar' })).toBeInTheDocument();
+    expect(groupNames()).toContain('Elsewhere');
+    expect(screen.getByRole('combobox', { name: 'Find anything' })).toHaveFocus();
+  });
+
+  it('R25 — Elsewhere holds Search all jobs, then Where the work stands, then the cross-paper hits, and nothing else', () => {
+    openAndType('procurement');
+    const elsewhere = groupOptions('Elsewhere');
+    expect(elsewhere[0]).toBe('Search all jobs for "procurement"');
+    expect(elsewhere[1]).toMatch(/^In procurement · 1/);
+    expect(elsewhere.some((name) => /Ask about/.test(name))).toBe(false);
+  });
+
+  it('R27 — each Money head act is its own row: Record the payment first when due, then Draw an invoice; no umbrella', () => {
+    mockFolders = [
+      {
+        row: mockRow,
+        need: { kind: 'overdue_decision', text: '2 decisions overdue' },
+        needs: [
+          { kind: 'overdue_decision', text: '2 decisions overdue' },
+          {
+            kind: 'payment_due',
+            text: 'Deposit to Woodward & Sons · $1,200.00 due 9 Oct — WS-188',
+            ledger: {
+              name: 'orders',
+              context: { page: 'ledger', projectId: 'proj-chen', purchaseOrderId: 'po-188' },
+            },
+          },
+        ],
+      },
+    ];
+    openAndType('payment');
+    const acts = screen.getByRole('group', { name: 'Acts on this paper' });
+    const names = within(acts)
+      .getAllByRole('option')
+      .map((option) => option.querySelector('.font-medium')?.textContent);
+    expect(names).toEqual(['Record the payment', 'Draw an invoice']);
+    expect(screen.queryByRole('option', { name: /^Money/ })).not.toBeInTheDocument();
+
+    const ledger = jest.fn();
+    window.addEventListener('document:open-ledger', ledger);
+    fireEvent.click(within(acts).getByRole('option', { name: /Record the payment/ }));
+    window.removeEventListener('document:open-ledger', ledger);
+    expect((ledger.mock.calls[0][0] as CustomEvent).detail).toEqual({
+      name: 'orders',
+      context: { page: 'ledger', projectId: 'proj-chen', purchaseOrderId: 'po-188' },
+    });
+  });
+
+  it('R27 — with nothing due, the money words offer Draw an invoice alone, as printed', () => {
+    openAndType('invoice');
+    const acts = screen.getByRole('group', { name: 'Acts on this paper' });
+    expect(within(acts).queryByRole('option', { name: /Record the payment/ })).not.toBeInTheDocument();
+    const draw = within(acts).getByRole('option', { name: /Draw an invoice/ });
+    expect(draw.querySelector('.font-medium')?.textContent).toBe('Draw an invoice');
+  });
+
+  it('R29 — invoice numbers are searched through the paper’s invoice rows', () => {
+    mockInvoices = [
+      { id: 'inv-114', invoice_number: '2026-114', status: 'sent' },
+      { id: 'inv-115', invoice_number: '2026-115', status: 'paid' },
+    ];
+    openAndType('2026-114');
+    const paper = screen.getByRole('group', { name: 'On this paper · Chen Residence' });
+    const invoice = within(paper).getByRole('option', { name: /Invoice 2026-114/ });
+    expect(within(paper).queryByRole('option', { name: /2026-115/ })).not.toBeInTheDocument();
+
+    const folio = jest.fn();
+    window.addEventListener('document:open-invoice-folio', folio);
+    fireEvent.click(invoice);
+    window.removeEventListener('document:open-invoice-folio', folio);
+    expect((folio.mock.calls[0][0] as CustomEvent).detail).toEqual({ invoiceId: 'inv-114' });
+  });
+
+  it('R30 — keys offers a Keys row with its ? hint under Acts on this paper; Enter opens Keys', () => {
+    openAndType('keys');
+    const acts = screen.getByRole('group', { name: 'Acts on this paper' });
+    const keys = within(acts).getByRole('option', { name: /^Keys/ });
+    expect(keys).toHaveTextContent('?');
+    expect(within(acts).getAllByRole('option')[0]).toBe(keys);
+
+    const opened = jest.fn();
+    window.addEventListener(KEYS_SHEET_EVENT, opened);
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+    window.removeEventListener(KEYS_SHEET_EVENT, opened);
+    expect(opened).toHaveBeenCalledTimes(1);
+  });
+
+  it('R31 — the Desk dry query: Nothing matches, Where the work stands, then one Open Help row', () => {
+    mockPathname.mockReturnValue('/desk');
+    openAndType('zzz');
+    expect(screen.getByText('Nothing matches "zzz".')).toBeInTheDocument();
+    expect(groupNames()).toEqual(['Results', 'Where the work stands', 'Results', 'Help']);
+    expect(groupOptions('Help')).toEqual(['Open Help']);
+    expect(screen.queryByText(/Browse the Help Center/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('option', { name: 'Open Help' }));
+    expect(mockPush).toHaveBeenCalledWith('/help');
   });
 
   it('prints `? keys` in the foot line', () => {

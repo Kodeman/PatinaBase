@@ -437,7 +437,13 @@ export function StudioDrawer() {
 
           {/* C-AP-05 — the register gets a printed door, so reaching a
               document-scoped surface at 1280 is two acts and neither is
-              recalling a chord. */}
+              recalling a chord. R22 — with `Keys ?` printed, the two stand as
+              one column, Keys its own row directly beneath, so neither reaches
+              into the right zone. */}
+          <div
+            data-drawer-find-stack
+            className={askThePaperOn ? 'flex flex-col items-start justify-center' : 'contents'}
+          >
           <button
             type="button"
             onClick={() => openCommandBar()}
@@ -446,7 +452,9 @@ export function StudioDrawer() {
                name. The words on the paper are the ruled ones and do not move;
                the name says which door this is. */
             aria-label="Find anything (⌘K), from the studio drawer"
-            className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+            className={`relative inline-flex items-center gap-1.5 rounded-[3px] px-2.5 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)] ${
+              askThePaperOn ? 'min-h-8 py-1' : 'min-h-11 py-2'
+            }`}
           >
             <Search className="h-[15px] w-[15px] shrink-0" strokeWidth={1.5} aria-hidden />
             {/* F03 — at 1280 the drawer's centre and right zones overprint.
@@ -458,20 +466,22 @@ export function StudioDrawer() {
               ⌘K
             </span>
           </button>
-          {/* US-19 D4 — `?` printed: its own act after `Find anything ⌘K`,
-              words and key at every width the drawer stands at. */}
+          {/* US-19 D4 — `?` printed: its own act beneath `Find anything ⌘K`,
+              words and key at every width the drawer stands at. The two rows
+              share the 60px bar, so each stays at least 24px tall. */}
           {askThePaperOn && (
             <button
               type="button"
               onClick={() => openKeys('drawer')}
-              className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+              className="relative inline-flex min-h-6 items-center gap-1.5 rounded-[3px] px-2.5 py-0.5 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
             >
               <span>Keys</span>
-              <kbd className="rounded-[3px] border border-[var(--border-default)] px-1.5 py-px font-mono text-[12px] text-[var(--text-muted)]">
+              <kbd className="rounded-[3px] border border-[var(--border-default)] px-1.5 py-px font-mono text-[12px] leading-none text-[var(--text-muted)]">
                 ?
               </kbd>
             </button>
           )}
+          </div>
         </div>
 
         {/* Right — in-hand state, notifications, identity. */}
@@ -539,7 +549,7 @@ export function StudioDrawer() {
                 />
               )}
             </span>
-            <span className="font-mono text-[12px] uppercase tracking-[0.08em]">
+            <span className="whitespace-nowrap font-mono text-[12px] uppercase tracking-[0.08em]">
               {THE_POST.label}
             </span>
           </button>

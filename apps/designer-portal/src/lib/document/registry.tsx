@@ -640,3 +640,23 @@ export function matchPaperSynonyms(query: string): PaperSynonymGroup[] {
     group.words.some((word) => padded.includes(` ${word} `)),
   );
 }
+
+// ── ⌘K line landing (US-19 F1, R28) ─────────────────────────────────────────
+
+/** ⌘K asks the Pieces region to land on a line; `ffe-section.tsx` answers. */
+export const FOCUS_FFE_LINE_EVENT = 'document:focus-ffe-line';
+
+export interface FocusFfeLineRequest {
+  itemId: string;
+  cell: 'order';
+}
+
+/**
+ * The landing ⌘K asked for and no Pieces region has answered yet. The event
+ * fires before the region's listener exists on a paper whose Pieces are not
+ * mounted, so the request waits here and the region consumes it on mount
+ * (the `captureLeadPending` pattern). Cleared by whichever region lands it.
+ */
+export const focusFfeLinePending: { request: FocusFfeLineRequest | null } = {
+  request: null,
+};
