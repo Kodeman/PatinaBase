@@ -79,6 +79,19 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION pg_temp.reset_user() TO PUBLIC;
 
+-- A designer's approval of a configured line: 00435/00438 revoked direct FF&E
+-- table writes from authenticated, while the configuration integrity trigger
+-- still requires an authenticated identity to approve. The table-owner session
+-- carries the designer's claims.
+CREATE OR REPLACE FUNCTION pg_temp.owner_as(p_user_id uuid)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  EXECUTE 'RESET ROLE';
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', p_user_id::text, 'role', 'authenticated')::text, true);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.owner_as(uuid) TO PUBLIC;
+
 CREATE OR REPLACE FUNCTION pg_temp.configuration_snapshot_hash(p_snapshot jsonb)
 RETURNS text
 LANGUAGE sql
@@ -498,6 +511,15 @@ BEGIN
           FROM public.project_ffe_items WHERE id = v_item_id),
     'approved quote prices must flow to procurement line money';
 
+  -- Placement lands a candidate (00434 design_disposition; the N-1 placement
+  -- passes 'candidate' since 00439), and a PO line must be an active selected
+  -- line (00449/00450). The designer selects it through triage first.
+  PERFORM public.triage_project_ffe_items(jsonb_build_object(
+    'projectId', '4c000000-0000-4000-8000-000000000030',
+    'selectionIds', jsonb_build_array(v_item_id),
+    'assignmentScope', (SELECT assignment_scope FROM public.project_ffe_items WHERE id = v_item_id),
+    'disposition', 'selected'));
+
   v_po := public.create_purchase_order(
     '4c000000-0000-4000-8000-000000000030',
     '4c000000-0000-4000-8000-000000000020',
@@ -554,6 +576,10 @@ BEGIN
           FROM public.project_ffe_specs WHERE ffe_item_id = v_item_id),
     'fulfillment events cannot rewrite the locked configuration snapshot';
 
+  -- 00435/00438 revoked direct FF&E table writes from authenticated, so the
+  -- lock triggers are probed from the table-owner session: only the trigger
+  -- stands between that session and the row.
+  PERFORM pg_temp.reset_user();
   v_raised := false;
   BEGIN
     UPDATE public.project_ffe_items SET trade_price_cents = 1 WHERE id = v_item_id;
@@ -568,7 +594,6 @@ BEGIN
   ASSERT v_raised, 'locked configuration specifications cannot be deleted';
 
   -- Approved/issued history cannot be edited or deleted, and a fork keeps it.
-  PERFORM pg_temp.reset_user();
   v_raised := false;
   BEGIN
     DELETE FROM public.product_configurations WHERE id = v_custom_config_id;
@@ -776,6 +801,9 @@ BEGIN
     'placing a reusable template must atomically instantiate an independent project configuration';
   ASSERT (SELECT configuration_locked_at IS NULL FROM public.project_ffe_specs WHERE id = v_bed_spec_id),
     'saved noncustom project configuration starts unlocked';
+  -- Approval and the lock probes run in the table-owner session with the
+  -- designer's claims (pg_temp.owner_as): the lock triggers fire for every role.
+  PERFORM pg_temp.owner_as('4c000000-0000-4000-8000-000000000001');
   UPDATE public.project_ffe_items SET status = 'approved' WHERE id = v_bed_item_id;
   ASSERT (SELECT status = 'approved' FROM public.product_configurations WHERE id = v_bed_project_config_id)
       AND (SELECT configuration_locked_at IS NOT NULL FROM public.project_ffe_specs WHERE id = v_bed_spec_id)
@@ -795,6 +823,7 @@ BEGIN
   END;
   ASSERT v_raised, 'locked configuration-derived spec descriptors are immutable';
   UPDATE public.project_ffe_specs SET client_notes = 'Ordinary audience note remains editable' WHERE id = v_bed_spec_id;
+  PERFORM pg_temp.assume_user('4c000000-0000-4000-8000-000000000001');
 
   v_saved := public.save_product_configuration(jsonb_build_object(
     'productId', '4c000000-0000-4000-8000-000000000101',
@@ -846,7 +875,9 @@ BEGIN
           FROM public.project_ffe_specs WHERE id = v_bed_spec_id)
       AND (SELECT status = 'specified' FROM public.project_ffe_items WHERE id = v_bed_item_id),
     'atomic configuration replacement records history, unlocks, and requires reapproval';
+  PERFORM pg_temp.owner_as('4c000000-0000-4000-8000-000000000001');
   UPDATE public.project_ffe_items SET status = 'approved' WHERE id = v_bed_item_id;
+  PERFORM pg_temp.assume_user('4c000000-0000-4000-8000-000000000001');
   ASSERT (SELECT status = 'approved' FROM public.product_configurations WHERE id = v_bed_project_config_v2)
       AND (SELECT configuration_locked_at IS NOT NULL FROM public.project_ffe_specs WHERE id = v_bed_spec_id),
     'replacement configuration must pass project approval before it relocks';
@@ -1128,7 +1159,9 @@ BEGIN
             AND material = 'Oak' AND finish = 'Natural'
           FROM public.project_ffe_specs WHERE id = v_com_spec_id),
     'placement must denormalize the COM fabric alongside material and finish';
+  PERFORM pg_temp.owner_as('4c000000-0000-4000-8000-000000000001');
   UPDATE public.project_ffe_items SET status = 'approved' WHERE id = v_com_item_id;
+  PERFORM pg_temp.reset_user();
   ASSERT (SELECT configuration_locked_at IS NOT NULL
             AND color_fabric = 'Mohair Velvet — Pierre Frey'
           FROM public.project_ffe_specs WHERE id = v_com_spec_id),
@@ -1137,7 +1170,6 @@ BEGIN
   -- Decision options carry a real configuration selection, not a typed delta.
   SELECT snapshot->'selections' INTO v_selections
   FROM public.product_configurations WHERE id = v_com_config_b;
-  PERFORM pg_temp.reset_user();
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', '4c000000-0000-4000-8000-000000000001',
                       'role', 'authenticated')::text, true);
