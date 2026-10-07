@@ -34,25 +34,13 @@ residuals split into three groups with very different confidence. One of the 23
   so left alone per the "diagnose briefly ... else document" instruction
   rather than risk a wrong fix.
 
-## Group 1 — benign local-image divergence (EVENT 3)
+## Group 1 — local-image / platform divergence
 
-`supabase/tests/edge_api/public_acl_exception_registry.sql`'s "EVENT 3"
-comment (search that file for `EVENT 3`) explains this precisely:
-`extensions.pg_stat_statements` / `.._info` are `postgres`-owned on
-staging/prod, so migration `00486_public_acl_residual_closure.sql`'s REVOKE
-closes them for real there. On the local Supabase CLI image the same two
-relations are `supabase_admin`-owned, so the same REVOKE is a silent no-op
-and they remain a live local finding (2 unregistered PUBLIC grants). All
-three files below assert against the same shared
-`public_acl_public_grant_finding` view and hit this identical residual.
+The EVENT 3 pg_stat_statements residual that used to fill this group is closed
+locally by `scripts/run-sql-tests.sh` (see "Closed by the runner's EVENT 3
+parity step" below). One file remains, for a different reason:
 
-- `supabase/tests/edge_api/catalog_roles_test.sql` — exits 3 by design on the local image: `PROVISIONING BLOCKED: ... unregistered_public_grants=2 ...` — the pg_stat_statements/local-image residual described above (EVENT 3 in public_acl_exception_registry.sql). Vars fix (-v HOST -v PORT) makes it *runnable*; this residual is what remains.
-- `supabase/tests/edge_api/catalog_roles_remote_conformance_test.sql` — same root cause: `REMOTE ACL CONFORMANCE FAILED: ... relation_acl=2 ...` then a `division by zero` in its own ratio calc once that count is nonzero. Same EVENT 3 residual.
-- `supabase/tests/edge_api/platform_acl_compatibility_test.sql` — same root cause via the same shared view: `PUBLIC holds a reachable schema, relation, sequence or column privilege that is not a signed registry exception`.
-
-Note: `catalog_roles_remote_conformance_negative_test.sql` (the third file in
-this trio per the brief) is GREEN once run with `-v HOST -v PORT` — it is not
-listed here.
+- `supabase/tests/edge_api/platform_acl_compatibility_test.sql` — 2026-10-06 (SQ-459): now gets past `$public_lockdown$` and `$platform_schema_usage$` (the two blocks Kody's PUBLIC-residual ruling re-scoped) and aborts at `:323`, `an Auth/RLS helper is missing a required named EXECUTE grant`. That is the first of the eight blocks the file's own header (`:17-36`) calls EXPECTED-RED and "a separate, un-ruled piece of work". `auth.uid/role/email/jwt` are `supabase_auth_admin`-owned with EXECUTE reaching anon/authenticated/service_role only through PUBLIC (`=X/supabase_auth_admin`); prod `bkvcixdmuyejfzcijpdg` shows the identical ACL (read-only SELECT, 2026-10-06), so this is not a local-image gap and no local step can or should change it. Going green needs that re-scope ruling, not a grant.
 
 ## Group 2 — real grant/authority gaps (migration-side, not fixed)
 
@@ -141,6 +129,28 @@ the list entirely. 00510 closed its storage-policy root cause; its residual
 superuser bypass — its `create_board_share` calls now run under
 `SET LOCAL ROLE authenticated`, so the edition-mint guard the file exists to
 police actually runs. Green as of 2026-08-31.
+
+## Closed by the runner's EVENT 3 parity step (SQ-459, 2026-10-06)
+
+`edge_api/catalog_roles_test.sql` (`unregistered_public_grants=2`) and
+`edge_api/catalog_roles_remote_conformance_test.sql` (`relation_acl=2`) are
+green and carry no entry. Their residual was the EVENT 3 local-image gap:
+`extensions.pg_stat_statements{,_info}` are `supabase_admin`-owned locally
+(`=r/supabase_admin`), so 00486's REVOKE run as `postgres` is a silent no-op.
+A seed cannot fix it either: `db reset` seeds run as `postgres`, which is not a
+member of `supabase_admin` (`SET ROLE supabase_admin` → permission denied).
+`scripts/run-sql-tests.sh` now connects as `supabase_admin` to a local stack
+only (127.0.0.1/localhost, no `PGURL` override) and reproduces prod's measured
+ACL `{postgres=a*r*w*d*D*x*t*m*/postgres,dashboard_user=arwdDxtm/postgres}`:
+PUBLIC/anon/authenticated revoked, `dashboard_user` granted. No registry row
+was added. The `division by zero` in the remote-conformance file was never a
+ratio bug: its `SELECT 1 / 0` is the file's deliberate nonzero-exit gate
+(`:400-404`) and stays.
+
+`edge_api/platform_acl_compatibility_test.sql` also had a stale allow-list in
+`$platform_schema_usage$`: `00490_scan_worker_roles.sql:361-362` grants public
+`USAGE` to `scan_worker`/`scan_reader` (prod carries both); the test now names
+them. That file remains in Group 1 for its un-ruled `$auth_helpers$` block.
 
 ## Fixed during this pass (for context, not failures)
 
