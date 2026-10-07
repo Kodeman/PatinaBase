@@ -65,10 +65,8 @@ Three entries that stood in this group — `mood_boards/share_security_test.sql`
 and `00510_post_00483_grant_and_scope_repairs.sql` closed all three root causes.
 See "Closed by 00510" below.
 
-- `supabase/tests/agent_os/roles_test.sql` — `permission denied for table agent_tasks`. `agent_writer`'s direct INSERT into `agent_tasks` (the test's own documented case 1) is denied at the table-grant layer before RLS is even evaluated. Needs a grant audit for `agent_writer` against current `agent_tasks` privileges.
-- `supabase/tests/commercial/trade_rfq_test.sql` — `mint role refusal: 'permission denied for function mint_trade_rfq_token'`. The test expects `authenticated` to reach `public.mint_trade_rfq_token`'s own internal check and get its custom message (`'minting a trade RFQ link requires service_role'`); instead Postgres's ACL layer denies it first because `authenticated` has no EXECUTE on the function at all. If real app code calls this as `authenticated`, it is broken in the same way today.
-- `supabase/tests/document/close_project_readiness_test.sql` — `studio_id_not_designer_studio`, raised at `:331`. **Message corrected 2026-09-14 (hour-tracking integration round 3, finding N-10).** The entry previously read `permission denied for table project_ffe_items`; the file now aborts 100+ lines EARLIER, so a reader matching the allowlist against the live output could not tell the entry still applied. The original grant boundary is real and unchanged (`authenticated` holds only SELECT on `public.project_ffe_items`; the test does a direct `UPDATE ... SET status = 'installed'` and real app code must go through an RPC), but it is now unreachable behind the earlier raise. Neither cause is hour tracking's: `set_project_studio_id`'s head is `00563` and nothing in `00595–00620` redefines it or `has_designer_domain_role`.
-- `supabase/tests/document/journey_authority_integrity_test.sql` — same `project_ffe_items` grant boundary as above, different call site.
+The four entries that remained here were closed test-side in 2026-10 (US-17
+S2); see "Closed by test repair (US-17 S2)" below. The group is now empty.
 
 ## Group 3 — business-logic / fixture drift (root cause not chased to completion)
 
@@ -151,6 +149,32 @@ two project-client board reads stay absent: `00462_workflow_privacy_authority`
 §2 dropped them on purpose (working board rows are never raw client surfaces),
 and `00434_ffe_privacy_domain_foundation` had already dropped the two
 project-client ones.
+
+## Closed by test repair (US-17 S2, 2026-10)
+
+The same no-bullet-shape rule applies to this section. All four former
+Group 2 files are green; in each case the platform's boundary was right and
+the test was stale, so no grant, policy or guard changed.
+
+`agent_os/roles_test.sql`: 00484 revoked every `agent_tasks` privilege from
+`agent_writer` and dropped its RLS policies on purpose. Case 2 now asserts that
+the direct INSERT is denied and that `enqueue_agent_task` writes the row and
+its audit actor. The forgery guard is now the RPC's `p_status` gate.
+
+`commercial/trade_rfq_test.sql`: the only caller of `mint_trade_rfq_token` is
+the `trade-rfq-send` edge function's service-role client, so both refusals now
+assert the 00424 ACL denial. Three more stale points sat behind it. The fixture
+lacked the designer-domain role that 00511 requires for countersign. Forged
+service_role claims leaked into section (5). The lock-order probe still
+matched the pre-00511 text of the scope lock.
+
+`document/close_project_readiness_test.sql`: the fixture now gives the
+designer a design studio, a membership and a designer role, which
+`set_project_studio_id` (head 00563) requires. Installation goes through
+`record_project_ffe_installed` (00691) from a delivered line.
+
+`document/journey_authority_integrity_test.sql`: the blocked FF&E fixture line
+is inserted as the session owner, and then the authenticated role is restored.
 
 ## Fixed during this pass (for context, not failures)
 
