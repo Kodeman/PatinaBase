@@ -17,7 +17,8 @@
 --      release (header, ship-to location, supplies, payment schedule, rider,
 --      spec column, an accepted lower unit price) re-holds it and the stamp is
 --      refused until a new release; a sidemark filled into a blank one does
---      not; a NULL (pre-00719) fingerprint stays total-only; ack v1 and v2 are
+--      not (A12a); rewording the printed ship_to does (A12b); a NULL
+--      (pre-00719) fingerprint stays total-only; ack v1 and v2 are
 --      refused on an edited PO and pass after a re-release. The threshold
 --      reads the job's open and recently sent orders to the same maker;
 --      po_release_state reasons; assign_po_number refuses a held PO.
@@ -440,17 +441,35 @@ BEGIN
      AND pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000107') IS NULL,
     'FAIL A11: a new release covers the edited paper';
 
-  -- A12: po-send fills a blank sidemark before the stamp; that keeps the
-  -- release. Changing a sidemark the release saw does not.
+  -- A12a (sidemark decision): po-send fills a blank sidemark before the
+  -- stamp; that keeps the release. Changing a sidemark the release saw does not.
   PERFORM pg_temp.as_owner($q$UPDATE public.purchase_orders SET sidemark = 'SQ420-A-ARM' WHERE id = '70420000-0000-4000-8000-000000000107'$q$);
   ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000107')
      AND pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000107') IS NULL,
-    'FAIL A12: a sidemark filled into a blank one keeps the release';
+    'FAIL A12a: a sidemark filled into a blank one keeps the release';
   PERFORM public.release_purchase_order('70420000-0000-4000-8000-000000000107');
   PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
   PERFORM public.set_purchase_order_header('70420000-0000-4000-8000-000000000107', '{"sidemark": "SQ420-OTHER"}');
   ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000107'),
-    'FAIL A12: changing a released sidemark needs a new release';
+    'FAIL A12a: changing a released sidemark needs a new release';
+
+  -- A12b (ship_to decision): the printed ship_to is on the paper. Rewording
+  -- it with the location unchanged needs a new release.
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.release_purchase_order('70420000-0000-4000-8000-000000000107');
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000107'),
+    'FAIL A12b: released and unedited is sendable before the ship_to edit';
+  PERFORM public.set_purchase_order_ship_to('70420000-0000-4000-8000-000000000107', 'SQ420 Studio, rear dock');
+  SELECT * INTO v_po FROM public.purchase_orders WHERE id = '70420000-0000-4000-8000-000000000107';
+  ASSERT v_po.ship_to = 'SQ420 Studio, rear dock'
+     AND v_po.ship_to_location_id = '70420000-0000-4000-8000-000000000701',
+    'FAIL A12b: only the printed ship_to changed';
+  ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000107'),
+    'FAIL A12b: a printed ship_to reworded after release needs a new release';
+  v_state := public.po_release_state('70420000-0000-4000-8000-000000000107');
+  ASSERT v_state->>'reason' = 'changed',
+    'FAIL A12b: po_release_state says changed, got ' || v_state::text;
 
   -- A13 (option T): ack v2 confirms a draft, so an edited one waits too; a
   -- new release lets it through.
@@ -518,7 +537,7 @@ BEGIN
   v_err := pg_temp.raised($q$SELECT public._release_gate_total('70420000-0000-4000-8000-000000000108')$q$);
   ASSERT v_err LIKE '42501 %', 'FAIL A11: authenticated cannot call _release_gate_total, got ' || COALESCE(v_err, 'no error');
 
-  RAISE NOTICE 'case A11-A15 passed: every edit path re-holds a released PO; blank sidemark fill keeps it; legacy release is total-only; ack v1/v2 wait for a new release';
+  RAISE NOTICE 'case A11-A15 passed: every edit path re-holds a released PO; blank sidemark fill keeps it; a reworded ship_to does not; legacy release is total-only; ack v1/v2 wait for a new release';
 END;
 $$;
 
