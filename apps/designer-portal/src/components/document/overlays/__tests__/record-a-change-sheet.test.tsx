@@ -46,6 +46,16 @@ jest.mock('@/components/document/buying/install-manifest', () => ({
   InstallManifest: () => null,
 }));
 
+// The install reading is proven in its own suite; here it only stands where
+// the Install head's leader stands, so the order of acts can be read.
+jest.mock('@/components/document/overlays/ask-maker-sheet', () => ({
+  InstallReadingLine: () => (
+    <button type="button" data-action-key="install-reading-act">
+      Ask the maker for a date
+    </button>
+  ),
+}));
+
 jest.mock('@patina/supabase', () => ({
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
@@ -367,6 +377,153 @@ describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
 
     fireEvent.click(lineAct);
     expect(screen.queryByText('What changed?')).not.toBeInTheDocument();
+    expect(screen.getByTestId('change-order-sheet')).toHaveTextContent('line-sofa');
+  });
+
+  it('a line with no PO unfolds for editing without Record a change as its first act (R35)', () => {
+    renderPaper();
+    fireEvent.click(screen.getByRole('button', { name: /Brass reading lamp/ }));
+
+    expect(screen.getByTestId('line-unfold-line-lamp')).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-action-key="record-a-change-line"]'),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('Leaving Choose the piece (R34, F3)', () => {
+  const headAct = () => screen.getByRole('button', { name: 'Record a change' });
+
+  /** The shell's Put down listens on the document; it must never hear Esc
+   *  while she is choosing. */
+  let shell: jest.Mock;
+  beforeEach(() => {
+    shell = jest.fn();
+    document.addEventListener('keydown', shell);
+  });
+  afterEach(() => {
+    document.removeEventListener('keydown', shell);
+  });
+
+  const choose = async () => {
+    renderPaper();
+    headAct().focus();
+    fireEvent.click(headAct());
+    fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
+    fireEvent.click(continueAct());
+    const prompt = screen.getByText('Choose the piece');
+    await waitFor(() => expect(prompt).toHaveFocus());
+    return prompt;
+  };
+
+  it('the prompt carries Put back · Esc as a plain act', async () => {
+    await choose();
+    const putBack = screen.getByRole('button', { name: 'Put back · Esc' });
+    expect(putBack).toHaveAttribute('data-action-variant', 'secondary');
+  });
+
+  it('Esc ends choosing, returns focus to Record a change, and never reaches Put down', async () => {
+    const prompt = await choose();
+    fireEvent.keyDown(prompt, { key: 'Escape' });
+
+    expect(shell).not.toHaveBeenCalled();
+    expect(screen.queryByText('Choose the piece')).not.toBeInTheDocument();
+    expect(headAct()).toHaveFocus();
+
+    // Choosing is over: a line press unfolds the line and opens no change order.
+    fireEvent.click(screen.getByRole('button', { name: /Linen slipcovered sofa/ }));
+    expect(screen.queryByTestId('change-order-sheet')).not.toBeInTheDocument();
+  });
+
+  it('Esc from a line she has tabbed to still ends choosing, not the paper', async () => {
+    await choose();
+    const line = screen.getByRole('button', { name: /Linen slipcovered sofa/ });
+    line.focus();
+    fireEvent.keyDown(line, { key: 'Escape' });
+
+    expect(shell).not.toHaveBeenCalled();
+    expect(screen.queryByText('Choose the piece')).not.toBeInTheDocument();
+    expect(headAct()).toHaveFocus();
+  });
+
+  it('Put back ends choosing and returns focus to Record a change', async () => {
+    await choose();
+    fireEvent.click(screen.getByRole('button', { name: 'Put back · Esc' }));
+
+    expect(screen.queryByText('Choose the piece')).not.toBeInTheDocument();
+    expect(headAct()).toHaveFocus();
+  });
+
+  it('once choosing is over, Esc belongs to the shell again', async () => {
+    const prompt = await choose();
+    fireEvent.keyDown(prompt, { key: 'Escape' });
+    fireEvent.keyDown(headAct(), { key: 'Escape' });
+    expect(shell).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Record a change on Install and Care spreads (R33)', () => {
+  const renderSpread = (sectionKey: 'install' | 'care') =>
+    render(
+      <>
+        <FFESection
+          projectId="project-1"
+          projectName="Halloran House"
+          mode="install"
+          sectionKey={sectionKey}
+        />
+        <RecordAChangeSheet projectId="project-1" clientName="Halloran" />
+      </>,
+    );
+  const actKeys = () =>
+    Array.from(
+      (document.getElementById('project-ffe') as HTMLElement).querySelectorAll(
+        '[data-action-key]',
+      ),
+    ).map((act) => act.getAttribute('data-action-key'));
+
+  it("prints as the Install head's second act, after the reading's act", () => {
+    renderSpread('install');
+    const keys = actKeys();
+    const reading = keys.indexOf('install-reading-act');
+    expect(reading).toBeGreaterThanOrEqual(0);
+    expect(keys[reading + 1]).toBe('record-a-change-install-head');
+    expect(
+      document.querySelector('[data-action-key="record-a-change-install-head"]'),
+    ).toHaveAttribute('data-action-variant', 'secondary');
+  });
+
+  it('prints on the Care spread, and not at all with the flag off', () => {
+    const { unmount } = renderSpread('care');
+    expect(actKeys()).toContain('record-a-change-install-head');
+    unmount();
+
+    mockAskThePaper = false;
+    renderSpread('install');
+    expect(screen.queryByRole('button', { name: 'Record a change' })).not.toBeInTheDocument();
+  });
+
+  it('On a piece at install: a line on a PO opens its change order', async () => {
+    renderSpread('install');
+    fireEvent.click(screen.getByRole('button', { name: 'Record a change' }));
+    fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
+    fireEvent.click(continueAct());
+    await screen.findByText('Choose the piece');
+
+    fireEvent.click(screen.getByRole('button', { name: /Linen slipcovered sofa/ }));
+    expect(screen.getByTestId('change-order-sheet')).toHaveTextContent(
+      'line-sofa · NA-2026-077',
+    );
+  });
+
+  it('an unfolded line on a PO at care leads with Record a change', () => {
+    renderSpread('care');
+    fireEvent.click(screen.getByRole('button', { name: /Linen slipcovered sofa/ }));
+    const lineAct = document.querySelector(
+      '[data-action-key="record-a-change-line"]',
+    ) as HTMLElement;
+    expect(lineAct).toHaveTextContent('Record a change');
+    fireEvent.click(lineAct);
     expect(screen.getByTestId('change-order-sheet')).toHaveTextContent('line-sofa');
   });
 });

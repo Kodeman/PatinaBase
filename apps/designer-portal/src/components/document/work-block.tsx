@@ -130,6 +130,7 @@ export function WorkBlock({
   projectId,
   sectionKey,
   sectionLabel,
+  heading = 'The work',
   clientName,
   tasks,
   gates,
@@ -141,6 +142,9 @@ export function WorkBlock({
   projectId: string;
   sectionKey: SectionKey;
   sectionLabel: string;
+  /** R40 — the block's name; an all-here Install spread calls it `The punch
+   *  list`, the name its reading's act lands on. */
+  heading?: string;
   clientUserId: string | null;
   clientName: string;
   /** D-B49 — read at the FF&E root, at every density. The block prints the
@@ -264,7 +268,7 @@ export function WorkBlock({
     <div id="document-task-controls" tabIndex={-1} className="mb-2 mt-4 rounded-[6px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
       <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-3 py-1.5">
         <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
-          The work{total > 0 ? ` · ${doneCount} of ${total}` : ''}
+          {heading}{total > 0 ? ` · ${doneCount} of ${total}` : ''}
         </span>
         {estTotal > 0 && (
           <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">

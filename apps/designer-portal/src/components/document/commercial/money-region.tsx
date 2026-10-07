@@ -247,8 +247,10 @@ export function MoneyRegion({
       label: 'Draw an invoice',
       onClick: () => openInvoiceComposer({ projectId }),
     },
-    // D5 (US-19) — Record a change, the head's second act: it opens the router
-    // (`What changed?`), never a sheet of its own.
+    // D5 (US-19) — Record a change, the head's second act on every spread
+    // (R33): it opens the router (`What changed?`), never a sheet of its own.
+    // F16 — with it, the amendment is reached through `Record a change` →
+    // `On the agreement` only, so the head's own Amendment leaves.
     ...(askThePaper
       ? [
           {
@@ -257,18 +259,20 @@ export function MoneyRegion({
             onClick: () => openRecordAChange({ origin: 'money-head' }),
           },
         ]
-      : []),
-    // R81 — the Amendment: scope changes composed from the money region (the
-    // margin escalation is the other doorway). The band listens for this
-    // event and opens its own AmendmentSheet.
-    {
-      key: 'compose-project-amendment',
-      // The band names this act by the section it is standing in; the region's
-      // doorway to the SAME sheet must not name it differently.
-      label: changeOnly ? 'Add a change' : 'Amendment',
-      variant: 'secondary',
-      onClick: () => window.dispatchEvent(new CustomEvent('document:compose-amendment')),
-    },
+      : [
+          // R81 — the Amendment: scope changes composed from the money region
+          // (the margin escalation is the other doorway). The band listens
+          // for this event and opens its own AmendmentSheet.
+          {
+            key: 'compose-project-amendment',
+            // The band names this act by the section it is standing in; the
+            // region's doorway to the SAME sheet must not name it differently.
+            label: changeOnly ? 'Add a change' : 'Amendment',
+            variant: 'secondary' as const,
+            onClick: () =>
+              window.dispatchEvent(new CustomEvent('document:compose-amendment')),
+          },
+        ]),
     // R77 — the per-document Hours lens, same opener the band's own tertiary
     // calls.
     {

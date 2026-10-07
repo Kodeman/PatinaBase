@@ -149,4 +149,26 @@ describe('WorkBlock punch photo batching', () => {
     expect(mockPhotoPathsHook).toHaveBeenCalledTimes(1);
     expect(mockCaptureMediaUrlsHook).toHaveBeenCalledTimes(1);
   });
+
+  it('prints the heading it is handed in place of The work (R40)', () => {
+    render(
+      <WorkBlock
+        projectId="project-1"
+        sectionKey="install"
+        sectionLabel="Install"
+        heading="The punch list"
+        clientUserId={null}
+        clientName="Avery"
+        tasks={[{ ...taskWithCapture('t1', 'cap-1'), section_key: 'install' }] as never}
+        gates={[]}
+        loggedMinutes={0}
+        workLoading={false}
+        workError={false}
+        onRetryWork={() => {}}
+      />,
+    );
+    const block = document.getElementById('document-task-controls') as HTMLElement;
+    expect(block).toHaveTextContent(/^The punch list/);
+    expect(block).not.toHaveTextContent('The work');
+  });
 });

@@ -159,6 +159,7 @@ import { InstallReadingLine } from './overlays/ask-maker-sheet';
 import type { BuyingReading } from '@/lib/document/buying-readings';
 import {
   STATE_WORDS,
+  isPieceHere,
   pieceInstallState,
   type PieceInstallState,
 } from '@/lib/document/install-state';
@@ -308,11 +309,26 @@ const COMMITTED = UNDERWAY;
 
 type FFERow = any; // row from useProjectFFEItems (untyped hook, view-shaped)
 
-function vendorLine(item: FFERow, stamp: LineStamp, showRoom = false): string {
+/** D5 / R35 — the order a change order can be raised against: any PO but a
+ *  cancelled one. A line without one has no change order to open. */
+function livePurchaseOrder(item: FFERow) {
+  const po = item.purchase_order ?? null;
+  return po && po.status !== 'cancelled' ? po : null;
+}
+
+/** F13 / R12: on Install the procurement status (`status`) is a fact in this
+ *  line, not a second stamp beside the row's state word. */
+function vendorLine(
+  item: FFERow,
+  stamp: LineStamp,
+  showRoom = false,
+  status: string | null = null,
+): string {
   const parts: string[] = [];
   const maker = item.vendor_name ?? item.product?.brand;
   if (maker) parts.push(maker);
   if (showRoom && item.room?.name) parts.push(item.room.name);
+  if (status) parts.push(status);
   if (stamp.kind === 'delivered') parts.push('awaiting inspection');
   else if (
     item.eta &&
@@ -477,7 +493,13 @@ function FFELine({
   showArtifactPlate: boolean;
 }) {
   const sp = stampProps(stamp);
-  const line = vendorLine(item, stamp, showRoom);
+  // F13 / R12: on Install the state word is the row's only stamp.
+  const line = vendorLine(
+    item,
+    stamp,
+    showRoom,
+    installState && stamp.kind !== 'trade_pending' ? sp.label : null,
+  );
   const billing = coverageNote(item, coverage);
   const price =
     item.line_total_cents != null
@@ -547,6 +569,10 @@ function FFELine({
         <span className="whitespace-nowrap font-mono text-[11px] lowercase tracking-[0.04em] text-[var(--text-muted)]">
           {eligible.reason}
         </span>
+      ) : installState ? (
+        // The status moved into the detail line; the empty cell keeps the
+        // grid's stamp track so the price stays in its column.
+        <span aria-hidden />
       ) : stamp.kind === 'trade_pending' ? null : (
         <Stamp
           label={sp.label}
@@ -1276,7 +1302,8 @@ function FFESectionBody({
       choosingPiece
         ? recordChangeOnLine(String(row.item.id))
         : setOpenLineId(openLineId === row.item.id ? null : row.item.id),
-    recordChange: askThePaper && mode === 'project',
+    // R33 / R35: on every spread, and first only where a change order exists.
+    recordChange: askThePaper && livePurchaseOrder(row.item) !== null,
     onAddNote,
     showRoom: !groupByRoom,
     coverage: coverage?.[row.item.id],
@@ -1416,8 +1443,8 @@ function FFESectionBody({
   }, [mode, ffeSetFolded]);
   useRegionUnfoldRequest('ffe', openFfeRegion);
   // D5 (US-19): a line's Record a change destination. On a live PO it is the
-  // line's change order (the Order cell's own sheet, under the same gate);
-  // without one, the line unfolds with today's controls.
+  // line's change order (the Order cell's own sheet) at project, install and
+  // care alike (R33); without one, the line unfolds with today's controls.
   const recordChangeOnLine = useCallback(
     (itemId: string) => {
       const item = (items ?? []).find((candidate) => String(candidate.id) === itemId);
@@ -1425,13 +1452,19 @@ function FFESectionBody({
       setChoosingPiece(false);
       openFfeRegion();
       setOpenLineId(item.id);
-      const po = item.purchase_order ?? null;
-      if (mode === 'project' && po && po.status !== 'cancelled') {
-        setChangeOrderLineId(String(item.id));
-      }
+      if (livePurchaseOrder(item)) setChangeOrderLineId(String(item.id));
     },
-    [items, mode, openFfeRegion],
+    [items, openFfeRegion],
   );
+  // R34: the control that started choosing — the router hands focus back to
+  // it before it dispatches here — is where Put back and Esc return.
+  const chooseOpenerRef = useRef<HTMLElement | null>(null);
+  const putBackChoosing = useCallback(() => {
+    setChoosingPiece(false);
+    const opener = chooseOpenerRef.current;
+    chooseOpenerRef.current = null;
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+  }, []);
   useEffect(() => {
     if (!askThePaper) return;
     const onPiece = (event: Event) => {
@@ -1441,6 +1474,9 @@ function FFESectionBody({
         recordChangeOnLine(itemId);
         return;
       }
+      const active = document.activeElement;
+      chooseOpenerRef.current =
+        active instanceof HTMLElement && active !== document.body ? active : null;
       // No line is left open while she chooses, so a line's own Fold is
       // never mistaken for a choice.
       setOpenLineId(null);
@@ -1450,6 +1486,22 @@ function FFESectionBody({
     window.addEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, onPiece);
     return () => window.removeEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, onPiece);
   }, [askThePaper, openFfeRegion, recordChangeOnLine]);
+  // R34: while she chooses, Esc puts the choosing back and never reaches the
+  // shell's Put down (page.tsx listens on the document, bubbling). Captured on
+  // the document so it holds wherever focus is in the paper; a sheet opened
+  // over the paper keeps its own Esc.
+  useEffect(() => {
+    if (!choosingPiece) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      putBackChoosing();
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [choosingPiece, putBackChoosing]);
   // The prompt takes focus a frame after the router's own sheet hands focus
   // back to its opener, so the prompt is where she lands.
   useEffect(() => {
@@ -1801,13 +1853,14 @@ function FFESectionBody({
                     this file), no longer hand-spelled here at all. */}
                 {/* R76 — bill the schedule: the composer opens FF&E-prefilled
                     with every uninvoiced priced line ticked (untick there to
-                    narrow). */}
+                    narrow). F15 / R32: plain — the install reading's act is
+                    this head's one leader. */}
                 {billableUninvoiced.length > 0 && (
                   <DocumentAction
                     actionKey="bill-project-ffe"
                     surfaceKey="project"
                     regionKey="ffe-head"
-                    variant={canRelease ? 'secondary' : 'primary'}
+                    variant="secondary"
                     onClick={() =>
                       openInvoiceComposer({
                         projectId,
@@ -1898,9 +1951,27 @@ function FFESectionBody({
       )}
 
       {/* D6 (slice 1, `ask-the-paper`): the Install head's own status line —
-          the install reading and its act. Flag off, it renders nothing. */}
-      {mode === 'install' && sectionKey !== 'care' && !selecting && (
-        <InstallReadingLine projectId={projectId} items={items} />
+          the install reading and its act. Flag off, it renders nothing.
+          R33: Record a change is the head's second act, after the reading's
+          act, plain beside that leader (R32); on Care it stands alone. */}
+      {mode === 'install' && !selecting && (
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          {sectionKey !== 'care' && (
+            <InstallReadingLine projectId={projectId} items={items} />
+          )}
+          {askThePaper && (
+            <DocumentAction
+              actionKey="record-a-change-install-head"
+              surfaceKey="project"
+              regionKey="install-head-record-change"
+              variant="secondary"
+              className="mb-2"
+              onClick={() => openRecordAChange({ origin: 'pieces-head' })}
+            >
+              {NAMED_ACTS.recordChange}
+            </DocumentAction>
+          )}
+        </div>
       )}
 
       {!ffeFolded && ffeQuiet && (
@@ -1914,15 +1985,31 @@ function FFESectionBody({
       {!ffeFolded && !ffeQuiet && (
       <div id={ffeBodyId}>
       {choosingPiece && (
-        <p
-          ref={choosePieceRef}
-          tabIndex={-1}
-          role="status"
-          data-testid="ffe-choose-the-piece"
-          className="mb-2 font-heading text-[15px] italic text-[var(--color-charcoal)]"
-        >
-          Choose the piece
-        </p>
+        // R34: `Choose the piece · Put back · Esc` — the way out stands on
+        // the prompt's own line.
+        <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+          <p
+            ref={choosePieceRef}
+            tabIndex={-1}
+            role="status"
+            data-testid="ffe-choose-the-piece"
+            className="font-heading text-[15px] italic text-[var(--color-charcoal)]"
+          >
+            Choose the piece
+          </p>
+          <span aria-hidden className="text-[var(--text-muted)]">
+            ·
+          </span>
+          <DocumentAction
+            actionKey="put-back-choose-the-piece"
+            surfaceKey="project"
+            regionKey="ffe-choose-the-piece"
+            variant="secondary"
+            onClick={putBackChoosing}
+          >
+            Put back · Esc
+          </DocumentAction>
+        </div>
       )}
       {/* The release gate reads authoritative readiness and stays closed
           without it — so a pending or failed read has to say so, or the act
@@ -1970,6 +2057,17 @@ function FFESectionBody({
             ]);
           }}
           sectionLabel={sectionLabel}
+          // R40: where the reading says `Everything is here.`, its act `Open
+          // the punch list` lands on this block, so the block wears that name.
+          heading={
+            askThePaper &&
+            mode === 'install' &&
+            sectionKey !== 'care' &&
+            (items ?? []).length > 0 &&
+            (items ?? []).every(isPieceHere)
+              ? 'The punch list'
+              : undefined
+          }
           clientUserId={clientUserId}
           clientName={clientName}
         />
