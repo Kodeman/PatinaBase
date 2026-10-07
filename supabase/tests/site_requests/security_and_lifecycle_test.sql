@@ -20,10 +20,19 @@ VALUES
   ('f3730000-0000-4000-8000-000000000002', 'site-outsider@test.invalid', 'Foreign Designer', now(), now())
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
 
-INSERT INTO public.projects (id, name, designer_id, created_by)
+-- Since 00622 (R-AW) consent is a studio's record, keyed by
+-- project_consent_org(project): the site project names the studio whose
+-- ledger the send gate and the consent-granted release both read.
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES ('f3731000-0000-4000-8000-000000000001', 'design_studio', 'Site Lifecycle Studio', 'site-lifecycle-design-studio', 'active');
+
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES ('f3731100-0000-4000-8000-000000000001', 'f3730000-0000-4000-8000-000000000001', 'f3731000-0000-4000-8000-000000000001', 'owner', 'active', now());
+
+INSERT INTO public.projects (id, name, designer_id, created_by, studio_id)
 VALUES
-  ('f3730000-0000-4000-8000-000000000101', 'Site Project', 'f3730000-0000-4000-8000-000000000001', 'f3730000-0000-4000-8000-000000000001'),
-  ('f3730000-0000-4000-8000-000000000102', 'Foreign Project', 'f3730000-0000-4000-8000-000000000002', 'f3730000-0000-4000-8000-000000000002');
+  ('f3730000-0000-4000-8000-000000000101', 'Site Project', 'f3730000-0000-4000-8000-000000000001', 'f3730000-0000-4000-8000-000000000001', 'f3731000-0000-4000-8000-000000000001'),
+  ('f3730000-0000-4000-8000-000000000102', 'Foreign Project', 'f3730000-0000-4000-8000-000000000002', 'f3730000-0000-4000-8000-000000000002', NULL);
 
 INSERT INTO public.project_rooms (id, project_id, name, sort_order)
 VALUES
@@ -236,7 +245,10 @@ BEGIN
   ASSERT v_count = 0, 'foreign designer RLS must hide request';
   PERFORM pg_temp.reset_user_role();
 
-  -- not_asked -> pending; awaiting_consent must mint no access token.
+  -- No consent record: the send parks awaiting consent and mints no access
+  -- token. Since 00622 (R-AW) the verdict is the studio's record, so the
+  -- snapshot is the record's `not_asked` and the frozen seat (00594) is not
+  -- written.
   PERFORM pg_temp.assume_user('f3730000-0000-4000-8000-000000000001');
   v_dispatch := public.site_request_send(v_request_id);
   ASSERT v_dispatch->>'status' = 'awaiting_consent', 'send must await consent';
@@ -245,17 +257,29 @@ BEGIN
   SELECT count(*) INTO v_count FROM public.site_request_access WHERE request_id = v_request_id;
   ASSERT v_count = 0, 'awaiting consent must install no access';
   ASSERT (
-    SELECT sms_consent_status = 'pending'
+    SELECT consent_status_snapshot = 'not_asked'
+    FROM public.site_requests WHERE id = v_request_id
+  ), 'send must snapshot the consent record''s verdict';
+  ASSERT (
+    SELECT sms_consent_status = 'not_asked'
     FROM public.project_parties WHERE id = 'f3730000-0000-4000-8000-000000000301'
-  ), 'send must transition not_asked consent to pending';
+  ), 'send must not write the frozen seat consent column';
 
   -- Consent grant transactionally creates identifier-only durable work before
   -- its best-effort pg_net wake-up. Even when Edge never handles that wake-up,
   -- the lifecycle sweep can discover the row; only claim mints a raw token.
+  -- The grant is the studio's consent record (00622 moved the release trigger
+  -- onto studio_channel_consent).
   RESET ROLE;
-  UPDATE public.project_parties
-  SET sms_consent_status = 'granted', sms_consented_at = now()
-  WHERE id = 'f3730000-0000-4000-8000-000000000301';
+  INSERT INTO public.studio_channel_consent (
+    organization_id, channel_kind, channel_value, status, consented_at,
+    source, evidence, disclosure_version, recorded_at
+  )
+  SELECT
+    'f3731000-0000-4000-8000-000000000001', 'sms', party.phone_e164, 'granted',
+    now(), 'inbound_sms', 'Replied YES', 'field-sms-v1', now()
+  FROM public.project_parties AS party
+  WHERE party.id = 'f3730000-0000-4000-8000-000000000301';
 
   SELECT id INTO v_outbox_id
   FROM public.site_request_dispatch_outbox
