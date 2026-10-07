@@ -127,7 +127,8 @@ export const buyingPhase2Keys = {
   quotes: (projectId: string) => ['buying-phase2', 'quotes', projectId] as const,
   exceptions: (projectId: string) => ['buying-phase2', 'exceptions', projectId] as const,
   releaseGate: (organizationId: string) => ['buying-phase2', 'release-gate', organizationId] as const,
-  releaseState: (purchaseOrderId: string) => ['buying-phase2', 'release', purchaseOrderId] as const,
+  /** Prefix ['po-release-state']: an edit to one order moves its siblings' group total. */
+  poReleaseState: (purchaseOrderId: string) => ['po-release-state', purchaseOrderId] as const,
   installManifest: (projectId: string) => ['buying-phase2', 'install-manifest', projectId] as const,
   punchItems: (projectId: string) => ['buying-phase2', 'punch-items', projectId] as const,
   specSnapshots: (purchaseOrderId: string) => ['buying-phase2', 'spec-snapshots', purchaseOrderId] as const,
@@ -139,6 +140,7 @@ export const buyingPhase2Keys = {
 function invalidatePurchaseOrder(queryClient: QueryClient, po: Pick<PurchaseOrder, 'id' | 'project_id'>) {
   queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
   queryClient.invalidateQueries({ queryKey: ['purchase-order', po.id] });
+  queryClient.invalidateQueries({ queryKey: ['po-release-state'] });
   invalidateFfeCaches(queryClient, po.project_id);
 }
 
@@ -281,6 +283,7 @@ export function useUpdateFfeComSpec() {
     onSuccess: (_data, { projectId }) => {
       void queryClient.invalidateQueries({ queryKey: specBookKeys.workbench(projectId) });
       void queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
+      void queryClient.invalidateQueries({ queryKey: ['po-release-state'] });
     },
   });
 }
@@ -516,6 +519,7 @@ export function useUpsertPoCostLine(options?: ErrorSurfaceOptions) {
       queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.costLines(row.purchase_order_id) });
       // The project-wide rider read behind "Bill N unbilled riders" (C-31).
       queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.costLines('project') });
+      queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.poReleaseState(row.purchase_order_id) });
     },
   });
 }
@@ -1421,38 +1425,35 @@ export function useSetStudioReleaseGate(options?: ErrorSurfaceOptions) {
     },
     onSuccess: (_org, { organizationId }) => {
       queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.releaseGate(organizationId) });
-      queryClient.invalidateQueries({ queryKey: ['buying-phase2', 'release'] });
+      queryClient.invalidateQueries({ queryKey: ['po-release-state'] });
     },
   });
 }
 
-export interface PurchaseOrderReleaseState {
-  /** The studio's gate applies to this PO. */
-  releaseRequired: boolean;
-  /** po-send would accept it now (released, under the gate, or already sent). */
-  sendable: boolean;
+/** po_release_state (00719). Null for a PO the caller cannot see. */
+export interface PoReleaseState {
+  /** The studio's gate applies, read on the group total. */
+  applies: boolean;
+  released: boolean;
+  /** po-send would accept it now (released for this paper, under the gate, or already sent). */
+  cleared: boolean;
+  /** Why it is not cleared, when a release no longer covers it or the group carries it over. */
+  reason: 'total_rose' | 'changed' | 'group_over' | null;
+  /** This order plus the job's open and recently sent orders to the same maker. */
+  group_total_cents: number;
+  threshold_cents: number | null;
 }
 
-export function usePurchaseOrderReleaseState(purchaseOrderId: string | null | undefined) {
+export function usePoReleaseState(purchaseOrderId: string | null | undefined) {
   return useQuery({
-    queryKey: buyingPhase2Keys.releaseState(purchaseOrderId ?? ''),
-    queryFn: async (): Promise<PurchaseOrderReleaseState> => {
-      const supabase = getSupabase();
-      const [required, sendable] = await Promise.all([
-        supabase.rpc('purchase_order_release_required', { p_po_id: purchaseOrderId as string }),
-        supabase.rpc('po_is_sendable', { p_po_id: purchaseOrderId as string }),
-      ]);
-      if (required.error) throw required.error;
-      if (sendable.error) throw sendable.error;
-      return { releaseRequired: required.data === true, sendable: sendable.data === true };
+    queryKey: buyingPhase2Keys.poReleaseState(purchaseOrderId ?? ''),
+    queryFn: async (): Promise<PoReleaseState | null> => {
+      const { data, error } = await getSupabase().rpc('po_release_state', { p_po_id: purchaseOrderId as string });
+      if (error) throw error;
+      return (data as unknown as PoReleaseState | null) ?? null;
     },
     enabled: !!purchaseOrderId,
   });
-}
-
-function invalidateReleasedPurchaseOrder(queryClient: QueryClient, po: PurchaseOrder) {
-  invalidatePurchaseOrder(queryClient, po);
-  queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.releaseState(po.id) });
 }
 
 /** Hold an unsent draft for release (only when the studio's gate applies). */
@@ -1468,7 +1469,7 @@ export function useHoldPurchaseOrderForRelease(options?: ErrorSurfaceOptions) {
       if (error) throw error;
       return data as unknown as PurchaseOrder;
     },
-    onSuccess: (po) => invalidateReleasedPurchaseOrder(queryClient, po),
+    onSuccess: (po) => invalidatePurchaseOrder(queryClient, po),
   });
 }
 
@@ -1482,7 +1483,7 @@ export function useReleasePurchaseOrder(options?: ErrorSurfaceOptions) {
       if (error) throw error;
       return data as unknown as PurchaseOrder;
     },
-    onSuccess: (po) => invalidateReleasedPurchaseOrder(queryClient, po),
+    onSuccess: (po) => invalidatePurchaseOrder(queryClient, po),
   });
 }
 
@@ -1499,7 +1500,7 @@ export function useSendBackPurchaseOrder(options?: ErrorSurfaceOptions) {
       if (error) throw error;
       return data as unknown as PurchaseOrder;
     },
-    onSuccess: (po) => invalidateReleasedPurchaseOrder(queryClient, po),
+    onSuccess: (po) => invalidatePurchaseOrder(queryClient, po),
   });
 }
 

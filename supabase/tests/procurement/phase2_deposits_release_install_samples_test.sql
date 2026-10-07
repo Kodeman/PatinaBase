@@ -13,6 +13,14 @@
 --      outsider and Studio B cannot release; an admin releases at the total;
 --      a higher total needs a new release; send back needs an owner/admin and
 --      a note; an owner releases a draft directly; every-order mode.
+--      00719 (SQ-449): the release covers the paper — each edit path after a
+--      release (header, ship-to location, supplies, payment schedule, rider,
+--      spec column, an accepted lower unit price) re-holds it and the stamp is
+--      refused until a new release; a sidemark filled into a blank one does
+--      not; a NULL (pre-00719) fingerprint stays total-only; ack v1 and v2 are
+--      refused on an edited PO and pass after a re-release. The threshold
+--      reads the job's open and recently sent orders to the same maker;
+--      po_release_state reasons; assign_po_number refuses a held PO.
 --   B. Billing: a deposit, then the balance, on separate slots; a full bill
 --      and a deposit never share a line (23505 naming the index); coverage
 --      stays one row per line, a deposit alone reads invoiced, both paid reads
@@ -78,22 +86,45 @@ VALUES
 INSERT INTO projects (id, name, designer_id, created_by, studio_id)
 VALUES
   ('70420000-0000-4000-8000-000000000001', 'SQ420 Project A', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-0000000000f1'),
-  ('70420000-0000-4000-8000-000000000002', 'SQ420 Project B', '70420000-0000-4000-8000-0000000000a5', '70420000-0000-4000-8000-0000000000a5', '70420000-0000-4000-8000-0000000000f2');
+  ('70420000-0000-4000-8000-000000000002', 'SQ420 Project B', '70420000-0000-4000-8000-0000000000a5', '70420000-0000-4000-8000-0000000000a5', '70420000-0000-4000-8000-0000000000f2'),
+  ('70420000-0000-4000-8000-000000000003', 'SQ420 Project C', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-0000000000f1');
 
-INSERT INTO vendors (id, name)
-VALUES ('70420000-0000-4000-8000-000000000011', 'SQ420 Workroom');
+-- 012–015 keep the 00719 release groups (project × maker) apart.
+INSERT INTO vendors (id, name, orders_email)
+VALUES
+  ('70420000-0000-4000-8000-000000000011', 'SQ420 Workroom',   NULL),
+  ('70420000-0000-4000-8000-000000000012', 'SQ420 Joinery',    NULL),
+  ('70420000-0000-4000-8000-000000000013', 'SQ420 Upholstery', 'orders@sq420-upholstery.test.invalid'),
+  ('70420000-0000-4000-8000-000000000014', 'SQ420 Lighting',   NULL),
+  ('70420000-0000-4000-8000-000000000015', 'SQ420 Rugs',       NULL);
+
+INSERT INTO studio_locations (id, organization_id, kind, label)
+VALUES ('70420000-0000-4000-8000-000000000701', '70420000-0000-4000-8000-0000000000f1', 'studio', 'SQ420 Studio');
 
 -- POs:
 --   101 draft, unsent, $3,000   (A hold → release → stamp)
---   102 draft, unsent, $1,000   (A below the threshold)
+--   102 draft, unsent, $1,000   (A below the threshold; its own maker)
 --   103 draft, unsent, $3,000   (A send back; owner releases a draft)
 --   104 confirmed, sent, two lines (B riders; D snapshots)
 --   105 cancelled               (A never sendable)
 --   106 Studio B's project      (cross-studio)
+--   107 draft, $3,000, one line and a deposit row (A11–A15 edit paths, ack v2)
+--   108 draft, $3,000           (A14 legacy release, ack v1)
+--   111–116 $600 each, $1,000 line (A16 groups): 111, 112 drafts to 014;
+--       113 to 014 sent 8 days ago; 114 draft and 116 sent 2 days ago to 015;
+--       115 draft to 014 on project C.
 INSERT INTO purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern, total_cents, status, created_by, sent_at)
 VALUES
   ('70420000-0000-4000-8000-000000000101', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000011', 'net_30', 300000, 'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
-  ('70420000-0000-4000-8000-000000000102', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000011', 'net_30', 100000, 'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
+  ('70420000-0000-4000-8000-000000000102', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000012', 'net_30', 100000, 'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
+  ('70420000-0000-4000-8000-000000000107', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000013', 'net_30', 300000, 'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
+  ('70420000-0000-4000-8000-000000000108', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000013', 'net_30', 300000, 'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
+  ('70420000-0000-4000-8000-000000000111', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000014', 'net_30', 60000,  'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
+  ('70420000-0000-4000-8000-000000000112', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000014', 'net_30', 60000,  'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
+  ('70420000-0000-4000-8000-000000000113', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000014', 'net_30', 60000,  'confirmed', '70420000-0000-4000-8000-0000000000a2', NOW() - interval '8 days'),
+  ('70420000-0000-4000-8000-000000000114', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000015', 'net_30', 60000,  'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
+  ('70420000-0000-4000-8000-000000000115', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000003', '70420000-0000-4000-8000-000000000014', 'net_30', 60000,  'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
+  ('70420000-0000-4000-8000-000000000116', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000015', 'net_30', 60000,  'confirmed', '70420000-0000-4000-8000-0000000000a2', NOW() - interval '2 days'),
   ('70420000-0000-4000-8000-000000000103', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000011', 'net_30', 300000, 'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
   ('70420000-0000-4000-8000-000000000104', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000011', 'net_30', 100000, 'confirmed', '70420000-0000-4000-8000-0000000000a2', NOW()),
   ('70420000-0000-4000-8000-000000000105', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000011', 'net_30', 1000,   'cancelled', '70420000-0000-4000-8000-0000000000a2', NULL),
@@ -114,6 +145,15 @@ INSERT INTO project_ffe_specs (ffe_item_id)
 SELECT '70420000-0000-4000-8000-000000000201'
 WHERE NOT EXISTS (SELECT 1 FROM project_ffe_specs WHERE ffe_item_id = '70420000-0000-4000-8000-000000000201');
 UPDATE project_ffe_specs SET finish = 'Walnut' WHERE ffe_item_id = '70420000-0000-4000-8000-000000000201';
+
+-- 00719: 207 is PO 107's armchair ($3,000 trade); 801 its deposit row.
+INSERT INTO project_ffe_items (id, project_id, name, status, quantity, unit_price_cents, trade_price_cents, line_total_cents, purchase_order_id, vendor_id, design_disposition, blocked)
+VALUES ('70420000-0000-4000-8000-000000000207', '70420000-0000-4000-8000-000000000001', 'SQ420 armchair', 'ordered', 1, 400000, 300000, 400000, '70420000-0000-4000-8000-000000000107', '70420000-0000-4000-8000-000000000013', 'selected', false);
+INSERT INTO project_ffe_specs (ffe_item_id)
+SELECT '70420000-0000-4000-8000-000000000207'
+WHERE NOT EXISTS (SELECT 1 FROM project_ffe_specs WHERE ffe_item_id = '70420000-0000-4000-8000-000000000207');
+INSERT INTO po_payments (id, purchase_order_id, kind, amount_cents, state)
+VALUES ('70420000-0000-4000-8000-000000000801', '70420000-0000-4000-8000-000000000107', 'deposit', 150000, 'pending');
 
 -- Invoices: 301 deposit, 302 balance, 303 purchases and riders, 304 re-bill
 -- then void, 306 Studio B.
@@ -163,8 +203,31 @@ RETURNS void AS $$
     json_build_object('sub', p_user, 'role', 'authenticated')::text, true);
 $$ LANGUAGE sql;
 
+-- 00719: probes the sent_at stamp as the table owner (po-send stamps as
+-- service_role) and undoes it; returns the refusal, or NULL when allowed.
+CREATE OR REPLACE FUNCTION pg_temp.stamp_refusal(p_po_id uuid)
+RETURNS text SECURITY DEFINER AS $$
+BEGIN
+  UPDATE public.purchase_orders SET sent_at = now() WHERE id = p_po_id;
+  RAISE EXCEPTION 'stamp_probe_allowed';
+EXCEPTION WHEN OTHERS THEN
+  RETURN CASE WHEN SQLERRM = 'stamp_probe_allowed' THEN NULL ELSE SQLSTATE || ' ' || SQLERRM END;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 00719: a write as the table owner mid-case (po-send's own writes; a
+-- release recorded before 00719).
+CREATE OR REPLACE FUNCTION pg_temp.as_owner(p_sql text)
+RETURNS void SECURITY DEFINER AS $$
+BEGIN
+  EXECUTE p_sql;
+END;
+$$ LANGUAGE plpgsql;
+
 GRANT EXECUTE ON FUNCTION pg_temp.raised(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION pg_temp.act(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.stamp_refusal(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.as_owner(text) TO authenticated;
 
 SET LOCAL ROLE authenticated;
 
@@ -327,6 +390,203 @@ BEGIN
 END;
 $$;
 SET LOCAL ROLE authenticated;
+
+-- A11–A15 (00719, R3): the release covers the paper, not just the total.
+DO $$
+DECLARE
+  v_po    public.purchase_orders%ROWTYPE;
+  v_ack   public.po_acknowledgments%ROWTYPE;
+  v_state jsonb;
+  v_err   text;
+  v_path  text;
+  v_sql   text;
+  v_line  uuid;
+BEGIN
+  -- A11: each edit path after a release needs a new release; the stamp is
+  -- refused until then.
+  FOR v_path, v_sql IN
+    SELECT * FROM (VALUES
+      ('header', $q$SELECT public.set_purchase_order_header('70420000-0000-4000-8000-000000000107', '{"vendorNote": "Call before delivery"}')$q$),
+      ('ship-to location', $q$SELECT public.set_purchase_order_ship_to_location('70420000-0000-4000-8000-000000000107', '70420000-0000-4000-8000-000000000701')$q$),
+      ('supplies', $q$SELECT public.set_purchase_order_supplies('70420000-0000-4000-8000-000000000107', '70420000-0000-4000-8000-000000000104')$q$),
+      ('payment schedule', $q$SELECT public.update_po_payment_schedule('70420000-0000-4000-8000-000000000107', '{"payments": [{"id": "70420000-0000-4000-8000-000000000801", "label": "Deposit on order"}]}')$q$),
+      ('rider', $q$SELECT public.upsert_po_cost_line('70420000-0000-4000-8000-000000000107', '{"kind": "freight", "estimateCents": 12000}')$q$),
+      ('spec column', $q$UPDATE public.project_ffe_specs SET com_spec = '{"yardage": 14}' WHERE ffe_item_id = '70420000-0000-4000-8000-000000000207'$q$)
+    ) AS edit_path(path, sql)
+  LOOP
+    PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+    v_po := public.release_purchase_order('70420000-0000-4000-8000-000000000107');
+    ASSERT v_po.released_fingerprint IS NOT NULL, 'FAIL A11: the release records the paper before the ' || v_path || ' edit';
+    PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+    ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000107'),
+      'FAIL A11: released and unedited is sendable before the ' || v_path || ' edit';
+    v_state := public.po_release_state('70420000-0000-4000-8000-000000000107');
+    ASSERT (v_state->>'cleared')::boolean AND v_state->'reason' = 'null'::jsonb,
+      'FAIL A11: a cleared paper has no reason, got ' || v_state::text;
+    EXECUTE v_sql;
+    ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000107'),
+      'FAIL A11: a ' || v_path || ' edit after release needs a new release';
+    v_err := pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000107');
+    ASSERT v_err LIKE '23514 held_for_release:%',
+      'FAIL A11: the stamp is refused after a ' || v_path || ' edit, got ' || COALESCE(v_err, 'no error');
+    v_state := public.po_release_state('70420000-0000-4000-8000-000000000107');
+    ASSERT v_state->>'reason' = 'changed' AND (v_state->>'released')::boolean AND NOT (v_state->>'cleared')::boolean,
+      'FAIL A11: po_release_state says changed after the ' || v_path || ' edit, got ' || v_state::text;
+  END LOOP;
+
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.release_purchase_order('70420000-0000-4000-8000-000000000107');
+  ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000107')
+     AND pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000107') IS NULL,
+    'FAIL A11: a new release covers the edited paper';
+
+  -- A12: po-send fills a blank sidemark before the stamp; that keeps the
+  -- release. Changing a sidemark the release saw does not.
+  PERFORM pg_temp.as_owner($q$UPDATE public.purchase_orders SET sidemark = 'SQ420-A-ARM' WHERE id = '70420000-0000-4000-8000-000000000107'$q$);
+  ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000107')
+     AND pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000107') IS NULL,
+    'FAIL A12: a sidemark filled into a blank one keeps the release';
+  PERFORM public.release_purchase_order('70420000-0000-4000-8000-000000000107');
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  PERFORM public.set_purchase_order_header('70420000-0000-4000-8000-000000000107', '{"sidemark": "SQ420-OTHER"}');
+  ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000107'),
+    'FAIL A12: changing a released sidemark needs a new release';
+
+  -- A13 (option T): ack v2 confirms a draft, so an edited one waits too; a
+  -- new release lets it through.
+  v_err := pg_temp.raised($q$SELECT public.log_po_acknowledgment_v2('70420000-0000-4000-8000-000000000107', '{}', '[]')$q$);
+  ASSERT v_err LIKE '23514 held_for_release:%',
+    'FAIL A13: ack v2 on a PO edited after release is refused, got ' || COALESCE(v_err, 'no error');
+  ASSERT NOT EXISTS (SELECT 1 FROM public.po_acknowledgments WHERE purchase_order_id = '70420000-0000-4000-8000-000000000107'),
+    'FAIL A13: the refused ack v2 left no acknowledgment';
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.release_purchase_order('70420000-0000-4000-8000-000000000107');
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  v_ack := public.log_po_acknowledgment_v2('70420000-0000-4000-8000-000000000107', '{}',
+    jsonb_build_array(jsonb_build_object('ffeItemId', '70420000-0000-4000-8000-000000000207',
+                                         'field', 'unit_price', 'ackValue', 290000)));
+  ASSERT (SELECT status FROM public.purchase_orders WHERE id = '70420000-0000-4000-8000-000000000107') = 'confirmed',
+    'FAIL A13: after a new release ack v2 confirms the PO';
+  ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000107'),
+    'FAIL A13: the acknowledgment itself does not change the released paper';
+
+  -- A15: resolve_ack_line accepting a lower unit price changes the paper.
+  SELECT id INTO v_line FROM public.po_ack_lines WHERE ack_id = v_ack.id AND field = 'unit_price';
+  PERFORM public.resolve_ack_line(v_line, 'accepted', 'Vendor price, accepted');
+  ASSERT (SELECT total_cents FROM public.purchase_orders WHERE id = '70420000-0000-4000-8000-000000000107') = 290000,
+    'FAIL A15: the accepted price lowers the total';
+  ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000107'),
+    'FAIL A15: a lower unit price accepted after release needs a new release';
+  v_err := pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000107');
+  ASSERT v_err LIKE '23514 held_for_release:%',
+    'FAIL A15: the stamp is refused after the accepted price, got ' || COALESCE(v_err, 'no error');
+  ASSERT public.po_release_state('70420000-0000-4000-8000-000000000107')->>'reason' = 'changed',
+    'FAIL A15: po_release_state says changed';
+
+  -- A14: a release from before 00719 (NULL fingerprint) covers its total only.
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.release_purchase_order('70420000-0000-4000-8000-000000000108');
+  PERFORM pg_temp.as_owner($q$UPDATE public.purchase_orders SET released_fingerprint = NULL WHERE id = '70420000-0000-4000-8000-000000000108'$q$);
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  PERFORM public.set_purchase_order_header('70420000-0000-4000-8000-000000000108', '{"vendorNote": "Legacy release"}');
+  ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000108')
+     AND pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000108') IS NULL,
+    'FAIL A14: a NULL fingerprint ignores the paper edit';
+  PERFORM pg_temp.as_owner($q$UPDATE public.purchase_orders SET total_cents = 300001 WHERE id = '70420000-0000-4000-8000-000000000108'$q$);
+  v_state := public.po_release_state('70420000-0000-4000-8000-000000000108');
+  ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000108') AND v_state->>'reason' = 'total_rose',
+    'FAIL A14: a NULL fingerprint still guards its total (total_rose), got ' || v_state::text;
+  PERFORM pg_temp.as_owner($q$UPDATE public.purchase_orders SET total_cents = 300000 WHERE id = '70420000-0000-4000-8000-000000000108'$q$);
+
+  -- A13 (option T): ack v1 likewise.
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.release_purchase_order('70420000-0000-4000-8000-000000000108');
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  PERFORM public.set_purchase_order_header('70420000-0000-4000-8000-000000000108', '{"freightTerms": "collect"}');
+  v_err := pg_temp.raised($q$SELECT public.log_po_acknowledgment('70420000-0000-4000-8000-000000000108', 'V-108')$q$);
+  ASSERT v_err LIKE '23514 held_for_release:%',
+    'FAIL A13: ack v1 on a PO edited after release is refused, got ' || COALESCE(v_err, 'no error');
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.release_purchase_order('70420000-0000-4000-8000-000000000108');
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  v_po := public.log_po_acknowledgment('70420000-0000-4000-8000-000000000108', 'V-108');
+  ASSERT v_po.status = 'confirmed', 'FAIL A13: after a new release ack v1 confirms the PO, got ' || v_po.status;
+
+  -- The fingerprint and its parts stay internal.
+  v_err := pg_temp.raised($q$SELECT public._po_release_fingerprint('70420000-0000-4000-8000-000000000108')$q$);
+  ASSERT v_err LIKE '42501 %', 'FAIL A11: authenticated cannot call _po_release_fingerprint, got ' || COALESCE(v_err, 'no error');
+  v_err := pg_temp.raised($q$SELECT public._release_gate_total('70420000-0000-4000-8000-000000000108')$q$);
+  ASSERT v_err LIKE '42501 %', 'FAIL A11: authenticated cannot call _release_gate_total, got ' || COALESCE(v_err, 'no error');
+
+  RAISE NOTICE 'case A11-A15 passed: every edit path re-holds a released PO; blank sidemark fill keeps it; legacy release is total-only; ack v1/v2 wait for a new release';
+END;
+$$;
+
+-- A16–A17 (00719, R4): the threshold reads the job's open and recently sent
+-- orders to the same maker; a held PO takes no number.
+DO $$
+DECLARE
+  v_po    public.purchase_orders%ROWTYPE;
+  v_state jsonb;
+  v_err   text;
+BEGIN
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.set_studio_release_gate('70420000-0000-4000-8000-0000000000f1', 100000);
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+
+  -- A16: two $600 drafts to one maker on one job are $1,200 together.
+  ASSERT public.purchase_order_release_required('70420000-0000-4000-8000-000000000111')
+     AND public.purchase_order_release_required('70420000-0000-4000-8000-000000000112'),
+    'FAIL A16: both $600 drafts wait under a $1,000 line';
+  ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000111')
+     AND NOT public.po_is_sendable('70420000-0000-4000-8000-000000000112'),
+    'FAIL A16: neither split draft is sendable';
+  v_state := public.po_release_state('70420000-0000-4000-8000-000000000111');
+  ASSERT (v_state->>'group_total_cents')::bigint = 120000,
+    'FAIL A16: the order sent 8 days ago, another maker''s and another job''s do not count, got ' || v_state::text;
+  ASSERT (v_state->>'applies')::boolean AND NOT (v_state->>'released')::boolean
+     AND v_state->>'reason' = 'group_over' AND (v_state->>'threshold_cents')::bigint = 100000,
+    'FAIL A16: po_release_state says group_over, got ' || v_state::text;
+  ASSERT (public.po_release_state('70420000-0000-4000-8000-000000000114')->>'group_total_cents')::bigint = 120000
+     AND public.purchase_order_release_required('70420000-0000-4000-8000-000000000114'),
+    'FAIL A16: the order sent 2 days ago counts';
+  ASSERT NOT public.purchase_order_release_required('70420000-0000-4000-8000-000000000115')
+     AND public.po_is_sendable('70420000-0000-4000-8000-000000000115')
+     AND (public.po_release_state('70420000-0000-4000-8000-000000000115')->>'group_total_cents')::bigint = 60000,
+    'FAIL A16: the same maker on another job does not count';
+  ASSERT public.po_release_state('70420000-0000-4000-8000-000000000115')->'reason' = 'null'::jsonb,
+    'FAIL A16: no reason under the line';
+  v_err := pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000112');
+  ASSERT v_err LIKE '23514 held_for_release:%', 'FAIL A16: the split draft''s stamp is refused, got ' || COALESCE(v_err, 'no error');
+  v_err := pg_temp.raised($q$SELECT public.log_po_acknowledgment_v2('70420000-0000-4000-8000-000000000112', '{}', '[]')$q$);
+  ASSERT v_err LIKE '23514 held_for_release:%', 'FAIL A16: an ack cannot confirm a split draft, got ' || COALESCE(v_err, 'no error');
+
+  -- A member holds one; it still counts toward its sibling. Releasing it
+  -- does not release the sibling.
+  v_po := public.hold_purchase_order_for_release('70420000-0000-4000-8000-000000000111');
+  ASSERT v_po.status = 'held_for_release', 'FAIL A16: a split draft can be held';
+  ASSERT (public.po_release_state('70420000-0000-4000-8000-000000000112')->>'group_total_cents')::bigint = 120000,
+    'FAIL A16: a held sibling counts';
+
+  -- A17: a held PO takes its number when it is released.
+  v_err := pg_temp.raised($q$SELECT public.assign_po_number('70420000-0000-4000-8000-000000000111')$q$);
+  ASSERT v_err = '23514 held_for_release: a held order takes its number when it is released',
+    'FAIL A17: assign_po_number refuses a held PO, got ' || COALESCE(v_err, 'no error');
+
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  v_po := public.release_purchase_order('70420000-0000-4000-8000-000000000111');
+  ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000111')
+     AND pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000111') IS NULL,
+    'FAIL A16: the released split draft can go';
+  ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000112'),
+    'FAIL A16: releasing one split draft does not release its sibling';
+  v_po := public.assign_po_number('70420000-0000-4000-8000-000000000111');
+  ASSERT v_po.po_number IS NOT NULL, 'FAIL A17: a released PO takes its number';
+
+  PERFORM public.set_studio_release_gate('70420000-0000-4000-8000-0000000000f1', 250000, false);
+  RAISE NOTICE 'case A16-A17 passed: the line reads the job''s open and 7-day orders to the maker; a held PO takes no number';
+END;
+$$;
 
 -- ─── case B: deposit/balance slots and the billing writer ───────────────────
 

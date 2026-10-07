@@ -20,14 +20,15 @@ import {
   useHoldPurchaseOrderForRelease,
   useIsStudioReleaser,
   useOrganizationMembers,
-  usePurchaseOrderReleaseState,
+  usePoReleaseState,
   useReleasePurchaseOrder,
   useSendBackPurchaseOrder,
   useStudioReleaseGate,
-  type PurchaseOrderReleaseState,
+  type PoReleaseState,
   type StudioReleaseGate,
 } from '@patina/supabase';
 import { DocumentAction } from '@/components/document/document-action';
+import { formatDollars } from './model';
 
 /**
  * none: the ordinary send. hold: this seat holds it. release: this seat
@@ -43,14 +44,14 @@ export function releaseModeFor(input: {
   /** The studio's gate: a new paper, or an existing one before serverState. */
   gate: StudioReleaseGate | null | undefined;
   totalCents: number;
-  /** The server's answer for an existing PO (00710). */
-  serverState: PurchaseOrderReleaseState | undefined;
+  /** The server's answer for an existing PO (po_release_state, 00719). */
+  serverState: PoReleaseState | null | undefined;
   canRelease: boolean;
 }): ReleaseMode {
   if (input.isPatinaMaker || input.sent) return 'none';
   if (input.status === 'held_for_release') return input.canRelease ? 'release' : 'waiting';
   const applies = input.serverState
-    ? input.serverState.releaseRequired && !input.serverState.sendable
+    ? input.serverState.applies && !input.serverState.cleared
     : Boolean(
         input.gate &&
           (input.gate.require_release_per_order ||
@@ -68,6 +69,25 @@ export function releaseConsequence(ownerFirstName: string | null, vendorName: st
   return `${ownerFirstName ? `${ownerFirstName} or an admin` : 'An owner or admin'} releases it before it goes to ${vendorName}.`;
 }
 
+/** Why the server holds an existing paper, when it is not the paper's own total. */
+export function releaseReasonSentence(
+  state: PoReleaseState | null | undefined,
+  vendorName: string,
+): string | null {
+  switch (state?.reason) {
+    case 'changed':
+      return 'Changed since release — needs release again';
+    case 'total_rose':
+      return 'The total rose after release — needs release again';
+    case 'group_over':
+      return `With your other open orders to ${vendorName} on this job, this comes to ${formatDollars(
+        state.group_total_cents,
+      )} — over the studio's release line (${formatDollars(state.threshold_cents ?? 0)}).`;
+    default:
+      return null;
+  }
+}
+
 /** po-send's refusal (and the DB guard's), in the paper's words. */
 export function releaseErrorMessage(raw: string): string | null {
   return raw.includes('held_for_release')
@@ -83,6 +103,8 @@ export interface ReleasePaper {
   heldByFirstName: string | null;
   heldAt: string | null;
   holdNote: string | null;
+  /** The server's reason the paper needs a release, in the paper's words. */
+  reason: string | null;
   hold: (purchaseOrderId: string) => Promise<void>;
   release: (purchaseOrderId: string) => Promise<void>;
   sendBack: (purchaseOrderId: string, note: string) => Promise<void>;
@@ -100,13 +122,14 @@ export function useReleasePaper(input: {
     hold_note?: string | null;
   } | null;
   totalCents: number;
+  vendorName: string;
 }): ReleasePaper {
   const po = input.purchaseOrder;
   // The studio's gate decides a new paper, and an existing one until the
   // server's own answer for that PO arrives.
   const { data: gate } = useStudioReleaseGate(input.studioId);
-  const { data: serverState } = usePurchaseOrderReleaseState(
-    po && !po.sent_at && po.status === 'draft' ? po.id : null,
+  const { data: serverState } = usePoReleaseState(
+    po && !po.sent_at && (po.status === 'draft' || po.status === 'held_for_release') ? po.id : null,
   );
   const { data: canRelease } = useIsStudioReleaser(input.studioId);
   const { data: members } = useOrganizationMembers(input.studioId ?? '');
@@ -133,6 +156,7 @@ export function useReleasePaper(input: {
     heldByFirstName: firstWord(holder?.profiles?.full_name),
     heldAt: po?.held_at ?? null,
     holdNote: po?.hold_note ?? null,
+    reason: releaseReasonSentence(serverState, input.vendorName),
     hold: async (id) => {
       await holdPo.mutateAsync({ purchaseOrderId: id });
     },
