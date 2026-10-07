@@ -8,7 +8,9 @@
  * and "void" (with a reason) per record. Payments are never edited.
  *
  * Recording is secondary, not terminal: the money moved outside Patina and
- * this act only writes the record. A Patina-catalog PO, or any row on the
+ * this act only writes the record. Under `one-voice`, R162 amends that: money
+ * recorded as moved is filled (`terminal`), with its consequence sentence
+ * above. A Patina-catalog PO, or any row on the
  * Stripe rail, settles through checkout and never offers "Record payment" —
  * the RPC refuses those rows anyway (00695 lane guard). A catalog row still
  * owed offers "Pay now" instead, which opens that same checkout (C-22).
@@ -30,7 +32,9 @@ import {
   type VendorPayment,
   type VendorPaymentMethodKind,
 } from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useUploadFolioFile, type FolioAnchor } from '@/hooks/use-folio';
+import { needActLabel } from '@/lib/document/act-names';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction } from '../document-action';
@@ -198,6 +202,17 @@ export function RecordPaymentForm({
     how || (methods && methods.length > 0 ? `pm:${methods[0].id}` : 'kind:other');
   const busy = record.isPending || upload.isPending;
   const name = (row ? scheduleName(row) : nameOverride || 'Payment').toLowerCase();
+  // US-19 D3 (one-voice, R162): recording money as moved is the filled tier,
+  // under its one name (D1) with the amount inside the label, and one
+  // consequence sentence above it in every state (R141).
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const figure = amountCents != null ? ` · ${fmtUsd(amountCents)}` : '';
+  const actLabel = oneVoice
+    ? `${needActLabel('payment_due')}${figure}`
+    : `Record the ${name}${figure}`;
+  const consequence = `This records the ${name}${
+    amountCents != null ? `, ${fmtUsd(amountCents)},` : ''
+  } as paid${paidOn ? ` on ${fmtDay(paidOn)}` : ''}. A record is never edited; it can only be voided, with a reason.`;
 
   const submit = async () => {
     if (busy || amountCents == null || !paidOn) return;
@@ -302,18 +317,23 @@ export function RecordPaymentForm({
           Enter the amount paid, in dollars.
         </p>
       )}
+      {oneVoice && (
+        <p data-record-payment-consequence className="text-[12px] text-[var(--color-charcoal)]">
+          {consequence}
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-x-2">
         <DocumentAction
           actionKey="record-vendor-payment"
           surfaceKey={surfaceKey}
           regionKey="money-out"
-          variant="secondary"
+          variant={oneVoice ? 'terminal' : 'secondary'}
           disabled={amountCents == null || !paidOn}
           loading={busy}
           loadingLabel="Recording…"
           onClick={submit}
         >
-          {`Record the ${name}${amountCents != null ? ` · ${fmtUsd(amountCents)}` : ''}`}
+          {actLabel}
         </DocumentAction>
         <DocumentAction
           actionKey="cancel-record-vendor-payment"
@@ -428,6 +448,8 @@ export function PoMoneyOut({
   const { data: methods } = useStudioPaymentMethods();
   const [recordingRowId, setRecordingRowId] = useState<string | null>(null);
   const [voidingId, setVoidingId] = useState<string | null>(null);
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const recordWord = oneVoice ? needActLabel('payment_due') : 'Record payment';
   // C-22: a catalog row still owed (a failed or never-finished checkout) pays
   // through the same Patina checkout — the Desk's "Pay again" lands here.
   const startCheckout = useStartPoCheckout({ errorSurface: 'inline' });
@@ -533,9 +555,9 @@ export function PoMoneyOut({
                     regionKey="money-out"
                     variant="tertiary"
                     onClick={() => setRecordingRowId(p.id!)}
-                    aria-label={`Record payment · ${scheduleName(p)}`}
+                    aria-label={`${recordWord} · ${scheduleName(p)}`}
                   >
-                    Record payment →
+                    {`${recordWord} →`}
                   </DocumentAction>
                 )}
                 {canPay && (

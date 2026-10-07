@@ -5,7 +5,9 @@ import {
   type NeedLine,
   type SectionKey,
 } from './desk-derivation';
+import { STAGE_WORD, needActLabel, ownAct, type OwnActFacts } from './act-names';
 import type { CommercialDocumentKind, CommercialState } from './commercial-documents';
+import { familyLabel } from './family-label';
 import type { SectionScheduleFacts } from './section-derivation';
 import type { SendWallLine } from './proposal-watch-derivation';
 import type { TicketRow } from './ticket-derivation';
@@ -144,6 +146,9 @@ interface DeriveDocumentGuideInput {
    *  (`client_discovery.seeded_proposal_id`). The rest act then opens what
    *  exists rather than running the seed a second time. */
   alreadySeeded?: boolean;
+  /** US-19 slice 2 — `useFeatureFlag('one-voice')`, read by the caller. On, the
+   *  guide's acts print D1's one name; off, every label stays as it is. */
+  oneVoice?: boolean;
 }
 
 export const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
@@ -634,6 +639,24 @@ function needVerb(kind: NeedKind): string {
   }
 }
 
+/**
+ * US-19 D1 (`one-voice`) — the client's first name an act prints (`Nudge Chen`,
+ * `Message Chen`), through the placeholder guard: a placeholder or empty
+ * household is null, and the act names `the client`. The band derives it the
+ * same way (`lens-band-derivation.ts` `deriveVoice`).
+ */
+export function voiceFirstName(clientName: string | null | undefined): string | null {
+  const household = familyLabel((clientName ?? '').trim());
+  return household === 'the client' ? null : clientShortName(household);
+}
+
+/** The flag and the name a voiced act reads. The libs take the flag as a
+ *  parameter; the `'use client'` caller reads `useFeatureFlag('one-voice')`. */
+export interface ActVoice {
+  oneVoice: boolean;
+  clientFirstName: string | null;
+}
+
 /** The act a need points at — extracted so a region that prints needs itself
  *  can reach the same destination the guide strip would have offered. `stage`
  *  is the section an anchor destination lands in; `projectId` reaches the
@@ -649,6 +672,7 @@ export function needGuideAction(
   stage: SectionKey,
   projectId?: string | null,
   lineId?: string | null,
+  voice?: ActVoice | null,
 ): DocumentGuideAction {
   // C12 — a purchase order acts on the line it was raised for, so its act lands
   // on that body rather than on the Orders ledger it used to open. A claim has
@@ -693,9 +717,84 @@ export function needGuideAction(
         };
   return {
     key: `resolve-${need.kind}`,
-    label: needVerb(need.kind),
+    // D1 rule of names — behind `one-voice` the one table names the act.
+    label: voice?.oneVoice
+      ? needActLabel(need.kind, voice.clientFirstName)
+      : needVerb(need.kind),
     destination,
   };
+}
+
+/** What `ownAct` reads where a stage's act needs no facts. */
+const NO_FACTS: OwnActFacts = {
+  inquiryOpen: false,
+  firstMissingEssential: null,
+  proposalState: null,
+  clientFirstName: null,
+  unspecifiedCount: 0,
+  releaseEligible: false,
+  install: null,
+};
+
+/**
+ * US-19 D1 (`one-voice`) — the guide's own acts, renamed to the control each
+ * lands on (ADV-29/32), keyed by the act's stable key. The landing does not
+ * change; only the name does. A key absent here keeps today's label.
+ *
+ * - Brief: `Accept and begin` → the inquiry's own act (contradiction 1).
+ * - Direction, and a Proposal still in draft: the Contract Room door is
+ *   `Write the proposal` (contradictions 4 and 6); `Send the agreement` was the
+ *   same door.
+ * - Project: `Open the FF&E schedule` retires with its name; it lands on the
+ *   Pieces head, which is `Open the pieces`. `Release the next room` named no
+ *   control; the head's is `Release for authorization` (contradiction 10).
+ * - Proposal accepted: the signed-proposal control is `Open the project`
+ *   (contradiction 7).
+ */
+function oneVoiceActLabel(
+  key: string,
+  eyebrow: string,
+  clientFirstName: string | null,
+): string | null {
+  switch (key) {
+    case 'review-inquiry':
+      return ownAct('brief', { ...NO_FACTS, inquiryOpen: true })!.label;
+    case 'open-drafting-room':
+    case 'rest-direction':
+      return ownAct('direction', NO_FACTS)!.label;
+    case 'review-project-work':
+      return ownAct('project', NO_FACTS)!.label;
+    case 'rest-project':
+      return ownAct('project', { ...NO_FACTS, releaseEligible: true })!.label;
+    case 'nudge-client':
+      return ownAct('proposal', { ...NO_FACTS, proposalState: 'sent', clientFirstName })!.label;
+    case 'review-signing-controls':
+      return eyebrow === 'Proposal · signed'
+        ? ownAct('proposal', { ...NO_FACTS, proposalState: 'accepted' })!.label
+        : null;
+    default:
+      return null;
+  }
+}
+
+/** Behind `one-voice`: the act's one name; R8's silence for a declined or
+ *  expired proposal (contradiction 8); and a gate's eyebrow in the seven
+ *  stage words, never the workflow's eleven (Q4, contradiction 13). */
+function voiceGuide(
+  model: DocumentGuideModel,
+  row: DocumentStateRow,
+  clientFirstName: string | null,
+): DocumentGuideModel {
+  const action = model.action;
+  if (!action) return model;
+  if (action.key === 'review-proposal-follow-up' && /declined|expired/.test(model.eyebrow)) {
+    return { ...model, action: null };
+  }
+  if (action.key.startsWith('gate-')) {
+    return { ...model, eyebrow: `${STAGE_WORD[row.active_section]} · gate` };
+  }
+  const label = oneVoiceActLabel(action.key, model.eyebrow, clientFirstName);
+  return label ? { ...model, action: { ...action, label } } : model;
 }
 
 function proposalGuide(
@@ -787,21 +886,34 @@ function proposalGuide(
   };
 }
 
-export function deriveDocumentGuide({
-  row,
-  availability = 'ready',
-  retryAvailable = false,
-  now = new Date(),
-  proposal,
-  schedule,
-  operationalNeed,
-  inputFacts,
-  gate,
-  closureReady,
-  inputsPending = false,
-  ticketRows,
-  alreadySeeded = false,
-}: DeriveDocumentGuideInput): DocumentGuideModel {
+export function deriveDocumentGuide(input: DeriveDocumentGuideInput): DocumentGuideModel {
+  if (!input.oneVoice) return deriveGuide(input, null);
+  const clientFirstName = voiceFirstName(input.row.client_name);
+  return voiceGuide(
+    deriveGuide(input, { oneVoice: true, clientFirstName }),
+    input.row,
+    clientFirstName,
+  );
+}
+
+function deriveGuide(
+  {
+    row,
+    availability = 'ready',
+    retryAvailable = false,
+    now = new Date(),
+    proposal,
+    schedule,
+    operationalNeed,
+    inputFacts,
+    gate,
+    closureReady,
+    inputsPending = false,
+    ticketRows,
+    alreadySeeded = false,
+  }: DeriveDocumentGuideInput,
+  voice: ActVoice | null,
+): DocumentGuideModel {
   const stage = row.active_section;
   if (availability === 'unavailable') {
     return withInputs({
@@ -858,7 +970,7 @@ export function deriveDocumentGuide({
       state: 'actionable', stage, eyebrow: `${stageCopy[stage].eyebrow} · needs attention`,
       headline: need.text,
       reason: 'Something on this job needs a decision.',
-      action: needGuideAction(need, row.active_section, row.project_id),
+      action: needGuideAction(need, row.active_section, row.project_id, null, voice),
     }, inputFacts, row.client_name);
   }
 

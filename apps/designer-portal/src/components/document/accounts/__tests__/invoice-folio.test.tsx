@@ -97,6 +97,13 @@ let mockInvoice: Invoice = invoice;
 
 let mockEmailDeliveryByRef: Record<string, unknown> = {};
 
+// SQ-499 — the folio reads `one-voice`. The real hook's fail-closed settle is
+// one more render, and the reconcile effect keys on the per-render mutation
+// object these mocks hand back, so the flag is held still here.
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
+}));
+
 jest.mock('@patina/supabase', () => ({
   useEmailDelivery: () => ({
     byRef: mockEmailDeliveryByRef,

@@ -46,6 +46,7 @@ export const STAGE_WORD: Record<SectionKey, StageWord> = {
  *
  * - normally `{ stage: 'Project', detail: 'Chen Residence' }`
  * - held (`on_hold`, no date: the record carries none) `{ stage, detail: 'On hold' }`
+ * - archived (FR1 R9, in the held form, no date) `{ stage, detail: 'Archived' }`
  * - closed (`completed`) `{ stage: 'Care', detail: 'Closed' }`
  */
 export interface StageEyebrow {
@@ -60,6 +61,7 @@ export function stageEyebrow(
 ): StageEyebrow {
   if (projectStatus === 'completed') return { stage: 'Care', detail: 'Closed' };
   if (projectStatus === 'on_hold') return { stage: STAGE_WORD[stage], detail: 'On hold' };
+  if (projectStatus === 'archived') return { stage: STAGE_WORD[stage], detail: 'Archived' };
   return { stage: STAGE_WORD[stage], detail: name };
 }
 
@@ -81,8 +83,9 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   'Release for authorization': 'filled',
   'Send the proposal': 'filled',
   'Send the invoice': 'filled',
-  // DESIGN-Q (SQ-489): money moves, so D3's rule says filled, but D3's list
-  // does not name it.
+  // FR1 R4 — sending a PO commits the studio's money to a maker.
+  'Send the purchase order': 'filled',
+  // FR1 R7 — money moves.
   'Pay again': 'filled',
 
   // Scored — the four named acts
@@ -111,29 +114,26 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   Fold: 'plain',
   'Open the record': 'plain',
   'Draw an invoice': 'plain',
-  // Plain — Message and its repair
+  // Plain — Message and its repair (FR1 R6: a reconnect is a Message, plain)
   'Message {first name}': 'plain',
   'Link a client': 'plain',
   // Plain — the need acts D3 does not raise
-  'Review decisions': 'plain',
   'Send reminder': 'plain',
   'Notify the vendor': 'plain',
   'Follow up': 'plain',
   'Revise proposal': 'plain',
-  'Review flagged lines': 'plain',
+  'Open the flagged lines': 'plain',
   'Continue the introduction': 'plain',
-  'Reach out': 'plain',
   'Inspect the delivery': 'plain',
   'Resolve the schedule': 'plain',
-  'Review the proposed date': 'plain',
+  'Open the proposed date': 'plain',
   'Open the task': 'plain',
   'Open the schedule': 'plain',
-  'Review the purchase order': 'plain',
   'Follow up with the maker': 'plain',
-  'Review and send': 'plain',
+  'Send the pulse': 'plain',
   'Answer the vendor': 'plain',
   'Reconfirm the price': 'plain',
-  // DESIGN-Q (SQ-489): approving a CFA may count as a signature (filled).
+  // FR1 R7 — plain at rest, scored only while it is Next; never filled.
   'Approve the CFA': 'plain',
   'Mark returned': 'plain',
   'Choose a path': 'plain',
@@ -266,9 +266,10 @@ const act = (label: string, targetId: ActTargetId, tierKey = label): OwnAct => (
 /**
  * The stage's own act (D1): the act that always leads its region head. null
  * where the table gives no act: an install piece arriving with a window
- * already held (D6: silence), and the states D1 does not name (no open
- * inquiry at Brief, nothing missing at Discovery, no proposal at Proposal, no
- * install reading) — DESIGN-Q (SQ-489).
+ * already held (D6: silence), and FR1 R8's silences — Brief with no open
+ * inquiry, Discovery with every essential set, Proposal declined or expired
+ * (or none), and Install with no reading. The band's Next then falls to the
+ * top standing row by D2's order.
  */
 export function ownAct(stage: SectionKey, facts: OwnActFacts): OwnAct | null {
   switch (stage) {
@@ -338,36 +339,36 @@ export function ownAct(stage: SectionKey, facts: OwnActFacts): OwnAct | null {
 
 /**
  * The one name for each need's act, replacing both `document-guide.ts`
- * `needVerb` and `desk-derivation.ts` `NEED_ACTION_LABELS` (adopted in slice 2).
+ * `needVerb` and `desk-derivation.ts` `NEED_ACTION_LABELS` behind `one-voice`.
  *
  * D1's named and own acts win over either source (`damage_claim`,
  * `payment_due`, `new_lead`). Where the sources agree, their string stands.
- * Where D1 is silent and they disagree, `NEED_ACTION_LABELS` is taken
- * provisionally — DESIGN-Q (SQ-489): `overdue_decision`, `lines_flagged`,
- * `schedule_proposal`, `po_unsent`, `pulse_due`; and `reconnect_due`, where
- * `NEED_ACTION_LABELS` prints nothing and `needVerb`'s is the only name.
+ * Where they disagreed, FR1 (`delivery/design-review-1.md` §1) ruled:
+ * R1 `overdue_decision` · R2 `lines_flagged` · R3 `schedule_proposal` ·
+ * R4 `po_unsent` · R5 `pulse_due` · R6 `reconnect_due`. Templated labels carry
+ * `{first name}`; print them through `needActLabel`.
  */
 export const NEED_ACT_LABELS: Record<NeedKind, string> = {
-  overdue_decision: 'Review decisions',
+  overdue_decision: 'Nudge {first name}',
   overdue_invoice: 'Send reminder',
   proposal_signed: 'Open the project',
   claim_window: 'Notify the vendor',
   damage_claim: 'File the claim',
   proposal_declined: 'Follow up',
   proposal_expired: 'Revise proposal',
-  lines_flagged: 'Review flagged lines',
+  lines_flagged: 'Open the flagged lines',
   new_lead: 'Respond to the inquiry',
   ceremony_pending: 'Continue the introduction',
-  reconnect_due: 'Reach out',
+  reconnect_due: 'Message {first name}',
   hesitating_proposal: 'Follow up',
   awaiting_inspection: 'Inspect the delivery',
   schedule_conflict: 'Resolve the schedule',
-  schedule_proposal: 'Review the proposed date',
+  schedule_proposal: 'Open the proposed date',
   task_due: 'Open the task',
   schedule_unconfigured: 'Open the schedule',
-  po_unsent: 'Review the purchase order',
+  po_unsent: 'Send the purchase order',
   po_unacknowledged: 'Follow up with the maker',
-  pulse_due: 'Review and send',
+  pulse_due: 'Send the pulse',
   payment_due: 'Record the payment',
   payment_failed: 'Pay again',
   ack_discrepancy: 'Answer the vendor',
@@ -378,6 +379,12 @@ export const NEED_ACT_LABELS: Record<NeedKind, string> = {
   return_by: 'Return it or keep it',
 };
 
-export function needActLabel(kind: NeedKind): string {
-  return NEED_ACT_LABELS[kind];
+/**
+ * The need's act as it prints. `firstName` fills `{first name}` (R1 `Nudge`,
+ * R6 `Message`) and must already be through the placeholder guard; with none,
+ * the act names `the client`.
+ */
+export function needActLabel(kind: NeedKind, firstName: string | null = null): string {
+  const first = firstName?.trim();
+  return NEED_ACT_LABELS[kind].replace('{first name}', first || 'the client');
 }

@@ -50,6 +50,8 @@ import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DeliveryWord } from '../delivery-word';
 import { Stamp } from '../stamp';
 import { todayYmd } from '@/lib/document/format';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { needActLabel } from '@/lib/document/act-names';
 import { dollarsToCents } from '@/lib/document/invoice-composer';
 import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
 import { useReconcileInvoiceCheckout } from '@/hooks/use-invoice-checkout-reconciliation';
@@ -125,6 +127,10 @@ export function InvoiceFolio({
   const [reference, setReference] = useState('');
   const [receivedDate, setReceivedDate] = useState(() => todayYmd());
   const [showClientFallback, setShowClientFallback] = useState(false);
+  // US-19 (one-voice): `Send the invoice` and `Record the payment` are their
+  // acts' one names (D1), and each commit is filled (`terminal`, R162) beneath
+  // the consequence sentence its panel already states (R141).
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   // Two act sites copy the same address — the toolbar act and the recovery
   // band — and each has to report its own outcome: one shared status made the
   // band say "select the link above" about a link that was not above it.
@@ -661,7 +667,7 @@ export function InvoiceFolio({
               disabled={busy}
               onClick={() => openPanel('send')}
             >
-              Issue &amp; send
+              {oneVoice ? 'Send the invoice' : 'Issue & send'}
             </DocumentAction>
           )}
           {canRecordPayment && (
@@ -671,7 +677,7 @@ export function InvoiceFolio({
               disabled={busy}
               onClick={() => openPanel('payment')}
             >
-              Record payment
+              {oneVoice ? needActLabel('payment_due') : 'Record payment'}
             </DocumentAction>
           )}
           {canResend && (
@@ -873,13 +879,17 @@ export function InvoiceFolio({
             >
               <DocumentAction
                 actionKey={act === 'send' ? 'confirm-issue-and-send' : 'confirm-resend'}
-                variant="primary"
+                variant={oneVoice && act === 'send' ? 'terminal' : 'primary'}
                 disabled={busy}
                 loading={busy}
                 loadingLabel="Sending…"
                 onClick={() => void (act === 'send' ? doIssueAndSend() : doResend())}
               >
-                {act === 'send' ? 'Issue & send' : 'Resend email'}
+                {act === 'send'
+                  ? oneVoice
+                    ? `Send the invoice · ${formatCurrency(invoice.total_cents, invoice.currency)}`
+                    : 'Issue & send'
+                  : 'Resend email'}
               </DocumentAction>
               <DocumentAction
                 actionKey="cancel-invoice-send"
@@ -960,13 +970,17 @@ export function InvoiceFolio({
             >
               <DocumentAction
                 actionKey="confirm-record-payment"
-                variant="primary"
+                variant={oneVoice ? 'terminal' : 'primary'}
                 disabled={!paymentValid || busy}
                 loading={busy}
                 loadingLabel="Recording…"
                 onClick={() => void doRecordPayment()}
               >
-                Record payment
+                {oneVoice
+                  ? `${needActLabel('payment_due')}${
+                      paymentValid ? ` · ${formatCurrency(amountCents, invoice.currency)}` : ''
+                    }`
+                  : 'Record payment'}
               </DocumentAction>
               <DocumentAction
                 actionKey="cancel-record-payment"

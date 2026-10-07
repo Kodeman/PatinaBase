@@ -73,7 +73,7 @@ import {
   matchSurfaces,
   type StudioSurface,
 } from '@/lib/document/registry';
-import { NAMED_ACTS, NEED_ACT_LABELS, ownAct } from '@/lib/document/act-names';
+import { NAMED_ACTS, NEED_ACT_LABELS, STAGE_WORD, ownAct } from '@/lib/document/act-names';
 import { installReading } from '@/lib/document/install-reading';
 import {
   deriveLineStamp,
@@ -384,6 +384,9 @@ export function CommandBar() {
   const { value: deckImportOn } = useFeatureFlag(DECK_IMPORT_FLAG);
   // US-19 D4 — ⌘K searches the open paper first. Fail-closed.
   const { value: askThePaperOn } = useFeatureFlag(ASK_THE_PAPER_FLAG);
+  // US-19 D1/Q4 (`one-voice`) — `Where the work stands` names each stage by
+  // one of the seven words. Fail-closed.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -865,6 +868,7 @@ export function CommandBar() {
     const lineByEngagement = new Map(
       liveDocs.map((entry) => [entry.row.engagement_id, liveLine(entry)]),
     );
+    const stageLabels = oneVoice ? STAGE_WORD : STAGE_LABELS;
     const stageRows: PaletteRow[] = STAGE_ORDER.flatMap((stage) => {
       const inStage = liveRows.filter((r) => r.active_section === stage);
       if (inStage.length === 0) return [];
@@ -883,12 +887,12 @@ export function CommandBar() {
         {
           kind: 'document' as const,
           key: `stage:${stage}`,
-          label: `${STAGE_LABELS[stage]} · ${inStage.length}`,
+          label: `${stageLabels[stage]} · ${inStage.length}`,
           sub,
           fill: fillStateForDesk(head),
           run: () => router.push(`/doc/${head.engagement_id}`),
           match: [
-            STAGE_LABELS[stage],
+            stageLabels[stage],
             stage,
             ...titles,
             ...inStage.map((r) => lineByEngagement.get(r.engagement_id) ?? null),
@@ -1469,6 +1473,7 @@ export function CommandBar() {
     teachingNotesOn,
     deckImportOn,
     askThePaperOn,
+    oneVoice,
     paperLines,
     searchAll,
   ]);

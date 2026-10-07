@@ -105,7 +105,7 @@ import {
   type RecordAChangeOnPieceDetail,
 } from './overlays/record-a-change-sheet';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { NAMED_ACTS } from '@/lib/document/act-names';
+import { NAMED_ACTS, needActLabel } from '@/lib/document/act-names';
 import { StrataMark } from './strata-mark';
 import { StrataMiniRule } from './strata-mini-rule';
 import { WorkBlock } from './work-block';
@@ -439,11 +439,17 @@ function RecordChangeLineAct({ itemId }: { itemId: string }) {
   );
 }
 
-/** Reads `ask-the-paper` in its own leaf: the flag hook's loading settle is a
- *  state change, and in the schedule's body it would re-render every line.
- *  Here only a changed value reaches the schedule. */
-function AskThePaperProbe({ onValue }: { onValue: (on: boolean) => void }) {
-  const on = useFeatureFlag('ask-the-paper').value;
+/** Reads a flag (`ask-the-paper`, `one-voice`) in its own leaf: the flag
+ *  hook's loading settle is a state change, and in the schedule's body it
+ *  would re-render every line. Here only a changed value reaches the schedule. */
+function FlagProbe({
+  flag,
+  onValue,
+}: {
+  flag: 'ask-the-paper' | 'one-voice';
+  onValue: (on: boolean) => void;
+}) {
+  const on = useFeatureFlag(flag).value === true;
   useEffect(() => onValue(on), [on, onValue]);
   return null;
 }
@@ -1047,6 +1053,9 @@ function FFESectionBody({
   // D5 (US-19): the Record a change router's `On a piece` destination — the
   // `Choose the piece` prompt, and the line whose change order it opened.
   const [askThePaper, setAskThePaper] = useState(false);
+  // US-19 D1 (`one-voice`) — the head's act names and the region's printed
+  // name come from the one table.
+  const [oneVoice, setOneVoice] = useState(false);
   const [choosingPiece, setChoosingPiece] = useState(false);
   const [changeOrderLineId, setChangeOrderLineId] = useState<string | null>(null);
   const choosePieceRef = useRef<HTMLParagraphElement | null>(null);
@@ -1605,11 +1614,14 @@ function FFESectionBody({
       : null;
   // C20 — the head's identity line carries the trade word the studio word
   // leaves out, then the counts. Line one never elides (RegionHead).
+  // US-19 D1 (`one-voice`) — `FF&E schedule` retires as a printed name; the
+  // region is Pieces, which the head's name already prints.
+  const ffeTradeWord = oneVoice ? '' : 'the FF&E schedule, ';
   const ffeStatus = byMaker
-    ? `the FF&E schedule, by maker · ${total} lines`
+    ? `${ffeTradeWord}by maker · ${total} lines`
     : byNextAct
-      ? `the FF&E schedule, by next act · ${total} lines`
-      : `the FF&E schedule, by room · ${ffeCounts}`;
+      ? `${ffeTradeWord}by next act · ${total} lines`
+      : `${ffeTradeWord}by room · ${ffeCounts}`;
   const ffeSeamSummary =
     total === 0
       ? `${ffeGroupCount} ${ffeGroupWord} · no lines yet`
@@ -1668,7 +1680,8 @@ function FFESectionBody({
   };
   const ffePoEntry: RegionLedgerEntry = {
     key: 'chase-ffe-po',
-    label: 'Chase the PO',
+    // US-19 D1 — never "Chase …"; an unanswered PO's act has one name.
+    label: oneVoice ? needActLabel('po_unacknowledged') : 'Chase the PO',
     onClick: () => openOrdersLedger('ledger'),
   };
   const ffeBillEntry: RegionLedgerEntry | null =
@@ -2337,7 +2350,8 @@ function FFESectionBody({
         />
       )}
 
-      <AskThePaperProbe onValue={setAskThePaper} />
+      <FlagProbe flag="ask-the-paper" onValue={setAskThePaper} />
+      <FlagProbe flag="one-voice" onValue={setOneVoice} />
       {changeOrderLine?.item.purchase_order && (
         <ChangeOrderSheet
           open

@@ -12,7 +12,9 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { folderTab, type DeskFolder } from '@/lib/document/desk-derivation';
+import { deskActionLabel, folderTab, type DeskFolder } from '@/lib/document/desk-derivation';
+import { voiceFirstName } from '@/lib/document/document-guide';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { StatusChip } from './status-chip';
 import { openLedger } from './command-bar';
@@ -153,6 +155,10 @@ export function FolderCard({
   const phase = prettyPhase(row.current_phase);
   const stageLine = phase ? `${section} · ${phase}` : section;
   const tabLabel = `${folderTab(row)} · ${section}`;
+  // US-19 D1 (`one-voice`) — the footer prints the act's one name; null stays
+  // null, so the card's layout never moves (D8).
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const actionLabel = deskActionLabel(need, oneVoice, voiceFirstName(row.client_name));
   const shown = useRef(false);
 
   useEffect(() => {
@@ -215,7 +221,12 @@ export function FolderCard({
         data-action-region={need.actionLabel ? 'needs-your-hand' : undefined}
         className="absolute inset-0 block cursor-grab rounded-[0_8px_8px_8px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] active:cursor-grabbing"
       />
-      <FolderFace folder={folder} stageLine={stageLine} tabLabel={tabLabel} />
+      <FolderFace
+        folder={folder}
+        stageLine={stageLine}
+        tabLabel={tabLabel}
+        actionLabel={actionLabel}
+      />
     </div>
   );
 }
@@ -224,10 +235,12 @@ function FolderFace({
   folder,
   stageLine,
   tabLabel,
+  actionLabel,
 }: {
   folder: DeskFolder;
   stageLine: string;
   tabLabel: string;
+  actionLabel: string | null;
 }) {
   const { row, need } = folder;
   return (
@@ -342,11 +355,11 @@ function FolderFace({
                   });
                   openLedger(need.ledger!.name, need.ledger!.context);
                 }}
-                aria-label={`${need.actionLabel} — ${row.title}`}
+                aria-label={`${actionLabel} — ${row.title}`}
                 className="pointer-events-auto relative mt-4 flex min-h-11 w-full items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               >
                 <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
-                  {need.actionLabel}
+                  {actionLabel}
                 </span>
                 <span
                   aria-hidden
@@ -358,7 +371,7 @@ function FolderFace({
             ) : (
               <div className="mt-4 flex min-h-11 items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3">
                 <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
-                  {need.actionLabel}
+                  {actionLabel}
                 </span>
                 <span
                   aria-hidden

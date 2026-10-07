@@ -37,6 +37,11 @@ const mockUser: { value: { id: string } | null } = { value: { id: 'designer-1' }
 
 const mockCheckout = jest.fn();
 
+let mockOneVoice = false;
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (name: string) => ({ value: name === 'one-voice' && mockOneVoice, isLoading: false }),
+}));
+
 const mockUpload = jest.fn();
 jest.mock('@/hooks/use-folio', () => ({
   useUploadFolioFile: () => ({ mutateAsync: mockUpload, isPending: false }),
@@ -147,6 +152,7 @@ const renderBand = (props: Partial<Parameters<typeof PoMoneyOut>[0]> = {}) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockOneVoice = false;
   mockRecord.mockReset().mockResolvedValue({ id: 'vp-new' });
   mockVoid.mockReset().mockResolvedValue({ id: 'vp-1' });
   mockUpload.mockReset();
@@ -280,6 +286,32 @@ describe('PoMoneyOut · record what we paid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Record the balance · $4,410' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('paidOn is in the future');
     expect(screen.getByTestId('record-payment-form')).toBeInTheDocument();
+  });
+});
+
+describe('PoMoneyOut · one-voice (US-19 D1, D3)', () => {
+  it('fills Record the payment, the amount in its label, its consequence sentence above it', async () => {
+    mockOneVoice = true;
+    setup();
+    renderBand();
+    fireEvent.click(screen.getByRole('button', { name: 'Record the payment · Balance' }));
+    const act = screen.getByRole('button', { name: 'Record the payment · $4,410' });
+    expect(act).toHaveClass('da-terminal');
+    const consequence = screen.getByText(/^This records the balance, \$4,410, as paid on /);
+    expect(consequence).toHaveTextContent('A record is never edited; it can only be voided, with a reason.');
+    expect(consequence.compareDocumentPosition(act) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(mockRecord).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps today’s secondary Record the balance, and no sentence, with the flag off', () => {
+    setup();
+    renderBand();
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment · Balance' }));
+    const act = screen.getByRole('button', { name: 'Record the balance · $4,410' });
+    expect(act).not.toHaveClass('da-terminal');
+    expect(screen.queryByText(/^This records the balance/)).not.toBeInTheDocument();
   });
 });
 

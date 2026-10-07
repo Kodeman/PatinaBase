@@ -39,6 +39,7 @@ import { useFinalizeLeader } from '@/hooks/use-finalize-leader';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { nudgeFailureNote } from '@/lib/delivery-ui';
 import { useDraftingState } from '@/hooks/use-drafting-state';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { displayDraftingState } from '@/lib/document/drafting-progress';
 import {
   DocumentAction,
@@ -252,6 +253,11 @@ function LegacyProposalInstruments({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  // US-19 D1 (one-voice): the Contract Room door has one name, `Write the
+  // proposal` (ownAct direction). It replaces `Drafting the proposal`, the
+  // inline `open the Contract Room`, and `Continue drafting`, which is deleted.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const doorLabel = oneVoice ? 'Write the proposal' : 'Continue drafting';
 
   // F6 (walk 2026-07): walking into the Room is a real transition, not an
   // instant swap — acknowledge the act and make it idempotent.
@@ -303,7 +309,7 @@ function LegacyProposalInstruments({
           actionKey: 'continue-drafting',
           surfaceKey: 'open-document',
           regionKey: 'proposal-draft-actions',
-          label: 'Continue drafting',
+          label: doorLabel,
           target: {
             kind: 'press',
             onPress: () => {
@@ -361,16 +367,23 @@ function LegacyProposalInstruments({
           <StrataMark
             size="lg"
             fill={fill}
-            label={`Drafting the proposal — ${pct}% written`}
+            label={
+              oneVoice
+                ? `The proposal — ${pct}% written`
+                : `Drafting the proposal — ${pct}% written`
+            }
           />
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-              Drafting the proposal
-            </p>
+            {!oneVoice && (
+              <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                Drafting the proposal
+              </p>
+            )}
             <p className="mt-0.5 text-[14px] leading-snug text-[var(--color-charcoal)]">
               {pct === 0 ? (
                 <>
-                  <b>Not started yet</b> — open the Contract Room to write it
+                  <b>Not started yet</b>
+                  {!oneVoice && <> — open the Contract Room to write it</>}
                 </>
               ) : fullyDrafted ? (
                 <>
@@ -394,7 +407,7 @@ function LegacyProposalInstruments({
               enterDrafting();
             }}
           >
-            Continue drafting
+            {doorLabel}
           </DocumentAction>
         </div>
 

@@ -51,6 +51,7 @@ import {
   useSendFurnishingsAuthorization,
   useWorkingBudget,
 } from '@/hooks/use-commercial-documents';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
@@ -153,6 +154,9 @@ export function ReviewReleaseSheet({
   const send = useSendFurnishingsAuthorization(projectId);
   const publishCheckpoint = usePublishBudgetCheckpoint(projectId);
   const overrideCheckpoint = useOverrideBudgetCheckpoint(projectId);
+  // US-19 D3 (one-voice, R162): a paper sent for signature is the filled tier,
+  // beneath the consequence sentence the sheet already states (R141).
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   const agreementPercent = furnishingsDepositPercent(authority.data);
   const [chosenPercent, setChosenPercent] = useState<number | null>(null);
@@ -631,7 +635,7 @@ export function ReviewReleaseSheet({
         </DocumentAction>
         <DocumentAction
           actionKey="send-authorization-for-signature"
-          variant="primary"
+          variant={oneVoice ? 'terminal' : 'primary'}
           disabled={busy || blocked || lineCount === 0}
           loading={send.isPending}
           loadingLabel="Sending…"

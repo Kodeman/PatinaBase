@@ -23,6 +23,7 @@ import {
   NOT_OVERDUE,
   type OverdueCondition,
 } from './overdue-condition';
+import { needActLabel } from './act-names';
 import {
   DESK_SCHEDULE_UNCONFIGURED,
   isCeremonySourceEvent,
@@ -187,6 +188,22 @@ export const NEED_ACTION_LABELS: Record<NeedKind, string | null> = {
   exception_open: 'Choose a path',
   return_by: 'Return it or keep it',
 };
+
+/**
+ * US-19 D1 (`one-voice`) — the act a folio footer prints. On, a printed act
+ * takes its one name from `act-names.ts`, the table the band, ⌘K and the paper
+ * read; a need whose card owns a TriageBar (`null`) still prints none, so the
+ * Desk adopts the string and nothing else (D8). Off, today's copy. The flag is
+ * the `'use client'` caller's to read; this module has no hooks.
+ */
+export function deskActionLabel(
+  need: NeedLine,
+  oneVoice: boolean,
+  clientFirstName: string | null = null,
+): string | null {
+  if (!oneVoice || need.actionLabel === null) return need.actionLabel;
+  return needActLabel(need.kind, clientFirstName);
+}
 
 /** R28 conflict inputs (built client-side from delivery_events by
  *  lib/document/desk-conflicts.ts — the Wave 2.1 precedent). Collision tier

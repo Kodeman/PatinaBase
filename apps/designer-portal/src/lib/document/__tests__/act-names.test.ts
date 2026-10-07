@@ -76,6 +76,13 @@ describe('stageEyebrow (D1, Q5)', () => {
       detail: 'Closed',
     });
   });
+
+  it('prints Archived, never the stage alone, when the project is archived (FR1 R9)', () => {
+    expect(stageEyebrow('project', 'archived', 'Chen Residence')).toEqual({
+      stage: 'Project',
+      detail: 'Archived',
+    });
+  });
 });
 
 describe('ownAct (D1 own-act table)', () => {
@@ -147,6 +154,23 @@ describe('needActLabel (D1 rule of names)', () => {
     expect(needActLabel('payment_due')).toBe('Record the payment');
     expect(needActLabel('new_lead')).toBe('Respond to the inquiry');
   });
+
+  it('fills {first name}, falling back to "the client", and never prints the braces', () => {
+    expect(needActLabel('overdue_decision', 'Mei')).toBe('Nudge Mei');
+    expect(needActLabel('overdue_decision')).toBe('Nudge the client');
+    expect(needActLabel('reconnect_due', '  ')).toBe('Message the client');
+    for (const kind of Object.keys(NEED_ACT_LABELS) as (keyof typeof NEED_ACT_LABELS)[]) {
+      expect(needActLabel(kind)).not.toMatch(/[{}]/);
+    }
+  });
+
+  it('names the FR1 acts (R4, R7) and retires the Review and Reach out synonyms', () => {
+    expect(needActLabel('po_unsent')).toBe('Send the purchase order');
+    expect(needActLabel('lines_flagged')).toBe('Open the flagged lines');
+    expect(needActLabel('schedule_proposal')).toBe('Open the proposed date');
+    expect(needActLabel('pulse_due')).toBe('Send the pulse');
+    expect(Object.values(NEED_ACT_LABELS).filter((l) => /^(Review|Reach out)/.test(l))).toEqual([]);
+  });
 });
 
 describe('every act string', () => {
@@ -204,9 +228,22 @@ describe('every act string', () => {
       'Release for authorization',
       'Send the proposal',
       'Send the invoice',
+      // FR1 R4 and R7 add these two to the filled tier.
+      'Send the purchase order',
+      'Pay again',
     ]) {
       expect(ACT_TIER[label]).toBe('filled');
     }
+    expect(Object.keys(ACT_TIER).filter((label) => ACT_TIER[label] === 'filled').sort()).toEqual(
+      [
+        'Pay again',
+        'Record the payment',
+        'Release for authorization',
+        'Send the invoice',
+        'Send the proposal',
+        'Send the purchase order',
+      ],
+    );
     for (const label of [
       'Record a change',
       'Ask the maker for a date',

@@ -150,6 +150,7 @@ import {
   clientShortName,
   deriveDocumentGuide,
   needGuideAction,
+  voiceFirstName,
   type DocumentGuideAction,
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
@@ -952,6 +953,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // closed: with the flag off this page prints exactly the composition it has
   // always printed, and every fixed part of the paper is identical either way.
   const worktableOn = useFeatureFlag('worktable').value;
+  // US-19 slice 2 (`one-voice`) — read once, above the guide: the guide, the
+  // need acts and the band's own act all name an act from the one table.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   // L3 (00559) — the checklist's sixth row fires here, not on the Desk: the
   // moment it marks is a non-owner member opening a real Document. Reads the
@@ -1773,6 +1777,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         closureReady,
         ticketRows,
         alreadySeeded: Boolean(discoveryQuery.data?.row?.seeded_proposal_id),
+        oneVoice,
       })
     : null;
   // R5 — one leader. The band's rest act on a ready discovery RUNS the seed
@@ -1858,7 +1863,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     const needs = rankedOperationalNeeds;
     if (!needs) return [];
     return needs.map((need, index) => {
-      const action = needGuideAction(need, row.active_section, row.project_id ?? null);
+      const action = needGuideAction(
+        need,
+        row.active_section,
+        row.project_id ?? null,
+        null,
+        oneVoice ? { oneVoice, clientFirstName: voiceFirstName(row.client_name) } : null,
+      );
       return {
         key: `${need.kind}-${index}`,
         kind: need.kind,
@@ -1873,7 +1884,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         owner: need.owner,
       };
     });
-  }, [row, rankedOperationalNeeds, activateDestination]);
+  }, [row, rankedOperationalNeeds, activateDestination, oneVoice]);
 
   // NF4-01 — the ranked need's act, elected from the rows that already carry
   // each need's kind beside the destination the guide offers, so the approvals
@@ -2402,7 +2413,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // whose deciding fact is not read here (Brief's open inquiry, Discovery's
   // four essentials) or not yet answered leaves `ownAct` undefined, and the
   // guide line stands in for it as before.
-  const oneVoice = useFeatureFlag('one-voice').value === true;
   const ownActProjectId =
     oneVoice && row?.engagement_kind === 'project' ? (row.project_id ?? '') : '';
   const ownActFfe = useProjectFFEItems(ownActProjectId, undefined, {
