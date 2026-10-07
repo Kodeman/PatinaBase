@@ -618,6 +618,102 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
     expect(door).toHaveClass('text-[var(--color-terracotta-ink)]');
   });
 
+  // ── D10 — setup is clay, in the sheet's SETUP group, never line 2 ────────
+  describe('setup (D10)', () => {
+    const NAME_THE_PHASES = need(
+      'schedule-0',
+      'schedule_unconfigured',
+      'Name the phases so the schedule can be built',
+      'Name the phases',
+    );
+    const GUIDE = { text: 'Place the orders for the approved pieces.', act: null };
+
+    it('never wins line 2 while an exception stands, and is never terracotta in the sheet', () => {
+      render(
+        <LensBand
+          model={model({
+            needs: [NAME_THE_PHASES, ...NEEDS],
+            setup: [{ kind: 'no_client_linked', onAct: jest.fn() }],
+          })}
+          docId="doc-1"
+        />,
+      );
+      expect(sentence()).not.toHaveTextContent(NAME_THE_PHASES.text);
+      fireEvent.click(screen.getByRole('button', { name: '+5 MORE' }));
+
+      const heading = document.querySelector('[data-standing-setup-heading]');
+      expect(heading).toHaveTextContent('SETUP');
+      expect(heading).toHaveClass('text-[var(--color-clay-ink)]');
+      const rows = Array.from(
+        document.querySelectorAll('[data-standing-setup-row]'),
+      );
+      expect(rows.map((row) => row.textContent)).toEqual([
+        expect.stringContaining('Name the phases'),
+        expect.stringContaining('No client linked'),
+      ]);
+      for (const row of rows) {
+        expect(row.innerHTML).not.toMatch(/terracotta/);
+      }
+      // The setup rows are not standing-exception rows.
+      expect(document.querySelectorAll('[data-standing-row]')).toHaveLength(4);
+    });
+
+    it('on a quiet job (Cedar Lane) prints the guide line in charcoal and a clay door', () => {
+      render(
+        <LensBand
+          model={model({ needs: [NAME_THE_PHASES], guide: GUIDE })}
+          docId="doc-1"
+        />,
+      );
+      expect(line('2')).toHaveAttribute('data-lens-line2-kind', 'guide');
+      expect(sentence()).toHaveTextContent(GUIDE.text);
+      expect(line('2').className).not.toMatch(/terracotta/);
+      const door = screen.getByRole('button', { name: '+1 MORE' });
+      expect(door).toHaveClass('text-[var(--color-clay-ink)]');
+      expect(door.className).not.toMatch(/terracotta/);
+
+      fireEvent.click(door);
+      expect(
+        document.querySelector('[data-standing-setup-row]'),
+      ).toHaveTextContent('Name the phases');
+    });
+
+    it('presses `Link a client` from the SETUP row', () => {
+      const onAct = jest.fn();
+      render(
+        <LensBand
+          model={model({
+            guide: GUIDE,
+            setup: [{ kind: 'no_client_linked', onAct }],
+          })}
+          docId="doc-1"
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: '+1 MORE' }));
+      expect(screen.getAllByText('No client linked')).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Link a client' }));
+      expect(onAct).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['completed', 'on_hold'])(
+      'prints no `No client linked` row on a %s job',
+      (projectStatus) => {
+        render(
+          <LensBand
+            model={model({
+              guide: GUIDE,
+              setup: [{ kind: 'no_client_linked', onAct: jest.fn() }],
+              projectStatus,
+            })}
+            docId="doc-1"
+          />,
+        );
+        expect(screen.queryByRole('button', { name: /MORE$/ })).toBeNull();
+        expect(screen.queryByText('No client linked')).toBeNull();
+      },
+    );
+  });
+
   it('falls back to the band itself when neither door nor act is left', async () => {
     const actless: RedLetterRow[] = [
       { ...NEEDS[0], actionLabel: null },

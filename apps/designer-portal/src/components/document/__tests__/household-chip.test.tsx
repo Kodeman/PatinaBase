@@ -22,4 +22,21 @@ describe('HouseholdChip', () => {
     expect(screen.getByText(/for Harper Vale/i)).toBeInTheDocument();
     expect(screen.queryByText(/No client linked/i)).not.toBeInTheDocument();
   });
+
+  it('D10 — prints nothing at the letterhead when no client is linked', () => {
+    const { container } = render(
+      <HouseholdChip
+        engagementKind="project"
+        projectId="project-1"
+        proposalId={null}
+        clientProfileId={null}
+        designerClientId={null}
+        clientName=""
+      />,
+    );
+
+    expect(screen.queryByText(/No client linked/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/attach one/i)).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+  });
 });

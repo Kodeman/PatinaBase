@@ -17,6 +17,7 @@ import { AlertCircle } from 'lucide-react';
 import type { RefObject } from 'react';
 import type {
   LensInputItem,
+  LensSetupItem,
   LensStandingItem,
 } from '@/lib/document/lens-band-derivation';
 import { DocumentAction, DocumentActionGroup } from './document-action';
@@ -31,12 +32,15 @@ const EYEBROW = `${EYEBROW_BASE} text-[var(--color-terracotta-ink)]`;
  *  still to be done; terracotta is reserved for what has gone wrong. */
 const INPUT_EYEBROW = `${EYEBROW_BASE} text-[var(--color-clay-ink)]`;
 const SENTENCE = 'mt-0.5 font-heading text-[14px] text-[var(--color-charcoal)]';
+/** D10 — a setup row is work not yet begun, so it reads in clay ink too. */
+const SETUP_SENTENCE = 'min-w-0 font-heading text-[14px] text-[var(--color-clay-ink)]';
 
 export function StandingSheet({
   open,
   onClose,
   items,
   inputs = [],
+  setup = [],
   triggerRef,
 }: {
   open: boolean;
@@ -44,6 +48,9 @@ export function StandingSheet({
   items: readonly LensStandingItem[];
   /** W3-R2 — the stage's open inputs, their own section under the exceptions. */
   inputs?: readonly LensInputItem[];
+  /** D10 — the `SETUP` group, at the sheet's foot, in clay ink at the plain
+   *  tier: never terracotta. */
+  setup?: readonly LensSetupItem[];
   /** Where focus goes when the sheet is put back and the door it was opened
    *  from is gone. The band hands over a CHAIN resolved at close time (C-12):
    *  the `+N MORE` button, else the act line 2 is printing, else the band. */
@@ -53,7 +60,7 @@ export function StandingSheet({
     <DocSheet
       open={open}
       onClose={onClose}
-      title={`Standing · ${items.length + inputs.length}`}
+      title={`Standing · ${items.length + inputs.length + setup.length}`}
       icon={AlertCircle}
       kind="standing"
       fallbackFocusRef={triggerRef}
@@ -122,6 +129,38 @@ export function StandingSheet({
                   {item.act && (
                     <DocumentAction
                       actionKey={`standing-input-${item.key}`}
+                      variant="secondary"
+                      onClick={item.act.onAct}
+                    >
+                      {item.act.label}
+                    </DocumentAction>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {setup.length > 0 && (
+          <>
+            {/* D10 — setup is something the job has not been given yet, not
+                something gone wrong: clay ink, the plain tier, at the foot. */}
+            <p
+              data-standing-setup-heading
+              className={`${
+                items.length + inputs.length > 0
+                  ? 'mt-4 border-t border-[var(--doc-ink-border)] pt-3'
+                  : ''
+              } ${INPUT_EYEBROW}`}
+            >
+              SETUP
+            </p>
+            <ul className="w-full">
+              {setup.map((item) => (
+                <li key={item.key} data-standing-setup-row className={ROW}>
+                  <p className={SETUP_SENTENCE}>{item.sentence}</p>
+                  {item.act && (
+                    <DocumentAction
+                      actionKey={`standing-setup-${item.key}`}
                       variant="secondary"
                       onClick={item.act.onAct}
                     >

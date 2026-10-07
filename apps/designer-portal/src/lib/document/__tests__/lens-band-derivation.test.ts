@@ -1085,6 +1085,113 @@ describe('deriveLensBand \u00b7 withheldHasException', () => {
   });
 });
 
+// ── D10 / D2 class 3 — setup stands in the sheet, never on line 2 ─────────
+describe('deriveLensBand · setup (D10)', () => {
+  const NAME_THE_PHASES = need(
+    'schedule-0',
+    'schedule_unconfigured',
+    'Name the phases so the schedule can be built',
+    'Name the phases',
+  );
+  const GUIDE = { text: 'Place the orders for the approved pieces.', act: null };
+  const NO_CLIENT = { kind: 'no_client_linked' as const, onAct: jest.fn() };
+
+  it('excludes setup from the winner while any non-setup row stands', () => {
+    const model = deriveLensBand(
+      input({
+        needs: [NAME_THE_PHASES, ...VANDERSTEEN_NEEDS],
+        setup: [NO_CLIENT],
+        guide: GUIDE,
+        now: NOW,
+      }),
+    );
+    expect(model.line2.kind).toBe('standing');
+    expect(model.line2.long.sentence).not.toBe(NAME_THE_PHASES.text);
+    expect(model.standing.map((item) => item.needKind)).not.toContain(
+      'schedule_unconfigured',
+    );
+    expect(model.setup.map((row) => row.setup)).toEqual([
+      'schedule_unconfigured',
+      'no_client_linked',
+    ]);
+  });
+
+  it('on a quiet job (Cedar Lane), line 2 is the stage’s own guide line and setup stays behind the door', () => {
+    const model = deriveLensBand(
+      input({ needs: [NAME_THE_PHASES], guide: GUIDE, now: NOW }),
+    );
+    expect(model.line2.kind).toBe('guide');
+    expect(model.line2.long.sentence).toBe(GUIDE.text);
+    expect(model.standing).toEqual([]);
+    expect(model.setup).toEqual([
+      expect.objectContaining({
+        setup: 'schedule_unconfigured',
+        sentence: NAME_THE_PHASES.text,
+        act: expect.objectContaining({ label: 'Name the phases' }),
+      }),
+    ]);
+    expect(model.line2.standingCount).toBe(1);
+    expect(model.line2.withheld).toBe(1);
+    // The door over setup alone is clay, never terracotta.
+    expect(model.line2.withheldHasException).toBe(false);
+  });
+
+  it('never prints setup on line 2, even with no guide', () => {
+    const model = deriveLensBand(input({ setup: [NO_CLIENT] }));
+    expect(model.line2.kind).toBe('none');
+    expect(model.line2.act).toBeNull();
+    expect(model.line2.withheld).toBe(1);
+  });
+
+  it('prints `No client linked` once, as a SETUP row whose act is `Link a client`', () => {
+    const onAct = jest.fn();
+    const model = deriveLensBand(
+      input({ setup: [{ kind: 'no_client_linked', onAct }], guide: GUIDE }),
+    );
+    expect(model.setup).toHaveLength(1);
+    const [row] = model.setup;
+    expect(row.sentence).toBe('No client linked');
+    expect(row.act?.label).toBe('Link a client');
+    row.act?.onAct();
+    expect(onAct).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the target and budget rows by D3’s plain acts', () => {
+    const model = deriveLensBand(
+      input({
+        setup: [
+          { kind: 'target_date_unset', onAct: jest.fn() },
+          { kind: 'budget_band_unset', onAct: jest.fn() },
+        ],
+      }),
+    );
+    expect(model.setup.map((row) => row.act?.label)).toEqual([
+      'Set a target',
+      'Set a budget band',
+    ]);
+  });
+
+  it.each(['completed', 'on_hold'])(
+    'suppresses `No client linked` on a %s job',
+    (projectStatus) => {
+      const model = deriveLensBand(
+        input({
+          setup: [NO_CLIENT, { kind: 'target_date_unset', onAct: jest.fn() }],
+          projectStatus,
+        }),
+      );
+      expect(model.setup.map((row) => row.setup)).toEqual(['target_date_unset']);
+    },
+  );
+
+  it('keeps `No client linked` on a live job', () => {
+    const model = deriveLensBand(
+      input({ setup: [NO_CLIENT], projectStatus: 'active' }),
+    );
+    expect(model.setup.map((row) => row.setup)).toEqual(['no_client_linked']);
+  });
+});
+
 describe('deriveLensBand · the announcement (OD-7 / DL-03)', () => {
   it("composes the stop's name over the paper's own count line, sentence case", () => {
     const model = deriveLensBand(

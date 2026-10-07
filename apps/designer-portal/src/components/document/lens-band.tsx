@@ -192,6 +192,9 @@ export function LensBand({
     setAnnouncement(stopLine);
   }, [stopKey, stopLine]);
 
+  // D10 — a `standing` line is a class 1–2 row: setup never reaches line 2
+  // (the derivation keeps it in the sheet's SETUP group), so terracotta here
+  // and on the door never paints a setup row.
   const standing = printed.kind === 'standing';
   const withheld = printed.withheld;
   const moreId = `lens-band-more-${docId}`;
@@ -343,6 +346,7 @@ export function LensBand({
         onClose={() => setSheetOpen(false)}
         items={model.standing}
         inputs={model.inputs}
+        setup={model.setup}
         triggerRef={fallbackFocusRef}
       />
     </>

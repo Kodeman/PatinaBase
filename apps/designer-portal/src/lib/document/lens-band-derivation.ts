@@ -21,6 +21,7 @@ import {
   LENS_LINE2_PX_PER_CHAR,
   LENS_MONO_PX_PER_CHAR,
 } from './lens-constants';
+import { classOfStandingRow, type SetupRowKind } from './need-class';
 import { needTieBreakRank } from './need-tie-break';
 import type {
   TicketExceptionRank,
@@ -154,6 +155,37 @@ export interface LensInputItem {
   act: LensAct | null;
 }
 
+/**
+ * D10 — a row under the sheet's `SETUP` eyebrow (D2 class 3): something the
+ * job has not been given yet, never something gone wrong. It is never the
+ * band's left slot and never painted terracotta; it stands behind the door.
+ */
+export interface LensSetupItem {
+  key: string;
+  /** `schedule_unconfigured` arrives as a desk need; the rest have no kind. */
+  setup: SetupRowKind | 'schedule_unconfigured';
+  sentence: string;
+  act: LensAct | null;
+}
+
+/** A setup fact the caller holds, with the press its act makes. The words are
+ *  the derivation's, so every surface prints the row the same way. */
+export interface LensSetupInput {
+  kind: SetupRowKind;
+  onAct: () => void;
+}
+
+/** D10 — the setup rows' own words: the sentence states the gap, the act is
+ *  D3's plain act for it. */
+const SETUP_WORDS: Record<SetupRowKind, { sentence: string; act: string }> = {
+  no_client_linked: { sentence: 'No client linked', act: 'Link a client' },
+  target_date_unset: { sentence: 'No target date set', act: 'Set a target' },
+  budget_band_unset: { sentence: 'No budget band set', act: 'Set a budget band' },
+};
+
+/** D10 — a job that is finished or held asks for no client. */
+const NO_CLIENT_SUPPRESSED = new Set(['completed', 'on_hold']);
+
 /** The guide's line, as `document-guide.tsx` hands it over (C-6). */
 export interface LensGuideLine {
   text: string;
@@ -207,7 +239,8 @@ export interface LensBandLine2 {
   /** D-B24's 390 form. Null only when neither the standing item nor the guide
    *  supplied one. */
   short: LensLine2Form | null;
-  /** Every standing exception AND every open input — the sheet's row count. */
+  /** Every standing exception, every open input AND every setup row — the
+   *  sheet's row count. */
   standingCount: number;
   /**
    * N-02 — what the `+N MORE` door prints. NOT `standingCount − 1`: line 2 only
@@ -225,7 +258,8 @@ export interface LensBandLine2 {
   /**
    * W3-F7 — whether anything behind the door is a standing exception. The door
    * is painted in the register of what it withholds: terracotta for an
-   * exception, clay where every withheld row is an open input (D1).
+   * exception, clay where every withheld row is an open input (D1) or a setup
+   * row (D10).
    */
   withheldHasException: boolean;
 }
@@ -233,10 +267,13 @@ export interface LensBandLine2 {
 export interface LensBandModel {
   line1: LensBandLine1;
   line2: LensBandLine2;
-  /** Every standing exception, ranked — the standing sheet's list (OD-6). */
+  /** Every standing exception, ranked — the standing sheet's list (OD-6).
+   *  Classes 1–2 only: setup (class 3) stands in `setup`. */
   standing: readonly LensStandingItem[];
   /** The open inputs — the sheet's `INPUT NEEDED · N` section (W3-R2). */
   inputs: readonly LensInputItem[];
+  /** D10 — the sheet's `SETUP` group, at its foot. Never line 2. */
+  setup: readonly LensSetupItem[];
   /** `Now at Pieces · 36 lines · 4 rooms · 1 damaged` (OD-7 / DL-03). */
   announcement: string | null;
 }
@@ -271,6 +308,12 @@ export interface LensBandInput {
   /** `AUG 19` — the day the proposal went out. */
   sentDate: string | null;
   readingStop?: LensReadingStop | null;
+  /** D10 — the setup facts the caller holds (no client linked, no target, no
+   *  budget band), each with its press. Unset values only. */
+  setup?: readonly LensSetupInput[];
+  /** D10 — `project_status`. `No client linked` is suppressed on a
+   *  `completed` or `on_hold` job. */
+  projectStatus?: string | null;
 }
 
 const STOP_WORDS = new Set(['A', 'AN', 'THE', 'OF', 'FOR', 'TO', 'WITH', 'ON']);
@@ -742,7 +785,41 @@ const sentencePx = (sentence: string) =>
 const monoPx = (label: string) => label.length * LENS_MONO_PX_PER_CHAR;
 
 export function deriveLensBand(input: LensBandInput): LensBandModel {
-  const standing = rankStanding(input.ticket, input.needs, input.now);
+  const ranked = rankStanding(input.ticket, input.needs, input.now);
+  // D2 / D10 — setup (class 3) never takes line 2: it stands in the sheet's
+  // `SETUP` group, so the winner is chosen from classes 1–2 alone and a quiet
+  // job falls through to the stage's own guide line.
+  const standing = ranked.filter((item) => classOfStandingRow(item) !== 3);
+  const setup: LensSetupItem[] = [
+    ...ranked
+      .filter((item) => classOfStandingRow(item) === 3)
+      .map(
+        (item): LensSetupItem => ({
+          key: item.key,
+          setup: 'schedule_unconfigured',
+          sentence: item.sentence,
+          act: item.act,
+        }),
+      ),
+    ...(input.setup ?? [])
+      .filter(
+        (row) =>
+          row.kind !== 'no_client_linked' ||
+          !NO_CLIENT_SUPPRESSED.has(input.projectStatus ?? ''),
+      )
+      .map(
+        (row): LensSetupItem => ({
+          key: `setup:${row.kind}`,
+          setup: row.kind,
+          sentence: SETUP_WORDS[row.kind].sentence,
+          act: {
+            key: `setup:${row.kind}`,
+            label: SETUP_WORDS[row.kind].act,
+            onAct: row.onAct,
+          },
+        }),
+      ),
+  ];
   const worst = standing[0] ?? null;
   const kind: LensBandLine2['kind'] = worst
     ? 'standing'
@@ -772,7 +849,7 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
 
   // W3-R2 — the door counts the open inputs too: at every offset they are one
   // press away, in the sheet's own section.
-  const standingCount = standing.length + inputs.length;
+  const standingCount = standing.length + inputs.length + setup.length;
   // N-02 — line 2 discounts a row only when it is naming one.
   const withheld = standingCount - (worst ? 1 : 0);
   // W3-F7 — every standing exception except the one line 2 is naming.
@@ -872,6 +949,7 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
     line2,
     standing,
     inputs,
+    setup,
     announcement: readingStop
       ? `Now at ${readingStop.label} · ${readingStop.countLine}`
       : null,

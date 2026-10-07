@@ -122,6 +122,47 @@ describe('StandingSheet (OD-6 / L-11)', () => {
     expect(screen.getByText('INPUT NEEDED · 1').className).toMatch(/border-t/);
   });
 
+  it('D10 — files setup under a clay SETUP eyebrow at the foot, counted, never terracotta', () => {
+    const onAct = jest.fn();
+    render(
+      <StandingSheet
+        open
+        onClose={jest.fn()}
+        items={FOUR}
+        inputs={[
+          {
+            key: '0:Working budget',
+            eyebrow: 'BUDGET',
+            sentence: 'Working budget · Client · blocks Direction',
+            act: null,
+          },
+        ]}
+        setup={[
+          {
+            key: 'setup:no_client_linked',
+            setup: 'no_client_linked',
+            sentence: 'No client linked',
+            act: { key: 'setup:no_client_linked', label: 'Link a client', onAct },
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Standing · 6');
+    const heading = screen.getByText('SETUP');
+    expect(heading).toHaveClass('text-[var(--color-clay-ink)]');
+    expect(heading.className).toMatch(/border-t/);
+    // At the foot: after the inputs' heading in document order.
+    const inputs = screen.getByText('INPUT NEEDED · 1');
+    expect(
+      inputs.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const row = document.querySelector('[data-standing-setup-row]') as HTMLElement;
+    expect(row).toHaveTextContent('No client linked');
+    expect(row.innerHTML).not.toMatch(/terracotta/);
+    fireEvent.click(within(row).getByRole('button', { name: 'Link a client' }));
+    expect(onAct).toHaveBeenCalledTimes(1);
+  });
+
   it('mounts nothing while closed', () => {
     const triggerRef = createRef<HTMLElement>();
     render(
