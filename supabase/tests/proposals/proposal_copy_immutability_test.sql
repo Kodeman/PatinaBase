@@ -544,11 +544,15 @@ INSERT INTO fingerprint_column_contract VALUES
    -- kind of thing — they say HOW this edition reached 'sent', which a copy
    -- has not done yet — and keeping them out is also what lets already-signed
    -- documents keep their evidence hash across the migration.
+   -- 00590_engagement_subject's `subject` is the Document head's letterhead
+   -- line, added alike to projects, leads and designer_clients. It is display
+   -- metadata, not authored commercial payload, and 00590 left the
+   -- fingerprint (last redefined in 00578) untouched, so it stays out.
    ARRAY['project_id','status','sent_at','viewed_at','accepted_at','declined_at',
          'decline_reason','updated_at','client_feedback','signed_at','signed_by_name',
          'signed_ip','last_nudged_at','nudge_count','proposal_send_dispatch_id',
          'document_kind','commercial_state','superseded_at','superseded_reason',
-         'replacement_proposal_id','issued_on_paper','paper_issued_by']),
+         'replacement_proposal_id','issued_on_paper','paper_issued_by','subject']),
   ('proposal_sections', 'section',
    ARRAY['id','proposal_id','type','title','body','metadata','sort_order'],
    ARRAY['created_at','updated_at']),

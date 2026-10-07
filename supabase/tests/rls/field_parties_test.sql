@@ -6,7 +6,8 @@
 --      still rejects a bogus kind.
 --   2. phone_e164 normalization trigger (10-digit → +1, 1+10 → +1, intl → +, junk
 --      → NULL) on INSERT and re-derivation on UPDATE.
---   3. sms_consent_status default + transitions; bogus status rejected.
+--   3. sms_consent_status default; the 00594 freeze; transitions through the
+--      freeze's door; bogus status rejected.
 --   4. project_tasks.owner + client_decisions.court CHECKs admit the field kinds.
 --   5. RLS: the owning designer SELECTs their party; an outsider designer cannot.
 --
@@ -118,6 +119,21 @@ BEGIN
   SELECT sms_consent_status INTO v_status FROM project_parties WHERE id = 'fa000000-0000-4000-8000-0000000000b1';
   ASSERT v_status = 'not_asked', 'FAIL 3a: default consent should be not_asked, got ' || v_status;
 
+  -- 00594_studio_channel_consent (R-AS) froze project_parties.sms_consent_*:
+  -- refuse_legacy_consent_write_trg raises consent_legacy_column_frozen on any
+  -- real change (00646's header, :10-13, relies on it). Consent now lives in
+  -- studio_channel_consent, so the freeze is asserted first, then 3b-3c go
+  -- through the trigger's own documented door (app.consent_legacy_write) to
+  -- keep pinning the column's transitions and CHECK.
+  v_raised := false;
+  BEGIN
+    UPDATE project_parties SET sms_consent_status = 'pending' WHERE id = 'fa000000-0000-4000-8000-0000000000b1';
+  EXCEPTION WHEN raise_exception THEN
+    v_raised := SQLERRM = 'consent_legacy_column_frozen';
+  END;
+  ASSERT v_raised, 'FAIL 3a2: a legacy consent write should raise consent_legacy_column_frozen (00594)';
+
+  PERFORM set_config('app.consent_legacy_write', 'on', true);
   UPDATE project_parties SET sms_consent_status = 'pending' WHERE id = 'fa000000-0000-4000-8000-0000000000b1';
   UPDATE project_parties SET sms_consent_status = 'granted', sms_consented_at = now()
    WHERE id = 'fa000000-0000-4000-8000-0000000000b1';
@@ -130,6 +146,7 @@ BEGIN
   EXCEPTION WHEN check_violation THEN v_raised := true;
   END;
   ASSERT v_raised, 'FAIL 3c: bogus consent status should violate the CHECK';
+  PERFORM set_config('app.consent_legacy_write', '', true);
 
   -- ── Case 4: owner / court CHECKs admit the field kinds ───────────────────
   INSERT INTO project_tasks (id, project_id, title, owner, owner_party_id)
