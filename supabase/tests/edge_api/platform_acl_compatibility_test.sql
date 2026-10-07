@@ -176,7 +176,10 @@ BEGIN
         'agent_reader',
         'agent_writer',
         'edge_catalog_reader',
-        'dashboard_user'
+        'dashboard_user',
+        -- 00490_scan_worker_roles.sql:361-362 grants these two; prod carries both.
+        'scan_worker',
+        'scan_reader'
       ]::text[])
       UNION
       SELECT owner.rolname
