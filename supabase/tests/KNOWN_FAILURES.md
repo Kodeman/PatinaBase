@@ -108,11 +108,8 @@ identified only down to the failing message, not chased further:
 - `supabase/tests/notifications/unconfirmed_analytics_test.sql` — `active service role must not read user-owned campaign analytics`.
 - `supabase/tests/procurement/state_chain_test.sql` — `authentication required to link a configured line to a purchase order`. Runs as the unrestricted session owner (no actor assumed) at that point; a trigger apparently now requires `auth.uid()` to be set where it previously didn't.
 - `supabase/tests/proposals/proposal_builder_atomicity_test.sql` — `proposal board room belongs to another proposal`.
-- `supabase/tests/proposals/proposal_policy_locking_integrity_test.sql` — `all thirteen installed-client SELECT-only policies must remain` (a policy-count assertion — the live count no longer matches 13).
 - `supabase/tests/proposals/proposal_signature_authority_test.sql` — `owner_insert_requires_owner`.
-- `supabase/tests/field/field_capture_note_routing_test.sql` — `FAIL 7f: field_captures should carry exactly five policies, got 9` (at `:547`). Added 2026-09-11 (hour-tracking W0 review, finding N1): `00584_studio_comember_rls_sweep.sql` added the four `field_captures_studio_{select,insert,update,delete}` policies beside the five the assertion was written against, so the count is 9. The assertion's own message asks for a deliberate ruling (FC-R8 per-studio) rather than a silent bump — so the expected count is left alone and the file is listed here instead. Unrelated to hour tracking: W0 adds no policy to any table.
 - `supabase/tests/commercial/direct_order_attribution_test.sql` — **CLOCK-DEPENDENT: fails only between 00:00 and 02:00 UTC**, at `:488`, `two roster designers on one day must file the order uncredited`. Added 2026-09-12 (hour-tracking W2 review round 10, finding W2-R10-05 — measured, not inferred). Mechanism: the tie fixture writes two `designer_clients` rows at `NOW() - INTERVAL '2 hours'` and `NOW() - INTERVAL '1 hour'` (`:120-122`) and the attribution rule groups them **by day**, so in the first two hours after UTC midnight the two timestamps fall on different dates, the tie dissolves, and the newer row credits a designer where the assert requires none (measured at 01:0x UTC: got `da000000-…-00d2`; the same file passes in the same minute under session TZ `America/Chicago`). **Not hour-tracking's file** (absent from every W2 branch diff) and listed here because the W2 gate runs this directory and two rounds of review reported the commercial baseline as "six documented" while it is seven in that window. The one-expression repair, if a later hand wants it: date both fixture rows off `(NOW() AT TIME ZONE 'UTC')::date`, or push them to `NOW() - INTERVAL '26 hours'` / `'25 hours'` — the same treatment `supabase/tests/billing/time_rate_resolution_test.sql` and `supabase/tests/rls/time_entry_studio_stamp_test.sql` took for W2-R9-04.
-- `supabase/tests/capture_enrichment/target_type_visibility_test.sql` — `FAIL c2`. Added 2026-09-14 (hour-tracking integration round 3, finding N-06). Same cause already documented for its sibling `field/field_capture_note_routing_test.sql` above: `00584_studio_comember_rls_sweep.sql` added the four `field_captures_studio_{select,insert,update,delete}` policies beside the ones these assertions were written against. `00584` is on `origin/main`; **no migration in `00595–00620` defines a policy on those tables**, and hour tracking does not touch the test file. Like its sibling, the count is left alone pending the FC-R8 per-studio ruling rather than silently bumped.
 - `supabase/tests/rls/design_requests_test.sql` — `FAIL 3b: expected no_scans, got <none>` (a case that should raise a specific error no longer does).
 - `supabase/tests/rls/studio_titles_test.sql` — `FAIL f: demoting the sole active owner should raise last_owner_protected` (same shape — an expected guard no longer fires). Cross-ref project memory: studio co-member RLS has a documented SECURITY DEFINER requirement that may be implicated.
 - `supabase/tests/spec_books/security_and_lifecycle_test.sql` — `only service_role may finalize rendered issues` (the test's own custom ASSERT message; the finalize-lifecycle guard it exercises no longer behaves as written).
@@ -141,6 +138,19 @@ the list entirely. 00510 closed its storage-policy root cause; its residual
 superuser bypass — its `create_board_share` calls now run under
 `SET LOCAL ROLE authenticated`, so the edition-mint guard the file exists to
 police actually runs. Green as of 2026-08-31.
+
+Three policy-drift files left the list on 2026-10-06 (SQ-456), each because a
+deliberate, shipped migration changed the policy set and the test was stale.
+`field/field_capture_note_routing_test.sql` (7f) and
+`capture_enrichment/target_type_visibility_test.sql` (c2) now pin the four
+`field_captures_studio_*` legs that `00584_studio_comember_rls_sweep` added
+(FC-R8 resolved as built: a studio co-member sees every capture, not only
+inbox ones). `proposals/proposal_policy_locking_integrity_test.sql` now pins
+eleven installed-client SELECT policies by name and asserts the two legacy and
+two project-client board reads stay absent: `00462_workflow_privacy_authority`
+§2 dropped them on purpose (working board rows are never raw client surfaces),
+and `00434_ffe_privacy_domain_foundation` had already dropped the two
+project-client ones.
 
 ## Fixed during this pass (for context, not failures)
 
