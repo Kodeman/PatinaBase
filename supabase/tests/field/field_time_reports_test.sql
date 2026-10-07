@@ -10,6 +10,17 @@
 BEGIN;
 SET LOCAL statement_timeout='60s';
 
+-- A shared local DB can hold project_time_entries rows that other suites
+-- committed (they are not this test's). Every "zero rows" and "exactly N"
+-- claim below reads new_time_entries: the rows this transaction wrote.
+-- security_invoker keeps RLS on for the assertions made as a studio member.
+CREATE TEMP TABLE time_entries_before ON COMMIT DROP AS
+  SELECT id FROM public.project_time_entries;
+CREATE TEMP VIEW new_time_entries WITH (security_invoker = true) AS
+  SELECT e.* FROM public.project_time_entries e
+   WHERE NOT EXISTS (SELECT 1 FROM time_entries_before b WHERE b.id = e.id);
+GRANT SELECT ON time_entries_before, new_time_entries TO PUBLIC;
+
 -- ─── fixtures ──────────────────────────────────────────────────────────────
 -- D = the project's designer AND an owner of the studio org (the only kind of
 --     actor 00601's classifier lets write another person's user_id).
@@ -255,7 +266,7 @@ BEGIN
   -- no timesheet row for anybody.
   ASSERT (SELECT profile_id IS NULL FROM project_parties WHERE id=v_row.party_id),
     'SQ20 the reporting trade seat is profile-less (00177:18)';
-  ASSERT NOT EXISTS(SELECT 1 FROM project_time_entries),
+  ASSERT NOT EXISTS(SELECT 1 FROM new_time_entries),
     'SQ20 a party reply writes ZERO project_time_entries rows';
   ASSERT NOT EXISTS(SELECT 1 FROM field_delivery_reports),
     'SQ20 hours are not a delivery report either';
@@ -334,7 +345,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000031',pg_temp.effect(v_task,'6'),'field'),
     '23514',NULL,'%trade report, not a client one%','SQ20 client hours');
 
-  ASSERT NOT EXISTS(SELECT 1 FROM project_time_entries),
+  ASSERT NOT EXISTS(SELECT 1 FROM new_time_entries),
     'SQ20 nothing in this section wrote a timesheet row';
   RAISE NOTICE 'PASS SQ20 S3 one proposal per claim, duplicate/ambiguous/out-of-range refused, zero time entries';
 END $$;
@@ -371,7 +382,7 @@ BEGIN
             AND (applied_effect->>'applied')::boolean
             AND matched_task_id=v_task FROM sms_messages WHERE id=m),
     'SQ20 the inbound row records what was applied';
-  ASSERT NOT EXISTS(SELECT 1 FROM project_time_entries),
+  ASSERT NOT EXISTS(SELECT 1 FROM new_time_entries),
     'SQ20 the text door still writes no timesheet row';
 
   -- Codeless, with exactly one open hours ask for the pair.
@@ -452,7 +463,7 @@ BEGIN
     UPDATE sms_prompts SET answered_at=clock_timestamp() WHERE id=c.id;
   END;
 
-  ASSERT NOT EXISTS(SELECT 1 FROM project_time_entries),
+  ASSERT NOT EXISTS(SELECT 1 FROM new_time_entries),
     'SQ20 no reply in this section wrote a timesheet row';
   RAISE NOTICE 'PASS SQ20 S7 door: numbers with and without a Ref reach the ledger, wrong Ref/range/word refused whole';
 END $$;
@@ -483,7 +494,7 @@ BEGIN
   -- Both replies came in at the same instant, late on the visit's evening.
   UPDATE field_time_reports SET reported_at = timestamptz '2026-11-03 01:30+00'
    WHERE id IN (r_book, r_rule);
-  SELECT count(*) INTO v_entries_before FROM project_time_entries;
+  SELECT count(*) INTO v_entries_before FROM new_time_entries;
   ASSERT v_entries_before=0,'SQ20 five proposals, no timesheet rows';
   -- Every claim made so far, here and in the sections above, is still open.
   SELECT count(*) INTO v_open_claims FROM field_time_reports WHERE status='proposed';
@@ -508,7 +519,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000004'),'23514','field_time_report_bad_attribution',
     '%not a member of this project%','SQ20 booking to a non-member of the project');
   PERFORM pg_temp.unassume();
-  ASSERT NOT EXISTS(SELECT 1 FROM project_time_entries)
+  ASSERT NOT EXISTS(SELECT 1 FROM new_time_entries)
      AND (SELECT status='proposed' AND version=1 FROM field_time_reports WHERE id=r_book),
     'SQ20 a refused attribution wrote nothing and settled nothing';
 
@@ -540,7 +551,7 @@ BEGIN
   ASSERT v_report.status='accepted' AND v_report.version=2
      AND v_report.attributed_user_id IS NULL AND v_report.attributed_time_entry_id IS NULL,
     'SQ20 an accepted report with nobody named carries no attribution';
-  ASSERT NOT EXISTS(SELECT 1 FROM project_time_entries),
+  ASSERT NOT EXISTS(SELECT 1 FROM new_time_entries),
     'SQ20 accept alone writes ZERO project_time_entries rows';
 
   -- A nothing-hours report can be accepted; it cannot be booked (00177:20
@@ -559,7 +570,7 @@ BEGIN
   PERFORM pg_temp.refuses(pg_temp.decide_sql(r_book,'rejected',1,
     '20000000-0000-4000-8000-000000000002'),'23514','field_time_report_bad_attribution',
     '%only an accepted report%','SQ20 booking while rejecting');
-  ASSERT NOT EXISTS(SELECT 1 FROM project_time_entries),'SQ20 still nothing booked';
+  ASSERT NOT EXISTS(SELECT 1 FROM new_time_entries),'SQ20 still nothing booked';
 
   -- THE ONE WRITE. A member profile, named by a designer who may write another
   -- person's hour (00601's classifier: the studio's owner or admin).
@@ -567,9 +578,9 @@ BEGIN
     '20000000-0000-4000-8000-000000000002')->>'attributed_time_entry_id') IS NOT NULL,
     'SQ20 booking to a teammate returns the entry it created';
   SELECT * INTO v_report FROM field_time_reports WHERE id=r_book;
-  ASSERT (SELECT count(*) FROM project_time_entries)=1,
+  ASSERT (SELECT count(*) FROM new_time_entries)=1,
     'SQ20 EXACTLY ONE project_time_entries row';
-  SELECT * INTO v_entry FROM project_time_entries;
+  SELECT * INTO v_entry FROM new_time_entries;
   ASSERT v_entry.user_id='20000000-0000-4000-8000-000000000002'
      AND v_entry.project_id='20000000-0000-4000-8000-000000000020'
      AND v_entry.task_id=v_report.task_id
@@ -632,7 +643,7 @@ BEGIN
   ASSERT (v_entry.started_at AT TIME ZONE 'UTC')::date = date '2026-11-03'
      AND (v_entry.started_at AT TIME ZONE 'UTC')::time = time '12:00',
     'SQ126 N1 an ask with no frozen day books the hour on the reply''s own UTC day';
-  ASSERT (SELECT count(*) FROM project_time_entries)=2,
+  ASSERT (SELECT count(*) FROM new_time_entries)=2,
     'SQ20 two bookings, two entries, and not one more';
   RAISE NOTICE 'PASS SQ20 S4 decide: forbidden/stale/decided/bad attribution refused, exactly one entry per booking, every decision audited';
 END $$;
