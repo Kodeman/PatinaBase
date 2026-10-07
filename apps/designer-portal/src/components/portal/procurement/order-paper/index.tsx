@@ -293,6 +293,7 @@ function PaperSheet({
     isPatinaMaker,
     purchaseOrder: existing,
     totalCents,
+    vendorName: vendor.name,
   });
 
   // ─── Header fields ──────────────────────────────────────────────────────
@@ -1061,6 +1062,11 @@ function PaperSheet({
                 <p data-order-paper-held-record className="doc-type-body text-[var(--color-charcoal)]">
                   {heldRecord}
                   {releasePaper.holdNote ? ` — “${releasePaper.holdNote}”` : ''}
+                </p>
+              )}
+              {releasePaper.reason && (
+                <p data-order-paper-release-reason className="doc-type-body text-[var(--color-charcoal)]">
+                  {releasePaper.reason}
                 </p>
               )}
               <p data-order-paper-consequence className="doc-type-body text-[var(--color-charcoal)]">

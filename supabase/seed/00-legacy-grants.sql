@@ -20670,6 +20670,66 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00719_release_gate_content_and_group.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._po_spec_lines(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00719_release_gate_content_and_group.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._po_spec_lines(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00719_release_gate_content_and_group.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._po_release_fingerprint(uuid, boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00719_release_gate_content_and_group.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._po_release_fingerprint(uuid, boolean) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00719_release_gate_content_and_group.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._release_gate_total(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00719_release_gate_content_and_group.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._release_gate_total(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00719_release_gate_content_and_group.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._po_release_cleared_po(uuid, text, timestamptz, uuid, integer, bigint, timestamptz, integer, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00719_release_gate_content_and_group.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._po_release_cleared_po(uuid, text, timestamptz, uuid, integer, bigint, timestamptz, integer, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00719_release_gate_content_and_group.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.po_release_state(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00719_release_gate_content_and_group.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.po_release_state(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00720_drafts_payments_receiver_notice.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._procurement_draft_send_on_record(uuid) FROM PUBLIC, anon, authenticated;

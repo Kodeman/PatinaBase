@@ -23098,6 +23098,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -23143,6 +23144,7 @@ export type Database = {
           project_id: string
           released_at?: string | null
           released_by?: string | null
+          released_fingerprint?: string | null
           released_total_cents?: number | null
           requested_ship_on?: string | null
           send_back_note?: string | null
@@ -23188,6 +23190,7 @@ export type Database = {
           project_id?: string
           released_at?: string | null
           released_by?: string | null
+          released_fingerprint?: string | null
           released_total_cents?: number | null
           requested_ship_on?: string | null
           send_back_note?: string | null
@@ -35686,6 +35689,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -35753,6 +35757,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -35820,6 +35825,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -36365,6 +36371,25 @@ export type Database = {
         }
         Returns: boolean
       }
+      _po_release_cleared_po: {
+        Args: {
+          p_group_total_cents: number
+          p_po_id: string
+          p_released_at: string
+          p_released_fingerprint: string
+          p_released_total_cents: number
+          p_sent_at: string
+          p_status: string
+          p_studio_id: string
+          p_total_cents: number
+        }
+        Returns: boolean
+      }
+      _po_release_fingerprint: {
+        Args: { p_blank_sidemark?: boolean; p_po_id: string }
+        Returns: string
+      }
+      _po_spec_lines: { Args: { p_po_id: string }; Returns: Json }
       _prepare_legacy_proposal_phase_insert: {
         Args: { p_proposal_id: string; p_requested_follows_phase_id: string }
         Returns: {
@@ -36555,6 +36580,7 @@ export type Database = {
         Args: { p_studio_id: string; p_total_cents: number }
         Returns: boolean
       }
+      _release_gate_total: { Args: { p_po_id: string }; Returns: number }
       _render_agreement_snapshot_html: {
         Args: { p_proposal_id: string }
         Returns: string
@@ -37321,6 +37347,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -37784,6 +37811,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -39152,6 +39180,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -40608,6 +40637,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -41043,6 +41073,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -41590,6 +41621,7 @@ export type Database = {
       place_product_in_project_v2: { Args: { p_request: Json }; Returns: Json }
       po_ack_state_for: { Args: { p_po_id: string }; Returns: string }
       po_is_sendable: { Args: { p_po_id: string }; Returns: boolean }
+      po_release_state: { Args: { p_po_id: string }; Returns: Json }
       po_status_to_ffe_stage: { Args: { p_po_status: string }; Returns: string }
       prepare_configuration_quote_request: {
         Args: {
@@ -42666,6 +42698,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -43607,6 +43640,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -44051,6 +44085,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -44105,6 +44140,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -44159,6 +44195,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -44213,6 +44250,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -44267,6 +44305,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null
@@ -44321,6 +44360,7 @@ export type Database = {
           project_id: string
           released_at: string | null
           released_by: string | null
+          released_fingerprint: string | null
           released_total_cents: number | null
           requested_ship_on: string | null
           send_back_note: string | null

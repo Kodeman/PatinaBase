@@ -46,7 +46,7 @@ jest.mock('@patina/supabase', () => ({
   useStudioReleaseGate: (studioId: string | null) => ({
     data: studioId === 'org-studio' ? mockGate.data : undefined,
   }),
-  usePurchaseOrderReleaseState: (poId: string | null) => ({
+  usePoReleaseState: (poId: string | null) => ({
     data: poId ? mockServerState.data : undefined,
   }),
   useIsStudioReleaser: () => ({ data: mockCanRelease.data }),
@@ -175,13 +175,13 @@ describe('releaseModeFor', () => {
 
   it("follows the server's answer for an existing PO over the studio's gate", () => {
     expect(
-      releaseModeFor({ ...base, serverState: { releaseRequired: true, sendable: true } as never }),
+      releaseModeFor({ ...base, serverState: { applies: true, cleared: true } as never }),
     ).toBe('none');
     expect(
       releaseModeFor({
         ...base,
         gate: null,
-        serverState: { releaseRequired: true, sendable: false } as never,
+        serverState: { applies: true, cleared: false } as never,
       }),
     ).toBe('hold');
   });
@@ -238,6 +238,55 @@ describe('a seat the gate applies to', () => {
     expect(screen.getByText('Leah or an admin releases it before it goes to Hewn.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Hold for release|Release to|Send to Hewn/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Send back/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("the server's reason on an existing paper (00719)", () => {
+  const DRAFT_PO: OrderPaperPurchaseOrder = {
+    ...HELD_PO,
+    id: 'po-7',
+    status: 'draft',
+    held_at: null,
+    held_by: null,
+    hold_note: null,
+  };
+  const state = (over: Record<string, unknown>) => ({
+    applies: true,
+    released: true,
+    cleared: false,
+    reason: null,
+    group_total_cents: 1_248_000,
+    threshold_cents: 1_000_000,
+    ...over,
+  });
+
+  it.each([
+    ['changed', 'Changed since release — needs release again'],
+    ['total_rose', 'The total rose after release — needs release again'],
+  ])('says a %s paper needs release again, and holds it', (reason, sentence) => {
+    mockServerState.data = state({ reason });
+    renderPaper({ purchaseOrder: DRAFT_PO });
+    expect(screen.getByText(sentence)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hold for release · $12,480' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Send to Hewn/ })).not.toBeInTheDocument();
+  });
+
+  it("names the group total and the studio's line when the job's other orders carry it over", () => {
+    mockServerState.data = state({ released: false, reason: 'group_over', group_total_cents: 1_848_000 });
+    renderPaper({ purchaseOrder: { ...DRAFT_PO, total_cents: 600_000 } });
+    expect(
+      screen.getByText(
+        "With your other open orders to Hewn on this job, this comes to $18,480 — over the studio's release line ($10,000).",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hold for release · $6,000' })).toBeInTheDocument();
+  });
+
+  it('says nothing while the release still covers the paper', () => {
+    mockServerState.data = state({ cleared: true });
+    renderPaper({ purchaseOrder: DRAFT_PO });
+    expect(screen.queryByText(/needs release again|release line/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send to Hewn · $12,480' })).toBeInTheDocument();
   });
 });
 
