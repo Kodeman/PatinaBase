@@ -164,6 +164,22 @@ describe('ChangeOrderAct — the sheet', () => {
     return screen.getByTestId('po-change-sheet');
   };
 
+  it('opens with nothing preselected and holds Record the change until a kind is chosen (F6-4)', () => {
+    renderAct();
+    const sheet = openSheet();
+
+    for (const label of ['Cancel', 'Credit', 'Claim', 'Change the maker', 'Remedy']) {
+      expect(within(sheet).getByRole('radio', { name: new RegExp(label) })).not.toBeChecked();
+    }
+    expect(within(sheet).queryByTestId('po-change-consequence')).not.toBeInTheDocument();
+
+    const held = within(sheet).getByTestId('po-change-held');
+    expect(held).toHaveTextContent('Choose what changed.');
+    const record = within(sheet).getByRole('button', { name: 'Record the change' });
+    expect(record).toHaveAttribute('aria-disabled', 'true');
+    expect(record).toHaveAttribute('aria-describedby', held.id);
+  });
+
   it('records a claim with the line, the kind and the reason', async () => {
     renderAct();
     const sheet = openSheet();

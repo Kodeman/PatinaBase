@@ -228,7 +228,7 @@ describe('Record a change — the router (D5)', () => {
     const piece = within(dialog).getByRole('radio', { name: /On a piece/ });
     const agreement = within(dialog).getByRole('radio', { name: /On the agreement/ });
     expect(piece).toHaveAccessibleDescription(
-      'Swap, add or remove a piece, or change its finish, size or maker.',
+      'Swap, add or remove a piece, or change its maker.',
     );
     expect(agreement).toHaveAccessibleDescription('The scope, the fee or the terms.');
   });

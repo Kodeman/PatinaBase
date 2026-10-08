@@ -161,20 +161,23 @@ export function ChangeOrderSheet({
   const qc = useQueryClient();
   const startChange = useStartPurchaseOrderChange({ errorSurface: 'inline' });
   const addMaker = useAddMaker();
-  const [kind, setKind] = useState<OfferedChangeKind>('cancellation');
+  // D9/F6-4: the sheet opens with nothing chosen.
+  const [kind, setKind] = useState<OfferedChangeKind | null>(null);
   const [reason, setReason] = useState('');
   const [maker, setMaker] = useState<{ id: string; name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<string | null>(null);
   const heldId = useId();
   const kindName = useId();
-  // P-2: the sheet opens on the checked kind.
+  // P-2: the sheet opens on the checked kind, or the first radio when none is.
   const checkedKindRef = useRef<HTMLInputElement | null>(null);
 
-  const gate = changeGate(kind, auth);
+  // F6-4: held with its own reason until a kind is chosen.
+  const gate: ChangeGate =
+    kind === null ? { held: true, reason: 'Choose what changed.' } : changeGate(kind, auth);
   const pending = startChange.isPending || addMaker.isPending;
   const missing =
-    reason.trim().length < MIN_REASON || (kind === 'vendor_change' && !maker);
+    kind === null || reason.trim().length < MIN_REASON || (kind === 'vendor_change' && !maker);
 
   const chooseMaker = (option: MakerOption | VendorMatch) => {
     setError(null);
@@ -199,7 +202,7 @@ export function ChangeOrderSheet({
   };
 
   const submit = async () => {
-    if (pending || missing || gate.held) return;
+    if (pending || missing || gate.held || kind === null) return;
     setError(null);
     try {
       const result = await startChange.mutateAsync({
@@ -232,10 +235,10 @@ export function ChangeOrderSheet({
         <fieldset>
           <legend className={LABEL_CLS}>What changed</legend>
           <div className="mt-1.5 space-y-1">
-            {CHANGE_KINDS.map((k) => (
+            {CHANGE_KINDS.map((k, i) => (
               <label key={k.kind} className="flex items-baseline gap-2 text-[12px]">
                 <input
-                  ref={kind === k.kind ? checkedKindRef : undefined}
+                  ref={(kind === null ? i === 0 : kind === k.kind) ? checkedKindRef : undefined}
                   type="radio"
                   name={kindName}
                   value={k.kind}
@@ -291,9 +294,11 @@ export function ChangeOrderSheet({
           />
         </label>
 
-        <p data-testid="po-change-consequence" className="text-[12px] text-[var(--color-charcoal)]">
-          {changeConsequence(kind, po, vendorName)}
-        </p>
+        {kind !== null && (
+          <p data-testid="po-change-consequence" className="text-[12px] text-[var(--color-charcoal)]">
+            {changeConsequence(kind, po, vendorName)}
+          </p>
+        )}
 
         {gate.held && (
           <p

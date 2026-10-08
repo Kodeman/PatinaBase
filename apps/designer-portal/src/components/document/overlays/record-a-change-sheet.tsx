@@ -64,7 +64,7 @@ const CHOICES = [
   {
     value: 'piece',
     label: 'On a piece',
-    helper: 'Swap, add or remove a piece, or change its finish, size or maker.',
+    helper: 'Swap, add or remove a piece, or change its maker.',
   },
   {
     value: 'agreement',
