@@ -87,7 +87,7 @@ test('the structured editor writes W/D/H/unit and preserves unknown captured key
   // z-40) overlays the bottom of the editor aside, and a plain click — even
   // `{ force: true }`, which only skips the actionability CHECK and still clicks
   // at coordinates — lands on the drawer instead, silently doing nothing.
-  await page.getByRole('button', { name: 'Save selection' }).dispatchEvent('click');
+  await page.getByRole('button', { name: 'Save line' }).dispatchEvent('click');
 
   // Poll the row FIRST — it is the authoritative evidence, and the mutation
   // lands well after any network-idle signal on a cold dev server.
@@ -107,7 +107,7 @@ test('the structured editor writes W/D/H/unit and preserves unknown captured key
     });
 
   // ...and the re-rendered control, now fed by the refetched row, still reports
-  // the unknown key. (The transient "Selection saved." banner is NOT asserted:
+  // the unknown key. (The transient "Line saved." banner is NOT asserted:
   // the post-save refetch clears that state, so it is not durably observable.)
   await expect(page.getByText('+1 captured field preserved')).toBeVisible();
   await expect(page.getByLabel('width', { exact: true })).toHaveValue('72');

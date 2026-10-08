@@ -87,7 +87,7 @@ test.describe("spec-book workspace", () => {
 
     const savedFinish = `E2E saved finish ${Date.now()}`;
     await page.getByLabel("Finish", { exact: true }).fill(savedFinish);
-    await page.getByRole("button", { name: "Save selection" }).press("Enter");
+    await page.getByRole("button", { name: "Save line" }).press("Enter");
 
     await expect
       .poll(() =>
@@ -99,7 +99,7 @@ test.describe("spec-book workspace", () => {
       )
       .toEqual([savedFinish, String(originalRowVersion + 1)]);
     await expect(
-      page.getByText(`Project selection · v${originalRowVersion + 1}`),
+      page.getByText(`Project line · v${originalRowVersion + 1}`),
     ).toBeVisible();
 
     const concurrentFinish = `Concurrent finish ${Date.now()}`;
@@ -112,7 +112,7 @@ test.describe("spec-book workspace", () => {
     await page
       .getByLabel("Finish", { exact: true })
       .fill(`Stale browser finish ${Date.now()}`);
-    await page.getByRole("button", { name: "Save selection" }).press("Enter");
+    await page.getByRole("button", { name: "Save line" }).press("Enter");
     // Scoped to `main`: the conflict also raises a global toast (a second,
     // assertive `role="status"` element with the same text) — this assertion
     // is about the workbench's own inline feedback, not the toast.
