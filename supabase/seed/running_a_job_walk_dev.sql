@@ -32,7 +32,10 @@
 --      proposal sent to a new login, Mei Tanaka, never opened, two decisions
 --      overdue. See the block near the foot of the file.
 --   6. Release lands on the lift (F6-2) — "Ashby Mews"; and
---   7. Answer the maker — "Fenwick Lodge" (both F7-12). See the last block.
+--   7. Answer the maker — "Fenwick Lodge" (both F7-12). See that block.
+--   8. A sent proposal with no login (F8-9 a) — "Okafor Terrace — Study"; and
+--   9. Two silences and a held follow-up (F8-9 b) — "Birchwood Row". See the
+--      last block, which names their walk steps.
 --
 -- Chen Residence is read, never written: its sectional on WS-188, its overdue
 -- balance and its lines stay exactly as procurement_workspace_dev.sql lays
@@ -777,4 +780,219 @@ BEGIN
       'awaiting_review', ts - INTERVAL '2 days', ts - INTERVAL '2 days'
     );
   END IF;
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 8 + 9. Two walk fixtures (F8-9, design-review-8.md §1 N1 and the F7-1/F7-5
+-- N/A row, §2).
+--
+-- The final walk could not reach F7-3's no-login legs (Tanaka has a login on
+-- local), and no paper carried two unacknowledged POs (F7-1) or a
+-- `maker_follow_up` draft (F7-5). These are the walk steps they serve, as
+-- `designer@patina.dev`, flags `ask-the-paper` + `one-voice` on:
+--
+--   8. "A sent proposal with no login" (F7-3) — "Okafor Terrace — Study", sent
+--      three days ago to Adaeze Okafor, a household with no login
+--      (designer_clients.client_id NULL, an email on file), never opened,
+--      reminded once yesterday.
+--        Doc: f1900000-0000-4000-8000-000000000082 (/doc/<id>)
+--      a. Open the paper: the band reads `PROPOSAL · Okafor Terrace` /
+--         `Reminder sent {yesterday}.` and offers no act (Message is held
+--         without a login; the reminder is inside its 3-day cooldown).
+--      b. The Desk card reads `Send a reminder`.
+--      c. Put the reminder outside its cooldown (the nudge guard admits the
+--         change only under its row-exact GUC):
+--           psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -c "BEGIN; SELECT set_config('app.proposal_nudge_id', 'f1900000-0000-4000-8000-000000000082', true); UPDATE public.proposals SET last_nudged_at = now() - interval '4 days' WHERE id = 'f1900000-0000-4000-8000-000000000082'; COMMIT;"
+--         Reload: the band reads `Sent {day} — not yet opened ·
+--         SEND A REMINDER`, landing on `#document-act-proposal-reminder`.
+--         Do not press Send. Restore by re-running this file, which sets the
+--         reminder back to yesterday on every run.
+--
+--   9. "Two silences and a held follow-up" (F7-1, F7-5) — "Birchwood Row", a
+--      Project paper with two POs sent and never acknowledged: BR-2026-031
+--      (Apparatus, seven days ago) and BR-2026-032 (Ceramica Studio, five days
+--      ago), one line each; and a `maker_follow_up` note held in
+--      `awaiting_review` on 031's line (kind from 00728).
+--        Doc: f1900000-0000-4000-8000-000000000091 (/doc/<id>)
+--      a. Open Standing: it holds two silences.
+--      b. 031's reads `Open the held draft` and opens the note on the line's
+--         Movement cell; the DraftReview head reads `Follow-up to the maker`.
+--         Do not press Send.
+--      c. 032's reads `Follow up with the maker`.
+--
+-- Nothing sends: the proposal's send and nudge are laid as rows, and the note
+-- waits for a member's review. Local dev only; fixed UUIDs
+-- f1900000-…-0000000000{81…99} with ON CONFLICT DO NOTHING or NOT EXISTS;
+-- the proposal is sent only when first laid (an issued proposal is immutable,
+-- 00390). Must run after procurement_workspace_dev.sql (vendors).
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  uid_designer   UUID := 'a0000000-0000-0000-0000-000000000004';  -- Leah Hartwell
+  v_studio       UUID := 'b0000000-0000-0000-0000-000000000001';  -- Local Dev Studio
+
+  v_dc_okafor    UUID := 'f1900000-0000-4000-8000-000000000081';
+  v_okafor       UUID := 'f1900000-0000-4000-8000-000000000082';
+
+  v_birchwood    UUID := 'f1900000-0000-4000-8000-000000000091';
+  v_po_031       UUID := 'f1900000-0000-4000-8000-000000000092';
+  v_po_032       UUID := 'f1900000-0000-4000-8000-000000000093';
+  v_line_031     UUID := 'f1900000-0000-4000-8000-000000000094';
+  v_line_032     UUID := 'f1900000-0000-4000-8000-000000000095';
+  v_draft_031    UUID := 'f1900000-0000-4000-8000-000000000098';
+
+  v_apparatus    UUID;
+  v_ceramica     UUID;
+  v_product_a    UUID;
+  v_product_b    UUID;
+  v_org          UUID;
+  ts             TIMESTAMPTZ := NOW();
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = uid_designer) THEN
+    RAISE NOTICE 'running_a_job_walk_dev.sql: dev accounts are not seeded yet, skipping the F8-9 fixtures';
+    RETURN;
+  END IF;
+
+  -- ── 8. Okafor Terrace: a sent proposal with no login ───────────────────
+  INSERT INTO public.designer_clients (
+    id, designer_id, client_id, status, client_name, client_email, source,
+    created_at, updated_at
+  )
+  SELECT v_dc_okafor, uid_designer, NULL, 'proposal',
+         'Adaeze Okafor', 'adaeze.okafor@example.com', 'manual',
+         ts - INTERVAL '20 days', ts - INTERVAL '20 days'
+  WHERE NOT EXISTS (SELECT 1 FROM public.designer_clients WHERE id = v_dc_okafor);
+
+  -- Built as a draft, then sent under the send capability GUC exactly as the
+  -- Tanaka block sends its paper. Never opened: viewed_at stays NULL.
+  IF NOT EXISTS (SELECT 1 FROM public.proposals WHERE id = v_okafor) THEN
+    INSERT INTO public.proposals (
+      id, designer_id, client_id, designer_client_id, title, description,
+      status, subtotal, total_amount, valid_until, personal_message,
+      created_at, updated_at, version
+    ) VALUES (
+      v_okafor, uid_designer, NULL, v_dc_okafor,
+      'Okafor Terrace — Study',
+      'Walk fixture (US-19, F8-9): sent to a household with no login, not yet opened, reminded once.',
+      'draft', 0, 0, (ts + INTERVAL '14 days'),
+      'Here is the study as we walked it: the desk under the window, the shelves along the party wall.',
+      ts - INTERVAL '5 days', ts - INTERVAL '5 days', 1
+    );
+
+    INSERT INTO public.proposal_sections (proposal_id, type, title, body, sort_order, metadata)
+    VALUES
+      (v_okafor, 'vision', 'Design Vision',
+       'A quiet study off the terrace: limed oak, a deep window seat, and lamplight for evenings.',
+       0, '{}'::jsonb);
+
+    PERFORM set_config('app.proposal_send_id', v_okafor::text, true);
+    UPDATE public.proposals
+       SET status = 'sent',
+           sent_at = ts - INTERVAL '3 days',
+           updated_at = ts - INTERVAL '3 days'
+     WHERE id = v_okafor AND status = 'draft';
+    PERFORM set_config('app.proposal_send_id', '', true);
+  END IF;
+
+  -- The one reminder, yesterday. Refreshed on every run (as the arrival
+  -- dates above are), so the cooldown stays live on an old local database and
+  -- a re-run restores walk step 8c. Only under nudge_proposal's row-exact GUC,
+  -- and only while the paper is still out.
+  PERFORM set_config('app.proposal_nudge_id', v_okafor::text, true);
+  UPDATE public.proposals
+     SET last_nudged_at = ts - INTERVAL '1 day',
+         nudge_count = 1
+   WHERE id = v_okafor AND status IN ('sent', 'viewed');
+  PERFORM set_config('app.proposal_nudge_id', '', true);
+
+  -- ── 9. Birchwood Row: two silences and a held follow-up ────────────────
+  SELECT id INTO v_apparatus FROM public.vendors WHERE name ILIKE 'Apparatus%' ORDER BY id LIMIT 1;
+  SELECT id INTO v_ceramica  FROM public.vendors WHERE name ILIKE 'Ceramica%'  ORDER BY id LIMIT 1;
+  IF v_apparatus IS NULL OR v_ceramica IS NULL THEN
+    RAISE NOTICE 'running_a_job_walk_dev.sql: demo vendors are not seeded yet, skipping Birchwood Row';
+    RETURN;
+  END IF;
+
+  -- A product behind each line, so the paper adds no "unspecified" count.
+  SELECT id INTO v_product_a FROM public.products
+   WHERE images IS NOT NULL AND array_length(images, 1) > 0 ORDER BY id LIMIT 1 OFFSET 6;
+  SELECT id INTO v_product_b FROM public.products
+   WHERE images IS NOT NULL AND array_length(images, 1) > 0 ORDER BY id LIMIT 1 OFFSET 7;
+
+  INSERT INTO public.projects (
+    id, name, designer_id, created_by, studio_id, status, current_phase,
+    budget_cents, start_date, notes, created_at, updated_at
+  ) VALUES (
+    v_birchwood, 'Birchwood Row', uid_designer, uid_designer, v_studio,
+    'active', NULL, 1400000, (ts - INTERVAL '45 days')::date,
+    'Walk fixture (US-19, F8-9): two POs sent, never acknowledged; a follow-up held on one.',
+    ts - INTERVAL '50 days', ts
+  ) ON CONFLICT (id) DO NOTHING;
+
+  -- Sent the way po-send sends (status stays draft, sent_at stamped), as
+  -- Halloran's PO is, and never acknowledged: document_state counts both in
+  -- unacked_po_count, labelled by the older (031). No agreement stands
+  -- behind the job, so the lines sit on their POs directly, as Fenwick's does.
+  INSERT INTO public.purchase_orders (
+    id, designer_id, project_id, vendor_id, vendor_po_number,
+    payment_pattern, total_cents, status, ack_state, sent_at, created_by,
+    created_at
+  ) VALUES
+    (v_po_031, uid_designer, v_birchwood, v_apparatus, 'BR-2026-031',
+     'net_30', 312000, 'draft', 'none', ts - INTERVAL '7 days', uid_designer,
+     ts - INTERVAL '9 days'),
+    (v_po_032, uid_designer, v_birchwood, v_ceramica, 'BR-2026-032',
+     'net_30', 136000, 'draft', 'none', ts - INTERVAL '5 days', uid_designer,
+     ts - INTERVAL '7 days')
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO public.po_payments (id, purchase_order_id, kind, amount_cents, due_date, state, sort_order)
+  VALUES
+    ('f1900000-0000-4000-8000-000000000096', v_po_031, 'balance', 312000, NULL, 'pending', 0),
+    ('f1900000-0000-4000-8000-000000000097', v_po_032, 'balance', 136000, NULL, 'pending', 0)
+  ON CONFLICT (id) DO NOTHING;
+
+  -- NOT EXISTS for the selection-thread reason above. Trade totals equal the
+  -- PO totals, so either PO is in sync if anyone resends it.
+  INSERT INTO public.project_ffe_items (
+    id, project_id, product_id, purchase_order_id, name, ffe_category,
+    item_type, status, quantity, unit_price_cents, trade_price_cents,
+    markup_percent, line_total_cents, vendor_name, vendor_id, sort_order,
+    design_disposition, created_at, updated_at
+  )
+  SELECT v.* FROM (VALUES
+    (v_line_031, v_birchwood, v_product_a, v_po_031,
+     'Brass cloud pendant, 36 in', 'lighting',
+     'fixed', 'ordered', 1, 390000, 312000,
+     25.00, 390000, 'Apparatus', v_apparatus, 0,
+     'selected', ts - INTERVAL '20 days', ts - INTERVAL '7 days'),
+    (v_line_032, v_birchwood, v_product_b, v_po_032,
+     'Stoneware console lamp', 'lighting',
+     'fixed', 'ordered', 1, 170000, 136000,
+     25.00, 170000, 'Ceramica Studio', v_ceramica, 1,
+     'selected', ts - INTERVAL '18 days', ts - INTERVAL '5 days')
+  ) AS v (
+    id, project_id, product_id, purchase_order_id, name, ffe_category,
+    item_type, status, quantity, unit_price_cents, trade_price_cents,
+    markup_percent, line_total_cents, vendor_name, vendor_id, sort_order,
+    design_disposition, created_at, updated_at
+  )
+  WHERE NOT EXISTS (SELECT 1 FROM public.project_ffe_items f WHERE f.id = v.id);
+
+  -- The follow-up a member held on 031's line through "Follow up with the
+  -- maker" (/api/document/ask-maker-date, kind maker_follow_up), laid with a
+  -- fixed id: subject `{PO} — following up`, the maker's address as the route
+  -- resolves it. Laid once; a walker who sends or discards it leaves that
+  -- standing, and the one-open-note index (00728) refuses a second.
+  v_org := public.purchase_order_studio_id(v_po_031);
+  INSERT INTO public.procurement_drafts (
+    id, organization_id, project_id, kind, purchase_order_id, ffe_item_id,
+    to_email, subject, body, status, composed_by, created_at, updated_at
+  ) VALUES (
+    v_draft_031, v_org, v_birchwood, 'maker_follow_up', v_po_031, v_line_031,
+    public._procurement_vendor_email(v_org, v_apparatus),
+    'BR-2026-031 — following up',
+    E'Hello,\n\nWe sent PO BR-2026-031 for the brass cloud pendant a week ago and have not had an acknowledgment. Could you confirm you have it, and the date you expect it to ship?\n\nThank you,\nLeah',
+    'awaiting_review', uid_designer::text, ts - INTERVAL '1 day', ts - INTERVAL '1 day'
+  ) ON CONFLICT DO NOTHING;
 END $$;
