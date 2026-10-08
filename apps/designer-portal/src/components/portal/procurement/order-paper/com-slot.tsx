@@ -38,12 +38,19 @@ export interface SuppliesLink {
 
 const byId = (lines: readonly FfePairLine[]) => new Map(lines.map((l) => [l.id, l]));
 
+/**
+ * The piece a line's COM fabric supplies. A labor or accessory child also
+ * points at its piece (link_kind, 00729), but only a 'com' link is the pair.
+ */
+const comParentId = (line: FfePairLine): string | null =>
+  line.link_kind === 'com' ? line.parent_ffe_item_id : null;
+
 /** The paper's lines that supply a piece (the fabric half of a pair). */
 export function fabricLines(paperItemIds: readonly string[], lines: readonly FfePairLine[]): FfePairLine[] {
   const index = byId(lines);
   return paperItemIds
     .map((id) => index.get(id))
-    .filter((l): l is FfePairLine => !!l && !!l.parent_ffe_item_id);
+    .filter((l): l is FfePairLine => !!l && !!comParentId(l));
 }
 
 /** An approved CFA on the fabric line or on the piece it supplies. */
@@ -55,7 +62,7 @@ export function hasApprovedCfa(
     (s) =>
       s.kind === 'cfa' &&
       s.decision === 'approved' &&
-      (s.ffe_item_id === fabric.id || s.ffe_item_id === fabric.parent_ffe_item_id),
+      (s.ffe_item_id === fabric.id || s.ffe_item_id === comParentId(fabric)),
   );
 }
 
@@ -74,7 +81,8 @@ export function comLineFacts(
   for (const id of paperItemIds) {
     const line = index.get(id);
     if (!line) continue;
-    const parent = line.parent_ffe_item_id ? index.get(line.parent_ffe_item_id) : null;
+    const parentId = comParentId(line);
+    const parent = parentId ? index.get(parentId) : null;
     if (parent) {
       facts.set(id, {
         pair: `COM for ${parent.name}${parent.vendor_name ? `, shipped to ${parent.vendor_name}` : ''}`,
@@ -83,7 +91,7 @@ export function comLineFacts(
       });
       continue;
     }
-    const children = lines.filter((l) => l.parent_ffe_item_id === id);
+    const children = lines.filter((l) => comParentId(l) === id);
     if (children.length === 0) continue;
     const pair = children.map((child) => {
       if (!child.purchase_order_id) return 'COM arriving separately — the fabric is not ordered yet';
@@ -115,13 +123,14 @@ export function suppliesLinks(
   for (const id of paperItemIds) {
     const line = index.get(id);
     if (!line) continue;
-    const parent = line.parent_ffe_item_id ? index.get(line.parent_ffe_item_id) : null;
+    const parentId = comParentId(line);
+    const parent = parentId ? index.get(parentId) : null;
     if (parent) {
       const current =
         line.purchase_order_id === poId ? line.purchase_order?.supplies_purchase_order_id : null;
       add(poId, parent.purchase_order_id, current);
     }
-    for (const child of lines.filter((l) => l.parent_ffe_item_id === id)) {
+    for (const child of lines.filter((l) => comParentId(l) === id)) {
       add(child.purchase_order_id, poId, child.purchase_order?.supplies_purchase_order_id);
     }
   }
@@ -165,7 +174,7 @@ export function useComPaper({
     const fabric = fabricLines(itemIds, all);
     const index = byId(all);
     const workroomName =
-      fabric.map((l) => index.get(l.parent_ffe_item_id as string)?.vendor_name).find(Boolean) ?? null;
+      fabric.map((l) => index.get(comParentId(l) as string)?.vendor_name).find(Boolean) ?? null;
     return {
       isFabricPaper: fabric.length > 0,
       workroomName,

@@ -149,6 +149,8 @@ interface FfeItemRow {
   id: string;
   name: string;
   quantity: number | null;
+  /** What the quantity counts (00729): each, sq_ft, lin_ft, roll, yard, box, hour, lot. */
+  unit: string | null;
   trade_price_cents: number | null;
   unit_price_cents: number | null;
   notes: string | null;
@@ -295,7 +297,7 @@ Deno.serve(async (req: Request) => {
     .from('project_ffe_items')
     .select(
       `
-      id, name, quantity, trade_price_cents, unit_price_cents, notes,
+      id, name, quantity, unit, trade_price_cents, unit_price_cents, notes,
       ffe_category,
       room:project_rooms!project_room_id(id, name),
       spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
@@ -352,7 +354,7 @@ Deno.serve(async (req: Request) => {
     supplyingOrders = supplyingData as unknown as SupplyingPurchaseOrder[];
     const { data: linesData, error: linesError } = await admin
       .from('project_ffe_items')
-      .select('purchase_order_id, parent_ffe_item_id')
+      .select('purchase_order_id, parent_ffe_item_id, link_kind')
       .in('purchase_order_id', supplyingOrders.map((order) => order.id))
       .is('removed_at', null);
     if (linesError) console.warn('po-send: supplying lines lookup failed', linesError);
@@ -481,6 +483,7 @@ Deno.serve(async (req: Request) => {
       name: item.name,
       room: item.room?.name ?? null,
       quantity,
+      unit: item.unit,
       unitTradeCents,
       lineTotalCents: unitTradeCents * quantity,
       specNotes: vendorSafeSpecNotes(item.notes),

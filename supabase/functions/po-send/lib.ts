@@ -912,16 +912,20 @@ export interface SupplyingPurchaseOrder {
   vendor: { name: string | null } | null;
 }
 
-/** A line on a supplying PO, with the piece it supplies. */
+/** A line on a supplying PO, with the piece it supplies and why (00729). */
 export interface SupplyingLine {
   purchase_order_id: string | null;
   parent_ffe_item_id: string | null;
+  /** 'com', 'labor' or 'accessory'; NULL exactly when the parent is NULL. */
+  link_kind: string | null;
 }
 
 /**
  * The "COM arriving separately" line for each of this PO's items, keyed by
- * item id. A supplying PO whose lines name no item here attaches to the
- * first item, so the vendor still reads it once.
+ * item id. Only a COM link (link_kind 'com') names a piece: a labor or
+ * accessory child is never COM. A supplying PO whose lines name no item here
+ * attaches to the first item, so the vendor still reads it once, unless its
+ * lines are all labor or accessory children: that PO supplies no COM.
  */
 export function comArrivingSeparately(
   items: readonly { id: string; spec?: unknown }[],
@@ -934,10 +938,14 @@ export function comArrivingSeparately(
   const specOf = new Map(items.map((item) => [item.id, item.spec]));
 
   for (const order of supplyingOrders) {
+    const linked = supplyingLines.filter(
+      (line) => line.purchase_order_id === order.id && line.parent_ffe_item_id,
+    );
+    const com = linked.filter((line) => line.link_kind === 'com');
+    if (linked.length > 0 && com.length === 0) continue;
     const pieces = Array.from(
       new Set(
-        supplyingLines
-          .filter((line) => line.purchase_order_id === order.id && line.parent_ffe_item_id)
+        com
           .map((line) => line.parent_ffe_item_id as string)
           .filter((id) => itemIds.has(id)),
       ),

@@ -44,6 +44,11 @@ export interface PoPdfLine {
   /** Room name, or null when the item has no room assignment. */
   room: string | null;
   quantity: number;
+  /**
+   * What the quantity counts (project_ffe_items.unit, 00729): the Qty cell
+   * prints `9 roll`. 'each' or absent prints the bare number, as before.
+   */
+  unit?: string | null;
   /** TRADE unit price in cents (COALESCE(trade, unit, 0) — 00186 semantics). */
   unitTradeCents: number;
   lineTotalCents: number;
@@ -153,6 +158,16 @@ function fmt(cents: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+/**
+ * The Qty cell: the count and the unit it counts, `9 roll` or `320 sq ft`
+ * (D3, 00729 unit codes with `_` read as a space). 'each' prints the bare
+ * number, so a line without a unit prints exactly as before.
+ */
+export function poQuantityLabel(quantity: number, unit?: string | null): string {
+  if (!unit || unit === 'each') return String(quantity);
+  return `${quantity} ${unit.replace(/_/g, ' ')}`;
 }
 
 function fmtDate(value: string): string {
@@ -295,7 +310,7 @@ function PoDocument(data: PoPdfData) {
               )
             ),
             h(Text, { style: styles.cellRoom }, line.room ?? '-'),
-            h(Text, { style: styles.cellQty }, String(line.quantity)),
+            h(Text, { style: styles.cellQty }, poQuantityLabel(line.quantity, line.unit)),
             h(Text, { style: styles.cellUnit }, fmt(line.unitTradeCents)),
             h(Text, { style: styles.cellTotal }, fmt(line.lineTotalCents))
           );
