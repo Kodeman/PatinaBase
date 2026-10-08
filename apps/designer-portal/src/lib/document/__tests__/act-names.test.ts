@@ -228,22 +228,21 @@ describe('every act string', () => {
       'Release for authorization',
       'Send the proposal',
       'Send the invoice',
-      // FR1 R4 and R7 add these two to the filled tier.
-      'Send the purchase order',
-      'Pay again',
     ]) {
       expect(ACT_TIER[label]).toBe('filled');
     }
+    // FR2 P-1 — the filled set is exactly D3's four; R4/R7's two acts print
+    // only as pointers, and a pointer is scored.
     expect(Object.keys(ACT_TIER).filter((label) => ACT_TIER[label] === 'filled').sort()).toEqual(
       [
-        'Pay again',
         'Record the payment',
         'Release for authorization',
         'Send the invoice',
         'Send the proposal',
-        'Send the purchase order',
       ],
     );
+    expect(ACT_TIER['Send the purchase order']).toBe('scored');
+    expect(ACT_TIER['Pay again']).toBe('scored');
     for (const label of [
       'Record a change',
       'Ask the maker for a date',

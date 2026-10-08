@@ -10,6 +10,7 @@ import { ArrivalRun } from '@/components/document/arrival/arrival-run';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import { paperRegionsForSection } from '@/lib/document/document-index';
+import { LAND_RECORD_PAYMENT_EVENT, recordPaymentPending } from '@/lib/document/registry';
 import { __setDensityForTest, __setResolvedForTest } from '@/hooks/use-lens-density';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { engine as arrivalEngine } from '@/lib/arrival/engine';
@@ -2265,6 +2266,43 @@ describe('DocumentPage guide activation', () => {
       expect(bandLine2()?.textContent).toContain('Next ─');
       expect(bandSentence()).toContain('Woodward & Sons');
       expect(screen.getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
+    });
+
+    // US-19 F2-3 / 2-5 (P-1) — the band act points; the press lands on the PO
+    // line's own record-payment control, never the Orders ledger sheet.
+    it('one-voice, Chen: pressing `Record the payment` lands on the WS-188 line', () => {
+      asProjectDocument();
+      mockEnabledFlags = ['one-voice'];
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: null,
+          needs: [{
+            kind: 'payment_due',
+            text: 'Balance to Woodward & Sons · $3,400 due May 12 — PO WS-188',
+            actionLabel: 'Record payment', urgent: false, stamp: { label: 'PAYMENT DUE' },
+            dueOn: '2026-05-12', owner: 'designer',
+            ledger: {
+              name: 'orders',
+              context: { page: 'ledger', projectId: 'project-1', purchaseOrderId: 'po-ws-188' },
+            },
+          }],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+      const landed: unknown[] = [];
+      const onLand = (e: Event) => landed.push((e as CustomEvent).detail);
+      window.addEventListener(LAND_RECORD_PAYMENT_EVENT, onLand);
+      try {
+        render(<DocumentPage params={fulfilledParams} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Record the payment' }));
+        expect(landed).toEqual([{ purchaseOrderId: 'po-ws-188' }]);
+        expect(recordPaymentPending.request).toEqual({ purchaseOrderId: 'po-ws-188' });
+      } finally {
+        window.removeEventListener(LAND_RECORD_PAYMENT_EVENT, onLand);
+        recordPaymentPending.request = null;
+      }
     });
 
     // D8 — the owner the need was raised with reaches the band: custody.

@@ -77,7 +77,11 @@ jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 import { CommandBar, openCommandBar } from '../command-bar';
 import { KeysShortcut } from '../keys-shortcut';
 import { KEYS_SHEET_EVENT } from '../overlays/keys-sheet';
-import { focusFfeLinePending } from '@/lib/document/registry';
+import {
+  LAND_RECORD_PAYMENT_EVENT,
+  focusFfeLinePending,
+  recordPaymentPending,
+} from '@/lib/document/registry';
 
 const LINES = [
   {
@@ -314,6 +318,43 @@ describe('⌘K on the paper (D4)', () => {
       name: 'orders',
       context: { page: 'ledger', projectId: 'proj-chen', purchaseOrderId: 'po-188' },
     });
+  });
+
+  // US-19 F2-3 / 2-5 (P-1) — under one-voice the ⌘K row points at the PO
+  // line's own record-payment control; the Orders ledger is not a landing.
+  it('R27 one-voice — Record the payment lands on the line, not the Orders ledger', () => {
+    mockOneVoice = true;
+    mockFolders = [
+      {
+        row: mockRow,
+        need: null,
+        needs: [
+          {
+            kind: 'payment_due',
+            text: 'Balance to Woodward & Sons · $3,400.00 due 12 May — WS-188',
+            ledger: {
+              name: 'orders',
+              context: { page: 'ledger', projectId: 'proj-chen', purchaseOrderId: 'po-188' },
+            },
+          },
+        ],
+      },
+    ];
+    openAndType('payment');
+    const acts = screen.getByRole('group', { name: 'Acts on this paper' });
+    const ledger = jest.fn();
+    const landed = jest.fn();
+    window.addEventListener('document:open-ledger', ledger);
+    window.addEventListener(LAND_RECORD_PAYMENT_EVENT, landed);
+    try {
+      fireEvent.click(within(acts).getByRole('option', { name: /Record the payment/ }));
+    } finally {
+      window.removeEventListener('document:open-ledger', ledger);
+      window.removeEventListener(LAND_RECORD_PAYMENT_EVENT, landed);
+      recordPaymentPending.request = null;
+    }
+    expect(ledger).not.toHaveBeenCalled();
+    expect((landed.mock.calls[0][0] as CustomEvent).detail).toEqual({ purchaseOrderId: 'po-188' });
   });
 
   it('R27 — with nothing due, the money words offer Draw an invoice alone, as printed', () => {

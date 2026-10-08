@@ -154,8 +154,13 @@ jest.mock("@patina/supabase", () => ({
 }));
 
 // Fail-closed, and this suite pins Wave 1's room: `agreement-library` off.
+// `one-voice` is off too, but for the US-19 499-4 case below.
+let mockOneVoice = false;
 jest.mock("@/hooks/use-feature-flag", () => ({
-  useFeatureFlag: () => ({ value: false, isLoading: false }),
+  useFeatureFlag: (name: string) => ({
+    value: name === "one-voice" && mockOneVoice,
+    isLoading: false,
+  }),
 }));
 
 jest.mock("../../../../commercial/service-agreement-preview", () => ({
@@ -1424,5 +1429,23 @@ describe("AgreementComposer · resilience", () => {
       screen.queryByRole("button", { name: /Hide from the client/ }),
     ).not.toBeInTheDocument();
     expect(screen.getByText(/Its parts are fixed as sent/)).toBeInTheDocument();
+  });
+});
+
+describe("AgreementComposer · one-voice (US-19 499-4, F2-20)", () => {
+  afterEach(() => {
+    mockOneVoice = false;
+  });
+
+  it("names its send control Send the proposal; Send the agreement is deleted", () => {
+    mockOneVoice = true;
+    render(<AgreementComposer proposal={proposal} bundle={bundleWith(threeParts())} />);
+    expect(screen.getByRole("button", { name: /^Send the proposal/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Send the agreement/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps Send the agreement with the flag off", () => {
+    render(<AgreementComposer proposal={proposal} bundle={bundleWith(threeParts())} />);
+    expect(screen.getByRole("button", { name: /^Send the agreement/ })).toBeInTheDocument();
   });
 });

@@ -648,7 +648,7 @@ export function ReviewReleaseSheet({
           }
           onClick={sendForSignature}
         >
-          Send for signature
+          {oneVoice ? 'Release for authorization' : 'Send for signature'}
         </DocumentAction>
       </DocumentActionGroup>
     </DocSheet>

@@ -16,7 +16,7 @@
  * owed offers "Pay now" instead, which opens that same checkout (C-22).
  */
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   usePOPayments,
   usePurchaseOrders,
@@ -36,6 +36,7 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useUploadFolioFile, type FolioAnchor } from '@/hooks/use-folio';
 import { needActLabel } from '@/lib/document/act-names';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
+import { LAND_RECORD_PAYMENT_EVENT, recordPaymentPending } from '@/lib/document/registry';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction } from '../document-action';
 import { FIELD_CLS, LABEL_CLS } from './cell';
@@ -170,9 +171,15 @@ export function RecordPaymentForm({
   onDone,
   surfaceKey = 'project',
   payee,
+  payeeName = null,
+  landing = 0,
 }: {
   purchaseOrderId: string;
   row?: MoneyOutPayment & { id: string };
+  /** Who the money went to, as the consequence sentence names them (499-5). */
+  payeeName?: string | null;
+  /** US-19 F2-3 — each landing on this form puts focus on its act. */
+  landing?: number;
   /** The payment's name in the act's label when there is no scheduled row. */
   name?: string;
   initialReference?: string;
@@ -210,9 +217,27 @@ export function RecordPaymentForm({
   const actLabel = oneVoice
     ? `${needActLabel('payment_due')}${figure}`
     : `Record the ${name}${figure}`;
-  const consequence = `This records the ${name}${
-    amountCents != null ? `, ${fmtUsd(amountCents)},` : ''
-  } as paid${paidOn ? ` on ${fmtDay(paidOn)}` : ''}. A record is never edited; it can only be voided, with a reason.`;
+  // 499-5 — one sentence: the amount, the payee and the day the record will
+  // carry (today's date until she changes it).
+  const consequence = `Records ${amountCents != null ? fmtUsd(amountCents) : `the ${name}`} paid${
+    payeeName ? ` to ${payeeName}` : ''
+  }${paidOn ? ` on ${fmtDay(paidOn)}` : ''} — voidable with a reason, never edited.`;
+  const actRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!landing) return;
+    // Two frames, as ffe-section's line landing waits: ⌘K hands focus back
+    // to its opener one frame after it closes.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        const act = actRef.current;
+        if (!act) return;
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        act.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+        act.focus({ preventScroll: true });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [landing]);
 
   const submit = async () => {
     if (busy || amountCents == null || !paidOn) return;
@@ -324,6 +349,7 @@ export function RecordPaymentForm({
       )}
       <div className="flex flex-wrap items-center gap-x-2">
         <DocumentAction
+          ref={actRef}
           actionKey="record-vendor-payment"
           surfaceKey={surfaceKey}
           regionKey="money-out"
@@ -458,9 +484,10 @@ export function PoMoneyOut({
   // ledger shares the cache); nothing shows until it and the user resolve.
   const { user } = useUser();
   const { data: orders } = usePurchaseOrders() as { data?: PurchaseOrder[] };
-  const isPayer =
-    !!user?.id && orders?.find((o) => o.id === purchaseOrderId)?.designer_id === user.id;
+  const order = orders?.find((o) => o.id === purchaseOrderId);
+  const isPayer = !!user?.id && order?.designer_id === user.id;
   const [payingRowId, setPayingRowId] = useState<string | null>(null);
+  const [landing, setLanding] = useState(0);
   const [payError, setPayError] = useState<string | null>(null);
   const payNow = async (rowId: string) => {
     setPayError(null);
@@ -474,8 +501,41 @@ export function PoMoneyOut({
     }
   };
 
-  const rows: readonly MoneyOutPayment[] =
-    (schedule as MoneyOutPayment[] | undefined) ?? fallback ?? [];
+  const rows: readonly MoneyOutPayment[] = useMemo(
+    () => (schedule as MoneyOutPayment[] | undefined) ?? fallback ?? [],
+    [schedule, fallback],
+  );
+
+  // US-19 F2-3 — `Record the payment` from the band, the dock or ⌘K lands
+  // here, on the line's money out (never the Orders ledger's copy): the form
+  // opens on the row that is due, earliest first, and its act takes focus.
+  useEffect(() => {
+    if (surfaceKey !== 'project') return;
+    const land = () => {
+      if (recordPaymentPending.request?.purchaseOrderId !== purchaseOrderId) return;
+      const open = rows.filter(
+        (p): p is MoneyOutPayment & { id: string } =>
+          !isPatinaCatalog &&
+          !isStripeRow(p) &&
+          Boolean(p.id) &&
+          p.state !== 'paid' &&
+          p.state !== 'refunded',
+      );
+      const due = open
+        .filter((p) => p.state === 'due')
+        .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'));
+      const target = due[0] ?? open[0];
+      // Wait for the schedule's own rows (their ids) before giving up.
+      if (!target && !schedule) return;
+      recordPaymentPending.request = null;
+      if (!target) return;
+      setRecordingRowId(target.id);
+      setLanding((n) => n + 1);
+    };
+    land();
+    window.addEventListener(LAND_RECORD_PAYMENT_EVENT, land);
+    return () => window.removeEventListener(LAND_RECORD_PAYMENT_EVENT, land);
+  }, [rows, schedule, purchaseOrderId, isPatinaCatalog, surfaceKey]);
 
   // A payment not tied to a scheduled row (a restocking fee, say) still lists.
   const rowIds = new Set(rows.map((p) => p.id).filter(Boolean));
@@ -591,8 +651,13 @@ export function PoMoneyOut({
                   remainderCents={remainder}
                   projectId={projectId}
                   receiptAnchor={receiptAnchor}
-                  onDone={() => setRecordingRowId(null)}
+                  onDone={() => {
+                    setRecordingRowId(null);
+                    setLanding(0);
+                  }}
                   surfaceKey={surfaceKey}
+                  payeeName={order?.vendor?.name ?? null}
+                  landing={landing}
                 />
               )}
             </li>

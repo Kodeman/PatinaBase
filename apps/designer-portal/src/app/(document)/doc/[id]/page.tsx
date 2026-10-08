@@ -155,6 +155,7 @@ import {
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
 import { ownAct } from '@/lib/document/act-names';
+import { landRecordPayment } from '@/lib/document/registry';
 import { familyLabel } from '@/lib/document/family-label';
 import {
   installReading,
@@ -1873,12 +1874,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         null,
         oneVoice ? { oneVoice, clientFirstName: voiceFirstName(row.client_name) } : null,
       );
+      // US-19 F2-3 (P-1) — a maker payment's act points at the PO line's
+      // record-payment control, never the Orders ledger; the band and the dock
+      // centre both press this.
+      const landingPoId =
+        oneVoice && need.kind === 'payment_due' ? need.ledger?.context?.purchaseOrderId : undefined;
       return {
         key: `${need.kind}-${index}`,
         kind: need.kind,
         text: need.text,
         actionLabel: action.label,
-        onAct: () => activateDestination(action.destination),
+        onAct: landingPoId
+          ? () => landRecordPayment(landingPoId)
+          : () => activateDestination(action.destination),
         urgent: need.urgent,
         // N-01 — the deadline the band ranks on, structured. The need already
         // holds it; the sentence it prints does not.

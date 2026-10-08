@@ -173,8 +173,11 @@ import { lineMaker } from '@/lib/document/install-reading';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import {
   FOCUS_FFE_LINE_EVENT,
+  LAND_RECORD_PAYMENT_EVENT,
   focusFfeLinePending,
+  recordPaymentPending,
   type FocusFfeLineRequest,
+  type RecordPaymentLanding,
 } from '@/lib/document/registry';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
 import {
@@ -1622,6 +1625,25 @@ function FFESectionBody({
     window.addEventListener(FOCUS_FFE_LINE_EVENT, onFocusLine);
     landOnLine(focusFfeLinePending.request ?? undefined);
     return () => window.removeEventListener(FOCUS_FFE_LINE_EVENT, onFocusLine);
+  }, [items, mode, ffeSetFolded]);
+  // US-19 F2-3 — `Record the payment` lands on the PO's line. Pieces and the
+  // line unfold here; the line's money out opens its record form and takes
+  // focus itself (record-payment.tsx), and clears the pending request.
+  useEffect(() => {
+    const unfoldFor = (request: RecordPaymentLanding | null | undefined) => {
+      const poId = request?.purchaseOrderId;
+      const item = poId
+        ? (items ?? []).find((line) => line.purchase_order?.id === poId)
+        : undefined;
+      if (!item) return;
+      setOpenLineId(String(item.id));
+      if (mode === 'project') ffeSetFolded(false);
+    };
+    const onLand = (event: Event) =>
+      unfoldFor((event as CustomEvent<RecordPaymentLanding | undefined>).detail);
+    window.addEventListener(LAND_RECORD_PAYMENT_EVENT, onLand);
+    unfoldFor(recordPaymentPending.request);
+    return () => window.removeEventListener(LAND_RECORD_PAYMENT_EVENT, onLand);
   }, [items, mode, ffeSetFolded]);
   const ffeHeadingId = `ffe-region-heading-${projectId}`;
   const ffeMovementId = `ffe-movement-${projectId}`;

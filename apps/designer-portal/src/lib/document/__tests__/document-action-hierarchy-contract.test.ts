@@ -206,7 +206,9 @@ describe("Project region ledgers", () => {
       "utf8",
     );
     expect(head.match(/'inked'/g) ?? []).toHaveLength(2);
-    expect(head).toContain("index === 0 ? 'inked'");
+    // US-19 499-2 / F2-12 (P-1): a head may declare it has no leader at all;
+    // when it has one, it is still entry 0 and only entry 0.
+    expect(head).toContain("index === 0 && leader ? 'inked'");
     // the second occurrence is the dev guard that catches a caller trying to
     // spell leadership on a later entry — not a second place it is granted.
     expect(head).toContain(

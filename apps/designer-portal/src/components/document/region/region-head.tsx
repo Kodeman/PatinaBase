@@ -104,6 +104,13 @@ export interface RegionHeadProps {
    */
   actsAtQuiet?: 'all' | 'leader';
   /**
+   * US-19 499-2 / F2-12 (P-1) — `false` declares a head with no scored leader:
+   * entry 0 prints its own declared weight (`secondary` when none), as every
+   * other entry does, and at quiet no act prints. Only the caller that knows
+   * nothing leads its region says so; the default keeps entry 0 inked.
+   */
+  leader?: boolean;
+  /**
    * R3 — the head stands as a LANDMARK and prints nothing. The `<h2>` keeps
    * its id and its -1 tabindex so the rail's jumps still land and the heading
    * outline is unbroken; it is `sr-only`, and the eyebrow, the status line and
@@ -128,11 +135,12 @@ export function RegionHead({
   onFold,
   allowNoActs = false,
   actsAtQuiet = 'all',
+  leader = true,
   silent = false,
 }: RegionHeadProps) {
   const showFold = Boolean(bodyId && onFold);
   const printedActions =
-    actsAtQuiet === 'leader' ? actions.slice(0, 1) : actions;
+    actsAtQuiet === 'leader' ? actions.slice(0, leader ? 1 : 0) : actions;
   const printedExceptions = silent ? [] : exceptions.slice(0, 2);
   const reasonIdBase = useId();
   const reasonId = (entry: RegionLedgerEntry) => `${reasonIdBase}-${entry.key}-reason`;
@@ -241,7 +249,7 @@ export function RegionHead({
         >
           {printedActions.map((entry, index) => {
             const variant: DocumentActionVariant =
-              index === 0 ? 'inked' : (entry.variant ?? 'secondary');
+              index === 0 && leader ? 'inked' : (entry.variant ?? 'secondary');
             const shared = {
               actionKey: entry.key,
               variant,

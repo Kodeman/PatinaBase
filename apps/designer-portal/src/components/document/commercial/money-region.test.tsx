@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 
 let mockAuthority: Record<string, unknown>;
 let mockBudget: Record<string, unknown>;
@@ -49,8 +49,10 @@ jest.mock('@/lib/analytics/document-events', () => ({
 }));
 
 const mockOpenInvoiceComposer = jest.fn();
+const mockOpenInvoiceFolio = jest.fn();
 jest.mock('../accounts/invoice-overlays', () => ({
   openInvoiceComposer: (...args: unknown[]) => mockOpenInvoiceComposer(...args),
+  openInvoiceFolio: (...args: unknown[]) => mockOpenInvoiceFolio(...args),
 }));
 
 const mockOpenLedger = jest.fn();
@@ -712,5 +714,90 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
       document.querySelector('[data-index-region="money"]'),
     ).toHaveAttribute('data-density', 'full');
     expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
+  });
+});
+
+// US-19 499-2 / 507-1 (one-voice) — the Money head leads with `Record the
+// payment` (scored) only while a client receivable on this paper is due; a
+// maker balance is never this head's; `Draw an invoice` is plain everywhere.
+describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
+  const flags = process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_FLAG_OVERRIDES = 'one-voice:true';
+    mockOpenInvoiceFolio.mockClear();
+  });
+  afterEach(() => {
+    process.env.NEXT_PUBLIC_FLAG_OVERRIDES = flags;
+  });
+
+  const invoice = (over: Record<string, unknown>) => ({
+    id: 'invoice-1',
+    invoice_number: '2026-114',
+    status: 'sent',
+    due_date: '2026-08-03',
+    total_cents: 175_000,
+    amount_paid_cents: 0,
+    ...over,
+  });
+
+  it('leads with Record the payment, scored, while an invoice is sent and unpaid', () => {
+    mockInvoices = {
+      data: [
+        invoice({ id: 'invoice-paid', status: 'paid', due_date: '2026-07-01' }),
+        invoice({ id: 'invoice-late', status: 'partially_paid', due_date: '2026-07-20' }),
+        invoice({}),
+      ],
+      isLoading: false,
+      error: null,
+    };
+
+    render(<MoneyRegion projectId="project-1" />);
+
+    const head = document.querySelector('[data-region-head="money-head"]') as HTMLElement;
+    const record = within(head).getByRole('button', { name: 'Record the payment' });
+    expect(record).toHaveAttribute('data-action-variant', 'inked');
+    expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
+    expect(head.querySelectorAll('.da-terminal')).toHaveLength(0);
+    expect(within(head).getByRole('button', { name: 'Draw an invoice' })).toHaveAttribute(
+      'data-action-variant',
+      'secondary',
+    );
+    // It points at the oldest receivable's folio, where the money is recorded.
+    fireEvent.click(record);
+    expect(mockOpenInvoiceFolio).toHaveBeenCalledWith('invoice-late');
+  });
+
+  it('has no scored leader when nothing is due: Draw an invoice is plain', () => {
+    mockInvoices = {
+      data: [
+        invoice({ id: 'invoice-draft', status: 'draft' }),
+        invoice({ id: 'invoice-paid', status: 'paid' }),
+      ],
+      isLoading: false,
+      error: null,
+    };
+
+    render(<MoneyRegion projectId="project-1" />);
+
+    const head = document.querySelector('[data-region-head="money-head"]') as HTMLElement;
+    expect(within(head).queryByRole('button', { name: 'Record the payment' })).not.toBeInTheDocument();
+    expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(0);
+    expect(within(head).getByRole('button', { name: 'Draw an invoice' })).toHaveAttribute(
+      'data-action-variant',
+      'secondary',
+    );
+  });
+
+  it('keeps today’s inked Draw an invoice with the flag off', () => {
+    process.env.NEXT_PUBLIC_FLAG_OVERRIDES = flags;
+    mockInvoices = { data: [invoice({})], isLoading: false, error: null };
+
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Record the payment' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Draw an invoice' })).toHaveAttribute(
+      'data-action-variant',
+      'inked',
+    );
   });
 });

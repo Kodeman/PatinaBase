@@ -288,6 +288,8 @@ function InstallReadingLive({
   const [sheet, setSheet] = useState<{ held: ProcurementDraftRow | null } | null>(null);
   const actRef = useRef<HTMLButtonElement | null>(null);
   const reasonId = useId();
+  // US-19 F2-12 (one-voice, V9) — a named act is scored, never the flooded ink.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   // A window read in flight or failed is not "no window is held"
   // (install-window-ceremony.tsx), so until it settles nothing offers to hold one.
@@ -361,7 +363,7 @@ function InstallReadingLive({
               actionKey={held ? 'open-held-maker-draft' : 'install-reading-act'}
               surfaceKey="project"
               regionKey="install-reading"
-              variant="inked"
+              variant={oneVoice ? 'primary' : 'inked'}
               disabled={heldReason !== null}
               held={heldReason !== null}
               aria-describedby={heldReason ? reasonId : undefined}

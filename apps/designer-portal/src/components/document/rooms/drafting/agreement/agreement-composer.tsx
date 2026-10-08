@@ -201,6 +201,7 @@ export function AgreementComposer({
   // a studio the flag has not reached.
   const { value: libraryFlag, isLoading: libraryLoading } =
     useFeatureFlag("agreement-library");
+  const oneVoice = useFeatureFlag("one-voice").value === true;
   const libraryOn = libraryFlag && !libraryLoading;
 
   // Wave 3 — the turnkey class, nested under the Library so `design-build`
@@ -1291,13 +1292,16 @@ export function AgreementComposer({
     (part) => part.kind === "schedule" && part.variant === "retainer",
   );
   const retainerCents = Number((retainer?.payload ?? {}).cents);
+  // US-19 499-4 (one-voice) — D1's one name for the act and the control it
+  // lands on; `Send the agreement` is deleted under the flag.
+  const sendWord = oneVoice ? "Send the proposal" : "Send the agreement";
   const sendLabel =
     Number.isFinite(retainerCents) && retainerCents > 0
-      ? `Send the agreement · ${new Intl.NumberFormat("en-US", {
+      ? `${sendWord} · ${new Intl.NumberFormat("en-US", {
           style: "currency",
           currency,
         }).format(retainerCents / 100)} retainer`
-      : "Send the agreement";
+      : sendWord;
 
   const sendHeld = !readiness.ready || refusedAtSave || readOnly;
   /* Check 8 — activating a held act never fails silently: it writes the

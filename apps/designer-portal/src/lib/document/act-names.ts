@@ -83,10 +83,11 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   'Release for authorization': 'filled',
   'Send the proposal': 'filled',
   'Send the invoice': 'filled',
-  // FR1 R4 — sending a PO commits the studio's money to a maker.
-  'Send the purchase order': 'filled',
-  // FR1 R7 — money moves.
-  'Pay again': 'filled',
+  // FR2 P-1 — the filled set is D3's four, worn by the landing control only.
+  // These two print only as pointers (band, Desk, ⌘K), and a pointer is
+  // scored; FR1 R4/R7's fill belongs to the control each lands on.
+  'Send the purchase order': 'scored',
+  'Pay again': 'scored',
 
   // Scored — the four named acts
   'Record a change': 'scored',

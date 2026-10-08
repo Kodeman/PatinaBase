@@ -660,3 +660,28 @@ export interface FocusFfeLineRequest {
 export const focusFfeLinePending: { request: FocusFfeLineRequest | null } = {
   request: null,
 };
+
+// ── Record the payment lands (US-19 F2-3, P-1) ──────────────────────────────
+
+/** The band, the dock and ⌘K point at a maker payment; the PO's line answers. */
+export const LAND_RECORD_PAYMENT_EVENT = 'document:land-record-payment';
+
+export interface RecordPaymentLanding {
+  purchaseOrderId: string;
+}
+
+/**
+ * The landing asked for and not yet taken. Pieces unfolds the PO's line and
+ * the line's money out opens its record form with focus on the act; both read
+ * this, because the line's cell mounts only once the line has unfolded. The
+ * money out clears it when it lands.
+ */
+export const recordPaymentPending: { request: RecordPaymentLanding | null } = {
+  request: null,
+};
+
+export function landRecordPayment(purchaseOrderId: string): void {
+  const request = { purchaseOrderId };
+  recordPaymentPending.request = request;
+  window.dispatchEvent(new CustomEvent(LAND_RECORD_PAYMENT_EVENT, { detail: request }));
+}

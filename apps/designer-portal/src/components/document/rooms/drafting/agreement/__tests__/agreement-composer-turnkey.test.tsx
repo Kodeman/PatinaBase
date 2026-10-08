@@ -113,11 +113,12 @@ jest.mock("@/hooks/use-clients", () => ({
   useClients: () => ({ isLoading: false, data: [] }),
 }));
 
-/** All three gates, resolved. `designBuildOn` flips per-test through this. */
+/** All three gates, resolved. `designBuildOn` flips per-test through this.
+ *  `one-voice` stays off: this room's send words are the pre-US-19 names. */
 let designBuildOn = true;
 jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: (flag: string) => ({
-    value: flag === "design-build" ? designBuildOn : true,
+    value: flag === "design-build" ? designBuildOn : flag !== "one-voice",
     isLoading: false,
   }),
 }));

@@ -73,6 +73,7 @@ import {
   STUDIO_VERBS,
   boardsRoutePath,
   focusFfeLinePending,
+  landRecordPayment,
   matchPaperSynonyms,
   matchSurfaces,
   type StudioSurface,
@@ -1347,6 +1348,11 @@ export function CommandBar() {
             .flatMap((folder) => folder.needs ?? [folder.need])
             .find((need) => need.kind === 'payment_due') ?? null;
         const recordPayment = NEED_ACT_LABELS.payment_due;
+        // US-19 F2-3 (P-1) — the row points at the PO line's record-payment
+        // control, as the band does; the Orders ledger is not a landing.
+        const landingPoId = oneVoice
+          ? paymentDue?.ledger?.context?.purchaseOrderId
+          : undefined;
         if (paymentDue && (moneyAsked || recordPayment.toLowerCase().includes(q))) {
           acts.push({
             kind: 'action',
@@ -1354,9 +1360,11 @@ export function CommandBar() {
             label: recordPayment,
             sub: paymentDue.text,
             run: () =>
-              paymentDue.ledger
-                ? openLedger(paymentDue.ledger.name, paymentDue.ledger.context)
-                : openLedger('orders', { page: 'ledger', projectId: paperProjectId }),
+              landingPoId
+                ? landRecordPayment(landingPoId)
+                : paymentDue.ledger
+                  ? openLedger(paymentDue.ledger.name, paymentDue.ledger.context)
+                  : openLedger('orders', { page: 'ledger', projectId: paperProjectId }),
             match: recordPayment.toLowerCase(),
           });
         }

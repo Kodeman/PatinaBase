@@ -12,6 +12,7 @@ import {
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { useRegionFold } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
@@ -218,6 +219,9 @@ export function ProjectApprovalDocument({
    *  destination the band's line 2 presses); null leaves `New approval`. */
   quietLeader?: { label: string; onAct: () => void } | null;
 }) {
+  // US-19 F2-12 (one-voice, P-1) — `Assign project client` is plain: it is
+  // not this stage's own act, so when it heads the ledger nothing leads.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const approvalsQuery = useProjectApprovals(projectId);
   const candidatesQuery = useProjectApprovalArtifactCandidates(projectId);
   const authorityQuery = useProjectDecisionAuthority(projectId);
@@ -702,6 +706,7 @@ export function ProjectApprovalDocument({
         regionKey="approvals-head"
         actions={quietLedger}
         actsAtQuiet={quiet ? 'leader' : 'all'}
+        leader={!(oneVoice && quietLedger[0]?.key === 'assign-project-decision-lead')}
         bodyId={APPROVALS_BODY_ID}
         onFold={() => fold.setFolded(true)}
       />

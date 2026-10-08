@@ -24,6 +24,7 @@
  */
 
 import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { useProjectInvoices } from '@patina/supabase';
 import { useAccountPage } from '@/hooks/use-account-page';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
@@ -31,7 +32,7 @@ import type { SectionKey } from '@/lib/document/desk-derivation';
 import { type MoneyRung } from '@/lib/document/money-ladder';
 import { money } from '@/lib/document/project-commerce';
 import { AccountBand } from '../account-band';
-import { openInvoiceComposer } from '../accounts/invoice-overlays';
+import { openInvoiceComposer, openInvoiceFolio } from '../accounts/invoice-overlays';
 import { openLedger } from '../command-bar';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
@@ -130,7 +131,17 @@ export function MoneyRegion({
   const askThePaper = useFeatureFlag('ask-the-paper').value;
   // FR2 508-1 / F2-18 (`one-voice`): the door is `Record a change` at every
   // state of ask-the-paper, and it prints at quiet beside the leader.
+  // US-19 499-2 / 507-1 (one-voice) — the head leads with `Record the
+  // payment` only while a client receivable on this paper is due: an invoice
+  // sent and unpaid (the folio's own record test). A maker balance leads its
+  // order's row in Pieces, never this head. Nothing due: no scored leader.
   const oneVoice = useFeatureFlag('one-voice').value === true;
+  const { data: projectInvoices } = useProjectInvoices(oneVoice ? projectId : null);
+  const receivableDue = oneVoice
+    ? ((projectInvoices ?? []) as { id: string; status: string; due_date?: string | null }[])
+        .filter((invoice) => invoice.status === 'sent' || invoice.status === 'partially_paid')
+        .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'))[0] ?? null
+    : null;
 
   const account = accountQuery.data ?? null;
   const accountFailed = Boolean(accountQuery.isError);
@@ -244,6 +255,15 @@ export function MoneyRegion({
   });
 
   const ledger: RegionLedgerEntry[] = [
+    ...(receivableDue
+      ? [
+          {
+            key: 'record-client-payment',
+            label: NAMED_ACTS.recordPayment,
+            onClick: () => openInvoiceFolio(receivableDue.id),
+          },
+        ]
+      : []),
     // R74b — draw an invoice for THIS engagement: the anti-wizard composer,
     // milestones/time/FF&E pulled through pre-scoped. Same opener the accounts
     // band's own primary calls — the region head is now the single doorway.
@@ -334,6 +354,7 @@ export function MoneyRegion({
             : ledger
         }
         actsAtQuiet={quiet && !oneVoice ? 'leader' : 'all'}
+        leader={!oneVoice || receivableDue !== null}
         bodyId={BODY_ID}
         onFold={() => setFolded(true)}
       />

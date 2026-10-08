@@ -3,19 +3,37 @@
  * the line unfolds, and focus is on the PO control itself, never the Order
  * group. A request made before the Pieces listener exists waits in
  * `focusFfeLinePending` and is landed on mount.
+ *
+ * US-19 F2-3 / 2-5 — `Record the payment` (band, dock, ⌘K) lands on the PO
+ * line's record-payment control: Pieces and the line unfold, the money out
+ * opens its form, and focus is on the one filled act beneath its sentence.
  */
 import { act, render, screen, waitFor } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
+let mockWithMoneyOut = false;
 // Stands in for the unfold: the Order cell and its PO control, as order-cell.tsx
-// prints them.
-const mockLineUnfold = jest.fn(() => (
-  <div role="group" aria-label="Order" data-testid="line-po-cell">
-    <button type="button" data-po-control aria-label="Open the order, PO WS-188">
-      WS-188
-    </button>
-  </div>
-));
+// prints them — and, for the payment landing, the line's real money out.
+const mockLineUnfold = jest.fn((props: Record<string, unknown>) => {
+  const { PoMoneyOut } = jest.requireActual('../line-unfold/record-payment');
+  const item = props.item as { id: string; purchase_order?: { id: string } } | undefined;
+  return (
+    <>
+      <div role="group" aria-label="Order" data-testid="line-po-cell">
+        <button type="button" data-po-control aria-label="Open the order, PO WS-188">
+          WS-188
+        </button>
+      </div>
+      {mockWithMoneyOut && item?.purchase_order && (
+        <PoMoneyOut
+          purchaseOrderId={item.purchase_order.id}
+          projectId="project-1"
+          receiptAnchor={{ kind: 'line', anchorId: item.id }}
+        />
+      )}
+    </>
+  );
+});
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -44,6 +62,34 @@ jest.mock('@patina/supabase', () => ({
   }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
+  // The line's money out (record-payment.tsx), for the payment landing.
+  usePOPayments: () => ({
+    data: [
+      { id: 'pay-dep', kind: 'deposit', state: 'paid', amount_cents: 340_000, paid_date: '2026-03-02' },
+      { id: 'pay-bal', kind: 'balance', state: 'due', amount_cents: 340_000, due_date: '2026-05-12' },
+    ],
+  }),
+  useVendorPayments: () => ({ data: [] }),
+  useStudioPaymentMethods: () => ({ data: [] }),
+  useRecordVendorPayment: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useVoidVendorPayment: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useStartPoCheckout: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useUser: () => ({ user: { id: 'designer-1' } }),
+  usePurchaseOrders: () => ({
+    data: [{ id: 'po-188', designer_id: 'designer-1', vendor: { id: 'v-1', name: 'Woodward & Sons' } }],
+  }),
+}));
+
+jest.mock('@/hooks/use-folio', () => ({
+  ...jest.requireActual('@/hooks/use-folio'),
+  useUploadFolioFile: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));
+
+// The Folio trigger has its own suite; a plain input carries the day.
+jest.mock('../date-text-input', () => ({
+  DateTextInput: ({ value, ariaLabel }: { value: string | null; ariaLabel?: string }) => (
+    <input aria-label={ariaLabel} value={value ?? ''} readOnly />
+  ),
 }));
 
 jest.mock('../schedule/add-to-project-sheet', () => ({
@@ -108,7 +154,12 @@ jest.mock('@/hooks/use-section-work', () => {
 
 import { FFESection } from '../ffe-section';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
-import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending } from '@/lib/document/registry';
+import {
+  FOCUS_FFE_LINE_EVENT,
+  focusFfeLinePending,
+  landRecordPayment,
+  recordPaymentPending,
+} from '@/lib/document/registry';
 
 const sectional = {
   id: 'line-sectional',
@@ -138,7 +189,9 @@ beforeEach(() => {
   __setDensityForTest('full');
   mockItems = [sectional];
   mockLineUnfold.mockClear();
+  mockWithMoneyOut = false;
   focusFfeLinePending.request = null;
+  recordPaymentPending.request = null;
   window.localStorage.clear();
 });
 afterEach(() => {
@@ -171,5 +224,57 @@ describe('⌘K lands on the line (F1, R28)', () => {
 
     await waitFor(() => expect(document.activeElement).toBe(poControl()));
     expect(focusFfeLinePending.request).toBeNull();
+  });
+});
+
+describe('Record the payment lands on the PO line’s control (F2-3, 2-5)', () => {
+  const flags = process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_FLAG_OVERRIDES = 'one-voice:true';
+    mockWithMoneyOut = true;
+  });
+  afterEach(() => {
+    process.env.NEXT_PUBLIC_FLAG_OVERRIDES = flags;
+  });
+
+  const recordAct = () => screen.getByRole('button', { name: 'Record the payment · $3,400' });
+
+  async function expectLanded(container: HTMLElement) {
+    await waitFor(() => expect(document.activeElement).toBe(recordAct()));
+    // Nothing else on the paper is filled.
+    const filled = container.querySelectorAll('.da-terminal');
+    expect(filled).toHaveLength(1);
+    expect(filled[0]).toBe(recordAct());
+    // 499-5 — its one sentence directly above it.
+    const sentence = screen.getByText(/^Records \$3,400 paid to Woodward & Sons on /);
+    expect(sentence).toHaveTextContent(/— voidable with a reason, never edited\.$/);
+    expect(sentence.compareDocumentPosition(recordAct()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(recordPaymentPending.request).toBeNull();
+  }
+
+  it('lands with Pieces folded, the press made before Pieces mounted', async () => {
+    window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
+    landRecordPayment('po-188'); // no listener exists yet
+
+    const { container } = render(
+      <FFESection projectId="project-1" projectName="Chen" mode="project" />,
+    );
+
+    await expectLanded(container);
+    expect(screen.getByRole('button', { name: /Custom Walnut Sectional/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
+  it('lands with Pieces open, the line still folded', async () => {
+    const { container } = render(
+      <FFESection projectId="project-1" projectName="Chen" mode="project" />,
+    );
+    expect(container.querySelectorAll('.da-terminal')).toHaveLength(0);
+
+    act(() => landRecordPayment('po-188'));
+
+    await expectLanded(container);
   });
 });

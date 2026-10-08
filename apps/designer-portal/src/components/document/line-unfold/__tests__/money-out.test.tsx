@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
   useFfeInvoiceCoverage,
   useFfeInvoiceStageCoverage,
@@ -10,7 +10,8 @@ import {
   useVendorPayments,
   useVoidVendorPayment,
 } from '@patina/supabase';
-import { todayYmd } from '@/lib/document/format';
+import { fmtDay, todayYmd } from '@/lib/document/format';
+import { landRecordPayment, recordPaymentPending } from '@/lib/document/registry';
 import { MoneyOutCell, frontingFact } from '../money-out-cell';
 import { PoMoneyOut, parseUsdToCents } from '../record-payment';
 
@@ -30,7 +31,9 @@ jest.mock('@patina/supabase', () => ({
   useStartPoCheckout: jest.fn(),
   // Pay now is the PO designer's act alone (create-checkout-session).
   useUser: () => ({ user: mockUser.value }),
-  usePurchaseOrders: () => ({ data: [{ id: 'po-1', designer_id: 'designer-1' }] }),
+  usePurchaseOrders: () => ({
+    data: [{ id: 'po-1', designer_id: 'designer-1', vendor: { id: 'v-1', name: 'Woodward & Sons' } }],
+  }),
 }));
 
 const mockUser: { value: { id: string } | null } = { value: { id: 'designer-1' } };
@@ -297,8 +300,10 @@ describe('PoMoneyOut · one-voice (US-19 D1, D3)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Record the payment · Balance' }));
     const act = screen.getByRole('button', { name: 'Record the payment · $4,410' });
     expect(act).toHaveClass('da-terminal');
-    const consequence = screen.getByText(/^This records the balance, \$4,410, as paid on /);
-    expect(consequence).toHaveTextContent('A record is never edited; it can only be voided, with a reason.');
+    // 499-5 — the amount, the payee and the day the record will carry.
+    const consequence = screen.getByText(
+      `Records $4,410 paid to Woodward & Sons on ${fmtDay(todayYmd())} — voidable with a reason, never edited.`,
+    );
     expect(consequence.compareDocumentPosition(act) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     fireEvent.click(act);
@@ -311,7 +316,58 @@ describe('PoMoneyOut · one-voice (US-19 D1, D3)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Record payment · Balance' }));
     const act = screen.getByRole('button', { name: 'Record the balance · $4,410' });
     expect(act).not.toHaveClass('da-terminal');
-    expect(screen.queryByText(/^This records the balance/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Records /)).not.toBeInTheDocument();
+  });
+});
+
+describe('PoMoneyOut · Record the payment lands here (US-19 F2-3, 2-5)', () => {
+  afterEach(() => {
+    recordPaymentPending.request = null;
+  });
+
+  it('opens the due row’s form and puts focus on its one filled act, the sentence above it', async () => {
+    mockOneVoice = true;
+    setup();
+    const { container } = renderBand();
+    expect(container.querySelectorAll('.da-terminal')).toHaveLength(0);
+
+    act(() => landRecordPayment('po-1'));
+
+    const terminals = container.querySelectorAll('.da-terminal');
+    expect(terminals).toHaveLength(1);
+    const recordAct = screen.getByRole('button', { name: 'Record the payment · $4,410' });
+    expect(terminals[0]).toBe(recordAct);
+    await waitFor(() => expect(document.activeElement).toBe(recordAct));
+    const sentence = screen.getByText(/^Records \$4,410 paid to Woodward & Sons on /);
+    expect(sentence.compareDocumentPosition(recordAct) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(recordPaymentPending.request).toBeNull();
+  });
+
+  it('takes a landing asked for before the line unfolded, on mount', async () => {
+    mockOneVoice = true;
+    setup();
+    landRecordPayment('po-1'); // nothing mounted yet
+    renderBand();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Record the payment · $4,410' }),
+      ),
+    );
+    expect(recordPaymentPending.request).toBeNull();
+  });
+
+  it('leaves another PO’s landing, and the Orders ledger’s copy, alone', () => {
+    mockOneVoice = true;
+    setup();
+    landRecordPayment('po-other');
+    const { unmount } = renderBand();
+    expect(screen.queryByTestId('record-payment-form')).not.toBeInTheDocument();
+    expect(recordPaymentPending.request).toEqual({ purchaseOrderId: 'po-other' });
+    unmount();
+
+    landRecordPayment('po-1');
+    renderBand({ surfaceKey: 'orders' });
+    expect(screen.queryByTestId('record-payment-form')).not.toBeInTheDocument();
   });
 });
 

@@ -438,6 +438,28 @@ describe('ReviewReleaseSheet', () => {
     expect(gate).toHaveTextContent('B-004');
   });
 
+  // US-19 499-3 / F2-20 (one-voice) — the confirm is the act's one name,
+  // filled, beneath the sentence the sheet already states.
+  it('one-voice: confirms Release for authorization, filled, beneath its sentence', () => {
+    const flags = process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
+    process.env.NEXT_PUBLIC_FLAG_OVERRIDES = 'one-voice:true';
+    try {
+      renderSheet();
+      const confirm = screen.getByRole('button', { name: 'Release for authorization' });
+      expect(confirm).toHaveClass('da-terminal');
+      expect(screen.queryByRole('button', { name: 'Send for signature' })).not.toBeInTheDocument();
+      const sentence = screen.getByText(/Prices lock on release\./);
+      expect(sentence.compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    } finally {
+      process.env.NEXT_PUBLIC_FLAG_OVERRIDES = flags;
+    }
+  });
+
+  it('keeps Send for signature with the flag off', () => {
+    renderSheet();
+    expect(screen.getByRole('button', { name: 'Send for signature' })).not.toHaveClass('da-terminal');
+  });
+
   it('tells the truth about what happens next', () => {
     renderSheet();
     expect(
