@@ -35,7 +35,10 @@
 --   7. Answer the maker — "Fenwick Lodge" (both F7-12). See that block.
 --   8. A sent proposal with no login (F8-9 a) — "Okafor Terrace — Study"; and
 --   9. Two silences and a held follow-up (F8-9 b) — "Birchwood Row". See the
---      last block, which names their walk steps.
+--      8 + 9 block, which names their walk steps.
+--  10. A sent design-services proposal with no project (F9-4) — "Varga
+--      House — Design Services", the countersign walk (F8-4). See the last
+--      block, which names its walk step.
 --
 -- Chen Residence is read, never written: its sectional on WS-188, its overdue
 -- balance and its lines stay exactly as procurement_workspace_dev.sql lays
@@ -995,4 +998,102 @@ BEGIN
     E'Hello,\n\nWe sent PO BR-2026-031 for the brass cloud pendant a week ago and have not had an acknowledgment. Could you confirm you have it, and the date you expect it to ship?\n\nThank you,\nLeah',
     'awaiting_review', uid_designer::text, ts - INTERVAL '1 day', ts - INTERVAL '1 day'
   ) ON CONFLICT DO NOTHING;
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 10. A sent design-services proposal with no project (F9-4,
+-- design-review-9.md §2; the F8-4 N/A row, §1).
+--
+-- The F8 walk could not reach the countersign (F8-4): the only sent
+-- design_services proposal (cb04) carries a project_id, so /doc/cb04
+-- redirects to the Cedar Lane project paper (R6) and no proposal section
+-- mounts. A real design-services agreement is a proposal paper until the
+-- countersign makes the project, so this one has no project_id at all.
+-- The walk step, as `designer@patina.dev`, flags `ask-the-paper` +
+-- `one-voice` on:
+--
+--  10. "Varga House — Design Services" — sent six days ago to Ilona Varga, a
+--      household with no login (designer_clients.client_id NULL, an email on
+--      file), opened five days ago, never reminded.
+--        Doc: f1900000-0000-4000-8000-0000000000a2 (/doc/<id>)
+--      a. Put the paper in `client_signed`. No RPC lays a client signature
+--         here, so psql sets the state alone, with triggers off
+--         (session_replication_role = replica) so no guard, dispatch or
+--         updated_at fires:
+--           psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -c "BEGIN; SET LOCAL session_replication_role = replica; UPDATE public.proposals SET commercial_state = 'client_signed' WHERE id = 'f1900000-0000-4000-8000-0000000000a2' AND commercial_state = 'sent'; COMMIT;"
+--      b. Reload: the band reads `PROPOSAL · VARGA HOUSE — DESIGN SERVICES` /
+--         `Signed by Ilona.` · `COUNTERSIGN AGREEMENT`. The press at 1440
+--         lands focus on `INPUT#document-act-countersign` (`Your full
+--         name`); at 390 the dock centre reads `COUNTERSIGN AGREEMENT` and
+--         lands the same. Never press Countersign.
+--      c. Restore exactly, the same way (only the state moved, so only the
+--         state moves back):
+--           psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -c "BEGIN; SET LOCAL session_replication_role = replica; UPDATE public.proposals SET commercial_state = 'sent' WHERE id = 'f1900000-0000-4000-8000-0000000000a2' AND commercial_state = 'client_signed'; COMMIT;"
+--
+-- Nothing sends: the send and the open are laid as rows. useCommercialDocument
+-- reads proposals, proposal_service_terms (maybeSingle), rates, signatures and
+-- agreement parts by proposal id; it needs no documents row and no project,
+-- so none is laid. Local dev only; fixed UUIDs f1900000-…-0000000000{a1…a9}
+-- (a1, a2 in use) with NOT EXISTS; the proposal is sent and opened only when
+-- first laid (an issued proposal is immutable, 00390).
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  uid_designer   UUID := 'a0000000-0000-0000-0000-000000000004';  -- Leah Hartwell
+
+  v_dc_varga     UUID := 'f1900000-0000-4000-8000-0000000000a1';
+  v_varga        UUID := 'f1900000-0000-4000-8000-0000000000a2';
+
+  ts             TIMESTAMPTZ := NOW();
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = uid_designer) THEN
+    RAISE NOTICE 'running_a_job_walk_dev.sql: dev accounts are not seeded yet, skipping the F9-4 fixture';
+    RETURN;
+  END IF;
+
+  INSERT INTO public.designer_clients (
+    id, designer_id, client_id, status, client_name, client_email, source,
+    created_at, updated_at
+  )
+  SELECT v_dc_varga, uid_designer, NULL, 'proposal',
+         'Ilona Varga', 'ilona.varga@example.com', 'manual',
+         ts - INTERVAL '21 days', ts - INTERVAL '21 days'
+  WHERE NOT EXISTS (SELECT 1 FROM public.designer_clients WHERE id = v_dc_varga);
+
+  -- Built as a draft design-services agreement (Halloran's and Ashby's shape,
+  -- with no project), then sent under the send capability GUC as Okafor is;
+  -- the send mirrors commercial_state to 'sent'. The open is laid in the same
+  -- update under mark_proposal_viewed's GUC; status stays 'sent'.
+  IF NOT EXISTS (SELECT 1 FROM public.proposals WHERE id = v_varga) THEN
+    INSERT INTO public.proposals (
+      id, designer_id, client_id, designer_client_id, title, description,
+      status, document_kind, commercial_state, subtotal, total_amount,
+      valid_until, personal_message, created_at, updated_at, version
+    ) VALUES (
+      v_varga, uid_designer, NULL, v_dc_varga,
+      'Varga House — Design Services',
+      'Walk fixture (US-19, F9-4): a design-services agreement sent to a household with no login, no project yet.',
+      'draft', 'design_services', 'draft', 420000, 420000,
+      (ts + INTERVAL '14 days'),
+      'Here is how we would work together on the house, room by room.',
+      ts - INTERVAL '8 days', ts - INTERVAL '8 days', 1
+    );
+
+    INSERT INTO public.proposal_sections (proposal_id, type, title, body, sort_order, metadata)
+    VALUES
+      (v_varga, 'vision', 'Design Vision',
+       'A family house made calm again: the front rooms opened to the garden, warm plaster, and pieces that will last.',
+       0, '{}'::jsonb);
+
+    PERFORM set_config('app.proposal_send_id', v_varga::text, true);
+    PERFORM set_config('app.proposal_view_id', v_varga::text, true);
+    UPDATE public.proposals
+       SET status = 'sent',
+           sent_at = ts - INTERVAL '6 days',
+           viewed_at = ts - INTERVAL '5 days',
+           updated_at = ts - INTERVAL '5 days'
+     WHERE id = v_varga AND status = 'draft';
+    PERFORM set_config('app.proposal_send_id', '', true);
+    PERFORM set_config('app.proposal_view_id', '', true);
+  END IF;
 END $$;
