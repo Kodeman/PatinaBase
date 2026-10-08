@@ -54,6 +54,18 @@ jest.mock("@patina/supabase", () => ({
 
 jest.mock("@/hooks/use-hydrated", () => ({ useHydrated: () => true }));
 
+// T-7 — the editor's Room select; exercised in __tests__/spec-book-way-back.
+jest.mock("@/hooks/use-document-rooms", () => ({
+  useDocumentRooms: () => ({ data: [] }),
+  useAssignLineRoom: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+    isError: false,
+    isSuccess: false,
+    error: null,
+  }),
+}));
+
 // SP-19/F57 — the workspace reads `?ffeItemId=` to land on one line. The
 // global jest.setup mock returns an empty stub, so this file drives it.
 let mockSearchParams = new URLSearchParams();
