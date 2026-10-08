@@ -49,6 +49,7 @@ import {
   type NeedLine,
 } from '@/lib/document/desk-derivation';
 import { buildDeskConflicts } from '@/lib/document/desk-conflicts';
+import { lineMaker } from '@/lib/document/install-reading';
 import {
   buildDeskProposalSignals,
   buildDeskSchedule,
@@ -248,6 +249,8 @@ export function buildDeskDrafts(rows: any): Map<string, DeskDraftSignal[]> | und
         body: row.body,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        // FR2 506-6: a line-level draft names its maker, by R42's one selector.
+        ...(row.ffe_item ? { maker: lineMaker(row.ffe_item) } : {}),
       },
     ]);
   }
@@ -645,7 +648,9 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         // buildDeskDrafts drops a studio-level draft (no project).
         supabase
           .from('procurement_drafts')
-          .select('id, project_id, kind, status, to_email, subject, body, created_at, updated_at')
+          .select(
+            'id, project_id, kind, status, to_email, subject, body, created_at, updated_at, ffe_item:project_ffe_items!procurement_drafts_ffe_item_id_fkey(vendor_name, product:products!product_id(brand), purchase_order:purchase_orders!purchase_order_id(vendor:vendors!purchase_orders_vendor_id_fkey(name)))',
+          )
           .in('status', ['awaiting_review', 'sending'])
           .order('created_at')
           .limit(DESK_DRAFT_LIMIT),

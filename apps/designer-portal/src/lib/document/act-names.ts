@@ -174,6 +174,10 @@ export const FORBIDDEN_ACT_LABELS = {
   prefix: ['Chase'],
 } as const;
 
+/** FR2 499-9 / 506-6 — the act a held draft lands on: its review, where Send
+ *  and Discard live. The Desk and the install row print it. */
+export const OPEN_THE_HELD_DRAFT = 'Open the held draft';
+
 /** `Message Chen`, or `Message the client` with no first name. */
 export function messageLabel(firstName: string | null): string {
   const first = firstName?.trim();

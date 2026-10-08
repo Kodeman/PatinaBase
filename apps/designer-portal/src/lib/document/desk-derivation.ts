@@ -23,7 +23,7 @@ import {
   NOT_OVERDUE,
   type OverdueCondition,
 } from './overdue-condition';
-import { needActLabel } from './act-names';
+import { OPEN_THE_HELD_DRAFT, needActLabel } from './act-names';
 import {
   DESK_SCHEDULE_UNCONFIGURED,
   isCeremonySourceEvent,
@@ -202,7 +202,42 @@ export function deskActionLabel(
   clientFirstName: string | null = null,
 ): string | null {
   if (!oneVoice || need.actionLabel === null) return need.actionLabel;
+  // FR2 499-9 — the Desk names the control the act lands on, not the need's
+  // kind. Only a seat that can release sees a held order, so the release act
+  // is never in its held form here.
+  if (need.releaseHeld) return 'Release for authorization';
+  if (need.draft) return OPEN_THE_HELD_DRAFT;
   return needActLabel(need.kind, clientFirstName);
+}
+
+/**
+ * US-19 FR2 506-6 (`one-voice`) — the sentence a need prints on the Desk. On,
+ * a single held date request names its maker and says it is not sent; every
+ * other need prints its own text. Off, today's copy.
+ */
+export function deskNeedText(need: NeedLine, oneVoice: boolean): string {
+  if (
+    oneVoice &&
+    need.draft?.kind === 'maker_eta_request' &&
+    need.text === DRAFT_NEED.maker_eta_request.text
+  ) {
+    return `Date request to ${need.draft.maker?.trim() || 'the maker'} drafted — not sent.`;
+  }
+  return need.text;
+}
+
+/**
+ * US-19 FR2 F2-2 / R17 (`one-voice`) — a chip as the Desk prints it. On, the
+ * word `Band` never prints: an unanchored project's position chip gives way to
+ * what `deriveMotion` would have said next (pieces on the way), or to nothing.
+ * Off, the chip as derived.
+ */
+export function deskMotion(chip: MotionChip | null, oneVoice: boolean): MotionChip | null {
+  if (!oneVoice || !chip || chip.kind !== 'schedule_position' || chip.text !== BAND_UNANCHORED) {
+    return chip;
+  }
+  const next = inFlightMotion(chip.row);
+  return next ? { row: chip.row, ...next } : null;
 }
 
 /** R28 conflict inputs (built client-side from delivery_events by
@@ -339,6 +374,9 @@ export interface DeskDraftSignal {
   created_at: string;
   /** While sending, the claim time (00720: a stalled send offers Send again). */
   updated_at?: string;
+  /** R42's maker for a line-level draft (`maker_eta_request`): the line's
+   *  vendor, else its PO's vendor, else its product's brand. Absent otherwise. */
+  maker?: string | null;
 }
 
 /** Which Desk need a draft rides: the act it answers. */
@@ -531,6 +569,9 @@ export interface NeedLine {
    *  mounts the draft review on it: recipient, editable subject and body,
    *  Send and Discard. */
   draft?: DeskDraftSignal;
+  /** C-32: the need is an order held for this seat's release; its act lands
+   *  on the release control (FR2 499-9). */
+  releaseHeld?: true;
 }
 
 export interface DeskFolder {
@@ -1302,6 +1343,7 @@ const needHeldForRelease: NeedRule = ({ row, heldReleases }) => {
     kind: 'po_unsent',
     text,
     actionLabel: 'Release',
+    releaseHeld: true,
     stamp: { label: 'HELD', ...STAMP.clay },
     urgent: false,
     ...(row.project_id
@@ -1860,7 +1902,7 @@ export function deriveMotion(
   if (schedule && row.engagement_kind === 'project') {
     const position = schedule.positionText;
     if (schedule.fidelity === 'band') {
-      if (position) return { kind: 'schedule_position', text: 'Band — no anchor yet' };
+      if (position) return { kind: 'schedule_position', text: BAND_UNANCHORED };
     } else if (position && schedule.activePhaseName) {
       return {
         kind: 'schedule_position',
@@ -1869,15 +1911,17 @@ export function deriveMotion(
     }
   }
 
-  if (row.in_flight_count > 0) {
-    const n = row.in_flight_count;
-    return {
-      kind: 'in_flight',
-      text: n === 1 ? '1 piece on the way' : `${n} pieces on the way`,
-    };
-  }
+  return inFlightMotion(row);
+}
 
-  return null;
+/** R108's unanchored position chip; `deskMotion` keeps it off the one-voice Desk (R17). */
+const BAND_UNANCHORED = 'Band — no anchor yet';
+
+/** The last chip `deriveMotion` offers: pieces on the way. */
+function inFlightMotion(row: DocumentStateRow): { kind: MotionKind; text: string } | null {
+  if (row.in_flight_count <= 0) return null;
+  const n = row.in_flight_count;
+  return { kind: 'in_flight', text: n === 1 ? '1 piece on the way' : `${n} pieces on the way` };
 }
 
 function needSortKey(folder: DeskFolder): [number, number, number] {

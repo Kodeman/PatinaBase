@@ -49,6 +49,7 @@ import { openLogTime } from '@/components/document/log-time-sheet';
 import { openDraftingRoom } from '@/lib/document/open-drafting-room';
 import { fmtDay } from '@/lib/document/format';
 import { useViewerStudio } from '@/hooks/use-viewer-studio';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 type RowVariant = 'room' | 'ledger' | 'verb';
 
@@ -278,6 +279,8 @@ function ContentsRow({
  */
 export function DeskContents({ prominent = false }: { prominent?: boolean }) {
   const router = useRouter();
+  // US-19 FR2 499-8(5) — `Open the Contract Room` retires; the door is its act.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   // Global rooms only — the document-scoped Drafting Room is excluded (it has no
   // standalone doorway without a proposal in hand).
@@ -404,7 +407,7 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
                 exports rather than a doorway string (C-AF-01). */}
             <ContentsRow
               icon={PenTool}
-              label="Open the Contract Room"
+              label={oneVoice ? 'Write the proposal' : 'Open the Contract Room'}
               subLabel="facets fill in any order"
               variant="verb"
               prominent={prominent}

@@ -6,6 +6,7 @@
  */
 
 import {
+  deskActionLabel,
   deriveNeed,
   partitionDesk,
   type DeskHeldReleaseSignal,
@@ -76,6 +77,14 @@ const derive = (...signals: DeskHeldReleaseSignal[]) =>
   deriveNeed(mkRow(), NOW, null, null, null, null, null, null, null, null, null, null, null, signals);
 
 describe('C-32 — the held-for-release need', () => {
+  // US-19 FR2 499-9 — the Desk labels the act by the control it lands on.
+  it('under one-voice names the release control, Release for authorization', () => {
+    const need = derive(held())!;
+    expect(need.releaseHeld).toBe(true);
+    expect(deskActionLabel(need, false)).toBe('Release');
+    expect(deskActionLabel(need, true)).toBe('Release for authorization');
+  });
+
   it("asks the releasing seat to release Maya's order to Hewn, with the total", () => {
     const need = derive(held());
     expect(need!.text).toBe("Release Maya's order to Hewn · $12,480");

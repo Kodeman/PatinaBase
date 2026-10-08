@@ -11,6 +11,9 @@
  */
 
 import {
+  deskActionLabel,
+  deskMotion,
+  deskNeedText,
   firstName,
   folderTab,
   type DeskFolder,
@@ -22,6 +25,7 @@ import {
   type SectionKey,
 } from './desk-derivation';
 import { dayMonth, legalDate, parseSourceDate } from './dates';
+import { voiceFirstName } from './document-guide';
 import {
   deriveOverdue,
   overdueElapsedPhrase,
@@ -174,6 +178,11 @@ export interface DeskRosterInput {
   folders: readonly DeskFolder[];
   chips: readonly MotionChip[];
   live: readonly DocumentStateRow[];
+  /** US-19 FR2 F2-2 — `one-voice`, read by the 'use client' caller. On, the
+   *  roster prints each act by its one name (`deskActionLabel`), a held date
+   *  request's own sentence (`deskNeedText`) and no `Band` chip
+   *  (`deskMotion`). Off or absent, today's strings. */
+  oneVoice?: boolean;
 }
 
 function prettyPhase(phase: string | null): string | null {
@@ -354,10 +363,15 @@ export function deriveDeskRoster(
     input.chips.map((chip) => [chip.row.engagement_id, chip]),
   );
 
+  const voice = input.oneVoice === true;
   const entries: RosterEntry[] = input.live.map((row) => {
     const folder = folderByEngagement.get(row.engagement_id) ?? null;
-    const chip = chipByEngagement.get(row.engagement_id) ?? null;
+    const chip = deskMotion(chipByEngagement.get(row.engagement_id) ?? null, voice);
     const need = folder?.need ?? null;
+    const needText = need ? deskNeedText(need, voice) : null;
+    const actionLabel = need
+      ? deskActionLabel(need, voice, voice ? voiceFirstName(row.client_name) : null)
+      : null;
     const overdue = need ? deriveOverdue(need.dueOn, now) : NOT_OVERDUE;
     // EVERY need is a mark (§2.1). A need with no due date is still a need —
     // a damage claim, a flagged line, a PO nobody answered — and leaving those
@@ -376,7 +390,7 @@ export function deriveDeskRoster(
       ? PAUSED_STATE
       : overdue.isOverdue
         ? null
-        : (need?.text ?? chip?.text ?? QUIET_STATE);
+        : (needText ?? chip?.text ?? QUIET_STATE);
     const state = [clientOf(row), prettyPhase(row.current_phase), body]
       .filter((part): part is string => Boolean(part))
       .join(' · ');
@@ -394,9 +408,9 @@ export function deriveDeskRoster(
 
     const jobHref = `/doc/${row.engagement_id}`;
     const act: RosterAct =
-      need?.actionLabel != null
+      need && actionLabel != null
         ? {
-            label: need.actionLabel,
+            label: actionLabel,
             href: need.deepLink ?? jobHref,
             ...(need.ledger ? { ledger: need.ledger } : {}),
           }
@@ -412,7 +426,7 @@ export function deriveDeskRoster(
         personLine,
         overdueText:
           overdue.isOverdue && need
-            ? `Overdue ${overdueElapsedPhrase(overdue)} — ${need.text}`
+            ? `Overdue ${overdueElapsedPhrase(overdue)} — ${needText}`
             : null,
         mark,
         needKind: need?.kind ?? null,
@@ -422,7 +436,7 @@ export function deriveDeskRoster(
         projectId: row.project_id ?? null,
         client: clientOf(row),
         dueOn: need?.dueOn ?? null,
-        needText: need?.text ?? null,
+        needText,
         custody: custodyWord(need, row),
         needOwner: need?.owner ?? null,
         // The need's own date first — a deadline outranks a provenance stamp.

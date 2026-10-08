@@ -36,6 +36,7 @@ import {
   type NeedLine,
   type SectionKey,
 } from '../desk-derivation';
+import { deriveDeskRoster } from '../desk-roster-derivation';
 import { deriveDocumentGuide, needGuideAction, voiceFirstName } from '../document-guide';
 import {
   deriveNext,
@@ -282,9 +283,12 @@ describe('the 13 cross-device contradictions, under one-voice', () => {
     }
   });
 
-  it.todo(
-    '5 · Direction: ⌘K’s and the Desk index’s Open the Contract Room do different things — FR1 limits command-bar.tsx to the Where the work stands labels; DESIGN-Q on SQ-499',
-  );
+  it('5 · Direction: Open the Contract Room retires on ⌘K and the Desk — both print Write the proposal (FR2 499-8(5), F2-14)', () => {
+    // command-bar.tsx and desk-contents.tsx print this one string under
+    // one-voice (command-bar-paper.test.tsx renders the ⌘K row).
+    expect(ownAct('direction', quietFacts)!.label).toBe('Write the proposal');
+    expect(ACT_TIER['Write the proposal']).toBe('scored');
+  });
 
   it('6 · Proposal draft: the guide names the control’s act, Write the proposal', () => {
     const draft = row('proposal', { proposal_status: 'draft' } as Partial<DocumentStateRow>);
@@ -392,5 +396,39 @@ describe('the 13 cross-device contradictions, under one-voice', () => {
     expect(deriveDocumentGuide({ row: chenRow, gate, oneVoice: true }).eyebrow).toBe(
       `${STAGE_WORD.project} · gate`,
     );
+  });
+});
+
+// US-19 FR2 F2-2 — the Desk card prints the act the band prints. The Desk's
+// cards are the roster's lines (ledger rows and claim cards print
+// `line.act.label`), derived here the way the Desk page derives them.
+describe('the Desk card speaks the band’s act (FR2 F2-2, 2-2)', () => {
+  const deskCard = (r: DocumentStateRow, need: NeedLine, oneVoice = true) =>
+    deriveDeskRoster({ folders: [{ row: r, need }], chips: [], live: [r], oneVoice }, new Date(
+      '2026-08-10T12:00:00Z',
+    )).groups[0].lines[0].act.label;
+
+  it('Chen: Record the payment, as the band and the guide print it', () => {
+    const band = chenSurfaces().band;
+    expect(deskCard(chenRow, chenPayment)).toBe('Record the payment');
+    expect(deskCard(chenRow, chenPayment)).toBe(band);
+    expect(deskCard(chenRow, chenPayment, false)).toBe('Record payment');
+  });
+
+  it('Aspen: Nudge {first}, with the client’s first name', () => {
+    const aspen = row('project', { client_name: 'Mei Lin', title: 'Aspen Residence' });
+    const decision = needOf('overdue_decision', { owner: 'client' });
+    const first = voiceFirstName(aspen.client_name);
+    expect(first).toBe('Mei');
+    expect(deskCard(aspen, decision)).toBe('Nudge Mei');
+    expect(deskCard(aspen, decision)).toBe(needActLabel('overdue_decision', first));
+    expect(deskCard(aspen, decision, false)).toBe('Review decisions');
+  });
+
+  it('Olsen: File the claim, the named act the band and head print', () => {
+    const olsen = row('install', { client_name: 'Per Olsen', title: 'Olsen Residence' });
+    const claim = needOf('damage_claim');
+    expect(deskCard(olsen, claim)).toBe(NAMED_ACTS.fileClaim);
+    expect(deskCard(olsen, claim, false)).toBe('Review the claim');
   });
 });

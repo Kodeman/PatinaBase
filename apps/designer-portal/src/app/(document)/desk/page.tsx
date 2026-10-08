@@ -92,6 +92,8 @@ export default function DeskPage() {
   // flag (W2). Flag off (or loading) never renders it.
   const { value: teammatePersonaEnabled, isLoading: teammatePersonaLoading } =
     useFeatureFlag('onboarding-teammate-persona');
+  // US-19 FR2 F2-2 — the roster prints each act by its one name.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const { data: orgs, isLoading: orgsLoading } = useOrganizations();
   const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
   const {
@@ -203,10 +205,11 @@ export default function DeskPage() {
           folders: data?.folders ?? [],
           chips: data?.chips ?? [],
           live: data?.live ?? [],
+          oneVoice,
         },
         new Date(),
       ),
-    [data],
+    [data, oneVoice],
   );
 
   // A quiet Desk (no live jobs at all) lets the Studio index rise to fill the

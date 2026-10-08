@@ -61,9 +61,11 @@ jest.mock('@/hooks/use-auth', () => ({
 }));
 
 let mockAskThePaper = true;
+let mockOneVoice = false;
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (name: string) => ({
-    value: name === 'ask-the-paper' ? mockAskThePaper : false,
+    value:
+      name === 'ask-the-paper' ? mockAskThePaper : name === 'one-voice' ? mockOneVoice : false,
   }),
 }));
 
@@ -131,6 +133,7 @@ const optionNames = () =>
 
 beforeEach(() => {
   mockAskThePaper = true;
+  mockOneVoice = false;
   mockRow = chenRow();
   mockPathname.mockReturnValue('/doc/eng-chen');
   mockPush.mockClear();
@@ -412,5 +415,85 @@ describe('flag off — today’s ⌘K', () => {
     openAndType('change');
     expect(screen.queryByText('Record a change')).not.toBeInTheDocument();
     expect(screen.queryByText('Add a change')).not.toBeInTheDocument();
+  });
+});
+
+// US-19 FR2 — ⌘K speaks the act names under `one-voice` (F2-11, F2-14, F2-23).
+describe('one-voice ⌘K (FR2)', () => {
+  beforeEach(() => {
+    mockOneVoice = true;
+  });
+
+  const directionRow = () =>
+    chenRow({
+      engagement_kind: 'proposal',
+      engagement_id: 'eng-dir',
+      project_id: null,
+      proposal_id: 'prop-dir',
+      proposal_status: 'draft',
+      active_section: 'direction',
+      title: 'Living Room Direction',
+    });
+
+  it('F2-14 — on Direction the Contract Room row is the act row Write the proposal', () => {
+    mockRow = directionRow();
+    mockPathname.mockReturnValue('/doc/eng-dir');
+    openAndType('prop');
+    const write = screen.getByRole('option', { name: /^Write the proposal/ });
+    expect(write.querySelector('.font-medium')?.textContent).toBe('Write the proposal');
+    expect(screen.queryByText('Contract Room')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Open the Contract Room/)).not.toBeInTheDocument();
+
+    fireEvent.click(write);
+    expect(mockPush).toHaveBeenCalledWith('/drafting/prop-dir');
+  });
+
+  it('F2-14 — the empty query’s This surface row prints Write the proposal, never Open the Contract Room', () => {
+    mockRow = directionRow();
+    mockPathname.mockReturnValue('/doc/eng-dir');
+    openAndType('');
+    const surface = screen.getByRole('group', { name: 'This surface' });
+    expect(within(surface).getByRole('option', { name: /^Write the proposal/ })).toBeInTheDocument();
+    expect(screen.queryByText('Open the Contract Room')).not.toBeInTheDocument();
+  });
+
+  it('F2-11 — a closed job’s dry query prints one sentence: no second Nothing matches., no pieces row', () => {
+    mockRow = chenRow({ project_status: 'completed', active_section: 'care', title: 'Lindqvist' });
+    mockUseProjectFFEItems.mockReturnValue({ data: [] });
+    openAndType('zzz');
+    expect(screen.getAllByText('Nothing on this paper matches "zzz".')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('Nothing on this paper matches "zzz".');
+    expect(screen.queryByText('Nothing matches.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Open the pieces/ })).not.toBeInTheDocument();
+  });
+
+  it('F2-23 / 507-4 — the ask row reads Ask the paper: "{query}", with no AI or Engine word', () => {
+    openAndType('c');
+    expect(groupOptions('Results')).toEqual(['Ask the paper: "c"ASK & PLACE']);
+    const dialog = screen.getByRole('dialog', { name: 'Command bar' });
+    expect(dialog.textContent).not.toMatch(/\b(AI|Engine)\b/);
+  });
+
+  it('F2-23 / 507-5 — The keys is gone: Keys ? is the one door, printed once', () => {
+    openAndType('keys');
+    expect(screen.queryByText('The keys')).not.toBeInTheDocument();
+    const keys = screen.getAllByRole('option', { name: /^Keys/ });
+    expect(keys).toHaveLength(1);
+    expect(keys[0]).toHaveTextContent('?');
+  });
+
+  it('F2-23 / 507-5 — on the Desk the one door is Keys ?, too', () => {
+    mockPathname.mockReturnValue('/desk');
+    openAndType('keys');
+    expect(screen.queryByText('The keys')).not.toBeInTheDocument();
+    const keys = screen.getByRole('option', { name: /^Keys/ });
+    expect(keys).toHaveTextContent('?');
+  });
+
+  it('flag off, the Desk still prints The keys', () => {
+    mockOneVoice = false;
+    mockPathname.mockReturnValue('/desk');
+    openAndType('keys');
+    expect(screen.getByText('The keys')).toBeInTheDocument();
   });
 });

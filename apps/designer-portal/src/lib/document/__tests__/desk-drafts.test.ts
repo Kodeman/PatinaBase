@@ -2,7 +2,10 @@
  * C-28: a procurement draft awaiting review rises as a Desk need that carries
  * the draft, so the folder face can mount its review.
  */
+import { buildDeskDrafts } from '@/hooks/use-desk-engagements';
 import {
+  deskActionLabel,
+  deskNeedText,
   deriveNeeds,
   partitionDesk,
   type DeskDraftSignal,
@@ -127,5 +130,55 @@ describe('C-28 draft review need', () => {
     expect(folders).toHaveLength(1);
     expect(folders[0].row.project_id).toBe('p1');
     expect(folders[0].need.draft?.id).toBe('draft-1');
+  });
+});
+
+// US-19 FR2 499-9 / 506-6 — under `one-voice` a held draft's act is the
+// control it lands on, and a held date request names its maker.
+describe('FR2 — the Desk speaks a held draft by its landing control', () => {
+  it('names every held draft Open the held draft, never Follow up with the maker', () => {
+    for (const kind of ['ack_discrepancy_reply', 'ack_chase', 'maker_eta_request']) {
+      const [need] = needsWith([draft({ kind })]);
+      expect(deskActionLabel(need, false)).toBe('Review and send');
+      expect(deskActionLabel(need, true)).toBe('Open the held draft');
+    }
+  });
+
+  it('prints a date request as Date request to {maker} drafted — not sent.', () => {
+    const [need] = needsWith([draft({ kind: 'maker_eta_request', maker: 'Fixture Metalworks' })]);
+    expect(deskNeedText(need, false)).toBe('Arrival date request to the maker drafted');
+    expect(deskNeedText(need, true)).toBe('Date request to Fixture Metalworks drafted — not sent.');
+  });
+
+  it('leaves every other draft sentence as it is', () => {
+    const [need] = needsWith([draft({})]);
+    expect(deskNeedText(need, true)).toBe(need.text);
+  });
+
+  it('buildDeskDrafts reads the maker off the draft line in R42 order', () => {
+    const base = {
+      id: 'd1',
+      project_id: 'p1',
+      kind: 'maker_eta_request',
+      status: 'awaiting_review',
+      to_email: null,
+      subject: 's',
+      body: 'b',
+      created_at: '2026-10-06T09:00:00Z',
+    };
+    const map = buildDeskDrafts([
+      {
+        ...base,
+        ffe_item: {
+          vendor_name: null,
+          purchase_order: { vendor: { name: 'Hewn' } },
+          product: { brand: 'Brand' },
+        },
+      },
+      { ...base, id: 'd2', kind: 'ack_chase', ffe_item: null },
+    ])!;
+    const [eta, chase] = map.get('p1')!;
+    expect(eta.maker).toBe('Hewn');
+    expect(chase).not.toHaveProperty('maker');
   });
 });

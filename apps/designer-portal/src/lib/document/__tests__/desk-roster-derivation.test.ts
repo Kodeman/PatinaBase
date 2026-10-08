@@ -1457,3 +1457,84 @@ describe('deriveDeskRoster — personLine (the line under the name)', () => {
     expect(line.personLine).not.toContain('nothing needs your hand');
   });
 });
+
+// US-19 FR2 F2-2, 499-9, 506-6, R17 — under `one-voice` the roster (every
+// ledger row and claim card prints `line.act.label`, `needText`, `state`,
+// `motionText`) speaks each act by its one name. Off, today's strings.
+describe('deriveDeskRoster — one voice (FR2 F2-2)', () => {
+  const voiced = (r: DocumentStateRow, n: NeedLine) =>
+    deriveDeskRoster(input({ live: [r], folders: [folder(r, n)], oneVoice: true }), NOW)
+      .groups[0].lines[0];
+  const unvoiced = (r: DocumentStateRow, n: NeedLine) =>
+    deriveDeskRoster(input({ live: [r], folders: [folder(r, n)] }), NOW).groups[0].lines[0];
+
+  it('kills Record payment, Review decisions and Review the claim', () => {
+    const mei = row('aspen', 'project', { client_name: 'Mei Lin' });
+    const cases: [NeedLine, string, string][] = [
+      [need({ kind: 'payment_due', actionLabel: 'Record payment' }), 'Record payment', 'Record the payment'],
+      [need({ kind: 'overdue_decision', actionLabel: 'Review decisions' }), 'Review decisions', 'Nudge Mei'],
+      [need({ kind: 'damage_claim', actionLabel: 'Review the claim' }), 'Review the claim', 'File the claim'],
+    ];
+    for (const [n, before, after] of cases) {
+      expect(unvoiced(mei, n).act.label).toBe(before);
+      expect(voiced(mei, n).act.label).toBe(after);
+    }
+  });
+
+  it('labels a held order by its landing control, Release for authorization', () => {
+    const r = row('held', 'project');
+    const held = need({ kind: 'po_unsent', actionLabel: 'Release', releaseHeld: true });
+    expect(unvoiced(r, held).act.label).toBe('Release');
+    expect(voiced(r, held).act.label).toBe('Release for authorization');
+  });
+
+  it('labels a held draft Open the held draft, and a date request names its maker', () => {
+    const r = row('cedar', 'install');
+    const draft = need({
+      kind: 'po_unacknowledged',
+      text: 'Arrival date request to the maker drafted',
+      actionLabel: 'Review and send',
+      draft: {
+        id: 'd1',
+        kind: 'maker_eta_request',
+        status: 'awaiting_review',
+        to_email: 'shop@fixture.example',
+        subject: 'Arrival date: Side table',
+        body: 'When?',
+        created_at: '2026-08-20T00:00:00Z',
+        maker: 'Fixture Metalworks',
+      },
+    });
+    const off = unvoiced(r, draft);
+    expect(off.act.label).toBe('Review and send');
+    expect(off.needText).toBe('Arrival date request to the maker drafted');
+    const on = voiced(r, draft);
+    expect(on.act.label).toBe('Open the held draft');
+    expect(on.needText).toBe('Date request to Fixture Metalworks drafted — not sent.');
+    expect(on.state).toContain('Date request to Fixture Metalworks drafted — not sent.');
+    expect(on.act.label).not.toBe('Follow up with the maker');
+  });
+
+  it('never prints the word Band: the unanchored chip yields to pieces on the way, or to nothing', () => {
+    const band = (r: DocumentStateRow) =>
+      ({ row: r, kind: 'schedule_position', text: 'Band — no anchor yet' }) as MotionChip;
+    const birch = row('birch', 'project', { in_flight_count: 0 });
+    const marrow = row('marrow', 'project', { in_flight_count: 2 });
+    const off = deriveDeskRoster(
+      input({ live: [birch, marrow], chips: [band(birch), band(marrow)] }),
+      NOW,
+    );
+    expect(off.groups[0].lines.map((l) => l.motionText)).toEqual([
+      'Band — no anchor yet',
+      'Band — no anchor yet',
+    ]);
+    const on = deriveDeskRoster(
+      input({ live: [birch, marrow], chips: [band(birch), band(marrow)], oneVoice: true }),
+      NOW,
+    );
+    const byId = new Map(on.groups[0].lines.map((l) => [l.engagementId, l]));
+    expect(byId.get('birch')!.motionText).toBeNull();
+    expect(byId.get('marrow')!.motionText).toBe('2 pieces on the way');
+    for (const line of on.groups[0].lines) expect(line.state).not.toMatch(/\bBand\b/);
+  });
+});

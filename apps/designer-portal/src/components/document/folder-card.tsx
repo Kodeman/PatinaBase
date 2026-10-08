@@ -12,7 +12,12 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { deskActionLabel, folderTab, type DeskFolder } from '@/lib/document/desk-derivation';
+import {
+  deskActionLabel,
+  deskNeedText,
+  folderTab,
+  type DeskFolder,
+} from '@/lib/document/desk-derivation';
 import { voiceFirstName } from '@/lib/document/document-guide';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { documentEvents } from '@/lib/analytics/document-events';
@@ -159,6 +164,7 @@ export function FolderCard({
   // null, so the card's layout never moves (D8).
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const actionLabel = deskActionLabel(need, oneVoice, voiceFirstName(row.client_name));
+  const needText = deskNeedText(need, oneVoice);
   const shown = useRef(false);
 
   useEffect(() => {
@@ -215,7 +221,7 @@ export function FolderCard({
       <Link
         href={need.deepLink ?? `/doc/${row.engagement_id}`}
         onClick={selectFolioAction}
-        aria-label={`${row.title} — ${need.text}`}
+        aria-label={`${row.title} — ${needText}`}
         data-action-key={need.actionLabel ? need.kind : undefined}
         data-action-variant={need.actionLabel ? 'primary' : undefined}
         data-action-region={need.actionLabel ? 'needs-your-hand' : undefined}
@@ -226,6 +232,7 @@ export function FolderCard({
         stageLine={stageLine}
         tabLabel={tabLabel}
         actionLabel={actionLabel}
+        needText={needText}
       />
     </div>
   );
@@ -236,11 +243,13 @@ function FolderFace({
   stageLine,
   tabLabel,
   actionLabel,
+  needText,
 }: {
   folder: DeskFolder;
   stageLine: string;
   tabLabel: string;
   actionLabel: string | null;
+  needText: string;
 }) {
   const { row, need } = folder;
   return (
@@ -294,7 +303,7 @@ function FolderFace({
             </p>
           )}
           <div className="mt-4 flex items-start justify-between gap-3 border-t border-[var(--border-default)] pt-3.5">
-            <p className="doc-type-body flex-1">{need.text}</p>
+            <p className="doc-type-body flex-1">{needText}</p>
             <StatusChip label={need.stamp.label} color={need.stamp.color} />
           </div>
           {/* C-28: a need that carries a composed letter reviews it in place —

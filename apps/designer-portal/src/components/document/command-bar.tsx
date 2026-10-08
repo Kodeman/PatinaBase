@@ -57,8 +57,12 @@ import { HELP_EVENTS, safeCapture } from '@/lib/help-system/help-events';
 import { openDraftProposalPicker } from './rooms/drafting/draft-proposal-opener';
 import { fillStateForDesk, type FillState } from '@/lib/document/fill-state';
 import {
+  deskMotion,
+  deskNeedText,
   folderTab,
+  type DeskFolder,
   type DocumentStateRow,
+  type MotionChip,
   type SectionKey,
 } from '@/lib/document/desk-derivation';
 import {
@@ -141,6 +145,8 @@ type PaletteRow =
       label: string;
       sub: string;
       icon: LucideIcon;
+      /** FR2 507-5 — only the one-voice `Keys` door carries its `?` hint. */
+      shortcut?: string[];
       run: () => void;
       match: string;
     }
@@ -190,7 +196,7 @@ type PaperInvoice = { id: string; invoice_number: string | null; status: string 
 
 /** D1's own act for a project paper with nothing to spec or release — the
  *  dry query's first row. Read from act-names, never retyped. */
-const OPEN_THE_PIECES = ownAct('project', {
+const QUIET_FACTS = {
   inquiryOpen: false,
   firstMissingEssential: null,
   proposalState: null,
@@ -198,7 +204,12 @@ const OPEN_THE_PIECES = ownAct('project', {
   unspecifiedCount: 0,
   releaseEligible: false,
   install: null,
-})!.label;
+} as const;
+const OPEN_THE_PIECES = ownAct('project', QUIET_FACTS)!.label;
+
+/** US-19 FR2 F2-14 / 499-8(5) — under `one-voice` the Contract Room door is
+ *  Direction's own act, `Write the proposal`, never `Open the Contract Room`. */
+const WRITE_THE_PROPOSAL = ownAct('direction', QUIET_FACTS)!.label;
 
 /** The PO a line prints, in the Order cell's own precedence. */
 function linePoNumber(line: PaperLine): string | null {
@@ -680,19 +691,30 @@ export function CommandBar() {
       match: [surface.label, ...surface.aliases].join(' ').toLowerCase(),
     });
 
-    const surfaceRow = (s: StudioSurface): PaletteRow => ({
-      // Host surfaces (Desk, Document) exist only to answer the help panel —
-      // they are absent from every list this builds rows from, so the branch
-      // is unreachable; it exists to keep the palette's own kind union closed.
-      kind: s.kind === 'host' ? 'room' : s.kind,
-      key: s.key,
-      label: s.label,
-      sub: s.subLabel ?? (s.kind === 'room' ? 'room ↗' : 'ledger'),
-      icon: s.icon,
-      shortcut: s.shortcut,
-      run: runForSurface(s),
-      match: [s.label, ...s.aliases].join(' ').toLowerCase(),
-    });
+    const surfaceRow = (s: StudioSurface): PaletteRow => {
+      const row: PaletteRow = {
+        // Host surfaces (Desk, Document) exist only to answer the help panel —
+        // they are absent from every list this builds rows from, so the branch
+        // is unreachable; it exists to keep the palette's own kind union closed.
+        kind: s.kind === 'host' ? 'room' : s.kind,
+        key: s.key,
+        label: s.label,
+        sub: s.subLabel ?? (s.kind === 'room' ? 'room ↗' : 'ledger'),
+        icon: s.icon,
+        shortcut: s.shortcut,
+        run: runForSurface(s),
+        match: [s.label, ...s.aliases].join(' ').toLowerCase(),
+      };
+      // FR2 F2-14 — the Contract Room row is Direction's act row.
+      return oneVoice && s.key === 'drafting-room'
+        ? {
+            ...row,
+            kind: 'verb',
+            label: WRITE_THE_PROPOSAL,
+            match: `${WRITE_THE_PROPOSAL} ${row.match}`.toLowerCase(),
+          }
+        : row;
+    };
 
     // The studio's own controls — F5 adds "Browse the Help Center" (distinct
     // from the contextual "Help…" panel). Kept filterable so "sign out",
@@ -719,12 +741,15 @@ export function CommandBar() {
       },
       {
         // L5 — "The keys": the reference opens as an overlay over whatever is
-        // in hand, not a route, so ⌘K never costs you your place.
+        // in hand, not a route, so ⌘K never costs you your place. FR2 507-5 —
+        // under `one-voice` the leftover `The keys` is gone: the one door is
+        // `Keys` with its `?` hint, as the paper's act row prints it.
         kind: 'help',
         key: 'the-keys',
         icon: Keyboard,
-        label: 'The keys',
-        sub: 'shortcuts, one page',
+        label: oneVoice ? 'Keys' : 'The keys',
+        sub: oneVoice ? '' : 'shortcuts, one page',
+        ...(oneVoice ? { shortcut: ['?'] } : {}),
         run: () => openKeys('palette'),
         match: 'keys shortcuts keyboard hotkeys chords the keys',
       },
@@ -865,8 +890,16 @@ export function CommandBar() {
     // a document with neither a need nor a motion is in neither, and chips are
     // capped at MAX_MOTION_CHIPS. Counting the studio's stages off them prints
     // an undercount, and a calm studio prints no group at all.
+    // FR2 F2-2 — under `one-voice` a stage row's sub-line is the Desk's own
+    // sentence (`deskNeedText`) and never prints the word `Band` (R17).
+    const lineOf = (entry: DeskFolder | MotionChip): string | null =>
+      !oneVoice
+        ? liveLine(entry)
+        : 'need' in entry
+          ? deskNeedText(entry.need, true)
+          : (deskMotion(entry, true)?.text ?? null);
     const lineByEngagement = new Map(
-      liveDocs.map((entry) => [entry.row.engagement_id, liveLine(entry)]),
+      liveDocs.map((entry) => [entry.row.engagement_id, lineOf(entry)]),
     );
     const stageLabels = oneVoice ? STAGE_WORD : STAGE_LABELS;
     const stageRows: PaletteRow[] = STAGE_ORDER.flatMap((stage) => {
@@ -1017,9 +1050,9 @@ export function CommandBar() {
       }
       if (draftingProposalId) {
         thisSurface.push({
-          kind: 'room',
+          kind: oneVoice ? 'verb' : 'room',
           key: 'drafting-room-here',
-          label: 'Open the Contract Room',
+          label: oneVoice ? WRITE_THE_PROPOSAL : 'Open the Contract Room',
           sub: 'this proposal · boards & lines',
           icon: DRAFTING_ROOM_ICON,
           run: () => router.push(`/drafting/${draftingProposalId}`),
@@ -1356,7 +1389,15 @@ export function CommandBar() {
         const onPaper = new Set(paperRows.map((r) => r.key));
         const actLabels = new Set(acts.map((r) => r.label));
         const isHelp = (r: PaletteRow) => r.kind === 'help' || r.key === 'help-panel';
-        const helpRows = list.filter(isHelp);
+        // FR2 507-5 — the one `Keys` door prints once: an act this paper
+        // already prints is not repeated under Help.
+        const helpRows = list.filter((r) => isHelp(r) && !actLabels.has(r.label));
+        // FR2 507-4 — the ask row on a paper: no "AI", no "Engine", no model word.
+        const askRow: PaletteRow = oneVoice
+          ? { ...engineRow, label: `Ask the paper: "${typed}"` }
+          : engineRow;
+        // FR2 F2-11 — a closed job's dry query is one sentence: no pieces row.
+        const closed = oneVoice && paperProject.project_status === 'completed';
         // R25 — today's cross-paper hits; an act this paper already prints is
         // not printed twice under another group.
         const elsewhere = list.filter(
@@ -1378,16 +1419,18 @@ export function CommandBar() {
           sections.push({
             eyebrow: null,
             note: `Nothing on this paper matches "${typed}".`,
-            rows: [
-              {
-                kind: 'paper',
-                key: 'paper-open-pieces',
-                label: `${OPEN_THE_PIECES} · ${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`,
-                sub: '',
-                run: () => jumpToRegion('ffe'),
-                match: '',
-              },
-            ],
+            rows: closed
+              ? []
+              : [
+                  {
+                    kind: 'paper',
+                    key: 'paper-open-pieces',
+                    label: `${OPEN_THE_PIECES} · ${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`,
+                    sub: '',
+                    run: () => jumpToRegion('ffe'),
+                    match: '',
+                  },
+                ],
           });
         } else {
           if (paperRows.length) {
@@ -1401,7 +1444,7 @@ export function CommandBar() {
           rows: [searchAllRow, ...typedStageRows, ...elsewhere],
         });
         // R24 — the Engine's ask stands after Elsewhere, before Help.
-        sections.push({ eyebrow: null, rows: [engineRow] });
+        sections.push({ eyebrow: null, rows: [askRow] });
         const help = helpRows.length ? helpRows : dry ? [openHelpRow] : [];
         if (help.length) sections.push({ eyebrow: 'Help', rows: help });
         matches =
@@ -1495,6 +1538,8 @@ export function CommandBar() {
      With no query the palette is the populated set of doorways, and the rows
      ARE the count. */
   const resultCount = query.trim() ? matchCount : flatRows.length;
+  const statusNote =
+    oneVoice && resultCount === 0 ? (rendered.find((s) => s.note)?.note ?? null) : null;
 
   // R23 — `Search all jobs` switches the sheet in place, and its first result
   // takes focus (a focused option moves with ↑↓ and Enter, ADV-40).
@@ -1593,7 +1638,10 @@ export function CommandBar() {
       );
     }
     if (
-      (row.kind === 'room' || row.kind === 'ledger' || row.kind === 'verb') &&
+      (row.kind === 'room' ||
+        row.kind === 'ledger' ||
+        row.kind === 'verb' ||
+        row.kind === 'help') &&
       row.shortcut?.length
     ) {
       return (
@@ -1728,11 +1776,20 @@ export function CommandBar() {
           </div>
         ) : (
           <div className="max-h-[52vh] overflow-y-auto py-1">
-            <p role="status" className="sr-only">
-              {resultCount === 0
-                ? 'Nothing matches.'
-                : `${resultCount} ${resultCount === 1 ? 'result' : 'results'}`}
-            </p>
+            {statusNote ? (
+              // FR2 F2-11 — under `one-voice` a dry query says one sentence:
+              // the sheet's own note is the status, never a second
+              // `Nothing matches.` beside it.
+              <p role="status" className="px-4 pb-1 pt-3 text-[13px] text-[var(--color-charcoal)]">
+                {statusNote}
+              </p>
+            ) : (
+              <p role="status" className="sr-only">
+                {resultCount === 0
+                  ? 'Nothing matches.'
+                  : `${resultCount} ${resultCount === 1 ? 'result' : 'results'}`}
+              </p>
+            )}
             <div role="listbox" id={RESULTS_ID} aria-label="Results">
               {rendered.map((section, sectionIndex) => (
                 <div
@@ -1745,7 +1802,7 @@ export function CommandBar() {
                       {section.eyebrow}
                     </div>
                   )}
-                  {section.note && (
+                  {section.note && section.note !== statusNote && (
                     <p className="px-4 pb-1 pt-3 text-[13px] text-[var(--color-charcoal)]">
                       {section.note}
                     </p>
