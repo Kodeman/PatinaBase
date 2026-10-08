@@ -648,7 +648,7 @@ BEGIN
   FOREACH v_fn IN ARRAY ARRAY[
     'public.set_purchase_order_header(uuid, jsonb)',
     'public.can_buy_for_project(uuid)',
-    'public.link_ffe_pair(uuid, uuid)',
+    'public.link_ffe_pair(uuid, uuid, text)', -- 00732: gained p_kind
     'public.set_purchase_order_supplies(uuid, uuid)',
     'public.record_submittal(jsonb)',
     'public.decide_submittal(uuid, text, text)',
