@@ -28,6 +28,9 @@
 --          passed five days ago and has not arrived.
 --        · "Alder Court Bedroom" (install) — one piece arriving in two days.
 --        · "Quill Lane Porch" (install) — every piece installed.
+--   5. A named client (499-1) — "Tanaka Garden Flat — Living Room", a
+--      proposal sent to a new login, Mei Tanaka, never opened, two decisions
+--      overdue. See the block at the foot of the file.
 --
 -- Chen Residence is read, never written: its sectional on WS-188, its overdue
 -- balance and its lines stay exactly as procurement_workspace_dev.sql lays
@@ -382,4 +385,141 @@ BEGIN
     'selected', ts - INTERVAL '40 days', ts - INTERVAL '6 days'
   WHERE EXISTS (SELECT 1 FROM public.projects WHERE id = v_cedar)
     AND NOT EXISTS (SELECT 1 FROM public.project_ffe_items WHERE id = v_line_side);
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 5. A named client on a live paper (499-1, design-review-4 §1, SQ-534).
+--
+-- The placeholder guard is proven only when a real first name reaches the
+-- paper. Aspen's client is the shared `Client User` profile, which the guard
+-- rightly prints as "the client", and the profile is pinned by the
+-- workflow-gate fixture and the client-portal specs, so Aspen is left alone.
+-- This lays one new proposal paper in Aspen's state instead: sent, not yet
+-- opened, two decisions overdue. Its client is a new login, Mei Tanaka, so
+-- the paper prints `Nudge Mei` and `Waiting on Mei`.
+--
+--   Proposal: f1900000-0000-4000-8000-000000000053 (/doc/<id>)
+--
+-- Local dev only. The login follows dev-accounts.sql (password123); the
+-- profile UPSERTs past the handle_new_user stub. Fixed UUIDs and ON CONFLICT
+-- or NOT EXISTS throughout; the proposal is sent only when first laid,
+-- because an issued proposal is immutable (00390).
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  uid_designer UUID := 'a0000000-0000-0000-0000-000000000004';  -- Leah Hartwell
+  uid_mei      UUID := 'f1900000-0000-4000-8000-000000000051';  -- Mei Tanaka
+  v_dc_mei     UUID := 'f1900000-0000-4000-8000-000000000052';
+  v_proposal   UUID := 'f1900000-0000-4000-8000-000000000053';
+  v_dec_a      UUID := 'f1900000-0000-4000-8000-000000000054';
+  v_dec_b      UUID := 'f1900000-0000-4000-8000-000000000055';
+  ts           TIMESTAMPTZ := NOW();
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = uid_designer) THEN
+    RAISE NOTICE 'running_a_job_walk_dev.sql: dev accounts are not seeded yet, skipping the named client';
+    RETURN;
+  END IF;
+
+  INSERT INTO auth.users (
+    instance_id, id, aud, role, email, encrypted_password,
+    email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+    created_at, updated_at, confirmation_token, recovery_token,
+    email_change_token_new, email_change
+  ) VALUES (
+    '00000000-0000-0000-0000-000000000000', uid_mei, 'authenticated', 'authenticated',
+    'mei.tanaka@patina.dev', extensions.crypt('password123', extensions.gen_salt('bf')), ts,
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"full_name":"Mei Tanaka"}'::jsonb,
+    ts, ts, '', '', '', ''
+  ) ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO auth.identities (
+    id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+  ) VALUES (
+    gen_random_uuid(), uid_mei, uid_mei::text,
+    jsonb_build_object('sub', uid_mei::text, 'email', 'mei.tanaka@patina.dev'),
+    'email', ts, ts, ts
+  ) ON CONFLICT ON CONSTRAINT identities_provider_id_provider_unique DO NOTHING;
+
+  INSERT INTO public.profiles (id, email, full_name, display_name, role, created_at, updated_at)
+  VALUES (uid_mei, 'mei.tanaka@patina.dev', 'Mei Tanaka', 'Mei Tanaka', 'homeowner', ts, ts)
+  ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    display_name = EXCLUDED.display_name,
+    role = EXCLUDED.role;
+
+  INSERT INTO public.user_roles (user_id, role_id)
+  SELECT uid_mei, id FROM public.roles WHERE name IN ('client', 'app_user')
+  ON CONFLICT (user_id, role_id) DO NOTHING;
+
+  INSERT INTO public.designer_clients (
+    id, designer_id, client_id, status, client_name, client_email, source,
+    created_at, updated_at
+  )
+  SELECT v_dc_mei, uid_designer, uid_mei, 'proposal',
+         'Mei Tanaka', 'mei.tanaka@patina.dev', 'manual',
+         ts - INTERVAL '30 days', ts - INTERVAL '30 days'
+  WHERE NOT EXISTS (SELECT 1 FROM public.designer_clients WHERE id = v_dc_mei);
+
+  -- Built as a draft, then sent under the send capability GUC exactly as
+  -- proposals.sql sends Aspen's. Never opened: viewed_at stays NULL.
+  IF NOT EXISTS (SELECT 1 FROM public.proposals WHERE id = v_proposal) THEN
+    INSERT INTO public.proposals (
+      id, designer_id, client_id, designer_client_id, title, description,
+      status, subtotal, total_amount, valid_until, personal_message,
+      created_at, updated_at, version
+    ) VALUES (
+      v_proposal, uid_designer, uid_mei, v_dc_mei,
+      'Tanaka Garden Flat — Living Room',
+      'Walk fixture (US-19, 499-1): sent, not yet opened, two decisions overdue.',
+      'draft', 1240000, 1240000, (ts + INTERVAL '10 days'),
+      'Here is the living room as we talked it through. Two picks are waiting on you.',
+      ts - INTERVAL '6 days', ts - INTERVAL '6 days', 1
+    );
+
+    INSERT INTO public.proposal_sections (proposal_id, type, title, body, sort_order, metadata)
+    VALUES
+      (v_proposal, 'vision', 'Design Vision',
+       'A calm garden-facing room: pale oak, undyed linen and one deep green.',
+       0, '{}'::jsonb),
+      (v_proposal, 'selections', 'Product Selections', NULL, 1, '{}'::jsonb),
+      (v_proposal, 'investment', 'Investment', NULL, 2, '{}'::jsonb);
+
+    INSERT INTO public.proposal_items (
+      proposal_id, name, description, quantity,
+      unit_price, unit_sell_price, line_total_cents, vendor_name, position
+    ) VALUES
+      (v_proposal, 'Oak daybed', 'Rift oak frame, undyed linen cushion', 1,
+       780000, 780000, 780000, 'Nordic Atelier', 0),
+      (v_proposal, 'Wool flatweave rug', '8x10, moss and oat', 1,
+       460000, 460000, 460000, 'Studio Piet', 1);
+
+    PERFORM set_config('app.proposal_send_id', v_proposal::text, true);
+    UPDATE public.proposals
+       SET status = 'sent',
+           sent_at = ts - INTERVAL '4 days',
+           updated_at = ts - INTERVAL '4 days'
+     WHERE id = v_proposal AND status = 'draft';
+    PERFORM set_config('app.proposal_send_id', '', true);
+  END IF;
+
+  -- Two decisions on the proposal, both past due (document_state counts them
+  -- through linked_proposal_id). The dates are fixed in the past at first
+  -- run, so "overdue" stays true on an old local database.
+  INSERT INTO public.client_decisions (
+    id, designer_client_id, designer_id, project_id, linked_proposal_id,
+    title, context, due_date, linked_phase,
+    decision_type, blocking_status, status, sent_at
+  ) VALUES
+    (v_dec_a, v_dc_mei, uid_designer, NULL, v_proposal,
+     'Daybed cushion — undyed linen vs moss wool',
+     'The linen is softer; the wool wears better against the garden door.',
+     ts - INTERVAL '3 days', 'Concept', 'material', 'non_blocking', 'pending',
+     ts - INTERVAL '4 days'),
+    (v_dec_b, v_dc_mei, uid_designer, NULL, v_proposal,
+     'Rug size — 8x10 vs 9x12',
+     '9x12 runs under the daybed; 8x10 keeps the oak floor showing.',
+     ts - INTERVAL '2 days', 'Concept', 'layout', 'non_blocking', 'pending',
+     ts - INTERVAL '4 days')
+  ON CONFLICT (id) DO NOTHING;
 END $$;
