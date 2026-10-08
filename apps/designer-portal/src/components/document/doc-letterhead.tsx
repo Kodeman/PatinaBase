@@ -39,9 +39,13 @@ export function DocLetterhead({
   subject,
   projectId = null,
   instruments = null,
+  stageWord,
 }: {
   title: string;
   vitals: string;
+  /** FR3 F3-12 (`one-voice`) — the project vitals print this stage word
+   *  (`Install`) where they printed the workflow phase (`Installation`). */
+  stageWord?: string;
   /** R15: the mark as progress device — how far the engagement has come. */
   fill?: FillState;
   /** The client this document is for — the clickable HouseholdChip, rendered as
@@ -95,7 +99,7 @@ export function DocLetterhead({
           {client}
           {subject}
           {projectId ? (
-            <LetterheadVitals projectId={projectId} />
+            <LetterheadVitals projectId={projectId} stageWord={stageWord} />
           ) : (
             vitals && (
               /* D5 — 15px, and it WRAPS. The clip trio said the line was one

@@ -125,9 +125,14 @@ export function ProposalWatch({
   clientName,
   hoistedLeader = null,
   onFinalizeTable = false,
+  previewInLetterhead = false,
 }: {
   proposalId: string;
   clientName: string;
+  /** FR3 F3-25 / 518-3 (`one-voice`) — the letterhead's `Preview the client's
+   *  copy` is the paper's one Preview doorway, so the watch prints none. The
+   *  peek of the client's copy stays. False with the flag off. */
+  previewInLetterhead?: boolean;
   /** W4a — the Finalize table's head has promoted one of the watch's own acts
    *  to the table's inked leader. The watch stands that one act down so the
    *  offer is made once; everything else it carries stays exactly where it is.
@@ -215,7 +220,7 @@ export function ProposalWatch({
           <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             The client&rsquo;s copy · as sent
           </span>
-          {hoistedLeader !== 'preview' && (
+          {hoistedLeader !== 'preview' && !previewInLetterhead && (
             <DocumentAction
               actionKey="preview-proposal-as-client"
               surfaceKey="open-document"

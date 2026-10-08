@@ -1456,6 +1456,45 @@ describe('deriveDeskRoster — personLine (the line under the name)', () => {
     expect(line.personLine).toBe('Erin Byrne');
     expect(line.personLine).not.toContain('nothing needs your hand');
   });
+
+  // US-19 FR3 F3-12 / F3-13 (`one-voice`) — the card printed
+  // `Nora Ellison · Installation` and the seed's no-login suffix.
+  it('one-voice: prints the stage word where the workflow word printed, and no no-login suffix', () => {
+    const install = row('a', 'install', {
+      title: 'Cedar Lane Study',
+      client_name: 'Nora Ellison',
+      current_phase: 'installation',
+    });
+    const line = deriveDeskRoster(input({ live: [install], oneVoice: true }), NOW).groups[0]
+      .lines[0];
+    expect(line.personLine).toBe('Nora Ellison · Install');
+    expect(line.state).toMatch(/^Nora Ellison · Install · /);
+    expect(line.state).not.toContain('Installation');
+
+    const noLogin = row('b', 'direction', {
+      client_name: 'Elena Marlowe (no-login household)',
+    });
+    const voiced = deriveDeskRoster(input({ live: [noLogin], oneVoice: true }), NOW).groups[0]
+      .lines[0];
+    expect(voiced.personLine).toBe('Elena Marlowe');
+    expect(voiced.client).toBe('Elena Marlowe');
+  });
+
+  it('one-voice: a phase-less card stays phase-less (label only)', () => {
+    const lead = row('a', 'brief', { client_name: 'Marcus Wright', current_phase: null });
+    const line = deriveDeskRoster(input({ live: [lead], oneVoice: true }), NOW).groups[0]
+      .lines[0];
+    expect(line.personLine).toBe('Marcus Wright');
+  });
+
+  it('flag off: the phase and the client print as they always have', () => {
+    const install = row('a', 'install', {
+      client_name: 'Elena Marlowe (no-login household)',
+      current_phase: 'installation',
+    });
+    const line = deriveDeskRoster(input({ live: [install] }), NOW).groups[0].lines[0];
+    expect(line.personLine).toBe('Elena Marlowe (no-login household) · Installation');
+  });
 });
 
 // US-19 FR2 F2-2, 499-9, 506-6, R17 — under `one-voice` the roster (every

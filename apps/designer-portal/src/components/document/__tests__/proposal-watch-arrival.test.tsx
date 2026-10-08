@@ -99,6 +99,18 @@ describe('ProposalWatch — the proposal becoming its project (US-14)', () => {
     expect(consumeSuppressed('/doc/project-7')).toBe(true);
   });
 
+  // US-19 FR3 F3-25 / 518-3 — the letterhead's Preview is the paper's one
+  // doorway, so the watch stands its own down; the peek of the copy stays.
+  it('prints its own Preview unless the letterhead carries it', () => {
+    const { unmount } = render(<ProposalWatch proposalId="proposal-1" clientName="Ana Reyes" />);
+    expect(screen.getByRole('button', { name: 'Preview as Ana Reyes' })).toBeInTheDocument();
+    unmount();
+
+    render(<ProposalWatch proposalId="proposal-1" clientName="Ana Reyes" previewInLetterhead />);
+    expect(screen.queryByRole('button', { name: /^Preview/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/as sent/)).toBeInTheDocument();
+  });
+
   it("the seal's link into the project already open is announced on click", () => {
     mockWatch = { ...awaiting, status: 'accepted', awaitingClient: false, settled: true };
     mockProjectLink = { projectId: 'project-9' };

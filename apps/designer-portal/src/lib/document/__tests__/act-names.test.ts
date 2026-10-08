@@ -7,7 +7,9 @@ import {
   NEED_ACT_LABELS,
   STAGE_WORD,
   STAGE_WORDS,
+  householdDisplayName,
   messageLabel,
+  messageNoLogin,
   needActLabel,
   ownAct,
   stageEyebrow,
@@ -145,6 +147,25 @@ describe('Message (D1, D3, D7)', () => {
 
   it('withholds with a reason and a repair act', () => {
     expect(MESSAGE_WITHHELD).toEqual({ reason: 'Link a client first.', repair: 'Link a client' });
+  });
+
+  it('FR3 F3-6 — holds a linked no-login household for the login, with the family fallback', () => {
+    expect(messageNoLogin('Elena')).toEqual({
+      reason: 'Elena has no login yet.',
+      repair: 'Invite Elena',
+    });
+    expect(messageNoLogin(null)).toEqual({
+      reason: 'The client has no login yet.',
+      repair: 'Invite the client',
+    });
+    expect(messageNoLogin(' ')).toEqual(messageNoLogin(null));
+    expect(ACT_TIER['Invite {first name}']).toBe('plain');
+  });
+
+  it('FR3 F3-13 — the household display name drops the no-login suffix, and only that', () => {
+    expect(householdDisplayName('Elena Marlowe (no-login household)')).toBe('Elena Marlowe');
+    expect(householdDisplayName('The Ashfords (no-login household)')).toBe('The Ashfords');
+    expect(householdDisplayName('Edna & Rob Courtney')).toBe('Edna & Rob Courtney');
   });
 });
 

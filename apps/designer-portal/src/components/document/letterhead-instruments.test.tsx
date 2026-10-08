@@ -602,10 +602,12 @@ describe('a proposal paper’s More under one-voice (FR2 F2-17, 500-4)', () => {
     clientProfileId,
     designerClientId = null,
     doorInDock = false,
+    clientName = 'Elena Marlowe',
   }: {
     clientProfileId: string | null;
     designerClientId?: string | null;
     doorInDock?: boolean;
+    clientName?: string;
   }) {
     render(
       <QueryClientProvider client={new QueryClient()}>
@@ -614,7 +616,7 @@ describe('a proposal paper’s More under one-voice (FR2 F2-17, 500-4)', () => {
           designerClientId={designerClientId}
           proposalStatus="draft"
           clientProfileId={clientProfileId}
-          clientName="Elena Marlowe"
+          clientName={clientName}
           voice={{ next: null, standingCount: 3, doorInDock }}
         />
       </QueryClientProvider>,
@@ -649,17 +651,19 @@ describe('a proposal paper’s More under one-voice (FR2 F2-17, 500-4)', () => {
     ]);
   });
 
-  it('a linked household with no login: Message is held, with its reason and repair', () => {
+  // FR3 F3-6 (516-3 / 518-2) — the household IS linked; the login is what is
+  // missing, so the reason and the repair say so.
+  it('a linked household with no login: held `Message Elena` — `Elena has no login yet.` · `Invite Elena`', () => {
     renderProposal({ clientProfileId: null, designerClientId: 'dc-1' });
     expect(more().map((act) => act.label)).toEqual([
-      'Message the client',
+      'Message Elena',
       "Preview the client's copy",
       'Keys',
     ]);
     const message = more().find((act) => act.actionKey === 'message-family')!;
     expect(message.held).toMatchObject({
-      reason: 'Link a client first.',
-      repair: { label: 'Link a client' },
+      reason: 'Elena has no login yet.',
+      repair: { label: 'Invite Elena' },
     });
     // Never the dock's centre while held.
     for (const [action] of primary.mock.calls) {
@@ -667,25 +671,44 @@ describe('a proposal paper’s More under one-voice (FR2 F2-17, 500-4)', () => {
     }
 
     // The letterhead prints the same held form, its reason linked beneath.
-    const held = screen.getByRole('button', { name: 'Message the client' });
+    const held = screen.getByRole('button', { name: 'Message Elena' });
     expect(held).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByText('Link a client first.')).toBeInTheDocument();
+    expect(document.getElementById(held.getAttribute('aria-describedby')!)).toHaveTextContent(
+      /^Elena has no login yet\.$/,
+    );
+    expect(screen.queryByText('Link a client first.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Link a client' })).not.toBeInTheDocument();
 
     // The repair opens the household sheet the chip opens, on this proposal.
-    act(() => message.held!.repair!.onPress());
+    fireEvent.click(screen.getByRole('button', { name: 'Invite Elena' }));
     const sheet = screen.getByTestId('household-sheet');
     expect(sheet).toHaveAttribute('data-kind', 'proposal');
     expect(sheet).toHaveAttribute('data-designer-client', 'dc-1');
     expect(sheet).toHaveAttribute('data-status', 'draft');
   });
 
-  it('no client at all: the same held Message', () => {
+  it('a linked no-login household with no usable name: the family fallback', () => {
+    renderProposal({ clientProfileId: null, designerClientId: 'dc-1', clientName: 'Client' });
+    expect(more().find((act) => act.actionKey === 'message-family')).toMatchObject({
+      label: 'Message the client',
+      held: {
+        reason: 'The client has no login yet.',
+        repair: { label: 'Invite the client' },
+      },
+    });
+    expect(screen.getByText('The client has no login yet.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Invite the client' })).toBeInTheDocument();
+  });
+
+  it('no household linked at all: `Link a client first.` · `Link a client`', () => {
     renderProposal({ clientProfileId: null });
     const message = more().find((act) => act.actionKey === 'message-family');
     expect(message).toMatchObject({
       label: 'Message the client',
-      held: { reason: 'Link a client first.' },
+      held: { reason: 'Link a client first.', repair: { label: 'Link a client' } },
     });
+    expect(screen.getByText('Link a client first.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Link a client' })).toBeInTheDocument();
   });
 
   it('flag off: nothing is published to More and no held Message prints', () => {
@@ -693,5 +716,68 @@ describe('a proposal paper’s More under one-voice (FR2 F2-17, 500-4)', () => {
     renderProposal({ clientProfileId: null, designerClientId: 'dc-1' });
     expect(secondary).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /^Message/ })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * US-19 FR3 F3-25 / 518-4 (`one-voice`) — a relationship (Discovery) paper
+ * mounts the letterhead too: Message (held for the login, F3-6), Keys, and
+ * `Standing · N` when the fallback is in force — never Preview, because no
+ * client copy exists to preview.
+ */
+describe('a relationship paper’s letterhead under one-voice (FR3 F3-25, F3-6)', () => {
+  const secondary = useMobileSecondaryAction as jest.Mock;
+
+  beforeEach(() => {
+    installTier(true);
+    secondary.mockClear();
+    mockProject = {};
+    mockOneVoice = true;
+  });
+  afterAll(() => {
+    mockOneVoice = false;
+  });
+
+  function more(): MobileSecondaryAction[] {
+    const latest = new Map<string, MobileSecondaryAction>();
+    for (const [action] of secondary.mock.calls) {
+      if (action) latest.set(action.actionKey, action);
+    }
+    return [...latest.values()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+
+  function renderRelationship(doorInDock = false) {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <LetterheadInstruments
+          designerClientId="dc-ashford"
+          clientProfileId={null}
+          clientName="Elena Marlowe"
+          voice={{ next: null, standingCount: 2, doorInDock }}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  it('no login: held Message {first} with its real reason, Keys, and no Preview', () => {
+    renderRelationship(true);
+    expect(more().map((act) => act.label)).toEqual(['Standing · 2', 'Message Elena', 'Keys']);
+    expect(more().find((act) => act.actionKey === 'message-family')?.held).toMatchObject({
+      reason: 'Elena has no login yet.',
+      repair: { label: 'Invite Elena' },
+    });
+    expect(screen.getByRole('button', { name: 'Message Elena' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.queryByRole('button', { name: /Preview/ })).not.toBeInTheDocument();
+
+    // The repair opens the household sheet on this relationship.
+    fireEvent.click(screen.getByRole('button', { name: 'Invite Elena' }));
+    expect(screen.getByTestId('household-sheet')).toHaveAttribute('data-kind', 'relationship');
+    expect(screen.getByTestId('household-sheet')).toHaveAttribute(
+      'data-designer-client',
+      'dc-ashford',
+    );
   });
 });

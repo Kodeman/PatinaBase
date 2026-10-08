@@ -72,6 +72,8 @@ export function ProposalInstruments({
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const { leader } = useFinalizeLeader(proposalId, clientName);
   const hoistedLeader = onFinalizeTable ? (leader?.kind ?? null) : null;
+  // FR3 F3-25 / 518-3 (`one-voice`) — Preview is the letterhead's alone.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const experience = commercialDocumentExperience(proposal?.document_kind);
   if (experience === 'commercial_readonly') {
     return (
@@ -96,7 +98,11 @@ export function ProposalInstruments({
         nudgeHoisted={hoistedLeader === 'nudge'}
       />
       {experience === 'design_services' ? (
-        <ServiceAgreementInstruments proposal={proposal} clientName={clientName} />
+        <ServiceAgreementInstruments
+          proposal={proposal}
+          clientName={clientName}
+          previewInLetterhead={oneVoice}
+        />
       ) : (
         <LegacyProposalInstruments
           proposalId={proposalId}
@@ -325,7 +331,8 @@ function LegacyProposalInstruments({
   );
 
   // Out the door — the Proposal section becomes the watch view (R71). It carries
-  // its own acts (Preview · Resend) and overlays.
+  // its own acts (Preview · Resend) and overlays. FR3 F3-25 / 518-3
+  // (`one-voice`): Preview is the letterhead's alone, so the watch drops it.
   if (!isDraft) {
     return (
       <ProposalWatch
@@ -333,6 +340,7 @@ function LegacyProposalInstruments({
         clientName={clientName}
         hoistedLeader={hoistedLeader}
         onFinalizeTable={onFinalizeTable}
+        previewInLetterhead={oneVoice}
       />
     );
   }

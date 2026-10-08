@@ -24,6 +24,7 @@ import {
   type NeedLine,
   type SectionKey,
 } from './desk-derivation';
+import { STAGE_WORD, householdDisplayName } from './act-names';
 import { dayMonth, legalDate, parseSourceDate } from './dates';
 import { voiceFirstName } from './document-guide';
 import { deskLeadNeed } from './need-class';
@@ -197,8 +198,9 @@ function prettyPhase(phase: string | null): string | null {
 /** Who the job is for. M1 draws a PLACE here; `document_state` carries no
  *  location column, so the client's name stands in its position — the nearest
  *  true thing, and never a role noun standing in for a name we do not have. */
-function clientOf(row: DocumentStateRow): string | null {
-  const name = (row.client_name ?? '').trim();
+function clientOf(row: DocumentStateRow, voice = false): string | null {
+  // FR3 F3-13 (`one-voice`) — the seed's ` (no-login household)` never prints.
+  const name = (voice ? householdDisplayName(row.client_name) : (row.client_name ?? '')).trim();
   if (!name) return null;
   const last = name.split(/\s+/).filter(Boolean).pop() ?? '';
   return PLACEHOLDER_CLIENT_NAMES.has(last.toLowerCase()) ? null : name;
@@ -398,18 +400,22 @@ export function deriveDeskRoster(
       : overdue.isOverdue
         ? null
         : (needText ?? chip?.text ?? QUIET_STATE);
-    const state = [clientOf(row), prettyPhase(row.current_phase), body]
+    // FR3 F3-12 (`one-voice`) — a workflow word never prints as the card's
+    // stage word: where the phase printed (`Installation`), the stage's own
+    // word does (`Install`). Label only; a phase-less card stays phase-less.
+    const phaseWord =
+      voice && row.current_phase
+        ? STAGE_WORD[row.active_section]
+        : prettyPhase(row.current_phase);
+    const client = clientOf(row, voice);
+    const state = [client, phaseWord, body]
       .filter((part): part is string => Boolean(part))
       .join(' · ');
 
-    const client = clientOf(row);
     const sameAsName =
       !!client &&
       client.trim().toLowerCase() === (row.title ?? '').trim().toLowerCase();
-    const personLine = [
-      sameAsName ? null : client,
-      prettyPhase(row.current_phase),
-    ]
+    const personLine = [sameAsName ? null : client, phaseWord]
       .filter((part): part is string => Boolean(part))
       .join(' · ');
 
@@ -441,7 +447,7 @@ export function deriveDeskRoster(
         jobHref,
         act,
         projectId: row.project_id ?? null,
-        client: clientOf(row),
+        client,
         dueOn: need?.dueOn ?? null,
         needText,
         custody: custodyWord(need, row),

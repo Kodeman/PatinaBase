@@ -435,7 +435,15 @@ function contractTotal(cents: number): string {
   return `${cents < 0 ? '−' : ''}$${body}`;
 }
 
-export function LetterheadVitals({ projectId }: { projectId: string }) {
+export function LetterheadVitals({
+  projectId,
+  stageWord,
+}: {
+  projectId: string;
+  /** FR3 F3-12 (`one-voice`) — the paper's stage word (`Install`), printed in
+   *  place of the workflow phase (`Installation`). Undefined keeps the phase. */
+  stageWord?: string;
+}) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
   const rowRef = useRef<HTMLDivElement>(null);
   const [targetAsk, setTargetAsk] = useState(0);
@@ -456,7 +464,10 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
 
   if (!project) return null;
 
-  const phaseWord = prettyPhase(project.current_phase);
+  // F3-12 — label only: the stage word stands where a phase word printed.
+  const phaseWord = project.current_phase
+    ? (stageWord ?? prettyPhase(project.current_phase))
+    : null;
   const startDate: string | null = project.start_date ?? null;
   const targetDate: string | null = project.target_end_date ?? null;
   const total: number | null = project.total_amount_cents ?? null;

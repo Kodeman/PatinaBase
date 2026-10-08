@@ -19,6 +19,23 @@
 import { render, screen } from '@testing-library/react';
 import { DocLetterhead } from './doc-letterhead';
 
+// Read only by the project case (FR3 F3-12), which mounts LetterheadVitals.
+const mockProject: Record<string, unknown> = {
+  title: 'Cedar Lane Study',
+  current_phase: 'installation',
+  start_date: '2026-06-11',
+  target_end_date: null,
+  budget_min: null,
+  budget_max: null,
+  total_amount_cents: null,
+};
+jest.mock('@patina/supabase', () => ({
+  useProjectV2: () => ({ data: mockProject }),
+}));
+jest.mock('@/hooks/use-project-lifecycle', () => ({
+  useSaveProjectVitals: () => ({ mutateAsync: jest.fn() }),
+}));
+
 describe('the letterhead', () => {
   it('prints no room line, even when a room is in hand', () => {
     render(
@@ -165,6 +182,21 @@ describe('the letterhead', () => {
     expect(subject.parentElement).toBe(vitals.parentElement);
     const cell = Array.from(subject.parentElement!.children);
     expect(cell.indexOf(subject)).toBeLessThan(cell.indexOf(vitals));
+  });
+
+  // US-19 FR3 F3-12 (`one-voice`) — the vitals line printed the workflow word
+  // `Installation START 11 June`; it prints the stage word.
+  it('prints the stage word in the project vitals, never the workflow phase (F3-12)', () => {
+    render(<DocLetterhead title="Cedar Lane Study" vitals="" projectId="project-1" stageWord="Install" />);
+    const vitals = document.querySelector<HTMLElement>('[data-letterhead-vitals]')!;
+    expect(vitals.querySelector('[data-part="stage"]')).toHaveTextContent(/^Install$/);
+    expect(vitals).not.toHaveTextContent('Installation');
+  });
+
+  it('flag off (no stage word): the project vitals keep the phase', () => {
+    render(<DocLetterhead title="Cedar Lane Study" vitals="" projectId="project-1" />);
+    const vitals = document.querySelector<HTMLElement>('[data-letterhead-vitals]')!;
+    expect(vitals.querySelector('[data-part="stage"]')).toHaveTextContent(/^Installation$/);
   });
 
   it('carries no shadow (D4)', () => {

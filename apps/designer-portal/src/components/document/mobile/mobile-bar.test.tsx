@@ -875,6 +875,40 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
     fireEvent.click(menu.getByRole('button', { name: 'Link a client' }));
     expect(repair).toHaveBeenCalledTimes(1);
   });
+
+  // US-19 FR3 F3-6 — a linked household with no login: More reads what the
+  // letterhead reads, the login as the reason and `Invite {first}` the repair.
+  it('reads a no-login hold as the letterhead does: `Elena has no login yet.` · `Invite Elena`', () => {
+    const invite = jest.fn();
+    render(
+      <TestProviders>
+        <HoldDocument doc={heldDocument} />
+        <Secondary
+          action={{
+            actionKey: 'message-family',
+            label: 'Message Elena',
+            order: 0,
+            onPress: jest.fn(),
+            held: {
+              reason: 'Elena has no login yet.',
+              repair: { label: 'Invite Elena', onPress: invite },
+            },
+          }}
+        />
+        <Secondary action={{ actionKey: 'keys', label: 'Keys', order: 1, onPress: jest.fn() }} />
+        <MobileBar />
+      </TestProviders>,
+    );
+    const menu = openMore();
+    const message = menu.getByRole('button', { name: 'Message Elena' });
+    expect(message).toHaveAttribute('aria-disabled', 'true');
+    expect(document.getElementById(message.getAttribute('aria-describedby')!)).toHaveTextContent(
+      /^Elena has no login yet\.$/,
+    );
+    expect(menu.queryByText('Link a client first.')).toBeNull();
+    fireEvent.click(menu.getByRole('button', { name: 'Invite Elena' }));
+    expect(invite).toHaveBeenCalledTimes(1);
+  });
 });
 
 /**

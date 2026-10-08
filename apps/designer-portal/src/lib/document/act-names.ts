@@ -118,6 +118,7 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   // Plain — Message and its repair (FR1 R6: a reconnect is a Message, plain)
   'Message {first name}': 'plain',
   'Link a client': 'plain',
+  'Invite {first name}': 'plain',
   // Plain — the need acts D3 does not raise
   'Send reminder': 'plain',
   'Notify the vendor': 'plain',
@@ -191,6 +192,27 @@ export const MESSAGE_WITHHELD = {
   reason: 'Link a client first.',
   repair: 'Link a client',
 } as const;
+
+/** FR3 F3-6 (516-3 / 518-2) — Message held for a LINKED household with no
+ *  login: the blocking condition is the login, not the link. `Invite Elena`,
+ *  or the family fallback `Invite the client`. */
+export function messageNoLogin(firstName: string | null): {
+  reason: string;
+  repair: string;
+} {
+  const first = firstName?.trim();
+  if (!first) return { reason: 'The client has no login yet.', repair: 'Invite the client' };
+  return {
+    reason: `${first.charAt(0).toUpperCase()}${first.slice(1)} has no login yet.`,
+    repair: `Invite ${first}`,
+  };
+}
+
+/** FR3 F3-13 — the household's display name without the seed's trailing
+ *  ` (no-login household)`; the no-login fact is held Message's reason. */
+export function householdDisplayName(name: string): string {
+  return (name ?? '').replace(/\s*\(no-login household\)\s*$/i, '');
+}
 
 // ── The stage's own act (D1) ─────────────────────────────────────────────────
 

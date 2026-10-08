@@ -101,9 +101,13 @@ const COUNTERSIGN_PROPOSES_IMPACT: ScheduleImpact = {
 export function ServiceAgreementInstruments({
   proposal,
   clientName,
+  previewInLetterhead = false,
 }: {
   proposal: any;
   clientName: string;
+  /** FR3 F3-25 / 518-3 (`one-voice`) — the letterhead's `Preview the client's
+   *  copy` is the paper's one Preview doorway, so this row prints none. */
+  previewInLetterhead?: boolean;
 }) {
   const proposalId = String(proposal.id);
   const router = useRouter();
@@ -254,13 +258,15 @@ export function ServiceAgreementInstruments({
                   Review & send
                 </DocumentAction>
               )}
-              <DocumentAction
-                actionKey="preview-design-agreement"
-                variant="secondary"
-                onClick={() => setPreviewOpen(true)}
-              >
-                Preview client copy
-              </DocumentAction>
+              {!previewInLetterhead && (
+                <DocumentAction
+                  actionKey="preview-design-agreement"
+                  variant="secondary"
+                  onClick={() => setPreviewOpen(true)}
+                >
+                  Preview client copy
+                </DocumentAction>
+              )}
               {status.isExecuted && projectId && (
                 <DocumentAction
                   actionKey="open-authorized-project"

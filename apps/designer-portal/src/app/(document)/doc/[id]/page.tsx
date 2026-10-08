@@ -154,7 +154,7 @@ import {
   type DocumentGuideAction,
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
-import { ownAct } from '@/lib/document/act-names';
+import { STAGE_WORD, householdDisplayName, ownAct } from '@/lib/document/act-names';
 import { landRecordPayment } from '@/lib/document/registry';
 import { familyLabel } from '@/lib/document/family-label';
 import {
@@ -2423,10 +2423,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
   // US-19 D1 / D6 (`one-voice`) — the stage's own act and the install reading,
   // from the facts the paper already reads. Read only behind the flag; a stage
-  // whose deciding fact is not read here (Brief's open inquiry, Discovery's
-  // four essentials) or not yet answered leaves `ownAct` undefined: not known
-  // yet, so line 2 prints `NEXT` alone (500-5). The guide line never stands in
-  // (498-c).
+  // whose deciding fact is not read here (Discovery's essentials, pending
+  // §4-3) or not yet answered leaves `ownAct` undefined: not known yet, so
+  // line 2 prints `NEXT` alone (500-5). The guide line never stands in
+  // (498-c). FR3 F3-15 — Brief's open inquiry is the row's own lead status,
+  // the test the Desk's `new_lead` need applies.
   const ownActProjectId =
     oneVoice && row?.engagement_kind === 'project' ? (row.project_id ?? '') : '';
   const ownActFfe = useProjectFFEItems(ownActProjectId, undefined, {
@@ -2450,6 +2451,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         : null,
     [bandSection, ownActPieces, windowHeld],
   );
+  const bandLeadStatus = row?.lead_status ?? null;
   const bandOwnAct = useMemo<LensOwnAct | null | undefined>(() => {
     if (!oneVoice || !bandSection) return undefined;
     // R5 — a failed seed is stated on line 2 with its Retry, as before the
@@ -2464,7 +2466,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         onAct: activateGuide,
       };
     }
-    if (bandSection === 'brief' || bandSection === 'discovery') return undefined;
+    if (bandSection === 'discovery') return undefined;
     if ((bandSection === 'project' || bandSection === 'install') && !ownActPieces) {
       return undefined;
     }
@@ -2472,7 +2474,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     const family = familyLabel(bandHousehold);
     const unspecified = (ownActPieces ?? []).filter((item) => !item.product_id).length;
     const act = ownAct(bandSection, {
-      inquiryOpen: false,
+      inquiryOpen: bandLeadStatus === 'new' || bandLeadStatus === 'viewed',
       firstMissingEssential: null,
       proposalState:
         liveProposalStatus === 'draft' || liveProposalStatus === 'ready'
@@ -2522,6 +2524,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     bandInstallReading,
     windowHeld,
     activateDestination,
+    bandLeadStatus,
   ]);
 
   const bandModel = useMemo<LensBandModel | null>(() => {
@@ -3035,16 +3038,27 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // a client login or not, with the proposal: More carries Message (held when
   // no client can be messaged), Preview the client's copy and Keys.
   const proposalPaper = oneVoice && row.engagement_kind === 'proposal';
+  // FR3 F3-13 (`one-voice`) — the household as the paper prints it: the seed's
+  // ` (no-login household)` never prints (the no-login fact is held Message's
+  // reason, F3-6).
+  const householdName = oneVoice ? householdDisplayName(row.client_name) : row.client_name;
+  // FR3 F3-25 / 518-4 (`one-voice`) — so does every relationship (Discovery)
+  // paper, a login or not: Message (held for the login when there is none),
+  // Keys, and `Standing · N` when the fallback is in force. No Preview: there
+  // is no client copy to preview yet.
+  const relationshipPaper = oneVoice && row.engagement_kind === 'relationship';
   const letterheadInstruments =
     row.engagement_kind === 'project' && row.project_id ? (
       <LetterheadInstruments
         voice={bandModel?.voice ?? null}
         projectId={row.project_id}
         clientProfileId={row.client_profile_id}
-        clientName={row.client_name}
+        clientName={householdName}
         engagementId={row.engagement_id}
       />
-    ) : (row.engagement_kind !== 'project' && row.client_profile_id) || proposalPaper ? (
+    ) : (row.engagement_kind !== 'project' && row.client_profile_id) ||
+      proposalPaper ||
+      relationshipPaper ? (
       <LetterheadInstruments
         voice={bandModel?.voice ?? null}
         {...(proposalPaper && {
@@ -3052,8 +3066,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           designerClientId,
           proposalStatus: liveProposal?.status ?? null,
         })}
+        {...(relationshipPaper && { designerClientId })}
         clientProfileId={row.client_profile_id}
-        clientName={row.client_name}
+        clientName={householdName}
         engagementId={row.engagement_id}
       />
     ) : null;
@@ -3127,7 +3142,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         // W7-R1 §1 — the phase itself: the head's `N OF M` and the progress
         // mark's own name are formatted from this one pair.
         stagePhase={ticketPhase}
-        household={row.client_name}
+        household={householdName}
         roomInHand={
           heldRoomId && heldRoomName
             ? { id: heldRoomId, name: heldRoomName }
@@ -3173,6 +3188,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           }
           // R80: project vitals self-save at the letterhead (blur-save law).
           projectId={row.engagement_kind === 'project' ? row.project_id : null}
+          // FR3 F3-12 (`one-voice`) — the vitals print the stage word, never
+          // the workflow phase (`Install`, not `Installation`).
+          stageWord={oneVoice ? STAGE_WORD[row.active_section] : undefined}
           fill={deriveFillState(sections)}
           client={
             row.engagement_kind === 'project' || row.engagement_kind === 'proposal' ? (
@@ -3182,7 +3200,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 proposalId={row.proposal_id}
                 clientProfileId={row.client_profile_id}
                 designerClientId={designerClientId}
-                clientName={row.client_name}
+                clientName={householdName}
                 proposalStatus={liveProposal?.status ?? null}
               />
             ) : undefined

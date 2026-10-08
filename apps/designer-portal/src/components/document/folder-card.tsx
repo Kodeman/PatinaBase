@@ -160,12 +160,14 @@ export function FolderCard({
 }) {
   const { row, need } = folder;
   const section = SECTION_LABEL[row.active_section] ?? row.active_section;
-  const phase = prettyPhase(row.current_phase);
-  const stageLine = phase ? `${section} · ${phase}` : section;
-  const tabLabel = `${folderTab(row)} · ${section}`;
   // US-19 D1 (`one-voice`) — the footer prints the act's one name; null stays
   // null, so the card's layout never moves (D8).
   const oneVoice = useFeatureFlag('one-voice').value === true;
+  // FR3 F3-12 (`one-voice`) — the workflow phase (`Installation`) never prints
+  // beside the stage word; the stage word stands alone.
+  const phase = oneVoice ? null : prettyPhase(row.current_phase);
+  const stageLine = phase ? `${section} · ${phase}` : section;
+  const tabLabel = `${folderTab(row)} · ${section}`;
   const actionLabel = deskActionLabel(need, oneVoice, voiceFirstName(row.client_name));
   const needText = deskNeedText(need, oneVoice);
   const shown = useRef(false);

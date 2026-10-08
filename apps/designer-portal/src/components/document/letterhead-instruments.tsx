@@ -32,7 +32,12 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { familyLabel } from '@/lib/document/family-label';
 import { vitalsInstrumentSuffix } from '@/lib/document/roster-derivation';
 import { clientShortName } from '@/lib/document/document-guide';
-import { MESSAGE_WITHHELD, NAMED_ACTS, messageLabel } from '@/lib/document/act-names';
+import {
+  MESSAGE_WITHHELD,
+  NAMED_ACTS,
+  messageLabel,
+  messageNoLogin,
+} from '@/lib/document/act-names';
 import {
   standingDoorLabel,
   type LensVoice,
@@ -292,7 +297,9 @@ export function LetterheadInstruments({
    *  door's un-scoped canonical-doc fallback. */
   engagementId?: string | null;
   /** US-19 FR2 F2-17 (`one-voice`) — a proposal paper's household, for held
-   *  Message's repair: it opens the household sheet the chip opens. */
+   *  Message's repair: it opens the household sheet the chip opens. FR3 F3-6:
+   *  set with no client profile, the household is linked but has no login.
+   *  A relationship (Discovery) paper passes its own engagement id. */
   designerClientId?: string | null;
   /** The proposal's status, so that sheet keeps a sent proposal's client. */
   proposalStatus?: string | null;
@@ -336,14 +343,21 @@ export function LetterheadInstruments({
   // A project with nobody linked still offers Message, held with its reason and
   // the repair beside it (D3 Gated, D7) — never as the dock's centre. FR2
   // F2-17 (`one-voice`): so does a proposal paper with no client to message —
-  // none linked, or a household with no login (no thread route).
+  // none linked, or a household with no login (no thread route). FR3 F3-25:
+  // and a relationship paper, which now mounts these with or without a login.
   const messageHeld =
     (Boolean(projectId) && !hasClient) ||
-    (oneVoice && !projectId && Boolean(proposalId) && !canSendNote);
+    (oneVoice && !projectId && !canSendNote);
   const [linking, setLinking] = useState(false);
   const messageReasonId = useId();
 
   const firstName = family === 'the client' ? null : clientShortName(family);
+  // FR3 F3-6 — a linked household with no login is held for the login, not
+  // the link: `Elena has no login yet.` / `Invite Elena`. `Link a client
+  // first.` stays for a paper with no household linked at all.
+  const noLogin = oneVoice && messageHeld && Boolean(designerClientId);
+  const withheld = noLogin ? messageNoLogin(firstName) : MESSAGE_WITHHELD;
+  const heldLabel = messageLabel(noLogin ? firstName : null);
 
   useMobilePrimaryAction(
     canSendNote
@@ -404,12 +418,12 @@ export function LetterheadInstruments({
             ? [
                 {
                   actionKey: 'message-family',
-                  label: messageLabel(null),
+                  label: heldLabel,
                   onPress: () => {},
                   held: {
-                    reason: MESSAGE_WITHHELD.reason,
+                    reason: withheld.reason,
                     repair: {
-                      label: MESSAGE_WITHHELD.repair,
+                      label: withheld.repair,
                       onPress: () => setLinking(true),
                     },
                   },
@@ -495,6 +509,8 @@ export function LetterheadInstruments({
         {(messageHeld || canSendNote) && (
           <MessageCluster
             held={messageHeld}
+            reason={withheld.reason}
+            repair={withheld.repair}
             reasonId={messageReasonId}
             onRepair={() => setLinking(true)}
           >
@@ -505,7 +521,7 @@ export function LetterheadInstruments({
               variant="primary"
               aria-label={
                 messageHeld
-                  ? messageLabel(null)
+                  ? heldLabel
                   : oneVoice
                     ? undefined
                     : `Message ${family}`
@@ -516,7 +532,7 @@ export function LetterheadInstruments({
               onClick={() => setComposing((v) => !v)}
             >
               {messageHeld
-                ? messageLabel(null)
+                ? heldLabel
                 : oneVoice
                   ? messageLabel(firstName)
                   : 'Message'}
@@ -554,11 +570,11 @@ export function LetterheadInstruments({
 
       {/* The repair opens the same sheet the household chip opens — mounted
           only while open, so a client-less page issues none of its reads. */}
-      {messageHeld && linking && (projectId || proposalId) && (
+      {messageHeld && linking && (projectId || proposalId || designerClientId) && (
         <HouseholdSheet
           open
           onClose={() => setLinking(false)}
-          engagementKind={projectId ? 'project' : 'proposal'}
+          engagementKind={projectId ? 'project' : proposalId ? 'proposal' : 'relationship'}
           projectId={projectId}
           proposalId={proposalId}
           clientProfileId={null}
@@ -652,11 +668,16 @@ export function LetterheadInstruments({
  */
 function MessageCluster({
   held,
+  reason,
+  repair,
   reasonId,
   onRepair,
   children,
 }: {
   held: boolean;
+  /** The real blocking condition (F3-6): no household linked, or no login. */
+  reason: string;
+  repair: string;
   reasonId: string;
   onRepair: () => void;
   children: ReactNode;
@@ -667,11 +688,11 @@ function MessageCluster({
       <span className="inline-flex flex-col items-start">
         {children}
         <span id={reasonId} className="px-[6px] text-[11.5px] leading-tight text-[var(--text-muted)]">
-          {MESSAGE_WITHHELD.reason}
+          {reason}
         </span>
       </span>
       <DocumentAction actionKey="link-client" variant="secondary" onClick={onRepair}>
-        {MESSAGE_WITHHELD.repair}
+        {repair}
       </DocumentAction>
     </span>
   );

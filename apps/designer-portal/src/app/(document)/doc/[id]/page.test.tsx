@@ -2088,6 +2088,48 @@ describe('DocumentPage guide activation', () => {
         expect(mockLetterheadProps?.proposalStatus).toBeUndefined();
       });
     });
+
+    // US-19 FR3 F3-25 / 518-4 (`one-voice`) — a Discovery (relationship) paper
+    // mounts the letterhead too, login or not, handed its household so a held
+    // Message can say why — and no proposal or project, so no Preview (there
+    // is no client copy). F3-13: the no-login suffix never reaches it.
+    describe('a Discovery paper (FR3 F3-25)', () => {
+      function asDiscovery(clientProfileId: string | null) {
+        const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+        mockDocumentQuery = {
+          ...mockDocumentQuery,
+          data: { kind: 'engagement', row: {
+            ...current, engagement_kind: 'relationship', active_section: 'discovery',
+            engagement_id: 'relationship-1', lead_id: null, proposal_id: null,
+            project_id: null, client_profile_id: clientProfileId,
+            client_name: 'The Ashfords (no-login household)',
+          } },
+        };
+      }
+      const rows = () => document.querySelectorAll('[data-testid="instruments-row"]');
+
+      it('one-voice, no login: mounts once with the household, without Preview', () => {
+        mockEnabledFlags = ['one-voice'];
+        asDiscovery(null);
+        render(<DocumentPage params={fulfilledParams} />);
+
+        expect(rows()).toHaveLength(1);
+        expect(mockLetterheadProps).toMatchObject({
+          designerClientId: 'relationship-1',
+          clientProfileId: null,
+          clientName: 'The Ashfords',
+        });
+        // Preview needs a client copy: neither a proposal nor a project.
+        expect(mockLetterheadProps?.proposalId).toBeUndefined();
+        expect(mockLetterheadProps?.projectId).toBeUndefined();
+      });
+
+      it('flag off: no login mounts nothing, as today', () => {
+        asDiscovery(null);
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(rows()).toHaveLength(0);
+      });
+    });
   });
 
   // ── A1-L1/L2 — the tie-break: the guide's headline and the red-letter
@@ -2467,6 +2509,37 @@ describe('DocumentPage guide activation', () => {
       expect(
         within(bandLine2() as HTMLElement).getByRole('button', { name: 'Ask the maker for a date' }),
       ).toBeInTheDocument();
+    });
+
+    // US-19 FR3 F3-15 (`one-voice`) — Brief's own act reaches the band: an
+    // inquiry still open (the Desk's `new_lead` test) is `Respond to the
+    // inquiry`, as its own act; answered, the band keeps no own act.
+    it('one-voice, Brief: an open inquiry prints `Respond to the inquiry` as its own act', () => {
+      mockEnabledFlags = ['one-voice'];
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, lead_status: 'new' } },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(
+        within(bandLine2()!).getByRole('button', { name: 'Respond to the inquiry' }),
+      ).toBeInTheDocument();
+    });
+
+    it('one-voice, Brief: an accepted inquiry has no own act to print', () => {
+      mockEnabledFlags = ['one-voice'];
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, lead_status: 'accepted' } },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.queryByRole('button', { name: 'Respond to the inquiry' })).toBeNull();
     });
 
     it('prints the guide sentence on a non-project document', () => {
