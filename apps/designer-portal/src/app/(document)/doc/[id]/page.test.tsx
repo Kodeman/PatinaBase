@@ -2693,7 +2693,7 @@ describe('DocumentPage guide activation', () => {
 
     // US-19 FR3 F3-11 — Cedar: the install reading reaches line 2 as Next's
     // sentence beside `Ask the maker for a date`, never the act alone.
-    it('one-voice, Cedar: line 2 reads D6’s install reading beside `Ask the maker for a date`', () => {
+    it('one-voice, Cedar: line 2 reads D6’s install reading beside `Add the maker` (F6-10)', () => {
       asProjectDocument();
       const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
       mockDocumentQuery = {
@@ -2724,9 +2724,12 @@ describe('DocumentPage guide activation', () => {
 
       expect(bandLine2()?.getAttribute('data-lens-line2-kind')).toBe('next');
       expect(screen.getByRole('button', { name: 'Standing · 2' })).toBeInTheDocument();
-      expect(bandSentence()).toBe("Side table isn't here — no date recorded.");
+      // FR6 F6-10 (D20) — no maker is recorded, so the held ask's repair is
+      // Next: `Add the maker`, quoting the reading. The shorter act leaves room
+      // for the long reading at 1440.
+      expect(bandSentence()).toBe("Side table isn't here, and no arrival date is recorded. 2 more aren't here.");
       expect(
-        within(bandLine2() as HTMLElement).getByRole('button', { name: 'Ask the maker for a date' }),
+        within(bandLine2() as HTMLElement).getByRole('button', { name: 'Add the maker' }),
       ).toBeInTheDocument();
     });
 

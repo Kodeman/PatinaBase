@@ -2557,10 +2557,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // DESIGN-Q (SQ-500): release eligibility is not read on this page.
       releaseEligible: false,
       install: bandInstallReading
-        ? { state: bandInstallReading.state, windowHeld }
+        ? { state: bandInstallReading.state, windowHeld, makerRecorded: bandInstallReading.makerRecorded }
         : null,
     });
     if (!act) return null;
+    // FR6 F6-10 (D20) — the held ask's repair quotes the reading, as the ask did.
+    const repair = act.label === 'Add the maker' ? bandInstallReading : null;
     // 498-c — the region's own status beside its act, where it states one;
     // the act alone otherwise. Never the guide line.
     return {
@@ -2571,7 +2573,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       sentence:
         bandSection === 'project' && unspecified > 0
           ? `${unspecified} ${unspecified === 1 ? 'line' : 'lines'} unspecified.`
-          : null,
+          : (repair?.sentence ?? null),
+      ...(repair ? { shortSentence: repair.shortSentence ?? '' } : {}),
       onAct: () => {
         // US-19 F3-2 (P-2) — `Ask the maker for a date` is the Install row's
         // own act: the row takes it and opens its sheet on the first field,
@@ -3124,7 +3127,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // FR3 F3-13 (`one-voice`) — the household as the paper prints it: the seed's
   // ` (no-login household)` never prints (the no-login fact is held Message's
   // reason, F3-6).
-  const householdName = oneVoice ? householdDisplayName(row.client_name) : row.client_name;
+  const householdName = oneVoice ? householdDisplayName(row.client_name) || row.client_name : row.client_name;
   // FR3 F3-25 / 518-4 (`one-voice`) — so does every relationship (Discovery)
   // paper, a login or not: Message (held for the login when there is none),
   // Keys, and `Standing · N` when the fallback is in force. No Preview: there
@@ -3230,7 +3233,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         // W7-R1 §1 — the phase itself: the head's `N OF M` and the progress
         // mark's own name are formatted from this one pair.
         stagePhase={ticketPhase}
-        household={householdName}
+        household={oneVoice ? householdDisplayName(row.client_name) : householdName}
         roomInHand={
           heldRoomId && heldRoomName
             ? { id: heldRoomId, name: heldRoomName }
