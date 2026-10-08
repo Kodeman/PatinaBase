@@ -15,6 +15,24 @@ const LABEL_CLASS =
   'mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
 /**
+ * Rough $ is an internal ballpark (Q7), never an allowance — it writes
+ * `roughCents` and never touches `budgetMaxCents` or `itemType`. Parses a
+ * dollar string typed in the field; returns null when it's empty or not a
+ * usable, non-negative number.
+ */
+function parseRoughDollarsToCents(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const dollars = Number(trimmed);
+  if (!Number.isFinite(dollars) || dollars < 0) return null;
+  return Math.round(dollars * 100);
+}
+
+function formatRoughCents(cents: number): string {
+  return `~$${Math.round(cents / 100).toLocaleString('en-US')}`;
+}
+
+/**
  * Enter in the Line field adds the line and starts the next one; the sheet
  * stays open until Esc or `Done adding`. The caller names where lines land:
  * `assignmentScope` is sent as given (`room` carries `roomId`; `throughout`
@@ -41,12 +59,14 @@ export function AddLineSheet({
 
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('1');
+  const [roughDollars, setRoughDollars] = useState('');
   const [takesCom, setTakesCom] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestKey = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const trimmedName = name.trim();
   const parsedQuantity = Math.max(1, Math.round(Number(quantity) || 1));
+  const roughCents = parseRoughDollarsToCents(roughDollars);
   const pending = addLine.isPending || addFabric.isPending;
   const canSave = trimmedName.length > 0 && !pending;
 
@@ -64,6 +84,7 @@ export function AddLineSheet({
         roomId: assignmentScope === 'room' ? roomId : null,
         disposition: 'candidate' as const,
         source: 'named-need' as const,
+        ...(roughCents !== null ? { roughCents } : {}),
       };
       const fingerprint = JSON.stringify(request);
       if (requestKey.current?.fingerprint !== fingerprint) {
@@ -88,6 +109,7 @@ export function AddLineSheet({
       // The next line starts here. A name typed while this one saved is kept.
       setName((current) => (current === submittedName ? '' : current));
       setQuantity('1');
+      setRoughDollars('');
       setTakesCom(false);
       requestKey.current = null;
       lineRef.current?.focus();
@@ -138,6 +160,23 @@ export function AddLineSheet({
             aria-label="Quantity"
             className={FIELD_CLASS}
           />
+        </label>
+        <label>
+          <span className={LABEL_CLASS}>Rough $</span>
+          <input
+            type="number"
+            min={0}
+            value={roughDollars}
+            onChange={(event) => setRoughDollars(event.target.value)}
+            placeholder="4800"
+            aria-label="Rough $"
+            className={FIELD_CLASS}
+          />
+          {roughCents !== null && (
+            <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
+              {formatRoughCents(roughCents)}
+            </span>
+          )}
         </label>
         <label className="flex items-center gap-2 sm:col-span-2">
           <input

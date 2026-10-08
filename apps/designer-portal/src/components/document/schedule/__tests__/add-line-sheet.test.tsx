@@ -251,6 +251,42 @@ describe('AddLineSheet', () => {
     });
   });
 
+  describe('Rough $ (Q7, D12)', () => {
+    it('writes roughCents through the create path and prints the rounded preview', async () => {
+      renderSheet();
+      type('Line name', 'Walnut bed, king');
+      type('Rough $', '4800');
+      expect(screen.getByText('~$4,800')).toBeInTheDocument();
+
+      fireEvent.keyDown(lineField(), { key: 'Enter' });
+      await waitFor(() => expect(addMutate).toHaveBeenCalled());
+      expect(sent(0)).toEqual(expect.objectContaining({ roughCents: 480000 }));
+      expect(sent(0)).not.toHaveProperty('budgetMaxCents');
+      expect(sent(0)).not.toHaveProperty('budgetMinCents');
+      expect(sent(0).itemType).toBe('tbd');
+    });
+
+    it('is never an allowance and omits roughCents when left blank', async () => {
+      renderSheet();
+      enterLine('Bench');
+      await waitFor(() => expect(addMutate).toHaveBeenCalled());
+      expect(sent(0)).not.toHaveProperty('roughCents');
+      expect(sent(0)).not.toHaveProperty('budgetMaxCents');
+      expect(sent(0).itemType).toBe('tbd');
+    });
+
+    it('clears Rough $ after the line saves', async () => {
+      renderSheet();
+      type('Line name', 'Walnut bed, king');
+      type('Rough $', '4800');
+      fireEvent.keyDown(lineField(), { key: 'Enter' });
+      await waitFor(() => expect(addMutate).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(screen.getByLabelText('Rough $')).toHaveValue(null),
+      );
+    });
+  });
+
   it('does not offer an allowance kind until its effective fields can be collected', () => {
     renderSheet();
     expect(screen.queryByRole('button', { name: 'Allowance' })).not.toBeInTheDocument();
