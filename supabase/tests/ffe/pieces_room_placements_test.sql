@@ -15,7 +15,8 @@
 --   case_1_waste       913 over 830 returns wasteQuantity 83
 --   case_2_partial     500 of 913 received: received_quantity stays one integer
 --   case_3_share       210→240 / 120→90 after the PO: recorded, no money, no PO change
---   case_4_fit         860 ≤ 913 accepted; 950 refused; primary fixed on a PO
+--   case_4_fit         860 ≤ 913 accepted; 950 refused (the primary-room-on-a-PO
+--                      rule moved to receiving/pieces_order_rooms_test.sql, 00754)
 --   rls                a client JWT reads 0 rows; the studio reads them
 --
 -- Run:
@@ -395,17 +396,9 @@ BEGIN
     RAISE EXCEPTION 'case_4_fit: the refused 950 must leave 860 placed and 2 events';
   END IF;
 
-  -- On a PO the primary room is fixed until phase 3 (00754).
-  BEGIN
-    PERFORM public.set_line_placements('73440000-0000-4000-8000-000000000001', '[
-      {"roomId":"73420000-0000-4000-8000-000000000002","quantity":320},
-      {"roomId":"73420000-0000-4000-8000-000000000001","quantity":120}
-    ]'::jsonb);
-    RAISE EXCEPTION 'case_4_fit: the primary room changed while on a PO';
-  EXCEPTION WHEN check_violation THEN
-    GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
-    IF v_msg <> 'The primary room is fixed while the line is on an order.' THEN RAISE; END IF;
-  END;
+  -- 00754 (phase 3) lifted the "primary room fixed on a PO" refusal; that a
+  -- primary-room change on a PO is accepted and recorded is asserted in
+  -- supabase/tests/receiving/pieces_order_rooms_test.sql (case_primary).
   IF (SELECT project_room_id FROM public.project_ffe_items
       WHERE id = '73440000-0000-4000-8000-000000000001') <> '73420000-0000-4000-8000-000000000001' THEN
     RAISE EXCEPTION 'case_4_fit: Hall must stay the primary room';
