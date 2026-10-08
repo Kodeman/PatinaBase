@@ -4,7 +4,10 @@
  * in order; naming a maker or filling flips PLACEHOLDER to SPECCED; the fill
  * previews a6's sentence before `FILL THIS LINE`; `NEXT UNFINISHED →` walks
  * the unfinished lines; the image writes `selected_media`; no money,
- * procurement or receiving prints, except a labor line's client price.
+ * procurement or receiving prints, a labor line's client price included.
+ * T-33b: released and Trade Scope lines take no act (F7); a fill keeps an
+ * allowance (F8), focuses the heading and says so (F4/F5); a tap at 390
+ * focuses the pane (F9); Spec prints no client price (F10).
  * Fixture: SPEC §4.2, Whole Home Renovation (Living Room, Bedroom).
  */
 
@@ -108,14 +111,20 @@ jest.mock("../library-inline-search", () => ({
 }));
 jest.mock("../placement-chips", () => ({
   ...jest.requireActual("../placement-chips"),
-  PlacementChips: () => <div data-testid="placement-chips" />,
+  PlacementChips: ({ canEdit }: { canEdit: boolean }) => (
+    <div data-testid="placement-chips" data-can-edit={String(canEdit)} />
+  ),
 }));
 jest.mock("../labor-act", () => ({
   ...jest.requireActual("../labor-act"),
-  LaborAct: () => <div data-testid="labor-act" />,
+  LaborAct: ({ canEdit }: { canEdit: boolean }) => (
+    <div data-testid="labor-act" data-can-edit={String(canEdit)} />
+  ),
 }));
 jest.mock("../com-toggle", () => ({
-  ComToggle: () => <div data-testid="com-toggle" />,
+  ComToggle: ({ canEdit }: { canEdit: boolean }) => (
+    <div data-testid="com-toggle" data-can-edit={String(canEdit)} />
+  ),
 }));
 jest.mock("@/components/portal/proposals/product-picker-modal", () => ({
   ProductPickerModal: ({ open }: { open: boolean }) =>
@@ -471,16 +480,23 @@ describe("the stamp", () => {
     const preview = within(section).getByTestId("fill-preview");
     expect(preview).toHaveTextContent("Hardware, 2 knobs for custom cabinet");
     expect(preview).toHaveTextContent(
-      "Emtek Ribbon & Reed knob, satin brass · ×2 · $38 each",
+      "Emtek Ribbon & Reed knob, satin brass · ×2",
     );
     expect(preview).toHaveTextContent(
       "The need stays on the line. The PO carries the product.",
     );
     expect(mockPlace).not.toHaveBeenCalled();
 
-    fireEvent.click(
-      within(preview).getByRole("button", { name: "FILL THIS LINE" }),
+    // F4/F5: the chosen product's act takes focus, and the choice is said.
+    const fillAct = within(preview).getByRole("button", {
+      name: "FILL THIS LINE",
+    });
+    expect(fillAct).toHaveFocus();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Emtek Ribbon & Reed knob chosen. Fill this line, or put it back.",
     );
+
+    fireEvent.click(fillAct);
     await waitFor(() => expect(mockPlace).toHaveBeenCalledTimes(1));
     expect(mockPlace.mock.calls[0][0]).toMatchObject({
       projectId: "p1",
@@ -489,12 +505,24 @@ describe("the stamp", () => {
       assignmentScope: "room",
       roomId: "living",
       disposition: "candidate",
-      duplicateMode: "create",
+      duplicateMode: "reuse",
       itemType: "fixed",
       quantity: 2,
       roleConfigurationIdentity: "default",
     });
+    expect(mockPlace.mock.calls[0][0]).not.toHaveProperty("budgetMaxCents");
     expect(typeof mockPlace.mock.calls[0][0].idempotencyKey).toBe("string");
+
+    // F4/F5: focus lands on the filled line's heading, and the fill is said.
+    await waitFor(() =>
+      expect(within(section).getByRole("heading", { level: 2 })).toHaveFocus(),
+    );
+    expect(document.activeElement).toHaveTextContent(
+      "Hardware, 2 knobs for custom cabinet · ×2",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Hardware, 2 knobs for custom cabinet filled with Emtek Ribbon & Reed knob.",
+    );
 
     // The fill renames the line to the product; the need label stays on the thread.
     mockItems.data = mockItems.data.map((r) =>
@@ -526,8 +554,37 @@ describe("the stamp", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("leaves out the price in the preview for a seat without money", async () => {
-    renderLens("living", false);
+  it.each([true, false])(
+    "leaves out the price in the preview (canSeeMoney %s; Q7)",
+    async (canSeeMoney) => {
+      renderLens("living", canSeeMoney);
+      await pane();
+      fireEvent.click(rowFor("Hardware, 2 knobs for custom cabinet"));
+      const section = await pane();
+      fireEvent.click(
+        within(section).getByRole("button", { name: "FILL WITH A PRODUCT" }),
+      );
+      fireEvent.click(
+        within(section).getByRole("button", { name: "Choose Emtek" }),
+      );
+      expect(within(section).getByTestId("fill-preview")).not.toHaveTextContent(
+        "$",
+      );
+    },
+  );
+
+  it("keeps an allowance an allowance, with its ceiling (F8, Q12)", async () => {
+    mockItems.data = mockItems.data.map((r) =>
+      r.id === "l3"
+        ? {
+            ...r,
+            item_type: "allowance",
+            budget_min_cents: 2000,
+            budget_max_cents: 120000,
+          }
+        : r,
+    );
+    renderLens();
     await pane();
     fireEvent.click(rowFor("Hardware, 2 knobs for custom cabinet"));
     const section = await pane();
@@ -537,9 +594,58 @@ describe("the stamp", () => {
     fireEvent.click(
       within(section).getByRole("button", { name: "Choose Emtek" }),
     );
-    expect(within(section).getByTestId("fill-preview")).not.toHaveTextContent(
-      "$38",
+    fireEvent.click(
+      within(section).getByRole("button", { name: "FILL THIS LINE" }),
     );
+    await waitFor(() => expect(mockPlace).toHaveBeenCalledTimes(1));
+    expect(mockPlace.mock.calls[0][0]).toMatchObject({
+      placeholderSelectionId: "l3",
+      itemType: "allowance",
+      budgetMinCents: 2000,
+      budgetMaxCents: 120000,
+      duplicateMode: "reuse",
+    });
+  });
+});
+
+describe("at 390 (a14, F9)", () => {
+  const setStacked = (matches: boolean) => {
+    (window.matchMedia as jest.Mock).mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    }));
+  };
+  afterEach(() => setStacked(false));
+
+  it("brings a tapped line's pane into view by focusing its heading", async () => {
+    setStacked(true);
+    renderLens();
+    await pane();
+    fireEvent.click(rowFor("Countertop for custom cabinets"));
+    const section = await pane();
+    const heading = within(section).getByRole("heading", { level: 2 });
+    await waitFor(() => expect(heading).toHaveFocus());
+    expect(heading).toHaveTextContent("Countertop for custom cabinets · ×2");
+    expect(window.matchMedia).toHaveBeenCalledWith("(max-width: 767.98px)");
+  });
+
+  it("leaves focus on the list at 1440, where the pane sits beside it", async () => {
+    setStacked(false);
+    renderLens();
+    await pane();
+    const row = rowFor("Countertop for custom cabinets");
+    row.focus();
+    fireEvent.click(row);
+    const section = await pane();
+    expect(
+      within(section).getByRole("heading", { level: 2 }),
+    ).toHaveTextContent("Countertop for custom cabinets · ×2");
+    expect(row).toHaveFocus();
   });
 });
 
@@ -614,52 +720,141 @@ describe("the image (D15)", () => {
   });
 });
 
-describe("a labor line's client price (T-21a amendment)", () => {
-  it("is editable while unreleased, through useSetLaborLinePrice", async () => {
-    renderLens("bedroom");
-    await pane();
-    fireEvent.click(
-      within(screen.getByRole("list", { name: "Lines" })).getAllByRole(
-        "button",
-      )[1],
-    );
+describe("no client price in Spec (F10, Q7)", () => {
+  it.each([
+    ["unreleased", null],
+    ["released", "sent"],
+  ])(
+    "prints none on a %s labor line, even for a seat with money",
+    async (_label, authorization) => {
+      mockItems.data = mockItems.data.map((r) =>
+        r.id === "r1a" || r.id === "r1"
+          ? {
+              ...r,
+              ffe_line_authorization: authorization,
+              ...(r.id === "r1a" ? { unit_price_cents: 9000 } : {}),
+            }
+          : r,
+      );
+      renderLens("bedroom", true);
+      await pane();
+      fireEvent.click(
+        within(screen.getByRole("list", { name: "Lines" })).getAllByRole(
+          "button",
+        )[1],
+      );
+      const section = await pane();
+      expect(
+        within(section).getByRole("heading", { level: 2 }),
+      ).toHaveTextContent("Install, wallpaper hanger");
+      expect(within(section).queryAllByText(/client price/i)).toHaveLength(0);
+      expect(
+        within(section).queryByRole("group", { name: "Client price / unit" }),
+      ).toBeNull();
+      // r1a's client price is $90 a roll; only Rough $ (~$85) may print.
+      expect(section).not.toHaveTextContent("$90");
+      expect(
+        within(section).queryByRole("textbox", { name: /price/i }),
+      ).toBeNull();
+      expect(screen.getByTestId("spec-rough")).toHaveTextContent(
+        "~$85 / roll · set the price in Price",
+      );
+      expect(mockLaborPrice).not.toHaveBeenCalled();
+    },
+  );
+
+  it("prints none on a priced goods line", async () => {
+    renderLens("bedroom", true);
     const section = await pane();
-    const price = within(section).getByRole("textbox", {
-      name: "Client price / unit",
-    });
-    fireEvent.change(price, { target: { value: "90" } });
-    fireEvent.blur(price);
-    await waitFor(() =>
-      expect(mockLaborPrice).toHaveBeenCalledWith({
-        projectId: "p1",
-        itemId: "r1a",
-        unitPriceCents: 9000,
-      }),
-    );
-    expect(within(section).queryByRole("group", { name: "Labor" })).toBeNull();
-    expect(within(section).queryByRole("group", { name: "COM" })).toBeNull();
+    expect(
+      within(section).getByRole("heading", { level: 2 }),
+    ).toHaveTextContent("Wallpaper, grasscloth");
+    expect(within(section).queryAllByText(/client price/i)).toHaveLength(0);
+    expect(section).not.toHaveTextContent("$");
+  });
+});
+
+describe("a released line, or a Trade Scope line, takes no act (F7)", () => {
+  const TS: Row = {
+    ...base,
+    id: "ts1",
+    name: "Paintwork and plaster",
+    project_room_id: "kitchen",
+    status: "installed",
+    trade_scope_document_id: "pcd-1",
+    selection_thread_id: "t9",
+  };
+  const RL: Row = {
+    ...base,
+    id: "rl1",
+    name: "Dining chairs, allowance",
+    project_room_id: "kitchen",
+    item_type: "allowance",
+    budget_max_cents: 120000,
+    ffe_line_authorization: "sent",
+    selection_thread_id: "t10",
+  };
+
+  beforeEach(() => {
+    mockItems.data = [TS, RL];
+    mockPlacements.data = [];
+    mockSpecs.data = [spec("ts1"), spec("rl1")];
   });
 
-  it("is read-only once released", async () => {
-    mockItems.data = mockItems.data.map((r) =>
-      r.id === "r1a" || r.id === "r1"
-        ? { ...r, ffe_line_authorization: "sent" }
-        : r,
-    );
-    renderLens("bedroom");
-    await pane();
-    fireEvent.click(
-      within(screen.getByRole("list", { name: "Lines" })).getAllByRole(
-        "button",
-      )[1],
-    );
+  it.each([
+    [0, "Trade Scope lines change in their scope."],
+    [1, "Released lines change through Record a change."],
+  ])(
+    "row %i offers no fill, maker, COM, chip or labor act, and says why",
+    async (index, reason) => {
+      renderLens("kitchen");
+      await pane();
+      fireEvent.click(
+        within(screen.getByRole("list", { name: "Lines" })).getAllByRole(
+          "button",
+        )[index],
+      );
+      const section = await pane();
+
+      for (const name of [/MAKER$/, "FILL WITH A PRODUCT", "BRING IN…"]) {
+        const act = within(section).getByRole("button", { name });
+        expect(act).toHaveAttribute("aria-disabled", "true");
+        expect(act).toHaveAccessibleDescription(reason);
+        fireEvent.click(act);
+      }
+      expect(screen.queryByTestId("product-picker")).toBeNull();
+      expect(
+        within(section).queryByRole("button", { name: "Hollis Millwork" }),
+      ).toBeNull();
+      expect(
+        within(section).queryByRole("button", { name: "Choose Emtek" }),
+      ).toBeNull();
+
+      for (const [group, testId] of [
+        ["Rooms", "placement-chips"],
+        ["Labor", "labor-act"],
+        ["COM", "com-toggle"],
+      ]) {
+        const field = within(section).getByRole("group", { name: group });
+        expect(within(field).getByTestId(testId)).toHaveAttribute(
+          "data-can-edit",
+          "false",
+        );
+        expect(field).toHaveTextContent(reason);
+      }
+    },
+  );
+
+  it("leaves an open line's chips, labor and COM editable", async () => {
+    seed();
+    renderLens();
     const section = await pane();
-    const group = within(section).getByRole("group", {
-      name: "Client price / unit",
-    });
-    expect(within(group).queryByRole("textbox")).toBeNull();
-    expect(group).toHaveTextContent("$85 / roll");
-    expect(group).toHaveTextContent("Changes through Record a change.");
+    for (const testId of ["placement-chips", "labor-act", "com-toggle"]) {
+      expect(within(section).getByTestId(testId)).toHaveAttribute(
+        "data-can-edit",
+        "true",
+      );
+    }
   });
 });
 

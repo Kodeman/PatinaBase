@@ -5,14 +5,17 @@
  * working sheet: the place's lines on the left as `name · stage · N OF 6`,
  * and the active line's fields on the right. `NEXT UNFINISHED →` walks the
  * lines with fewer than six fields filled. At 390 the panes stack (a14): the
- * fields first, `NEXT UNFINISHED →` at their foot, then the line list. Money, procurement and receiving are not on this lens.
+ * fields first, `NEXT UNFINISHED →` at their foot, then the line list. There
+ * a tapped line brings its pane into view and focuses its heading (F9). A
+ * fill focuses the same heading and says so in a polite live region (F4/F5).
+ * Money, procurement and receiving are not on this lens.
  *
  * The lens reads its own data. The spec columns and the need labels come from
  * `project_ffe_specs` and `project_ffe_selection_threads` under a key inside
  * `['project-ffe-items', projectId]`, so every FF&E write refreshes them.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createBrowserClient,
@@ -61,6 +64,17 @@ interface SpecFieldRows {
 
 const SPEC_COLUMNS =
   "id, ffe_item_id, row_version, finish, material, color_fabric, selected_dimensions, exact_location, trade_notes, selected_media";
+
+/** Below `md` the panes stack, so the fields pane sits above the line list. */
+const STACKED_QUERY = "(max-width: 767.98px)";
+
+function stacked(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(STACKED_QUERY).matches
+  );
+}
 
 export const specFieldRowsKey = (
   projectId: string,
@@ -117,6 +131,20 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
   const { data: placements } = useProjectRoomPlacements(projectId);
   const { data: roomRows } = useDocumentRooms(projectId);
   const [chosenId, setChosenId] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const [focusRequest, setFocusRequest] = useState(0);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  // Runs after the chosen line's pane mounts, so the heading is its own.
+  useEffect(() => {
+    if (focusRequest > 0) headingRef.current?.focus();
+  }, [focusRequest]);
+
+  /** Shows a line; at 390 its pane sits above the list, so it takes focus. */
+  const choose = (id: string) => {
+    setChosenId(id);
+    if (stacked()) setFocusRequest((n) => n + 1);
+  };
 
   const allLines = useMemo(
     () => (rawLines ?? []) as unknown as SpecLensLine[],
@@ -201,7 +229,7 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
         aria-disabled={nextId == null || undefined}
         aria-describedby={nextId == null ? "spec-next-reason" : undefined}
         onClick={() => {
-          if (nextId) setChosenId(nextId);
+          if (nextId) choose(nextId);
         }}
       >
         NEXT UNFINISHED →
@@ -228,7 +256,7 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
             <button
               type="button"
               aria-current={current ? "true" : undefined}
-              onClick={() => setChosenId(line.id)}
+              onClick={() => choose(line.id)}
               className={`grid min-h-[var(--row,40px)] w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[var(--sheet-rule)] py-2 text-left hover:bg-[var(--sheet-row-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--clay-ink)] ${
                 labor ? "pl-6" : "pl-2"
               } pr-2 ${current ? "outline outline-1 -outline-offset-1 outline-[var(--sheet-rule-strong)]" : ""}`}
@@ -282,6 +310,9 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
       data-testid="spec-lens"
       className="grid grid-cols-1 gap-6 py-6 md:grid-cols-[520px_minmax(0,1fr)] md:gap-x-12"
     >
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
       <div className="order-3 md:order-none md:col-start-1 md:row-start-1">
         {list}
       </div>
@@ -304,6 +335,14 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
             placements={placementsOf(active.id)}
             rooms={rooms}
             onSpecSaved={onSpecSaved}
+            headingRef={headingRef}
+            onAnnounce={setAnnouncement}
+            onFilled={(message) => {
+              // The fill may finish the line; keep it rather than walk on.
+              setChosenId(active.id);
+              setAnnouncement(message);
+              setFocusRequest((n) => n + 1);
+            }}
           />
         </div>
       )}

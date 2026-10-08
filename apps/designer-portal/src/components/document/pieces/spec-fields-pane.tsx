@@ -6,23 +6,33 @@
  * place or bring one in), image (D15, `selected_media`), finish, material,
  * color, dimensions, exact location, notes, rooms, unit, labor and COM. The
  * stamp is D1's, so it flips to SPECCED the moment a maker is named or the
- * line is filled. No money here: a dim rough figure points to Price, and a
- * labor line's client price is the one exception (T-21a amendment).
+ * line is filled. No money here (Q7): a dim rough figure points to Price, and
+ * every client price, a labor line's included, lives in Price.
+ *
+ * A released line, a line on an order and a Trade Scope line take no act here,
+ * with the reason Rough in prints.
  *
  * Writes: spec columns through `useUpdateProjectFfeSpec` (the authenticated
  * column grant, row_version checked); the maker through
  * `set_project_ffe_line_commercials` (00692); the fill through
  * `place_product_in_project_v2`, which keeps the need label on the thread
- * (D2); the unit through `set_project_ffe_line_build_fields` (00730); a labor
- * line's client price through `set_labor_line_price` (00737).
+ * (D2) and the line's allowance (Q12); the unit through
+ * `set_project_ffe_line_build_fields` (00730).
  */
 
-import { useId, useState, type DragEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+  type Ref,
+} from "react";
 import {
   usePlaceProductInProjectV2,
   useSetFfeLineBuildFields,
   useSetFfeLineCommercials,
-  useSetLaborLinePrice,
   useUpdateProjectFfeSpec,
   type ProjectFfeSpec,
   type VendorMatch,
@@ -54,7 +64,7 @@ import {
   type MakerOption,
 } from "../line-unfold/the-buy-cell";
 import { ComToggle } from "./com-toggle";
-import { LaborAct, parseRoughCents } from "./labor-act";
+import { LaborAct } from "./labor-act";
 import {
   LibraryInlineSearch,
   type LibraryInlineResult,
@@ -73,6 +83,7 @@ export type SpecLensLine = PieceLineStageRow & {
   name: string;
   unit?: string | null;
   rough_cents?: number | null;
+  budget_min_cents?: number | null;
   link_kind?: string | null;
   project_room_id?: string | null;
   assignment_scope?: string | null;
@@ -122,7 +133,6 @@ export const RELEASED_SENTENCE =
   "Released lines change through Record a change.";
 const UNIT_LOCKED_SENTENCE =
   "This line is released. Quantity and unit change through Record a change.";
-const PRICE_LOCKED_SENTENCE = "Changes through Record a change.";
 const MAKER_ON_ORDER_SENTENCE =
   "The line is on an order. Its maker changes through the order.";
 const DROP_LINK_SENTENCE = "Drop an image from a web page, or paste its link.";
@@ -268,6 +278,12 @@ export interface SpecFieldsPaneProps {
   rooms: readonly PieceRoom[];
   /** The saved spec row, so the next save carries its row_version. */
   onSpecSaved: (spec: ProjectFfeSpec) => void;
+  /** The pane's heading, which takes focus after a fill or a tap at 390. */
+  headingRef?: Ref<HTMLHeadingElement>;
+  /** Says a sentence in the lens's polite live region. */
+  onAnnounce?: (message: string) => void;
+  /** The line was filled; the lens keeps it, focuses its heading and says so. */
+  onFilled?: (message: string) => void;
 }
 
 export function SpecFieldsPane({
@@ -281,11 +297,13 @@ export function SpecFieldsPane({
   placements,
   rooms,
   onSpecSaved,
+  headingRef,
+  onAnnounce,
+  onFilled,
 }: SpecFieldsPaneProps) {
   const updateSpec = useUpdateProjectFfeSpec();
   const commercials = useSetFfeLineCommercials({ errorSurface: "inline" });
   const buildFields = useSetFfeLineBuildFields();
-  const laborPrice = useSetLaborLinePrice();
   const place = usePlaceProductInProjectV2();
   const addMaker = useAddMaker();
 
@@ -297,8 +315,13 @@ export function SpecFieldsPane({
   const [pick, setPick] = useState<FillPick | null>(null);
   const [link, setLink] = useState("");
   const [imageNote, setImageNote] = useState<string | null>(null);
-  const [priceDraft, setPriceDraft] = useState<string | null>(null);
+  const fillActRef = useRef<HTMLButtonElement>(null);
   const ids = useId();
+
+  // A chosen product opens the preview; its act takes focus (F4).
+  useEffect(() => {
+    if (pick) fillActRef.current?.focus();
+  }, [pick]);
 
   const labor = isLaborLine(line);
   const read = pieceLineStage(line, piece);
@@ -307,8 +330,14 @@ export function SpecFieldsPane({
   const released =
     line.ffe_line_authorization != null || read.stage === "released";
   const onOrder = line.purchase_order_id != null;
-  const makerLocked = onOrder || read.lock != null;
+  // Rough in's rule (isLocked): released, on an order, or a Trade Scope line.
   const locked = released || onOrder || read.lock != null;
+  const lockReason = tradeScope ? TRADE_SCOPE_REASON : RELEASED_SENTENCE;
+  const makerReason = tradeScope
+    ? TRADE_SCOPE_REASON
+    : onOrder
+      ? MAKER_ON_ORDER_SENTENCE
+      : RELEASED_SENTENCE;
   const quantity = line.quantity ?? 0;
   const productName = line.product_id
     ? (line.product?.name ?? line.name)
@@ -367,6 +396,7 @@ export function SpecFieldsPane({
   }) => {
     setPick({ ...next, idempotencyKey: newIdempotencyKey() });
     setFilling(false);
+    onAnnounce?.(`${next.name} chosen. Fill this line, or put it back.`);
   };
 
   const fill = () => {
@@ -376,21 +406,35 @@ export function SpecFieldsPane({
     const disposition = DISPOSITIONS.has(line.design_disposition ?? "")
       ? (line.design_disposition as Exclude<FfeDesignDisposition, "superseded">)
       : undefined;
+    // Q12: an allowance stays an allowance, ceiling and all. A fill decides
+    // any other line, so it becomes fixed.
+    const allowance = line.item_type === "allowance";
     place
       .mutateAsync({
         projectId,
         productId: pick.productId,
         quantity: Math.max(1, quantity),
-        itemType: "fixed",
+        itemType: allowance ? "allowance" : "fixed",
+        ...(allowance
+          ? {
+              budgetMinCents: line.budget_min_cents ?? 0,
+              budgetMaxCents: line.budget_max_cents ?? null,
+            }
+          : {}),
         assignmentScope: scope,
         roomId: scope === "room" ? (line.project_room_id ?? null) : null,
         ...(disposition ? { disposition } : {}),
-        duplicateMode: "create",
+        // A placeholder fill updates the line in place and never reads the
+        // mode; 'reuse' is the RPC's default and Rough in's.
+        duplicateMode: "reuse",
         placeholderSelectionId: line.id,
         roleConfigurationIdentity: line.role_identity ?? "default",
         idempotencyKey: pick.idempotencyKey,
       })
-      .then(() => setPick(null))
+      .then(() => {
+        setPick(null);
+        onFilled?.(`${needLabel} filled with ${pick.name}.`);
+      })
       .catch((e: unknown) =>
         setError(errorText(e, "The line was not filled.")),
       );
@@ -419,23 +463,6 @@ export function SpecFieldsPane({
     else setImageNote(DROP_LINK_SENTENCE);
   };
 
-  const savePrice = () => {
-    if (priceDraft == null) return;
-    const cents = parseRoughCents(priceDraft);
-    if (cents === "invalid") {
-      setError("Client price is an amount in dollars, like 85 or 4,800.");
-      return;
-    }
-    setPriceDraft(null);
-    if (cents == null || cents === (line.unit_price_cents ?? null)) return;
-    setError(null);
-    laborPrice
-      .mutateAsync({ projectId, itemId: line.id, unitPriceCents: cents })
-      .catch((e: unknown) =>
-        setError(errorText(e, "The price was not saved.")),
-      );
-  };
-
   const makerName = (line.vendor_name ?? "").trim();
   const specFields = spec != null;
 
@@ -447,7 +474,11 @@ export function SpecFieldsPane({
     >
       <header className="flex flex-col gap-2">
         <span className={LABEL_CLS}>What we need</span>
-        <h2 className="font-heading text-[24px] font-normal leading-[1.2] text-[color:var(--sheet-ink,#1A1816)]">
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="font-heading text-[24px] font-normal leading-[1.2] text-[color:var(--sheet-ink,#1A1816)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--clay-ink)]"
+        >
           {needLabel} · {shareText(quantity, line.unit)}
         </h2>
         {productName && productName !== needLabel && (
@@ -488,17 +519,17 @@ export function SpecFieldsPane({
               <button
                 type="button"
                 className={ACT_CLS}
-                aria-disabled={makerLocked || undefined}
-                aria-describedby={makerLocked ? `${ids}-maker` : undefined}
+                aria-disabled={locked || undefined}
+                aria-describedby={locked ? `${ids}-maker` : undefined}
                 onClick={() => {
-                  if (!makerLocked) setChoosingMaker(true);
+                  if (!locked) setChoosingMaker(true);
                 }}
               >
                 {makerName ? "CHANGE THE MAKER" : "NAME A MAKER"}
               </button>
-              {makerLocked && (
+              {locked && (
                 <span id={`${ids}-maker`} className={REASON_CLS}>
-                  {tradeScope ? TRADE_SCOPE_REASON : MAKER_ON_ORDER_SENTENCE}
+                  {makerReason}
                 </span>
               )}
             </span>
@@ -533,6 +564,7 @@ export function SpecFieldsPane({
               <p className={`${SENTENCE_CLS} mt-2`}>{FILL_PREVIEW_SENTENCE}</p>
               <span className="flex flex-wrap items-center gap-x-6">
                 <button
+                  ref={fillActRef}
                   type="button"
                   className={INKED_ACT_CLS}
                   aria-busy={place.isPending || undefined}
@@ -557,13 +589,12 @@ export function SpecFieldsPane({
                 const name = [row.name.trim(), row.finish?.trim()]
                   .filter(Boolean)
                   .join(", ");
-                const parts = [name, shareText(quantity, line.unit)];
-                if (canSeeMoney && row.price_retail != null)
-                  parts.push(perUnit(row.price_retail, "each"));
+                // No money in Spec (Q7): the product's price is the line's
+                // client price, which prints only in Price.
                 choose({
                   productId: row.id,
                   name: row.name,
-                  detail: parts.join(" · "),
+                  detail: `${name} · ${shareText(quantity, line.unit)}`,
                 });
               }}
               onSearchLibrary={(query) => {
@@ -599,7 +630,7 @@ export function SpecFieldsPane({
               </button>
               {locked && (
                 <span id={`${ids}-fill`} className={REASON_CLS}>
-                  {tradeScope ? TRADE_SCOPE_REASON : RELEASED_SENTENCE}
+                  {lockReason}
                 </span>
               )}
             </span>
@@ -714,8 +745,9 @@ export function SpecFieldsPane({
             }}
             placements={placements}
             rooms={rooms}
-            canEdit={read.lock == null}
+            canEdit={!locked}
           />
+          {locked && <span className={REASON_CLS}>{lockReason}</span>}
         </Field>
 
         <Field label="Unit">
@@ -752,42 +784,6 @@ export function SpecFieldsPane({
           )}
         </Field>
 
-        {labor && canSeeMoney && (
-          <Field label="Client price / unit">
-            {released ? (
-              <>
-                <span className={`${VALUE_CLS} tabular-nums`}>
-                  {line.unit_price_cents
-                    ? perUnit(line.unit_price_cents, line.unit)
-                    : "Not priced"}
-                </span>
-                <span className={REASON_CLS}>{PRICE_LOCKED_SENTENCE}</span>
-              </>
-            ) : (
-              <input
-                aria-label="Client price / unit"
-                inputMode="decimal"
-                placeholder="$"
-                value={
-                  priceDraft ??
-                  (line.unit_price_cents
-                    ? String(line.unit_price_cents / 100)
-                    : "")
-                }
-                onChange={(e) => setPriceDraft(e.target.value)}
-                onBlur={savePrice}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    savePrice();
-                  }
-                }}
-                className={`${INPUT_CLS} max-w-[160px] tabular-nums`}
-              />
-            )}
-          </Field>
-        )}
-
         {!labor && (
           <>
             <Field label="Labor">
@@ -795,15 +791,13 @@ export function SpecFieldsPane({
                 projectId={projectId}
                 piece={line}
                 laborLines={laborLines}
-                canEdit
+                canEdit={!locked}
               />
+              {locked && <span className={REASON_CLS}>{lockReason}</span>}
             </Field>
             <Field label="COM">
-              <ComToggle
-                projectId={projectId}
-                item={line}
-                canEdit={read.lock == null}
-              />
+              <ComToggle projectId={projectId} item={line} canEdit={!locked} />
+              {locked && <span className={REASON_CLS}>{lockReason}</span>}
             </Field>
           </>
         )}
@@ -833,13 +827,10 @@ export function SpecFieldsPane({
         onClose={() => setPickerOpen(false)}
         onPick={(result) => {
           setPickerOpen(false);
-          const parts = [result.name, shareText(quantity, line.unit)];
-          if (canSeeMoney && result.priceCents != null)
-            parts.push(perUnit(result.priceCents, "each"));
           choose({
             productId: result.productId,
             name: result.name,
-            detail: parts.join(" · "),
+            detail: `${result.name} · ${shareText(quantity, line.unit)}`,
           });
         }}
         rooms={rooms.map((room) => ({ id: room.id, name: room.name }))}
