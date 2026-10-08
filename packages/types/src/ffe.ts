@@ -56,6 +56,69 @@ export type FfeDuplicateMode = 'reuse' | 'create' | 'hold';
 
 export type FfePlacementOutcome = 'created' | 'reused' | 'filled' | 'held';
 
+/** `project_ffe_items.unit` (00729 CHECK project_ffe_items_unit_check). */
+export type FfeLineUnit = 'each' | 'sq_ft' | 'lin_ft' | 'roll' | 'yard' | 'box' | 'hour' | 'lot';
+
+/** `project_ffe_items.line_kind` (00729). Labor is created only by add_labor_line. */
+export type FfeLineKind = 'goods' | 'labor';
+
+/** `project_ffe_items.link_kind` (00729): set exactly when parent_ffe_item_id is. */
+export type FfeLinkKind = 'com' | 'labor' | 'accessory';
+
+/** The pre-order stage words (D1, Q3); `ffe_line_stage` (00736) computes the same. */
+export type FfeLineStage = 'placeholder' | 'specced' | 'ready' | 'released';
+
+/**
+ * One room a line is placed in (`project_ffe_placements`, 00734). The line's
+ * `project_room_id` stays its primary room. Named for the room: board x/y
+ * placements and FfePlacementOutcome are a different thing.
+ */
+export interface FfeRoomPlacement {
+  id: string;
+  ffeItemId: string;
+  projectRoomId: string;
+  quantity: number;
+  areaNote: string | null;
+  sortOrder: number;
+}
+
+export interface SetLinePlacementsResult {
+  placements: FfeRoomPlacement[];
+  /** line quantity minus the placed sum. */
+  wasteQuantity: number;
+}
+
+/** `batch_create_named_project_needs` (00730): 1–100 lines, all or nothing. */
+export interface BatchCreateNamedProjectNeedsRequest {
+  projectId: string;
+  roomId: string | null;
+  assignmentScope: FfeAssignmentScope;
+  lines: Array<{ name: string; quantity?: number; unit?: FfeLineUnit; roughCents?: number | null }>;
+  idempotencyKey: string;
+}
+
+/**
+ * `set_project_ffe_line_build_fields` (00730). Only the keys present are
+ * written; `roughCents: null` clears it. Quantity and unit refuse once the
+ * line is released or on a PO.
+ */
+export interface SetFfeLineBuildFieldsRequest {
+  name?: string;
+  needLabel?: string;
+  quantity?: number;
+  unit?: FfeLineUnit;
+  roughCents?: number | null;
+}
+
+/** `add_labor_line` (00732): a labor line on its piece. */
+export interface AddLaborLineRequest {
+  name: string;
+  quantity?: number;
+  unit?: FfeLineUnit;
+  roughCents?: number | null;
+  vendorId?: string | null;
+}
+
 export interface ProjectFfeSelection {
   id: string;
   projectId: string;
@@ -73,6 +136,15 @@ export interface ProjectFfeSelection {
   missingRequiredFieldCount?: number;
   latestReviewVerdict?: 'approved' | 'rejected' | 'comment' | null;
   createdAt: string;
+  unit?: FfeLineUnit;
+  lineKind?: FfeLineKind;
+  linkKind?: FfeLinkKind | null;
+  /** Internal Rough $ (Q7). Never on a client payload. */
+  roughCents?: number | null;
+  /** The thread's need label; survives a fill. */
+  needLabel?: string | null;
+  /** Every room the line is placed in; `projectRoomId` stays the primary. */
+  roomPlacements?: FfeRoomPlacement[];
   product?: {
     id: string;
     name: string;
@@ -110,6 +182,9 @@ export interface PlaceProductInProjectRequest {
     width?: number;
     sectionId?: string | null;
   };
+  unit?: FfeLineUnit;
+  roughCents?: number | null;
+  needLabel?: string | null;
   idempotencyKey: string;
 }
 
@@ -144,6 +219,9 @@ export interface CreateNamedProjectNeedRequest {
   source?: string | null;
   sourceMetadata?: Record<string, unknown>;
   placement?: PlaceProductInProjectRequest['placement'];
+  unit?: FfeLineUnit;
+  roughCents?: number | null;
+  needLabel?: string | null;
   idempotencyKey: string;
 }
 

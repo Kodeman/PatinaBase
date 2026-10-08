@@ -189,6 +189,8 @@ export function useProjectFFEItems(
         .from('project_ffe_items')
         .select(`
           *,
+          ffe_line_stage,
+          ffe_line_authorization,
           room:project_rooms!project_room_id(id, name),
           product:products!product_id(id, name, images, brand),
           blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
