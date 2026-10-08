@@ -375,7 +375,7 @@ export function DocumentImportReview({
                           if (value === 'unassigned' || value === 'throughout') update(index, { assignment: value, roomId: '' });
                           else update(index, { assignment: 'room', roomId: value === 'room' ? '' : value });
                         }} className={FIELD_CLASS}>
-                          <option value="unassigned">Unsorted</option>
+                          <option value="unassigned">Not in a room yet</option>
                           <option value="throughout">Throughout</option>
                           {rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
                         </select>

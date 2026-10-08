@@ -278,14 +278,14 @@ describe("SelectionEditor — structured dimensions", () => {
     expect(screen.getByLabelText("unit")).toHaveValue("in");
   });
 
-  it("saves the parsed structured object on Save selection, expectedRowVersion intact", async () => {
+  it("saves the parsed structured object on Save line, expectedRowVersion intact", async () => {
     const onSaved = jest.fn();
     render(<SelectionEditor item={buildItem()} onSaved={onSaved} />);
     fireEvent.change(screen.getByLabelText("width"), {
       target: { value: "84" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save selection" }));
-    await screen.findByText("Selection saved.");
+    fireEvent.click(screen.getByRole("button", { name: "Save line" }));
+    await screen.findByText("Line saved.");
 
     expect(mutateAsync).toHaveBeenCalledTimes(1);
     const call = mutateAsync.mock.calls[0][0];
@@ -310,8 +310,8 @@ describe("SelectionEditor — structured dimensions", () => {
       />,
     );
     fireEvent.change(screen.getByLabelText("width"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save selection" }));
-    await screen.findByText("Selection saved.");
+    fireEvent.click(screen.getByRole("button", { name: "Save line" }));
+    await screen.findByText("Line saved.");
     expect(mutateAsync.mock.calls[0][0].changes.selected_dimensions).toBeNull();
   });
 });
@@ -337,8 +337,8 @@ describe("SelectionEditor — legacy non-object fallback", () => {
         item={buildItem({ selected_dimensions: "32x30x18" as never })}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save selection" }));
-    await screen.findByText("Selection saved.");
+    fireEvent.click(screen.getByRole("button", { name: "Save line" }));
+    await screen.findByText("Line saved.");
     expect(mutateAsync.mock.calls[0][0].changes.selected_dimensions).toBe(
       "32x30x18",
     );
@@ -354,7 +354,7 @@ describe("SelectionEditor — legacy non-object fallback", () => {
       screen.getByPlaceholderText('{"width":"32 in","height":"30 in"}'),
       { target: { value: "{not json" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save selection" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save line" }));
     expect(
       await screen.findByText(
         'Dimensions must be valid JSON, for example {"width":"32 in"}.',

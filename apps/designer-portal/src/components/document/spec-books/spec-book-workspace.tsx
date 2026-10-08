@@ -64,7 +64,7 @@ const AUDIENCES: Array<{
   {
     id: "client",
     label: "Client",
-    description: "Selection, client pricing, care",
+    description: "Line, client pricing, care",
   },
   { id: "vendor", label: "Vendor", description: "Order-facing facts" },
   {
@@ -262,7 +262,7 @@ function roomChoiceOf(item: SpecBookWorkItem): string {
   if (scope === "room" && item.project_room_id) {
     return `room:${item.project_room_id}`;
   }
-  return scope === "unassigned" ? "unassigned" : "throughout";
+  return scope === "throughout" ? "throughout" : "unassigned";
 }
 
 /** The line's room, in the same three choices as the paper's unfold (R25). */
@@ -279,7 +279,12 @@ function LineRoomSelect({
   const [chosen, setChosen] = useState<string | null>(null);
 
   // A refreshed row or a refused write both hand the select back to the row.
-  useEffect(() => setChosen(null), [current, assignRoom.isError]);
+  // Only the turn into a refusal resets: a retry clears isError while its own
+  // write is pending, and the select must keep the new choice until it lands.
+  useEffect(() => setChosen(null), [current]);
+  useEffect(() => {
+    if (assignRoom.isError) setChosen(null);
+  }, [assignRoom.isError]);
   useEffect(() => {
     if (assignRoom.isSuccess) onAssigned?.();
   }, [assignRoom.isSuccess, assignRoom.submittedAt, onAssigned]);
@@ -450,13 +455,13 @@ export function SelectionEditor({
           warranty_notes: draft.warranty_notes?.trim() || null,
         },
       });
-      setFeedback("Selection saved.");
+      setFeedback("Line saved.");
       onSaved?.();
     } catch (error) {
       setFeedback(
         error instanceof Error
           ? error.message
-          : "Selection could not be saved.",
+          : "Line could not be saved.",
       );
     }
   };
@@ -492,7 +497,7 @@ export function SelectionEditor({
   if (!item.spec) {
     return (
       <div className="border border-[var(--color-terracotta)] p-4 text-sm text-[var(--color-terracotta-ink)]">
-        This schedule line has no project selection record. Route or repair it
+        This schedule line has no project line record. Route or repair it
         before editing; the product itself remains safe.
       </div>
     );
@@ -526,7 +531,7 @@ export function SelectionEditor({
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            Project selection · v{item.spec.row_version}
+            Project line · v{item.spec.row_version}
           </p>
           <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
             {item.name}
@@ -697,7 +702,7 @@ export function SelectionEditor({
       )}
       <div className="mt-5 flex justify-end">
         <Button loading={updateSpec.isPending} onClick={() => void save()}>
-          Save selection
+          Save line
         </Button>
       </div>
     </div>
@@ -1383,7 +1388,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
               </>
             ) : (
               <p className="py-16 text-center italic text-[var(--text-muted)]">
-                Choose a selection.
+                Choose a line.
               </p>
             )}
           </aside>

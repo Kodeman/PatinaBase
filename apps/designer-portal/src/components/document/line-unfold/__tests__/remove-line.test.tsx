@@ -69,6 +69,7 @@ jest.mock('@/hooks/use-document-rooms', () => ({
 import { LineUnfold } from '../../line-unfold';
 
 const REFUSAL = 'Released lines change through Record a change.';
+const DRAFT_REFUSAL = 'This line is on a draft authorization. Take it off the draft first.';
 
 const item = {
   id: 'line-1',
@@ -173,15 +174,42 @@ describe('LineUnfold · REMOVE THIS LINE', () => {
     expect(mockArchive).not.toHaveBeenCalled();
   });
 
+  it('is absent on a Trade Scope presence line', () => {
+    renderUnfold({ item: { ...item, trade_scope_document_id: 'scope-1' } });
+    expect(screen.queryByRole('button', { name: 'Remove this line' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Fold' })).toBeInTheDocument();
+  });
+
+  it('moves focus to the reason field when the ask opens', () => {
+    renderUnfold();
+    fireEvent.click(removeAct());
+    expect(screen.getByRole('textbox', { name: 'Why remove this line' })).toHaveFocus();
+  });
+
   it.each([
     ['authorized', { auth: authorized }],
     ['awaiting signature', { auth: { track: 'awaiting', number: 2 } as LineAuthorization }],
-    ['on a draft instrument', { auth: { track: 'draft', number: 4 } as LineAuthorization }],
     ['ordered', { item: { ...item, status: 'ordered', purchase_order_id: 'po-1' } }],
+    [
+      'ordered and on a draft instrument',
+      {
+        auth: { track: 'draft', number: 4 } as LineAuthorization,
+        item: { ...item, status: 'ordered', purchase_order_id: 'po-1' },
+      },
+    ],
   ])('refuses in place for a line %s, naming the door', (_label, over) => {
     renderUnfold(over);
     fireEvent.click(removeAct());
     expect(screen.getByRole('status')).toHaveTextContent(REFUSAL);
+    expect(screen.queryByTestId('line-remove-form')).toBeNull();
+    expect(mockArchiveHook).not.toHaveBeenCalled();
+  });
+
+  it('refuses a line on an unsent draft authorization without calling it released', () => {
+    renderUnfold({ auth: { track: 'draft', number: 4 } as LineAuthorization });
+    fireEvent.click(removeAct());
+    expect(screen.getByRole('status')).toHaveTextContent(DRAFT_REFUSAL);
+    expect(screen.getByRole('status')).not.toHaveTextContent(REFUSAL);
     expect(screen.queryByTestId('line-remove-form')).toBeNull();
     expect(mockArchiveHook).not.toHaveBeenCalled();
   });

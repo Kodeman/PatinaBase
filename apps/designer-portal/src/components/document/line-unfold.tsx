@@ -15,7 +15,7 @@
  * and changing it means voiding the instrument and superseding it.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useArchiveProjectSelection,
   useVendor,
@@ -73,6 +73,9 @@ const softLockSentence = (auth: LineAuthorization) =>
 /** R1-F29 / a8: a line on an instrument or a PO is not removed; it changes. */
 const RELEASED_REMOVE_REFUSAL =
   'Released lines change through Record a change.';
+/** A line on an unsent draft is not released yet; it comes off the draft. */
+const DRAFT_REMOVE_REFUSAL =
+  'This line is on a draft authorization. Take it off the draft first.';
 /** archive_project_selection's floor (00435:530). */
 const MIN_REMOVE_REASON = 5;
 /** The RPC's refusal for an authorized or ordered line, before and after D8. */
@@ -95,6 +98,8 @@ function RemoveLineForm({
   onRefused: () => void;
 }) {
   const archive = useArchiveProjectSelection();
+  const reasonRef = useRef<HTMLInputElement>(null);
+  useEffect(() => reasonRef.current?.focus(), []);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const trimmed = reason.trim();
@@ -118,6 +123,7 @@ function RemoveLineForm({
       className="mt-1 flex flex-wrap items-center gap-x-2 border-l border-[var(--color-pearl)] pl-2.5"
     >
       <input
+        ref={reasonRef}
         aria-label="Why remove this line"
         placeholder="why this line goes"
         value={reason}
@@ -214,7 +220,10 @@ export function LineUnfold({
   // R1-F29: removing asks for a reason; a line on an instrument or a PO is
   // refused in place (a8), the same sentence the RPC's refusal maps to.
   const [removing, setRemoving] = useState<'asking' | 'refused' | null>(null);
-  const removeGated = auth.track !== 'none' || Boolean(item.purchase_order_id ?? po);
+  const onOrder = Boolean(item.purchase_order_id ?? po);
+  const removeGated = auth.track !== 'none' || onOrder;
+  const removeRefusal =
+    auth.track === 'draft' && !onOrder ? DRAFT_REMOVE_REFUSAL : RELEASED_REMOVE_REFUSAL;
 
   // C-03: once a status move lands, the next act stands in at once rather
   // than waiting on the refetch; the PO's own status takes over when it
@@ -518,7 +527,9 @@ export function LineUnfold({
         >
           Add note
         </DocumentAction>
-        {canEditSelection && (
+        {/* A Trade Scope presence line belongs to its scope document; it
+            leaves with the scope, never from here. */}
+        {canEditSelection && !isTradeLine && (
           <DocumentAction
             actionKey="remove-ffe-line"
             variant="tertiary"
@@ -538,7 +549,7 @@ export function LineUnfold({
 
       {removing === 'refused' && (
         <p role="status" className="mt-1 text-[11px] text-[var(--color-charcoal)]">
-          {RELEASED_REMOVE_REFUSAL}
+          {removeRefusal}
         </p>
       )}
       {removing === 'asking' && (

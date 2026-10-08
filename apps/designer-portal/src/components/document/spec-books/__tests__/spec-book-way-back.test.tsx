@@ -277,6 +277,49 @@ describe("T-7 — the item editor's Room select", () => {
       screen.getByText("Released lines change through Record a change."),
     ).toBeInTheDocument();
   });
+
+  it("keeps a retried choice while its write is pending, and hands back only on a new refusal", () => {
+    mockAssignState = {
+      ...mockAssignState,
+      isError: true,
+      error: new Error("The room could not be changed."),
+    };
+    const { rerender } = render(<SelectionEditor item={buildItem()} />);
+    const select = () => screen.getByLabelText("Room") as HTMLSelectElement;
+
+    fireEvent.change(select(), { target: { value: "room:room-living" } });
+    expect(select().value).toBe("room:room-living");
+
+    // The retry's mutate clears isError while the write is pending.
+    mockAssignState = { ...mockAssignState, isError: false, error: null, isPending: true };
+    rerender(<SelectionEditor item={buildItem()} />);
+    expect(select().value).toBe("room:room-living");
+
+    // Refused again: the select goes back to the row's room.
+    mockAssignState = {
+      ...mockAssignState,
+      isPending: false,
+      isError: true,
+      error: new Error("The room could not be changed."),
+    };
+    rerender(<SelectionEditor item={buildItem()} />);
+    expect(select().value).toBe("unassigned");
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["null", null],
+  ])("reads a %s scope as Not in a room yet, not Throughout", (_label, scope) => {
+    render(
+      <SelectionEditor
+        item={buildItem({ assignment_scope: scope } as unknown as Partial<Row>)}
+      />,
+    );
+
+    expect((screen.getByLabelText("Room") as HTMLSelectElement).value).toBe(
+      "unassigned",
+    );
+  });
 });
 
 describe('T-7 — the spec book says "lines"', () => {

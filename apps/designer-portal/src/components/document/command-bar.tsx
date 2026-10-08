@@ -870,7 +870,7 @@ export function CommandBar() {
       ? {
           kind: 'verb',
           key: 'add-to-project-here',
-          label: 'Add a line',
+          label: 'Add to the job',
           sub: 'this project · Library, link, need, import, or board',
           icon: FolderPlus,
           run: () => window.dispatchEvent(new CustomEvent('document:open-add-to-project', {
