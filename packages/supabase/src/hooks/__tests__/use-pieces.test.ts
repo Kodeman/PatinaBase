@@ -42,9 +42,12 @@ vi.mock('@tanstack/react-query', () => ({
 import {
   useAddLaborLine,
   useBatchCreateNamedProjectNeeds,
+  useHandBackRoom,
+  useMakeFfeLineAllowance,
   useProjectRoomPlacements,
   useRemovedProjectLines,
   useRestoreProjectSelection,
+  useRoomHandbacks,
   useSetFfeLineBuildFields,
   useSetLaborLinePrice,
   useSetLinePlacements,
@@ -301,6 +304,77 @@ describe('useSetLaborLinePrice', () => {
     const mutation = useSetLaborLinePrice() as unknown as MutationConfig<unknown, unknown>;
 
     await expect(mutation.mutationFn({ projectId: 'p1', itemId: 'lab-1', unitPriceCents: 9000 })).rejects.toBe(error);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Room hand-backs (00742, W4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useRoomHandbacks', () => {
+  interface Config {
+    queryKey: unknown[];
+    queryFn: () => Promise<unknown>;
+  }
+
+  it('keys on ["project-room-handbacks", projectId] and maps rows to RoomHandback', async () => {
+    const { chain, calls } = makeChain({
+      data: [{ id: 'hb-1', project_room_id: 'r1', handed_back_by: 'u1', handed_back_at: '2026-10-08T00:00:00Z' }],
+      error: null,
+    });
+    from.mockReturnValue(chain);
+    const config = useRoomHandbacks('p1') as unknown as Config;
+    expect(config.queryKey).toEqual(['project-room-handbacks', 'p1']);
+    await expect(config.queryFn()).resolves.toEqual([
+      { id: 'hb-1', projectRoomId: 'r1', handedBackBy: 'u1', handedBackAt: '2026-10-08T00:00:00Z' },
+    ]);
+    expect(from).toHaveBeenCalledWith('project_room_handbacks');
+    expect(calls).toContainEqual(['eq', ['project_id', 'p1']]);
+    expect(calls).toContainEqual(['order', ['handed_back_at', { ascending: false }]]);
+  });
+});
+
+describe('useHandBackRoom', () => {
+  it('calls hand_back_project_room with p_project_room_id and invalidates only the handbacks key, never the ffe caches', async () => {
+    rpc.mockResolvedValue({ data: { handedBackAt: '2026-10-08T00:00:00Z' }, error: null });
+    const result = await runMutation(useHandBackRoom(), { projectId: 'p1', roomId: 'r1' });
+
+    expect(rpc).toHaveBeenCalledWith('hand_back_project_room', { p_project_room_id: 'r1' });
+    expect(result).toEqual({ handedBackAt: '2026-10-08T00:00:00Z' });
+    expect(invalidatedKeys()).toEqual([['project-room-handbacks', 'p1']]);
+  });
+
+  it('throws the RPC error and invalidates nothing', async () => {
+    const error = { message: 'project not found or access denied' };
+    rpc.mockResolvedValue({ data: null, error });
+    const mutation = useHandBackRoom() as unknown as MutationConfig<unknown, unknown>;
+
+    await expect(mutation.mutationFn({ projectId: 'p1', roomId: 'r1' })).rejects.toBe(error);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Allowance (00743, W4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useMakeFfeLineAllowance', () => {
+  it('calls make_ffe_line_allowance with p_item_id and p_budget_max_cents, and invalidates the ffe caches', async () => {
+    rpc.mockResolvedValue({ data: { id: 'i1', item_type: 'allowance', budget_max_cents: 500000 }, error: null });
+    const result = await runMutation(useMakeFfeLineAllowance(), { projectId: 'p1', itemId: 'i1', budgetMaxCents: 500000 });
+
+    expect(rpc).toHaveBeenCalledWith('make_ffe_line_allowance', { p_item_id: 'i1', p_budget_max_cents: 500000 });
+    expect(result).toEqual({ id: 'i1', item_type: 'allowance', budget_max_cents: 500000 });
+    expectFfeCachesInvalidated();
+  });
+
+  it('throws the RPC error and invalidates nothing', async () => {
+    const error = { message: "An allowance needs a ceiling above $0." };
+    rpc.mockResolvedValue({ data: null, error });
+    const mutation = useMakeFfeLineAllowance() as unknown as MutationConfig<unknown, unknown>;
+
+    await expect(mutation.mutationFn({ projectId: 'p1', itemId: 'i1', budgetMaxCents: 0 })).rejects.toBe(error);
     expect(invalidateQueries).not.toHaveBeenCalled();
   });
 });

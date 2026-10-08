@@ -9,6 +9,7 @@ import type {
   AddLaborLineRequest,
   BatchCreateNamedProjectNeedsRequest,
   FfeRoomPlacement,
+  RoomHandback,
   SetFfeLineBuildFieldsRequest,
   SetLinePlacementsResult,
 } from '@patina/types';
@@ -25,6 +26,9 @@ export const projectRoomPlacementsKey = (projectId: string | null) =>
 
 export const projectFfeRemovedKey = (projectId: string) =>
   ['project-ffe-removed', projectId] as const;
+
+export const projectRoomHandbacksKey = (projectId: string) =>
+  ['project-room-handbacks', projectId] as const;
 
 // ─── Room placements (00734) ─────────────────────────────────────────────────
 
@@ -239,6 +243,86 @@ export function useSetLaborLinePrice() {
       });
       if (error) throw error;
       return data as SetLaborLinePriceResult;
+    },
+    onSuccess: (_result, { projectId }) => invalidateFfeCaches(queryClient, projectId),
+  });
+}
+
+// ─── Room hand-backs (00742, W4) ─────────────────────────────────────────────
+
+interface ProjectRoomHandbackRow {
+  id: string;
+  project_room_id: string;
+  handed_back_by: string;
+  handed_back_at: string;
+}
+
+/** READY FOR LEAH acts for the project's rooms, most recent first. */
+export function useRoomHandbacks(projectId: string) {
+  return useQuery({
+    queryKey: projectRoomHandbacksKey(projectId),
+    queryFn: async (): Promise<RoomHandback[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (getSupabase() as any)
+        .from('project_room_handbacks')
+        .select('id, project_room_id, handed_back_by, handed_back_at')
+        .eq('project_id', projectId)
+        .order('handed_back_at', { ascending: false });
+      if (error) throw error;
+      return ((data ?? []) as ProjectRoomHandbackRow[]).map((row) => ({
+        id: row.id,
+        projectRoomId: row.project_room_id,
+        handedBackBy: row.handed_back_by,
+        handedBackAt: row.handed_back_at,
+      }));
+    },
+    enabled: !!projectId,
+  });
+}
+
+/**
+ * READY FOR LEAH (00742, D18, Q13): records a hand-back act. Never touches
+ * project_ffe_items — no disposition, no select, no release — so it
+ * invalidates only its own key, never the ffe caches.
+ */
+export function useHandBackRoom() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ roomId }: { projectId: string; roomId: string }): Promise<{ handedBackAt: string }> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (getSupabase() as any).rpc('hand_back_project_room', {
+        p_project_room_id: roomId,
+      });
+      if (error) throw error;
+      return data as { handedBackAt: string };
+    },
+    onSuccess: (_result, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: projectRoomHandbacksKey(projectId) });
+    },
+  });
+}
+
+// ─── Allowance (00743, W4) ───────────────────────────────────────────────────
+
+/** Makes the line an allowance with a ceiling (00743); refused once released. */
+export function useMakeFfeLineAllowance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      budgetMaxCents,
+    }: {
+      projectId: string;
+      itemId: string;
+      budgetMaxCents: number;
+    }): Promise<ProjectFfeItemRow> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (getSupabase() as any).rpc('make_ffe_line_allowance', {
+        p_item_id: itemId,
+        p_budget_max_cents: budgetMaxCents,
+      });
+      if (error) throw error;
+      return data as ProjectFfeItemRow;
     },
     onSuccess: (_result, { projectId }) => invalidateFfeCaches(queryClient, projectId),
   });

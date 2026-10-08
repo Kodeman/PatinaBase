@@ -314,3 +314,15 @@ export interface PublishProjectReviewResult {
   snapshotHash: string;
   itemCount: number;
 }
+
+/**
+ * READY FOR LEAH (00742, D18, Q13, W4): an internal review act — the first
+ * hire hands a room back to the lead designer for review. Who and when,
+ * nothing else; never touches project_ffe_items and never read client-side.
+ */
+export interface RoomHandback {
+  id: string;
+  projectRoomId: string;
+  handedBackBy: string;
+  handedBackAt: string;
+}

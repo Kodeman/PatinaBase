@@ -11,6 +11,7 @@ import type {
   DesignBuildScheduleOfValuesLine,
   LienWaiverType,
 } from './agreement';
+import type { FfeLineUnit } from './ffe';
 
 export const COMMERCIAL_DOCUMENT_KINDS = [
   'legacy',
@@ -186,6 +187,10 @@ export interface FurnishingsAuthorizationItem {
   clientUnitPriceCents: number;
   tradeUnitPriceCents: number | null;
   currency: string;
+  /** The unit the line prices by (00744 snapshot); 'each' when absent (W4). */
+  unit?: FfeLineUnit;
+  /** Every room the line is placed in, from the frozen snapshot (00744, W4). */
+  rooms?: Array<{ name: string; quantity: number; unit: FfeLineUnit }>;
 }
 
 export interface FurnishingsAuthorization extends CommercialDocumentSummary {
