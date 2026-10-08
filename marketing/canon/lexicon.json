@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "_note": "Machine source for marketing/tools/voice-lint.mjs. The rules mirror the US-22 contract's lint section and marketing/canon/voice.md. Every pattern is a JavaScript RegExp source; flags are applied as given plus 'g'.",
+  "errors": [
+    { "rule": "ai", "pattern": "\\bAI\\b", "flags": "" },
+    { "rule": "ai-powered", "pattern": "\\bAI-powered\\b", "flags": "i" },
+    {
+      "rule": "artificial-intelligence",
+      "pattern": "\\bartificial intelligence\\b",
+      "flags": "i"
+    },
+    {
+      "rule": "machine-learning",
+      "pattern": "\\bmachine learning\\b",
+      "flags": "i"
+    },
+    { "rule": "powered-by", "pattern": "\\bpowered by\\b", "flags": "i" },
+    { "rule": "algorithm", "pattern": "\\balgorithm\\w*", "flags": "i" },
+    { "rule": "pledge", "pattern": "\\bpledge\\w*", "flags": "i" },
+    {
+      "rule": "held-tagline",
+      "pattern": "Where Time Adds Value",
+      "flags": "i"
+    },
+    { "rule": "disrupt", "pattern": "\\bdisrupt\\w*", "flags": "i" },
+    { "rule": "revolutionize", "pattern": "\\brevolutioni\\w*", "flags": "i" },
+    { "rule": "curated", "pattern": "\\bcurated\\b", "flags": "i" },
+    { "rule": "luxury", "pattern": "\\bluxury\\b", "flags": "i" },
+    { "rule": "gig", "pattern": "\\bgigs?\\b", "flags": "i" },
+    { "rule": "game-changer", "pattern": "\\bgame[- ]chang\\w*", "flags": "i" },
+    { "rule": "seamless", "pattern": "\\bseamless\\w*", "flags": "i" },
+    { "rule": "unlock", "pattern": "\\bunlock\\w*", "flags": "i" }
+  ],
+  "warnings": [
+    { "rule": "elevated", "pattern": "\\belevated\\b", "flags": "i" },
+    { "rule": "bespoke", "pattern": "\\bbespoke\\b", "flags": "i" },
+    { "rule": "emoji", "pattern": "\\p{Extended_Pictographic}", "flags": "u" },
+    {
+      "rule": "exclamations",
+      "pattern": "!(?!\\[)",
+      "flags": "",
+      "maxPerPiece": 1
+    }
+  ],
+  "places": [
+    { "name": "NYC", "flags": "" },
+    { "name": "New York", "flags": "i" },
+    { "name": "Manhattan", "flags": "i" },
+    { "name": "Brooklyn", "flags": "i" },
+    { "name": "Hamptons", "flags": "i" },
+    { "name": "LA", "flags": "" },
+    { "name": "Los Angeles", "flags": "i" },
+    { "name": "San Francisco", "flags": "i" },
+    { "name": "Miami", "flags": "i" },
+    { "name": "penthouse", "flags": "i" }
+  ],
+  "numbers": {
+    "rule": "uncited-number",
+    "_note": "Group 1 = currency sign, group 2 = the number, group 3 = percent sign. A hit needs a [Cnn] marker in the same sentence. Bare integers in yearMin..yearMax are exempt; any other number with minDigits or more digits, any $ amount and any % need a citation.",
+    "pattern": "(?<![A-Za-z0-9_.,:])(\\$\\s?)?(\\d(?:[\\d,]*\\d)?(?:\\.\\d+)?)(\\s?%)?",
+    "flags": "",
+    "minDigits": 2,
+    "yearMin": 1900,
+    "yearMax": 2099
+  },
+  "claims": {
+    "rule": "unverified-claim",
+    "marker": "\\[(C\\d{2,})\\]"
+  },
+  "formats": {
+    "social": { "maxHashtags": 4 },
+    "pin": { "maxHashtags": 4 },
+    "pr-pitch": { "maxWords": 150 },
+    "email": { "maxSubject": 60 }
+  }
+}
