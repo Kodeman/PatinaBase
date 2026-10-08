@@ -35,6 +35,7 @@ import { suppressNextArrival } from '@/lib/arrival/nav';
 import { useProposalWatch } from '@/hooks/use-proposal-watch';
 import { useProposalProject } from '@/hooks/use-proposal-project';
 import { useProposal } from '@/hooks/use-proposals';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import type { ProposalWatchModel } from '@/lib/document/proposal-watch-derivation';
 import { Stamp } from './stamp';
 import { SignedStamp } from './signed-stamp';
@@ -160,17 +161,22 @@ export function ProposalWatch({
   const family = familyLabel(clientName);
   const signable =
     w?.status === 'sent' || w?.status === 'viewed' || w?.status === 'expired';
+  // FR8 F8-1 (D7) — under one-voice the phone dock centre holds only the
+  // band's Next or the letterhead's Message stand-in, never Mark signed.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   useMobilePrimaryAction(
-    w && !w.settled && signable
-      ? {
-          actionKey: 'mark-proposal-signed',
-          surfaceKey: 'open-document',
-          regionKey: 'proposal-watch-actions',
-          label: 'Mark signed',
-          target: { kind: 'press', onPress: () => setMarkSignedOpen(true) },
-        }
-      : null,
+    oneVoice
+      ? null
+      : w && !w.settled && signable
+        ? {
+            actionKey: 'mark-proposal-signed',
+            surfaceKey: 'open-document',
+            regionKey: 'proposal-watch-actions',
+            label: 'Mark signed',
+            target: { kind: 'press', onPress: () => setMarkSignedOpen(true) },
+          }
+        : null,
     { priority: MOBILE_ACTION_PRIORITY.lifecycle },
   );
 
