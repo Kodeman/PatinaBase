@@ -337,16 +337,24 @@ function sentText(
  * so the line has lost its verb without the state behind it changing. Without
  * it the wall read "Sent 5 days ago" and stopped, over an action row with no
  * action.
+ *
+ * `voiced` (US-19 FR6 F6-1b, `one-voice`): the reminder prints by its own
+ * name, `Reminder sent 8 October.`, never as a nudge.
  */
 export function sendWallStateWord(
   watch: ProposalWatchModel,
   commercialState: string | null,
+  voiced = false,
 ): string {
   if (commercialState === 'client_signed') return 'awaiting countersign';
   if (watch.status === 'declined') return 'declined by the client';
   if (watch.status === 'expired') return 'expired unsigned';
   if (watch.status === 'revised') return 'superseded by a newer version';
-  if (watch.lastNudgedAt) return `nudged ${fmtShortDay(watch.lastNudgedAt)}`;
+  if (watch.lastNudgedAt) {
+    return voiced
+      ? `Reminder sent ${fmtShortDay(watch.lastNudgedAt)}.`
+      : `nudged ${fmtShortDay(watch.lastNudgedAt)}`;
+  }
   return 'awaiting the client’s signature';
 }
 

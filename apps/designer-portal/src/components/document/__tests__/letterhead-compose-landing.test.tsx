@@ -8,7 +8,15 @@
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ACT_LANDING_EVENTS } from '@/lib/document/act-names';
+import {
+  ACT_LANDING_EVENTS,
+  ACT_TARGET_IDS,
+  ownAct,
+  type OwnAct,
+  type OwnActFacts,
+} from '@/lib/document/act-names';
+import type { MarginItemRow } from '@/lib/document/margin-derivation';
+import { overdueMarginDecisionTitles, waitingOnNamed } from '@/lib/document/nudge-named';
 import { LetterheadInstruments } from '../letterhead-instruments';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
@@ -226,5 +234,153 @@ describe('FR4 Fix 2 — the name guard on the composer', () => {
     renderFor('client-1', 'Client User');
     fireEvent.click(screen.getByRole('button', { name: 'Message the client' }));
     expect(screen.getByPlaceholderText('A quick note to Client User…')).toBeInTheDocument();
+  });
+});
+
+/**
+ * US-19 FR6 F6-1 (D1-a, D1-c, D1-d) — Tanaka (`running_a_job_walk_dev.sql`):
+ * a proposal sent to Mei on 3 October, never opened, two decisions hanging
+ * off it overdue. The band's `Nudge Mei` is the composer.
+ */
+describe('FR6 F6-1 — Tanaka: the sent proposal’s Nudge Mei is the composer', () => {
+  const PROPOSAL = 'f1900000-0000-4000-8000-000000000053';
+  const MEI = 'f1900000-0000-4000-8000-000000000051';
+  const RELATIONSHIP = 'f1900000-0000-4000-8000-000000000052';
+  const at = (day: number) => new Date(2026, 9, day, 12).toISOString();
+  const row = (over: Partial<MarginItemRow>): MarginItemRow => ({
+    kind: 'decision',
+    item_id: String(over.title),
+    project_id: null,
+    proposal_id: PROPOSAL,
+    anchor_kind: 'letterhead',
+    anchor_id: null,
+    state: 'overdue',
+    title: '',
+    detail: '',
+    ts: at(1),
+    payload: {},
+    ...over,
+  });
+  // The margin as the view returns it, out of print order, with a decision
+  // not yet due and a message beside the two overdue.
+  const margin: MarginItemRow[] = [
+    row({ title: 'Rug size — 8x10 vs 9x12', ts: at(5) }),
+    row({ kind: 'message', state: 'open', title: 'Mei wrote', ts: at(6) }),
+    row({ title: 'Daybed cushion — undyed linen vs moss wool', ts: at(4) }),
+    row({ title: 'Side table finish', state: 'pending', ts: at(20) }),
+  ];
+  const facts = (over: Partial<OwnActFacts>): OwnActFacts => ({
+    inquiryOpen: false,
+    firstMissingEssential: null,
+    proposalState: 'sent',
+    clientFirstName: 'Mei',
+    unspecifiedCount: 0,
+    releaseEligible: false,
+    install: null,
+    ...over,
+  });
+  const named = () =>
+    waitingOnNamed(
+      { status: 'sent', sentAt: at(3) },
+      overdueMarginDecisionTitles(margin, new Date(2026, 9, 7, 9)),
+    );
+
+  function renderTanaka(clientProfileId: string | null = MEI) {
+    return render(
+      <QueryClientProvider client={new QueryClient()}>
+        <LetterheadInstruments
+          proposalId={PROPOSAL}
+          designerClientId={RELATIONSHIP}
+          clientProfileId={clientProfileId}
+          clientName="Mei Tanaka"
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  /** page.tsx's own-act press (PAGE-WIRING on SQ-546): the composer takes a
+   *  `proposalNudge` act; otherwise the press lands on the act's id. */
+  function pressBandAct(own: OwnAct): boolean {
+    let taken = false;
+    act(() => {
+      if (own.targetId === ACT_TARGET_IDS.proposalNudge) {
+        taken = !window.dispatchEvent(
+          new CustomEvent(ACT_LANDING_EVENTS.composeMessage, {
+            detail: { named: named(), act: own.label },
+            cancelable: true,
+          }),
+        );
+      }
+      if (!taken) document.getElementById(own.targetId)?.focus();
+    });
+    return taken;
+  }
+
+  const meiNote = () => screen.getByPlaceholderText('A quick note to Mei…');
+  const eyebrow = () => document.querySelector('[data-composer-eyebrow]');
+
+  it('the band press lands in the composer’s note, the proposal clause first, under NUDGE MEI', async () => {
+    const own = ownAct('proposal', facts({ clientMessageable: true }))!;
+    expect(own).toEqual({ label: 'Nudge Mei', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' });
+    renderTanaka();
+
+    expect(pressBandAct(own)).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(meiNote()));
+    expect(document.activeElement?.tagName).toBe('TEXTAREA');
+    expect(document.querySelector('[data-message-named]')).toHaveTextContent(
+      'Waiting on Mei: the proposal, sent 3 October · Daybed cushion — undyed linen vs moss wool · Rug size — 8x10 vs 9x12',
+    );
+    expect(eyebrow()).toHaveTextContent(/^Nudge Mei$/);
+    expect(eyebrow()).toHaveClass('uppercase');
+  });
+
+  it('the letterhead’s own Message opens it under MESSAGE MEI, naming nothing', async () => {
+    renderTanaka();
+    fireEvent.click(screen.getByRole('button', { name: 'Message Mei' }));
+    await waitFor(() => expect(meiNote()).toBeInTheDocument());
+    expect(eyebrow()).toHaveTextContent(/^Message Mei$/);
+    expect(document.querySelector('[data-message-named]')).toBeNull();
+  });
+
+  it('a sheet row that names no act still prints its Nudge', async () => {
+    renderTanaka();
+    nudge([]);
+    await waitFor(() => expect(meiNote()).toHaveFocus());
+    expect(eyebrow()).toHaveTextContent(/^Nudge Mei$/);
+  });
+
+  it('the act’s id is on Message Mei, so even an untaken press lands on a control', () => {
+    renderTanaka();
+    expect(document.getElementById(ACT_TARGET_IDS.proposalNudge)).toBe(
+      screen.getByRole('button', { name: 'Message Mei' }),
+    );
+  });
+
+  it('held Message (no login): the composer never takes the press', () => {
+    renderTanaka(null);
+    expect(nudge(['the proposal, sent 3 October'])).toBe(false);
+    expect(screen.queryByPlaceholderText(/^A quick note to/)).toBeNull();
+  });
+
+  it('flag off: no eyebrow and no act id — the letterhead as today', () => {
+    mockOneVoice = false;
+    renderTanaka();
+    expect(document.getElementById(ACT_TARGET_IDS.proposalNudge)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Message Mei Tanaka' }));
+    expect(screen.getByPlaceholderText('A quick note to Mei Tanaka…')).toBeInTheDocument();
+    expect(eyebrow()).toBeNull();
+  });
+
+  it('the composer is an open thing while it is open, in both flag states', () => {
+    for (const flag of [true, false]) {
+      mockOneVoice = flag;
+      const { unmount } = renderTanaka();
+      expect(document.querySelector('[data-dismissible-popover]')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: flag ? 'Message Mei' : 'Message Mei Tanaka' }));
+      expect(document.querySelector('[data-dismissible-popover]')).toContainElement(
+        screen.getByPlaceholderText(/^A quick note to Mei/),
+      );
+      unmount();
+    }
   });
 });

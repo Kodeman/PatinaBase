@@ -34,10 +34,12 @@ import { vitalsInstrumentSuffix } from '@/lib/document/roster-derivation';
 import { clientShortName } from '@/lib/document/document-guide';
 import {
   ACT_LANDING_EVENTS,
+  ACT_TARGET_IDS,
   MESSAGE_WITHHELD,
   NAMED_ACTS,
   messageLabel,
   messageNoLogin,
+  needActLabel,
   type NoLoginRepair,
 } from '@/lib/document/act-names';
 import {
@@ -413,10 +415,16 @@ export function LetterheadInstruments({
   // opens with focus in its note and names the overdue decisions above it.
   // Taken only where a note can be sent; a held Message keeps the old landing.
   const [named, setNamed] = useState<readonly string[]>([]);
+  // FR6 F6-1 (D1-c) — the act a landing was pressed as; null when the
+  // letterhead's own Message opened the composer.
+  const [landedAct, setLandedAct] = useState<string | null>(null);
   const noteRef = useRef<HTMLTextAreaElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (!composing) setNamed([]);
+    if (!composing) {
+      setNamed([]);
+      setLandedAct(null);
+    }
   }, [composing]);
   // FR4 Fix 2 (`one-voice`, design-review-3 §4) — the act that opened the
   // composer, so Esc (Cancel) puts focus back on it.
@@ -433,6 +441,7 @@ export function LetterheadInstruments({
   };
   const openComposer = () => {
     rememberOpener(false);
+    setLandedAct(null);
     setComposing(true);
   };
   const cancelComposer = () => {
@@ -445,8 +454,12 @@ export function LetterheadInstruments({
     if (!oneVoice || !canSendNote) return;
     const onCompose = (event: Event) => {
       event.preventDefault();
-      const detail = (event as CustomEvent<{ named?: readonly string[] } | undefined>).detail;
+      const detail = (
+        event as CustomEvent<{ named?: readonly string[]; act?: string } | undefined>
+      ).detail;
       setNamed(detail?.named ?? []);
+      // Every landing that names no act is a `Nudge` row (the sheet's).
+      setLandedAct(detail?.act ?? needActLabel('overdue_decision', firstName));
       openerRef.current = composerOpener(composerRef.current, true);
       setComposing(true);
       requestAnimationFrame(() => {
@@ -456,7 +469,7 @@ export function LetterheadInstruments({
     };
     window.addEventListener(ACT_LANDING_EVENTS.composeMessage, onCompose);
     return () => window.removeEventListener(ACT_LANDING_EVENTS.composeMessage, onCompose);
-  }, [oneVoice, canSendNote]);
+  }, [oneVoice, canSendNote, firstName]);
 
   useMobilePrimaryAction(
     canSendNote
@@ -621,6 +634,9 @@ export function LetterheadInstruments({
             {/* F2-9 (`one-voice`) — the letterhead prints D1's names at every
                 width, so the accessible name is the printed one. */}
             <DocumentAction
+              // FR6 F6-1 (D1-a) — the sent proposal's `Nudge {first}` lands
+              // here when no composer takes it: still a control.
+              id={oneVoice ? ACT_TARGET_IDS.proposalNudge : undefined}
               actionKey="message-family"
               variant="primary"
               aria-label={
@@ -696,6 +712,9 @@ export function LetterheadInstruments({
       {composing && (
         <div
           ref={composerRef}
+          // An open thing (529-6): a visible log-time offer yields Esc on
+          // <body> to it rather than discarding its entry.
+          data-dismissible-popover=""
           className="mt-2 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] p-2.5"
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
@@ -708,6 +727,16 @@ export function LetterheadInstruments({
             }
           }}
         >
+          {/* FR6 F6-1 (D1-c, `one-voice`) — the eyebrow names the act that
+              opened the composer: `NUDGE MEI` or `MESSAGE MEI`. */}
+          {oneVoice && (
+            <p
+              data-composer-eyebrow
+              className="mb-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
+            >
+              {landedAct ?? messageLabel(firstName)}
+            </p>
+          )}
           {/* FR4 Fix 2 (`one-voice`) — the helper line and the placeholder go
               through the `Waiting on` line's name guard: a seeded `Client
               User` reads `the client`. */}

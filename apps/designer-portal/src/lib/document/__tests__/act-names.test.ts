@@ -108,6 +108,14 @@ describe('ownAct (D1 own-act table)', () => {
       { label: 'Nudge Mei', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' }],
     ['Proposal, sent, no name', 'proposal', { proposalState: 'sent', clientFirstName: null },
       { label: 'Nudge the client', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' }],
+    // FR6 F6-1 (D1-a) — Message reachable: the composer is the Nudge.
+    ['Proposal, sent, Message reachable', 'proposal',
+      { proposalState: 'sent', clientFirstName: 'Mei', clientMessageable: true },
+      { label: 'Nudge Mei', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' }],
+    // …held: the act follows the control that can reach her, by its name.
+    ['Proposal, sent, Message held', 'proposal',
+      { proposalState: 'sent', clientFirstName: 'Mei', clientMessageable: false },
+      { label: 'Send a reminder', targetId: ACT_TARGET_IDS.proposalReminder, tier: 'plain' }],
     ['Proposal, accepted', 'proposal', { proposalState: 'accepted' },
       { label: 'Open the project', targetId: ACT_TARGET_IDS.projectPaper, tier: 'scored' }],
     ['Project, unspecified lines', 'project', { unspecifiedCount: 3, releaseEligible: true },
@@ -274,6 +282,7 @@ describe('every act string', () => {
       ['direction', {}],
       ['proposal', { proposalState: 'draft' }],
       ['proposal', { proposalState: 'sent', clientFirstName: null }],
+      ['proposal', { proposalState: 'sent', clientMessageable: false }],
       ['proposal', { proposalState: 'accepted' }],
       ['project', { unspecifiedCount: 2 }],
       ['project', { releaseEligible: true }],

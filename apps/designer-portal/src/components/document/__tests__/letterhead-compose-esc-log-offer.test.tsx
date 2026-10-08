@@ -59,6 +59,8 @@ jest.mock('../overlays/household-sheet', () => ({ HouseholdSheet: () => null }))
 // The chained-out offer: the previous project's, so it does not own the edge
 // on Aspen's paper and the strip paints nothing.
 const mockDiscardOffer = jest.fn().mockResolvedValue(undefined);
+// SQ-546 — the same offer on its own paper, painted and owning the edge.
+let mockOwnsEdge = false;
 jest.mock('@/hooks/document-time-provider', () => ({
   useDocumentTime: () => ({
     offer: {
@@ -74,7 +76,7 @@ jest.mock('@/hooks/document-time-provider', () => ({
       rateRole: null,
       ratedAmountCents: null,
     },
-    offerOwnsEdge: false,
+    offerOwnsEdge: mockOwnsEdge,
     logOffer: jest.fn(),
     discardOffer: mockDiscardOffer,
   }),
@@ -104,7 +106,10 @@ function bandNudge() {
 const note = () => screen.queryByPlaceholderText('A quick note to Nora…');
 
 describe('walk D2 — band Nudge composer takes Esc over a hidden log-time offer (F5-8 regression)', () => {
-  beforeEach(() => mockDiscardOffer.mockClear());
+  beforeEach(() => {
+    mockDiscardOffer.mockClear();
+    mockOwnsEdge = false;
+  });
 
   it('Esc in the note closes the composer and leaves the unseen offer alone', async () => {
     renderAspenPaper();
@@ -121,5 +126,29 @@ describe('walk D2 — band Nudge composer takes Esc over a hidden log-time offer
     expect(note()).toBeNull();
     expect(notCanceled).toBe(false);
     expect(mockDiscardOffer).not.toHaveBeenCalled();
+  });
+
+  // SQ-546 (SQ-552 follow-up) — the composer is an open thing: it wears
+  // `data-dismissible-popover`, so a VISIBLE offer yields Esc on <body> to it.
+  it('a visible offer leaves Esc on <body> alone while the composer is open', async () => {
+    mockOwnsEdge = true;
+    renderAspenPaper();
+    expect(screen.getByRole('region', { name: 'Log time offer' })).toBeInTheDocument();
+
+    // The control: nothing open, Esc on <body> is the offer's (529-6).
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(mockDiscardOffer).toHaveBeenCalledTimes(1);
+    mockDiscardOffer.mockClear();
+
+    bandNudge();
+    await waitFor(() => expect(note()).toHaveFocus());
+    // Focus drops to <body> (a press on bare paper); the composer stays open.
+    act(() => (document.activeElement as HTMLElement).blur());
+    expect(document.activeElement).toBe(document.body);
+
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    expect(mockDiscardOffer).not.toHaveBeenCalled();
+    expect(note()).toBeInTheDocument();
   });
 });

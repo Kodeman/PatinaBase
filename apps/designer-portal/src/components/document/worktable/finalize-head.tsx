@@ -31,16 +31,19 @@
 
 import { useState } from 'react';
 import { useNudgeProposal, useProposal } from '@/hooks/use-proposals';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { nudgeFailureNote } from '@/lib/delivery-ui';
 import { useFinalizeLeader } from '@/hooks/use-finalize-leader';
 import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
 import { familyLabel } from '@/lib/document/family-label';
+import { voiceFirstName } from '@/lib/document/document-guide';
 import {
   DocumentAction,
   DocumentActionGroup,
 } from '../document-action';
 import { ProposalPreview } from '../proposal-preview';
 import { SendSheet } from '../overlays/send-sheet';
+import { ReminderArmRow, ReminderControl, useReminderArm } from '../proposal-instruments';
 
 const HEADLINE_ID = 'finalize-table-heading';
 
@@ -55,6 +58,11 @@ export function FinalizeHead({
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const { headline, leader } = useFinalizeLeader(proposalId, clientName);
   const nudge = useNudgeProposal();
+  // FR6 F6-1b (`one-voice`) — the reminder is `Send a reminder`, plain, and
+  // arms before it sends; the Message composer is the paper's one Nudge.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const arm = useReminderArm();
+  const first = voiceFirstName(clientName) ?? 'the client';
   const [note, setNote] = useState<{
     text: string;
     tone: 'ok' | 'warn' | 'err';
@@ -66,9 +74,13 @@ export function FinalizeHead({
     setNote(null);
     try {
       const res = await nudge.mutateAsync({ proposalId });
+      if (oneVoice) arm.setArmed(false);
       setNote(
         res._emailDispatched
-          ? { text: `Reminder sent to ${familyLabel(clientName)}.`, tone: 'ok' }
+          ? {
+              text: `Reminder sent to ${oneVoice ? first : familyLabel(clientName)}.`,
+              tone: 'ok',
+            }
           : {
               text: nudgeFailureNote(
                 res.emailSuppressed,
@@ -114,7 +126,8 @@ export function FinalizeHead({
           className="mt-0.5"
           aria-label="The table's leader"
         >
-          {leader.kind === 'nudge' && (
+          {leader.kind === 'nudge' && oneVoice && <ReminderControl arm={arm} />}
+          {leader.kind === 'nudge' && !oneVoice && (
             <DocumentAction
               actionKey="nudge-client"
               variant="inked"
@@ -144,6 +157,9 @@ export function FinalizeHead({
             </DocumentAction>
           )}
         </DocumentActionGroup>
+      )}
+      {oneVoice && leader?.kind === 'nudge' && (
+        <ReminderArmRow arm={arm} first={first} pending={nudge.isPending} onSend={onNudge} />
       )}
       {note && (
         <p

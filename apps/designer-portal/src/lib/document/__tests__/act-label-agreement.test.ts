@@ -20,6 +20,7 @@
  */
 import type { ProjectContextualHandoff } from '@patina/supabase';
 import {
+  ACT_TARGET_IDS,
   ACT_TIER,
   NAMED_ACTS,
   NEED_ACT_LABELS,
@@ -32,13 +33,14 @@ import {
 } from '../act-names';
 import {
   NEED_ACTION_LABELS,
+  deriveNeed,
   deskActionLabel,
   type DocumentStateRow,
   type NeedKind,
   type NeedLine,
   type SectionKey,
 } from '../desk-derivation';
-import { deriveDeskRoster } from '../desk-roster-derivation';
+import { deriveDeskRoster, sentProposalReasonLine } from '../desk-roster-derivation';
 import { deriveDocumentGuide, needGuideAction, voiceFirstName } from '../document-guide';
 import {
   deriveNext,
@@ -576,5 +578,93 @@ describe('the Desk leads with the band’s Next (FR3 F3-4)', () => {
     const band = bandNext(needs, lensOwnAct('project', {}), 'Mei');
     expect(band?.act.label).toBe('Record the payment');
     expect(deskLead(aspen, needs).act.label).toBe(band?.act.label);
+  });
+});
+
+// ── Tanaka (FR6 F6-1; `running_a_job_walk_dev.sql`): a proposal sent to Mei on
+// 3 October, never opened, two decisions overdue on it. One `Nudge Mei`, the
+// composer; the reminder is `Send a reminder` (D1-a, D1-c, D1-d, X1).
+describe('Tanaka — one Nudge Mei on every surface (FR6 F6-1)', () => {
+  const now = new Date('2026-10-07T12:00:00Z');
+  const tanakaRow = (over: Partial<DocumentStateRow> = {}) =>
+    row('proposal', {
+      client_name: 'Mei Tanaka',
+      title: 'Tanaka Garden Flat — Living Room',
+      proposal_sent_at: '2026-10-03T12:00:00Z',
+      ...over,
+    });
+  const tanaka = tanakaRow();
+  const first = voiceFirstName(tanaka.client_name);
+  const card = (r: DocumentStateRow) => {
+    const need = deriveNeed(r, now)!;
+    return deriveDeskRoster(
+      { folders: [{ row: r, need, needs: [need] }], chips: [], live: [r], oneVoice: true },
+      now,
+    ).groups[0].lines[0];
+  };
+  /** The band as page.tsx builds it: the own act, its sentence the card's
+   *  reason line (`sentProposalReasonLine`). */
+  const band = (r: DocumentStateRow, clientMessageable = true) =>
+    deriveNext({
+      standing: [],
+      ownAct: {
+        key: 'own-proposal',
+        ...ownAct('proposal', facts({ proposalState: 'sent', clientFirstName: first, clientMessageable }))!,
+        sentence: sentProposalReasonLine(r, now),
+        onAct: noop,
+      },
+      clientFirstName: first,
+      closed: false,
+    })!;
+
+  it('band, dock, Desk card, sheet row and the need table all print Nudge Mei', () => {
+    expect(first).toBe('Mei');
+    const hesitating = deriveNeed(tanaka, now)!;
+    expect(hesitating.kind).toBe('hesitating_proposal');
+    const next = band(tanaka);
+    expect(next.act.label).toBe('Nudge Mei');
+    expect(next.act.targetId).toBe(ACT_TARGET_IDS.proposalNudge);
+    expect(next.act.tier).toBe('scored');
+    // The dock registers this same LensNext (D7); the Desk prints the band's act.
+    expect(card(tanaka).act.label).toBe(next.act.label);
+    // X1 — the one-name table agrees with the Desk it feeds.
+    expect(NEED_ACT_LABELS.hesitating_proposal).toBe('Nudge {first name}');
+    expect(needActLabel('hesitating_proposal', first)).toBe(next.act.label);
+    expect(
+      needGuideAction(hesitating, 'proposal', null, null, { oneVoice: true, clientFirstName: first })
+        .label,
+    ).toBe(next.act.label);
+    expect(ACT_TIER[NEED_ACT_LABELS.hesitating_proposal]).toBe('scored');
+  });
+
+  it('the band’s sentence is the Desk card’s reason line, verbatim (D1-d)', () => {
+    expect(card(tanaka).needText).toBe('Sent 3 October — not yet opened');
+    expect(band(tanaka).sentence).toBe(card(tanaka).needText);
+    const opened = tanakaRow({
+      proposal_status: 'viewed',
+      proposal_viewed_at: '2026-10-04T12:00:00Z',
+    });
+    expect(card(opened).needText).toBe('Opened 4 October — no signature yet');
+    expect(band(opened).sentence).toBe(card(opened).needText);
+  });
+
+  it('inside the hesitation threshold the card prints no reason, so the band’s act prints alone', () => {
+    const fresh = tanakaRow({ proposal_sent_at: '2026-10-06T12:00:00Z' });
+    expect(sentProposalReasonLine(fresh, now)).toBeNull();
+    expect(band(fresh).sentence).toBe('');
+    expect(sentProposalReasonLine(tanakaRow({ proposal_status: 'accepted' }), now)).toBeNull();
+  });
+
+  it('held Message: the band’s act follows the reminder, by its control’s name', () => {
+    const next = band(tanaka, false);
+    expect(next.act.label).toBe('Send a reminder');
+    expect(next.act.targetId).toBe(ACT_TARGET_IDS.proposalReminder);
+    expect(ACT_TIER['Send a reminder']).toBe('plain');
+  });
+
+  it('flag off: the Desk and the guide keep today’s Follow up', () => {
+    const hesitating = deriveNeed(tanaka, now)!;
+    expect(deskActionLabel(hesitating, false)).toBe('Follow up');
+    expect(needGuideAction(hesitating, 'proposal').label).toBe('Follow up');
   });
 });

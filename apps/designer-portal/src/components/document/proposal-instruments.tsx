@@ -26,7 +26,7 @@
  * shadows (D4).
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useNudgeProposal, useProposal } from '@/hooks/use-proposals';
 import { useProposalWatch } from '@/hooks/use-proposal-watch';
@@ -37,7 +37,8 @@ import {
 } from '@/lib/document/proposal-watch-derivation';
 import { useFinalizeLeader } from '@/hooks/use-finalize-leader';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
-import { ACT_TARGET_IDS } from '@/lib/document/act-names';
+import { ACT_TARGET_IDS, SEND_A_REMINDER } from '@/lib/document/act-names';
+import { voiceFirstName } from '@/lib/document/document-guide';
 import { nudgeFailureNote } from '@/lib/delivery-ui';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -102,6 +103,7 @@ export function ProposalInstruments({
         }
         issuedOnPaper={proposal?.issued_on_paper === true}
         nudgeHoisted={hoistedLeader === 'nudge'}
+        oneVoice={oneVoice}
       />
       {experience === 'design_services' ? (
         <ServiceAgreementInstruments
@@ -123,6 +125,97 @@ export function ProposalInstruments({
 }
 
 /**
+ * US-19 FR6 F6-1b (D1-b, D1-c; `one-voice`) — the proposal reminder is a real
+ * email to the household, so it arms before it sends (J2): press one prints
+ * what she will get, `Send the reminder` sends. Esc on the armed row is Cancel,
+ * and Cancel puts focus back on `Send a reminder`. The send wall and the
+ * Finalize table's head share it; only one of them mounts the control.
+ */
+export function useReminderArm() {
+  const [armed, setArmed] = useState(false);
+  const controlRef = useRef<HTMLButtonElement | HTMLAnchorElement | null>(null);
+  const cancel = () => {
+    setArmed(false);
+    controlRef.current?.focus({ preventScroll: true });
+  };
+  return { armed, setArmed, controlRef, cancel };
+}
+
+type ReminderArm = ReturnType<typeof useReminderArm>;
+
+function cancelOnEscape(arm: ReminderArm) {
+  return (e: KeyboardEvent) => {
+    if (e.key !== 'Escape' || !arm.armed) return;
+    e.preventDefault();
+    e.stopPropagation();
+    arm.cancel();
+  };
+}
+
+/** `Send a reminder`, plain: the composer is the paper's one `Nudge`. */
+export function ReminderControl({ arm }: { arm: ReminderArm }) {
+  return (
+    <DocumentAction
+      ref={arm.controlRef}
+      id={ACT_TARGET_IDS.proposalReminder}
+      actionKey="nudge-client"
+      variant="secondary"
+      aria-expanded={arm.armed}
+      onClick={() => arm.setArmed((v) => !v)}
+      onKeyDown={cancelOnEscape(arm)}
+    >
+      {SEND_A_REMINDER}
+    </DocumentAction>
+  );
+}
+
+/** The armed row. `first` is already through `voiceFirstName`'s guard. */
+export function ReminderArmRow({
+  arm,
+  first,
+  pending,
+  onSend,
+}: {
+  arm: ReminderArm;
+  first: string;
+  pending: boolean;
+  onSend: () => Promise<void>;
+}) {
+  if (!arm.armed) return null;
+  return (
+    <div
+      role="group"
+      aria-label={SEND_A_REMINDER}
+      data-reminder-armed
+      className="mt-2"
+      onKeyDown={cancelOnEscape(arm)}
+    >
+      <p className="mb-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
+        {`${first.charAt(0).toUpperCase()}${first.slice(1)} gets an email that the proposal is waiting for a reply.`}
+      </p>
+      <DocumentActionGroup surfaceKey="open-document" regionKey="proposal-reminder">
+        <DocumentAction
+          actionKey="send-proposal-reminder"
+          variant="primary"
+          loading={pending}
+          loadingLabel="Sending…"
+          onClick={onSend}
+        >
+          Send the reminder
+        </DocumentAction>
+        <DocumentAction
+          actionKey="cancel-proposal-reminder"
+          variant="tertiary"
+          onClick={arm.cancel}
+        >
+          Cancel
+        </DocumentAction>
+      </DocumentActionGroup>
+    </div>
+  );
+}
+
+/**
  * SP3 — the send wall's state line: a thin renderer over `deriveSendWallLine`.
  * Every rule about which verb is offered, which state word is named, and when
  * the wall stands down lives in the derivation, where the
@@ -135,6 +228,7 @@ function SendWallLine({
   commercialState,
   issuedOnPaper,
   nudgeHoisted = false,
+  oneVoice = false,
 }: {
   proposalId: string;
   clientName: string;
@@ -147,21 +241,26 @@ function SendWallLine({
    *  verb rather than printing the act twice, and names the state it is in
    *  where the verb stood. */
   nudgeHoisted?: boolean;
+  /** FR6 F6-1b — the reminder is named for what it does and arms first. */
+  oneVoice?: boolean;
 }) {
   const { watch } = useProposalWatch(proposalId);
   const nudge = useNudgeProposal();
+  const arm = useReminderArm();
   const [note, setNote] = useState<{ text: string; tone: 'ok' | 'warn' | 'err' } | null>(
     null,
   );
 
   const family = familyLabel(clientName);
+  const first = voiceFirstName(clientName) ?? 'the client';
   const onNudge = async () => {
     setNote(null);
     try {
       const res = await nudge.mutateAsync({ proposalId });
+      if (oneVoice) arm.setArmed(false);
       setNote(
         res._emailDispatched
-          ? { text: `Reminder sent to ${family}.`, tone: 'ok' }
+          ? { text: `Reminder sent to ${oneVoice ? first : family}.`, tone: 'ok' }
           : {
               text: nudgeFailureNote(res.emailSuppressed, clientEmail),
               tone: 'warn',
@@ -187,6 +286,9 @@ function SendWallLine({
   const stateWord =
     line.stateWord ??
     (standDown && watch ? sendWallStateWord(watch, commercialState) : null);
+  // FR6 F6-1b — the same state, with the reminder printed by its own name.
+  const shownWord =
+    oneVoice && stateWord && watch ? sendWallStateWord(watch, commercialState, true) : stateWord;
 
   return (
     <>
@@ -209,7 +311,8 @@ function SendWallLine({
             here for exactly this act, so removing the row outright would land
             the guide on nothing. The restatement is what the ruling objects
             to; the destination is not. Flagged for the design lead. */}
-        {!standDown && line.verb === 'nudge' && (
+        {!standDown && line.verb === 'nudge' && oneVoice && <ReminderControl arm={arm} />}
+        {!standDown && line.verb === 'nudge' && !oneVoice && (
           <DocumentAction
             actionKey="nudge-client"
             variant="secondary"
@@ -223,13 +326,16 @@ function SendWallLine({
         {/* NOT a restatement: this prints only when the act has STOOD DOWN
             because the table's head took it (`standDown`), and it is then the
             only thing in the row. Removing it left an empty row. */}
-        {stateWord && (
+        {shownWord && (
           <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            {stateWord}
+            {shownWord}
           </span>
         )}
       </DocumentActionRow>
       </div>
+      {oneVoice && !standDown && line.verb === 'nudge' && (
+        <ReminderArmRow arm={arm} first={first} pending={nudge.isPending} onSend={onNudge} />
+      )}
       {note && (
         <p
           role={note.tone === 'err' ? 'alert' : 'status'}

@@ -11,6 +11,7 @@
  */
 
 import {
+  deriveNeeds,
   deskActionLabel,
   deskMotion,
   deskNeedText,
@@ -391,6 +392,21 @@ function voicedActLabel(need: NeedLine, row: DocumentStateRow): string | null {
     );
   }
   return deskActionLabel(need, true, clientFirstName);
+}
+
+/**
+ * US-19 FR6 F6-1 (D1-d) — the Desk card's reason line for a sent proposal,
+ * verbatim (531-1's `Opened {day} — no signature yet` family), so the band
+ * that prints it beside `Nudge {first}` and the card say one thing. Null where
+ * the card prints none: not sent, or still inside the hesitation threshold.
+ */
+export function sentProposalReasonLine(
+  row: DocumentStateRow,
+  now: Date,
+): string | null {
+  if (row.proposal_status !== 'sent' && row.proposal_status !== 'viewed') return null;
+  const need = deriveNeeds(row, now).find((n) => n.kind === 'hesitating_proposal');
+  return need ? deskNeedText(need, true) : null;
 }
 
 export function deriveDeskRoster(

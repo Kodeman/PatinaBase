@@ -11,6 +11,7 @@ import {
   deriveProposalWatch,
   deriveSendWallLine,
   NUDGE_COOLDOWN_DAYS,
+  sendWallStateWord,
   type SendWallLine,
 } from '../proposal-watch-derivation';
 
@@ -206,5 +207,31 @@ describe('deriveSendWallLine — the sent phrase', () => {
   // 00477's paper door writes no sent_at, because nothing was sent.
   it('says how a paper-issued agreement reached the client', () => {
     expect(line({ sentAt: null, issuedOnPaper: true })!.sentText).toBe('Issued on paper');
+  });
+});
+
+// US-19 FR6 F6-1b (`one-voice`) — the watch line names the reminder by what
+// it is; the derivation the wall and the guide read is untouched.
+describe('sendWallStateWord — voiced', () => {
+  const watch = (lastNudgedAt: string | null) =>
+    deriveProposalWatch(
+      { status: 'sent', sentAt: daysAgo(5), viewedAt: null, acceptedAt: null, lastNudgedAt },
+      null,
+      null,
+      NOW,
+    );
+
+  it('reads `Reminder sent {day}.` voiced and `nudged {day}` otherwise', () => {
+    const w = watch('2026-06-08T12:00:00Z');
+    expect(sendWallStateWord(w, null, true)).toBe('Reminder sent 8 June.');
+    expect(sendWallStateWord(w, null)).toBe('nudged 8 June');
+    expect(line({ status: 'sent', lastNudgedAt: daysAgo(1) })?.stateWord).toBe('nudged 23 June');
+  });
+
+  it('leaves every other state word as it was', () => {
+    expect(sendWallStateWord(watch(null), null, true)).toBe('awaiting the client’s signature');
+    expect(sendWallStateWord(watch('2026-06-08T12:00:00Z'), 'client_signed', true)).toBe(
+      'awaiting countersign',
+    );
   });
 });

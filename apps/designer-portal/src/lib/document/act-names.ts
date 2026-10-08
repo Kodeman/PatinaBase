@@ -125,6 +125,8 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   // Plain — the need acts D3 does not raise
   'Send reminder': 'plain',
   'Notify the maker': 'plain',
+  // FR6 F6-1b — the proposal's reminder email, named for what it does.
+  'Send a reminder': 'plain',
   'Follow up': 'plain',
   'Revise proposal': 'plain',
   'Open the flagged lines': 'plain',
@@ -182,6 +184,10 @@ export const FORBIDDEN_ACT_LABELS = {
 /** FR2 499-9 / 506-6 — the act a held draft lands on: its review, where Send
  *  and Discard live. The Desk and the install row print it. */
 export const OPEN_THE_HELD_DRAFT = 'Open the held draft';
+
+/** FR6 F6-1 (D1-b, D1-c) — the proposal watch's reminder email. Never a
+ *  `Nudge`: the Message composer is the paper's one `Nudge {first}`. */
+export const SEND_A_REMINDER = 'Send a reminder';
 
 /** `Message Chen`, or `Message the client` with no first name. */
 export function messageLabel(firstName: string | null): string {
@@ -252,8 +258,9 @@ export function householdDisplayName(name: string | null | undefined): string {
  * when it took the act, and the press keeps its old landing when nobody did.
  * - `askTheMaker` — the Install row opens its sheet on the first field.
  * - `ffeAct` (detail `FfeActLanding`) — Pieces lands on its own control.
- * - `composeMessage` (detail `{ named: string[] }`) — the letterhead's Message
- *   composer opens, naming what is overdue.
+ * - `composeMessage` (detail `{ named: string[]; act?: string }`) — the
+ *   letterhead's Message composer opens, naming what is overdue; `act` is the
+ *   pressed act's name, printed as the composer's eyebrow (FR6 F6-1).
  */
 export const ACT_LANDING_EVENTS = {
   askTheMaker: 'document:ask-the-maker',
@@ -303,6 +310,7 @@ export const ACT_TARGET_IDS = {
   contractRoomDoor: 'document-act-contract-room',
   proposalSend: 'document-act-proposal-send',
   proposalNudge: 'document-act-proposal-nudge',
+  proposalReminder: 'document-act-proposal-reminder',
   projectPaper: 'document-act-project-paper',
   piecesHead: 'document-act-pieces-head',
   installReading: 'document-act-install-reading',
@@ -344,6 +352,10 @@ export interface OwnActFacts {
   /** The client's first name, already through the placeholder guard; null
    *  when there is no usable name. */
   clientFirstName: string | null;
+  /** Proposal: the letterhead's Message composer can open (its `canSendNote`).
+   *  False reroutes a sent proposal's act to the reminder (FR6 F6-1); unset
+   *  reads as reachable. */
+  clientMessageable?: boolean;
   /** Project: FF&E lines not yet specified. */
   unspecifiedCount: number;
   /** Project: lines are eligible to release for authorization. */
@@ -395,6 +407,10 @@ export function ownAct(stage: SectionKey, facts: OwnActFacts): OwnAct | null {
         case 'draft':
           return act('Send the proposal', ACT_TARGET_IDS.proposalSend);
         case 'sent': {
+          // D1-a — held Message: the act follows the control that can reach her.
+          if (facts.clientMessageable === false) {
+            return act(SEND_A_REMINDER, ACT_TARGET_IDS.proposalReminder);
+          }
           const first = facts.clientFirstName?.trim();
           return act(
             first ? `Nudge ${first}` : 'Nudge the client',
@@ -468,7 +484,7 @@ export const NEED_ACT_LABELS: Record<NeedKind, string> = {
   new_lead: 'Respond to the inquiry',
   ceremony_pending: 'Continue the introduction',
   reconnect_due: 'Message {first name}',
-  hesitating_proposal: 'Follow up',
+  hesitating_proposal: 'Nudge {first name}',
   awaiting_inspection: 'Inspect the delivery',
   schedule_conflict: 'Resolve the schedule',
   schedule_proposal: 'Open the proposed date',
