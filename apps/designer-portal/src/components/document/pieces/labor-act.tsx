@@ -5,13 +5,14 @@ import { useAddLaborLine } from "@patina/supabase";
 import type { FfeLineUnit } from "@patina/types";
 import {
   LABOR_STAMP_LABEL,
-  deriveLineStage,
   isLaborLine,
-  lineStageInputFromRow,
   lineStampLabel,
   type LineStage,
-  type LineStageRow,
 } from "@/lib/document/stamp-derivation";
+import {
+  pieceLineStage,
+  type PieceLineStageRow,
+} from "@/lib/document/pieces/line-stage";
 import { perUnit, unitWord } from "./placement-chips";
 
 /**
@@ -22,15 +23,14 @@ import { perUnit, unitWord } from "./placement-chips";
  * act is gated on here.
  */
 
-export type LaborPieceRow = LineStageRow & {
+export type LaborPieceRow = PieceLineStageRow & {
   id: string;
   name: string;
   unit?: string | null;
   purchase_order_id?: string | null;
-  trade_scope_document_id?: string | null;
 };
 
-export type LaborLineRow = LineStageRow & {
+export type LaborLineRow = PieceLineStageRow & {
   id: string;
   name: string;
   unit?: string | null;
@@ -82,7 +82,7 @@ export function laborGate(piece: LaborPieceRow): string | null {
     return "Labor attaches to a piece, not to a line that supplies one.";
   if (piece.trade_scope_document_id)
     return "This line is a Trade Scope; its work is billed by the scope.";
-  if (piece.purchase_order_id)
+  if (piece.purchase_order_id || pieceLineStage(piece).lock === "ordered")
     return "The piece is on an order. Labor changes through Record a change.";
   if (piece.ffe_line_authorization)
     return "The piece is released. Labor changes through Record a change.";
@@ -96,7 +96,7 @@ function LaborLine({
   line: LaborLineRow;
   piece: LaborPieceRow;
 }) {
-  const stage = deriveLineStage(lineStageInputFromRow(line, piece));
+  const { kind, stage } = pieceLineStage(line, piece);
   const quantity = line.quantity ?? 0;
   return (
     <li
@@ -117,8 +117,8 @@ function LaborLine({
       >
         {LABOR_STAMP_LABEL}
       </span>
-      <span className={`${STAMP_CLS} ${STAGE_STAMP_CLS[stage]}`}>
-        {lineStampLabel(stage)}
+      <span className={`${STAMP_CLS} ${STAGE_STAMP_CLS[stage ?? "specced"]}`}>
+        {lineStampLabel(kind)}
       </span>
       <span className="font-sans text-[14px] tabular-nums text-[color:var(--sheet-ink,#1A1816)]">
         {quantity} {unitWord(line.unit)}

@@ -34,12 +34,11 @@ import {
 } from "@/lib/document/pieces/spec-progress";
 import {
   LABOR_STAMP_LABEL,
-  deriveLineStage,
   isLaborLine,
   laborPiece,
-  lineStageInputFromRow,
   lineStampLabel,
 } from "@/lib/document/stamp-derivation";
+import { pieceLineStage } from "@/lib/document/pieces/line-stage";
 import { AlsoInLine } from "./placement-chips";
 import {
   INKED_ACT_CLS,
@@ -221,9 +220,7 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
   const list = (
     <ul aria-label="Lines" className="flex flex-col">
       {lines.map((line) => {
-        const stage = deriveLineStage(
-          lineStageInputFromRow(line, laborPiece(line, allLines)),
-        );
+        const stage = pieceLineStage(line, laborPiece(line, allLines)).kind;
         const labor = isLaborLine(line);
         const current = line.id === activeId;
         return (

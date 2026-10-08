@@ -330,6 +330,47 @@ describe("RoughInLens — remove with undo (D8)", () => {
     expect(mockArchive).not.toHaveBeenCalled();
   });
 
+  // T-33c (F3): D1's R3/R5 precedence, and every act locked.
+  it.each([
+    [
+      "an installed Trade Scope line",
+      "Paintwork and plaster",
+      { status: "installed", trade_scope_document_id: "pcd-1" },
+      "Engaged",
+      "Trade Scope lines change in their scope.",
+    ],
+    [
+      "a line ordered without an authorization",
+      "Sconce, aged brass",
+      { status: "ordered", product_id: "p-1", item_type: "fixed" },
+      "Released to maker",
+      "Released lines change through Record a change.",
+    ],
+  ])(
+    "%s prints its own word, never Placeholder, and refuses every act",
+    async (_case, name, extra, word, reason) => {
+      mockState.lines = [line("x1", name, extra)];
+      const { user } = setup();
+      expect(within(livingTable()).getByText(word)).toBeInTheDocument();
+      expect(within(livingTable()).queryByText("Placeholder")).toBeNull();
+      await user.click(
+        screen.getByRole("button", { name: `Acts for ${name}` }),
+      );
+      for (const act of [
+        "Fill with a product",
+        "Move to room…",
+        "Also place in…",
+        "Remove",
+      ]) {
+        const item = screen.getByRole("menuitem", { name: act });
+        expect(item).toHaveAttribute("aria-disabled", "true");
+        expect(item).toHaveAccessibleDescription(reason);
+      }
+      await user.click(screen.getByRole("menuitem", { name: "Remove" }));
+      expect(mockArchive).not.toHaveBeenCalled();
+    },
+  );
+
   it("Removed in the rail puts a line back through restore", async () => {
     mockState.removed = [
       line("r1", "Rattan lounge chair", { removed_at: "2026-10-08T12:00:00Z" }),

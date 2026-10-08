@@ -1,19 +1,19 @@
 /**
  * The Build room's counts (US-21 a5, SPEC §4.4, CONTRACT §3.6). A placed line
  * counts once in each of its rooms; a labor line counts as a line. The stage
- * is D1's (`deriveLineStage`), so these counts and the stamps never disagree.
+ * is `pieceLineStage`'s, as every lens and the overview read it, so these
+ * counts and the stamps never disagree: a line from `ordered` on counts as
+ * released, and a Trade Scope line before an order counts in no stage.
  *
  * Rough $ is per unit (`~$4,800 each`). In a room it is multiplied by that
  * room's share of a placed line, and on the job by the line's quantity, so a
  * placed line's figure is split by share and never multiplied by its rooms.
  */
+import { laborPiece, type LineStage } from "@/lib/document/stamp-derivation";
 import {
-  deriveLineStage,
-  laborPiece,
-  lineStageInputFromRow,
-  type LineStage,
-  type LineStageRow,
-} from "@/lib/document/stamp-derivation";
+  pieceLineStage,
+  type PieceLineStageRow,
+} from "@/lib/document/pieces/line-stage";
 
 export interface RoomCounts {
   lines: number;
@@ -24,7 +24,7 @@ export interface RoomCounts {
   roughCents: number;
 }
 
-export interface RoomCountsLine extends LineStageRow {
+export interface RoomCountsLine extends PieceLineStageRow {
   id: string;
   project_room_id?: string | null;
   assignment_scope?: string | null;
@@ -61,12 +61,16 @@ export function emptyRoomCounts(): RoomCounts {
   };
 }
 
-function add(counts: RoomCounts, stage: LineStage, roughCents: number): void {
+function add(
+  counts: RoomCounts,
+  stage: LineStage | null,
+  roughCents: number,
+): void {
   counts.lines += 1;
   if (stage === "placeholder") counts.placeholders += 1;
   else if (stage === "specced") counts.specced += 1;
   else if (stage === "ready") counts.ready += 1;
-  else counts.released += 1;
+  else if (stage === "released") counts.released += 1;
   counts.roughCents += roughCents;
 }
 
@@ -93,9 +97,7 @@ export function deriveRoomCounts(
 
   const live = (lines ?? []).filter((line) => line.removed_at == null);
   for (const line of live) {
-    const stage = deriveLineStage(
-      lineStageInputFromRow(line, laborPiece(line, live)),
-    );
+    const { stage } = pieceLineStage(line, laborPiece(line, live));
     const roughEach = line.rough_cents ?? 0;
     const quantity = line.quantity ?? 0;
     add(result.job, stage, roughEach * quantity);

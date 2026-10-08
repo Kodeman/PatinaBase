@@ -36,12 +36,14 @@ import type {
 import { ProductPickerModal } from "@/components/portal/proposals/product-picker-modal";
 import {
   LABOR_STAMP_LABEL,
-  deriveLineStage,
   isLaborLine,
-  lineStageInputFromRow,
   lineStampLabel,
-  type LineStageRow,
 } from "@/lib/document/stamp-derivation";
+import {
+  TRADE_SCOPE_REASON,
+  pieceLineStage,
+  type PieceLineStageRow,
+} from "@/lib/document/pieces/line-stage";
 import { lineImageUrl } from "@/lib/document/pieces/spec-progress";
 import { ROUGH_IN_UNITS } from "@/lib/document/pieces/rough-in-keys";
 import { DimensionFields } from "../dimension-fields";
@@ -66,7 +68,7 @@ import {
 } from "./placement-chips";
 
 /** A schedule row as the Spec lens reads it (`useProjectFFEItems`). */
-export type SpecLensLine = LineStageRow & {
+export type SpecLensLine = PieceLineStageRow & {
   id: string;
   name: string;
   unit?: string | null;
@@ -77,7 +79,6 @@ export type SpecLensLine = LineStageRow & {
   design_disposition?: string | null;
   role_identity?: string | null;
   purchase_order_id?: string | null;
-  trade_scope_document_id?: string | null;
   selection_thread_id?: string | null;
   product?: {
     id?: string;
@@ -300,10 +301,14 @@ export function SpecFieldsPane({
   const ids = useId();
 
   const labor = isLaborLine(line);
-  const stage = deriveLineStage(lineStageInputFromRow(line, piece));
-  const released = line.ffe_line_authorization != null;
+  const read = pieceLineStage(line, piece);
+  const stage = read.kind;
+  const tradeScope = read.lock === "trade_scope";
+  const released =
+    line.ffe_line_authorization != null || read.stage === "released";
   const onOrder = line.purchase_order_id != null;
-  const locked = released || onOrder;
+  const makerLocked = onOrder || read.lock != null;
+  const locked = released || onOrder || read.lock != null;
   const quantity = line.quantity ?? 0;
   const productName = line.product_id
     ? (line.product?.name ?? line.name)
@@ -483,17 +488,17 @@ export function SpecFieldsPane({
               <button
                 type="button"
                 className={ACT_CLS}
-                aria-disabled={onOrder || undefined}
-                aria-describedby={onOrder ? `${ids}-maker` : undefined}
+                aria-disabled={makerLocked || undefined}
+                aria-describedby={makerLocked ? `${ids}-maker` : undefined}
                 onClick={() => {
-                  if (!onOrder) setChoosingMaker(true);
+                  if (!makerLocked) setChoosingMaker(true);
                 }}
               >
                 {makerName ? "CHANGE THE MAKER" : "NAME A MAKER"}
               </button>
-              {onOrder && (
+              {makerLocked && (
                 <span id={`${ids}-maker`} className={REASON_CLS}>
-                  {MAKER_ON_ORDER_SENTENCE}
+                  {tradeScope ? TRADE_SCOPE_REASON : MAKER_ON_ORDER_SENTENCE}
                 </span>
               )}
             </span>
@@ -594,7 +599,7 @@ export function SpecFieldsPane({
               </button>
               {locked && (
                 <span id={`${ids}-fill`} className={REASON_CLS}>
-                  {RELEASED_SENTENCE}
+                  {tradeScope ? TRADE_SCOPE_REASON : RELEASED_SENTENCE}
                 </span>
               )}
             </span>
@@ -709,7 +714,7 @@ export function SpecFieldsPane({
             }}
             placements={placements}
             rooms={rooms}
-            canEdit
+            canEdit={read.lock == null}
           />
         </Field>
 
@@ -742,7 +747,7 @@ export function SpecFieldsPane({
           </select>
           {locked && (
             <span id={`${ids}-unit`} className={REASON_CLS}>
-              {UNIT_LOCKED_SENTENCE}
+              {tradeScope ? TRADE_SCOPE_REASON : UNIT_LOCKED_SENTENCE}
             </span>
           )}
         </Field>
@@ -794,7 +799,11 @@ export function SpecFieldsPane({
               />
             </Field>
             <Field label="COM">
-              <ComToggle projectId={projectId} item={line} canEdit />
+              <ComToggle
+                projectId={projectId}
+                item={line}
+                canEdit={read.lock == null}
+              />
             </Field>
           </>
         )}

@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import {
   LABOR_STAMP_LABEL,
   lineStampLabel,
-  type LineStage,
+  type LineStampKind,
 } from "@/lib/document/stamp-derivation";
 import {
   ENTRY_NAME_ATTR,
@@ -54,7 +54,8 @@ export interface RoughInRow {
   unit: FfeLineUnit;
   /** Per unit, internal, printed `~$4,800` (Q7, D12). */
   roughCents: number | null;
-  stage: LineStage;
+  /** The word the line prints (`pieceLineStage(...).kind`). */
+  stage: LineStampKind;
   /** A labor line: indented `↳` under its piece, `LABOR` beside the name. */
   labor?: boolean;
   /** Acts this line cannot take, each with the sentence that says why. */

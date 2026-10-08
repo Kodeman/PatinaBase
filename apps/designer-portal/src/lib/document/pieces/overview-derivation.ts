@@ -1,7 +1,8 @@
 /**
  * The Document's Pieces overview (US-21 Q14, S7, SPEC a1/a10/a12): one row per
- * room under a head that counts the job. Pure; the stage is D1's
- * (`deriveLineStage`), so these words never disagree with a line's stamp.
+ * room under a head that counts the job. Pure; the stage is `pieceLineStage`'s,
+ * as every lens and the Build room head read it, so these words and counts
+ * never disagree with a line's stamp.
  *
  * A line counts once in each room it is placed in, and once on the job. A
  * labor line counts as a line; it rides with its piece, so the head's stage
@@ -17,25 +18,25 @@
  */
 import { fmtUsd } from "@/lib/document/format";
 import {
-  deriveLineStage,
   isLaborLine,
   laborPiece,
-  lineStageInputFromRow,
   type LineStage,
-  type LineStageRow,
 } from "@/lib/document/stamp-derivation";
 import {
   THROUGHOUT_PLACE,
   UNASSIGNED_PLACE,
 } from "@/lib/document/pieces/build-room-url";
+import {
+  pieceLineStage,
+  type PieceLineStageRow,
+} from "@/lib/document/pieces/line-stage";
 
-export interface OverviewLine extends LineStageRow {
+export interface OverviewLine extends PieceLineStageRow {
   id: string;
   project_room_id?: string | null;
   assignment_scope?: string | null;
   removed_at?: string | null;
   rough_cents?: number | null;
-  trade_scope_document_id?: string | null;
 }
 
 /** As `useProjectRoomPlacements` returns them (00734). */
@@ -80,15 +81,6 @@ export interface OverviewRow {
   mark: OverviewMark;
 }
 
-/** From `ordered` on a line has no pre-order stage; it is past release. */
-const ORDERED_ON: ReadonlySet<string> = new Set([
-  "ordered",
-  "production",
-  "shipped",
-  "delivered",
-  "installed",
-]);
-
 function emptyTally(): OverviewTally {
   return {
     lines: 0,
@@ -108,12 +100,12 @@ function liveLines<T extends OverviewLine>(
   return (lines ?? []).filter((line) => line.removed_at == null);
 }
 
+/** The line's count stage; null on a Trade Scope line before an order. */
 export function overviewStage(
   line: OverviewLine,
   live: readonly OverviewLine[],
-): LineStage {
-  if (ORDERED_ON.has(line.status ?? "")) return "released";
-  return deriveLineStage(lineStageInputFromRow(line, laborPiece(line, live)));
+): LineStage | null {
+  return pieceLineStage(line, laborPiece(line, live)).stage;
 }
 
 /** The line's figure per unit: its client price, else its rough figure. */
@@ -128,7 +120,7 @@ function eachCents(line: OverviewLine): number {
 function add(
   tally: OverviewTally,
   line: OverviewLine,
-  stage: LineStage,
+  stage: LineStage | null,
   cents: number,
 ): void {
   tally.lines += 1;
@@ -188,11 +180,11 @@ export function deriveOverviewRows(
   }
 
   const settledByRow = new Map<OverviewRow, boolean>();
-  const place = (target: OverviewRow, line: OverviewLine, stage: LineStage, share: number, primary: boolean) => {
+  const place = (target: OverviewRow, line: OverviewLine, stage: LineStage | null, share: number, primary: boolean) => {
     target.lineIds.push(line.id);
     if (primary) target.primaryLineIds.push(line.id);
     add(target.tally, line, stage, eachCents(line) * share);
-    if (stage === "placeholder" && !line.trade_scope_document_id) target.placeholderLines += 1;
+    if (stage === "placeholder") target.placeholderLines += 1;
     settledByRow.set(target, (settledByRow.get(target) ?? true) && stage === "released");
   };
 

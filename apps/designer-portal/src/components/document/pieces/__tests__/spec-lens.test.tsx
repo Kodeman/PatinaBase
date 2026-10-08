@@ -663,6 +663,64 @@ describe("a labor line's client price (T-21a amendment)", () => {
   });
 });
 
+describe("a line past ordered, or a Trade Scope line (T-33c, F3)", () => {
+  const T1: Row = {
+    ...base,
+    id: "t1",
+    name: "Paintwork and plaster",
+    project_room_id: "kitchen",
+    status: "installed",
+    item_type: "fixed",
+    trade_scope_document_id: "pcd-1",
+    selection_thread_id: "t7",
+  };
+  const O1: Row = {
+    ...base,
+    id: "o1",
+    name: "Sconce, aged brass",
+    project_room_id: "kitchen",
+    status: "ordered",
+    product_id: "prod-sconce",
+    item_type: "fixed",
+    unit_price_cents: 3800,
+    selection_thread_id: "t8",
+  };
+
+  beforeEach(() => {
+    mockItems.data = [T1, O1];
+    mockPlacements.data = [];
+    mockSpecs.data = [spec("t1"), spec("o1")];
+  });
+
+  it.each([
+    [0, "Engaged", "Trade Scope lines change in their scope."],
+    [
+      1,
+      "Released to maker",
+      "This line is released. Quantity and unit change through Record a change.",
+    ],
+  ])(
+    "row %i reads %s, never Placeholder, and its acts are locked",
+    async (index, word, unitReason) => {
+      renderLens("kitchen");
+      await pane();
+      const rows = within(
+        screen.getByRole("list", { name: "Lines" }),
+      ).getAllByRole("button");
+      expect(rows[index]).toHaveTextContent(word);
+      expect(rows[index]).not.toHaveTextContent("Placeholder");
+      fireEvent.click(rows[index]);
+      const section = await pane();
+      expect(within(section).getByTestId("spec-stamp")).toHaveTextContent(word);
+      const maker = within(section).getByRole("button", { name: /MAKER$/ });
+      expect(maker).toHaveAttribute("aria-disabled", "true");
+      const unit = within(section).getByRole("combobox", { name: "Unit" });
+      expect(unit).toHaveAttribute("aria-disabled", "true");
+      expect(unit).toHaveAccessibleDescription(unitReason);
+    },
+  );
+});
+
 describe("spec-progress", () => {
   it("counts product or maker, image, finish, material, color and dimensions", () => {
     expect(specProgress({ product_id: null, vendor_name: "  " }, null)).toBe(0);

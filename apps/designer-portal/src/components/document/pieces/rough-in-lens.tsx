@@ -42,13 +42,13 @@ import type {
 import { cn } from "@/lib/utils";
 import { useAssignLineRoom } from "@/hooks/use-document-rooms";
 import { isEditableTarget } from "@/hooks/use-lens-state";
+import { isLaborLine, laborPiece } from "@/lib/document/stamp-derivation";
 import {
-  deriveLineStage,
-  isLaborLine,
-  laborPiece,
-  lineStageInputFromRow,
-  type LineStageRow,
-} from "@/lib/document/stamp-derivation";
+  TRADE_SCOPE_REASON,
+  pieceLineStage,
+  type PieceLineStage,
+  type PieceLineStageRow,
+} from "@/lib/document/pieces/line-stage";
 import {
   REMOVED_PLACE,
   THROUGHOUT_PLACE,
@@ -93,7 +93,7 @@ export interface RoughInLensProps {
 }
 
 /** The `project_ffe_items` columns this lens reads, as `useProjectFFEItems` returns them. */
-interface RoughInLine extends LineStageRow {
+interface RoughInLine extends PieceLineStageRow {
   id: string;
   name?: string | null;
   unit?: string | null;
@@ -102,7 +102,6 @@ interface RoughInLine extends LineStageRow {
   assignment_scope?: string | null;
   design_disposition?: string | null;
   purchase_order_id?: string | null;
-  trade_scope_document_id?: string | null;
   removed_at?: string | null;
 }
 
@@ -154,7 +153,6 @@ const KEPT_DISPOSITIONS: ReadonlySet<string> = new Set([
 ]);
 
 const PENDING_REASON = "This line is still being saved.";
-const TRADE_SCOPE_REASON = "Trade Scope lines change in their scope.";
 const FILLED_REASON = "This line already has a product.";
 const LABOR_FILL_REASON = "A labor line takes no product.";
 const REASON_REFUSAL = "archive reason must be at least 5 characters";
@@ -179,8 +177,16 @@ function lineName(line: RoughInLine): string {
   return line.name?.trim() || "Unnamed line";
 }
 
-function isLocked(line: RoughInLine, released: boolean): boolean {
-  return released || line.purchase_order_id != null;
+/** Released, on an order, past `ordered`, or a Trade Scope line. */
+function isLocked(
+  line: RoughInLine,
+  stage: PieceLineStage | undefined,
+): boolean {
+  return (
+    stage?.stage === "released" ||
+    stage?.lock != null ||
+    line.purchase_order_id != null
+  );
 }
 
 function errorText(cause: unknown): string | null {
@@ -274,7 +280,7 @@ export function RoughInLens({
       new Map(
         lines.map((line) => [
           line.id,
-          deriveLineStage(lineStageInputFromRow(line, laborPiece(line, lines))),
+          pieceLineStage(line, laborPiece(line, lines)),
         ]),
       ),
     [lines],
@@ -374,7 +380,7 @@ export function RoughInLens({
         id: line.id,
         name: lineName(line),
         roomId: line.project_room_id ?? null,
-        released: isLocked(line, stages.get(line.id) === "released"),
+        released: isLocked(line, stages.get(line.id)),
       })),
     [lines, stages],
   );
@@ -416,16 +422,19 @@ export function RoughInLens({
     const rows: RoughInRow[] = orderWithLabor(
       linesByPlace.get(placeItem.id) ?? [],
     ).map((line) => {
-      const stage = stages.get(line.id) ?? "placeholder";
+      const read = stages.get(line.id);
+      const stage = read?.kind ?? "placeholder";
       const labor = isLaborLine(line);
       const gates: Partial<Record<RoughInRowAct, string>> = {};
-      if (line.trade_scope_document_id) {
+      if (read?.lock) {
         gates.fill =
           gates.move =
           gates.alsoPlace =
           gates.remove =
-            TRADE_SCOPE_REASON;
-      } else if (isLocked(line, stage === "released")) {
+            read.lock === "trade_scope"
+              ? TRADE_SCOPE_REASON
+              : RELEASED_DRAG_REASON;
+      } else if (isLocked(line, read)) {
         gates.fill = gates.remove = RELEASED_DRAG_REASON;
       } else if (line.product_id) {
         gates.fill = FILLED_REASON;
@@ -698,9 +707,7 @@ export function RoughInLens({
             }}
             placements={placementsByLine.get(tool.line.id) ?? []}
             rooms={moveRooms}
-            canEdit={
-              !isLocked(tool.line, stages.get(tool.line.id) === "released")
-            }
+            canEdit={!isLocked(tool.line, stages.get(tool.line.id))}
           />
         ) : (
           <LibraryInlineSearch
