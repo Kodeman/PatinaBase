@@ -33,6 +33,12 @@
  * note stays down, and re-decides when hydration lands (FR7 F7-9, D26): a
  * fresh browser's empty localStorage must not re-show a note the person
  * already retired on another device.
+ *
+ * Auth-pending (F8-8, SQ-559 residual): `HelpStateProvider` only installs the
+ * backend once `useSession` resolves, so a note that mounts while auth is
+ * still pending would otherwise decide from localStorage and could flash for
+ * one frame before the backend lands. `setMarginNoteAuthPending` holds the
+ * note down for that window — R131 allows no frame of exception.
  */
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -53,6 +59,10 @@ function storageKeyFor(noteKey: string): string {
 // there is exactly one margin-note backend per signed-in session.
 let backend: MarginNoteStateBackend | null = null;
 let backendHydrated = false;
+// True while `useSession` has not yet resolved (F8-8): the note stays down,
+// same as "backend installed but unhydrated", so it never decides from
+// localStorage before the cross-device record can override it.
+let authPending = false;
 // Bumped on every install / hydrate / clear so a mounted note re-decides.
 let backendRevision = 0;
 const backendListeners = new Set<() => void>();
@@ -84,6 +94,18 @@ export function setMarginNoteStateBackend(
   backendListeners.forEach((listener) => listener());
 }
 
+/**
+ * Report whether auth is still resolving (F8-8). Called by `HelpStateProvider`
+ * from `useSession().isLoading`. Notifies the same listener set as
+ * `setMarginNoteStateBackend` so a mounted note re-decides the moment auth
+ * settles, exactly like a backend install or hydration does.
+ */
+export function setMarginNoteAuthPending(pending: boolean): void {
+  authPending = pending;
+  backendRevision += 1;
+  backendListeners.forEach((listener) => listener());
+}
+
 function localHasSeen(noteKey: string): boolean {
   if (typeof window === 'undefined') return true;
   try {
@@ -109,11 +131,13 @@ function recordedSeen(noteKey: string): boolean {
   return localHasSeen(noteKey);
 }
 
-/** The note's own visibility decision (F7-9, D26): while a signed-in backend
- *  is installed but not hydrated the record is unknown, so the note stays
- *  down; `MarginNote` re-decides when `setMarginNoteStateBackend` reports the
- *  hydrated backend. */
+/** The note's own visibility decision (F7-9, D26; F8-8): while auth is still
+ *  resolving, or a signed-in backend is installed but not hydrated, the
+ *  record is unknown, so the note stays down; `MarginNote` re-decides when
+ *  `setMarginNoteAuthPending` reports auth settled or
+ *  `setMarginNoteStateBackend` reports the hydrated backend. */
 function hasSeen(noteKey: string): boolean {
+  if (authPending) return true;
   if (backend && !backendHydrated) return true;
   return recordedSeen(noteKey);
 }

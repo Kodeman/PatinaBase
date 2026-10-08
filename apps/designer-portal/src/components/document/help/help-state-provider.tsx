@@ -30,7 +30,7 @@ import {
   setFeatureAnnouncementStateBackend,
   setTourStateBackend,
 } from '@patina/help-system';
-import { setMarginNoteStateBackend } from '../margin-note';
+import { setMarginNoteAuthPending, setMarginNoteStateBackend } from '../margin-note';
 import { setFirstAuthoredStateBackend } from './first-authored-state';
 
 interface HelpStateContextValue {
@@ -50,10 +50,17 @@ export function useHelpState(): HelpStateContextValue {
 export function HelpStateProvider({ children }: { children: ReactNode }) {
   // The underlying Supabase session — read directly (not via @/hooks/use-auth,
   // which strips fields) so the backend install keys off the real user id.
-  const { session } = useSession();
+  const { session, isLoading } = useSession();
   const supabaseUser = session?.user ?? null;
 
   const [helpStateReady, setHelpStateReady] = useState(false);
+
+  // F8-8: hold margin notes down while auth is still resolving, so a note
+  // that mounts before the backend installs can't decide from localStorage
+  // and flash for one frame (R131 — no frame of exception).
+  useEffect(() => {
+    setMarginNoteAuthPending(isLoading);
+  }, [isLoading]);
 
   useEffect(() => {
     if (!supabaseUser?.id) return;

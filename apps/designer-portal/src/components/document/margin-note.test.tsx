@@ -12,6 +12,7 @@ import {
   MarginNote,
   hasMarginNoteBeenSeen,
   markMarginNoteSeen,
+  setMarginNoteAuthPending,
   setMarginNoteStateBackend,
 } from './margin-note';
 
@@ -32,10 +33,12 @@ beforeEach(() => {
   window.localStorage.clear();
   marginNoteEvent.mockClear();
   setMarginNoteStateBackend(null);
+  setMarginNoteAuthPending(false);
 });
 
 afterEach(() => {
   setMarginNoteStateBackend(null);
+  setMarginNoteAuthPending(false);
 });
 
 describe('MarginNote — suppressed prop', () => {
@@ -257,6 +260,49 @@ describe('MarginNote — cross-device Supabase backend (decision 5, amending R94
       expect(hasMarginNoteBeenSeen('k-reader')).toBe(false);
       window.localStorage.setItem(storageKey('k-reader'), String(Date.now()));
       expect(hasMarginNoteBeenSeen('k-reader')).toBe(true);
+    });
+  });
+
+  describe('auth-pending hold (F8-8, SQ-559 residual)', () => {
+    it('auth pending, no backend, key unseen in localStorage: nothing renders and no shown is recorded', () => {
+      setMarginNoteAuthPending(true);
+      render(<MarginNote noteKey="k-auth-pending">pending note</MarginNote>);
+      expect(screen.queryByRole('note')).toBeNull();
+      expect(marginNoteEvent).not.toHaveBeenCalled();
+      expect(window.localStorage.getItem(storageKey('k-auth-pending'))).toBeNull();
+    });
+
+    it('pending changes to false with no backend: the note reveals once, from localStorage', () => {
+      setMarginNoteAuthPending(true);
+      render(<MarginNote noteKey="k-auth-settles">settles note</MarginNote>);
+      expect(screen.queryByRole('note')).toBeNull();
+
+      act(() => setMarginNoteAuthPending(false));
+      expect(screen.getByRole('note')).toBeInTheDocument();
+      expect(marginNoteEvent).toHaveBeenCalledTimes(1);
+      expect(marginNoteEvent).toHaveBeenCalledWith({ key: 'k-auth-settles', action: 'shown' });
+    });
+
+    it('pending changes to false, then the backend installs unhydrated: the note stays down until hydration', () => {
+      setMarginNoteAuthPending(true);
+      render(<MarginNote noteKey="k-auth-then-backend">waits for hydration</MarginNote>);
+      expect(screen.queryByRole('note')).toBeNull();
+
+      const backend = { hasSeen: jest.fn(() => false), markSeen: jest.fn() };
+      act(() => {
+        setMarginNoteAuthPending(false);
+        setMarginNoteStateBackend(backend, false);
+      });
+      expect(screen.queryByRole('note')).toBeNull();
+      expect(marginNoteEvent).not.toHaveBeenCalled();
+
+      act(() => setMarginNoteStateBackend(backend, true));
+      expect(screen.getByRole('note')).toBeInTheDocument();
+      expect(marginNoteEvent).toHaveBeenCalledTimes(1);
+      expect(marginNoteEvent).toHaveBeenCalledWith({
+        key: 'k-auth-then-backend',
+        action: 'shown',
+      });
     });
   });
 
