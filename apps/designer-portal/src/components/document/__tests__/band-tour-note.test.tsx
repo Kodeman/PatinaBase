@@ -63,6 +63,19 @@ describe('the one-note tour (D8, 2-7)', () => {
     expect(screen.getByRole('note')).toHaveTextContent(SENTENCE);
   });
 
+  // FR2 F2-16 — the rule is the label's: `da-score-hover` draws its hairline
+  // 3px under the element that wears it, and on the 44px box that left the
+  // underline ~20px below `Understood` at 390.
+  it('`Understood` wears its rule on the label, inside a 44px target', () => {
+    render(<BandTourNote />);
+    const act = screen.getByRole('button', { name: 'Understood' });
+    expect(act).toHaveClass('min-h-11');
+    expect(act).not.toHaveClass('da-score-hover');
+    const label = act.querySelector('.da-score-hover');
+    expect(label).not.toBeNull();
+    expect(label).toHaveTextContent(/^Understood$/);
+  });
+
   it('flag off: absent, and nothing is written', () => {
     mockOneVoice = false;
     render(<BandTourNote />);

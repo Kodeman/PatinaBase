@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ClientVisibilityTier } from '@patina/utils';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocumentAction } from './document-action';
 import { ShareSheet } from './overlays/share-sheet';
 import { useMobileSecondaryAction } from './mobile/mobile-shell';
@@ -34,6 +35,8 @@ export function ProposalShareInstrument({
   mobileSecondary?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // US-19 F2-9 (`one-voice`) — one name for the doorway at every width.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const openShare = () => setOpen(true);
   const shareSheet = (
     <ShareSheet
@@ -52,7 +55,7 @@ export function ProposalShareInstrument({
         variant="tertiary"
         onClick={openShare}
       >
-        Share…
+        {oneVoice ? 'Sharing' : 'Share…'}
       </DocumentAction>
       {/* Drafting's head action lives in a desktop-only RoomShell wrapper.
           Portal the shared sheet for the mobile opt-in so opening it from More

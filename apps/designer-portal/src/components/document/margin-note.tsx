@@ -138,7 +138,13 @@ export interface MarginNoteProps {
   label?: string;
   /** One act under the sentence at 44px — a link with `href`, else a press
    *  that only acknowledges. Either recedes the note as 'acted'. */
-  act?: { label: string; href?: string };
+  act?: {
+    label: string;
+    href?: string;
+    /** A press act whose rule sits under its label rather than at the foot of
+     *  its 44px box (the band tour, F2-16). */
+    scoreOnLabel?: boolean;
+  };
   /** When false, the act is the note's only control: no ×. */
   dismissible?: boolean;
   /** 'anchor' sets the note in a sheet's margin column. */
@@ -314,6 +320,17 @@ export function MarginNote({
             >
               {act.label}
             </Link>
+          ) : act.scoreOnLabel ? (
+            // F2-16 — the rule sits on the label, not the 44px box's foot.
+            <button
+              type="button"
+              onClick={() => recedeAs('acted')}
+              className={ACT_CLASS_LABEL_SCORED}
+            >
+              <span className="da-score-hover group-hover:after:bg-[var(--color-clay)] group-focus-visible:after:bg-[var(--color-clay)]">
+                {act.label}
+              </span>
+            </button>
           ) : (
             <button type="button" onClick={() => recedeAs('acted')} className={ACT_CLASS}>
               {act.label}
@@ -341,6 +358,8 @@ export function MarginNote({
 
 const ACT_CLASS =
   'da-score-hover mt-1 flex min-h-11 w-fit items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]';
+/** The same act with its rule on the label: the 44px box keeps its target. */
+const ACT_CLASS_LABEL_SCORED = ACT_CLASS.replace('da-score-hover', 'group');
 
 /** US-19 D8 — the one-note tour's key. A new version re-arms it once. */
 export const BAND_TOUR_NOTE_KEY = 'band-tour-v1';
@@ -359,7 +378,7 @@ export function BandTourNote() {
       noteKey={BAND_TOUR_NOTE_KEY}
       caption={null}
       dismissible={false}
-      act={{ label: 'Understood' }}
+      act={{ label: 'Understood', scoreOnLabel: true }}
       className="mt-2"
     >
       The band says what&rsquo;s next on this job. Press it.

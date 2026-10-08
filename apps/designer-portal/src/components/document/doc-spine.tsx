@@ -133,8 +133,13 @@ export function DocSpine({
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const ordinal =
     stagePhase && !oneVoice ? `${stagePhase.position} OF ${stagePhase.of}` : null;
+  // F2-13 (`one-voice`) — the rail prints one of the seven stage words, never
+  // a workflow phase (`Design development`) or a section sub-label
+  // (`Installation`); a held or closed job keeps its state beneath it.
   const stagePhrase =
-    held?.detail
+    oneVoice && held
+      ? { top: held.stage, bottom: held.detail || null }
+      : held?.detail
       ? { top: held.stage, bottom: held.detail }
       : stageWord != null
       ? { top: stageWord, bottom: ordinal }

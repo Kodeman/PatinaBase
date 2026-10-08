@@ -211,6 +211,72 @@ describe('the letterhead ledger — the accessible names lose nothing', () => {
 });
 
 /**
+ * US-19 FR2 F2-9 / 500-3 (`one-voice`) — the letterhead prints D1's names, at
+ * every width: `Message {first}` and `Preview the client's copy`, never the
+ * bare `MESSAGE` or `PREVIEW`. The printed name is the accessible name.
+ */
+describe('the letterhead ledger under one-voice — D1 names (FR2 F2-9)', () => {
+  beforeEach(() => {
+    mockOneVoice = true;
+    mockProject = {};
+  });
+  afterEach(() => {
+    mockOneVoice = false;
+  });
+
+  function renderFor(clientName: string) {
+    const qc = new QueryClient();
+    return render(
+      <QueryClientProvider client={qc}>
+        <LetterheadInstruments
+          projectId="proj-1"
+          clientProfileId="client-1"
+          clientName={clientName}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  it.each([
+    ['≥1180', true],
+    ['390', false],
+  ] as const)('prints Message {first} · Preview the client’s copy · Sharing at %s', (_tier, wide) => {
+    installTier(wide);
+    renderFor('Nora Ellison');
+    expect(printedLabels()).toEqual([
+      'Message Nora',
+      "Preview the client's copy",
+      'Sharing',
+      'Call sheet · 2',
+    ]);
+    for (const bare of ['Message', 'Preview', 'Punch', 'Share…']) {
+      expect(printedLabels()).not.toContain(bare);
+    }
+    expect(screen.getByRole('button', { name: 'Message Nora' })).toHaveAttribute(
+      'data-action-key',
+      'message-family',
+    );
+    expect(
+      screen.getByRole('button', { name: "Preview the client's copy" }),
+    ).toHaveAttribute('data-action-key', 'preview-as-client');
+  });
+
+  it('a placeholder household reads `Message the client`', () => {
+    installTier(true);
+    renderFor('Client User');
+    expect(printedLabels()[0]).toBe('Message the client');
+  });
+
+  it('keeps one static primary: Message, live', () => {
+    installTier(true);
+    renderFor('Nora Ellison');
+    const region = document.querySelector('[data-action-region="letterhead-actions"]')!;
+    expect(region.querySelectorAll('.da-primary')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Message Nora' })).toHaveClass('da-primary');
+  });
+});
+
+/**
  * F52 (0a-3, D3, D7) — Message needs a linked client. With nobody linked the
  * dock's centre is never Message, and the letterhead offers it held: focusable,
  * `aria-disabled`, its reason beneath and the repair beside it.

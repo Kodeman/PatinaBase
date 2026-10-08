@@ -358,8 +358,16 @@ function LegacyProposalInstruments({
         className="mt-1 !block"
         aria-label="Draft proposal actions"
       >
+        {/* F2-16 (`one-voice`) — below 640 the status and the act cannot
+            share a row (`Not started yet` broke a word a line beside the act
+            at 390): the row wraps, and the act takes a line of its own under
+            the status. */}
         <div
+          data-direction-card
           className={`mb-2.5 flex items-center gap-4 rounded-[3px] px-4 py-3.5 transition-colors ${
+            // Two row gaps meet at the zero-height break: 5px each reads 10px.
+            oneVoice ? 'max-[639px]:flex-wrap max-[639px]:gap-y-[5px] ' : ''
+          }${
             fullyDrafted
               ? 'bg-[rgba(168,181,160,0.16)]'
               : 'bg-[rgba(229,221,208,0.5)]'
@@ -402,6 +410,15 @@ function LegacyProposalInstruments({
               )}
             </p>
           </div>
+          {oneVoice && (
+            // The line break: a full-basis, zero-height item below 640 only,
+            // so the act keeps its own width on the line beneath.
+            <span
+              aria-hidden
+              data-direction-card-break
+              className="hidden h-0 basis-full max-[639px]:block"
+            />
+          )}
           <DocumentAction
             actionKey="continue-drafting"
             variant="primary"

@@ -15,7 +15,10 @@ import {
   useProcurementUnreadCount,
 } from '@patina/supabase';
 import { ALL_STUDIO_SURFACES, boardsRoutePath } from '@/lib/document/registry';
-import { DOCUMENT_INDEX_LABELS } from '@/lib/document/document-index';
+import {
+  DOCUMENT_INDEX_LABELS,
+  type DocumentIndexKey,
+} from '@/lib/document/document-index';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
@@ -49,6 +52,12 @@ function surfaceLabel(pathname: string | null): string {
   if (pathname.startsWith('/compose')) return 'Composing';
   return 'The Studio';
 }
+
+/** US-19 D7 / F2-15 — the dock's short place word, where it differs from the
+ *  region's name. Every other stop prints its own name. */
+const DOCK_PLACE_WORDS: Partial<Record<DocumentIndexKey, string>> = {
+  approvals: 'approvals',
+};
 
 const MAIL_GROUP_LABEL_ID = 'mobile-more-mail-group';
 const IN_DOCUMENT_GROUP_LABEL_ID = 'mobile-more-in-document-group';
@@ -119,9 +128,18 @@ export function MobileBar() {
   // OD-11/A-08: the left zone's second line names the household (not the
   // active section, which `context` above still carries for the studio
   // case); the third line names the current reading stop.
-  const household = activeDoc?.clientName || activeDoc?.title || 'Document';
+  // US-19 F2-15 (`one-voice`) — a parenthetical is bookkeeping, never printed
+  // in the dock: `Elena Marlowe (no-login household)` reads `Elena Marlowe`.
+  const clientName = oneVoice
+    ? (activeDoc?.clientName ?? '').replace(/\s*\([^)]*\)/g, '').trim()
+    : activeDoc?.clientName;
+  const household = clientName || activeDoc?.title || 'Document';
   const readingIndex = activeDoc?.readingIndex ?? null;
   const stopLabel = readingIndex ? DOCUMENT_INDEX_LABELS[readingIndex] : null;
+  // D7 — the dock's place word is the short one (`At approvals`); the door's
+  // accessible name keeps the region's full name.
+  const placeWord =
+    oneVoice && readingIndex ? (DOCK_PLACE_WORDS[readingIndex] ?? stopLabel) : stopLabel;
 
   // F49 — the shelves the spine prints at 1440, as doors a phone can reach.
   // The boards now have a page of their own (B1-L4), so the row that used to
@@ -185,6 +203,9 @@ export function MobileBar() {
 
   useEffect(() => {
     if (!moreOpen) return;
+    // F2-5 (`one-voice`) — More scrolls inside the viewport and opens on its
+    // first row, whatever it was scrolled to last.
+    if (oneVoice && menuRef.current) menuRef.current.scrollTop = 0;
     firstMenuItemRef.current?.focus();
 
     const onPointerDown = (event: PointerEvent) => {
@@ -199,17 +220,24 @@ export function MobileBar() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
+      // F2-8 (`one-voice`) — this Esc is More's alone. The paper puts itself
+      // down on a bare Esc (page.tsx, bubbling on the document), and More is
+      // a group, not a dialog, so without this the same key that closed More
+      // also left the paper for the Desk.
+      if (oneVoice) event.stopPropagation();
       setMoreOpen(false);
       moreButtonRef.current?.focus();
     };
 
+    // Captured, under `one-voice`, so it runs before the paper's listener.
+    const capture = oneVoice;
     document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown, capture);
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keydown', onKeyDown, capture);
     };
-  }, [moreOpen]);
+  }, [moreOpen, oneVoice]);
 
   // D-B54 ruled this line STAYS on the bare `offer`: a chain-out is a change
   // of subject whether or not it takes the edge, and an open More menu over
@@ -345,7 +373,7 @@ export function MobileBar() {
                 oneVoice ? 'break-words' : 'truncate'
               } ${stopLabel ? '' : 'invisible'}`}
             >
-              At {stopLabel ?? '\u00a0'}
+              At {placeWord ?? '\u00a0'}
             </span>
           </span>
         </button>
@@ -404,7 +432,16 @@ export function MobileBar() {
           id="mobile-studio-menu"
           role="group"
           aria-label="More studio actions"
-          className="absolute bottom-[calc(100%+8px)] right-3 w-[min(19rem,calc(100vw-1.5rem))] overflow-hidden rounded-[6px] border border-[rgba(250,247,242,0.2)] bg-[var(--color-charcoal)]"
+          data-mobile-more-scroll={oneVoice ? '' : undefined}
+          // F2-5 (`one-voice`) — More is a scroll container no taller than the
+          // viewport above the dock (less its 8px gap and an 8px top margin):
+          // at 949px with `overflow: hidden` its first rows stood above the
+          // screen and could not be reached.
+          className={`absolute bottom-[calc(100%+8px)] right-3 w-[min(19rem,calc(100vw-1.5rem))] rounded-[6px] border border-[rgba(250,247,242,0.2)] bg-[var(--color-charcoal)] ${
+            oneVoice
+              ? 'max-h-[calc(100dvh_-_var(--doc-mobile-bar-height,72px)_-_16px)] overflow-y-auto overscroll-contain'
+              : 'overflow-hidden'
+          }`}
         >
           {orderedActions.map((action, index) => {
             const takeRef = index === 0 ? setFirstMenuItem : undefined;

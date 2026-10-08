@@ -32,7 +32,7 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { familyLabel } from '@/lib/document/family-label';
 import { vitalsInstrumentSuffix } from '@/lib/document/roster-derivation';
 import { clientShortName } from '@/lib/document/document-guide';
-import { MESSAGE_WITHHELD, messageLabel } from '@/lib/document/act-names';
+import { MESSAGE_WITHHELD, NAMED_ACTS, messageLabel } from '@/lib/document/act-names';
 import {
   standingDoorLabel,
   type LensVoice,
@@ -485,16 +485,28 @@ export function LetterheadInstruments({
             reasonId={messageReasonId}
             onRepair={() => setLinking(true)}
           >
+            {/* F2-9 (`one-voice`) — the letterhead prints D1's names at every
+                width, so the accessible name is the printed one. */}
             <DocumentAction
               actionKey="message-family"
               variant="primary"
-              aria-label={messageHeld ? messageLabel(null) : `Message ${family}`}
+              aria-label={
+                messageHeld
+                  ? messageLabel(null)
+                  : oneVoice
+                    ? undefined
+                    : `Message ${family}`
+              }
               disabled={messageHeld}
               held={messageHeld}
               aria-describedby={messageHeld ? messageReasonId : undefined}
               onClick={() => setComposing((v) => !v)}
             >
-              {messageHeld ? messageLabel(null) : 'Message'}
+              {messageHeld
+                ? messageLabel(null)
+                : oneVoice
+                  ? messageLabel(firstName)
+                  : 'Message'}
             </DocumentAction>
           </MessageCluster>
         )}
@@ -502,10 +514,10 @@ export function LetterheadInstruments({
           <DocumentAction
             actionKey="preview-as-client"
             variant="secondary"
-            aria-label={`Preview as ${family}`}
+            aria-label={oneVoice ? undefined : `Preview as ${family}`}
             onClick={() => setMirrorOpen(true)}
           >
-            Preview
+            {oneVoice ? NAMED_ACTS.preview : 'Preview'}
           </DocumentAction>
         )}
         {scan && (

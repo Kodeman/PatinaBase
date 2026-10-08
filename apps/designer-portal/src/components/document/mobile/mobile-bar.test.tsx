@@ -1,5 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { useState } from 'react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { StandingSheet } from '../standing-sheet';
 import { MobileBar } from './mobile-bar';
 import { MobileSheets } from './mobile-sheets';
 import {
@@ -449,7 +451,10 @@ describe('the left zone · household and the current stop (OD-11, A-08)', () => 
     ).toBeInTheDocument();
   });
 
-  it('names every stop with the running index labels', () => {
+  it('names every stop with the running index labels (one-voice off)', () => {
+    // Under `one-voice` the approvals stop takes D7's short place word; that
+    // case is pinned in the FR2 block below.
+    mockCallSheetOn = false;
     (
       [
         ['approvals', 'At Client approvals', 'Open sections, at Client approvals'],
@@ -869,5 +874,164 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
 
     fireEvent.click(menu.getByRole('button', { name: 'Link a client' }));
     expect(repair).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * US-19 FR2 (`one-voice`) — the phone's More and its left zone, as design
+ * review 2 found them at 390: F2-5 (More ran 949px tall at top −221 with
+ * `overflow: hidden`, so its first four rows were unreachable), F2-8 (the Esc
+ * that put More back also put the paper down to the Desk), F2-15 (the
+ * no-login suffix and `AT CLIENT APPROVALS` in the dock).
+ */
+describe('the phone at 390 under one-voice (FR2 F2-5, F2-8, F2-15)', () => {
+  function Secondary({ action }: { action: MobileSecondaryAction }) {
+    useMobileSecondaryAction(action);
+    return null;
+  }
+
+  /** The band's door, moved into More by the 390 measure (D2), opening the
+   *  real standing sheet the way `OPEN_STANDING_SHEET_EVENT` does. */
+  function StandingDoor() {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        <Secondary
+          action={{
+            actionKey: 'standing',
+            label: 'Standing · 2',
+            order: 0,
+            onPress: () => setOpen(true),
+          }}
+        />
+        <StandingSheet open={open} onClose={() => setOpen(false)} items={[]} grouped />
+      </>
+    );
+  }
+
+  const RULED_ROWS: MobileSecondaryAction[] = [
+    { actionKey: 'preview-as-client', label: "Preview the client's copy", onPress: jest.fn() },
+    { actionKey: 'keys', label: 'Keys', onPress: jest.fn() },
+  ].map((act, order) => ({ ...act, order: order + 1 }));
+
+  /** The paper's own Esc (page.tsx): a bare Esc puts the paper down. */
+  const putDown = jest.fn();
+  const paperEsc = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape') return;
+    if (document.querySelector('[role="dialog"]')) return;
+    putDown();
+  };
+
+  beforeEach(() => {
+    mockPathname = '/doc/proj-1';
+    mockCallSheetOn = true;
+    mockOffer = null;
+    mockHeldProjectId = null;
+    putDown.mockClear();
+    document.addEventListener('keydown', paperEsc);
+  });
+  afterEach(() => {
+    document.removeEventListener('keydown', paperEsc);
+  });
+
+  function mountPhone(doc: MobileActiveDoc = heldDocument) {
+    return render(
+      <TestProviders>
+        <HoldDocument doc={doc} />
+        <StandingDoor />
+        {RULED_ROWS.map((act) => (
+          <Secondary key={act.actionKey} action={act} />
+        ))}
+        <MobileBar />
+      </TestProviders>,
+    );
+  }
+
+  it('F2-5: More is a scroll container no taller than the viewport above the dock', () => {
+    mountPhone();
+    openMore();
+    const menu = screen.getByRole('group', { name: 'More studio actions' });
+    expect(menu).toHaveAttribute('data-mobile-more-scroll');
+    expect(menu).toHaveClass(
+      'max-h-[calc(100dvh_-_var(--doc-mobile-bar-height,72px)_-_16px)]',
+    );
+    expect(menu).toHaveClass('overflow-y-auto');
+    expect(menu).not.toHaveClass('overflow-hidden');
+  });
+
+  it('F2-5: More opens on its first row, scrolled to the top, every time', () => {
+    mountPhone();
+    openMore();
+    let menu = screen.getByRole('group', { name: 'More studio actions' });
+    const first = within(menu).getByRole('button', { name: 'Standing · 2' });
+    expect(first).toHaveFocus();
+    expect(menu.scrollTop).toBe(0);
+
+    // Scrolled down and put back, it reopens on the first row again.
+    menu.scrollTop = 400;
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    openMore();
+    menu = screen.getByRole('group', { name: 'More studio actions' });
+    expect(menu.scrollTop).toBe(0);
+    expect(within(menu).getByRole('button', { name: 'Standing · 2' })).toHaveFocus();
+  });
+
+  it('flag off: More keeps today’s box', () => {
+    mockCallSheetOn = false;
+    mountPhone();
+    openMore();
+    const menu = screen.getByRole('group', { name: 'More studio actions' });
+    expect(menu).toHaveClass('overflow-hidden');
+    expect(menu).not.toHaveAttribute('data-mobile-more-scroll');
+  });
+
+  it('F2-8: the Esc that puts More back is More’s alone — the paper stays up', () => {
+    mountPhone();
+    openMore();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'More studio actions' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'More studio actions' })).toHaveFocus();
+    expect(putDown).not.toHaveBeenCalled();
+  });
+
+  it('F2-8: Esc from the standing sheet returns to More’s door, never to the Desk', async () => {
+    mountPhone();
+    fireEvent.click(openMore().getByRole('button', { name: 'Standing · 2' }));
+    const sheet = await screen.findByRole('dialog');
+    expect(sheet).toHaveTextContent('Standing · 0');
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'More studio actions' })).toHaveFocus(),
+    );
+    expect(putDown).not.toHaveBeenCalled();
+  });
+
+  it('F2-15: the dock never prints the no-login suffix', () => {
+    mountPhone({ ...heldDocument, clientName: 'Elena Marlowe (no-login household)' });
+    const doorway = screen.getByRole('button', { name: 'Open sections' });
+    expect(within(doorway).getByText('Elena Marlowe')).toBeInTheDocument();
+    expect(doorway.textContent).not.toMatch(/no-login/);
+  });
+
+  it('F2-15: the approvals stop reads `At approvals`; the door keeps its full name', () => {
+    mountPhone({ ...heldDocument, readingIndex: 'approvals' });
+    expect(screen.getByText('At approvals')).toBeInTheDocument();
+    expect(screen.queryByText('At Client approvals')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Open sections, at Client approvals' }),
+    ).toBeInTheDocument();
+  });
+
+  it('F2-15 flag off: the left zone is unchanged', () => {
+    mockCallSheetOn = false;
+    mountPhone({
+      ...heldDocument,
+      clientName: 'Elena Marlowe (no-login household)',
+      readingIndex: 'approvals',
+    });
+    expect(screen.getByText('Elena Marlowe (no-login household)')).toBeInTheDocument();
+    expect(screen.getByText('At Client approvals')).toBeInTheDocument();
   });
 });
