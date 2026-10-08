@@ -164,6 +164,11 @@ import {
   ownAct,
 } from '@/lib/document/act-names';
 import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending, landRecordPayment } from '@/lib/document/registry';
+import {
+  expandPoSilences,
+  type PoSilenceLine,
+  type PoSilenceNeed,
+} from '@/lib/document/po-silences';
 import { familyLabel } from '@/lib/document/family-label';
 import {
   installReading,
@@ -1907,9 +1912,26 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     activateDestination(destination);
   }, [activateDestination, beginDirectionError, guideModel, runBeginDirection]);
 
+  // US-19 FR9 F9-1 (X1) — the paper's lines, which name the unanswered POs a
+  // per-PO silence prints. Read only behind the flag; the same cache entry
+  // Pieces and the own act read.
+  const silenceLines = useProjectFFEItems(
+    oneVoice && row?.engagement_kind === 'project' ? (row.project_id ?? '') : '',
+    undefined,
+    { withLifecycle: true },
+  ).data as PoSilenceLine[] | undefined;
+
   const redLetterRows: LensNeedRow[] = useMemo(() => {
     if (!row || row.engagement_kind !== 'project') return [];
-    const needs = rankedOperationalNeeds;
+    // US-19 FR9 F9-1 (X1) — under one-voice two makers' silences are two rows,
+    // oldest first, each landing on its own PO's line; the Desk keeps its
+    // aggregate. Where the lines name fewer POs than the row counts, the
+    // aggregate prints as today.
+    const needs: readonly PoSilenceNeed[] | undefined = oneVoice
+      ? rankedOperationalNeeds?.flatMap((need) =>
+          expandPoSilences({ need, lines: silenceLines, unackedPoCount: row.unacked_po_count }),
+        )
+      : rankedOperationalNeeds;
     if (!needs) return [];
     return needs.map((need, index) => {
       const action = needGuideAction(
@@ -1945,6 +1967,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         need.draft.purchaseOrderId
           ? need.draft.purchaseOrderId
           : null;
+      // US-19 FR9 F9-1 — a per-PO silence lands on its own PO's line: the
+      // held note there (F7-7), else the maker composer.
+      const silenceLineId = oneVoice ? need.lineId : undefined;
       const landing: (() => boolean) | null = !oneVoice
         ? null
         : heldReplyPoId
@@ -1967,7 +1992,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         : need.kind === 'damage_claim'
           ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'claim')
           : need.kind === 'po_unacknowledged'
-            ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'follow-up')
+            ? silenceLineId
+              ? () => landAct(ACT_LANDING_EVENTS.ffeAct, { act: 'follow-up', itemId: silenceLineId })
+              : () => landAct(ACT_LANDING_EVENTS.ffeAct, 'follow-up')
             : need.kind === 'po_unsent'
               ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'send')
             : need.kind === 'overdue_decision' || need.kind === 'hesitating_proposal'
@@ -1993,7 +2020,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         ...(oneVoice && need.draft ? { draft: need.draft } : {}),
       };
     });
-  }, [row, rankedOperationalNeeds, activateDestination, oneVoice, nudgeNamed]);
+  }, [row, rankedOperationalNeeds, silenceLines, activateDestination, oneVoice, nudgeNamed]);
 
   // NF4-01 — the ranked need's act, elected from the rows that already carry
   // each need's kind beside the destination the guide offers, so the approvals
