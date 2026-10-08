@@ -28,7 +28,7 @@ jest.mock('@/hooks/use-proposals', () => ({
   useNudgeProposal: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 jest.mock('@/hooks/use-drafting-state', () => ({
-  useDraftingState: () => ({ state: 'Not started', pct: 0, fill: [0, 0, 0] }),
+  useDraftingState: () => ({ state: 'Not started', pct: 0, fill: [0, 0, 0], gaps: [] }),
 }));
 jest.mock('../proposal-watch', () => ({ ProposalWatch: () => null }));
 jest.mock('../strata-mark', () => ({ StrataMark: () => null }));
