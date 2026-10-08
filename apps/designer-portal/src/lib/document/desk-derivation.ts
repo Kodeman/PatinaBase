@@ -213,16 +213,21 @@ export function deskActionLabel(
 
 /**
  * US-19 FR2 506-6 (`one-voice`) — the sentence a need prints on the Desk. On,
- * a single held date request names its maker and says it is not sent; every
- * other need prints its own text. Off, today's copy.
+ * a single held maker note names its maker and says it is not sent: a date
+ * request, or (FR5 530-3) a follow-up. Every other need prints its own text.
+ * Off, today's copy.
  */
 export function deskNeedText(need: NeedLine, oneVoice: boolean): string {
+  const kind = need.draft?.kind;
   if (
     oneVoice &&
-    need.draft?.kind === 'maker_eta_request' &&
-    need.text === DRAFT_NEED.maker_eta_request.text
+    (kind === 'maker_eta_request' || kind === 'maker_follow_up') &&
+    need.text === DRAFT_NEED[kind]!.text
   ) {
-    return `Date request to ${need.draft.maker?.trim() || 'the maker'} drafted — not sent.`;
+    const maker = need.draft?.maker?.trim() || 'the maker';
+    return kind === 'maker_follow_up'
+      ? `Follow-up to ${maker} drafted — not sent.`
+      : `Date request to ${maker} drafted — not sent.`;
   }
   return need.text;
 }
@@ -375,7 +380,8 @@ export interface DeskDraftSignal {
   created_at: string;
   /** While sending, the claim time (00720: a stalled send offers Send again). */
   updated_at?: string;
-  /** R42's maker for a line-level draft (`maker_eta_request`): the line's
+  /** R42's maker for a line-level draft (`maker_eta_request`,
+   *  `maker_follow_up`): the line's
    *  vendor, else its PO's vendor, else its product's brand. Absent otherwise. */
   maker?: string | null;
   /** US-19 F3-22 (517-5): the line a line-level draft was asked from, as R42's
@@ -392,6 +398,8 @@ const DRAFT_NEED: Record<string, { kind: NeedKind; text: string }> = {
   vendor_claim_notice: { kind: 'exception_open', text: 'Claim notice to the vendor drafted' },
   // R37: the install reading's Ask the maker for a date, held for review.
   maker_eta_request: { kind: 'po_unacknowledged', text: 'Arrival date request to the maker drafted' },
+  // FR5 530-3: Follow up with the maker, held for review as its own kind.
+  maker_follow_up: { kind: 'po_unacknowledged', text: 'Follow-up to the maker drafted' },
 };
 
 /** C-25: the return-by need rises this many days before the window closes. */

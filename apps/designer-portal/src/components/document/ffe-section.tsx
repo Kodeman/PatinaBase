@@ -1699,16 +1699,23 @@ function FFESectionBody({
           ? '[data-testid="line-po-cell"]'
           : request?.cell === 'maker'
             ? '[data-testid="line-buy-cell"] [aria-label="Maker"]'
-            : null;
+            : request?.cell === 'draft'
+              ? '[data-testid="line-held-maker-note"]'
+              : null;
       const land = () => {
         const line = document.getElementById(`ffe-selection-${itemId}`);
         const cell = cellSelector ? line?.querySelector<HTMLElement>(cellSelector) : null;
+        // FR5 F5-2: the held note lands on its DraftReview's first control,
+        // as the ask sheet's `Open the held draft` does (L-10).
         const control =
           request?.cell === 'order'
             ? (cell?.querySelector<HTMLElement>('[data-po-control]') ?? null)
-            : null;
+            : request?.cell === 'draft'
+              ? (cell?.querySelector<HTMLElement>('input, textarea, button') ?? null)
+              : null;
         // Up to a second: the region and the line mount before the cell does.
-        if (!(request?.cell === 'order' ? control : cell) && waited++ < 60) {
+        const needsControl = request?.cell === 'order' || request?.cell === 'draft';
+        if (!(needsControl ? control : cell) && waited++ < 60) {
           requestAnimationFrame(land);
           return;
         }

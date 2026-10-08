@@ -6,12 +6,16 @@
 import { dayMonth } from '../dates';
 import {
   deriveNeed,
+  deriveNeeds,
+  deskActionLabel,
+  deskNeedText,
   folderTab,
   deriveMotion,
   partitionDesk,
   deriveReconnectNeeds,
   NEED_ACTION_LABELS,
   type DeskClaimWindowSignal,
+  type DeskDraftSignal,
   type DeskExceptionSignal,
   type DeskPaymentSignal,
   type DeskQuoteSignal,
@@ -2153,5 +2157,50 @@ describe('C-35 — the memo_return need (d2 §M10)', () => {
     expect(folders).toHaveLength(1);
     expect(folders[0].row.project_id).toBe('p2');
     expect(folders[0].need.kind).toBe('memo_return');
+  });
+});
+
+// US-19 FR5 530-3 — the follow-up is its own kind, and the Desk says which.
+describe('FR5 530-3: a held follow-up on the Desk', () => {
+  const note = (kind: string): DeskDraftSignal => ({
+    id: `draft-${kind}`,
+    kind,
+    status: 'awaiting_review',
+    to_email: 'orders@halloran.test',
+    subject: 'NA-2026-077 — following up',
+    body: 'Any word on the order?',
+    created_at: '2026-06-10T09:00:00Z',
+    maker: 'Halloran Joinery',
+  });
+  const needOf = (kind: string) =>
+    deriveNeeds(mkRow({}), NOW, null, null, null, null, null, null, null, null, [note(kind)]).find(
+      (need) => need.draft,
+    )!;
+
+  it('rides the po_unacknowledged need and carries the draft', () => {
+    const need = needOf('maker_follow_up');
+    expect(need.kind).toBe('po_unacknowledged');
+    expect(need.draft?.kind).toBe('maker_follow_up');
+    expect(need.actionLabel).toBe('Review and send');
+  });
+
+  it('prints Follow-up to {maker} drafted — not sent. beside the date request words', () => {
+    expect(deskNeedText(needOf('maker_follow_up'), true)).toBe(
+      'Follow-up to Halloran Joinery drafted — not sent.',
+    );
+    expect(deskNeedText(needOf('maker_eta_request'), true)).toBe(
+      'Date request to Halloran Joinery drafted — not sent.',
+    );
+  });
+
+  it('flag off, the date request reads as today', () => {
+    expect(deskNeedText(needOf('maker_eta_request'), false)).toBe(
+      'Arrival date request to the maker drafted',
+    );
+    expect(deskActionLabel(needOf('maker_eta_request'), false)).toBe('Review and send');
+  });
+
+  it('its act is Open the held draft, never Follow up with the maker', () => {
+    expect(deskActionLabel(needOf('maker_follow_up'), true)).toBe('Open the held draft');
   });
 });

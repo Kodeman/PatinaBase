@@ -325,10 +325,55 @@ describe('POST /api/document/ask-maker-date', () => {
     expect(sessionTables).toContain('procurement_drafts');
     expect(sessionCalls).toEqual(
       expect.arrayContaining([
-        ['eq', ['kind', 'maker_eta_request']],
+        ['in', ['kind', ['maker_eta_request', 'maker_follow_up']]],
         ['eq', ['ffe_item_id', LINE]],
       ]),
     );
+  });
+
+  describe('FR5 530-3: the follow-up is its own kind', () => {
+    const followUp = { ...hold, kind: 'maker_follow_up', subject: 'WS-214 — following up', body: 'Any word?' };
+    const HELD_FOLLOW_UP = { ...HELD_ROW, id: 'draft-2', kind: 'maker_follow_up' };
+
+    it('holds a maker_follow_up draft when the sheet names that kind', async () => {
+      expect((await post(followUp)).status).toBe(200);
+      expect(inserted()[0]).toMatchObject({ kind: 'maker_follow_up', status: 'awaiting_review', ffe_item_id: LINE });
+    });
+
+    it('a body naming no kind holds a date request', async () => {
+      expect((await post(hold)).status).toBe(200);
+      expect(inserted()[0]).toMatchObject({ kind: 'maker_eta_request' });
+    });
+
+    it('refuses any other kind before reading or writing', async () => {
+      expect((await post({ ...hold, kind: 'ack_chase' })).status).toBe(400);
+      expect(inserted()).toEqual([]);
+      expect(sessionTables).not.toContain('project_ffe_items');
+    });
+
+    it('a held follow-up refuses a second note of either kind, in its own words', async () => {
+      existingDrafts = [HELD_FOLLOW_UP];
+      for (const body of [followUp, hold]) {
+        const res = await post(body);
+        expect(res.status).toBe(409);
+        expect(await res.json()).toEqual({
+          error: 'A note to the maker for this line is already drafted.',
+          draft: HELD_FOLLOW_UP,
+        });
+      }
+      expect(inserted()).toEqual([]);
+    });
+
+    it('a held date request refuses a follow-up in the date request words', async () => {
+      existingDrafts = [HELD_ROW];
+      const res = await post(followUp);
+      expect(res.status).toBe(409);
+      expect(await res.json()).toEqual({
+        error: 'A date request for this line is already drafted.',
+        draft: HELD_ROW,
+      });
+      expect(inserted()).toEqual([]);
+    });
   });
 
   it('F2: a draft claimed by a send in flight is held too', async () => {

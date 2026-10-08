@@ -24,6 +24,11 @@ const mockLineUnfold = jest.fn((props: Record<string, unknown>) => {
           WS-188
         </button>
       </div>
+      {/* FR5 F5-2: the Movement cell's held maker note, as movement-cell.tsx prints it. */}
+      <div data-testid="line-held-maker-note">
+        <p>Follow-up to Halloran Joinery drafted — not sent.</p>
+        <input aria-label="Held note subject" defaultValue="WS-188 — following up" />
+      </div>
       {mockWithMoneyOut && item?.purchase_order && (
         <PoMoneyOut
           purchaseOrderId={item.purchase_order.id}
@@ -224,6 +229,17 @@ describe('⌘K lands on the line (F1, R28)', () => {
 
     await waitFor(() => expect(document.activeElement).toBe(poControl()));
     expect(focusFfeLinePending.request).toBeNull();
+  });
+
+  it("FR5 F5-2: the band's Open the held draft lands on the held note's DraftReview", async () => {
+    render(<FFESection projectId="project-1" projectName="Chen" mode="project" />);
+    const request = { itemId: 'line-sectional', cell: 'draft' as const };
+    act(() => {
+      window.dispatchEvent(new CustomEvent(FOCUS_FFE_LINE_EVENT, { detail: request }));
+    });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText('Held note subject')),
+    );
   });
 });
 

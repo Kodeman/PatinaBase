@@ -6,16 +6,21 @@ import {
   serverError,
 } from '@/lib/supabase-admin';
 import {
+  MAKER_NOTE_KINDS,
+  isMakerNoteKind,
   lineMakerRecord,
   standingMakerAsk,
   type LineMakerSource,
+  type MakerNoteKind,
 } from '@/lib/document/install-reading';
 
 /**
- * /api/document/ask-maker-date — "Ask the maker for a date" (US-19 D6, R37).
+ * /api/document/ask-maker-date — "Ask the maker for a date" (US-19 D6, R37)
+ * and "Follow up with the maker" (FR4 520-2, FR5 530-3).
  *
- * POST holds ONE `procurement_drafts` row (kind `maker_eta_request`) in
- * `awaiting_review` and stops there. It shows in the DraftReview of the line's
+ * POST holds ONE `procurement_drafts` row (kind `maker_eta_request`, or
+ * `maker_follow_up` when the body says so) in `awaiting_review` and stops
+ * there. One maker note stands per line across both kinds (00728). It shows in the DraftReview of the line's
  * own Movement cell (511-R6) and in the Desk's drafts list, and a studio member
  * sends or discards it there through `procurement-draft-send`. Nothing is emailed and nothing reaches the maker
  * from here (AGENTS.md: drafts land `awaiting_review`).
@@ -33,16 +38,21 @@ import {
  * The address is the one on the record the printed maker names (R7), or none.
  */
 
-const KIND = 'maker_eta_request';
+const DEFAULT_KIND: MakerNoteKind = 'maker_eta_request';
 const SUBJECT_MAX = 200;
 const BODY_MAX = 4000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** 506-3: the refusal while a live draft stands for the line. */
-const HELD_ERROR = 'A date request for this line is already drafted.';
+/** 506-3 / FR5 530-3: the refusal while a live note stands for the line,
+ *  named by the kind of the note that stands. */
+const HELD_ERROR: Record<MakerNoteKind, string> = {
+  maker_eta_request: 'A date request for this line is already drafted.',
+  maker_follow_up: 'A note to the maker for this line is already drafted.',
+};
 
 interface HoldRequestBody {
   projectId?: unknown;
   ffeItemId?: unknown;
+  kind?: unknown;
   subject?: unknown;
   body?: unknown;
 }
@@ -61,6 +71,7 @@ interface LineRow extends LineMakerSource {
 }
 
 interface DraftRow {
+  kind?: string | null;
   status: string;
   created_at: string;
   sent_at?: string | null;
@@ -71,8 +82,12 @@ const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 const sameName = (a: string | null | undefined, b: string) =>
   a?.trim().toLowerCase() === b.toLowerCase();
 
-const conflict = (error: string, draft: unknown) =>
-  NextResponse.json({ error, draft }, { status: 409 });
+/** 409 with the note that stands, its reason by that note's kind (530-3). */
+const conflict = (draft: DraftRow | null) =>
+  NextResponse.json(
+    { error: HELD_ERROR[isMakerNoteKind(draft?.kind) ? draft.kind : DEFAULT_KIND], draft },
+    { status: 409 },
+  );
 
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedDesignerAdmin(request);
@@ -91,6 +106,12 @@ export async function POST(request: NextRequest) {
   if (!UUID.test(projectId) || !UUID.test(ffeItemId)) {
     return badRequest('projectId and ffeItemId are required');
   }
+  // FR5 530-3: the sheet names the note's kind; a body that names none holds
+  // a date request, as every caller before 00728 did.
+  if (input.kind !== undefined && !isMakerNoteKind(input.kind as string)) {
+    return badRequest('kind must be maker_eta_request or maker_follow_up');
+  }
+  const kind: MakerNoteKind = (input.kind as MakerNoteKind | undefined) ?? DEFAULT_KIND;
   const subject = text(input.subject);
   const body = text(input.body);
   if (!subject || !body) return badRequest('The note needs a subject and a body');
@@ -129,7 +150,7 @@ export async function POST(request: NextRequest) {
     session
       .from('procurement_drafts')
       .select('*')
-      .eq('kind', KIND)
+      .in('kind', [...MAKER_NOTE_KINDS])
       .eq('ffe_item_id', line.id)
       .order('created_at', { ascending: false });
 
@@ -140,9 +161,10 @@ export async function POST(request: NextRequest) {
   }
   // F1/F2 as amended by 506-3: a held or sending draft stands until it is
   // sent or discarded, a sent one for the studio day it went. A Discard
-  // releases the day. The sheet opens the draft that stands.
+  // releases the day. The sheet opens the draft that stands. FR5 530-3: a
+  // note of either maker kind stands against both.
   const standing = standingMakerAsk((notes ?? []) as DraftRow[], new Date());
-  if (standing) return conflict(HELD_ERROR, standing);
+  if (standing) return conflict(standing);
 
   const po = line.purchase_order;
   let studioId = line.project?.studio_id ?? null;
@@ -195,7 +217,7 @@ export async function POST(request: NextRequest) {
     .insert({
       organization_id: studioId,
       project_id: line.project_id,
-      kind: KIND,
+      kind,
       // A draft, and only a draft. DraftReview's Send is the send gate.
       status: 'awaiting_review',
       purchase_order_id: po?.id ?? line.purchase_order_id ?? null,
@@ -212,7 +234,7 @@ export async function POST(request: NextRequest) {
     // Two presses at once: the one-open-note index refused the second.
     if ((error as { code?: string }).code === '23505') {
       const { data: again } = await readNotes();
-      return conflict(HELD_ERROR, standingMakerAsk((again ?? []) as DraftRow[], new Date()));
+      return conflict(standingMakerAsk((again ?? []) as DraftRow[], new Date()));
     }
     console.error('[ask-maker-date] hold failed', error);
     return serverError('Could not hold that note just now.');

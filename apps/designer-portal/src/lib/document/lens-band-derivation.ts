@@ -14,6 +14,7 @@
 import type { RedLetterRow } from '@/components/document/red-letter-zone';
 import {
   ACT_TIER,
+  OPEN_THE_HELD_DRAFT,
   STANDING_ROW_ACTS,
   needActLabel,
   stageEyebrow,
@@ -90,7 +91,17 @@ export type LensNeedOwner = NeedLine['owner'];
  *  carries it (D8 custody). */
 export interface LensNeedRow extends RedLetterRow {
   owner?: LensNeedOwner;
+  /** FR5 F5-2 — the procurement draft the need carries (`NeedLine.draft`, the
+   *  same drafts the Desk reads), where the caller hands it over. A held maker
+   *  note renames the line's act `Open the held draft`. */
+  draft?: Pick<NonNullable<NeedLine['draft']>, 'kind' | 'status'> | null;
 }
+
+/** FR5 530-3 — a note to the maker held for review: a date request or a
+ *  follow-up (00728), `awaiting_review`. */
+const isHeldMakerNote = (draft: LensNeedRow['draft']): boolean =>
+  draft?.status === 'awaiting_review' &&
+  (draft.kind === 'maker_eta_request' || draft.kind === 'maker_follow_up');
 
 /**
  * The four standing tiers. They are EYEBROW WORDS, not a ranking (W3-R1): the
@@ -178,6 +189,8 @@ export interface LensStandingItem {
   /** D8 — the need's recorded owner; null for a ticket exception, or where
    *  the caller did not carry one. */
   owner?: LensNeedOwner | null;
+  /** FR5 F5-2 — the need carries a maker note held for review. */
+  heldMakerNote?: boolean;
   /** D-B24 — the item's short form, for the 390 measure. */
   short: LensShortForm;
 }
@@ -802,6 +815,7 @@ export function rankStanding(
         namesMoney: need.kind === 'overdue_invoice',
         needKind: need.kind,
         owner: need.owner,
+        ...(isHeldMakerNote(need.draft) ? { heldMakerNote: true } : {}),
       }),
     });
   });
@@ -962,6 +976,27 @@ function voiceItem(item: LensStandingItem, clientFirstName: string | null): Lens
   };
 }
 
+/**
+ * FR5 F5-2 (530-3, 506-6 extended to the band) — `voiceItem` over the whole
+ * standing set. While a maker note stands held for review, the maker's line
+ * has been followed up: every `po_unacknowledged` act reads `Open the held
+ * draft` and presses the held note's own act, which lands on its DraftReview.
+ * The draft need carries the note; a maker's silence is project-grained (it
+ * names no line), so it takes the held note's act too rather than offering a
+ * second follow-up. Every other row is `voiceItem`'s.
+ */
+function voiceStanding(
+  standing: readonly LensStandingItem[],
+  clientFirstName: string | null,
+): LensStandingItem[] {
+  const held = standing.find((item) => item.heldMakerNote && item.act)?.act ?? null;
+  return standing.map((item) =>
+    held && item.act && item.needKind === 'po_unacknowledged'
+      ? { ...item, act: { ...item.act, label: OPEN_THE_HELD_DRAFT, onAct: held.onAct } }
+      : voiceItem(item, clientFirstName),
+  );
+}
+
 /** The desk's `payment_due` line (`desk-derivation.ts`, PAYMENT_KIND_WORD):
  *  `Balance to Woodward & Sons · $3,400 due 12 May — WS-188`. The need holds
  *  no structured payee, figure or PO, so the band reads its own template back.
@@ -1071,7 +1106,8 @@ function rowAct(
   const label = standingRowActLabel(row.kind, { firstName: clientFirstName, count: row.count });
   const lending = LENDING_NEED[row.kind];
   const lent = lending ? actOfKind(lending) : null;
-  if (lent?.label === label) return lent;
+  // FR5 F5-2: a maker's silence with a note held for review lends that act.
+  if (lent && (lent.label === label || lent.label === OPEN_THE_HELD_DRAFT)) return lent;
   if (ownAct?.label === label) {
     return {
       key: ownAct.key,
@@ -1141,9 +1177,10 @@ export function deriveNext({
   closed,
 }: DeriveNextInput): LensNext | null {
   type Row = (StandingNeedRow | SetupRow) & { next: LensNext | null };
+  const voiced = voiceStanding(standing, clientFirstName);
   const rows: Row[] = [
-    ...standing.map((item): Row => {
-      const { act } = voiceItem(item, clientFirstName);
+    ...standing.map((item, index): Row => {
+      const { act } = voiced[index]!;
       const prose = paymentProse(item);
       return {
         needKind: item.needKind,
@@ -1490,7 +1527,7 @@ function deriveVoice(
   );
 
   // F2-7 / FR3 F3-8 — every sheet row carries its act; chosen after Next.
-  const voiced = standing.map((item) => voiceItem(item, clientFirstName));
+  const voiced = voiceStanding(standing, clientFirstName);
   const actOf = (item: { key: string; sentence: string; needKind?: NeedKind | null }) =>
     rowAct(item.key, item.sentence, item.needKind, voiced, ownAct, clientFirstName, input.landOn);
   const acted = voiced.map((item) => (item.act ? item : { ...item, act: actOf(item) }));

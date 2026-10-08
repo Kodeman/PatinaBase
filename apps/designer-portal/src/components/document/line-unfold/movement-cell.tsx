@@ -13,8 +13,10 @@ import { fmtDay } from '@/lib/document/format';
 import {
   LIVE_MAKER_ASK_STATUSES,
   awaitsArrivalDate,
+  isMakerNoteKind,
   lineMaker,
   makerAskSentWords,
+  makerNoteDraftedWords,
   shownMakerAsk,
 } from '@/lib/document/install-reading';
 import { DateTextInput } from '../date-text-input';
@@ -43,8 +45,9 @@ function LineDateRequests({ item, projectId }: { item: FFERow; projectId: string
     projectId,
     oneVoice ? LIVE_MAKER_ASK_STATUSES : OPEN_PROCUREMENT_DRAFT_STATUSES,
   );
+  // FR5 530-3: the line's maker note, a date request or a follow-up.
   const drafts = (data ?? []).filter(
-    (d) => d.kind === 'maker_eta_request' && d.ffe_item_id === item.id,
+    (d) => isMakerNoteKind(d.kind) && d.ffe_item_id === item.id,
   );
   if (oneVoice) {
     // US-19 F3-22 (517-4): one status line in every state, the Desk's words,
@@ -59,9 +62,10 @@ function LineDateRequests({ item, projectId }: { item: FFERow; projectId: string
         ? 'Sending…'
         : standing.status === 'sent'
           ? makerAskSentWords(standing)
-          : `Date request to ${lineMaker(item) ?? 'the maker'} drafted — not sent.`;
+          : makerNoteDraftedWords(standing.kind, lineMaker(item));
     return (
-      <div>
+      // FR5 F5-2: the band's `Open the held draft` lands here (cell `draft`).
+      <div data-testid="line-held-maker-note">
         <p data-testid="line-date-request-status" className="text-[11px] text-[var(--text-muted)]">
           {status}
         </p>

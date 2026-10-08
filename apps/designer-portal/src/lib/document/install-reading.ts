@@ -81,6 +81,40 @@ export function lineMaker(line: LineMakerSource): string | null {
   return lineMakerRecord(line)?.name ?? null;
 }
 
+/**
+ * FR5 530-4 — the one PO number a note to the maker names: the number the
+ * maker knows (`vendor_po_number`), else the studio's own. Both maker notes,
+ * the date ask and the follow-up, read it, so two notes to the same maker
+ * never disagree about his order number.
+ */
+export function linePoNumber(line: {
+  purchase_order?: { vendor_po_number?: string | null; po_number?: string | null } | null;
+}): string | null {
+  return line.purchase_order?.vendor_po_number ?? line.purchase_order?.po_number ?? null;
+}
+
+/** FR5 530-3 — the two notes to the maker a line holds, one open at a time
+ *  across both (00728). The date request is R37's; the follow-up FR4 520-2's. */
+export const MAKER_NOTE_KINDS = ['maker_eta_request', 'maker_follow_up'] as const;
+export type MakerNoteKind = (typeof MAKER_NOTE_KINDS)[number];
+
+export const isMakerNoteKind = (kind: string | null | undefined): kind is MakerNoteKind =>
+  kind === 'maker_eta_request' || kind === 'maker_follow_up';
+
+/** FR5 530-3 — a held maker note's words, by its kind: the Movement cell's and
+ *  the Desk's (`deskNeedText`) one sentence. */
+export function makerNoteDraftedWords(kind: string | null | undefined, maker: string | null): string {
+  const to = maker?.trim() || 'the maker';
+  return kind === 'maker_follow_up'
+    ? `Follow-up to ${to} drafted — not sent.`
+    : `Date request to ${to} drafted — not sent.`;
+}
+
+/** FR5 530-3 — the verb a maker note's day takes: `Asked` for a date request,
+ *  `Followed up` for a follow-up. */
+export const makerNoteVerb = (kind: string | null | undefined) =>
+  kind === 'maker_follow_up' ? 'Followed up' : 'Asked';
+
 /** No studio stores a time zone yet: the studio clock is Chicago's (F6, 506-5). */
 export const STUDIO_TIME_ZONE = 'America/Chicago';
 
@@ -98,6 +132,8 @@ export const studioDay = (at: Date | string) => STUDIO_DAY.format(new Date(at));
 export const LIVE_MAKER_ASK_STATUSES = ['awaiting_review', 'sending', 'sent'] as const;
 
 interface MakerAskDraft {
+  /** FR5 530-3 — `maker_eta_request` or `maker_follow_up`; read for the words. */
+  kind?: string | null;
   status: string;
   created_at: string;
   sent_at?: string | null;
@@ -159,10 +195,11 @@ export function sentThisStudioDay(draft: MakerAskDraft, now: Date): boolean {
   return draft.status === 'sent' && studioDay(draft.sent_at ?? draft.created_at) === studioDay(now);
 }
 
-/** 517-4 — a sent request's words, the same in the cell and the install row. */
+/** 517-4 — a sent request's words, the same in the cell and the install row.
+ *  FR5 530-3: by its kind, `Asked {day} · sent` or `Followed up {day} · sent`. */
 export function makerAskSentWords(draft: MakerAskDraft): string {
   const day = dayMonth(draft.sent_at ?? draft.created_at);
-  return day ? `Asked ${day} · sent` : 'Sent.';
+  return day ? `${makerNoteVerb(draft.kind)} ${day} · sent` : 'Sent.';
 }
 
 /** A line's name as the reading speaks it: the piece, without the spec after

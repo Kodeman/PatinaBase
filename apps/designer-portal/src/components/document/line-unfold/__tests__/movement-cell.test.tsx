@@ -170,3 +170,46 @@ describe('MovementCell asked-for date (one-voice)', () => {
     expect(screen.queryByText(/· sent/)).toBeNull();
   });
 });
+
+// US-19 FR5 530-3 — the follow-up is its own kind; the cell says which.
+describe('MovementCell held follow-up (one-voice)', () => {
+  const FOLLOW_UP = {
+    ...ASK,
+    id: 'follow-1',
+    kind: 'maker_follow_up',
+    subject: 'NA-2026-077 — following up',
+    created_at: '2026-10-07T15:00:00Z',
+  };
+  const HALLORAN = { id: 'line-1', vendor_name: 'Halloran Joinery', purchase_order: null };
+
+  beforeEach(() => {
+    mockOneVoice = true;
+  });
+
+  it('prints Follow-up to {maker} drafted — not sent. over its DraftReview, the band’s landing', () => {
+    mockDrafts.data = [FOLLOW_UP];
+    renderCell(HALLORAN, null);
+    expect(screen.getByTestId('line-date-request-status')).toHaveTextContent(
+      'Follow-up to Halloran Joinery drafted — not sent.',
+    );
+    const landing = screen.getByTestId('line-held-maker-note');
+    expect(within(landing).getByTestId('draft-review')).toBeInTheDocument();
+  });
+
+  it('a held date request keeps its own words', () => {
+    mockDrafts.data = [{ ...ASK, created_at: '2026-10-07T15:00:00Z' }];
+    renderCell(HALLORAN, null);
+    expect(screen.getByTestId('line-date-request-status')).toHaveTextContent(
+      'Date request to Halloran Joinery drafted — not sent.',
+    );
+  });
+
+  it('a sent follow-up reads Followed up {day} · sent', () => {
+    const at = '2026-10-03T16:00:00Z';
+    mockDrafts.data = [{ ...FOLLOW_UP, status: 'sent', created_at: at, sent_at: at }];
+    renderCell(HALLORAN, null);
+    expect(screen.getByTestId('line-date-request-status')).toHaveTextContent(
+      `Followed up ${dayMonth(at)} · sent`,
+    );
+  });
+});

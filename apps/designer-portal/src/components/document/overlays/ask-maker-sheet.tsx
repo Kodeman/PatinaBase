@@ -39,8 +39,11 @@ import {
   LIVE_MAKER_ASK_STATUSES,
   awaitsArrivalDate,
   installReading,
+  isMakerNoteKind,
   lineMaker,
+  linePoNumber,
   makerAskSentWords,
+  makerNoteVerb,
   pieceName,
   readingDay,
   sentThisStudioDay,
@@ -69,7 +72,6 @@ export interface AskMakerPiece extends InstallReadingPiece {
 }
 
 const ROUTE = '/api/document/ask-maker-date';
-const KIND = 'maker_eta_request';
 const NO_MAKER = 'No maker is recorded on this line.';
 
 /** The drafted note. It states the recorded fact and asks; it never judges. */
@@ -78,7 +80,7 @@ export function askMakerDraft(
   today: Date,
 ): { to: string | null; subject: string; body: string } {
   const maker = lineMaker(piece);
-  const po = piece.purchase_order?.vendor_po_number ?? piece.purchase_order?.po_number ?? null;
+  const po = linePoNumber(piece);
   const eta = parseSourceDate(piece.purchase_order?.confirmed_eta ?? null);
   const fact = eta
     ? `We had it due ${readingDay(eta, today)}, and it hasn't arrived.`
@@ -98,15 +100,16 @@ export function askMakerDraft(
 }
 
 /**
- * US-19 FR4 520-2 — `Follow up with the maker`: the same held note, addressed
- * by the PO number the paper prints. The body is the designer's to write.
+ * US-19 FR4 520-2 — `Follow up with the maker`: a held note of its own kind
+ * (FR5 530-3), addressed by the PO number the maker knows (530-4). The body
+ * is the designer's to write.
  */
 export function followUpDraft(piece: AskMakerPiece): {
   to: string | null;
   subject: string;
   body: string;
 } {
-  const po = piece.purchase_order?.po_number ?? piece.purchase_order?.vendor_po_number ?? null;
+  const po = linePoNumber(piece);
   return {
     to: lineMaker(piece),
     subject: `${po ?? pieceName(piece.name)} — following up`,
@@ -130,7 +133,13 @@ function useHoldMakerDraft(projectId: string) {
   const refreshDrafts = () =>
     queryClient.invalidateQueries({ queryKey: [...buyingPhase2Keys.all, 'drafts'] });
   return useMutation({
-    mutationFn: async (input: { ffeItemId: string; subject: string; body: string }) => {
+    mutationFn: async (input: {
+      ffeItemId: string;
+      subject: string;
+      body: string;
+      /** FR5 530-3 — the follow-up's own kind; left out, a date request. */
+      kind?: 'maker_follow_up';
+    }) => {
       const response = await fetch(ROUTE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -318,7 +327,12 @@ export function AskMakerSheet({
                 loadingLabel="Holding…"
                 onClick={() =>
                   hold.mutate(
-                    { ffeItemId: piece.id, subject: subject.trim(), body: body.trim() },
+                    {
+                      ffeItemId: piece.id,
+                      subject: subject.trim(),
+                      body: body.trim(),
+                      ...(followUp ? { kind: 'maker_follow_up' as const } : {}),
+                    },
                     { onSuccess: onHeld },
                   )
                 }
@@ -418,7 +432,8 @@ function InstallReadingLive({
   const now = new Date();
   const lineDrafts = asks
     ? (draftsQuery.data ?? []).filter(
-        (draft) => draft.kind === KIND && draft.ffe_item_id === reading.firstItemId,
+        // FR5 530-3: one maker note stands per line, of either kind.
+        (draft) => isMakerNoteKind(draft.kind) && draft.ffe_item_id === reading.firstItemId,
       )
     : [];
   const standing = !asks
@@ -502,7 +517,7 @@ function InstallReadingLive({
               : sent
                 ? makerAskSentWords(sent)
                 : askedDay
-                  ? `Asked ${askedDay} · draft held for review`
+                  ? `${makerNoteVerb(held?.kind)} ${askedDay} · draft held for review`
                   : 'Draft held for review'}
           </span>
         )}

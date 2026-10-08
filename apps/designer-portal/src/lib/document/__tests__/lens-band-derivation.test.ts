@@ -2114,3 +2114,85 @@ describe('deriveNext · FR3: not-yet-due wording (F3-26, 512-4)', () => {
     );
   });
 });
+
+// US-19 FR5 F5-2 (530-3, walk D4/D5) — while a maker note stands held for
+// review, the band's act for the maker's line is `Open the held draft`, and it
+// presses the held note's own act (its DraftReview landing).
+describe('deriveLensBand · FR5 F5-2: a held maker note is opened, not followed up again', () => {
+  const heldNote = (kind: 'maker_eta_request' | 'maker_follow_up', status = 'awaiting_review') => ({
+    ...need(
+      'draft-0',
+      'po_unacknowledged',
+      kind === 'maker_follow_up'
+        ? 'Follow-up to the maker drafted'
+        : 'Arrival date request to the maker drafted',
+      'Review and send',
+    ),
+    owner: 'designer' as const,
+    draft: { kind, status },
+  });
+  const SILENCE: LensNeedRow = {
+    ...need('po-0', 'po_unacknowledged', 'NA-2026-077 sent — no acknowledgment', 'Follow up with the maker'),
+    owner: 'maker',
+  };
+
+  it('D4 (Wren): a held date request is Next as Open the held draft; line 1 and the sentence stay', () => {
+    const note = heldNote('maker_eta_request');
+    const before = deriveLensBand(input({ now: NOW, ownAct: null, needs: [] }));
+    const model = deriveLensBand(input({ now: NOW, ownAct: null, needs: [note] }));
+    expect(model.voice.next?.act.label).toBe('Open the held draft');
+    expect(model.voice.next?.sentence).toBe('Arrival date request to the maker drafted');
+    expect(model.line1).toEqual(before.line1);
+    model.voice.next?.act.onAct();
+    expect(note.onAct).toHaveBeenCalledTimes(1);
+  });
+
+  it('D5 (Halloran): with a held follow-up on the line, the act is Open the held draft, not Follow up with the maker', () => {
+    const note = heldNote('maker_follow_up');
+    const { voice } = deriveLensBand(
+      input({
+        now: NOW,
+        ownAct: null,
+        landOn: jest.fn(),
+        needs: [SILENCE, note],
+        ticket: [
+          ticketRow('pieces', {
+            rank: 'piece-stuck',
+            phrase: 'NA-2026-077 unanswered, 6 days',
+            standingSince: '2026-08-23',
+          }),
+        ],
+      }),
+    );
+    expect(voice.next?.act.label).toBe('Open the held draft');
+    const labels = voice.standing.map((item) => item.act?.label);
+    expect(labels).not.toContain('Follow up with the maker');
+    expect(labels.every((label) => label === 'Open the held draft')).toBe(true);
+    // Every relabelled row presses the held note's own landing.
+    voice.next?.act.onAct();
+    for (const item of voice.standing) item.act?.onAct();
+    expect(SILENCE.onAct).not.toHaveBeenCalled();
+    expect(note.onAct).toHaveBeenCalled();
+  });
+
+  it('deriveNext reads the held note the same way', () => {
+    const note = heldNote('maker_follow_up');
+    const standing = rankStanding([], [SILENCE, note], NOW);
+    expect(
+      deriveNext({ standing, ownAct: null, clientFirstName: null, closed: false })?.act.label,
+    ).toBe('Open the held draft');
+  });
+
+  it('a note no longer held, or no note at all, leaves Follow up with the maker', () => {
+    for (const needs of [[SILENCE], [SILENCE, heldNote('maker_follow_up', 'sending')]]) {
+      const { voice } = deriveLensBand(input({ now: NOW, ownAct: null, needs }));
+      expect(voice.next?.act.label).toBe('Follow up with the maker');
+    }
+  });
+
+  it('a held letter of another kind is not a maker note', () => {
+    const chase = { ...heldNote('maker_eta_request'), draft: { kind: 'ack_chase', status: 'awaiting_review' } };
+    const { voice } = deriveLensBand(input({ now: NOW, ownAct: null, needs: [SILENCE, chase] }));
+    expect(voice.standing.map((item) => item.act?.label)).not.toContain('Open the held draft');
+  });
+});

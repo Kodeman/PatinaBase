@@ -649,7 +649,9 @@ export const FOCUS_FFE_LINE_EVENT = 'document:focus-ffe-line';
 
 export interface FocusFfeLineRequest {
   itemId: string;
-  cell: 'order' | 'maker';
+  /** `draft` (FR5 F5-2): the held maker note's DraftReview in the line's
+   *  Movement cell, where the band's `Open the held draft` lands. */
+  cell: 'order' | 'maker' | 'draft';
 }
 
 /**

@@ -126,7 +126,8 @@ describe('Ask the maker for a date lands on the sheet’s body (F3-2, 520-1)', (
     const halloran: AskMakerPiece = {
       ...CHAIR,
       name: 'Halloran dining table',
-      purchase_order: { po_number: 'NA-2026-077', vendor_po_number: 'V-88' },
+      // FR5 530-4: the number the maker knows (vendor_po_number) leads.
+      purchase_order: { po_number: 'PO-2026-0031', vendor_po_number: 'NA-2026-077' },
     };
     renderWithQuery(
       <AskMakerSheet open followUp onClose={jest.fn()} projectId={PROJECT} piece={halloran} held={null} />,

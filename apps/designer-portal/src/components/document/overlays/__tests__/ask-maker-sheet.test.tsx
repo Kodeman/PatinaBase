@@ -53,7 +53,13 @@ jest.mock('@/hooks/use-feature-flag', () => ({
       : { value: name === 'one-voice' && mockOneVoice, isLoading: false },
 }));
 
-import { AskMakerSheet, InstallReadingLine, type AskMakerPiece } from '../ask-maker-sheet';
+import {
+  AskMakerSheet,
+  InstallReadingLine,
+  askMakerDraft,
+  followUpDraft,
+  type AskMakerPiece,
+} from '../ask-maker-sheet';
 import { dayMonth } from '@/lib/document/dates';
 
 const PROJECT = '33333333-3333-4333-8333-333333333333';
@@ -541,5 +547,72 @@ describe('InstallReadingLine', () => {
     expect(
       await screen.findByRole('button', { name: 'Ask the maker for a date' }),
     ).toBeInTheDocument();
+  });
+
+  it('FR5 530-3: a held follow-up stands on the row as Followed up {day} · draft held for review', async () => {
+    mockDraftsRead = async () => [{ ...(HELD as object), kind: 'maker_follow_up' }];
+    renderWithQuery(<InstallReadingLine projectId={PROJECT} items={CEDAR_LANE} />);
+    expect(
+      await screen.findByText('Followed up 7 October · draft held for review'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open the held draft' })).toBeInTheDocument();
+  });
+});
+
+// US-19 FR5 F5-2 / F5-3 — the follow-up holds as its own kind; both maker
+// notes name the one PO number the maker knows.
+describe('FR5: the maker follow-up and the one PO number', () => {
+  const BOTH_NUMBERS: AskMakerPiece = {
+    ...CHAIR,
+    purchase_order: { vendor_po_number: 'NA-2026-077', po_number: 'PO-2026-0031', confirmed_eta: null },
+  };
+
+  it('530-4: a piece with both PO numbers — both subjects name vendor_po_number', () => {
+    expect(askMakerDraft(BOTH_NUMBERS, new Date(2026, 9, 7)).subject).toBe(
+      'Arrival date: Reading chair · PO NA-2026-077',
+    );
+    expect(followUpDraft(BOTH_NUMBERS).subject).toBe('NA-2026-077 — following up');
+  });
+
+  it("530-3: the follow-up's Hold for review POSTs kind maker_follow_up", async () => {
+    const onHeld = jest.fn();
+    renderWithQuery(
+      <AskMakerSheet
+        open
+        followUp
+        onClose={jest.fn()}
+        onHeld={onHeld}
+        projectId={PROJECT}
+        piece={BOTH_NUMBERS}
+        held={null}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Any word on the order?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Hold for review' }));
+    await waitFor(() => expect(onHeld).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls.find(([, i]) => i?.method === 'POST')!;
+    expect(JSON.parse(init.body)).toEqual({
+      projectId: PROJECT,
+      ffeItemId: CHAIR.id,
+      subject: 'NA-2026-077 — following up',
+      body: 'Any word on the order?',
+      kind: 'maker_follow_up',
+    });
+  });
+
+  it("530-3: a held follow-up's refusal names a note to the maker and offers Open the held draft", async () => {
+    const standing = { ...(HELD as object), kind: 'maker_follow_up' };
+    fetchMock.mockImplementation(() =>
+      json({ error: 'A note to the maker for this line is already drafted.', draft: standing }, 409),
+    );
+    renderWithQuery(
+      <AskMakerSheet open followUp onClose={jest.fn()} projectId={PROJECT} piece={BOTH_NUMBERS} held={null} />,
+    );
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Any word?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Hold for review' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'A note to the maker for this line is already drafted.',
+    );
+    expect(screen.getByRole('button', { name: 'Open the held draft' })).toBeInTheDocument();
   });
 });

@@ -5,7 +5,10 @@ import {
   installReading,
   lineMaker,
   lineMakerRecord,
+  linePoNumber,
   makerAskSentWords,
+  makerNoteDraftedWords,
+  makerNoteVerb,
   pieceName,
   sentThisStudioDay,
   shownMakerAsk,
@@ -388,5 +391,39 @@ describe('installReading — prints the fact, never a judgement or a ratio', () 
     ]) {
       expect(source).not.toContain(forbidden);
     }
+  });
+});
+
+describe('FR5 530-3 / 530-4 — a maker note by its kind, and the one PO number', () => {
+  it('makerAskSentWords prints Followed up for a sent follow-up, Asked for a date request', () => {
+    const sentAt = '2026-10-03T16:00:00Z';
+    const base = { status: 'sent', created_at: sentAt, sent_at: sentAt };
+    expect(makerAskSentWords({ ...base, kind: 'maker_follow_up' })).toBe('Followed up 3 October · sent');
+    expect(makerAskSentWords({ ...base, kind: 'maker_eta_request' })).toBe('Asked 3 October · sent');
+    // A row read without its kind is a date request, as before 00728.
+    expect(makerAskSentWords(base)).toBe('Asked 3 October · sent');
+  });
+
+  it('the held day takes the same verb', () => {
+    expect(makerNoteVerb('maker_follow_up')).toBe('Followed up');
+    expect(makerNoteVerb('maker_eta_request')).toBe('Asked');
+  });
+
+  it('a held note names its kind and its maker, the cell and the Desk alike', () => {
+    expect(makerNoteDraftedWords('maker_follow_up', 'Halloran Joinery')).toBe(
+      'Follow-up to Halloran Joinery drafted — not sent.',
+    );
+    expect(makerNoteDraftedWords('maker_eta_request', 'Hewn')).toBe('Date request to Hewn drafted — not sent.');
+    expect(makerNoteDraftedWords('maker_follow_up', null)).toBe('Follow-up to the maker drafted — not sent.');
+  });
+
+  it('linePoNumber names the number the maker knows first', () => {
+    expect(
+      linePoNumber({ purchase_order: { vendor_po_number: 'NA-2026-077', po_number: 'PO-2026-0031' } }),
+    ).toBe('NA-2026-077');
+    expect(linePoNumber({ purchase_order: { vendor_po_number: null, po_number: 'PO-2026-0031' } })).toBe(
+      'PO-2026-0031',
+    );
+    expect(linePoNumber({ purchase_order: null })).toBeNull();
   });
 });
