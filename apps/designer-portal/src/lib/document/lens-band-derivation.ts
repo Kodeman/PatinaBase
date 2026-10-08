@@ -94,7 +94,7 @@ export interface LensNeedRow extends RedLetterRow {
   /** FR5 F5-2 — the procurement draft the need carries (`NeedLine.draft`, the
    *  same drafts the Desk reads), where the caller hands it over. A held maker
    *  note renames the line's act `Open the held draft`. */
-  draft?: Pick<NonNullable<NeedLine['draft']>, 'kind' | 'status'> | null;
+  draft?: Pick<NonNullable<NeedLine['draft']>, 'kind' | 'status' | 'ffeItemId'> | null;
 }
 
 /** FR5 530-3 — a note to the maker held for review: a date request or a
@@ -191,6 +191,8 @@ export interface LensStandingItem {
   owner?: LensNeedOwner | null;
   /** FR5 F5-2 — the need carries a maker note held for review. */
   heldMakerNote?: boolean;
+  /** FR6 F6-3 — the line that held note rides (`DRAFT_NEED`'s `ffeItemId`). */
+  heldMakerNoteLine?: string;
   /** D-B24 — the item's short form, for the 390 measure. */
   short: LensShortForm;
 }
@@ -385,9 +387,10 @@ export interface LensNext {
 }
 
 /** One printable form of the voice's line 2. `act` is F2-4's last rung: the
- *  lead and the act, the sentence given up whole. */
+ *  lead and the act, the sentence given up whole. `sentence` (FR6 F6-6, 390
+ *  only) is the lead and the short sentence with no act: the dock prints it. */
 export interface LensVoiceRung {
-  form: LensBandLine2['form'] | 'act';
+  form: LensBandLine2['form'] | 'sentence' | 'act';
   /** `Next ─` beside the long sentence and the act alone, `Next` beside the
    *  short one and alone while the own act loads; null where no Next prints
    *  (a closed or held job). */
@@ -412,7 +415,7 @@ export interface LensVoice extends LensVoiceRung {
   next: LensNext | null;
   /** F2-4 — the printed form first, then every form below it in yield order:
    *  the band measures the printed sentence and drops a rung while it clips.
-   *  The act never yields. */
+   *  The act never yields, except to the dock at 390 (`sentence`, F6-6). */
   rungs: readonly LensVoiceRung[];
   /** `Standing · N` — every sheet row minus the one Next names. 0 is silence. */
   standingCount: number;
@@ -816,6 +819,9 @@ export function rankStanding(
         needKind: need.kind,
         owner: need.owner,
         ...(isHeldMakerNote(need.draft) ? { heldMakerNote: true } : {}),
+        ...(isHeldMakerNote(need.draft) && need.draft?.ffeItemId
+          ? { heldMakerNoteLine: need.draft.ffeItemId }
+          : {}),
       }),
     });
   });
@@ -1182,6 +1188,15 @@ export function deriveNext({
     ...standing.map((item, index): Row => {
       const { act } = voiced[index]!;
       const prose = paymentProse(item);
+      // FR6 F6-3 (D4) — a held note on the line the install reading names
+      // keeps the reading's fact; the drafted text stays the sheet row's.
+      const reading =
+        installReading &&
+        item.needKind === 'po_unacknowledged' &&
+        item.heldMakerNoteLine !== undefined &&
+        item.heldMakerNoteLine === installReading.firstItemId
+          ? installReading
+          : null;
       return {
         needKind: item.needKind,
         tier: item.tier,
@@ -1190,12 +1205,12 @@ export function deriveNext({
         standingSince: item.standingSince,
         next: act
           ? {
-              sentence: withCustody(
-                prose?.sentence ?? item.sentence,
-                item.owner,
-                clientFirstName,
-              ),
-              shortSentence: prose?.shortSentence ?? shortSentenceOf(item),
+              sentence: reading
+                ? reading.sentence
+                : withCustody(prose?.sentence ?? item.sentence, item.owner, clientFirstName),
+              shortSentence: reading
+                ? (reading.shortSentence ?? '')
+                : (prose?.shortSentence ?? shortSentenceOf(item)),
               act: nextAct(act, null, ACT_TIER[act.label] ?? 'plain'),
               rowKey: item.key,
             }
@@ -1571,14 +1586,18 @@ function deriveVoice(
 
   // D2 / 498-g — the measure picks the form. The order of yield is the door,
   // then the sentence, never the act: at the phone's measure the door goes to
-  // the dock first; elsewhere it stays and the sentence gives way.
+  // the dock first; elsewhere it stays and the sentence gives way. FR6 F6-6
+  // (D13) — at the phone's measure the act then yields to the dock's centre
+  // before the short sentence does; act-only is the last rung there too.
   const doorPx =
     standingCount > 0 ? monoPx(standingDoorLabel(standingCount)) + LENS_LINE2_GAP_PX : 0;
   const actPx = next ? monoPx(next.act.label) + LENS_LINE2_GAP_PX : 0;
-  const fits = ({ lead, sentence }: LensVoiceRung, withDoor: boolean) =>
+  // FR6 F6-6 — the `sentence` rung prints no act, so it measures lead and
+  // sentence only.
+  const fits = ({ form, lead, sentence }: LensVoiceRung, withDoor: boolean) =>
     (lead ? monoPx(lead) + LENS_LINE2_GAP_PX : 0) +
       sentencePx(sentence) +
-      actPx +
+      (form === 'sentence' ? 0 : actPx) +
       (withDoor ? doorPx : 0) <=
     LENS_LINE2_MEASURE_PX[input.tier];
   const forms: LensVoiceRung[] = next
@@ -1588,6 +1607,11 @@ function deriveVoice(
           : []),
         ...(next.shortSentence
           ? [{ form: 'short' as const, lead: 'Next', sentence: next.shortSentence }]
+          : []),
+        // FR6 F6-6 (D13) — at 390 the dock's centre prints the act (D7), so
+        // the short sentence outranks it here: printed alone, before the act.
+        ...(input.tier === 'mobile' && next.shortSentence
+          ? [{ form: 'sentence' as const, lead: 'Next', sentence: next.shortSentence }]
           : []),
         // F2-4 — the last rung: `NEXT ─ RECORD THE PAYMENT`, the sentence
         // given up whole rather than clipped.

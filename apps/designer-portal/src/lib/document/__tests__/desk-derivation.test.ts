@@ -2203,4 +2203,15 @@ describe('FR5 530-3: a held follow-up on the Desk', () => {
   it('its act is Open the held draft, never Follow up with the maker', () => {
     expect(deskActionLabel(needOf('maker_follow_up'), true)).toBe('Open the held draft');
   });
+
+  // US-19 FR6 F6-3 — the draft need carries its line, so the band can match it
+  // to the line the install reading names.
+  it('carries the line it was asked from as ffeItemId; a draft on no line carries none', () => {
+    const onLine = deriveNeeds(mkRow({}), NOW, null, null, null, null, null, null, null, null, [
+      { ...note('maker_eta_request'), makerLine: { id: 'ffe-ladder', vendor_name: 'Halloran Joinery' } },
+    ]).find((need) => need.draft)!;
+    expect(onLine.draft?.ffeItemId).toBe('ffe-ladder');
+    expect(onLine.text).toBe('Arrival date request to the maker drafted');
+    expect(needOf('maker_eta_request').draft).not.toHaveProperty('ffeItemId');
+  });
 });

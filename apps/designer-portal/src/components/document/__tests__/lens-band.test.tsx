@@ -1030,13 +1030,42 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(phone.voice.doorInDock).toBe(true);
     render(<LensBand model={phone} docId="doc-1" />);
     expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next');
-    expect(screen.getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
     expect(door()).toBeNull();
 
     act(() => {
       window.dispatchEvent(new Event(OPEN_STANDING_SHEET_EVENT));
     });
     expect(screen.getByRole('dialog')).toHaveAttribute('data-doc-sheet-kind', 'standing');
+  });
+
+  it('FR6 F6-6 — at 390 the sentence rung prints the short sentence with no act; the dock carries it', () => {
+    const phone = chen({ tier: 'mobile' });
+    expect(phone.voice.form).toBe('sentence');
+    render(<LensBand model={phone} docId="doc-1" />);
+    expect(line('2')).toHaveAttribute('data-lens-line2-form', 'sentence');
+    expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next');
+    const sentence = line('2').querySelector('[data-lens-sentence]');
+    expect(sentence).toHaveTextContent(phone.voice.next!.shortSentence);
+    expect(sentence).toHaveAttribute('data-arr-long', phone.voice.next!.sentence);
+    expect(line('2').querySelector('[data-part="act"]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Record the payment' })).toBeNull();
+  });
+
+  it('FR6 F6-6 — the act rung below it still prints the act', () => {
+    const phone = chen({ tier: 'mobile' });
+    const actOnly: LensBandModel = {
+      ...phone,
+      voice: {
+        ...phone.voice,
+        form: 'act',
+        lead: 'Next ─',
+        sentence: '',
+        rungs: phone.voice.rungs.filter((rung) => rung.form === 'act'),
+      },
+    };
+    render(<LensBand model={actOnly} docId="doc-1" />);
+    expect(line('2')).toHaveAttribute('data-lens-line2-form', 'act');
+    expect(screen.getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
   });
 
   it('leaves the band exactly as 0b printed it while the flag is off', () => {

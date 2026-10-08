@@ -1707,10 +1707,12 @@ describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
 
   it('at 390 the measure moves the door to the dock when it cannot fit after the act', () => {
     const phone = deriveLensBand(chen({ tier: 'mobile' })).voice;
-    // 498-g / F2-4 — the door yields first, then the sentence; never the act.
-    expect(phone.lead).toBe('Next ─');
-    expect(phone.form).toBe('act');
-    expect(phone.sentence).toBe('');
+    // 498-g / F2-4 — the door yields first. FR6 F6-6 — then, at 390, the act
+    // yields to the dock's centre and the short sentence prints alone.
+    expect(phone.lead).toBe('Next');
+    expect(phone.form).toBe('sentence');
+    expect(phone.sentence).toBe(phone.next?.shortSentence);
+    expect(phone.sentence).not.toBe('');
     expect(phone.next?.act.label).toBe('Record the payment');
     expect(phone.doorInDock).toBe(true);
     expect(phone.standingCount).toBe(2);
@@ -2194,5 +2196,156 @@ describe('deriveLensBand · FR5 F5-2: a held maker note is opened, not followed 
     const chase = { ...heldNote('maker_eta_request'), draft: { kind: 'ack_chase', status: 'awaiting_review' } };
     const { voice } = deriveLensBand(input({ now: NOW, ownAct: null, needs: [SILENCE, chase] }));
     expect(voice.standing.map((item) => item.act?.label)).not.toContain('Open the held draft');
+  });
+});
+
+/** FR6's Wren (walk D4/D13): the library ladder, due 3 October, not here. */
+const OCT_8 = new Date('2026-10-08T12:00:00');
+const WREN_ASK: LensOwnAct = {
+  key: 'own:ask',
+  label: 'Ask the maker for a date',
+  targetId: 'document-act-install-reading',
+  tier: 'scored',
+  sentence: null,
+  onAct: jest.fn(),
+};
+const WREN_READING = installReading(
+  [
+    {
+      id: 'ffe-ladder',
+      name: 'Library ladder and rail',
+      status: 'ordered',
+      purchase_order: { confirmed_eta: '2026-10-03' },
+    },
+  ],
+  OCT_8,
+  false,
+);
+const WREN_LONG = "Library ladder and rail was due 3 October and isn't here.";
+const WREN_SHORT = "Library ladder and rail isn't here — due 3 October.";
+const wren = (over: Partial<LensBandInput> = {}) =>
+  deriveLensBand(
+    input({
+      spreadKind: 'install',
+      household: 'Wren',
+      jobName: 'Wren Library',
+      now: OCT_8,
+      ownAct: WREN_ASK,
+      installReading: WREN_READING,
+      ...over,
+    }),
+  ).voice;
+
+// US-19 FR6 F6-3 (walk D4) — after a held ask, the band keeps the install
+// reading's fact; the held note is the act, and its drafted text stays the
+// sheet row's.
+describe('deriveLensBand · FR6 F6-3: the band keeps the reading after a held ask', () => {
+  const DRAFTED = 'Arrival date request to the maker drafted';
+  const heldNote = (ffeItemId?: string): LensNeedRow => ({
+    ...need('draft-0', 'po_unacknowledged', DRAFTED, 'Review and send'),
+    owner: 'designer',
+    draft: { kind: 'maker_eta_request', status: 'awaiting_review', ffeItemId },
+  });
+
+  it('reads the reading: long, short and the line it names', () => {
+    expect(WREN_READING?.sentence).toBe(WREN_LONG);
+    expect(WREN_READING?.shortSentence).toBe(WREN_SHORT);
+    expect(WREN_READING?.firstItemId).toBe('ffe-ladder');
+  });
+
+  it('Wren after a hold: the reading’s sentence, long and short, and Open the held draft', () => {
+    const voice = wren({ needs: [heldNote('ffe-ladder')] });
+    expect(voice.next?.rowKey).toBe('need:draft-0');
+    expect(voice.next?.act.label).toBe('Open the held draft');
+    expect(voice.next?.sentence).toBe(WREN_LONG);
+    expect(voice.next?.shortSentence).toBe(WREN_SHORT);
+    expect(voice.form).toBe('long');
+    expect(voice.sentence).toBe(WREN_LONG);
+  });
+
+  it('the sheet row keeps its drafted text', () => {
+    const voice = wren({ needs: [heldNote('ffe-ladder')] });
+    const row = voice.standing.find((item) => item.key === 'need:draft-0');
+    expect(row?.sentence).toBe(DRAFTED);
+    expect(row?.act?.label).toBe('Open the held draft');
+  });
+
+  it('a held note on a line the reading does not name, or on no line, keeps the drafted text', () => {
+    for (const note of [heldNote('ffe-other'), heldNote(undefined)]) {
+      const voice = wren({ needs: [note] });
+      expect(voice.next?.act.label).toBe('Open the held draft');
+      expect(voice.next?.sentence).toBe(DRAFTED);
+    }
+    expect(wren({ needs: [heldNote('ffe-ladder')], installReading: null }).next?.sentence).toBe(
+      DRAFTED,
+    );
+  });
+});
+
+// US-19 FR6 F6-6 (walk D13) — at 390 under one-voice the dock's centre prints
+// the act, so line 2 yields long → short → the short sentence alone → the act
+// alone. The sentence rung measures the lead and the sentence only.
+describe('deriveLensBand · FR6 F6-6: at 390 the sentence before the act', () => {
+  const sentenceRungPx = (sentence: string) =>
+    'Next'.length * LENS_MONO_PX_PER_CHAR +
+    LENS_LINE2_GAP_PX +
+    sentence.length * LENS_LINE2_PX_PER_CHAR;
+  const OLSEN_CLAIM = 'AP-012 has an open damage claim';
+  const olsen = (tier: LensBandInput['tier']) =>
+    deriveLensBand(
+      input({
+        tier,
+        now: NOW,
+        ownAct: null,
+        household: 'Olsen',
+        needs: [need('claim', 'damage_claim', OLSEN_CLAIM, 'File the claim')],
+      }),
+    ).voice;
+
+  it('Olsen at 390: the short sentence alone stands before the act; the dock’s act is still File the claim', () => {
+    const voice = olsen('mobile');
+    expect(voice.next?.sentence).toBe(OLSEN_CLAIM);
+    // The estimate fits `Next · CLAIM OPEN · AP-012 · File the claim`; where the
+    // band measures it clipping, it drops to the sentence alone, then the act.
+    expect(voice.rungs).toEqual([
+      { form: 'short', lead: 'Next', sentence: 'CLAIM OPEN · AP-012' },
+      { form: 'sentence', lead: 'Next', sentence: 'CLAIM OPEN · AP-012' },
+      { form: 'act', lead: 'Next ─', sentence: '' },
+    ]);
+    // D7 — the dock registers `voice.next`, never the printed rung.
+    expect(voice.next?.act.label).toBe('File the claim');
+  });
+
+  it('the sentence rung measures the lead and the sentence only, never the act', () => {
+    // 31 characters: too wide beside `File the claim`, narrow enough alone.
+    const voice = deriveLensBand(
+      input({
+        tier: 'mobile',
+        now: NOW,
+        ownAct: { ...WREN_ASK, label: 'File the claim', sentence: OLSEN_CLAIM },
+      }),
+    ).voice;
+    expect(
+      sentenceRungPx(OLSEN_CLAIM) + 'File the claim'.length * LENS_MONO_PX_PER_CHAR + LENS_LINE2_GAP_PX,
+    ).toBeGreaterThan(LENS_LINE2_MEASURE_PX.mobile);
+    expect(sentenceRungPx(OLSEN_CLAIM)).toBeLessThanOrEqual(LENS_LINE2_MEASURE_PX.mobile);
+    expect(voice.form).toBe('sentence');
+    expect(voice.lead).toBe('Next');
+    expect(voice.sentence).toBe(OLSEN_CLAIM);
+    expect(voice.rungs.map((rung) => rung.form)).toEqual(['sentence', 'act']);
+    expect(voice.next?.act.label).toBe('File the claim');
+  });
+
+  it('Wren at 390: the short reading is the sentence rung, and the measure decides', () => {
+    const voice = wren({ tier: 'mobile' });
+    expect(voice.next?.act.label).toBe('Ask the maker for a date');
+    expect(voice.rungs.find((rung) => rung.form === 'sentence')).toBeUndefined();
+    expect(sentenceRungPx(WREN_SHORT)).toBeGreaterThan(LENS_LINE2_MEASURE_PX.mobile);
+    expect(voice.form).toBe('act');
+  });
+
+  it('the sentence rung is the phone’s alone', () => {
+    expect(olsen('full').rungs.map((rung) => rung.form)).not.toContain('sentence');
+    expect(olsen('narrow').rungs.map((rung) => rung.form)).not.toContain('sentence');
   });
 });

@@ -218,7 +218,7 @@ export function LensBand({
 
   // F2-4 / 498-g — the measure decides, never the tier: the derivation's
   // estimate picks a rung, and while the printed sentence still clips the band
-  // drops to the next (the act never yields). Keyed on the rungs' words and
+  // drops to the next (the act yields only to the dock, F6-6). Keyed on the rungs' words and
   // the band's width, so new words or a wider window start again at the top.
   const sentenceRef = useRef<HTMLSpanElement | null>(null);
   const [bandWidth, setBandWidth] = useState(0);
@@ -381,7 +381,8 @@ export function LensBand({
         {/* The clip lives on the SENTENCE, never on this flex line: the act's
             44px control is inset by -12px into the 19.5px line, so an
             `overflow: hidden` here would cut 12px off its box for painting and
-            for hit-testing — and at 390 line 2 is that act's only printing. */}
+            for hit-testing. At 390 under `one-voice` the dock's centre prints
+            the act (D7), so the `sentence` rung (F6-6) prints no act here. */}
         {spoken && rung ? (
           <p
             data-lens-line="2"
@@ -408,7 +409,9 @@ export function LensBand({
               data-lens-sentence
               data-part={rung.sentence ? 'headline' : undefined}
               data-arr-long={
-                spoken.next && rung.sentence && rung.form === 'short'
+                spoken.next &&
+                rung.sentence &&
+                (rung.form === 'short' || rung.form === 'sentence')
                   ? spoken.next.sentence
                   : undefined
               }
@@ -420,7 +423,7 @@ export function LensBand({
             >
               {rung.sentence}
             </span>
-            {spoken.next && (
+            {spoken.next && rung.form !== 'sentence' && (
               <DocumentAction
                 ref={actRef}
                 actionKey="lens-band-next"

@@ -388,6 +388,10 @@ export interface DeskDraftSignal {
    *  selector reads it, so the Desk's `Add an address` lands where the maker's
    *  address is kept (517-1). Absent otherwise. */
   makerLine?: LineMakerSource & { id: string };
+  /** US-19 FR6 F6-3 — the line a line-level draft rides, stamped by the
+   *  `DRAFT_NEED` rule from `makerLine`, so the band can match it to the line
+   *  the install reading names. Absent otherwise. */
+  ffeItemId?: string;
 }
 
 /** Which Desk need a draft rides: the act it answers. */
@@ -1384,7 +1388,7 @@ const needDraftReview: NeedRule = ({ drafts }) => {
     stamp: { label: 'DRAFTED', ...STAMP.dustyBlue },
     urgent: false,
     owner: 'designer',
-    draft: first,
+    draft: first.makerLine ? { ...first, ffeItemId: first.makerLine.id } : first,
   };
 };
 
