@@ -6,8 +6,9 @@
  * mobile bar; at desktop widths it rides above the Studio Drawer. The offer
  * survives navigation because its state lives in the provider.
  * Esc = discard, FIRST in the §3 priority order (before sheets and
- * put-down) — handled here on capture so nothing beneath sees the key,
- * unless a newer open thing outside the strip holds focus (FR5 F5-8).
+ * put-down) — handled here on capture so nothing beneath sees the key, but
+ * only while the strip is shown and is the innermost open thing: focus in the
+ * strip, or on <body> with nothing else open (529-6; FR5 F5-8, SQ-552).
  *
  * The entry is already written when the strip appears (crash-safe): "Log"
  * persists the adjustment + activity, "Discard" deletes the entry.
@@ -25,6 +26,7 @@ import {
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DocumentAction } from './document-action';
 import { BillablePill, RateReadout, RateRoleMark } from './time-capture';
+import { isElementRendered } from './overlays/active-dialog';
 import type { TimeRateRole, TimeRateSource } from '@patina/supabase';
 
 const SURFACE_KEY = 'time';
@@ -36,6 +38,17 @@ const REGION_KEY = 'log-offer';
 // select). The billable pill and rate readout inherited the paper-dark
 // palette instead and measured 2.14:1 / 3.23:1 against the strip.
 const STRIP_LIGHT_INK = 'max-[1179px]:!text-[rgba(250,247,242,0.72)]';
+
+/** 529-6's "nothing else open": a rendered dialog, modal or dismissible
+ *  popover outside the strip means Esc on <body> belongs to that, not the
+ *  offer. */
+const OPEN_THING_SELECTOR =
+  '[role="dialog"], [role="alertdialog"], [aria-modal], [data-dismissible-popover]';
+function anotherThingOpen(strip: HTMLElement | null) {
+  return Array.from(document.querySelectorAll<HTMLElement>(OPEN_THING_SELECTOR)).some(
+    (el) => !strip?.contains(el) && isElementRendered(el),
+  );
+}
 
 export function LogStrip() {
   const { offer, offerOwnsEdge, logOffer, discardOffer } = useDocumentTime();
@@ -58,22 +71,22 @@ export function LogStrip() {
   }, [offer]);
 
   useEffect(() => {
-    if (!offer) return;
+    // SQ-552 — a hidden offer (chained out from another project, so it does
+    // not own the edge) never takes a key: its entry is already written, and
+    // Esc would delete time the designer never saw.
+    if (!offer || !offerOwnsEdge) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      // FR5 F5-8 (529-6) — Esc closes the innermost open thing. A composer,
-      // sheet or form opened above the offer owns the key: yield it untouched
-      // (no preventDefault, no stopPropagation) when focus sits outside the
-      // strip inside a dialog, textarea or input. Focus in the strip or on
-      // <body> still discards the offer.
+      // FR5 F5-8 / SQ-552 (529-6) — Esc closes the innermost open thing. The
+      // offer takes it only when focus is inside the strip, or on <body> with
+      // nothing else open. Anywhere else (a composer's note or its Send
+      // button, a sheet, a form) the key is yielded untouched: no
+      // preventDefault, no stopPropagation.
       const target = e.target instanceof Element ? e.target : null;
-      if (
-        target &&
-        !stripRef.current?.contains(target) &&
-        target.closest('[role="dialog"], textarea, input')
-      ) {
-        return;
-      }
+      const inStrip = Boolean(target && stripRef.current?.contains(target));
+      const onBody =
+        !target || target === document.body || target === document.documentElement;
+      if (!inStrip && (!onBody || anotherThingOpen(stripRef.current))) return;
       e.preventDefault();
       e.stopPropagation();
       void discardOffer();
@@ -81,7 +94,7 @@ export function LogStrip() {
     window.addEventListener('keydown', onKey, { capture: true });
     return () =>
       window.removeEventListener('keydown', onKey, { capture: true });
-  }, [offer, discardOffer]);
+  }, [offer, offerOwnsEdge, discardOffer]);
 
   // A chained-out entry is already saved. Keep its adjustment offer in the
   // provider, but do not lay an unrelated project's controls over the document

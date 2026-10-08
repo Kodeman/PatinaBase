@@ -1,8 +1,10 @@
 /**
- * US-19 FR5 F5-8 (ruling 529-6) — the log-time offer yields Esc to a newer
- * open thing. Esc closes the innermost open thing: a composer opened above the
- * offer takes the key (and calls preventDefault, story log #6), and the offer
- * stays; with focus on <body> or inside the strip, Esc discards the offer.
+ * US-19 FR5 F5-8 / SQ-552 (ruling 529-6) — the log-time offer takes Esc only
+ * when it is the innermost open thing: focus inside the strip, or focus on
+ * <body> with nothing else open. Everywhere else it yields the key untouched,
+ * and a hidden offer (one that does not own the edge) never takes a key — its
+ * entry is already written, so a stray discard deletes time the designer never
+ * saw.
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
@@ -10,6 +12,7 @@ import { LogStrip } from '../log-strip';
 
 const mockLogOffer = jest.fn().mockResolvedValue(undefined);
 const mockDiscardOffer = jest.fn().mockResolvedValue(undefined);
+let mockOwnsEdge = true;
 
 const offer = {
   projectId: 'aspen-project',
@@ -31,7 +34,7 @@ jest.mock('@patina/supabase', () => ({
 jest.mock('@/hooks/document-time-provider', () => ({
   useDocumentTime: () => ({
     offer,
-    offerOwnsEdge: true,
+    offerOwnsEdge: mockOwnsEdge,
     logOffer: mockLogOffer,
     discardOffer: mockDiscardOffer,
   }),
@@ -67,10 +70,118 @@ function Composer() {
   );
 }
 
+/** A stand-in for the letterhead's inline Message composer as it ships: no
+ *  dialog role, a plain block that takes Esc as Cancel on its own keydown
+ *  (letterhead-instruments.tsx), with Send and Cancel buttons. */
+const inlineComposerEsc = jest.fn();
+function InlineComposer() {
+  const [open, setOpen] = useState(true);
+  if (!open) return null;
+  return (
+    <div
+      data-testid="inline-composer"
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        inlineComposerEsc();
+        setOpen(false);
+      }}
+    >
+      <textarea aria-label="Quick note" defaultValue="Checking in" />
+      <button type="button">Send</button>
+      <button type="button">Cancel</button>
+    </div>
+  );
+}
+
 describe('LogStrip — Esc yields to the innermost open thing (FR5 F5-8)', () => {
   beforeEach(() => {
+    mockOwnsEdge = true;
     mockDiscardOffer.mockClear();
     composerEsc.mockClear();
+    inlineComposerEsc.mockClear();
+  });
+
+  it('hidden chained-out offer (does not own the edge) + Esc on body: nothing is discarded (SQ-552)', () => {
+    mockOwnsEdge = false;
+    render(<LogStrip />);
+    // The strip paints nothing on this paper.
+    expect(screen.queryByRole('region', { name: 'Log time offer' })).toBeNull();
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    const notCanceled = fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    // The written entry survives: discardOffer (which deletes it) never runs,
+    // and the key is not taken.
+    expect(mockDiscardOffer).not.toHaveBeenCalled();
+    expect(notCanceled).toBe(true);
+  });
+
+  it('hidden chained-out offer + Esc on a button elsewhere: nothing is discarded (SQ-552)', () => {
+    mockOwnsEdge = false;
+    render(
+      <>
+        <LogStrip />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+    const elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
+    elsewhere.focus();
+
+    const notCanceled = fireEvent.keyDown(elsewhere, { key: 'Escape' });
+
+    expect(mockDiscardOffer).not.toHaveBeenCalled();
+    expect(notCanceled).toBe(true);
+  });
+
+  it('visible offer + the inline composer\'s Send button focused: Esc reaches the composer and the offer stays (SQ-552)', () => {
+    render(
+      <>
+        <LogStrip />
+        <InlineComposer />
+      </>,
+    );
+    const send = screen.getByRole('button', { name: 'Send' });
+    send.focus();
+    expect(send).toHaveFocus();
+
+    fireEvent.keyDown(send, { key: 'Escape' });
+
+    expect(inlineComposerEsc).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('inline-composer')).toBeNull();
+    expect(mockDiscardOffer).not.toHaveBeenCalled();
+    expect(screen.getByRole('region', { name: 'Log time offer' })).toBeInTheDocument();
+  });
+
+  it('visible offer + focus on body while a dialog is open: the strip yields (SQ-552)', () => {
+    render(
+      <>
+        <LogStrip />
+        <div role="dialog" aria-modal="true" aria-label="A sheet">
+          <p>Open sheet</p>
+        </div>
+      </>,
+    );
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    const notCanceled = fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    expect(mockDiscardOffer).not.toHaveBeenCalled();
+    expect(notCanceled).toBe(true);
+  });
+
+  it('visible offer + Discard button focused (inside the strip): Esc discards (SQ-552)', () => {
+    render(<LogStrip />);
+    const discard = screen.getByRole('button', { name: 'Discard' });
+    discard.focus();
+
+    const notCanceled = fireEvent.keyDown(discard, { key: 'Escape' });
+
+    expect(mockDiscardOffer).toHaveBeenCalledTimes(1);
+    expect(notCanceled).toBe(false);
   });
 
   it('offer open + composer textarea focused: Esc reaches the composer and the offer stays', () => {
