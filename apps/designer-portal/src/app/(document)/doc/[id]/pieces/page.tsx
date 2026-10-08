@@ -15,6 +15,7 @@ import {
   useRemovedProjectLines,
 } from "@patina/supabase";
 import { BuildRoomShell } from "@/components/document/pieces/build-room-shell";
+import { RoughInLens } from "@/components/document/pieces/rough-in-lens";
 import { useCanSeeMargin } from "@/hooks/use-can-see-margin";
 import {
   useAddDocumentRoom,
@@ -126,6 +127,15 @@ function BuildRoom({ docId }: { docId: string }) {
       onNavigate={navigate}
       onReturn={leave}
       onAddRoom={onAddRoom}
-    />
+    >
+      {lens === "rough" ? (
+        <RoughInLens
+          docId={docId}
+          projectId={projectId}
+          rooms={roomList}
+          room={room}
+        />
+      ) : null}
+    </BuildRoomShell>
   );
 }
