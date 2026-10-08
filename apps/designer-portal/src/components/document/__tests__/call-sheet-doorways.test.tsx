@@ -114,7 +114,10 @@ jest.mock('@/hooks/use-margin-items', () => ({ invalidateMarginSurfaces: jest.fn
 jest.mock('@/hooks/use-project-lifecycle', () => ({
   useSaveProjectVitals: () => ({ mutate: jest.fn(), isPending: false }),
 }));
-jest.mock('../mobile/mobile-shell', () => ({ useMobilePrimaryAction: jest.fn() }));
+jest.mock('../mobile/mobile-shell', () => ({
+  useMobilePrimaryAction: jest.fn(),
+  useMobilePrimaryActionValue: () => null,
+}));
 jest.mock('../client-mirror', () => ({ ClientMirror: () => null }));
 jest.mock('../proposal-preview', () => ({ ProposalPreview: () => null }));
 
