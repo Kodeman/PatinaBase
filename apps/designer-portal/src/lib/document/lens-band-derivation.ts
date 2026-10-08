@@ -363,6 +363,8 @@ export interface LensOwnAct {
    *  guide line. */
   sentence: string | null;
   shortSentence?: string | null;
+  /** FR7 F7-4 — the phone form of a quoted reading (Cedar's repair). */
+  phoneSentence?: string;
   onAct: () => void;
   disabled?: boolean;
   held?: LensHeld;
@@ -382,6 +384,9 @@ export interface LensNext {
   /** D-B24 / W6-R1 — the 390 form. The act is never shortened (D1: never the
    *  bare `Record`). */
   shortSentence: string;
+  /** FR7 F7-4 (D13) — the last sentence form at 390, where a reading supplies
+   *  one (`{piece} isn't here.`). Standing items have none. */
+  phoneSentence?: string;
   act: LensNextAct;
   /** The sheet row Next names, so the door does not count it twice. Null for
    *  the stage's own act from `deriveNext`; the voice gives it the key of the
@@ -390,10 +395,13 @@ export interface LensNext {
 }
 
 /** One printable form of the voice's line 2. `act` is F2-4's last rung: the
- *  lead and the act, the sentence given up whole. `sentence` (FR6 F6-6, 390
- *  only) is the lead and the short sentence with no act: the dock prints it. */
+ *  lead and the act, the sentence given up whole. `sentence` (FR6 F6-6 /
+ *  FR7 F7-4, 390 only) is the lead and a sentence alone with no act: the dock
+ *  prints it. */
 export interface LensVoiceRung {
   form: LensBandLine2['form'] | 'sentence' | 'act';
+  /** FR7 F7-4 — which sentence an alone rung prints; set only on `sentence`. */
+  alone?: 'long' | 'short' | 'phone';
   /** `Next ─` beside the long sentence and the act alone, `Next` beside the
    *  short one and alone while the own act loads; null where no Next prints
    *  (a closed or held job). */
@@ -1238,6 +1246,8 @@ export function deriveNext({
               shortSentence: reading
                 ? (reading.shortSentence ?? '')
                 : (prose?.shortSentence ?? shortSentenceOf(item)),
+              // FR7 F7-4 — the reading's phone form; a standing item has none.
+              ...(reading?.phoneSentence ? { phoneSentence: reading.phoneSentence } : {}),
               act: nextAct(act, null, ACT_TIER[act.label] ?? 'plain'),
               rowKey: item.key,
             }
@@ -1280,6 +1290,7 @@ export function deriveNext({
   // 498-c — the region's status where it states one, else the act alone.
   const sentence =
     quoted && installReading ? installReading.sentence : (ownAct.sentence ?? '');
+  const phoneSentence = quoted ? installReading?.phoneSentence : ownAct.phoneSentence;
   return {
     sentence,
     // FR3 F3-11 — D6's own short form. The long sentence repeated here was a
@@ -1289,6 +1300,8 @@ export function deriveNext({
       quoted && installReading
         ? (installReading.shortSentence ?? '')
         : (ownAct.shortSentence ?? sentence),
+    // FR7 F7-4 — the quoted reading's phone form (Cedar's repair carries it).
+    ...(phoneSentence ? { phoneSentence } : {}),
     act: nextAct(ownAct, ownAct.targetId, ownAct.tier),
     rowKey: null,
   };
@@ -1635,10 +1648,19 @@ function deriveVoice(
         ...(next.shortSentence
           ? [{ form: 'short' as const, lead: 'Next', sentence: next.shortSentence }]
           : []),
-        // FR6 F6-6 (D13) — at 390 the dock's centre prints the act (D7), so
-        // the short sentence outranks it here: printed alone, before the act.
-        ...(input.tier === 'mobile' && next.shortSentence
-          ? [{ form: 'sentence' as const, lead: 'Next', sentence: next.shortSentence }]
+        // FR6 F6-6 / FR7 F7-4 (D13) — at 390 the dock's centre prints the act
+        // (D7), so every sentence outranks it here, printed alone: the long,
+        // then the short, then the reading's phone form, before the act.
+        ...(input.tier === 'mobile'
+          ? (
+              [
+                ['long', 'Next ─', next.sentence],
+                ['short', 'Next', next.shortSentence],
+                ['phone', 'Next', next.phoneSentence],
+              ] as const
+            ).flatMap(([alone, lead, sentence]) =>
+              sentence ? [{ form: 'sentence' as const, alone, lead, sentence }] : [],
+            )
           : []),
         // F2-4 — the last rung: `NEXT ─ RECORD THE PAYMENT`, the sentence
         // given up whole rather than clipped.
@@ -1668,6 +1690,7 @@ function deriveVoice(
     lead: printed.lead,
     sentence: printed.sentence,
     form: printed.form,
+    ...(printed.alone ? { alone: printed.alone } : {}),
     rungs,
     standingCount,
     doorClassOne,

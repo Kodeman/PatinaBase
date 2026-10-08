@@ -147,6 +147,24 @@ describe('installReading — short forms (522-2)', () => {
   });
 });
 
+// FR7 F7-4 (D13) — the band's phone form: the piece and nothing else.
+describe('installReading — the phone form (F7-4)', () => {
+  const several = (over: Partial<Parameters<typeof piece>[1]>) =>
+    read([piece('Reading chair, oiled oak', over), piece('Rug', due('2026-10-21'))]);
+
+  it.each([
+    ['past', due('2026-10-02')],
+    ['undated', {}],
+  ])("%s: {piece} isn't here. — no date, no N more", (_, over) => {
+    expect(several(over).phoneSentence).toBe("Reading chair isn't here.");
+  });
+
+  it('none where a date is ahead or everything is here', () => {
+    expect(several(due('2026-10-08')).phoneSentence).toBeUndefined();
+    expect(read([piece('Reading chair', { status: 'delivered' })]).phoneSentence).toBeUndefined();
+  });
+});
+
 describe('installReading — several pieces not here', () => {
   it('names the first and counts one more', () => {
     expect(

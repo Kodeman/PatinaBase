@@ -2089,10 +2089,12 @@ describe('deriveLensBand · FR3: Cedar’s band sentence is D6’s reading (F3-1
     expect(voice.rungs.map((rung) => rung.form)).toEqual(['short', 'act']);
   });
 
-  it('else the act alone', () => {
+  // FR7 F7-4 (D13) — at 390 the phone form stands before the act alone.
+  it('at 390, the phone form alone before the act', () => {
     const voice = cedar({ tier: 'mobile' });
-    expect(voice.form).toBe('act');
-    expect(voice.sentence).toBe('');
+    expect(voice.form).toBe('sentence');
+    expect(voice.sentence).toBe("Side table isn't here.");
+    expect(voice.rungs.map((rung) => rung.alone ?? rung.form)).toEqual(['phone', 'act']);
     expect(voice.next?.act.label).toBe('Ask the maker for a date');
   });
 });
@@ -2310,6 +2312,7 @@ const WREN_READING = installReading(
 );
 const WREN_LONG = "Library ladder and rail was due 3 October and isn't here.";
 const WREN_SHORT = "Library ladder and rail isn't here — due 3 October.";
+const WREN_PHONE = "Library ladder and rail isn't here.";
 const wren = (over: Partial<LensBandInput> = {}) =>
   deriveLensBand(
     input({
@@ -2369,9 +2372,10 @@ describe('deriveLensBand · FR6 F6-3: the band keeps the reading after a held as
   });
 });
 
-// US-19 FR6 F6-6 (walk D13) — at 390 under one-voice the dock's centre prints
-// the act, so line 2 yields long → short → the short sentence alone → the act
-// alone. The sentence rung measures the lead and the sentence only.
+// US-19 FR6 F6-6 / FR7 F7-4 (walk D13) — at 390 under one-voice the dock's
+// centre prints the act, so line 2 yields long → short → the long alone → the
+// short alone → the phone form alone → the act alone. An alone rung measures
+// the lead and the sentence only.
 describe('deriveLensBand · FR6 F6-6: at 390 the sentence before the act', () => {
   const sentenceRungPx = (sentence: string) =>
     'Next'.length * LENS_MONO_PX_PER_CHAR +
@@ -2389,21 +2393,25 @@ describe('deriveLensBand · FR6 F6-6: at 390 the sentence before the act', () =>
       }),
     ).voice;
 
-  it('Olsen at 390: the short sentence alone stands before the act; the dock’s act is still File the claim', () => {
+  it('Olsen at 390: the long sentence alone stands before the code; the dock’s act is still File the claim', () => {
     const voice = olsen('mobile');
     expect(voice.next?.sentence).toBe(OLSEN_CLAIM);
-    // The estimate fits `Next · CLAIM OPEN · AP-012 · File the claim`; where the
-    // band measures it clipping, it drops to the sentence alone, then the act.
+    // FR7 F7-4 — the estimate fits `Next · CLAIM OPEN · AP-012 · File the
+    // claim`; where the band measures it clipping, it drops to the long
+    // sentence alone — the fact — before D-B24's code, then the act.
     expect(voice.rungs).toEqual([
       { form: 'short', lead: 'Next', sentence: 'CLAIM OPEN · AP-012' },
-      { form: 'sentence', lead: 'Next', sentence: 'CLAIM OPEN · AP-012' },
+      { form: 'sentence', alone: 'long', lead: 'Next ─', sentence: OLSEN_CLAIM },
+      { form: 'sentence', alone: 'short', lead: 'Next', sentence: 'CLAIM OPEN · AP-012' },
       { form: 'act', lead: 'Next ─', sentence: '' },
     ]);
+    // A standing item has no phone form.
+    expect(voice.next?.phoneSentence).toBeUndefined();
     // D7 — the dock registers `voice.next`, never the printed rung.
     expect(voice.next?.act.label).toBe('File the claim');
   });
 
-  it('the sentence rung measures the lead and the sentence only, never the act', () => {
+  it('the long sentence alone measures the lead and the sentence only, never the act', () => {
     // 31 characters: too wide beside `File the claim`, narrow enough alone.
     const voice = deriveLensBand(
       input({
@@ -2417,23 +2425,114 @@ describe('deriveLensBand · FR6 F6-6: at 390 the sentence before the act', () =>
     ).toBeGreaterThan(LENS_LINE2_MEASURE_PX.mobile);
     expect(sentenceRungPx(OLSEN_CLAIM)).toBeLessThanOrEqual(LENS_LINE2_MEASURE_PX.mobile);
     expect(voice.form).toBe('sentence');
-    expect(voice.lead).toBe('Next');
+    expect(voice.lead).toBe('Next ─');
     expect(voice.sentence).toBe(OLSEN_CLAIM);
-    expect(voice.rungs.map((rung) => rung.form)).toEqual(['sentence', 'act']);
+    expect(voice.rungs[0]?.alone).toBe('long');
+    expect(voice.rungs.map((rung) => rung.form)).toEqual(['sentence', 'sentence', 'act']);
     expect(voice.next?.act.label).toBe('File the claim');
   });
 
-  it('Wren at 390: the short reading is the sentence rung, and the measure decides', () => {
+  it('Wren at 390: the long and the short reading refuse; the phone form prints alone', () => {
     const voice = wren({ tier: 'mobile' });
     expect(voice.next?.act.label).toBe('Ask the maker for a date');
-    expect(voice.rungs.find((rung) => rung.form === 'sentence')).toBeUndefined();
     expect(sentenceRungPx(WREN_SHORT)).toBeGreaterThan(LENS_LINE2_MEASURE_PX.mobile);
-    expect(voice.form).toBe('act');
+    // Y1 — 35 characters: 326px by the estimate, inside 327.
+    expect(sentenceRungPx(WREN_PHONE)).toBeLessThanOrEqual(LENS_LINE2_MEASURE_PX.mobile);
+    expect(voice.next?.phoneSentence).toBe(WREN_PHONE);
+    expect(voice.form).toBe('sentence');
+    expect(voice.lead).toBe('Next');
+    expect(voice.sentence).toBe(WREN_PHONE);
+    expect(voice.rungs).toEqual([
+      { form: 'sentence', alone: 'phone', lead: 'Next', sentence: WREN_PHONE },
+      { form: 'act', lead: 'Next ─', sentence: '' },
+    ]);
   });
 
-  it('the sentence rung is the phone’s alone', () => {
-    expect(olsen('full').rungs.map((rung) => rung.form)).not.toContain('sentence');
-    expect(olsen('narrow').rungs.map((rung) => rung.form)).not.toContain('sentence');
+  it('Wren held at 390: the phone form prints alone; the dock’s act is Open the held draft', () => {
+    const voice = wren({
+      tier: 'mobile',
+      needs: [
+        {
+          ...need('draft-0', 'po_unacknowledged', 'Arrival date request to the maker drafted', 'Review and send'),
+          owner: 'designer',
+          draft: { kind: 'maker_eta_request', status: 'awaiting_review', ffeItemId: 'ffe-ladder' },
+        },
+      ],
+    });
+    expect(voice.next?.act.label).toBe('Open the held draft');
+    expect(voice.next?.phoneSentence).toBe(WREN_PHONE);
+    expect(voice.form).toBe('sentence');
+    expect(voice.sentence).toBe(WREN_PHONE);
+    expect(voice.rungs[0]?.alone).toBe('phone');
+  });
+
+  it('Cedar at 390: the repair quotes the reading, phone form and all; the dock’s act is Add the maker', () => {
+    const reading = installReading(
+      [{ id: 'ffe-1', name: 'Side table, walnut', status: 'ordered', purchase_order: null }],
+      NOW,
+      false,
+    );
+    expect(reading?.phoneSentence).toBe("Side table isn't here.");
+    // As page.tsx builds the repair (FR6 F6-10): the reading's three forms.
+    const voice = deriveLensBand(
+      input({
+        tier: 'mobile',
+        spreadKind: 'install',
+        household: 'Nora Ellison',
+        jobName: 'Cedar Lane Study',
+        now: NOW,
+        installReading: reading,
+        ownAct: {
+          key: 'own:document-act-install-reading',
+          label: 'Add the maker',
+          targetId: 'document-act-install-reading',
+          tier: 'scored',
+          sentence: reading!.sentence,
+          shortSentence: reading!.shortSentence ?? '',
+          phoneSentence: reading!.phoneSentence,
+          onAct: jest.fn(),
+        },
+      }),
+    ).voice;
+    expect(voice.next?.act.label).toBe('Add the maker');
+    expect(voice.form).toBe('sentence');
+    expect(voice.sentence).toBe("Side table isn't here.");
+    expect(voice.rungs.map((rung) => rung.alone ?? rung.form)).toEqual(['phone', 'act']);
+  });
+
+  it('Halloran at 390: the long refuses alone; D-B24’s code prints alone, as before', () => {
+    const voice = deriveLensBand(
+      input({
+        tier: 'mobile',
+        household: 'Client User',
+        jobName: 'Halloran House',
+        now: NOW,
+        ownAct: null,
+        landOn: jest.fn(),
+        needs: [
+          {
+            ...need('po-0', 'po_unacknowledged', 'NA-2026-077 sent — no acknowledgment', 'Follow up with the maker'),
+            owner: 'maker' as const,
+          },
+        ],
+      }),
+    ).voice;
+    expect(voice.next?.act.label).toBe('Follow up with the maker');
+    expect(voice.next?.phoneSentence).toBeUndefined();
+    expect(voice.form).toBe('sentence');
+    expect(voice.lead).toBe('Next');
+    expect(voice.sentence).toBe(voice.next?.shortSentence);
+    expect(voice.sentence).toMatch(/^NO ACK · NA-2026-077$/i);
+    expect(voice.rungs.map((rung) => rung.alone ?? rung.form)).toEqual(['short', 'act']);
+  });
+
+  it('the alone rungs are the phone’s; full and narrow are unchanged', () => {
+    for (const tier of ['full', 'narrow'] as const) {
+      expect(olsen(tier).rungs.map((rung) => rung.form)).not.toContain('sentence');
+      const reading = wren({ tier });
+      expect(reading.rungs.map((rung) => rung.form)).not.toContain('sentence');
+      expect(reading.rungs.map((rung) => rung.sentence)).not.toContain(WREN_PHONE);
+    }
   });
 });
 

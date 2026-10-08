@@ -37,6 +37,9 @@ export interface InstallReading {
    *  here — no date recorded.`), or null where no short form is ruled: the
    *  band then prints the act alone when the sentence does not fit. */
   shortSentence?: string | null;
+  /** FR7 F7-4 (D13) — the band's phone form, `{piece} isn't here.`, for both
+   *  not-here states: no date, no `{n} more`. Unset when everything is here. */
+  phoneSentence?: string;
   /** The stage's own act for this state (D1), or null where D6 is silent. */
   act: OwnAct | null;
   /** The piece the sentence names; null when everything is here. */
@@ -246,11 +249,13 @@ function reading(
   first: InstallReadingPiece | null,
   windowHeld: boolean,
   shortSentence: string | null = null,
+  phoneSentence?: string,
 ): InstallReading {
   return {
     state,
     sentence,
     shortSentence,
+    ...(phoneSentence ? { phoneSentence } : {}),
     act: ownAct('install', { ...NOT_READ_AT_INSTALL, install: { state, windowHeld } }),
     firstItemId: first?.id ?? null,
     makerRecorded: first ? lineMaker(first) !== null : true,
@@ -298,6 +303,8 @@ export function installReading(
   if (!first) return reading('all_here', 'Everything is here.', null, windowHeld);
 
   const name = pieceName(first.piece.name);
+  // FR7 F7-4 — the phone form names the piece and nothing else.
+  const phone = `${name} isn't here.`;
   const more =
     rest.length === 0
       ? ''
@@ -312,6 +319,7 @@ export function installReading(
       first.piece,
       windowHeld,
       `${name} isn't here — no date recorded.`,
+      phone,
     );
   }
   // FR4 522-2 — the short forms carry no `N more` trailer: the short form
@@ -325,6 +333,7 @@ export function installReading(
       first.piece,
       windowHeld,
       `${name} isn't here — due ${etaDay}.`,
+      phone,
     );
   }
   return reading(

@@ -388,6 +388,7 @@ export function LensBand({
             data-lens-line="2"
             data-lens-line2-kind={spoken.next ? 'next' : printed.kind}
             data-lens-line2-form={rung.form}
+            data-lens-sentence-rung={rung.form === 'sentence' ? rung.alone : undefined}
             aria-live="polite"
             aria-atomic="true"
             className={`flex items-center gap-2 whitespace-nowrap text-[15px] leading-[1.3] ${

@@ -6,6 +6,7 @@ import {
   type LensBandModel,
   type LensSpreadKind,
 } from '@/lib/document/lens-band-derivation';
+import { installReading } from '@/lib/document/install-reading';
 import { LensBand, OPEN_STANDING_SHEET_EVENT } from '../lens-band';
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -1043,6 +1044,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(phone.voice.form).toBe('sentence');
     render(<LensBand model={phone} docId="doc-1" />);
     expect(line('2')).toHaveAttribute('data-lens-line2-form', 'sentence');
+    expect(line('2')).toHaveAttribute('data-lens-sentence-rung', 'short');
     expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next');
     const sentence = line('2').querySelector('[data-lens-sentence]');
     expect(sentence).toHaveTextContent(phone.voice.next!.shortSentence);
@@ -1136,6 +1138,121 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
       render(<LensBand model={chen()} docId="doc-1" />);
       expect(line('2')).toHaveAttribute('data-lens-line2-form', 'long');
       expect(sentence()).toHaveTextContent(CHEN_PROSE);
+    });
+
+    // FR7 F7-4 (D13) — at 390 the alone rungs: the long, the short, then the
+    // reading's phone form, each with no act; the dock carries it.
+    describe('FR7 F7-4 — the alone rungs at 390', () => {
+      const OLSEN_CLAIM = 'AP-012 has an open damage claim';
+      const OCT_8 = new Date('2026-10-08T12:00:00');
+      const rung = () => line('2').getAttribute('data-lens-sentence-rung');
+
+      it('Olsen: where the code beside the act clips, the long sentence prints alone', () => {
+        clips = (text) => text.includes('CLAIM OPEN');
+        render(
+          <LensBand
+            model={model({
+              tier: 'mobile',
+              household: 'Olsen',
+              now: OCT_8,
+              ownAct: null,
+              needs: [need('claim', 'damage_claim', OLSEN_CLAIM, 'File the claim')],
+            })}
+            docId="doc-1"
+          />,
+        );
+        expect(line('2')).toHaveAttribute('data-lens-line2-form', 'sentence');
+        expect(rung()).toBe('long');
+        expect(sentence()).toHaveTextContent(OLSEN_CLAIM);
+        expect(screen.queryByRole('button', { name: 'File the claim' })).toBeNull();
+      });
+
+      it('Wren held: the phone form alone; no Open the held draft in the band', () => {
+        clips = () => false;
+        const reading = installReading(
+          [
+            {
+              id: 'ffe-ladder',
+              name: 'Library ladder and rail',
+              status: 'ordered',
+              purchase_order: { confirmed_eta: '2026-10-03' },
+            },
+          ],
+          OCT_8,
+          false,
+        );
+        const phone = model({
+          tier: 'mobile',
+          spreadKind: 'install',
+          household: 'Wren',
+          jobName: 'Wren Library',
+          now: OCT_8,
+          ownAct: {
+            key: 'own:ask',
+            label: 'Ask the maker for a date',
+            targetId: 'document-act-install-reading',
+            tier: 'scored',
+            sentence: null,
+            onAct: jest.fn(),
+          },
+          installReading: reading,
+          needs: [
+            {
+              ...need('draft-0', 'po_unacknowledged', 'Arrival date request to the maker drafted', 'Review and send'),
+              owner: 'designer',
+              draft: { kind: 'maker_eta_request', status: 'awaiting_review', ffeItemId: 'ffe-ladder' },
+            },
+          ],
+        });
+        expect(phone.voice.next?.act.label).toBe('Open the held draft');
+        render(<LensBand model={phone} docId="doc-1" />);
+        expect(line('2')).toHaveAttribute('data-lens-line2-form', 'sentence');
+        expect(rung()).toBe('phone');
+        expect(sentence()).toHaveTextContent("Library ladder and rail isn't here.");
+        expect(screen.queryByRole('button', { name: 'Open the held draft' })).toBeNull();
+      });
+
+      it('Cedar: the repair’s phone form alone; no Add the maker in the band', () => {
+        clips = () => false;
+        const reading = installReading(
+          [{ id: 'ffe-1', name: 'Side table, walnut', status: 'ordered', purchase_order: null }],
+          OCT_8,
+          false,
+        )!;
+        render(
+          <LensBand
+            model={model({
+              tier: 'mobile',
+              spreadKind: 'install',
+              household: 'Nora Ellison',
+              jobName: 'Cedar Lane Study',
+              now: OCT_8,
+              installReading: reading,
+              ownAct: {
+                key: 'own:document-act-install-reading',
+                label: 'Add the maker',
+                targetId: 'document-act-install-reading',
+                tier: 'scored',
+                sentence: reading.sentence,
+                shortSentence: reading.shortSentence ?? '',
+                phoneSentence: reading.phoneSentence,
+                onAct: jest.fn(),
+              },
+            })}
+            docId="doc-1"
+          />,
+        );
+        expect(rung()).toBe('phone');
+        expect(sentence()).toHaveTextContent("Side table isn't here.");
+        expect(screen.queryByRole('button', { name: 'Add the maker' })).toBeNull();
+      });
+
+      it('a rung that prints the act carries no sentence-rung mark', () => {
+        clips = () => false;
+        render(<LensBand model={chen({ tier: 'narrow' })} docId="doc-1" />);
+        expect(line('2')).toHaveAttribute('data-lens-line2-form', 'long');
+        expect(rung()).toBeNull();
+      });
     });
   });
 
