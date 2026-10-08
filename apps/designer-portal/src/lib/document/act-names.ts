@@ -261,7 +261,7 @@ export function householdDisplayName(name: string | null | undefined): string {
  * act lands it on its own control. Each is cancelable: the owner cancels it
  * when it took the act, and the press keeps its old landing when nobody did.
  * - `askTheMaker` — the Install row opens its sheet on the first field.
- * - `ffeAct` (detail `FfeActLanding`) — Pieces lands on its own control.
+ * - `ffeAct` (detail `FfeActLandingDetail`) — Pieces lands on its own control.
  * - `composeMessage` (detail `{ named: string[]; act?: string }`) — the
  *   letterhead's Message composer opens, naming what is overdue; `act` is the
  *   pressed act's name, printed as the composer's eyebrow (FR6 F6-1).
@@ -282,6 +282,13 @@ export const ACT_LANDING_EVENTS = {
  * not (FR5 F5-1).
  */
 export type FfeActLanding = 'claim' | 'follow-up' | 'send' | 'spec' | 'open' | 'release';
+
+/**
+ * FR9 F9-1 — the event's detail: a landing alone (Pieces picks the line by its
+ * own rule), or a landing on a named line (`itemId`), as a per-PO silence's
+ * `Follow up with the maker` lands on its own PO's line.
+ */
+export type FfeActLandingDetail = FfeActLanding | { act: FfeActLanding; itemId: string };
 
 const SPEC_THE_UNSPECIFIED = /^Spec the \d+ unspecified$/;
 

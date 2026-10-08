@@ -115,8 +115,10 @@ import {
   needActLabel,
   ownAct,
   type FfeActLanding,
+  type FfeActLandingDetail,
   type OwnActFacts,
 } from '@/lib/document/act-names';
+import { isUnansweredPo } from '@/lib/document/po-silences';
 import { StrataMark } from './strata-mark';
 import { StrataMiniRule } from './strata-mini-rule';
 import { WorkBlock } from './work-block';
@@ -1104,17 +1106,9 @@ export function ffeActLine<
   if (act === 'spec') return live.find((item) => !item.product_id) ?? null;
   // R18: a drafted PO never sent is the one Send is offered on.
   if (act === 'send') return live.find((item) => canSend(item.purchase_order ?? null)) ?? null;
-  // The rule the Desk's `po_unacknowledged` counts by (00590): sent, never
-  // acknowledged, neither delivered nor cancelled — the oldest first.
-  const unanswered = live.filter((item) => {
-    const po = item.purchase_order;
-    return (
-      Boolean(po?.sent_at) &&
-      !po?.acknowledged_at &&
-      po?.status !== 'delivered' &&
-      po?.status !== 'cancelled'
-    );
-  });
+  // The rule the Desk's `po_unacknowledged` counts by (00590), shared with
+  // the per-PO silences (F9-1) — the oldest first.
+  const unanswered = live.filter((item) => isUnansweredPo(item.purchase_order));
   return (
     [...unanswered].sort((a, b) =>
       String(a.purchase_order?.sent_at).localeCompare(String(b.purchase_order?.sent_at)),
@@ -1911,8 +1905,11 @@ function FFESectionBody({
   // control: the claim, the send and the spec on their line, `Follow up with
   // the maker` in the maker composer, `Open the pieces` on the first line.
   // True (the press taken) only when Pieces carries the act; otherwise the
-  // press keeps its old landing.
-  const landFfeAct = (act: FfeActLanding): boolean => {
+  // press keeps its old landing. FR9 F9-1 — a detail naming its line (a
+  // per-PO silence's) lands on that line, not the one the act's rule picks.
+  const landFfeAct = (detail: FfeActLandingDetail): boolean => {
+    const act = typeof detail === 'string' ? detail : detail.act;
+    const namedLineId = typeof detail === 'string' ? undefined : detail.itemId;
     const openRegion = () => {
       if (mode === 'project') ffeSetFolded(false);
     };
@@ -1951,7 +1948,11 @@ function FFESectionBody({
       landOnControl(liftEntry);
       return true;
     }
-    const line = items ? ffeActLine(items, act) : null;
+    const line = !items
+      ? null
+      : namedLineId !== undefined
+        ? (items.find((item) => String(item.id) === namedLineId) ?? null)
+        : ffeActLine(items, act);
     if (act === 'follow-up') {
       // 520-2 — the maker composer, never the order ledger or the PO button.
       if (!line) return false;
@@ -2017,7 +2018,7 @@ function FFESectionBody({
   });
   useEffect(() => {
     const onLand = (event: Event) => {
-      if (landFfeActRef.current((event as CustomEvent<FfeActLanding>).detail)) {
+      if (landFfeActRef.current((event as CustomEvent<FfeActLandingDetail>).detail)) {
         event.preventDefault();
       }
     };

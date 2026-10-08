@@ -13,7 +13,12 @@
 import type { ReactElement } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ACT_LANDING_EVENTS, ffeActLandingOf, type FfeActLanding } from '@/lib/document/act-names';
+import {
+  ACT_LANDING_EVENTS,
+  ffeActLandingOf,
+  type FfeActLanding,
+  type FfeActLandingDetail,
+} from '@/lib/document/act-names';
 import type { NeedLine } from '@/lib/document/desk-derivation';
 
 let mockItems: Record<string, unknown>[] = [];
@@ -380,6 +385,89 @@ describe('a need’s act lands on its line’s control (F3-2)', () => {
     expect(taken).toBe(true);
     const sheet = await screen.findByRole('dialog', { name: 'Follow up with the maker' });
     expect(within(sheet).getByLabelText('Subject')).toHaveValue('NA-2026-077 — following up');
+  });
+
+  // US-19 FR9 F9-1 (X1) — a per-PO silence's act names its line: the press
+  // lands on that line's follow-up, not the oldest unanswered PO's.
+  describe('F9-1: a landing that names its line (Birchwood)', () => {
+    const apparatus = line('line-031', {
+      vendor_name: 'Apparatus',
+      purchase_order: { id: 'po-031', po_number: 'BR-2026-031', status: 'sent', sent_at: '2026-09-28', acknowledged_at: null },
+    });
+    const ceramica = line('line-032', {
+      vendor_name: 'Ceramica Studio',
+      purchase_order: { id: 'po-032', po_number: 'BR-2026-032', status: 'sent', sent_at: '2026-09-30', acknowledged_at: null },
+    });
+    const pressLine = (itemId: string) => {
+      const detail: FfeActLandingDetail = { act: 'follow-up', itemId };
+      return !window.dispatchEvent(
+        new CustomEvent(ACT_LANDING_EVENTS.ffeAct, { detail, cancelable: true }),
+      );
+    };
+    const renderBirchwood = () =>
+      renderWithQuery(
+        <FFESection
+          projectId="project-1"
+          projectName="Birchwood"
+          mode="project"
+          needs={[need('po_unacknowledged')]}
+        />,
+      );
+
+    it('itemId = 032’s line opens the composer on 032, not the oldest', async () => {
+      mockOneVoice = true;
+      mockItems = [apparatus, ceramica];
+      mockDrafts = [
+        { id: 'note-031', kind: 'maker_follow_up', status: 'awaiting_review', ffe_item_id: 'line-031' },
+      ];
+      renderBirchwood();
+
+      let taken = false;
+      act(() => {
+        taken = pressLine('line-032');
+      });
+      expect(taken).toBe(true);
+      const sheet = await screen.findByRole('dialog', { name: 'Follow up with the maker' });
+      expect(within(sheet).getByLabelText('Subject')).toHaveValue('BR-2026-032 — following up');
+      expect(within(sheet).getByText('Ceramica Studio')).toBeInTheDocument();
+      await waitFor(() => expect(document.activeElement).toBe(within(sheet).getByLabelText('Note')));
+      expect(mockOpenLedger).not.toHaveBeenCalled();
+    });
+
+    it('itemId = 031’s line, a note held there, lands on line-held-maker-note’s DraftReview', async () => {
+      mockOneVoice = true;
+      mockItems = [apparatus, ceramica];
+      mockDrafts = [
+        { id: 'note-031', kind: 'maker_follow_up', status: 'awaiting_review', ffe_item_id: 'line-031' },
+      ];
+      renderBirchwood();
+
+      let taken = false;
+      act(() => {
+        taken = pressLine('line-031');
+      });
+      expect(taken).toBe(true);
+      await waitFor(() =>
+        expect(screen.getByTestId('line-held-maker-note')).toContainElement(
+          document.activeElement as HTMLElement,
+        ),
+      );
+      expect(document.getElementById('ffe-selection-line-031')).toContainElement(
+        document.activeElement as HTMLElement,
+      );
+      expect(screen.queryByRole('dialog', { name: 'Follow up with the maker' })).toBeNull();
+    });
+
+    it('an itemId no line carries leaves the press untaken', () => {
+      mockOneVoice = true;
+      mockItems = [apparatus, ceramica];
+      renderBirchwood();
+      let taken = true;
+      act(() => {
+        taken = pressLine('line-gone');
+      });
+      expect(taken).toBe(false);
+    });
   });
 
   it('File the claim at PO grain (520-4): opens Receiving with its claim landing armed', async () => {

@@ -91,7 +91,7 @@ describe('a Standing-sheet row lands on a control (FR4 522-3)', () => {
   it.each([
     ['Send the purchase order', 'po_unsent-0', 'send'],
     ['File the claim', 'row:damaged', 'claim'],
-    ['Follow up with the maker', 'po_unacknowledged-0', 'follow-up'],
+    ['Follow up with the maker', 'row:po_silence', 'follow-up'],
     ['Open the pieces', 'row:blocked', 'open'],
   ])('%s goes to Pieces as `%s` → `%s`', async (label, actKey, landing) => {
     const item = row('r', actKey, label);
@@ -133,6 +133,22 @@ describe('a Standing-sheet row lands on a control (FR4 522-3)', () => {
     await waitFor(() => expect(nudge.act!.onAct).toHaveBeenCalledTimes(1));
     expect(composer.details).toEqual([]);
     composer.stop();
+  });
+
+  // US-19 FR9 F9-1 — a per-PO silence's act names its line; the name alone
+  // would land on the oldest PO's. A need's own (or lent) follow-up keeps it.
+  it('a need’s own Follow up with the maker keeps its own landing, which names its line', async () => {
+    const s032 = row('po_unacknowledged-1', 'po_unacknowledged-1', 'Follow up with the maker', {
+      needKind: 'po_unacknowledged',
+    });
+    const pieces = listen(ACT_LANDING_EVENTS.ffeAct);
+    render(<Band items={[s032]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Follow up with the maker' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(s032.act!.onAct).toHaveBeenCalledTimes(1));
+    expect(pieces.details).toEqual([]);
+    pieces.stop();
   });
 
   it('where no region takes the act, the act keeps its own landing', async () => {

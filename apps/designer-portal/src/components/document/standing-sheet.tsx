@@ -70,10 +70,13 @@ function landAct(type: string, detail?: unknown): boolean {
 /**
  * FR4 522-3 — a row's act lands on a control, as the band's does. A Pieces
  * act by its name goes to Pieces; a `Nudge` row the table names no control
- * for opens the Message composer. True when the owner took it.
+ * for opens the Message composer. True when the owner took it. FR9 F9-1 — a
+ * need's own (or lent) `Follow up with the maker` keeps its own landing: a
+ * per-PO silence's names its line, which the name alone cannot.
  */
 function landInRegion(act: LensAct): boolean {
   const pieces = ffeActLandingOf(act.label);
+  if (pieces === 'follow-up' && !act.key.startsWith('row:')) return false;
   if (pieces) return landAct(ACT_LANDING_EVENTS.ffeAct, pieces);
   const kind = act.key.startsWith('row:') ? act.key.slice('row:'.length) : null;
   const composes =

@@ -14,7 +14,8 @@ import {
   type LensStandingItem,
 } from '../lens-band-derivation';
 import { ACT_TARGET_IDS, ownAct } from '../act-names';
-import type { DocumentStateRow } from '../desk-derivation';
+import type { DocumentStateRow, NeedLine } from '../desk-derivation';
+import { expandPoSilences } from '../po-silences';
 import { sentProposalReasonLine, sentProposalSignedLine } from '../desk-roster-derivation';
 import { installReading, type InstallReading } from '../install-reading';
 import { sentProposalVoice, type SentProposalRecord } from '../sent-proposal-voice';
@@ -2327,6 +2328,107 @@ describe('deriveLensBand · F8-6: the relabel matches either PO number', () => {
       standing.find((item) => item.key === key);
     expect(rowOf(voice.standing, 'need:po-077')?.act?.label).toBe('Open the held draft');
     expect(rowOf(voice.standing, 'need:draft-0')?.act?.label).toBe('Open the held draft');
+  });
+});
+
+// US-19 FR9 F9-1 (X1) — two silences are two rows. Birchwood: two sent,
+// unacknowledged POs, one line each, a follow-up held on 031's line. The
+// aggregate need expands per PO (as page.tsx maps it under one-voice), so
+// F7-1's relabel fires: 031 opens the held draft, 032 follows up with its own.
+describe('deriveLensBand · F9-1: two silences are two rows', () => {
+  const BIRCHWOOD_NOW = new Date('2026-10-06T12:00:00');
+  const AGGREGATE: NeedLine = {
+    kind: 'po_unacknowledged',
+    text: '2 POs sent — no acknowledgment',
+    actionLabel: 'Follow up with the maker',
+    stamp: { label: 'NO ACK', color: '#6E8BA3' },
+    urgent: false,
+    dueOn: '2026-09-28T15:00:00Z',
+    owner: 'maker',
+  };
+  const silencePo = (id: string, poNumber: string, sentAt: string) => ({
+    id: `po-${id}`,
+    po_number: poNumber,
+    vendor_po_number: null,
+    sent_at: sentAt,
+    acknowledged_at: null,
+    status: 'sent',
+  });
+  const LINES = [
+    { id: 'line-032', purchase_order: silencePo('032', 'BR-2026-032', '2026-09-30T10:00:00Z') },
+    { id: 'line-031', purchase_order: silencePo('031', 'BR-2026-031', '2026-09-28T15:00:00Z') },
+  ];
+  /** The page's need rows: the expanded silences, keyed by their index. */
+  const silences = (): LensNeedRow[] =>
+    expandPoSilences({ need: AGGREGATE, lines: LINES, unackedPoCount: 2 }).map((row, index) => ({
+      key: `${row.kind}-${index}`,
+      kind: row.kind,
+      text: row.text,
+      actionLabel: row.actionLabel,
+      onAct: jest.fn(),
+      urgent: row.urgent,
+      dueOn: row.dueOn ?? null,
+      owner: row.owner,
+    }));
+  const NOTE: LensNeedRow = {
+    ...need('draft-0', 'po_unacknowledged', 'Follow-up to the maker drafted', 'Review and send'),
+    urgent: false,
+    owner: 'designer',
+    draft: {
+      kind: 'maker_follow_up',
+      status: 'awaiting_review',
+      ffeItemId: 'line-031',
+      poNumber: 'BR-2026-031',
+    },
+  };
+
+  it('031 opens the held draft, 032 follows up with its own act; Next is 031’s; STUCK lends 032’s act', () => {
+    (NOTE.onAct as jest.Mock).mockClear();
+    const [s031, s032] = silences();
+    expect([s031.text, s032.text]).toEqual([
+      'BR-2026-031 sent — no acknowledgment',
+      'BR-2026-032 sent — no acknowledgment',
+    ]);
+    const { voice } = deriveLensBand(
+      input({
+        now: BIRCHWOOD_NOW,
+        ownAct: null,
+        landOn: jest.fn(),
+        needs: [s031, s032, NOTE],
+        ticket: [
+          ticketRow('pieces', {
+            rank: 'piece-stuck',
+            phrase: '2 purchase orders unanswered, 7 days',
+            standingSince: '2026-09-29',
+          }),
+        ],
+      }),
+    );
+    const rowOf = (key: string) => voice.standing.find((item) => item.key === key);
+    const row031 = rowOf(`need:${s031.key}`);
+    const row032 = rowOf(`need:${s032.key}`);
+
+    expect(row031?.act?.label).toBe('Open the held draft');
+    row031?.act?.onAct();
+    expect(NOTE.onAct).toHaveBeenCalledTimes(1);
+    expect(s031.onAct).not.toHaveBeenCalled();
+
+    expect(row032?.act?.label).toBe('Follow up with the maker');
+    row032?.act?.onAct();
+    expect(s032.onAct).toHaveBeenCalledTimes(1);
+
+    // Next is the oldest silence, by D2's deadline order.
+    expect(voice.next?.rowKey).toBe(`need:${s031.key}`);
+    expect(voice.next?.sentence).toContain('BR-2026-031 sent — no acknowledgment');
+    expect(voice.next?.act.label).toBe('Open the held draft');
+
+    // The ticket's aggregate clause stays one row; its act is 032's own.
+    const stuck = voice.standing.find((item) => item.key === 'ticket:pieces');
+    expect(stuck?.sentence).toBe('2 purchase orders unanswered, 7 days');
+    expect(stuck?.act?.label).toBe('Follow up with the maker');
+    stuck?.act?.onAct();
+    expect(s032.onAct).toHaveBeenCalledTimes(2);
+    expect(NOTE.onAct).toHaveBeenCalledTimes(1);
   });
 });
 
