@@ -16,6 +16,7 @@ import {
 } from "@patina/supabase";
 import { BuildRoomShell } from "@/components/document/pieces/build-room-shell";
 import { PriceLens } from "@/components/document/pieces/price-lens";
+import { ReleaseLens } from "@/components/document/pieces/release-lens";
 import { RoughInLens } from "@/components/document/pieces/rough-in-lens";
 import { SpecLens } from "@/components/document/pieces/spec-lens";
 import { useCanSeeMargin } from "@/hooks/use-can-see-margin";
@@ -148,6 +149,14 @@ function BuildRoom({ docId }: { docId: string }) {
       )}
       {lens === "price" && (
         <PriceLens
+          docId={docId}
+          projectId={projectId}
+          room={room}
+          canSeeMoney={canSeeMoney}
+        />
+      )}
+      {lens === "release" && (
+        <ReleaseLens
           docId={docId}
           projectId={projectId}
           room={room}
