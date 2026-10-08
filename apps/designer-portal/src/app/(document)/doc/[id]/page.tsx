@@ -258,7 +258,11 @@ import {
 } from '@/lib/document/shelves';
 import { deriveSectionStageLine } from '@/lib/document/section-stage-line';
 import { deriveSectionWorkflowStageDocument } from '@/lib/document/workflow-stage-derivation';
-import { ROSTER_STAGE_ORDER, sentProposalReasonLine } from '@/lib/document/desk-roster-derivation';
+import {
+  ROSTER_STAGE_ORDER,
+  sentProposalReasonLine,
+  sentProposalSignedLine,
+} from '@/lib/document/desk-roster-derivation';
 import { sentProposalVoice } from '@/lib/document/sent-proposal-voice';
 import { overdueApprovalTitles, overdueMarginDecisionTitles, waitingOnNamed } from '@/lib/document/nudge-named';
 import { useMarginItems } from '@/hooks/use-margin-items';
@@ -2555,10 +2559,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             row,
             proposal: liveProposal,
             clientMessageable: Boolean(row.client_profile_id),
+            // FR8 F8-3: `Issued on paper — awaiting {first}’s signature.`
+            clientFirstName:
+              familyLabel(bandHousehold) === 'the client'
+                ? null
+                : clientShortName(familyLabel(bandHousehold)),
             now: new Date(),
           })
         : null,
-    [oneVoice, bandSection, row, liveProposal],
+    [oneVoice, bandSection, row, liveProposal, bandHousehold],
   );
   const bandOwnAct = useMemo<LensOwnAct | null | undefined>(() => {
     if (!oneVoice || !bandSection) return undefined;
@@ -2598,6 +2607,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // reminder the wall cannot send, a sent proposal has no act.
       proposalHesitating: bandProposalVoice?.proposalHesitating,
       reminderAvailable: bandProposalVoice?.reminderAvailable,
+      // FR8 F8-4: the client has signed and the countersign form is mounted
+      // (the voice exists only under one-voice on the proposal band).
+      countersignPending: bandProposalVoice?.countersignPending,
       unspecifiedCount: unspecified,
       // F8-5 (N2): under one-voice the band reads the release the Pieces
       // head is offering, so it names the head's own act.
@@ -2619,8 +2631,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       sentence:
         bandSection === 'project' && unspecified > 0
           ? `${unspecified} ${unspecified === 1 ? 'line' : 'lines'} unspecified.`
-          : (repair?.sentence ??
-            (bandSection === 'proposal' && row ? sentProposalReasonLine(row, new Date()) : null)),
+          : act.targetId === ACT_TARGET_IDS.countersign
+            ? sentProposalSignedLine(family === 'the client' ? null : clientShortName(family))
+            : (repair?.sentence ??
+              (bandSection === 'proposal' && row ? sentProposalReasonLine(row, new Date()) : null)),
       ...(repair
         ? {
             shortSentence: repair.shortSentence ?? '',
@@ -2654,7 +2668,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             act.targetId !== ACT_TARGET_IDS.installWindow &&
             act.targetId !== ACT_TARGET_IDS.inquiryReply &&
             // FR6 F6-1b — the reminder arms on a press: land, never press.
-            act.targetId !== ACT_TARGET_IDS.proposalReminder,
+            act.targetId !== ACT_TARGET_IDS.proposalReminder &&
+            // FR8 F8-4: the countersign executes the agreement; land on its
+            // first field, never press.
+            act.targetId !== ACT_TARGET_IDS.countersign,
         });
       },
     };
