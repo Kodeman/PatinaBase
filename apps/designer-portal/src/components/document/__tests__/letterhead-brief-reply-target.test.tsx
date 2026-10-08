@@ -87,3 +87,37 @@ describe('the triage group is named for the act (FR5 F5-9)', () => {
     expect(screen.queryByRole('group', { name: 'Respond to the inquiry' })).toBeNull();
   });
 });
+
+// US-19 FR6 F6-11 (D25) — the group's name prints: under one-voice the Brief
+// triad carries a mono eyebrow `RESPOND TO THE INQUIRY` above it, the same
+// string as F5-9's group label. No outcome sentences, no reply door.
+describe('the triad’s eyebrow (FR6 F6-11)', () => {
+  const eyebrow = () => document.querySelector('[data-triage-eyebrow]');
+
+  it('the Brief under one-voice: a mono eyebrow above the group, the group’s own name', () => {
+    render(<TriageBar leadId="lead-1" variant="brief" />);
+    const group = screen.getByRole('group', { name: 'Respond to the inquiry' });
+    const mark = eyebrow();
+    expect(mark).not.toBeNull();
+    expect(mark).toHaveTextContent(/^Respond to the inquiry$/);
+    expect(mark).toHaveClass('font-mono', 'uppercase');
+    // Above the group: its preceding sibling, not inside it.
+    expect(group).not.toContainElement(mark as HTMLElement);
+    expect(mark?.nextElementSibling).toBe(group);
+    expect(mark?.parentElement?.textContent).toBe(
+      'Respond to the inquiryAccept · beginNurturePass',
+    );
+  });
+
+  it('the Desk’s card prints no eyebrow', () => {
+    render(<TriageBar leadId="lead-1" variant="desk" />);
+    expect(eyebrow()).toBeNull();
+  });
+
+  it('flag off: no eyebrow', () => {
+    mockOneVoice = false;
+    render(<TriageBar leadId="lead-1" variant="brief" />);
+    expect(eyebrow()).toBeNull();
+    expect(screen.queryByText(/respond to the inquiry/i)).toBeNull();
+  });
+});

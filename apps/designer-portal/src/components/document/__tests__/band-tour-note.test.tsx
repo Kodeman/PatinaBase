@@ -5,6 +5,8 @@
  * focused; absent while `one-voice` is off.
  */
 import { fireEvent, render, screen } from '@testing-library/react';
+import { ownAct } from '@/lib/document/act-names';
+import { installReading } from '@/lib/document/install-reading';
 import { deriveLensBand } from '@/lib/document/lens-band-derivation';
 import { BAND_TOUR_NOTE_KEY, BandTourNote } from '../margin-note';
 
@@ -131,5 +133,66 @@ describe('the tour note only on a band with an act (F3-16)', () => {
   it('is absent on a closed paper (Lindqvist)', () => {
     mount('completed');
     expect(screen.queryByRole('note')).toBeNull();
+  });
+});
+
+// FR6 F6-10 / D26 — Cedar's held ask has a repair, so the repair is Next and
+// the note has something to press. The own act is built as page.tsx builds it
+// (PAGE-WIRING on SQ-551): the reading's makerRecorded, and the reading's
+// sentence beside the repair.
+describe('Cedar: the repair is Next, so the tour note mounts (F6-10, D26)', () => {
+  const reading = installReading(
+    [
+      { id: 'ffe-1', name: 'Side table, walnut', status: 'ordered', purchase_order: null },
+      { id: 'ffe-2', name: 'Lamp', status: 'ordered', purchase_order: null, vendor_name: 'Hewn' },
+    ],
+    new Date(2026, 9, 7),
+    false,
+  )!;
+  const act = ownAct('install', {
+    inquiryOpen: false,
+    firstMissingEssential: null,
+    proposalState: null,
+    clientFirstName: null,
+    unspecifiedCount: 0,
+    releaseEligible: false,
+    install: { state: reading.state, windowHeld: false, makerRecorded: reading.makerRecorded },
+  })!;
+  const voice = deriveLensBand({
+    spreadKind: 'install',
+    ticket: [],
+    needs: [],
+    guide: null,
+    tier: 'full',
+    household: 'Nora Ellison',
+    jobName: 'Cedar Lane Study',
+    stageWord: 'Install',
+    stageIndex: null,
+    installDate: null,
+    moneyFigure: null,
+    proposalInvestment: null,
+    sentDate: null,
+    projectStatus: 'active',
+    installReading: reading,
+    ownAct: {
+      key: `own:${act.targetId}`,
+      label: act.label,
+      targetId: act.targetId,
+      tier: act.tier,
+      sentence: reading.sentence,
+      shortSentence: reading.shortSentence ?? '',
+      onAct: jest.fn(),
+    },
+  }).voice;
+
+  it('the band’s act is Add the maker, scored, beside the reading', () => {
+    expect(voice.next?.act).toMatchObject({ label: 'Add the maker', tier: 'scored' });
+    expect(voice.next?.act.held).toBeUndefined();
+    expect(voice.next?.sentence).toBe("Side table isn't here, and no arrival date is recorded. 1 more isn't here.");
+  });
+
+  it('the tour note is present', () => {
+    render(<BandTourNote hasAct={voice.next !== null} />);
+    expect(screen.getByRole('note')).toHaveTextContent(SENTENCE);
   });
 });

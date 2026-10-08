@@ -140,7 +140,11 @@ export function MobileBar() {
   const clientName = oneVoice
     ? printedName && familyLabel(printedName)
     : activeDoc?.clientName;
-  const household = clientName || activeDoc?.title || 'Document';
+  // FR6 F6-7 (D14, `one-voice`) — a client-less paper names no household
+  // where it printed `the client`: the left prints the place word alone
+  // (`At approvals`). A blank name keeps the title, as before.
+  const clientless = oneVoice && Boolean(activeDoc?.clientName?.trim()) && !printedName;
+  const household = clientless ? '' : clientName || activeDoc?.title || 'Document';
   const readingIndex = activeDoc?.readingIndex ?? null;
   const stopLabel = readingIndex ? DOCUMENT_INDEX_LABELS[readingIndex] : null;
   // D7 — the dock's place word is the short one (`At approvals`); the door's
@@ -357,13 +361,15 @@ export function MobileBar() {
             <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.58)]">
               In this document
             </span>
-            <span
-              className={`block font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)] ${
-                oneVoice ? 'break-words' : 'truncate'
-              }`}
-            >
-              {household}
-            </span>
+            {household && (
+              <span
+                className={`block font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)] ${
+                  oneVoice ? 'break-words' : 'truncate'
+                }`}
+              >
+                {household}
+              </span>
+            )}
             {/* PRE-PRINTED and swapped by `visibility`, exactly as A-01 ruled
                 — never mounted and unmounted. A line that comes and goes as
                 the reading index arrives re-lays the bar under the reader's

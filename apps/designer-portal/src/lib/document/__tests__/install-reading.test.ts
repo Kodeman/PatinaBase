@@ -427,3 +427,38 @@ describe('FR5 530-3 / 530-4 — a maker note by its kind, and the one PO number'
     expect(linePoNumber({ purchase_order: null })).toBeNull();
   });
 });
+
+// FR6 F6-10 (D20) — the reading exposes whether R42 names a maker for the piece
+// it reads, so the band can make the held ask's repair its act. The reading's
+// own act stays the region head's `Ask the maker for a date`, held for no maker.
+describe('installReading — makerRecorded (F6-10)', () => {
+  it('Cedar’s side table: no maker recorded, the act stays the held ask', () => {
+    const reading = read([piece('Side table, walnut')]);
+    expect(reading.makerRecorded).toBe(false);
+    expect(reading.act?.label).toBe('Ask the maker for a date');
+  });
+
+  it('reads R42’s selector: the line vendor, the PO vendor, or the brand', () => {
+    expect(read([piece('Chair', { vendor_name: 'Hewn' })]).makerRecorded).toBe(true);
+    expect(
+      read([piece('Chair', { purchase_order: { vendor: { name: 'Woodward & Sons' } } })])
+        .makerRecorded,
+    ).toBe(true);
+    expect(read([piece('Chair', { product: { brand: 'Fixture Metalworks' } })]).makerRecorded).toBe(
+      true,
+    );
+  });
+
+  it('reads the piece the sentence names, not another', () => {
+    const reading = read([
+      piece('Lamp', { vendor_name: 'Hewn', ...due('2026-10-20') }),
+      piece('Side table'),
+    ]);
+    expect(reading.firstItemId).toBe('side-table');
+    expect(reading.makerRecorded).toBe(false);
+  });
+
+  it('everything here: nothing to ask, recorded', () => {
+    expect(read([piece('Rug', { status: 'delivered' })]).makerRecorded).toBe(true);
+  });
+});

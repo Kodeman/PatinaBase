@@ -1049,11 +1049,16 @@ describe('the phone at 390 under one-voice (FR2 F2-5, F2-8, F2-15)', () => {
     expect(doorway.textContent).not.toMatch(/no-login/);
   });
 
-  it('FR4 Fix 2: the seed’s `Client User` record prints `the client`, never the record', () => {
-    mountPhone({ ...heldDocument, clientName: 'Client User' });
-    const doorway = screen.getByRole('button', { name: 'Open sections' });
-    expect(within(doorway).getByText('the client')).toBeInTheDocument();
-    expect(doorway.textContent).not.toMatch(/Client User/);
+  // FR6 F6-7 (D14) supersedes FR4 Fix 2's `the client`: a client-less paper
+  // names no household, and the left prints the place word alone.
+  it.each([
+    ['the seed’s `Client User`', 'Client User'],
+    ['Halloran: document_state’s `Client` fallback', 'Client'],
+  ])('F6-7: %s prints no household; the left reads `At approvals`', (_case, clientName) => {
+    mountPhone({ ...heldDocument, title: 'Halloran House', clientName, readingIndex: 'approvals' });
+    const doorway = screen.getByRole('button', { name: 'Open sections, at Client approvals' });
+    expect(doorway.textContent).toBe('In this documentAt approvals');
+    expect(doorway.textContent).not.toMatch(/the client|Client User|Halloran/);
   });
 
   it('FR4 Fix 2: a real household prints whole', () => {

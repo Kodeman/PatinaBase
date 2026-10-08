@@ -8,7 +8,7 @@
 import type { ReactElement } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ACT_LANDING_EVENTS } from '@/lib/document/act-names';
+import { ACT_LANDING_EVENTS, ACT_TARGET_IDS, ownAct } from '@/lib/document/act-names';
 
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -43,7 +43,7 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 }));
 
 import { AskMakerSheet, InstallReadingLine, type AskMakerPiece } from '../overlays/ask-maker-sheet';
-import { pieceName } from '@/lib/document/install-reading';
+import { installReading, pieceName } from '@/lib/document/install-reading';
 
 const PROJECT = '33333333-3333-4333-8333-333333333333';
 const CHAIR: AskMakerPiece = {
@@ -99,6 +99,37 @@ describe('Ask the maker for a date lands on the sheet’s body (F3-2, 520-1)', (
     expect(pressFromBand()).toBe(true);
     expect(screen.getByRole('button', { name: 'Add the maker' })).toHaveFocus();
     expect(screen.queryByRole('button', { name: 'Hold for review' })).toBeNull();
+  });
+
+  // FR6 F6-10 (D20) — the band's Next is the repair, by its control's name;
+  // the region head still leads with the held ask, its reason, and the repair.
+  it('Cedar, no maker: the band’s act is Add the maker; the head keeps the held ask', async () => {
+    const reading = installReading([CHAIR_NO_MAKER, SHELVING], new Date(), false);
+    expect(reading?.makerRecorded).toBe(false);
+    const bandAct = ownAct('install', {
+      inquiryOpen: false,
+      firstMissingEssential: null,
+      proposalState: null,
+      clientFirstName: null,
+      unspecifiedCount: 0,
+      releaseEligible: false,
+      install: { state: reading!.state, windowHeld: false, makerRecorded: reading!.makerRecorded },
+    });
+    expect(bandAct).toEqual({
+      label: 'Add the maker',
+      targetId: ACT_TARGET_IDS.installReading,
+      tier: 'scored',
+    });
+
+    renderWithQuery(<InstallReadingLine projectId={PROJECT} items={[CHAIR_NO_MAKER, SHELVING]} />);
+    const held = await screen.findByRole('button', { name: 'Ask the maker for a date' });
+    await waitFor(() => expect(held).toHaveAttribute('aria-disabled', 'true'));
+    expect(held).toHaveAccessibleDescription('No maker is recorded on this line.');
+    const repair = screen.getByRole('button', { name: 'Add the maker' });
+
+    // The band's press (targetId installReading) lands on the control it names.
+    expect(pressFromBand()).toBe(true);
+    expect(repair).toHaveFocus();
   });
 
   it('the sheet itself opens on the body when the line has a maker, flag on or off', async () => {

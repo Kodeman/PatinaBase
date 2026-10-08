@@ -120,6 +120,19 @@ describe('ownAct (D1 own-act table)', () => {
       { label: 'Ask the maker for a date', targetId: ACT_TARGET_IDS.installReading, tier: 'scored' }],
     ['Install, arrival date passed', 'install', { install: { state: 'not_here_past', windowHeld: true } },
       { label: 'Ask the maker for a date', targetId: ACT_TARGET_IDS.installReading, tier: 'scored' }],
+    // FR6 F6-10 (D20) — the ask is held for no maker: its repair is the act.
+    ['Install, no arrival date, no maker (Cedar)', 'install',
+      { install: { state: 'not_here_undated', windowHeld: false, makerRecorded: false } },
+      { label: 'Add the maker', targetId: ACT_TARGET_IDS.installReading, tier: 'scored' }],
+    ['Install, arrival date passed, no maker', 'install',
+      { install: { state: 'not_here_past', windowHeld: true, makerRecorded: false } },
+      { label: 'Add the maker', targetId: ACT_TARGET_IDS.installReading, tier: 'scored' }],
+    ['Install, no arrival date, a maker recorded', 'install',
+      { install: { state: 'not_here_undated', windowHeld: false, makerRecorded: true } },
+      { label: 'Ask the maker for a date', targetId: ACT_TARGET_IDS.installReading, tier: 'scored' }],
+    ['Install, arriving, no window, no maker', 'install',
+      { install: { state: 'not_here_ahead', windowHeld: false, makerRecorded: false } },
+      { label: 'Hold a window', targetId: ACT_TARGET_IDS.installWindow, tier: 'scored' }],
     ['Install, arriving, no window', 'install', { install: { state: 'not_here_ahead', windowHeld: false } },
       { label: 'Hold a window', targetId: ACT_TARGET_IDS.installWindow, tier: 'scored' }],
     ['Install, everything here', 'install', { install: { state: 'all_here', windowHeld: false } },
@@ -211,6 +224,20 @@ describe('Message (D1, D3, D7)', () => {
     expect(householdDisplayName('Elena Marlowe (no-login household)')).toBe('Elena Marlowe');
     expect(householdDisplayName('The Ashfords (no-login household)')).toBe('The Ashfords');
     expect(householdDisplayName('Edna & Rob Courtney')).toBe('Edna & Rob Courtney');
+  });
+
+  it('FR6 F6-7 (D14) — a client-less paper has no household name to print', () => {
+    expect(householdDisplayName(null)).toBe('');
+    expect(householdDisplayName(undefined)).toBe('');
+    expect(householdDisplayName('  ')).toBe('');
+    expect(householdDisplayName('Client User')).toBe('');
+    // document_state's fallback for a paper with no client (Halloran).
+    expect(householdDisplayName('Client')).toBe('');
+    expect(householdDisplayName('the client')).toBe('');
+    expect(householdDisplayName('Client User (no-login household)')).toBe('');
+    // The sentence fallbacks are untouched.
+    expect(messageLabel(null)).toBe('Message the client');
+    expect(messageNoLogin(null).reason).toBe('The client has no login yet.');
   });
 });
 

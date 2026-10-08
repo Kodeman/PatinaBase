@@ -49,6 +49,9 @@ import { offerReturnToLeadUndo } from './return-to-lead-undo';
 
 type Variant = 'desk' | 'brief';
 
+/** The Brief's own act (D1), the triad's name under `one-voice`. */
+const INQUIRY_ACT = 'Respond to the inquiry';
+
 /** R65 reconnect presets — a dated touchpoint, computed at click time. */
 const RECONNECT_PRESETS: ReadonlyArray<{ label: string; at: () => string }> = [
   { label: 'In 1 week', at: () => addDays(7) },
@@ -212,14 +215,16 @@ export function TriageBar({
     );
   }
 
-  return (
+  // FR5 F5-9 (529-1, `one-voice`) — the group the band's press lands in
+  // carries the act's name on the Brief. FR6 F6-11 (D25) — and prints it, a
+  // mono eyebrow above the group.
+  const named = variant === 'brief' && oneVoice;
+  const group = (
     <DocumentActionGroup
       surfaceKey={variant === 'desk' ? 'desk' : 'open-document'}
       regionKey="lead-triage"
-      className={`${wrapClass} gap-2`}
-      // FR5 F5-9 (529-1, `one-voice`) — the group the band's press lands in
-      // carries the act's name on the Brief.
-      aria-label={variant === 'brief' && oneVoice ? 'Respond to the inquiry' : 'Lead triage'}
+      className={named ? 'gap-2' : `${wrapClass} gap-2`}
+      aria-label={named ? INQUIRY_ACT : 'Lead triage'}
     >
       <DocumentAction
         actionKey="accept-lead"
@@ -254,5 +259,19 @@ export function TriageBar({
         Pass
       </DocumentAction>
     </DocumentActionGroup>
+  );
+  if (!named) return group;
+  return (
+    <div className={wrapClass}>
+      {/* The group's `aria-label` already speaks this name. */}
+      <p
+        aria-hidden="true"
+        data-triage-eyebrow=""
+        className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
+      >
+        {INQUIRY_ACT}
+      </p>
+      {group}
+    </div>
   );
 }

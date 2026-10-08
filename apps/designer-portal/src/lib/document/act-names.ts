@@ -12,6 +12,7 @@
  */
 
 import type { NeedKind, SectionKey } from './desk-derivation';
+import { familyLabel } from './family-label';
 
 // ── Stage words (D1, Q1, Q4) ─────────────────────────────────────────────────
 
@@ -103,6 +104,8 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   'Spec the {N} unspecified': 'scored',
   'Open the pieces': 'scored',
   'Hold a window': 'scored',
+  // FR6 F6-10 — the held `Ask the maker for a date`'s repair, as the act.
+  'Add the maker': 'scored',
   'Open the punch list': 'scored',
   'Run the closeout checklist': 'scored',
 
@@ -231,9 +234,14 @@ export function messageNoLogin(
 }
 
 /** FR3 F3-13 — the household's display name without the seed's trailing
- *  ` (no-login household)`; the no-login fact is held Message's reason. */
-export function householdDisplayName(name: string): string {
-  return (name ?? '').replace(/\s*\(no-login household\)\s*$/i, '');
+ *  ` (no-login household)`; the no-login fact is held Message's reason.
+ *  FR6 F6-7 (D14) — `''` where there is no household to name (none, the
+ *  seed's `Client User`, or any value the placeholder guard reads as `the
+ *  client`): a client-less paper prints no name. `the client` stays the
+ *  sentence fallback (`messageLabel`, `messageNoLogin`), never a name. */
+export function householdDisplayName(name: string | null | undefined): string {
+  const shown = (name ?? '').replace(/\s*\(no-login household\)\s*$/i, '');
+  return familyLabel(shown) === 'the client' ? '' : shown;
 }
 
 // ── Where a Next act lands (US-19 F3-2, P-2) ─────────────────────────────────
@@ -340,8 +348,12 @@ export interface OwnActFacts {
   unspecifiedCount: number;
   /** Project: lines are eligible to release for authorization. */
   releaseEligible: boolean;
-  /** Install: the reading's state, and whether a window is already held. */
-  install: { state: InstallReadingState; windowHeld: boolean } | null;
+  /** Install: the reading's state, and whether a window is already held.
+   *  FR6 F6-10 — `makerRecorded` (the reading's `makerRecorded`, R42's
+   *  `lineMaker`): false, `Ask the maker for a date` is held and its repair,
+   *  `Add the maker`, is the act. Absent reads as recorded, which is how the
+   *  region head's own reading keeps leading with the held act. */
+  install: { state: InstallReadingState; windowHeld: boolean; makerRecorded?: boolean } | null;
 }
 
 export interface OwnAct {
@@ -414,7 +426,10 @@ export function ownAct(stage: SectionKey, facts: OwnActFacts): OwnAct | null {
       switch (reading.state) {
         case 'not_here_undated':
         case 'not_here_past':
-          return act('Ask the maker for a date', ACT_TARGET_IDS.installReading);
+          // FR6 F6-10 (D20) — held for no maker: its repair is the act.
+          return reading.makerRecorded === false
+            ? act('Add the maker', ACT_TARGET_IDS.installReading)
+            : act('Ask the maker for a date', ACT_TARGET_IDS.installReading);
         case 'not_here_ahead':
           return reading.windowHeld
             ? null

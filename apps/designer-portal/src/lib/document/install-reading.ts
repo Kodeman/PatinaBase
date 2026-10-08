@@ -17,12 +17,16 @@ import { dayMonth, legalDate, parseSourceDate, WEEKDAY_FORMAT } from './dates';
 import { isPieceHere, type InstallStateInput } from './install-state';
 import { compareDeadline } from './lens-band-derivation';
 
-export interface InstallReadingPiece extends InstallStateInput {
+export interface InstallReadingPiece
+  extends InstallStateInput,
+    Omit<LineMakerSource, 'purchase_order'> {
   id: string;
   name: string;
   purchase_order?: {
     delivered_date?: string | null;
     confirmed_eta?: string | null;
+    vendor_id?: string | null;
+    vendor?: { name?: string | null } | null;
   } | null;
 }
 
@@ -37,6 +41,10 @@ export interface InstallReading {
   act: OwnAct | null;
   /** The piece the sentence names; null when everything is here. */
   firstItemId: string | null;
+  /** FR6 F6-10 — R42's `lineMaker` names a maker for that piece; true when
+   *  everything is here. The band's own act reads it (`OwnActFacts.install`);
+   *  `act` above stays the region head's, held for no maker (R37). */
+  makerRecorded: boolean;
 }
 
 const DAY_MS = 86_400_000;
@@ -228,7 +236,7 @@ const NOT_READ_AT_INSTALL = {
 function reading(
   state: InstallReadingState,
   sentence: string,
-  firstItemId: string | null,
+  first: InstallReadingPiece | null,
   windowHeld: boolean,
   shortSentence: string | null = null,
 ): InstallReading {
@@ -237,7 +245,8 @@ function reading(
     sentence,
     shortSentence,
     act: ownAct('install', { ...NOT_READ_AT_INSTALL, install: { state, windowHeld } }),
-    firstItemId,
+    firstItemId: first?.id ?? null,
+    makerRecorded: first ? lineMaker(first) !== null : true,
   };
 }
 
@@ -293,7 +302,7 @@ export function installReading(
     return reading(
       'not_here_undated',
       `${name} isn't here, and no arrival date is recorded.${more}`,
-      first.piece.id,
+      first.piece,
       windowHeld,
       `${name} isn't here — no date recorded.`,
     );
@@ -306,7 +315,7 @@ export function installReading(
     return reading(
       'not_here_past',
       `${name} was due ${etaDay} and isn't here.${more}`,
-      first.piece.id,
+      first.piece,
       windowHeld,
       `${name} isn't here — due ${etaDay}.`,
     );
@@ -314,7 +323,7 @@ export function installReading(
   return reading(
     'not_here_ahead',
     `${name} arrives ${WEEKDAY_FORMAT.format(first.eta)} ${etaDay}.${more}`,
-    first.piece.id,
+    first.piece,
     windowHeld,
     `${name} arrives ${etaDay}.`,
   );
