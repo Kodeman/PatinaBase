@@ -400,6 +400,15 @@ describe('US-19 F6-9 (D17, one-voice) — the acknowledgment form behind a door'
     expect(screen.getByRole('textbox', { name: 'Their order №' })).toBeInTheDocument();
   });
 
+  it('door={false} (F7-8: the host is the door) mounts the inputs at once, focused on Their order №', async () => {
+    render(<AckCheckForm purchaseOrderId="po-1" sentAt={SENT} door={false} />);
+    expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Log what they confirmed' })).not.toBeInTheDocument();
+    const theirOrder = screen.getByRole('textbox', { name: 'Their order №' });
+    expect(screen.getByTestId('ack-check')).toBeInTheDocument();
+    await waitFor(() => expect(document.activeElement).toBe(theirOrder));
+  });
+
   it('the Order cell says the order went to the maker (F6-8)', () => {
     render(
       <OrderCell
@@ -422,6 +431,12 @@ describe('flag off — the form stands open as today', () => {
     expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Everything agrees — log it' })).toBeInTheDocument();
     expect(screen.getByTestId('ack-check-summary')).toHaveTextContent('Everything agrees.');
+  });
+
+  it('door={false} changes nothing with the flag off — no door, no focus taken', () => {
+    render(<AckCheckForm purchaseOrderId="po-1" sentAt={SENT} door={false} />);
+    expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
+    expect(document.activeElement).not.toBe(screen.getByRole('textbox', { name: 'Their order №' }));
   });
 
   it('the Order cell keeps vendor', () => {

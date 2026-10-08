@@ -38,6 +38,7 @@ import {
   useShipToAddresses,
   type ShipToSelection,
 } from '@/components/portal/procurement/order-assistant/ship-to-choice';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
 import { fmtDay } from '@/lib/document/format';
 import { AckCheckForm, AckRecord, usePoAckSummary } from './buying/ack-check';
@@ -78,6 +79,7 @@ export function LogAckInline({
   confirmedEta,
   sentAt,
   onLogged,
+  door = true,
 }: {
   purchaseOrderId: string;
   vendorPoNumber?: string | null;
@@ -88,6 +90,8 @@ export function LogAckInline({
    *  laid-paper ink (R96), so the prop no longer changes anything. */
   tone?: 'paper' | 'book';
   onLogged?: () => void;
+  /** US-19 F7-8: false where the host is already the door (AckCheckForm). */
+  door?: boolean;
 }) {
   return (
     <AckCheckForm
@@ -96,6 +100,7 @@ export function LogAckInline({
       confirmedEta={confirmedEta}
       sentAt={sentAt}
       onLogged={onLogged}
+      door={door}
     />
   );
 }
@@ -253,6 +258,7 @@ export function PoPreview({
   const qc = useQueryClient();
   // R83: failures render inline on this paper — no global toast (D2).
   const sendPo = useSendPurchaseOrder({ errorSurface: 'inline' });
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [poNumber, setPoNumber] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -409,9 +415,12 @@ export function PoPreview({
             the paper itself — the vendor phoned or emailed; log it here. */}
         {mode === 'resend' && sentAt && !acknowledgedAt && (
           <div className="border-t border-[var(--color-pearl)] px-5 py-2.5">
-            <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
-              Vendor confirmed by phone or email?
-            </p>
+            {/* US-19 F7-8 (one-voice): the door's own fact line stands in for the heading. */}
+            {!oneVoice && (
+              <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
+                Vendor confirmed by phone or email?
+              </p>
+            )}
             <LogAckInline
               purchaseOrderId={purchaseOrderId}
               vendorPoNumber={vendorPoNumber}

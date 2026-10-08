@@ -831,6 +831,7 @@ export function OrdersLedger({
                             confirmedEta={po.confirmed_eta}
                             sentAt={po.sent_at}
                             tone="book"
+                            door={false}
                           />
                         </li>
                       )}

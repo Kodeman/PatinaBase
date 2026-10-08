@@ -132,12 +132,18 @@ export function AckCheckForm({
   confirmedEta,
   sentAt,
   onLogged,
+  door = true,
 }: {
   purchaseOrderId: string;
   vendorPoNumber?: string | null;
   confirmedEta?: string | null;
   sentAt?: string | null;
   onLogged?: () => void;
+  /**
+   * US-19 F7-8 (one door per surface): false where the host already is the
+   * door (the Orders ledger's `log ack ↓`) — the form opens straight in.
+   */
+  door?: boolean;
 }) {
   const qc = useQueryClient();
   const logAck = useLogPoAcknowledgment({ errorSurface: 'inline' });
@@ -154,7 +160,7 @@ export function AckCheckForm({
   // US-19 F6-9 (D17, `one-voice`) — on a PO nobody has acknowledged, the form
   // stays behind a door until she opens it; a corrected ack opens straight in.
   const { latest } = usePoAckSummary(oneVoice ? purchaseOrderId : null);
-  const behindDoor = oneVoice && !latest;
+  const behindDoor = oneVoice && !latest && door;
   const [doorOpen, setDoorOpen] = useState(false);
   const doorRef = useRef<HTMLDivElement | null>(null);
   const poNoRef = useRef<HTMLInputElement | null>(null);
@@ -165,6 +171,10 @@ export function AckCheckForm({
     if (land === 'form') poNoRef.current?.focus();
     if (land === 'door') doorRef.current?.querySelector<HTMLElement>('button')?.focus();
   }, [doorOpen]);
+  // F7-8: the host's own door was pressed to mount this form; land on its first field.
+  useEffect(() => {
+    if (oneVoice && !door) poNoRef.current?.focus();
+  }, [oneVoice, door]);
 
   // Esc on the opened form is Cancel: it closes, focus goes back to the door.
   // The key is taken so the paper's put-down does not fire; mid-log it closes
