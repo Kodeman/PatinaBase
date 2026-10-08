@@ -70,3 +70,39 @@ project_time_entries  3   timer_auto, from opening papers: Birchwood (…091), F
 ```
 
 No holds were needed or made. Nothing was sent: there was no request to `/api/document/*`, to `functions/v1`, to a nudge or reminder route, to `client_messages` or to `procurement_drafts`. **The send guard's count is 0.** **The safety guard's count is 0.**
+
+## 6. F9-2b re-walk (SQ-580)
+
+This re-walks X3 only, after F9-2b (SQ-579, `916a1a0e5`). No product code was changed. (The section is numbered 6 as the ticket asks; this file has no §4 or §5.)
+
+- **Tree.** main at `916a1a0e5`. The main checkout's `HEAD` is `916a1a0e5`, and its `ack-check.tsx` and `document-action.tsx` are byte-identical to that commit (`wrap={inCell}` at `:566` and `:578`). The orchestrator's dev server on `localhost:3000` (PID 59297, cwd `apps/designer-portal` in the main checkout) served it. It was not touched. The live DOM shows SQ-579's change is being served: `ACCEPT THEIRS` and `DISPUTE` now compute `white-space: normal` (they were `nowrap`). The flags are on: the dock centre reads `ANSWER THE MAKER` (`next:ack_discrepancy-0`).
+- **Method.** This uses the §0 harness: headless Playwright 1.58.2 in one fresh context at 390×844, mobile and touch, DPR 2, signed in as `designer@patina.dev`. Only the Fenwick Lodge paper (`/doc/f1900000-…071`) was opened.
+  - The only control pressed was the dock centre, `ANSWER THE MAKER`.
+  - "At rest" means the window was scrolled vertically with `window.scrollTo`. There was no `scrollIntoView` and no sideways scroll. The table box's `scrollLeft` was 0 at both probes.
+  - **Label whole** means two things: every line box of the control's text lies inside its clipping ancestors (the table's `overflow-x-auto` box, then the 390 viewport), and the control does not overflow itself.
+  - `elementFromPoint` was probed at `right − 2`, at the control's vertical centre.
+- **Send guard.** The §0 pattern was used, with the `release|authoriz|countersign` safety guard. **It fired 0 times; the safety guard also fired 0 times.**
+  - Supabase was local: `127.0.0.1:54321` only, with no `db reset`. The only foreign hosts were read-only GETs to the Sanity CDN (2) and Unsplash (1).
+  - Writes came only from opening the paper (N3's family): 2 `rpc/mark_arrival`, 1 `rpc/start_timer`, and 1 `DELETE project_time_entries?…&duration_minutes=is.null` (the auto-timer clearing its open entry before it restarts). Every other non-GET was a read RPC. There was no request to `/api/document/*`, `functions/v1` or `procurement_drafts`.
+- **Walk window.** 11:56:15Z to 11:56:53Z.
+- **Evidence.** Screenshots are `delivery/f9-walk/390-f92b-01-fenwick`, `-02-landed-3s`, `-03-table-at-rest` and `-04-door-at-rest` (`.jpg`, 4 files, 0.40 MB). Raw PNGs, `measure.jsonl` (both probes), `steps.jsonl`, `run-f92b-390.log`, `net-writes.log`, `guard-summary.log`, `hosts.log` and the scripts are in `~/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-580/`.
+
+**The table at rest.** The `overflow-x-auto` box spans x 67 to 326, with **`scrollWidth 309` and `clientWidth 259`**. It was 318 / 259 in §1, so the table still scrolls sideways. The page itself does not (`scrollWidth 390`).
+- The table spans x 67 to 335. Its columns are WHAT 42.5, WE ORDERED 69.4, THEY CONFIRMED 75.3 and CHECK 80.8.
+- The table ends 9px past the box. `ACCEPT THEIRS` overflows its own CHECK cell, which ends at x 335, by a further 41px.
+
+| Control | Rect x (left → right) | 1. right ≤ box right (326) and ≤ 390 | 2. Label whole | 3. `elementFromPoint` at right edge | Verdict |
+|---|---|---|---|---|---|
+| `ACCEPT THEIRS` | 255.2 → **376.4** (one line, text 261 → 370) | **fails**: 376.4 > 326 (passes ≤ 390) | **fails**: prints **`ACCEPT T`** | **miss**: hits `MAIN` at (374, 363) | **STILL FAILS (X3)** |
+| `DISPUTE` | 255.2 → 326.0 | passes (326.0 = 326) | passes | hits `BUTTON[dispute-ack-difference]` | passes |
+| `THEY CORRECTED IT — LOG THE NEW ACKNOWLEDGMENT` | 67 → 326 (two lines; outside the table) | passes | passes | hits `BUTTON[log-corrected-acknowledgment]` | passes |
+
+**The other cells.** `WE ORDERED` and `THEY CONFIRMED` read whole; each wraps to two lines inside the box. Their values `$3,800.00` and `$4,120.00` also read whole. The verdict reads whole as `differs · / +$320.00` on two lines, spanning x 255 to 307. The WHAT cell reads whole (`Oak / trestle / table / — 84 / in · / price`, six lines).
+
+**Verdict: F9-2b NOT FIXED.** At 390, at rest, `ACCEPT THEIRS` still prints `ACCEPT T`. Its right edge is 376.4, which is past the table box's 326, and `elementFromPoint` at its right edge misses it. `DISPUTE`, the door, `WE ORDERED`, `THEY CONFIRMED` and the verdict all pass.
+
+**Why, from the live computed styles (observed, not ruled).** `wrap` reached the button: it computes `white-space: normal`, which gives a min-content of `ACCEPT`. The table therefore sizes CHECK to 80.8.
+- The button still carries the base `shrink-0` (`flex-shrink: 0`; `WRAP_BASE_CLASS`, `document-action.tsx:55-58`, swaps only `whitespace-nowrap`).
+- It is a flex item in the `flex flex-wrap` row (`ack-check.tsx:559`), so it lays out at its max-content basis, about 121px, and cannot shrink to the 80px cell. The label therefore never breaks onto a second line.
+- `DISPUTE`'s max-content (71px) fits, which is why it passes.
+- Where the fix goes is Fable's to rule; no decision is made here.
