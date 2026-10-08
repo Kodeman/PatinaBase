@@ -38,10 +38,18 @@ export interface InvoiceComposerContext {
   initialCostLineIds?: string[];
 }
 
+/** Where the folio puts focus when it opens (US-19 F3-3). `record` opens the
+ *  payment panel with focus on its filled `Record the payment · $X`. */
+export interface InvoiceFolioOptions {
+  landOn?: "record";
+}
+
 /** Open the Invoice folio from anywhere in the document model. */
-export function openInvoiceFolio(invoiceId: string) {
+export function openInvoiceFolio(invoiceId: string, options?: InvoiceFolioOptions) {
   window.dispatchEvent(
-    new CustomEvent("document:open-invoice-folio", { detail: { invoiceId } }),
+    new CustomEvent("document:open-invoice-folio", {
+      detail: { invoiceId, landOn: options?.landOn },
+    }),
   );
 }
 
@@ -57,7 +65,7 @@ export function openInvoiceComposer(context?: InvoiceComposerContext) {
 // ── The host ────────────────────────────────────────────────────────────────
 
 type OverlayState =
-  | { kind: "folio"; invoiceId: string }
+  | { kind: "folio"; invoiceId: string; landOn?: InvoiceFolioOptions["landOn"] }
   | { kind: "composer"; context: InvoiceComposerContext }
   | null;
 
@@ -67,9 +75,9 @@ export function InvoiceOverlays() {
 
   useEffect(() => {
     const onFolio = (e: Event) => {
-      const { invoiceId } =
-        (e as CustomEvent<{ invoiceId: string }>).detail ?? {};
-      if (invoiceId) setOverlay({ kind: "folio", invoiceId });
+      const { invoiceId, landOn } =
+        (e as CustomEvent<{ invoiceId: string } & InvoiceFolioOptions>).detail ?? {};
+      if (invoiceId) setOverlay({ kind: "folio", invoiceId, landOn });
     };
     const onComposer = (e: Event) => {
       const context = (e as CustomEvent<InvoiceComposerContext>).detail ?? {};
@@ -95,6 +103,7 @@ export function InvoiceOverlays() {
         {overlay?.kind === "folio" && (
           <InvoiceFolio
             invoiceId={overlay.invoiceId}
+            landOn={overlay.landOn}
             onOpenDocument={(projectId) => {
               // The doorway: close the folio and walk into the document. If an
               // Accounts sheet is open beneath, it stays (put it back with Esc).

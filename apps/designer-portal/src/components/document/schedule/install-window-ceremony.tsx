@@ -35,7 +35,7 @@ import {
 } from "@patina/supabase";
 import { formatCalendarDate, todayYmd } from "@/lib/document/format";
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
-import { ownAct, type OwnActFacts } from "@/lib/document/act-names";
+import { ACT_TARGET_IDS, ownAct, type OwnActFacts } from "@/lib/document/act-names";
 import {
   deriveScheduleImpact,
   deriveUnpinImpact,
@@ -195,6 +195,9 @@ export function InstallWindowCeremony({ projectId }: { projectId: string }) {
         </p>
         {settled && (
           <DocumentAction
+            // US-19 F3-23 — `Hold a window` (the band's act, the guide's rest
+            // act) lands on this door, with focus.
+            id={ACT_TARGET_IDS.installWindow}
             actionKey="open-install-window-ceremony"
             surfaceKey="open-document"
             regionKey="install-window"

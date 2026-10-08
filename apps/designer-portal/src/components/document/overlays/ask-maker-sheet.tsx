@@ -33,7 +33,7 @@ import {
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { Input, Textarea } from '@/components/ui/controls';
-import { ACT_TARGET_IDS } from '@/lib/document/act-names';
+import { ACT_LANDING_EVENTS, ACT_TARGET_IDS } from '@/lib/document/act-names';
 import { dayMonth, parseSourceDate } from '@/lib/document/dates';
 import {
   LIVE_MAKER_ASK_STATUSES,
@@ -158,6 +158,7 @@ export function AskMakerSheet({
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const subjectRef = useRef<HTMLInputElement | null>(null);
   const reviewRef = useRef<HTMLDivElement | null>(null);
   const hold = useHoldMakerDraft(projectId);
   const canHold = subject.trim().length > 0 && body.trim().length > 0;
@@ -166,15 +167,18 @@ export function AskMakerSheet({
   const review = held ?? opened;
   const standing = hold.error instanceof HoldRefused ? hold.error.draft : null;
   // US-19 F3-22 (517-1): Add an address lands on the vendor's terms.
+  // US-19 F3-2 (one-voice): the sheet opens on its first field, the Subject.
   const oneVoice = useFeatureFlag('one-voice').value === true;
 
   // DocSheet focuses its panel in a frame on open; its effect runs before this
   // one (child first), so this frame lands focus on the body after it.
   useEffect(() => {
     if (!open || held) return;
-    const frame = window.requestAnimationFrame(() => bodyRef.current?.focus());
+    const frame = window.requestAnimationFrame(() =>
+      (oneVoice ? subjectRef.current : bodyRef.current)?.focus(),
+    );
     return () => window.cancelAnimationFrame(frame);
-  }, [open, held]);
+  }, [open, held, oneVoice]);
 
   // L-10: `Open the held draft` lands on the review it opened, in a frame as
   // the body's focus does, so it lands after DocSheet's own.
@@ -223,6 +227,7 @@ export function AskMakerSheet({
               </label>
               <Input
                 id="ask-maker-subject"
+                ref={subjectRef}
                 value={subject}
                 maxLength={200}
                 onChange={(event) => setSubject(event.target.value)}
@@ -360,6 +365,18 @@ function InstallReadingLive({
     () => installReading(items, new Date(), windowHeld),
     [items, windowHeld],
   );
+  // F3-2 — the band's press, as this render would take it (set below).
+  const pressFromBandRef = useRef<(() => boolean) | null>(null);
+  const addMakerRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!oneVoice) return;
+    const onAsk = (event: Event) => {
+      if (pressFromBandRef.current?.()) event.preventDefault();
+    };
+    window.addEventListener(ACT_LANDING_EVENTS.askTheMaker, onAsk);
+    return () => window.removeEventListener(ACT_LANDING_EVENTS.askTheMaker, onAsk);
+  }, [oneVoice]);
+  pressFromBandRef.current = null;
   if (!reading) return null;
 
   const piece = items.find((item) => String(item.id) === reading.firstItemId) ?? null;
@@ -425,6 +442,20 @@ function InstallReadingLive({
     );
   };
 
+  // US-19 F3-2 (one-voice) — the band's act takes the row's own act: the sheet
+  // opens on its first field. A held act lands where it can move: a line with
+  // no maker on `Add the maker` (the sheet cannot hold a note to nobody),
+  // any other reason on the held act, its reason beneath it.
+  pressFromBandRef.current = () => {
+    if (!asks || unsettled) return false;
+    const heldLanding = heldReason === NO_MAKER ? addMakerRef.current : heldReason ? actRef.current : null;
+    if (heldReason) {
+      heldLanding?.scrollIntoView?.({ block: 'center' });
+      heldLanding?.focus({ preventScroll: true });
+    } else press();
+    return true;
+  };
+
   return (
     <div
       data-install-reading={reading.state}
@@ -461,6 +492,7 @@ function InstallReadingLive({
             </DocumentAction>
             {heldReason === NO_MAKER && (
               <DocumentAction
+                ref={addMakerRef}
                 actionKey="install-reading-add-maker"
                 surfaceKey="project"
                 regionKey="install-reading"

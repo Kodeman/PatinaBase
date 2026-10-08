@@ -49,7 +49,8 @@ import { DateTextInput } from '../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DeliveryWord } from '../delivery-word';
 import { Stamp } from '../stamp';
-import { todayYmd } from '@/lib/document/format';
+import { fmtDay, todayYmd } from '@/lib/document/format';
+import { voiceFirstName } from '@/lib/document/document-guide';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { needActLabel } from '@/lib/document/act-names';
 import { dollarsToCents } from '@/lib/document/invoice-composer';
@@ -95,10 +96,14 @@ type CopyStatus = 'idle' | 'copied' | 'failed';
 export function InvoiceFolio({
   invoiceId,
   onOpenDocument,
+  landOn,
 }: {
   invoiceId: string;
   /** The doorway to the document this money belongs to (kept quiet). */
   onOpenDocument?: (projectId: string) => void;
+  /** US-19 F3-3 — `record` opens on the payment panel, its amount at the
+   *  balance, with focus on its filled `Record the payment · $X`. */
+  landOn?: 'record';
 }) {
   const qc = useQueryClient();
   const { data: invoice, isLoading, isError, refetch } = useInvoice(invoiceId);
@@ -131,6 +136,28 @@ export function InvoiceFolio({
   // acts' one names (D1), and each commit is filled (`terminal`, R162) beneath
   // the consequence sentence its panel already states (R141).
   const oneVoice = useFeatureFlag('one-voice').value === true;
+  // F3-3 — the landing happens once, when an invoice that can take a payment
+  // has read; the panel is then hers to close and reopen as before.
+  const confirmPaymentRef = useRef<HTMLButtonElement | null>(null);
+  const landingRef = useRef<'pending' | 'focus' | 'done'>('pending');
+  const landsOnRecord =
+    landOn === 'record' &&
+    (invoice?.status === 'sent' || invoice?.status === 'partially_paid');
+  useEffect(() => {
+    if (!landsOnRecord || !invoice || landingRef.current !== 'pending') return;
+    landingRef.current = 'focus';
+    setAct('payment');
+    setAmountDollars((invoiceBalanceCents(invoice) / 100).toFixed(2));
+  }, [landsOnRecord, invoice]);
+  useEffect(() => {
+    if (act !== 'payment' || landingRef.current !== 'focus') return;
+    // A frame after the sheet's own focus on its panel and the amount's.
+    const frame = window.requestAnimationFrame(() => {
+      landingRef.current = 'done';
+      confirmPaymentRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [act]);
   // Two act sites copy the same address — the toolbar act and the recovery
   // band — and each has to report its own outcome: one shared status made the
   // band say "select the link above" about a link that was not above it.
@@ -963,12 +990,24 @@ export function InvoiceFolio({
                 amount exceeds the remaining balance
               </p>
             )}
+            {oneVoice && (
+              // F3-3 / 499-5 — the filled act's one consequence sentence,
+              // directly above it: amount, payer, the day the record carries.
+              <p data-record-payment-consequence className="mt-2 text-[12px] text-[var(--color-charcoal)]">
+                {`Records ${
+                  amountCents > 0 ? formatCurrency(amountCents, invoice.currency) : 'the payment'
+                } received from ${voiceFirstName(invoice.client?.full_name) ?? 'the client'}${
+                  receivedDate ? ` on ${fmtDay(receivedDate)}` : ''
+                } — voidable with a reason, never edited.`}
+              </p>
+            )}
             <DocumentActionGroup
               surfaceKey="accounts"
               regionKey="invoice-payment-confirmation"
               className="mt-2"
             >
               <DocumentAction
+                ref={confirmPaymentRef}
                 actionKey="confirm-record-payment"
                 variant={oneVoice ? 'terminal' : 'primary'}
                 disabled={!paymentValid || busy}

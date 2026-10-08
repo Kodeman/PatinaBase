@@ -214,6 +214,23 @@ export function householdDisplayName(name: string): string {
   return (name ?? '').replace(/\s*\(no-login household\)\s*$/i, '');
 }
 
+// ── Where a Next act lands (US-19 F3-2, P-2) ─────────────────────────────────
+
+/**
+ * The window events a Next act's press dispatches so the region that owns the
+ * act lands it on its own control. Each is cancelable: the owner cancels it
+ * when it took the act, and the press keeps its old landing when nobody did.
+ * - `askTheMaker` — the Install row opens its sheet on the first field.
+ * - `ffeAct` (detail `'claim' | 'follow-up'`) — Pieces lands on the line.
+ * - `composeMessage` (detail `{ named: string[] }`) — the letterhead's Message
+ *   composer opens, naming what is overdue.
+ */
+export const ACT_LANDING_EVENTS = {
+  askTheMaker: 'document:ask-the-maker',
+  ffeAct: 'document:land-ffe-act',
+  composeMessage: 'document:compose-message',
+} as const;
+
 // ── The stage's own act (D1) ─────────────────────────────────────────────────
 
 /**

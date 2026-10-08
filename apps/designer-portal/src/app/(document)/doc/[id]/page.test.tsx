@@ -71,6 +71,8 @@ const mockUpdateEngagementSubject = jest.fn().mockResolvedValue(undefined);
 let mockAuthUser: { id: string } | null = { id: 'owner-user' };
 // W4: the recap line counts drafted-and-unsent client approvals off this read.
 let mockProjectApprovalsQuery: Record<string, unknown> = { data: [] };
+// The band's own-act read of the pieces (US-19 F3-2's install act).
+let mockOwnActFfeItems: Array<Record<string, unknown>> = [];
 // P-17/R13: the Record's settled stamps. Empty and 'requested' keep every
 // other case exactly where it was — no gate, so no grant stamp.
 let mockSectionGates: Array<Record<string, unknown>> = [];
@@ -209,7 +211,8 @@ jest.mock('@patina/supabase', () => ({
     id ? mockDiscoveryQuery : MOCK_DISCOVERY_UNASKED,
   useBeginDirection: () => ({ mutateAsync: mockBeginDirectionMutateAsync }),
   // Read by the real MarginRail, and (US-19 D1/D6) by the band's own act.
-  useProjectFFEItems: () => ({ data: mockProjectFfeItems }),
+  // SQ-520 own-act lines and SQ-523 held-Pieces lines; each test fills one.
+  useProjectFFEItems: () => ({ data: [...mockOwnActFfeItems, ...mockProjectFfeItems] }),
   useInstallWindow: () => ({ data: null, isSuccess: true }),
   useProjectContextualHandoffs: () => mockContextualHandoffsQuery,
   useProjectParties: () => ({ data: [] }),
@@ -643,6 +646,7 @@ beforeEach(() => {
   mockAuthUser = { id: 'owner-user' };
   mockSectionGates = [];
   mockGateState = () => 'requested';
+  mockOwnActFfeItems = [];
 });
 
 describe('DocumentPage hydration render behavior', () => {
@@ -2422,6 +2426,155 @@ describe('DocumentPage guide activation', () => {
       }
     });
 
+    // US-19 FR3 F3-2 (P-2) — every other Next act is handed to the region
+    // that owns its control (ffe-section, the letterhead): the band press
+    // dispatches a cancelable landing, and keeps its old landing only when
+    // nobody takes it.
+    describe('one-voice, F3-2: the band hands its act to the owning control', () => {
+      const asNext = (need: Record<string, unknown>) => {
+        asProjectDocument();
+        mockDeskData = {
+          folders: [{ row: { engagement_id: 'project-1' }, need: null, needs: [need] }],
+          chips: [],
+          composed: { 'project-1': true },
+        };
+      };
+      const CLAIM = {
+        kind: 'damage_claim', text: 'A delivered piece was damaged in transit',
+        actionLabel: null, urgent: true, stamp: { label: 'DAMAGE CLAIM' }, owner: 'designer',
+      };
+      const SILENT_PO = {
+        kind: 'po_unacknowledged', text: 'PO-2026-0418 sent — no acknowledgment, 14 days',
+        actionLabel: 'Follow up with the maker', urgent: false, stamp: { label: 'SILENT' },
+        owner: 'maker',
+      };
+      const OVERDUE = {
+        kind: 'overdue_decision', text: 'Primary bedroom approval overdue 6 days',
+        actionLabel: 'Send a reminder', urgent: true, stamp: { label: 'OVERDUE' }, owner: 'client',
+      };
+
+      /** Record every dispatch of these events; `take` cancels the landing. */
+      function listen(take: boolean) {
+        const heard: { type: string; detail: unknown }[] = [];
+        const on = (e: Event) => {
+          heard.push({ type: e.type, detail: (e as CustomEvent).detail });
+          if (take && e.type !== 'document:open-ledger') e.preventDefault();
+        };
+        const types = ['document:land-ffe-act', 'document:compose-message', 'document:open-ledger'];
+        types.forEach((type) => window.addEventListener(type, on));
+        return {
+          heard,
+          stop: () => types.forEach((type) => window.removeEventListener(type, on)),
+        };
+      }
+
+      it('File the claim lands on the damaged line’s claim control, not the Orders ledger', () => {
+        mockEnabledFlags = ['one-voice'];
+        asNext(CLAIM);
+        const events = listen(true);
+        try {
+          render(<DocumentPage params={fulfilledParams} />);
+          fireEvent.click(screen.getByRole('button', { name: 'File the claim' }));
+          expect(events.heard).toEqual([{ type: 'document:land-ffe-act', detail: 'claim' }]);
+        } finally {
+          events.stop();
+        }
+      });
+
+      it('with no line to take it, File the claim keeps its old landing', () => {
+        mockEnabledFlags = ['one-voice'];
+        asNext(CLAIM);
+        const events = listen(false);
+        try {
+          render(<DocumentPage params={fulfilledParams} />);
+          fireEvent.click(screen.getByRole('button', { name: 'File the claim' }));
+          expect(events.heard.map((event) => event.type)).toEqual([
+            'document:land-ffe-act',
+            'document:open-ledger',
+          ]);
+        } finally {
+          events.stop();
+        }
+      });
+
+      it('Follow up with the maker lands on the PO line’s control', () => {
+        mockEnabledFlags = ['one-voice'];
+        asNext(SILENT_PO);
+        const events = listen(true);
+        try {
+          render(<DocumentPage params={fulfilledParams} />);
+          fireEvent.click(screen.getByRole('button', { name: 'Follow up with the maker' }));
+          expect(events.heard).toEqual([{ type: 'document:land-ffe-act', detail: 'follow-up' }]);
+        } finally {
+          events.stop();
+        }
+      });
+
+      it('Nudge {first} lands on the Message composer with the overdue decisions named', () => {
+        mockEnabledFlags = ['one-voice'];
+        asNext(OVERDUE);
+        mockProjectApprovalsQuery = {
+          data: [
+            { disposition: 'active', outcome: null, isOverdue: true, artifactTitle: 'Primary bedroom rug' },
+            { disposition: 'active', outcome: null, isOverdue: false, artifactTitle: 'Dining chairs' },
+            { disposition: 'active', outcome: 'approved', isOverdue: true, artifactTitle: 'Sofa fabric' },
+            { disposition: 'superseded', outcome: null, isOverdue: true, artifactTitle: 'Old rug' },
+          ],
+        };
+        const events = listen(true);
+        try {
+          render(<DocumentPage params={fulfilledParams} />);
+          fireEvent.click(screen.getByRole('button', { name: 'Nudge Avery' }));
+          expect(events.heard).toEqual([
+            { type: 'document:compose-message', detail: { named: ['Primary bedroom rug'] } },
+          ]);
+        } finally {
+          events.stop();
+        }
+      });
+
+      it('Ask the maker for a date is the Install row’s own act: the row takes the press', () => {
+        mockEnabledFlags = ['one-voice'];
+        asProjectDocument();
+        const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+        mockDocumentQuery = {
+          ...mockDocumentQuery,
+          data: { kind: 'engagement', row: { ...current, active_section: 'install' } },
+        };
+        mockOwnActFfeItems = [
+          { id: 'chair', name: 'Reading chair', status: 'production', vendor_name: 'Nordic Atelier', removed_at: null },
+          { id: 'shelving', name: 'Walnut shelving', status: 'delivered', removed_at: null },
+        ];
+        const heard: string[] = [];
+        const take = (e: Event) => {
+          heard.push(e.type);
+          e.preventDefault();
+        };
+        window.addEventListener('document:ask-the-maker', take);
+        try {
+          render(<DocumentPage params={fulfilledParams} />);
+          fireEvent.click(screen.getByRole('button', { name: 'Ask the maker for a date' }));
+          expect(heard).toEqual(['document:ask-the-maker']);
+        } finally {
+          window.removeEventListener('document:ask-the-maker', take);
+        }
+      });
+
+      it('with one-voice off the band hands nothing over', () => {
+        asNext(CLAIM);
+        const events = listen(true);
+        try {
+          render(<DocumentPage params={fulfilledParams} />);
+          const act = bandLine2()?.querySelector<HTMLElement>('button');
+          expect(act).toBeTruthy();
+          fireEvent.click(act!);
+          expect(events.heard.map((event) => event.type)).toEqual(['document:open-ledger']);
+        } finally {
+          events.stop();
+        }
+      });
+    });
+
     // D8 — the owner the need was raised with reaches the band: custody.
     it('one-voice: a need in the client’s hand reads `Waiting on …:`', () => {
       asProjectDocument();
@@ -4188,5 +4341,33 @@ describe('Escape puts the paper down — unless a field is using the key', () =>
     } finally {
       field.remove();
     }
+  });
+
+  // US-19 F3-1 — Esc closes the innermost open thing. An inline form on the
+  // paper (the record-payment form) takes its Esc as Cancel and marks it.
+  describe('an Esc an inline form took (F3-1)', () => {
+    function pressTakenEsc() {
+      const form = document.createElement('div');
+      form.addEventListener('keydown', (e) => e.preventDefault());
+      document.body.appendChild(form);
+      try {
+        fireEvent.keyDown(form, { key: 'Escape' });
+      } finally {
+        form.remove();
+      }
+    }
+
+    it('one-voice: leaves the paper where it is', () => {
+      mockEnabledFlags = ['one-voice'];
+      render(<DocumentPage params={fulfilledParams} />);
+      pressTakenEsc();
+      expect(mockRouter.push).not.toHaveBeenCalled();
+    });
+
+    it('one-voice off: puts the paper down, as today', () => {
+      render(<DocumentPage params={fulfilledParams} />);
+      pressTakenEsc();
+      expect(mockRouter.push).toHaveBeenCalledWith('/desk');
+    });
   });
 });

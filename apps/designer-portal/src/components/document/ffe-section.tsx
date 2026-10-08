@@ -100,6 +100,7 @@ import { RowWash, useRowWash, type RowWashTone } from './row-wash';
 import { LineUnfold } from './line-unfold';
 import { ChangeOrderSheet } from './line-unfold/change-order';
 import { makerLandingPending } from './line-unfold/the-buy-cell';
+import { recordPaymentOpener } from './line-unfold/record-payment';
 import {
   openRecordAChange,
   RECORD_A_CHANGE_ON_PIECE_EVENT,
@@ -107,6 +108,7 @@ import {
 } from './overlays/record-a-change-sheet';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
+  ACT_LANDING_EVENTS,
   NAMED_ACTS,
   needActLabel,
   ownAct,
@@ -1066,6 +1068,59 @@ interface FFESectionProps {
   projectStatus?: string | null;
 }
 
+// ── A need's act lands on its line (US-19 F3-2, P-2) ─────────────────────────
+
+/** `ACT_LANDING_EVENTS.ffeAct`'s detail. `claim`: the damaged line's claim
+ *  control. `follow-up`: the oldest unacknowledged PO's line, on its PO
+ *  control. */
+export type FfeActLanding = 'claim' | 'follow-up';
+
+/** The line an act lands on, in the schedule's own order. */
+export function ffeActLine<
+  T extends {
+    removed_at?: string | null;
+    item_claims?: readonly { state: string }[] | null;
+    purchase_order?: {
+      sent_at?: string | null;
+      acknowledged_at?: string | null;
+      status?: string | null;
+    } | null;
+  },
+>(items: readonly T[], act: FfeActLanding): T | null {
+  const live = items.filter((item) => item.removed_at == null);
+  if (act === 'claim') {
+    return (
+      live.find((item) =>
+        (item.item_claims ?? []).some(
+          (claim) => claim.state === 'drafted' || claim.state === 'vendor_notified',
+        ),
+      ) ?? null
+    );
+  }
+  // The rule the Desk's `po_unacknowledged` counts by (00590): sent, never
+  // acknowledged, neither delivered nor cancelled — the oldest first.
+  const unanswered = live.filter((item) => {
+    const po = item.purchase_order;
+    return (
+      Boolean(po?.sent_at) &&
+      !po?.acknowledged_at &&
+      po?.status !== 'delivered' &&
+      po?.status !== 'cancelled'
+    );
+  });
+  return (
+    [...unanswered].sort((a, b) =>
+      String(a.purchase_order?.sent_at).localeCompare(String(b.purchase_order?.sent_at)),
+    )[0] ?? null
+  );
+}
+
+const FFE_ACT_CONTROL: Record<FfeActLanding, string> = {
+  claim:
+    '[data-action-key="notify-vendor-of-ffe-claim"], [data-action-key="open-resolve-ffe-claim"]',
+  'follow-up': '[data-testid="line-po-cell"] [data-po-control]',
+};
+
 /**
  * The schedule, wrapped in its own ceremony. The provider is section-local by
  * design: releasing is the schedule's act, not the document's.
@@ -1658,11 +1713,49 @@ function FFESectionBody({
       setOpenLineId(String(item.id));
       if (mode === 'project') ffeSetFolded(false);
     };
-    const onLand = (event: Event) =>
+    const onLand = (event: Event) => {
+      // F3-1 — the press's own control (the band act, the dock centre), so
+      // Esc in the record form can hand focus back to it.
+      const focused = document.activeElement;
+      recordPaymentOpener.element =
+        focused instanceof HTMLElement && focused !== document.body ? focused : null;
       unfoldFor((event as CustomEvent<RecordPaymentLanding | undefined>).detail);
+    };
     window.addEventListener(LAND_RECORD_PAYMENT_EVENT, onLand);
     unfoldFor(recordPaymentPending.request);
     return () => window.removeEventListener(LAND_RECORD_PAYMENT_EVENT, onLand);
+  }, [items, mode, ffeSetFolded]);
+  // US-19 F3-2 (P-2) — `File the claim` and `Follow up with the maker` land on
+  // the line's own control, never the Orders ledger or the Pieces heading.
+  // Taken (the event cancelled) only when a line carries the act; otherwise
+  // the press keeps its old landing.
+  useEffect(() => {
+    const onLand = (event: Event) => {
+      const act = (event as CustomEvent<FfeActLanding>).detail;
+      const line = items && FFE_ACT_CONTROL[act] ? ffeActLine(items, act) : null;
+      if (!line) return;
+      event.preventDefault();
+      const itemId = String(line.id);
+      setOpenLineId(itemId);
+      if (mode === 'project') ffeSetFolded(false);
+      let waited = 0;
+      const land = () => {
+        const control = document
+          .getElementById(`ffe-selection-${itemId}`)
+          ?.querySelector<HTMLElement>(FFE_ACT_CONTROL[act]);
+        // Up to a second: the region and the line mount before the cell does.
+        if (!control) {
+          if (waited++ < 60) requestAnimationFrame(land);
+          return;
+        }
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        control.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+        control.focus({ preventScroll: true });
+      };
+      requestAnimationFrame(() => requestAnimationFrame(land));
+    };
+    window.addEventListener(ACT_LANDING_EVENTS.ffeAct, onLand);
+    return () => window.removeEventListener(ACT_LANDING_EVENTS.ffeAct, onLand);
   }, [items, mode, ffeSetFolded]);
   const ffeHeadingId = `ffe-region-heading-${projectId}`;
   const ffeMovementId = `ffe-movement-${projectId}`;

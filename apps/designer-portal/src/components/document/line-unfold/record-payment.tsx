@@ -58,6 +58,14 @@ export interface MoneyOutPayment {
 
 export const SETTLES_THROUGH_CHECKOUT = 'Settles through Patina checkout';
 
+/**
+ * US-19 F3-1 — the control a landing on the record form was pressed from (the
+ * band's act, the dock centre), set by the press before it lands so Esc can
+ * hand focus back one floor. ⌘K sets none: its return point holds focus by
+ * the time the form lands, and the landing reads that instead.
+ */
+export const recordPaymentOpener: { element: HTMLElement | null } = { element: null };
+
 const KIND_WORD: Record<string, string> = {
   deposit: 'Deposit',
   balance: 'Balance',
@@ -223,6 +231,9 @@ export function RecordPaymentForm({
     payeeName ? ` to ${payeeName}` : ''
   }${paidOn ? ` on ${fmtDay(paidOn)}` : ''} — voidable with a reason, never edited.`;
   const actRef = useRef<HTMLButtonElement | null>(null);
+  const formRef = useRef<HTMLDivElement | null>(null);
+  // F3-1 — where Esc hands focus back: the control the landing came from.
+  const openerRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (!landing) return;
     // Two frames, as ffe-section's line landing waits: ⌘K hands focus back
@@ -231,6 +242,14 @@ export function RecordPaymentForm({
       frame = requestAnimationFrame(() => {
         const act = actRef.current;
         if (!act) return;
+        const pressed = recordPaymentOpener.element;
+        recordPaymentOpener.element = null;
+        const focused = document.activeElement;
+        openerRef.current = pressed?.isConnected
+          ? pressed
+          : focused instanceof HTMLElement && focused !== document.body
+            ? focused
+            : null;
         const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         act.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
         act.focus({ preventScroll: true });
@@ -264,10 +283,39 @@ export function RecordPaymentForm({
     }
   };
 
+  // F3-1 (one-voice) — Esc is Cancel: the form closes and focus goes back to
+  // the control that opened it — the landing's opener, else the row's own
+  // `Record the payment →` that reappears. The paper's put-down (page.tsx)
+  // skips an Esc this form has taken (`defaultPrevented`). Mid-save the form
+  // keeps the key and stays.
+  const cancel = () => {
+    const opener = openerRef.current;
+    const row = formRef.current?.closest('li') ?? null;
+    onDone();
+    if (!oneVoice) return;
+    requestAnimationFrame(() => {
+      const back = opener?.isConnected
+        ? opener
+        : row?.querySelector<HTMLElement>('[data-action-key="open-record-vendor-payment"]');
+      back?.focus({ preventScroll: true });
+    });
+  };
+
   return (
     <div
+      ref={formRef}
       data-testid="record-payment-form"
       className="mt-1.5 space-y-1.5 border-l border-[var(--color-pearl)] pl-2.5"
+      onKeyDown={
+        oneVoice
+          ? (event) => {
+              if (event.key !== 'Escape' || event.defaultPrevented) return;
+              event.preventDefault();
+              event.stopPropagation();
+              if (!busy) cancel();
+            }
+          : undefined
+      }
     >
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <label className="flex items-baseline gap-1.5">
@@ -367,7 +415,7 @@ export function RecordPaymentForm({
           regionKey="money-out"
           variant="tertiary"
           disabled={busy}
-          onClick={onDone}
+          onClick={cancel}
         >
           Cancel
         </DocumentAction>

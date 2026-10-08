@@ -33,6 +33,7 @@ import { familyLabel } from '@/lib/document/family-label';
 import { vitalsInstrumentSuffix } from '@/lib/document/roster-derivation';
 import { clientShortName } from '@/lib/document/document-guide';
 import {
+  ACT_LANDING_EVENTS,
   MESSAGE_WITHHELD,
   NAMED_ACTS,
   messageLabel,
@@ -359,6 +360,31 @@ export function LetterheadInstruments({
   const withheld = noLogin ? messageNoLogin(firstName) : MESSAGE_WITHHELD;
   const heldLabel = messageLabel(noLogin ? firstName : null);
 
+  // US-19 F3-2 (one-voice, P-2) — `Nudge {first}` lands here: the composer
+  // opens with focus in its note and names the overdue decisions above it.
+  // Taken only where a note can be sent; a held Message keeps the old landing.
+  const [named, setNamed] = useState<readonly string[]>([]);
+  const noteRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!composing) setNamed([]);
+  }, [composing]);
+  useEffect(() => {
+    if (!oneVoice || !canSendNote) return;
+    const onCompose = (event: Event) => {
+      event.preventDefault();
+      const detail = (event as CustomEvent<{ named?: readonly string[] } | undefined>).detail;
+      setNamed(detail?.named ?? []);
+      setComposing(true);
+      requestAnimationFrame(() => {
+        composerRef.current?.scrollIntoView?.({ block: 'center' });
+        noteRef.current?.focus({ preventScroll: true });
+      });
+    };
+    window.addEventListener(ACT_LANDING_EVENTS.composeMessage, onCompose);
+    return () => window.removeEventListener(ACT_LANDING_EVENTS.composeMessage, onCompose);
+  }, [oneVoice, canSendNote]);
+
   useMobilePrimaryAction(
     canSendNote
       ? {
@@ -586,9 +612,13 @@ export function LetterheadInstruments({
 
       {composing && (
         <div
+          ref={composerRef}
           className="mt-2 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] p-2.5"
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
+              // F3-1 — marked as taken: the paper's put-down shares the
+              // document with React, so stopPropagation alone cannot keep it.
+              e.preventDefault();
               e.stopPropagation();
               setComposing(false);
             }
@@ -598,7 +628,13 @@ export function LetterheadInstruments({
             The Pulse handles Fridays; this is for now. It lands in {clientName}
             &rsquo;s portal messages.
           </p>
+          {named.length > 0 && (
+            <p data-message-named className="mb-1.5 text-[12px] text-[var(--color-charcoal)]">
+              {`Waiting on ${firstName ?? 'the client'}: ${named.join(' · ')}`}
+            </p>
+          )}
           <textarea
+            ref={noteRef}
             autoFocus
             value={noteBody}
             onChange={(e) => setNoteBody(e.target.value)}

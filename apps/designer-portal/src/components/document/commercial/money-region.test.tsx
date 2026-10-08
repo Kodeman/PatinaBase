@@ -762,9 +762,10 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
       'data-action-variant',
       'secondary',
     );
-    // It points at the oldest receivable's folio, where the money is recorded.
+    // It points at the oldest receivable's folio, where the money is recorded,
+    // landing on its filled `Record the payment · $X` (US-19 F3-3).
     fireEvent.click(record);
-    expect(mockOpenInvoiceFolio).toHaveBeenCalledWith('invoice-late');
+    expect(mockOpenInvoiceFolio).toHaveBeenCalledWith('invoice-late', { landOn: 'record' });
   });
 
   it('leads with Record a change when nothing is due: Draw an invoice is plain (F3-7)', () => {

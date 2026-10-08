@@ -37,6 +37,7 @@ import {
 } from '@/lib/document/proposal-watch-derivation';
 import { useFinalizeLeader } from '@/hooks/use-finalize-leader';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
+import { ACT_TARGET_IDS } from '@/lib/document/act-names';
 import { nudgeFailureNote } from '@/lib/delivery-ui';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -307,7 +308,9 @@ function LegacyProposalInstruments({
     if (entering) return;
     setEntering(true);
     rememberRoomOrigin(pathname);
-    router.push(`/drafting/${proposalId}`);
+    // US-19 F3-2 (one-voice) — `Write the proposal` lands on the composer's
+    // first missing input (510-6), not the Room's top.
+    router.push(`/drafting/${proposalId}${oneVoice ? '?land=gap' : ''}`);
   };
 
   useMobilePrimaryAction(
@@ -434,6 +437,7 @@ function LegacyProposalInstruments({
             />
           )}
           <DocumentAction
+            id={oneVoice ? ACT_TARGET_IDS.contractRoomDoor : undefined}
             actionKey="continue-drafting"
             variant="primary"
             loading={entering}

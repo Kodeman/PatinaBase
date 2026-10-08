@@ -5,7 +5,7 @@ import {
   type NeedLine,
   type SectionKey,
 } from './desk-derivation';
-import { STAGE_WORD, needActLabel, ownAct, type OwnActFacts } from './act-names';
+import { ACT_TARGET_IDS, STAGE_WORD, needActLabel, ownAct, type OwnActFacts } from './act-names';
 import type { CommercialDocumentKind, CommercialState } from './commercial-documents';
 import { familyLabel } from './family-label';
 import type { SectionScheduleFacts } from './section-derivation';
@@ -809,7 +809,20 @@ function voiceGuide(
     return { ...model, eyebrow: `${STAGE_WORD[row.active_section]} · gate` };
   }
   const label = oneVoiceActLabel(action.key, model.eyebrow, clientFirstName);
-  return label ? { ...model, action: { ...action, label } } : model;
+  if (!label) return model;
+  // US-19 F3-23 — `Hold a window` lands on the ceremony door's own control,
+  // with focus, not on the section's heading.
+  if (action.key === 'rest-install' && action.destination.kind === 'anchor') {
+    return {
+      ...model,
+      action: {
+        ...action,
+        label,
+        destination: { ...action.destination, focusId: ACT_TARGET_IDS.installWindow },
+      },
+    };
+  }
+  return { ...model, action: { ...action, label } };
 }
 
 function proposalGuide(

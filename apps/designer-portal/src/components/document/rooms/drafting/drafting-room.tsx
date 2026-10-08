@@ -30,7 +30,7 @@
  * A Room — full-bleed paper, zero shadows (D4); reuses RoomShell's physics.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -321,6 +321,32 @@ function DraftingRoomEditor({
       (current) => current ?? firstIncompleteDraftingFacet(facets),
     );
   }, [facets, facetsLoading]);
+
+  // US-19 F3-2 — `Write the proposal` walks in at /drafting/<id>?land=gap and
+  // lands with focus on the first unfinished facet's first control (510-6).
+  const landedOnGap = useRef(false);
+  useEffect(() => {
+    if (facetsLoading || landedOnGap.current) return;
+    if (new URLSearchParams(window.location.search).get('land') !== 'gap') return;
+    let frame = 0;
+    let handle = 0;
+    const land = () => {
+      const body = document.querySelector<HTMLElement>('[data-drafting-facet-body]:not([hidden])');
+      const control =
+        body?.querySelector<HTMLElement>(
+          'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])',
+        ) ?? body?.querySelector<HTMLElement>('button:not([disabled])');
+      if (control) {
+        landedOnGap.current = true;
+        control.scrollIntoView?.({ block: 'center' });
+        control.focus({ preventScroll: true });
+      } else if (frame++ < 60) {
+        handle = requestAnimationFrame(land);
+      }
+    };
+    handle = requestAnimationFrame(land);
+    return () => cancelAnimationFrame(handle);
+  }, [facetsLoading]);
 
   const openPreview = () => {
     setPreviewOpen(true);

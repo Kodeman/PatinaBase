@@ -261,7 +261,8 @@ export function MoneyRegion({
           {
             key: 'record-client-payment',
             label: NAMED_ACTS.recordPayment,
-            onClick: () => openInvoiceFolio(receivableDue.id),
+            // F3-3 (P-1) — the folio opens on its filled record control.
+            onClick: () => openInvoiceFolio(receivableDue.id, { landOn: 'record' }),
           },
         ]
       : []),

@@ -154,7 +154,13 @@ import {
   type DocumentGuideAction,
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
-import { STAGE_WORD, householdDisplayName, ownAct } from '@/lib/document/act-names';
+import {
+  ACT_LANDING_EVENTS,
+  ACT_TARGET_IDS,
+  STAGE_WORD,
+  householdDisplayName,
+  ownAct,
+} from '@/lib/document/act-names';
 import { landRecordPayment } from '@/lib/document/registry';
 import { familyLabel } from '@/lib/document/family-label';
 import {
@@ -300,6 +306,18 @@ interface TicketFFERow extends LineStampInput {
 interface ScheduleVitals {
   activePhaseName: string | null;
   target: { date: string | null; fidelity: Fidelity };
+}
+
+/**
+ * US-19 F3-2 (P-2) — hand a Next act to the region that owns it, so the press
+ * lands on that region's own control. True when the owner took it (cancelled
+ * the event); the caller keeps its old landing when nobody did.
+ */
+function landAct(
+  type: (typeof ACT_LANDING_EVENTS)[keyof typeof ACT_LANDING_EVENTS],
+  detail?: unknown,
+): boolean {
+  return !window.dispatchEvent(new CustomEvent(type, { detail, cancelable: true }));
 }
 
 /**
@@ -1441,6 +1459,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // Target` is `use-lens-state.ts`'s own selector, so the guard that
       // decides `editing` and the guard that decides Put-down cannot drift.
       if (isEditableTarget(e.target)) return;
+      // US-19 F3-1 (one-voice) — Esc closes the innermost open thing. An
+      // inline form on the paper (the record-payment form) takes its Esc as
+      // Cancel and marks it; React and this listener both sit on the
+      // document, so stopPropagation alone cannot keep it from here.
+      if (oneVoice && e.defaultPrevented) return;
       if (document.querySelector('[role="dialog"]')) return;
       if (openShelf) return;
       // Explicit put-down — always a genuine exit, never gated on a
@@ -1450,7 +1473,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [router, openShelf, fireZoneFlightIfDue]);
+  }, [router, openShelf, fireZoneFlightIfDue, oneVoice]);
 
   // The shelf rows. A leaf toggles; the call sheet dispatches at the roster
   // sheet that already exists rather than printing a second, thinner copy.
@@ -1879,6 +1902,30 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // centre both press this.
       const landingPoId =
         oneVoice && need.kind === 'payment_due' ? need.ledger?.context?.purchaseOrderId : undefined;
+      // US-19 F3-2 (P-2) — every other Next act lands on its own control:
+      // a claim or an unanswered PO on its line, a nudge in the Message
+      // composer with the overdue decisions named. Where no owner takes it,
+      // the press keeps the guide's landing.
+      const landing: (() => boolean) | null = !oneVoice
+        ? null
+        : need.kind === 'damage_claim'
+          ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'claim')
+          : need.kind === 'po_unacknowledged'
+            ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'follow-up')
+            : need.kind === 'overdue_decision'
+              ? () =>
+                  landAct(ACT_LANDING_EVENTS.composeMessage, {
+                    named: (approvalsQuery.data ?? [])
+                      .filter(
+                        (approval) =>
+                          approval.disposition === 'active' &&
+                          approval.outcome !== 'approved' &&
+                          approval.isOverdue,
+                      )
+                      .map((approval) => approval.artifactTitle)
+                      .filter(Boolean),
+                  })
+              : null;
       return {
         key: `${need.kind}-${index}`,
         kind: need.kind,
@@ -1886,7 +1933,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         actionLabel: action.label,
         onAct: landingPoId
           ? () => landRecordPayment(landingPoId)
-          : () => activateDestination(action.destination),
+          : () => {
+              if (landing?.()) return;
+              activateDestination(action.destination);
+            },
         urgent: need.urgent,
         // N-01 — the deadline the band ranks on, structured. The need already
         // holds it; the sentence it prints does not.
@@ -1895,7 +1945,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         owner: need.owner,
       };
     });
-  }, [row, rankedOperationalNeeds, activateDestination, oneVoice]);
+  }, [row, rankedOperationalNeeds, activateDestination, oneVoice, approvalsQuery.data]);
 
   // NF4-01 — the ranked need's act, elected from the rows that already carry
   // each need's kind beside the destination the guide offers, so the approvals
@@ -2504,13 +2554,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         bandSection === 'project' && unspecified > 0
           ? `${unspecified} ${unspecified === 1 ? 'line' : 'lines'} unspecified.`
           : null,
-      onAct: () =>
+      onAct: () => {
+        // US-19 F3-2 (P-2) — `Ask the maker for a date` is the Install row's
+        // own act: the row takes it and opens its sheet on the first field,
+        // rather than the band pointing at the row's copy of the act.
+        if (act.targetId === ACT_TARGET_IDS.installReading && landAct(ACT_LANDING_EVENTS.askTheMaker)) return;
         activateDestination({
           kind: 'anchor',
           section: bandSection,
           focusId: act.targetId,
-          activate: true,
-        }),
+          // F3-23 — `Hold a window` lands with focus on the ceremony's door;
+          // pressing it is hers to do.
+          activate: act.targetId !== ACT_TARGET_IDS.installWindow,
+        });
+      },
     };
   }, [
     oneVoice,
