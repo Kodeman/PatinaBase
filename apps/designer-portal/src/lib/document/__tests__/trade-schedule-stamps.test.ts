@@ -50,6 +50,22 @@ describe("trade presence lines on the schedule", () => {
     ).toBe("trade_engaged");
   });
 
+  // US-21 D1 R3: a presence line carries no product and no maker, and it is
+  // still the trade word, never the pre-order PLACEHOLDER.
+  it("never reads as a placeholder, though it has no product and no maker", () => {
+    expect(
+      deriveLineStamp({
+        status: "specified",
+        blocked: false,
+        received_quantity: null,
+        trade_scope_document_id: "pcd-1",
+        productId: null,
+        vendorId: null,
+        vendorName: null,
+      }).kind,
+    ).toBe("trade_engaged");
+  });
+
   // A caller that DOES track trade progress but has not resolved it yet
   // (its query is loading, or disabled for this view) must say so with an
   // explicit `null` — distinct from the omitted-argument case above — so the

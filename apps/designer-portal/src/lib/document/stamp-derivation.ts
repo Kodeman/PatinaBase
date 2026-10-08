@@ -27,6 +27,9 @@ const MACHINE = new Set([
 ]);
 
 export type LineStampKind =
+  // US-21 Q3: a pre-order line with no product and no maker is a placeholder,
+  // not "specified" — nothing about it is specified yet.
+  | 'placeholder'
   | 'specified'
   | 'quoted'
   | 'approved'
@@ -64,6 +67,11 @@ export interface LineStampInput {
   item_claims?: { state: string }[] | null;
   /** Set on a trade scope's presence lines — the pcd this line belongs to. */
   trade_scope_document_id?: string | null;
+  /** US-21 D1 inputs. Only an explicit `null` on all three says "no product,
+   *  no maker"; a caller that omits them keeps today's word. */
+  productId?: string | null;
+  vendorId?: string | null;
+  vendorName?: string | null;
 }
 
 /**
@@ -137,10 +145,38 @@ export function deriveLineStamp(
     return { kind: short ? 'partial' : 'received', dueDate: null };
   }
 
-  return {
-    kind: MACHINE.has(item.status) ? (item.status as LineStampKind) : 'specified',
-    dueDate: null,
-  };
+  const kind = MACHINE.has(item.status) ? (item.status as LineStampKind) : 'specified';
+  // D1 row 9: no product and no maker is a placeholder, whatever its price —
+  // a price never promotes it. Every other pre-order line keeps its current
+  // word until the full stage derivation lands (T-19).
+  if (
+    kind === 'specified' &&
+    item.productId === null &&
+    item.vendorId === null &&
+    item.vendorName === null
+  ) {
+    return { kind: 'placeholder', dueDate: null };
+  }
+  return { kind, dueDate: null };
+}
+
+/**
+ * The price a line prints when it has none (fix-now #5). The column defaults
+ * to 0 (00066), so a rough line with no product reads `$0` unless this says
+ * otherwise. An allowance is priced by its ceiling, and a line with a product
+ * at 0 is a stated price, so both keep their figure. `null` means print the
+ * price as usual.
+ */
+export function priceWord(row: {
+  unit_price_cents: number | null;
+  product_id: string | null;
+  item_type?: string | null;
+}): 'Not priced' | null {
+  return row.unit_price_cents === 0 &&
+    row.product_id == null &&
+    row.item_type !== 'allowance'
+    ? 'Not priced'
+    : null;
 }
 
 /**
@@ -159,6 +195,8 @@ export function deriveLineStamp(
  * callers render nothing for it.
  */
 const LINE_STAMP_LABEL: Record<LineStampKind, string> = {
+  // Q3's word; the stamp's CSS uppercases it to PLACEHOLDER like every other.
+  placeholder: 'Placeholder',
   specified: 'Specified',
   quoted: 'Quoted',
   approved: 'Approved',

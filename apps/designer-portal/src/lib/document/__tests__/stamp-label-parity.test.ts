@@ -43,4 +43,11 @@ describe('F58 · one vocabulary across the paper and the FF&E board', () => {
     expect(STAGE_CONFIG.delivered.label).toBe('Received');
     expect(lineStampLabel('received')).toBe('Received');
   });
+
+  // US-21 Q3: PLACEHOLDER is a derived stamp, not a stage a line can be moved
+  // to, so the board's dropdown has no word for it to drift from.
+  it('keeps placeholder off the stage dropdown and prints Q3’s word', () => {
+    expect(FFE_STAGE_KEYS).not.toContain('placeholder');
+    expect(lineStampLabel('placeholder')).toBe('Placeholder');
+  });
 });

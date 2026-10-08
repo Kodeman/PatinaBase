@@ -240,6 +240,10 @@ function stampProps(stamp: LineStamp): {
     // 'trade_pending' entry and would throw).
     case 'trade_pending':
       return { label, color: 'var(--color-aged-oak)' };
+    // US-21 Q3: not a machine stage, so not in STAGE_CONFIG. It keeps the
+    // pre-order outline of the word it replaces.
+    case 'placeholder':
+      return { label, color: STAGE_CONFIG.specified.color };
     case 'decision_due':
       return {
         label: stamp.dueDate ? `${label} · ${fmtDay(stamp.dueDate)}` : label,
