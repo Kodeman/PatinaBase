@@ -15,6 +15,7 @@ import {
   useRemovedProjectLines,
 } from "@patina/supabase";
 import { BuildRoomShell } from "@/components/document/pieces/build-room-shell";
+import { PriceLens } from "@/components/document/pieces/price-lens";
 import { RoughInLens } from "@/components/document/pieces/rough-in-lens";
 import { SpecLens } from "@/components/document/pieces/spec-lens";
 import { useCanSeeMargin } from "@/hooks/use-can-see-margin";
@@ -139,6 +140,14 @@ function BuildRoom({ docId }: { docId: string }) {
       ) : null}
       {lens === "spec" && (
         <SpecLens
+          docId={docId}
+          projectId={projectId}
+          room={room}
+          canSeeMoney={canSeeMoney}
+        />
+      )}
+      {lens === "price" && (
+        <PriceLens
           docId={docId}
           projectId={projectId}
           room={room}
