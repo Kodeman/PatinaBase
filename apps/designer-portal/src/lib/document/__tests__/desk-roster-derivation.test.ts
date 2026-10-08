@@ -1658,8 +1658,96 @@ describe('deriveDeskRoster — the lead need is the band’s Next (FR3 F3-4)', (
     expect(chained(r, [silent, task], true).needKind).toBe('task_due');
   });
 
-  it('setup alone still leads: the Desk holds no stage facts, so no own act', () => {
-    const r = row('quiet', 'install');
-    expect(chained(r, [setup], true).act.label).toBe('Open the schedule');
+  // FR4 ruling 521 (b) — setup never leads a card: a folder whose only needs
+  // are setup prints at rest with the Desk's existing `Open the job`.
+  it('setup alone prints at rest with Open the job (FR4 521)', () => {
+    const cedar = row('cedar', 'install', { client_name: 'Ines Cedar' });
+    const on = chained(cedar, [setup], true);
+    expect(on.act.label).toBe(OPEN_THE_JOB);
+    expect(on.act.href).toBe('/doc/cedar');
+    expect(on.needKind).toBeNull();
+    expect(on.needText).toBeNull();
+    expect(on.mark).toBeNull();
+    expect(on.custody).toBe('At rest');
+    expect(on.state).not.toContain('Name the phases for this project');
+    expect(rosterLineNeedsAHand(on)).toBe(false);
+    // Flag off, today's setup lead.
+    const off = chained(cedar, [setup], false);
+    expect(off.act.label).toBe('Open the schedule');
+    expect(off.needKind).toBe('schedule_unconfigured');
+    expect(off.custody).toBe('Your pen');
+  });
+});
+
+// US-19 FR4 Fix 5 — the Desk card prints the paper's own act where the need
+// and the paper name the same moment. Labels and act choice only.
+describe('deriveDeskRoster — the card act agrees with the paper (FR4 Fix 5)', () => {
+  const line = (r: DocumentStateRow, n: NeedLine, oneVoice: boolean) =>
+    deriveDeskRoster(input({ live: [r], folders: [folder(r, n)], oneVoice }), NOW).groups[0]
+      .lines[0];
+
+  const newLead = need({
+    kind: 'new_lead',
+    text: 'New lead — respond by Aug 27',
+    actionLabel: null,
+    dueOn: '2026-08-27T00:00:00Z',
+    owner: 'designer',
+  });
+
+  it('a Brief card with an open inquiry prints Respond to the inquiry; the reason line stays', () => {
+    const wright = row('wright', 'brief', { engagement_kind: 'lead', lead_status: 'new' });
+    const on = line(wright, newLead, true);
+    expect(on.act.label).toBe('Respond to the inquiry');
+    expect(on.act.href).toBe('/doc/wright');
+    expect(on.needText).toBe('New lead — respond by Aug 27');
+    expect(on.needKind).toBe('new_lead');
+    const off = line(wright, newLead, false);
+    expect(off.act.label).toBe(OPEN_THE_JOB);
+    expect(off.needText).toBe('New lead — respond by Aug 27');
+  });
+
+  const unopened = need({
+    kind: 'hesitating_proposal',
+    text: 'Sent 5 October — not yet opened',
+    actionLabel: 'Follow up',
+    owner: 'client',
+  });
+  const sent = (id: string, client_name: string, over: Partial<DocumentStateRow> = {}) =>
+    row(id, 'proposal', {
+      client_name,
+      proposal_status: 'sent',
+      proposal_sent_at: '2026-08-20T00:00:00Z',
+      proposal_viewed_at: null,
+      ...over,
+    });
+
+  it('a proposal with the client, not yet opened, prints Nudge {first}', () => {
+    const aspen = sent('aspen', 'Mei Lin');
+    const on = line(aspen, unopened, true);
+    expect(on.act.label).toBe('Nudge Mei');
+    expect(on.act.href).toBe('/doc/aspen');
+    expect(on.needText).toBe('Sent 5 October — not yet opened');
+    expect(line(aspen, unopened, false).act.label).toBe('Follow up');
+  });
+
+  it('the generic Client User is no name: Nudge the client', () => {
+    const aspen = sent('aspen', 'Client User');
+    expect(line(aspen, unopened, true).act.label).toBe('Nudge the client');
+    expect(line(sent('blank', ''), unopened, true).act.label).toBe('Nudge the client');
+    expect(line(aspen, unopened, false).act.label).toBe('Follow up');
+  });
+
+  it('a proposal opened and unsigned keeps Follow up (not ruled by Fix 5)', () => {
+    const opened = sent('opened', 'Mei Lin', {
+      proposal_status: 'viewed',
+      proposal_viewed_at: '2026-08-21T00:00:00Z',
+    });
+    const hesitating = need({
+      kind: 'hesitating_proposal',
+      text: 'Opened Aug 21 — no signature yet',
+      actionLabel: 'Follow up',
+      owner: 'client',
+    });
+    expect(line(opened, hesitating, true).act.label).toBe('Follow up');
   });
 });

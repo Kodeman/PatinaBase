@@ -1,9 +1,15 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type {
-  AnsweredClientNote,
-  DeskRoster as DeskRosterModel,
-  RosterMember,
+  DeskFolder,
+  DocumentStateRow,
+  NeedLine,
+} from '@/lib/document/desk-derivation';
+import {
+  deriveDeskRoster,
+  type AnsweredClientNote,
+  type DeskRoster as DeskRosterModel,
+  type RosterMember,
 } from '@/lib/document/desk-roster-derivation';
 import { DeskRoster } from './desk-roster';
 
@@ -1007,5 +1013,109 @@ describe('DeskRoster — no shadow reaches either half', () => {
       expect(el.className.toString()).not.toMatch(/\bshadow-/);
       expect(el.className.toString()).not.toMatch(/\bdrop-shadow\b/);
     }
+  });
+});
+
+// US-19 FR4 Fix 5 — the card's act agrees with the paper. Built through the
+// real derivation so the printed act is what `one-voice` derives.
+describe('DeskRoster — the card act agrees with the paper (FR4 Fix 5)', () => {
+  const NOW = new Date('2026-08-25T12:00:00Z');
+  const docRow = (id: string, title: string, over: Partial<DocumentStateRow>) =>
+    ({
+      engagement_id: id,
+      title,
+      client_name: `Family ${id}`,
+      active_section: 'project',
+      current_phase: null,
+      updated_at: '2026-08-01T00:00:00Z',
+      ...over,
+    }) as unknown as DocumentStateRow;
+  const needLine = (over: Partial<NeedLine>) =>
+    ({
+      stamp: { label: 'DUE', color: 'var(--color-clay)' },
+      urgent: false,
+      ...over,
+    }) as NeedLine;
+
+  const cedar = docRow('cedar', 'Cedar house', { active_section: 'install' });
+  const wright = docRow('wright', 'Wright apartment', {
+    active_section: 'brief',
+    engagement_kind: 'lead',
+    lead_status: 'new',
+  });
+  const aspen = docRow('aspen', 'Aspen residence', {
+    active_section: 'proposal',
+    client_name: 'Client User',
+    proposal_status: 'sent',
+    proposal_sent_at: '2026-08-20T00:00:00Z',
+    proposal_viewed_at: null,
+  });
+  const folders = [
+    {
+      row: cedar,
+      need: needLine({
+        kind: 'schedule_unconfigured',
+        text: 'Name the phases for this project',
+        actionLabel: 'Open the schedule',
+      }),
+    },
+    {
+      row: wright,
+      need: needLine({
+        kind: 'new_lead',
+        text: 'New lead — respond by Aug 27',
+        actionLabel: null,
+        owner: 'designer',
+      }),
+    },
+    {
+      row: aspen,
+      need: needLine({
+        kind: 'hesitating_proposal',
+        text: 'Sent 20 August — not yet opened',
+        actionLabel: 'Follow up',
+        owner: 'client',
+      }),
+    },
+  ] as DeskFolder[];
+  const derived = (oneVoice: boolean) =>
+    deriveDeskRoster({ folders, chips: [], live: [cedar, wright, aspen], oneVoice }, NOW);
+
+  it('one-voice on: setup at rest, Respond to the inquiry, Nudge the client', () => {
+    const { container } = render(<DeskRoster roster={derived(true)} />);
+
+    // Cedar is at rest: a ledger row with the Desk's `Open the job`, no card.
+    const cedarAct = screen.getByRole('link', { name: 'Open the job — Cedar house' });
+    expect(cedarAct.closest('[data-ledger-row]')).not.toBeNull();
+    expect(screen.queryByText(/Name the phases for this project/)).toBeNull();
+    expect(screen.queryByText('Open the schedule')).toBeNull();
+
+    const wrightAct = screen.getByRole('link', {
+      name: 'Respond to the inquiry — Wright apartment',
+    });
+    expect(wrightAct).toHaveAttribute('href', '/doc/wright');
+    expect(wrightAct.closest('[data-claim-card]')).toHaveTextContent(
+      'New lead — respond by Aug 27',
+    );
+
+    expect(
+      screen.getByRole('link', { name: 'Nudge the client — Aspen residence' }),
+    ).toHaveAttribute('href', '/doc/aspen');
+    expect(container.querySelectorAll('[data-claim-card]')).toHaveLength(2);
+  });
+
+  it('one-voice off: the Desk stays as it is today', () => {
+    const { container } = render(<DeskRoster roster={derived(false)} />);
+
+    expect(
+      screen.getByRole('link', { name: 'Open the schedule — Cedar house' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Open the job — Wright apartment' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Follow up — Aspen residence' }),
+    ).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-claim-card]')).toHaveLength(3);
   });
 });

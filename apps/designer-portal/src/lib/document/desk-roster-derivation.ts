@@ -24,10 +24,10 @@ import {
   type NeedLine,
   type SectionKey,
 } from './desk-derivation';
-import { STAGE_WORD, householdDisplayName } from './act-names';
+import { STAGE_WORD, householdDisplayName, ownAct, type OwnActFacts } from './act-names';
 import { dayMonth, legalDate, parseSourceDate } from './dates';
 import { voiceFirstName } from './document-guide';
-import { deskLeadNeed } from './need-class';
+import { classOfNeed, deskLeadNeed } from './need-class';
 import {
   deriveOverdue,
   overdueElapsedPhrase,
@@ -355,6 +355,44 @@ interface RosterEntry {
   at: number;
 }
 
+/** What `ownAct` reads where the Desk names a stage's own act: the Desk holds
+ *  no stage facts beyond the row, so only the one fact each case sets. */
+const NO_OWN_ACT_FACTS: OwnActFacts = {
+  inquiryOpen: false,
+  firstMissingEssential: null,
+  proposalState: null,
+  clientFirstName: null,
+  unspecifiedCount: 0,
+  releaseEligible: false,
+  install: null,
+};
+
+/**
+ * US-19 FR4 Fix 5 (`one-voice`) — the card's act is the paper's own act where
+ * the need and the paper name the same moment: a Brief card with an open
+ * inquiry prints `Respond to the inquiry`, a proposal sent and not yet opened
+ * prints `Nudge {first}` / `Nudge the client`. Every other need keeps
+ * `deskActionLabel`. The Desk reads only the row it already has (ruling 521
+ * (b)); feeding the band's facts to the card is the deferred end state.
+ */
+function voicedActLabel(need: NeedLine, row: DocumentStateRow): string | null {
+  const clientFirstName = voiceFirstName(row.client_name);
+  if (need.kind === 'new_lead') {
+    return ownAct('brief', { ...NO_OWN_ACT_FACTS, inquiryOpen: true })?.label ?? null;
+  }
+  if (
+    need.kind === 'hesitating_proposal' &&
+    row.proposal_status === 'sent' &&
+    !row.proposal_viewed_at
+  ) {
+    return (
+      ownAct('proposal', { ...NO_OWN_ACT_FACTS, proposalState: 'sent', clientFirstName })
+        ?.label ?? null
+    );
+  }
+  return deskActionLabel(need, true, clientFirstName);
+}
+
 export function deriveDeskRoster(
   input: DeskRosterInput,
   now: Date,
@@ -371,15 +409,22 @@ export function deriveDeskRoster(
     const folder = folderByEngagement.get(row.engagement_id) ?? null;
     const chip = deskMotion(chipByEngagement.get(row.engagement_id) ?? null, voice);
     // FR3 F3-4 (`one-voice`) — the line leads with the band's Next, so a setup
-    // row never outranks a need that blocks money or needs her.
+    // row never outranks a need that blocks money or needs her. FR4 ruling 521
+    // (b) — setup never leads a card at all: a folder whose only needs are
+    // setup (D2/D10 class 3) prints at rest with `Open the job`.
     const need = folder
       ? voice
-        ? deskLeadNeed(folder.needs ?? [folder.need], now)
+        ? deskLeadNeed(
+            (folder.needs ?? [folder.need]).filter((n) => classOfNeed(n.kind) !== 3),
+            now,
+          )
         : folder.need
       : null;
     const needText = need ? deskNeedText(need, voice) : null;
     const actionLabel = need
-      ? deskActionLabel(need, voice, voice ? voiceFirstName(row.client_name) : null)
+      ? voice
+        ? voicedActLabel(need, row)
+        : deskActionLabel(need, false)
       : null;
     const overdue = need ? deriveOverdue(need.dueOn, now) : NOT_OVERDUE;
     // EVERY need is a mark (§2.1). A need with no due date is still a need —
