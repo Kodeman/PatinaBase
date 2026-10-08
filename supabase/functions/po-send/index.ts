@@ -155,6 +155,10 @@ interface FfeItemRow {
   unit_price_cents: number | null;
   notes: string | null;
   ffe_category: string | null;
+  /** 00729: distinguishes a labor line from goods (C-24 COM fallback). */
+  line_kind?: string | null;
+  /** project_ffe_items.link_kind: 'com' pairs a line to its piece (C-24). */
+  link_kind?: string | null;
   room: { id: string; name: string } | null;
   /** project_ffe_specs embed (UNIQUE ffe_item_id → object, not array). */
   spec: VendorConfigurationSpec | null;
@@ -298,7 +302,7 @@ Deno.serve(async (req: Request) => {
     .select(
       `
       id, name, quantity, unit, trade_price_cents, unit_price_cents, notes,
-      ffe_category,
+      ffe_category, line_kind, link_kind,
       room:project_rooms!project_room_id(id, name),
       spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
         configuration_id, configuration_snapshot,
