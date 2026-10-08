@@ -93,8 +93,9 @@ export interface LensNeedRow extends RedLetterRow {
   owner?: LensNeedOwner;
   /** FR5 F5-2 — the procurement draft the need carries (`NeedLine.draft`, the
    *  same drafts the Desk reads), where the caller hands it over. A held maker
-   *  note renames the line's act `Open the held draft`. */
-  draft?: Pick<NonNullable<NeedLine['draft']>, 'kind' | 'status' | 'ffeItemId'> | null;
+   *  note renames the line's act `Open the held draft`; FR7 F7-1 — and the
+   *  silence row for its PO (`poNumber`). */
+  draft?: Pick<NonNullable<NeedLine['draft']>, 'kind' | 'status' | 'ffeItemId' | 'poNumber'> | null;
 }
 
 /** FR5 530-3 — a note to the maker held for review: a date request or a
@@ -193,6 +194,8 @@ export interface LensStandingItem {
   heldMakerNote?: boolean;
   /** FR6 F6-3 — the line that held note rides (`DRAFT_NEED`'s `ffeItemId`). */
   heldMakerNoteLine?: string;
+  /** FR7 F7-1 — that held note's line PO number (`linePoNumber`). */
+  heldMakerNotePo?: string;
   /** D-B24 — the item's short form, for the 390 measure. */
   short: LensShortForm;
 }
@@ -822,6 +825,9 @@ export function rankStanding(
         ...(isHeldMakerNote(need.draft) && need.draft?.ffeItemId
           ? { heldMakerNoteLine: need.draft.ffeItemId }
           : {}),
+        ...(isHeldMakerNote(need.draft) && need.draft?.poNumber
+          ? { heldMakerNotePo: need.draft.poNumber }
+          : {}),
       }),
     });
   });
@@ -985,19 +991,25 @@ function voiceItem(item: LensStandingItem, clientFirstName: string | null): Lens
 /**
  * FR5 F5-2 (530-3, 506-6 extended to the band) — `voiceItem` over the whole
  * standing set. While a maker note stands held for review, the maker's line
- * has been followed up: every `po_unacknowledged` act reads `Open the held
+ * has been followed up: its `po_unacknowledged` act reads `Open the held
  * draft` and presses the held note's own act, which lands on its DraftReview.
- * The draft need carries the note; a maker's silence is project-grained (it
- * names no line), so it takes the held note's act too rather than offering a
- * second follow-up. Every other row is `voiceItem`'s.
+ * FR7 F7-1 (538 Q1) — the relabel follows the PO number: the draft row itself,
+ * and a silence row whose PO code (`short.subject`) is the held note's line PO
+ * number. Any other silence keeps `Follow up with the maker` and its own
+ * landing. Every other row is `voiceItem`'s.
  */
 function voiceStanding(
   standing: readonly LensStandingItem[],
   clientFirstName: string | null,
 ): LensStandingItem[] {
-  const held = standing.find((item) => item.heldMakerNote && item.act)?.act ?? null;
+  const heldRow = standing.find((item) => item.heldMakerNote && item.act) ?? null;
+  const held = heldRow?.act ?? null;
+  const heldPo = heldRow?.heldMakerNotePo;
   return standing.map((item) =>
-    held && item.act && item.needKind === 'po_unacknowledged'
+    held &&
+    item.act &&
+    item.needKind === 'po_unacknowledged' &&
+    (item.heldMakerNote || (heldPo !== undefined && item.short.subject === heldPo))
       ? { ...item, act: { ...item.act, label: OPEN_THE_HELD_DRAFT, onAct: held.onAct } }
       : voiceItem(item, clientFirstName),
   );
@@ -1111,7 +1123,18 @@ function rowAct(
   if (!row) return null;
   const label = standingRowActLabel(row.kind, { firstName: clientFirstName, count: row.count });
   const lending = LENDING_NEED[row.kind];
-  const lent = lending ? actOfKind(lending) : null;
+  // FR7 F7-1: a held note's act is lent only to the silence for its PO; any
+  // other silence borrows a need's own act, never the held note's.
+  const heldRow = voiced.find((item) => item.heldMakerNote && item.act);
+  const lent = !lending
+    ? null
+    : lending === 'po_unacknowledged' &&
+        heldRow?.heldMakerNotePo !== undefined &&
+        shortSubject(sentence, undefined) === heldRow.heldMakerNotePo
+      ? (heldRow.act ?? null)
+      : (voiced.find(
+          (item) => item.needKind === lending && item.act && item.act.label !== OPEN_THE_HELD_DRAFT,
+        )?.act ?? null);
   // FR5 F5-2: a maker's silence with a note held for review lends that act.
   if (lent && (lent.label === label || lent.label === OPEN_THE_HELD_DRAFT)) return lent;
   if (ownAct?.label === label) {

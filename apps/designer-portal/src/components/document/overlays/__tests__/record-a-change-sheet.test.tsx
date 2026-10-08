@@ -66,6 +66,7 @@ jest.mock('@/components/document/overlays/ask-maker-sheet', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProcurementDrafts: () => ({ data: [] }),
   useProjectV2: () => ({ data: null }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),

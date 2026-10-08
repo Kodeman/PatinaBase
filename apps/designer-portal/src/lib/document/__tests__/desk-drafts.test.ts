@@ -181,4 +181,38 @@ describe('FR2 — the Desk speaks a held draft by its landing control', () => {
     expect(eta.maker).toBe('Hewn');
     expect(chase).not.toHaveProperty('maker');
   });
+
+  // US-19 FR7 F7-1 — the held note's line PO number rides the need's draft,
+  // beside ffeItemId: the maker's number first, else the studio's.
+  it('stamps the line PO number (linePoNumber) on the draft the need carries', () => {
+    const base = {
+      project_id: 'p1',
+      kind: 'maker_follow_up',
+      status: 'awaiting_review',
+      to_email: null,
+      subject: 's',
+      body: 'b',
+      created_at: '2026-10-06T09:00:00Z',
+    };
+    const map = buildDeskDrafts([
+      {
+        ...base,
+        id: 'd1',
+        ffe_item: { id: 'ffe-1', purchase_order: { po_number: 'NA-2026-077', vendor_po_number: null } },
+      },
+      {
+        ...base,
+        id: 'd2',
+        created_at: '2026-10-06T10:00:00Z',
+        ffe_item: { id: 'ffe-2', purchase_order: { po_number: 'NA-2026-078', vendor_po_number: 'HW-12' } },
+      },
+      { ...base, id: 'd3', kind: 'ack_chase', ffe_item: null },
+    ])!;
+    const [first, second, chase] = map.get('p1')!;
+    expect(first.poNumber).toBe('NA-2026-077');
+    expect(second.poNumber).toBe('HW-12');
+    expect(chase).not.toHaveProperty('poNumber');
+    const [need] = needsWith([first, second]);
+    expect(need.draft).toMatchObject({ id: 'd1', ffeItemId: 'ffe-1', poNumber: 'NA-2026-077' });
+  });
 });

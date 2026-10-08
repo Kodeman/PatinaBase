@@ -43,6 +43,7 @@ import {
   lineMaker,
   linePoNumber,
   makerAskSentWords,
+  makerNoteSentTodayReason,
   makerNoteVerb,
   pieceName,
   readingDay,
@@ -454,7 +455,7 @@ function InstallReadingLive({
     : draftsQuery.isError
       ? 'Could not read the held notes just now.'
       : sentToday
-        ? `A date request already went to ${maker ?? 'the maker'} today.`
+        ? makerNoteSentTodayReason(sentToday.kind, maker)
         : piece && !maker
           ? NO_MAKER
           : null;

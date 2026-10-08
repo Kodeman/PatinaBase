@@ -123,6 +123,13 @@ export function makerNoteDraftedWords(kind: string | null | undefined, maker: st
 export const makerNoteVerb = (kind: string | null | undefined) =>
   kind === 'maker_follow_up' ? 'Followed up' : 'Asked';
 
+/** FR7 F7-6 (538 Q3) — why the ask is held after a note went this studio day,
+ *  naming the note that went: a follow-up, else a date request. */
+export const makerNoteSentTodayReason = (kind: string | null | undefined, maker: string | null) =>
+  kind === 'maker_follow_up'
+    ? `A follow-up already went to ${maker ?? 'the maker'} today.`
+    : `A date request already went to ${maker ?? 'the maker'} today.`;
+
 /** No studio stores a time zone yet: the studio clock is Chicago's (F6, 506-5). */
 export const STUDIO_TIME_ZONE = 'America/Chicago';
 

@@ -62,6 +62,17 @@ describe('DraftReview', () => {
     expect(screen.getByText('Reply to the maker')).toBeInTheDocument();
   });
 
+  // US-19 FR7 F7-5 (538 Q4) — the review head names a follow-up; the body
+  // field keeps its screen-reader label `Letter`.
+  it('heads a maker follow-up as Follow-up to the maker', () => {
+    render(<DraftReview draft={{ ...DRAFT, kind: 'maker_follow_up' }} />);
+    expect(screen.getByText('Follow-up to the maker')).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'Follow-up to the maker, drafted' }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Letter')).toHaveValue(DRAFT.body);
+  });
+
   it('sends the stored draft by id without an update when nothing was edited', async () => {
     render(<DraftReview draft={DRAFT} />);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));

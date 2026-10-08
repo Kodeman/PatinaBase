@@ -17,6 +17,8 @@ import { ACT_LANDING_EVENTS, ffeActLandingOf, type FfeActLanding } from '@/lib/d
 import type { NeedLine } from '@/lib/document/desk-derivation';
 
 let mockItems: Record<string, unknown>[] = [];
+// FR7 F7-7 — the project's maker notes, as useProcurementDrafts reads them.
+let mockDrafts: Record<string, unknown>[] = [];
 let mockOneVoice = false;
 // An executed agreement behind the project is what lets Pieces release.
 let mockAuthority: unknown = null;
@@ -32,8 +34,14 @@ const mockLineUnfold = jest.fn((props: Record<string, unknown>) => {
       }
     | undefined;
   const po = item?.purchase_order;
+  const heldNote = mockDrafts.some((draft) => draft.ffe_item_id === item?.id);
   return (
     <>
+      {heldNote && (
+        <div data-testid="line-held-maker-note">
+          <textarea aria-label="Letter" defaultValue="Held note" />
+        </div>
+      )}
       <div role="group" aria-label="Order" data-testid="line-po-cell">
         <button type="button" data-po-control aria-label={`Open the order for ${item?.id}`}>
           PO
@@ -82,6 +90,7 @@ jest.mock('@patina/supabase', () => ({
   }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
+  useProcurementDrafts: () => ({ data: mockDrafts }),
   useUser: () => ({ user: { id: 'designer-1' } }),
 }));
 jest.mock('../schedule/add-to-project-sheet', () => ({
@@ -209,6 +218,7 @@ beforeEach(() => {
   mockOpenLedger.mockClear();
   mockOneVoice = false;
   mockAuthority = null;
+  mockDrafts = [];
   receivingClaimLanding.pending = false;
   ordersSendLanding.pending = false;
   window.localStorage.clear();
@@ -314,6 +324,62 @@ describe('a need’s act lands on its line’s control (F3-2)', () => {
     expect(within(sheet).getByText('Nordic Atelier')).toBeInTheDocument();
     await waitFor(() => expect(document.activeElement).toBe(within(sheet).getByLabelText('Note')));
     expect(mockOpenLedger).not.toHaveBeenCalled();
+  });
+
+  // US-19 FR7 F7-7 (538 Q5) — a note already held on the line is where the
+  // follow-up lands: its DraftReview, never a composer the route refuses.
+  it.each(['awaiting_review', 'sending'])(
+    'F7-7: with a maker note %s on the line, Follow up with the maker lands on the held note',
+    async (status) => {
+      mockOneVoice = true;
+      mockItems = [halloran];
+      mockDrafts = [
+        { id: 'note-1', kind: 'maker_follow_up', status, ffe_item_id: 'line-halloran' },
+      ];
+      renderWithQuery(
+        <FFESection
+          projectId="project-1"
+          projectName="Halloran"
+          mode="project"
+          needs={[need('po_unacknowledged')]}
+        />,
+      );
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Follow up with the maker' }));
+      await waitFor(() =>
+        expect(screen.getByTestId('line-held-maker-note')).toContainElement(
+          document.activeElement as HTMLElement,
+        ),
+      );
+      expect(screen.queryByRole('dialog', { name: 'Follow up with the maker' })).toBeNull();
+      expect(mockOpenLedger).not.toHaveBeenCalled();
+    },
+  );
+
+  it('F7-7: a note on another line, a sent note, or none opens the composer as today', async () => {
+    mockOneVoice = true;
+    mockItems = [halloran];
+    mockDrafts = [
+      { id: 'note-2', kind: 'maker_eta_request', status: 'awaiting_review', ffe_item_id: 'line-other' },
+      { id: 'note-3', kind: 'maker_follow_up', status: 'sent', ffe_item_id: 'line-halloran' },
+      { id: 'chase-1', kind: 'ack_chase', status: 'awaiting_review', ffe_item_id: 'line-halloran' },
+    ];
+    renderWithQuery(
+      <FFESection
+        projectId="project-1"
+        projectName="Halloran"
+        mode="project"
+        needs={[need('po_unacknowledged')]}
+      />,
+    );
+
+    let taken = false;
+    act(() => {
+      taken = press('follow-up');
+    });
+    expect(taken).toBe(true);
+    const sheet = await screen.findByRole('dialog', { name: 'Follow up with the maker' });
+    expect(within(sheet).getByLabelText('Subject')).toHaveValue('NA-2026-077 — following up');
   });
 
   it('File the claim at PO grain (520-4): opens Receiving with its claim landing armed', async () => {

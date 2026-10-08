@@ -392,6 +392,10 @@ export interface DeskDraftSignal {
    *  `DRAFT_NEED` rule from `makerLine`, so the band can match it to the line
    *  the install reading names. Absent otherwise. */
   ffeItemId?: string;
+  /** US-19 FR7 F7-1 — a line-level draft's PO number, by `linePoNumber`
+   *  (stamped by the read, as `maker` is), so the band relabels only the
+   *  silence row for the same PO. Absent otherwise. */
+  poNumber?: string | null;
 }
 
 /** Which Desk need a draft rides: the act it answers. */
@@ -1388,6 +1392,7 @@ const needDraftReview: NeedRule = ({ drafts }) => {
     stamp: { label: 'DRAFTED', ...STAMP.dustyBlue },
     urgent: false,
     owner: 'designer',
+    // FR7 F7-1: `poNumber` rides the signal from the read (`linePoNumber`).
     draft: first.makerLine ? { ...first, ffeItemId: first.makerLine.id } : first,
   };
 };

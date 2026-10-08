@@ -2121,7 +2121,11 @@ describe('deriveNext · FR3: not-yet-due wording (F3-26, 512-4)', () => {
 // review, the band's act for the maker's line is `Open the held draft`, and it
 // presses the held note's own act (its DraftReview landing).
 describe('deriveLensBand · FR5 F5-2: a held maker note is opened, not followed up again', () => {
-  const heldNote = (kind: 'maker_eta_request' | 'maker_follow_up', status = 'awaiting_review') => ({
+  const heldNote = (
+    kind: 'maker_eta_request' | 'maker_follow_up',
+    status = 'awaiting_review',
+    poNumber: string | null = 'NA-2026-077',
+  ) => ({
     ...need(
       'draft-0',
       'po_unacknowledged',
@@ -2131,7 +2135,7 @@ describe('deriveLensBand · FR5 F5-2: a held maker note is opened, not followed 
       'Review and send',
     ),
     owner: 'designer' as const,
-    draft: { kind, status },
+    draft: { kind, status, poNumber },
   });
   const SILENCE: LensNeedRow = {
     ...need('po-0', 'po_unacknowledged', 'NA-2026-077 sent — no acknowledgment', 'Follow up with the maker'),
@@ -2196,6 +2200,85 @@ describe('deriveLensBand · FR5 F5-2: a held maker note is opened, not followed 
     const chase = { ...heldNote('maker_eta_request'), draft: { kind: 'ack_chase', status: 'awaiting_review' } };
     const { voice } = deriveLensBand(input({ now: NOW, ownAct: null, needs: [SILENCE, chase] }));
     expect(voice.standing.map((item) => item.act?.label)).not.toContain('Open the held draft');
+  });
+});
+
+// US-19 FR7 F7-1 (538 Q1) — the relabel follows the PO number: the held note's
+// own row and the silence for its PO open the note; another PO's silence keeps
+// Follow up with the maker and its own landing.
+describe('deriveLensBand · FR7 F7-1: the relabel follows the PO number', () => {
+  const NOTE: LensNeedRow = {
+    ...need('draft-0', 'po_unacknowledged', 'Follow-up to the maker drafted', 'Review and send'),
+    owner: 'designer',
+    draft: { kind: 'maker_follow_up', status: 'awaiting_review', poNumber: 'NA-2026-077' },
+  };
+  const SILENCE_077: LensNeedRow = {
+    ...need('po-077', 'po_unacknowledged', 'NA-2026-077 sent — no acknowledgment', 'Follow up with the maker'),
+    owner: 'maker',
+  };
+  const SILENCE_078: LensNeedRow = {
+    ...need('po-078', 'po_unacknowledged', 'NA-2026-078 sent — no acknowledgment', 'Follow up with the maker'),
+    owner: 'maker',
+  };
+  const rowOf = (standing: readonly LensStandingItem[], key: string) =>
+    standing.find((item) => item.key === key);
+
+  beforeEach(() => {
+    for (const row of [NOTE, SILENCE_077, SILENCE_078]) (row.onAct as jest.Mock).mockClear();
+  });
+
+  it('two silences, a note held on 077’s line: 077 opens the held draft, 078 follows up with its own', () => {
+    const { voice } = deriveLensBand(
+      input({ now: NOW, ownAct: null, needs: [SILENCE_077, SILENCE_078, NOTE] }),
+    );
+    const s077 = rowOf(voice.standing, 'need:po-077');
+    const s078 = rowOf(voice.standing, 'need:po-078');
+    expect(s077?.act?.label).toBe('Open the held draft');
+    expect(s078?.act?.label).toBe('Follow up with the maker');
+    expect(rowOf(voice.standing, 'need:draft-0')?.act?.label).toBe('Open the held draft');
+    s077?.act?.onAct();
+    expect(NOTE.onAct).toHaveBeenCalledTimes(1);
+    expect(SILENCE_077.onAct).not.toHaveBeenCalled();
+    s078?.act?.onAct();
+    expect(SILENCE_078.onAct).toHaveBeenCalledTimes(1);
+    expect(NOTE.onAct).toHaveBeenCalledTimes(1);
+  });
+
+  it('the per-PO ticket rows borrow the same way: 078’s silence never lends the held note', () => {
+    const landOn = jest.fn();
+    const { voice } = deriveLensBand(
+      input({
+        now: NOW,
+        ownAct: null,
+        landOn,
+        needs: [NOTE],
+        ticket: [
+          ticketRow('pieces', {
+            rank: 'piece-stuck',
+            phrase: 'NA-2026-077 unanswered, 6 days',
+            standingSince: '2026-08-23',
+          }),
+          ticketRow('pieces', {
+            rank: 'piece-stuck',
+            phrase: 'NA-2026-078 unanswered, 6 days',
+            standingSince: '2026-08-23',
+          }),
+        ],
+      }),
+    );
+    const labelOf = (code: string) =>
+      voice.standing.find((item) => item.sentence.startsWith(code))?.act?.label;
+    expect(labelOf('NA-2026-077')).toBe('Open the held draft');
+    expect(labelOf('NA-2026-078')).toBe('Follow up with the maker');
+    voice.standing.find((item) => item.sentence.startsWith('NA-2026-078'))?.act?.onAct();
+    expect(NOTE.onAct).not.toHaveBeenCalled();
+  });
+
+  it('a held note with no PO number opens only its own row', () => {
+    const noPo = { ...NOTE, draft: { ...NOTE.draft!, poNumber: null } };
+    const { voice } = deriveLensBand(input({ now: NOW, ownAct: null, needs: [SILENCE_077, noPo] }));
+    expect(rowOf(voice.standing, 'need:draft-0')?.act?.label).toBe('Open the held draft');
+    expect(rowOf(voice.standing, 'need:po-077')?.act?.label).toBe('Follow up with the maker');
   });
 });
 

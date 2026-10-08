@@ -49,7 +49,7 @@ import {
   type NeedLine,
 } from '@/lib/document/desk-derivation';
 import { buildDeskConflicts } from '@/lib/document/desk-conflicts';
-import { lineMaker } from '@/lib/document/install-reading';
+import { lineMaker, linePoNumber } from '@/lib/document/install-reading';
 import {
   buildDeskProposalSignals,
   buildDeskSchedule,
@@ -253,6 +253,8 @@ export function buildDeskDrafts(rows: any): Map<string, DeskDraftSignal[]> | und
         ...(row.ffe_item ? { maker: lineMaker(row.ffe_item) } : {}),
         // F3-22 517-5: and carries that line, for Add an address's landing.
         ...(row.ffe_item?.id ? { makerLine: row.ffe_item } : {}),
+        // FR7 F7-1: and that line's PO number, so the band relabels only its PO's silence.
+        ...(row.ffe_item ? { poNumber: linePoNumber(row.ffe_item) } : {}),
       },
     ]);
   }
@@ -651,7 +653,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         supabase
           .from('procurement_drafts')
           .select(
-            'id, project_id, kind, status, to_email, subject, body, created_at, updated_at, ffe_item:project_ffe_items!procurement_drafts_ffe_item_id_fkey(id, vendor_id, vendor_name, product:products!product_id(brand), purchase_order:purchase_orders!purchase_order_id(vendor_id, vendor:vendors!purchase_orders_vendor_id_fkey(name)))',
+            'id, project_id, kind, status, to_email, subject, body, created_at, updated_at, ffe_item:project_ffe_items!procurement_drafts_ffe_item_id_fkey(id, vendor_id, vendor_name, product:products!product_id(brand), purchase_order:purchase_orders!purchase_order_id(vendor_id, po_number, vendor_po_number, vendor:vendors!purchase_orders_vendor_id_fkey(name)))',
           )
           .in('status', ['awaiting_review', 'sending'])
           .order('created_at')

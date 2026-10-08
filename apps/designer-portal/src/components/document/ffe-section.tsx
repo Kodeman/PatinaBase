@@ -38,6 +38,7 @@ import {
   useProjectFfeReadiness,
   useProjectOwnedBoards,
   useProjectPoCostLines,
+  useProcurementDrafts,
   useRecordFfeInstalled,
   useStudioPurchases,
   useUnresolvedProcurementExceptions,
@@ -174,7 +175,11 @@ import {
   pieceInstallState,
   type PieceInstallState,
 } from '@/lib/document/install-state';
-import { lineMaker } from '@/lib/document/install-reading';
+import {
+  LIVE_MAKER_ASK_STATUSES,
+  isMakerNoteKind,
+  lineMaker,
+} from '@/lib/document/install-reading';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import {
   FOCUS_FFE_LINE_EVENT,
@@ -1199,6 +1204,12 @@ function FFESectionBody({
   // line's act. The title row's bill act prints tertiary and the empty
   // states' `Add the first task` and `+ File` print secondary beside it.
   const installOneLeader = oneVoice && mode === 'install' && sectionKey !== 'care';
+  // FR7 F7-7 (538 Q5, `one-voice`): the line's maker notes, the read the ask
+  // sheet makes, so `Follow up with the maker` lands on a note already held.
+  const makerNotesQuery = useProcurementDrafts(
+    oneVoice ? projectId : null,
+    LIVE_MAKER_ASK_STATUSES,
+  );
   const [choosingPiece, setChoosingPiece] = useState(false);
   const [changeOrderLineId, setChangeOrderLineId] = useState<string | null>(null);
   const choosePieceRef = useRef<HTMLParagraphElement | null>(null);
@@ -1922,7 +1933,23 @@ function FFESectionBody({
     if (act === 'follow-up') {
       // 520-2 — the maker composer, never the order ledger or the PO button.
       if (!line) return false;
-      setFollowUpLineId(String(line.id));
+      const itemId = String(line.id);
+      // FR7 F7-7 — a note of either kind already held (or sending) on the
+      // line: land on its DraftReview (F5-2's `draft` cell), not a composer
+      // the route would refuse. The route's 409 stays the last guard.
+      const heldNote = (makerNotesQuery.data ?? []).some(
+        (draft) =>
+          isMakerNoteKind(draft.kind) &&
+          draft.status !== 'sent' &&
+          String(draft.ffe_item_id) === itemId,
+      );
+      if (heldNote) {
+        const request = { itemId, cell: 'draft' as const };
+        focusFfeLinePending.request = request;
+        window.dispatchEvent(new CustomEvent(FOCUS_FFE_LINE_EVENT, { detail: request }));
+        return true;
+      }
+      setFollowUpLineId(itemId);
       return true;
     }
     if (!line && act === 'send') {

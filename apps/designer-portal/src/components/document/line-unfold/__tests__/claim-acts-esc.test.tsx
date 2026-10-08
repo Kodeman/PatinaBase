@@ -13,6 +13,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
 
 let mockPending = false;
 jest.mock('@patina/supabase', () => ({
+  useProcurementDrafts: () => ({ data: [] }),
   useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: mockPending }),
 }));
 jest.mock('@tanstack/react-query', () => ({

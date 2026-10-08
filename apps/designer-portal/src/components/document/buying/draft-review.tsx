@@ -50,6 +50,7 @@ export const DRAFT_KIND_LABEL: Record<string, string> = {
   client_substitution_note: 'Note to the client',
   memo_return_note: 'Memo return note',
   maker_eta_request: 'Arrival date request to the maker',
+  maker_follow_up: 'Follow-up to the maker',
 };
 
 const INPUT_CLS =

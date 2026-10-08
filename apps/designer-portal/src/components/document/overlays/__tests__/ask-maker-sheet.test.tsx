@@ -477,6 +477,24 @@ describe('InstallReadingLine', () => {
     expect(screen.queryByRole('button', { name: 'Hold for review' })).toBeNull();
   });
 
+  // US-19 FR7 F7-6 (538 Q3) — the reason names the note that went.
+  it('F7-6: after a same-day follow-up the held ask’s reason names the follow-up', async () => {
+    const sentAt = new Date().toISOString();
+    mockDraftsRead = async () => [
+      {
+        ...(HELD as object),
+        kind: 'maker_follow_up',
+        status: 'sent',
+        created_at: sentAt,
+        sent_at: sentAt,
+      },
+    ];
+    renderWithQuery(<InstallReadingLine projectId={PROJECT} items={CEDAR_LANE} />);
+    const ask = await screen.findByRole('button', { name: 'Ask the maker for a date' });
+    await waitFor(() => expect(ask).toHaveAttribute('aria-disabled', 'true'));
+    expect(ask).toHaveAccessibleDescription('A follow-up already went to Nordic Atelier today.');
+  });
+
   it('506-3: a send on an earlier studio day, or a discarded note, does not stand', async () => {
     const earlier = new Date(Date.now() - 3 * 86_400_000).toISOString();
     let read = false;
