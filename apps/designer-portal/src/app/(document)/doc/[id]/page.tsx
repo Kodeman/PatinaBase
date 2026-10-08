@@ -1931,8 +1931,28 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         (need.draft.kind === 'maker_eta_request' || need.draft.kind === 'maker_follow_up')
           ? (need.draft.makerLine?.id ?? null)
           : null;
+      // US-19 FR8 F8-2: a held reply to a differing acknowledgment lands on
+      // its DraftReview in the PO's first line's Order cell. A PO with no
+      // line on the paper is not taken, and the press keeps the guide's landing.
+      const heldReplyPoId =
+        oneVoice &&
+        need.draft?.status === 'awaiting_review' &&
+        need.draft.kind === 'ack_discrepancy_reply' &&
+        need.draft.purchaseOrderId
+          ? need.draft.purchaseOrderId
+          : null;
       const landing: (() => boolean) | null = !oneVoice
         ? null
+        : heldReplyPoId
+          ? () => {
+              const request = { purchaseOrderId: heldReplyPoId, cell: 'order-draft' as const };
+              focusFfeLinePending.request = request;
+              const taken = !window.dispatchEvent(
+                new CustomEvent(FOCUS_FFE_LINE_EVENT, { detail: request, cancelable: true }),
+              );
+              if (!taken) focusFfeLinePending.request = null;
+              return taken;
+            }
         : heldNoteLineId
           ? () => {
               const request = { itemId: String(heldNoteLineId), cell: 'draft' as const };
