@@ -393,3 +393,45 @@ export function needActLabel(kind: NeedKind, firstName: string | null = null): s
   const first = firstName?.trim();
   return NEED_ACT_LABELS[kind].replace('{first name}', first || 'the client');
 }
+
+// ── A standing row's act (498-e) ─────────────────────────────────────────────
+
+/** The standing rows no need names: the ticket's exceptions (`1 damaged`,
+ *  `$X owed you`, …) and the guide's `N blocked project items` input. */
+export type StandingRowKind =
+  | 'damaged'
+  | 'awaiting_decision'
+  | 'owed'
+  | 'install_passed'
+  | 'blocked'
+  | 'unspecified'
+  | 'po_silence';
+
+/**
+ * FR3 512-6 / 498-e — every standing row carries its act, from this one table.
+ * `targetId` names the control the press lands on; null where `ACT_TARGET_IDS`
+ * names none yet (Message, F3-2), and the press lands on the stage's region.
+ */
+export const STANDING_ROW_ACTS: Readonly<
+  Record<StandingRowKind, { label: string; targetId: ActTargetId | null }>
+> = {
+  damaged: { label: NAMED_ACTS.fileClaim, targetId: ACT_TARGET_IDS.piecesHead },
+  awaiting_decision: { label: 'Nudge {first name}', targetId: null },
+  owed: { label: 'Nudge {first name}', targetId: null },
+  install_passed: { label: 'Set dates', targetId: ACT_TARGET_IDS.installWindow },
+  blocked: { label: 'Open the pieces', targetId: ACT_TARGET_IDS.piecesHead },
+  unspecified: { label: 'Spec the {N} unspecified', targetId: ACT_TARGET_IDS.piecesHead },
+  po_silence: { label: NEED_ACT_LABELS.po_unacknowledged, targetId: ACT_TARGET_IDS.piecesHead },
+};
+
+/** The row's act as it prints: `{first name}` as `needActLabel` fills it,
+ *  `{N}` the count the row states. */
+export function standingRowActLabel(
+  kind: StandingRowKind,
+  { firstName = null, count = 0 }: { firstName?: string | null; count?: number } = {},
+): string {
+  const first = firstName?.trim();
+  return STANDING_ROW_ACTS[kind].label
+    .replace('{first name}', first || 'the client')
+    .replace('{N}', String(count));
+}

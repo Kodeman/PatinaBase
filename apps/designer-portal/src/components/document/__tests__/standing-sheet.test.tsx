@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createRef } from 'react';
-import type { LensStandingItem } from '@/lib/document/lens-band-derivation';
+import type { NeedKind } from '@/lib/document/desk-derivation';
+import { deriveLensBand, type LensStandingItem } from '@/lib/document/lens-band-derivation';
 import { StandingSheet } from '../standing-sheet';
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -289,5 +290,93 @@ describe('StandingSheet · one voice (US-19 FR2)', () => {
       'secondary',
     );
     expect(screen.queryByText('NEXT')).toBeNull();
+  });
+
+  // FR3 512-5 / F3-24 — a row wears one stamp.
+  it('F3-24 — `NEXT` replaces the kind eyebrow on Next’s row; the others keep theirs', () => {
+    render(
+      <StandingSheet open onClose={jest.fn()} items={[pay, claim]} grouped count={1} nextKey="pay" />,
+    );
+    const next = document.querySelector('[data-standing-next]') as HTMLElement;
+    expect(within(next).getByText('NEXT')).toHaveAttribute('data-standing-next-eyebrow');
+    expect(within(next).queryByText('PAYMENT DUE')).toBeNull();
+    expect(screen.queryByText('PAYMENT DUE')).toBeNull();
+    expect(screen.getByText('CLAIM OPEN')).toBeInTheDocument();
+  });
+
+  it('F3-24 — off, the kind eyebrow stays', () => {
+    render(<StandingSheet open onClose={jest.fn()} items={[pay, claim]} nextKey="pay" />);
+    expect(screen.getByText('PAYMENT DUE')).toBeInTheDocument();
+  });
+
+  // FR3 F3-9 — one need, one row: on Halloran the sheet's rows behind Next are
+  // exactly the door's count.
+  it('F3-9 — the rows behind Next equal the door (Halloran)', () => {
+    const red = (key: string, kind: NeedKind, text: string, actionLabel: string) => ({
+      key,
+      kind,
+      text,
+      actionLabel,
+      onAct: jest.fn(),
+      urgent: false,
+      dueOn: null,
+    });
+    const { voice } = deriveLensBand({
+      spreadKind: 'project',
+      ticket: [
+        {
+          key: 'pieces',
+          label: 'Pieces',
+          value: '1 line',
+          emphasis: null,
+          door: { kind: 'none' },
+          exception: {
+            rank: 'piece-stuck',
+            phrase: 'NA-2026-077 unanswered, 6 days',
+            standingSince: '2026-10-01',
+          },
+        },
+      ],
+      needs: [
+        { ...red('po-0', 'po_unacknowledged', 'NA-2026-077 sent — no acknowledgment', 'Follow up with the maker'), owner: 'maker' },
+        red('sched-0', 'schedule_unconfigured', 'Name the phases for this project', 'Open the schedule'),
+      ],
+      guide: null,
+      tier: 'full',
+      now: new Date('2026-10-07T12:00:00'),
+      household: 'Client User',
+      jobName: 'Halloran House',
+      stageWord: 'Project',
+      stageIndex: null,
+      installDate: null,
+      moneyFigure: null,
+      proposalInvestment: null,
+      sentDate: null,
+      ownAct: null,
+      landOn: jest.fn(),
+      setup: [
+        { kind: 'no_client_linked', onAct: jest.fn() },
+        { kind: 'target_date_unset', onAct: jest.fn() },
+        { kind: 'budget_band_unset', onAct: jest.fn() },
+      ],
+    });
+    render(
+      <StandingSheet
+        open
+        onClose={jest.fn()}
+        items={voice.standing}
+        inputs={voice.inputs}
+        setup={voice.setup}
+        grouped
+        count={voice.standingCount}
+        nextKey={voice.next?.rowKey ?? null}
+      />,
+    );
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Standing · 4');
+    expect(screen.getAllByText(/NA-2026-077/)).toHaveLength(1);
+    const behind = document.querySelectorAll(
+      '[data-standing-row]:not([data-standing-next]), [data-standing-input-row], [data-standing-setup-row]:not([data-standing-next])',
+    );
+    expect(behind).toHaveLength(voice.standingCount);
   });
 });

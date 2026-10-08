@@ -181,8 +181,8 @@ export function StandingSheet({
       className={ROW}
     >
       <div className="min-w-0">
-        {nextEyebrow(item.key)}
-        <p className={EYEBROW}>{item.eyebrow}</p>
+        {/* FR3 512-5 — one eyebrow: on Next's row `NEXT` replaces the kind. */}
+        {nextEyebrow(item.key) ?? <p className={EYEBROW}>{item.eyebrow}</p>}
         <p className={SENTENCE}>{item.sentence}</p>
       </div>
       {item.act && (

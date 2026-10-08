@@ -369,10 +369,13 @@ export const BAND_TOUR_NOTE_KEY = 'band-tour-v1';
  * sentence under the band and the single act `Understood`. In flow, never
  * modal, never focused, no count and no sequence; once per person per
  * version. Absent unless `one-voice` is on.
+ *
+ * FR3 F3-16 — and absent on a band with no act to press: a held or closed
+ * paper (no Next), or one whose own act is not known yet.
  */
-export function BandTourNote() {
+export function BandTourNote({ hasAct }: { hasAct: boolean }) {
   const oneVoice = useFeatureFlag('one-voice').value === true;
-  if (!oneVoice) return null;
+  if (!oneVoice || !hasAct) return null;
   return (
     <MarginNote
       noteKey={BAND_TOUR_NOTE_KEY}

@@ -209,7 +209,7 @@ jest.mock('@patina/supabase', () => ({
     id ? mockDiscoveryQuery : MOCK_DISCOVERY_UNASKED,
   useBeginDirection: () => ({ mutateAsync: mockBeginDirectionMutateAsync }),
   // Read by the real MarginRail, and (US-19 D1/D6) by the band's own act.
-  useProjectFFEItems: () => ({ data: [] }),
+  useProjectFFEItems: () => ({ data: mockProjectFfeItems }),
   useInstallWindow: () => ({ data: null, isSuccess: true }),
   useProjectContextualHandoffs: () => mockContextualHandoffsQuery,
   useProjectParties: () => ({ data: [] }),
@@ -570,6 +570,8 @@ jest.mock('@/hooks/use-section-work', () => ({
 // Off for everything unless a test names the flag it needs — W3 turns
 // `worktable` on to prove the band prints once on the composed spreads.
 let mockEnabledFlags: string[] = [];
+// US-19 D6 — the FF&E lines the band's own act and install reading read.
+let mockProjectFfeItems: unknown[] = [];
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (key: string) => ({
     value: mockEnabledFlags.includes(key),
@@ -630,6 +632,7 @@ const fulfilledParams = {
 // must not leak it into the next.
 beforeEach(() => {
   mockEnabledFlags = [];
+  mockProjectFfeItems = [];
   mockRouter.push.mockReset();
   mockRouter.replace.mockReset();
   // L3 (00559) — reset to the no-op default; the mount effect's own describe
@@ -2425,6 +2428,45 @@ describe('DocumentPage guide activation', () => {
       expect(identity).toBe('Project · Stone Residence');
       expect(identity).not.toContain('Avery');
       expect(screen.getByRole('button', { name: 'Nudge Avery' })).toBeInTheDocument();
+    });
+
+    // US-19 FR3 F3-11 — Cedar: the install reading reaches line 2 as Next's
+    // sentence beside `Ask the maker for a date`, never the act alone.
+    it('one-voice, Cedar: line 2 reads D6’s install reading beside `Ask the maker for a date`', () => {
+      asProjectDocument();
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, active_section: 'install' } },
+      };
+      mockEnabledFlags = ['one-voice'];
+      mockProjectFfeItems = ['Side table, walnut', 'Reading lamp', 'Wool rug'].map((name, index) => ({
+        id: `ffe-${index + 1}`,
+        name,
+        status: 'ordered',
+        product_id: `product-${index + 1}`,
+        removed_at: null,
+        purchase_order: null,
+      }));
+
+      // Two setup rows behind the door (no target, no budget band): with the
+      // door beside it the long reading misses the 1440 measure, so the short
+      // one prints. Before F3-11 the short rung WAS the long one, and line 2
+      // fell to the act alone.
+      mockProjectQuery = {
+        data: { id: 'project-1', target_end_date: null, budget_min: null, budget_max: null },
+        isLoading: false,
+        isError: false,
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(bandLine2()?.getAttribute('data-lens-line2-kind')).toBe('next');
+      expect(screen.getByRole('button', { name: 'Standing · 2' })).toBeInTheDocument();
+      expect(bandSentence()).toBe("Side table isn't here — no date recorded.");
+      expect(
+        within(bandLine2() as HTMLElement).getByRole('button', { name: 'Ask the maker for a date' }),
+      ).toBeInTheDocument();
     });
 
     it('prints the guide sentence on a non-project document', () => {

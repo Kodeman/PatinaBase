@@ -2598,6 +2598,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       projectStatus: bandProjectStatus,
       ownAct: bandOwnAct,
       installReading: bandInstallReading,
+      // FR3 F3-8 — a standing row's table act lands as the own act does.
+      landOn: bandSection
+        ? (targetId) =>
+            activateDestination({
+              kind: 'anchor',
+              section: bandSection,
+              focusId: targetId ?? undefined,
+              activate: targetId !== null,
+            })
+        : undefined,
     });
     // `doorFacts` and `ticketPhase` are re-created every render; the values
     // that decide the model are `inputSignature` and `bandStageIndex`.
@@ -3216,7 +3226,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           />
         )}
         {/* US-19 D8 — the one-note tour, in flow under the band. */}
-        {bandModel && <BandTourNote />}
+        {bandModel && <BandTourNote hasAct={bandModel.voice.next !== null} />}
         {/* D10 — the SETUP row's `Link a client` opens the household sheet the
             chip uses; the chip prints nothing while no client is linked. */}
         {setupHouseholdOpen && row.engagement_kind === 'project' && (

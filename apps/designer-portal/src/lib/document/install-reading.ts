@@ -29,6 +29,10 @@ export interface InstallReadingPiece extends InstallStateInput {
 export interface InstallReading {
   state: InstallReadingState;
   sentence: string;
+  /** FR3 F3-11 — the band's short form of the sentence (`Side table isn't
+   *  here — no date recorded.`), or null where no short form is ruled: the
+   *  band then prints the act alone when the sentence does not fit. */
+  shortSentence?: string | null;
   /** The stage's own act for this state (D1), or null where D6 is silent. */
   act: OwnAct | null;
   /** The piece the sentence names; null when everything is here. */
@@ -147,10 +151,12 @@ function reading(
   sentence: string,
   firstItemId: string | null,
   windowHeld: boolean,
+  shortSentence: string | null = null,
 ): InstallReading {
   return {
     state,
     sentence,
+    shortSentence,
     act: ownAct('install', { ...NOT_READ_AT_INSTALL, install: { state, windowHeld } }),
     firstItemId,
   };
@@ -210,6 +216,7 @@ export function installReading(
       `${name} isn't here, and no arrival date is recorded.${more}`,
       first.piece.id,
       windowHeld,
+      `${name} isn't here — no date recorded.`,
     );
   }
   if (first.sense === 'past') {

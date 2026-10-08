@@ -13,7 +13,7 @@ import {
   type LensSpreadKind,
   type LensStandingItem,
 } from '../lens-band-derivation';
-import type { InstallReading } from '../install-reading';
+import { installReading, type InstallReading } from '../install-reading';
 import {
   LENS_LINE2_GAP_PX,
   LENS_LINE2_MEASURE_PX,
@@ -1415,7 +1415,18 @@ describe('deriveNext · D2’s order', () => {
       closed: false,
     });
     expect(next?.sentence).toBe(reading.sentence);
-    expect(next?.shortSentence).toBe(reading.sentence);
+    // FR3 F3-11 — the reading's own short form, never the long one repeated;
+    // none stated, no short rung.
+    expect(next?.shortSentence).toBe('');
+    expect(
+      deriveNext({
+        standing: [],
+        ownAct: ask,
+        installReading: { ...reading, shortSentence: 'Sofa isn’t here — no date recorded.' },
+        clientFirstName: null,
+        closed: false,
+      })?.shortSentence,
+    ).toBe('Sofa isn’t here — no date recorded.');
 
     const other = deriveNext({ standing: [], ownAct: OWN, installReading: reading, clientFirstName: null, closed: false });
     expect(other?.sentence).toBe(OWN.sentence);
@@ -1819,5 +1830,287 @@ describe('deriveLensBand · the proposal’s inputs collapse to one row (F14)', 
   it('leaves every other paper’s inputs one row each', () => {
     const model = deriveLensBand(input({ inputs: GAPS.slice(0, 2) }));
     expect(model.inputs).toHaveLength(2);
+  });
+});
+
+// US-19 FR3 (design-review-3 §3) — the band and the standing sheet.
+describe('deriveLensBand · FR3: every row carries its act (F3-8, 512-6)', () => {
+  const ASK: LensOwnAct = {
+    key: 'own:ask',
+    label: 'Ask the maker for a date',
+    targetId: 'document-act-install-reading',
+    tier: 'scored',
+    sentence: null,
+    onAct: jest.fn(),
+  };
+  const rowsOf = (ticket: TicketRow[], over: Partial<LensBandInput> = {}) => {
+    const landOn = jest.fn();
+    const { voice } = deriveLensBand(
+      input({ ticket, needs: [], clientFirstName: 'Mei', now: NOW, ownAct: OWN, landOn, ...over }),
+    );
+    return { voice, landOn };
+  };
+  const stuck = (phrase: string) => ({ rank: 'piece-stuck' as const, phrase, standingSince: null });
+
+  it.each([
+    ['pieces', '1 damaged', 'File the claim', 'document-act-pieces-head'],
+    ['pieces', '2 awaiting a decision', 'Nudge Mei', null],
+    ['money', '$4,200 owed you', 'Nudge Mei', null],
+    ['dates', 'Install day has passed', 'Set dates', 'document-act-install-window'],
+    ['pieces', 'NA-2026-077 unanswered, 6 days', 'Follow up with the maker', 'document-act-pieces-head'],
+  ] as const)('%s `%s` carries `%s`, landing on %s', (key, phrase, label, target) => {
+    const rank = key === 'money' || key === 'dates' ? 'promise-past-due' : 'piece-stuck';
+    const { voice, landOn } = rowsOf([
+      ticketRow(key, { rank, phrase, standingSince: key === 'pieces' ? null : '2026-08-01' }),
+    ]);
+    const row = voice.standing.find((item) => item.key === `ticket:${key}`);
+    expect(row?.act?.label).toBe(label);
+    row?.act?.onAct();
+    expect(landOn).toHaveBeenCalledWith(target);
+  });
+
+  it('`N blocked project items` carries `Open the pieces`', () => {
+    const { voice, landOn } = rowsOf([], {
+      inputs: [{ key: '0:2 blocked project items', eyebrow: 'ITEMS', sentence: '2 blocked project items', act: null }],
+    });
+    expect(voice.inputs[0].act?.label).toBe('Open the pieces');
+    voice.inputs[0].act?.onAct();
+    expect(landOn).toHaveBeenCalledWith('document-act-pieces-head');
+  });
+
+  it('`N unspecified` carries `Spec the N unspecified` on an install paper, where the own act is another', () => {
+    const { voice, landOn } = rowsOf([ticketRow('spec', stuck('2 unspecified'))], {
+      spreadKind: 'install',
+      ownAct: ASK,
+    });
+    expect(voice.next?.act.label).toBe('Ask the maker for a date');
+    const spec = voice.standing.find((item) => item.key === 'ticket:spec');
+    expect(spec?.act?.label).toBe('Spec the 2 unspecified');
+    spec?.act?.onAct();
+    expect(landOn).toHaveBeenCalledWith('document-act-pieces-head');
+    // A row's act never chooses Next.
+    expect(voice.next?.rowKey).toBeNull();
+  });
+
+  it('a need that holds the same act lends it: its press is the need’s', () => {
+    const decision = {
+      ...need('d-0', 'overdue_decision', 'Bedroom approval overdue 6 days', 'Send a reminder', '2026-08-23'),
+      owner: 'client' as const,
+    };
+    const { voice, landOn } = rowsOf([ticketRow('pieces', stuck('2 awaiting a decision'))], {
+      needs: [decision],
+    });
+    const row = voice.standing.find((item) => item.key === 'ticket:pieces');
+    expect(row?.act?.label).toBe('Nudge Mei');
+    row?.act?.onAct();
+    expect(decision.onAct).toHaveBeenCalled();
+    expect(landOn).not.toHaveBeenCalled();
+  });
+
+  it('without a landing, a row no need or own act lends to keeps none', () => {
+    const { voice } = deriveLensBand(
+      input({ ticket: [ticketRow('pieces', stuck('1 damaged'))], now: NOW, ownAct: OWN }),
+    );
+    expect(voice.standing.find((item) => item.key === 'ticket:pieces')?.act).toBeNull();
+  });
+
+  it('leaves the 0b list as it was', () => {
+    const { standing } = deriveLensBand(
+      input({ ticket: [ticketRow('pieces', stuck('1 damaged'))], now: NOW, ownAct: OWN, landOn: jest.fn() }),
+    );
+    expect(standing.find((item) => item.key === 'ticket:pieces')?.act).toBeNull();
+  });
+});
+
+describe('deriveLensBand · FR3: one need, one row (F3-9, 512-7)', () => {
+  const PO_NEED = {
+    ...need('po-0', 'po_unacknowledged', 'NA-2026-077 sent — no acknowledgment', 'Follow up with the maker'),
+    owner: 'maker' as const,
+  };
+  const SCHEDULE_NEED = need(
+    'sched-0',
+    'schedule_unconfigured',
+    'Name the phases for this project',
+    'Open the schedule',
+  );
+
+  it('Halloran: NA-2026-077 prints once, as Next’s row, and the door does not count it', () => {
+    const { voice } = deriveLensBand(
+      input({
+        household: 'Client User',
+        jobName: 'Halloran House',
+        now: NOW,
+        ownAct: null,
+        landOn: jest.fn(),
+        needs: [PO_NEED, SCHEDULE_NEED],
+        ticket: [
+          ticketRow('pieces', {
+            rank: 'piece-stuck',
+            phrase: 'NA-2026-077 unanswered, 6 days',
+            standingSince: '2026-08-23',
+          }),
+        ],
+        setup: [
+          { kind: 'no_client_linked', onAct: jest.fn() },
+          { kind: 'target_date_unset', onAct: jest.fn() },
+          { kind: 'budget_band_unset', onAct: jest.fn() },
+        ],
+      }),
+    );
+    expect(voice.next?.rowKey).toBe('need:po-0');
+    expect(voice.next?.act.label).toBe('Follow up with the maker');
+    expect(voice.standing.map((item) => item.key)).toEqual(['need:po-0']);
+    // Four setup rows behind the door; Next uncounted, the duplicate gone.
+    expect(voice.setup).toHaveLength(4);
+    expect(voice.standingCount).toBe(4);
+  });
+
+  it('keeps a row with the same act on another subject', () => {
+    const { voice } = deriveLensBand(
+      input({
+        now: NOW,
+        ownAct: null,
+        landOn: jest.fn(),
+        needs: [PO_NEED],
+        ticket: [
+          ticketRow('pieces', {
+            rank: 'piece-stuck',
+            phrase: 'PO-2026-0418 unanswered, 14 days',
+            standingSince: '2026-08-15',
+          }),
+        ],
+      }),
+    );
+    expect(voice.standing.map((item) => item.key).sort()).toEqual(['need:po-0', 'ticket:pieces']);
+    expect(voice.standingCount).toBe(1);
+  });
+
+  it('512-7: the row carrying the own act Next is Next’s row — first, uncounted', () => {
+    const { voice } = deriveLensBand(
+      input({
+        now: NOW,
+        ownAct: OWN,
+        ticket: [ticketRow('spec', { rank: 'piece-stuck', phrase: '3 unspecified', standingSince: null })],
+        setup: [{ kind: 'target_date_unset', onAct: jest.fn() }],
+      }),
+    );
+    expect(voice.next?.act.label).toBe('Spec the 3 unspecified');
+    expect(voice.next?.rowKey).toBe('ticket:spec');
+    expect(voice.next?.sentence).toBe(OWN.sentence);
+    expect(voice.standingCount).toBe(1);
+  });
+
+  it('Chen: `Standing · 5` — 1 stuck + 4 setup, Next uncounted', () => {
+    const { voice } = deriveLensBand(
+      chen({
+        needs: [CHEN_NEEDS[1], SCHEDULE_NEED],
+        ownAct: OWN,
+        landOn: jest.fn(),
+        ticket: [ticketRow('spec', { rank: 'piece-stuck', phrase: '3 unspecified', standingSince: null })],
+        setup: [
+          { kind: 'no_client_linked', onAct: jest.fn() },
+          { kind: 'target_date_unset', onAct: jest.fn() },
+          { kind: 'budget_band_unset', onAct: jest.fn() },
+        ],
+      }),
+    );
+    expect(voice.next?.rowKey).toBe('need:pay-0');
+    expect(voice.standing.find((item) => item.key === 'ticket:spec')?.act?.label).toBe(
+      'Spec the 3 unspecified',
+    );
+    expect(standingDoorLabel(voice.standingCount)).toBe('Standing · 5');
+  });
+});
+
+describe('deriveLensBand · FR3: Cedar’s band sentence is D6’s reading (F3-11)', () => {
+  const ASK: LensOwnAct = {
+    key: 'own:ask',
+    label: 'Ask the maker for a date',
+    targetId: 'document-act-install-reading',
+    tier: 'scored',
+    sentence: null,
+    onAct: jest.fn(),
+  };
+  const piece = (id: string, name: string) => ({ id, name, status: 'ordered', purchase_order: null });
+  const reading = installReading(
+    [piece('ffe-1', 'Side table, walnut'), piece('ffe-2', 'Lamp'), piece('ffe-3', 'Rug')],
+    NOW,
+    false,
+  );
+  const cedar = (over: Partial<LensBandInput> = {}) =>
+    deriveLensBand(
+      input({
+        spreadKind: 'install',
+        household: 'Nora Ellison',
+        jobName: 'Cedar Lane Study',
+        now: NOW,
+        ownAct: ASK,
+        installReading: reading,
+        landOn: jest.fn(),
+        ...over,
+      }),
+    ).voice;
+  const LONG = "Side table isn't here, and no arrival date is recorded. 2 more aren't here.";
+  const SHORT = "Side table isn't here — no date recorded.";
+
+  it('reads the reading: long and short', () => {
+    expect(reading?.sentence).toBe(LONG);
+    expect(reading?.shortSentence).toBe(SHORT);
+  });
+
+  it('prints the long reading when the measure allows', () => {
+    const voice = cedar();
+    expect(voice.next?.act.label).toBe('Ask the maker for a date');
+    expect(voice.form).toBe('long');
+    expect(voice.sentence).toBe(LONG);
+  });
+
+  it('Cedar at 1440, `Standing · 4` beside it: the short reading, never the act alone', () => {
+    const voice = cedar({
+      needs: [
+        need('sched-0', 'schedule_unconfigured', 'Name the phases for this project', 'Open the schedule'),
+      ],
+      ticket: [ticketRow('spec', { rank: 'piece-stuck', phrase: '2 unspecified', standingSince: null })],
+      setup: [
+        { kind: 'target_date_unset', onAct: jest.fn() },
+        { kind: 'budget_band_unset', onAct: jest.fn() },
+      ],
+    });
+    expect(voice.standingCount).toBe(4);
+    expect(voice.form).toBe('short');
+    expect(voice.lead).toBe('Next');
+    expect(voice.sentence).toBe(SHORT);
+    expect(voice.rungs.map((rung) => rung.form)).toEqual(['short', 'act']);
+  });
+
+  it('else the act alone', () => {
+    const voice = cedar({ tier: 'mobile' });
+    expect(voice.form).toBe('act');
+    expect(voice.sentence).toBe('');
+    expect(voice.next?.act.label).toBe('Ask the maker for a date');
+  });
+});
+
+describe('deriveNext · FR3: not-yet-due wording (F3-26, 512-4)', () => {
+  const PAY = 'Balance to Woodward & Sons · $3,400 due Aug 30 — WS-188';
+  const at = (dueOn: string | null) =>
+    deriveNext({
+      standing: rankStanding([], [need('pay', 'payment_due', PAY, 'Record payment', dueOn)], NOW),
+      ownAct: null,
+      clientFirstName: null,
+      closed: false,
+    });
+
+  it('`— due today` · `— due tomorrow` · `— due in N days` · nothing undated', () => {
+    expect(at('2026-08-29')?.sentence).toBe(
+      'Pay Woodward & Sons the WS-188 balance, $3,400 — due today.',
+    );
+    expect(at('2026-08-30')?.sentence).toBe(
+      'Pay Woodward & Sons the WS-188 balance, $3,400 — due tomorrow.',
+    );
+    expect(at('2026-08-30')?.shortSentence).toBe('WS-188 balance, due tomorrow.');
+    expect(at('2026-09-02')?.sentence).toBe(
+      'Pay Woodward & Sons the WS-188 balance, $3,400 — due in 4 days.',
+    );
   });
 });
