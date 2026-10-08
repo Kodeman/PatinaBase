@@ -1,0 +1,288 @@
+/**
+ * The Document's Pieces overview (US-21 Q14, S7, SPEC a1/a10/a12): one row per
+ * room under a head that counts the job. Pure; the stage is D1's
+ * (`deriveLineStage`), so these words never disagree with a line's stamp.
+ *
+ * A line counts once in each room it is placed in, and once on the job. A
+ * labor line counts as a line; it rides with its piece, so the head's stage
+ * sentence counts pieces only (a1: `26 lines` beside `21 placeholders ·
+ * 4 specced`, the 26th being the hanger's labor). A trade scope's presence
+ * line is not a piece either: it counts as a line, never as a placeholder,
+ * as its stamp never reads PLACEHOLDER.
+ *
+ * The money figure is the line's client price where it has one (a price, or
+ * an allowance's ceiling) and its rough figure where it has not, per unit,
+ * times the room's share (a placed line is split, never multiplied). Ready
+ * lines are `priced`, released lines `released`, the rest `roughed`.
+ */
+import { fmtUsd } from "@/lib/document/format";
+import {
+  deriveLineStage,
+  isLaborLine,
+  laborPiece,
+  lineStageInputFromRow,
+  type LineStage,
+  type LineStageRow,
+} from "@/lib/document/stamp-derivation";
+import {
+  THROUGHOUT_PLACE,
+  UNASSIGNED_PLACE,
+} from "@/lib/document/pieces/build-room-url";
+
+export interface OverviewLine extends LineStageRow {
+  id: string;
+  project_room_id?: string | null;
+  assignment_scope?: string | null;
+  removed_at?: string | null;
+  rough_cents?: number | null;
+  trade_scope_document_id?: string | null;
+}
+
+/** As `useProjectRoomPlacements` returns them (00734). */
+export interface OverviewPlacement {
+  ffeItemId: string;
+  projectRoomId: string;
+  quantity: number;
+}
+
+export interface OverviewRoom {
+  id: string;
+  name: string;
+}
+
+export interface OverviewTally {
+  lines: number;
+  /** Stage counts over pieces (labor lines ride with their piece). */
+  placeholders: number;
+  specced: number;
+  ready: number;
+  released: number;
+  pricedCents: number;
+  roughedCents: number;
+  releasedCents: number;
+}
+
+export type OverviewMark = "settled" | "active" | "future";
+
+export interface OverviewRow {
+  /** A room id, or `throughout` / `unassigned`. Also the Build room's `?room=`. */
+  key: string;
+  /** The project room, or null for Throughout and Not in a room yet. */
+  roomId: string | null;
+  name: string;
+  /** Every line the room holds, placed lines included, in schedule order. */
+  lineIds: string[];
+  /** Only the lines whose primary room this is (each line once on the page). */
+  primaryLineIds: string[];
+  tally: OverviewTally;
+  /** Room placeholders count every line, labor included (`6 lines · 5 placeholders`). */
+  placeholderLines: number;
+  mark: OverviewMark;
+}
+
+/** From `ordered` on a line has no pre-order stage; it is past release. */
+const ORDERED_ON: ReadonlySet<string> = new Set([
+  "ordered",
+  "production",
+  "shipped",
+  "delivered",
+  "installed",
+]);
+
+function emptyTally(): OverviewTally {
+  return {
+    lines: 0,
+    placeholders: 0,
+    specced: 0,
+    ready: 0,
+    released: 0,
+    pricedCents: 0,
+    roughedCents: 0,
+    releasedCents: 0,
+  };
+}
+
+function liveLines<T extends OverviewLine>(
+  lines: readonly T[] | null | undefined,
+): T[] {
+  return (lines ?? []).filter((line) => line.removed_at == null);
+}
+
+export function overviewStage(
+  line: OverviewLine,
+  live: readonly OverviewLine[],
+): LineStage {
+  if (ORDERED_ON.has(line.status ?? "")) return "released";
+  return deriveLineStage(lineStageInputFromRow(line, laborPiece(line, live)));
+}
+
+/** The line's figure per unit: its client price, else its rough figure. */
+function eachCents(line: OverviewLine): number {
+  if ((line.unit_price_cents ?? 0) > 0) return line.unit_price_cents ?? 0;
+  if (line.item_type === "allowance" && (line.budget_max_cents ?? 0) > 0) {
+    return line.budget_max_cents ?? 0;
+  }
+  return Math.max(0, line.rough_cents ?? 0);
+}
+
+function add(
+  tally: OverviewTally,
+  line: OverviewLine,
+  stage: LineStage,
+  cents: number,
+): void {
+  tally.lines += 1;
+  if (stage === "released") tally.releasedCents += cents;
+  else if (stage === "ready") tally.pricedCents += cents;
+  else tally.roughedCents += cents;
+  if (isLaborLine(line) || line.trade_scope_document_id) return;
+  if (stage === "placeholder") tally.placeholders += 1;
+  else if (stage === "specced") tally.specced += 1;
+  else if (stage === "ready") tally.ready += 1;
+  else tally.released += 1;
+}
+
+/** The job, each live line once. Needs no placements. */
+export function deriveOverviewJob(
+  lines: readonly OverviewLine[] | null | undefined,
+): OverviewTally {
+  const live = liveLines(lines);
+  const job = emptyTally();
+  for (const line of live) {
+    add(job, line, overviewStage(line, live), eachCents(line) * (line.quantity ?? 0));
+  }
+  return job;
+}
+
+/**
+ * The room rows: every project room in its order (a room with no lines still
+ * prints), then Throughout and Not in a room yet when they hold a line.
+ */
+export function deriveOverviewRows(
+  lines: readonly OverviewLine[] | null | undefined,
+  placements: readonly OverviewPlacement[] | null | undefined,
+  rooms: readonly OverviewRoom[] | null | undefined,
+): OverviewRow[] {
+  const live = liveLines(lines);
+  const knownRooms = rooms ?? [];
+  const row = (key: string, roomId: string | null, name: string): OverviewRow => ({
+    key,
+    roomId,
+    name,
+    lineIds: [],
+    primaryLineIds: [],
+    tally: emptyTally(),
+    placeholderLines: 0,
+    mark: "future",
+  });
+  const byKey = new Map<string, OverviewRow>();
+  for (const room of knownRooms) byKey.set(room.id, row(room.id, room.id, room.name));
+  const throughout = row(THROUGHOUT_PLACE, null, "Throughout");
+  const unassigned = row(UNASSIGNED_PLACE, null, "Not in a room yet");
+
+  const placementsByLine = new Map<string, OverviewPlacement[]>();
+  for (const placement of placements ?? []) {
+    const list = placementsByLine.get(placement.ffeItemId) ?? [];
+    list.push(placement);
+    placementsByLine.set(placement.ffeItemId, list);
+  }
+
+  const settledByRow = new Map<OverviewRow, boolean>();
+  const place = (target: OverviewRow, line: OverviewLine, stage: LineStage, share: number, primary: boolean) => {
+    target.lineIds.push(line.id);
+    if (primary) target.primaryLineIds.push(line.id);
+    add(target.tally, line, stage, eachCents(line) * share);
+    if (stage === "placeholder" && !line.trade_scope_document_id) target.placeholderLines += 1;
+    settledByRow.set(target, (settledByRow.get(target) ?? true) && stage === "released");
+  };
+
+  for (const line of live) {
+    const stage = overviewStage(line, live);
+    const quantity = line.quantity ?? 0;
+    // The primary room plus every placement, each room once.
+    const shares = new Map<string, number>();
+    for (const placement of placementsByLine.get(line.id) ?? []) {
+      shares.set(placement.projectRoomId, placement.quantity);
+    }
+    if (line.project_room_id && !shares.has(line.project_room_id)) {
+      shares.set(line.project_room_id, shares.size === 0 ? quantity : 0);
+    }
+    const primaryRoom =
+      line.project_room_id && byKey.has(line.project_room_id)
+        ? line.project_room_id
+        : [...shares.keys()].find((id) => byKey.has(id)) ?? null;
+
+    let inKnownRoom = false;
+    for (const [roomId, share] of shares) {
+      const target = byKey.get(roomId);
+      if (!target) continue;
+      inKnownRoom = true;
+      place(target, line, stage, share, roomId === primaryRoom);
+    }
+    if (inKnownRoom) continue;
+    place(
+      line.assignment_scope === "unassigned" ? unassigned : throughout,
+      line,
+      stage,
+      quantity,
+      true,
+    );
+  }
+
+  const rows = knownRooms.map((room) => byKey.get(room.id)!);
+  if (throughout.tally.lines > 0) rows.push(throughout);
+  if (unassigned.tally.lines > 0) rows.push(unassigned);
+  for (const r of rows) {
+    r.mark = r.tally.lines === 0 ? "future" : settledByRow.get(r) ? "settled" : "active";
+  }
+  return rows;
+}
+
+const count = (n: number, one: string, many: string) =>
+  `${n} ${n === 1 ? one : many}`;
+
+/** Head line one: `by room · 7 rooms · 26 lines`. */
+export function overviewHeadStatus(roomCount: number, job: OverviewTally): string {
+  return `by room · ${count(roomCount, "room", "rooms")} · ${count(job.lines, "line", "lines")}`;
+}
+
+/** Head line two: `21 placeholders · 4 specced · nothing released`. */
+export function overviewHeadStages(job: OverviewTally): string {
+  const parts: string[] = [];
+  if (job.placeholders > 0) parts.push(count(job.placeholders, "placeholder", "placeholders"));
+  if (job.specced > 0) parts.push(`${job.specced} specced`);
+  if (job.ready > 0) parts.push(`${job.ready} ready`);
+  parts.push(job.released > 0 ? `${job.released} released` : "nothing released");
+  return parts.join(" · ");
+}
+
+/** The front matter: `$30,760 priced · ~$36,368 roughed · nothing released`. */
+export function overviewFrontMatter(job: OverviewTally): string | null {
+  if (job.lines === 0) return null;
+  const parts: string[] = [];
+  if (job.pricedCents > 0) parts.push(`${fmtUsd(job.pricedCents)} priced`);
+  if (job.roughedCents > 0) parts.push(`~${fmtUsd(job.roughedCents)} roughed`);
+  parts.push(
+    job.releasedCents > 0 || job.released > 0
+      ? `${fmtUsd(job.releasedCents)} released`
+      : "nothing released",
+  );
+  return parts.join(" · ");
+}
+
+/** A room row's counts: `6 lines · 5 placeholders`. */
+export function overviewRowCounts(row: OverviewRow): string {
+  return `${count(row.tally.lines, "line", "lines")} · ${count(
+    row.placeholderLines,
+    "placeholder",
+    "placeholders",
+  )}`;
+}
+
+/** A room row's figure: `~$23,564`, `~` while any of it is rough; none at $0. */
+export function overviewRowFigure(row: OverviewRow): string | null {
+  const { pricedCents, roughedCents, releasedCents } = row.tally;
+  const total = pricedCents + roughedCents + releasedCents;
+  if (total <= 0) return null;
+  return `${roughedCents > 0 ? "~" : ""}${fmtUsd(total)}`;
+}

@@ -70,6 +70,7 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManifest: () => null }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: mockDrafts }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),

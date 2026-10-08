@@ -22,6 +22,7 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManifest: () => null }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
@@ -101,8 +102,16 @@ afterEach(() => {
 import { FFESection } from '../ffe-section';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 
-const renderSection = (mode: 'project' | 'install' = 'project') =>
-  render(<FFESection projectId="project-1" projectName="Ellsworth" mode={mode} />);
+// US-21 Q14 — the project spread opens on room rows; with no rooms on the
+// job the line stands under Throughout, which unfolds to it.
+const renderSection = (mode: 'project' | 'install' = 'project') => {
+  const view = render(<FFESection projectId="project-1" projectName="Ellsworth" mode={mode} />);
+  const room = view.container.querySelector<HTMLButtonElement>(
+    '[data-pieces-room="throughout"] button[aria-expanded="false"]',
+  );
+  if (room) fireEvent.click(room);
+  return view;
+};
 
 const furnishing = {
   id: 'line-1',

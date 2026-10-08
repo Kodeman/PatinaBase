@@ -4,7 +4,7 @@
  * never `$0`. A priced line prints its money; an allowance prints its
  * allowance.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 
@@ -27,6 +27,7 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManifest: () => null }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
@@ -102,8 +103,16 @@ afterEach(() => {
 import { FFESection } from '../ffe-section';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 
-const renderSection = (mode: 'project' | 'install' = 'project') =>
-  render(<FFESection projectId="project-1" projectName="Ellsworth" mode={mode} />);
+// US-21 Q14 — the project spread opens on room rows; with no rooms on the
+// job the line stands under Throughout, which unfolds to it.
+const renderSection = (mode: 'project' | 'install' = 'project') => {
+  const view = render(<FFESection projectId="project-1" projectName="Ellsworth" mode={mode} />);
+  const room = view.container.querySelector<HTMLButtonElement>(
+    '[data-pieces-room="throughout"] button[aria-expanded="false"]',
+  );
+  if (room) fireEvent.click(room);
+  return view;
+};
 
 // D-B49 — the FF&E/schedule region ROOTS now own the work reads (they moved out
 // of `WorkBlock`/`CoordinationWork`, which mount only in a promoted body, so a

@@ -86,6 +86,7 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManifest: () => null }));
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
   useUnresolvedProcurementExceptions: () => ({ data: [] }),
@@ -311,7 +312,9 @@ describe('a need’s act lands on its line’s control (F3-2)', () => {
     expect(within(sheet).getByRole('button', { name: 'Hold for review' })).toBeInTheDocument();
   });
 
-  it('the Pieces head’s Follow up with the maker opens the composer named for its PO', async () => {
+  // US-21 Q14: the Pieces head no longer prints a need's act; the band's press
+  // still lands it.
+  it('the band’s Follow up with the maker opens the composer named for its PO', async () => {
     mockOneVoice = true;
     mockItems = [halloran];
     renderWithQuery(
@@ -323,7 +326,9 @@ describe('a need’s act lands on its line’s control (F3-2)', () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Follow up with the maker' }));
+    act(() => {
+      press('follow-up');
+    });
     const sheet = await screen.findByRole('dialog', { name: 'Follow up with the maker' });
     expect(within(sheet).getByLabelText('Subject')).toHaveValue('NA-2026-077 — following up');
     expect(within(sheet).getByText('Nordic Atelier')).toBeInTheDocument();
@@ -350,7 +355,9 @@ describe('a need’s act lands on its line’s control (F3-2)', () => {
         />,
       );
 
-      fireEvent.click(await screen.findByRole('button', { name: 'Follow up with the maker' }));
+      act(() => {
+        press('follow-up');
+      });
       await waitFor(() =>
         expect(screen.getByTestId('line-held-maker-note')).toContainElement(
           document.activeElement as HTMLElement,
@@ -591,16 +598,20 @@ describe('a need’s act lands on its line’s control (F3-2)', () => {
   });
 });
 
-describe('the held head’s Open the pieces (523-1)', () => {
-  it('lands on the first line’s unfold control', async () => {
+// US-21 Q14: the held head no longer prints Open the pieces; the band's press
+// still lands it, on the overview's first room.
+describe('the band’s Open the pieces (523-1)', () => {
+  it('lands on the first room row’s unfold control', async () => {
     mockOneVoice = true;
     mockItems = [specified('line-first'), specified('line-second')];
     render(
       <FFESection projectId="project-1" projectName="Harrow" mode="project" projectStatus="on_hold" />,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Open the pieces' }));
-    const first = document.querySelector('#ffe-selection-line-first button[aria-expanded]');
+    act(() => {
+      press('open');
+    });
+    const first = document.querySelector('[data-pieces-room] button[aria-expanded]');
     expect(first).not.toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(first));
   });
@@ -612,7 +623,9 @@ describe('the held head’s Open the pieces (523-1)', () => {
       <FFESection projectId="project-1" projectName="Harrow" mode="project" projectStatus="on_hold" />,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Open the pieces' }));
+    act(() => {
+      press('open');
+    });
     await waitFor(() =>
       expect(document.activeElement).toBe(document.getElementById('ffe-region-heading-project-1')),
     );
@@ -664,19 +677,25 @@ describe('the band’s Release for authorization lands on the head’s own entry
     await waitFor(() => expect(document.activeElement).toBe(entry));
     expect(entry).toHaveAttribute('aria-disabled', 'true');
     expect(entry).not.toHaveAttribute('disabled');
-    expect(screen.getByText('No lines are currently eligible for release.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing is ready to release yet.')).toBeInTheDocument();
   });
 
-  it('leaves the press untaken when the head prints no release', () => {
+  it('lands on the held entry when no agreement stands behind the job (US-21 Q14)', async () => {
     mockOneVoice = true;
     mockItems = [specified('line-ready')];
     render(<FFESection projectId="project-1" projectName="Chen" mode="project" />);
 
-    let taken = true;
+    let taken = false;
     act(() => {
       taken = pressRelease();
     });
-    expect(taken).toBe(false);
+    expect(taken).toBe(true);
+    const entry = screen.getByRole('button', { name: 'Release for authorization' });
+    await waitFor(() => expect(document.activeElement).toBe(entry));
+    expect(entry).toHaveAttribute('aria-disabled', 'true');
+    expect(
+      screen.getByText('No signed agreement stands behind the job yet.'),
+    ).toBeInTheDocument();
   });
 
   it('lands on the lift’s entry when the release is lifted to the Delivery table (F6-2)', async () => {
@@ -716,7 +735,7 @@ describe('the band’s Release for authorization lands on the head’s own entry
 });
 
 describe('Choose the piece sits with the lines (F6-5)', () => {
-  it('heads the lines list, directly before the first line row, and lands focus on itself', async () => {
+  it('stands directly above the room rows that hold the lines, and lands focus on itself', async () => {
     mockOneVoice = true;
     mockItems = [specified('line-first'), specified('line-second')];
     const scrolled: Element[] = [];
@@ -733,11 +752,11 @@ describe('Choose the piece sits with the lines (F6-5)', () => {
       const prompt = await screen.findByTestId('ffe-choose-the-piece');
       const firstRow = document.getElementById('ffe-selection-line-first');
       expect(firstRow).not.toBeNull();
-      // Inside the lines list, the item just before the first line row.
-      const promptItem = prompt.closest('li');
-      expect(promptItem).not.toBeNull();
-      expect(promptItem?.parentElement).toBe(firstRow?.parentElement);
-      expect(promptItem?.nextElementSibling).toBe(firstRow);
+      // US-21 Q14: on the overview, just before the room rows, every room
+      // unfolded so each line can be chosen.
+      const rowsList = prompt.parentElement?.nextElementSibling;
+      expect(rowsList?.querySelector('[data-pieces-room]')).not.toBeNull();
+      expect(rowsList).toContainElement(firstRow);
       await waitFor(() => expect(document.activeElement).toBe(prompt));
       expect(scrolled).toContain(firstRow);
     } finally {

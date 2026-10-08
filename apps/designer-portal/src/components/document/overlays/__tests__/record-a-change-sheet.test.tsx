@@ -66,6 +66,7 @@ jest.mock('@/components/document/overlays/ask-maker-sheet', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useProjectV2: () => ({ data: null }),
   useStudioPurchases: () => ({ data: [] }),
@@ -190,13 +191,20 @@ const noPO = {
 const renderRouter = () =>
   render(<RecordAChangeSheet projectId="project-1" clientName="Halloran" />);
 
-const renderPaper = () =>
-  render(
+// US-21 Q14 — the paper opens on room rows; Throughout unfolds to the lines.
+const renderPaper = () => {
+  const view = render(
     <>
       <FFESection projectId="project-1" projectName="Halloran House" mode="project" />
       <RecordAChangeSheet projectId="project-1" clientName="Halloran" />
     </>,
   );
+  const room = view.container.querySelector<HTMLButtonElement>(
+    '[data-pieces-room="throughout"] button[aria-expanded="false"]',
+  );
+  if (room) fireEvent.click(room);
+  return view;
+};
 
 const continueAct = () => screen.getByRole('button', { name: /Continue/ });
 
@@ -315,20 +323,15 @@ describe('Record a change — the router (D5)', () => {
 describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
   const headAct = () => screen.getByRole('button', { name: 'Record a change' });
 
-  it('prints as the head\'s second act, and not at all with the flag off', () => {
-    const { unmount } = renderPaper();
-    // The head's ledger, links and buttons alike: index 0 is the leader.
-    const acts = Array.from(
-      (document.getElementById('project-ffe') as HTMLElement).querySelectorAll(
-        '[data-action-key]',
-      ),
-    );
-    expect(acts[1]).toHaveAttribute('data-action-key', 'record-a-change-pieces-head');
-    unmount();
-
-    mockAskThePaper = false;
+  it('prints in the head after Work the pieces and Add to the job (US-21 Q14)', () => {
     renderPaper();
-    expect(screen.queryByRole('button', { name: 'Record a change' })).not.toBeInTheDocument();
+    // The head's ledger, links and buttons alike: index 0 is the leader.
+    const head = document.querySelector('[data-region-head="ffe"]') as HTMLElement;
+    const keys = Array.from(head.querySelectorAll('[data-action-key]')).map((act) =>
+      act.getAttribute('data-action-key'),
+    );
+    expect(keys.slice(0, 2)).toEqual(['work-the-pieces', 'open-add-to-project']);
+    expect(keys).toContain('record-a-change-pieces-head');
   });
 
   it('On the agreement opens the amendment sheet', () => {

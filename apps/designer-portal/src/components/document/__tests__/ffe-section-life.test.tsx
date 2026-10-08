@@ -5,7 +5,7 @@
  * stamp rendered `variant="filled"` with the mapped tone. Mirrors the mock
  * pattern in ffe-section-spec-details-link.test.tsx.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 
@@ -40,6 +40,7 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
@@ -119,10 +120,17 @@ jest.mock('../stamp', () => ({
 import { FFESection } from '../ffe-section';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 
-const renderSection = (highlightId?: string | null) =>
-  render(
+// US-21 Q14 — the region opens on room rows; the room unfolds to its lines.
+const renderSection = (highlightId?: string | null) => {
+  const view = render(
     <FFESection projectId="project-1" projectName="Ellsworth" mode="project" highlightId={highlightId} />,
   );
+  const room = view.container.querySelector<HTMLButtonElement>(
+    '[data-pieces-room="room-1"] button[aria-expanded="false"]',
+  );
+  if (room) fireEvent.click(room);
+  return view;
+};
 
 const baseFurnishing = {
   id: 'line-1',
@@ -278,15 +286,6 @@ describe('FF&E region rule', () => {
     renderSection();
     const rule = document.querySelector('[data-rule-weight]');
     expect(rule).toHaveClass('mt-0');
-  });
-
-  it('gives a room head half the region gap (12px), not the full token', () => {
-    mockItems = [{ ...baseFurnishing }];
-    const { container } = renderSection();
-    const roomHead = container.querySelector('#doc-room-room-1');
-    expect(roomHead).not.toBeNull();
-    expect(roomHead).toHaveClass('mt-[12px]');
-    expect(roomHead!.className).not.toMatch(/\bmt-4\b/);
   });
 });
 

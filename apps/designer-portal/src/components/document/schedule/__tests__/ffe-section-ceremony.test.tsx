@@ -27,6 +27,15 @@ afterEach(() => {
   __setDensityForTest(undefined);
 });
 
+// US-21 Q14 — the overview never branches on `one-voice` or `ask-the-paper`;
+// both are pinned ON, as they stand in production.
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (flag: string) => ({
+    value: flag === 'one-voice' || flag === 'ask-the-paper',
+    isLoading: false,
+  }),
+}));
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),
@@ -43,6 +52,7 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
@@ -140,6 +150,14 @@ const item = (over: Record<string, unknown> = {}) => ({
 const renderSection = () =>
   render(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
 
+/** US-21 Q14 — the region opens on room rows; a room unfolds to its lines. */
+const unfold = (roomKey: string) => {
+  const room = document.querySelector<HTMLButtonElement>(
+    `[data-pieces-room="${roomKey}"] button[aria-expanded="false"]`,
+  );
+  if (room) fireEvent.click(room);
+};
+
 
 // D-B49 — the FF&E/schedule region ROOTS now own the work reads (they moved out
 // of `WorkBlock`/`CoordinationWork`, which mount only in a promoted body, so a
@@ -219,14 +237,13 @@ describe('the schedule ceremony', () => {
 
     mockItemsError = false;
     renderSection();
-    // R127 OD-10 (W3-L5). A settled, genuinely empty schedule USED to default
-    // its region to folded (the seam read "N rooms · no lines yet"), so the
-    // guided empty state in the body had to be unfolded to. `ffe` is a STOP
-    // key now — a derived default quiets it, never folds it — so the guided
-    // empty state is already on the paper, with no seam standing in front of
-    // it. The claim is unchanged: a successful empty schedule GUIDES.
+    // R127 OD-10 (W3-L5): a settled empty schedule is never folded behind a
+    // seam. US-21 Q14: it prints its rooms as rows, each with its own Add a
+    // line; the retired guided empty state no longer stands.
     expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
-    expect(screen.getByText('Build the FF&E schedule')).toBeVisible();
+    expect(screen.queryByText('Build the FF&E schedule')).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[data-pieces-room]')).toHaveLength(2);
+    expect(screen.getAllByText('0 lines · 0 placeholders')).toHaveLength(2);
   });
 
   it('says so when readiness cannot be read, instead of silently holding every line', () => {
@@ -250,18 +267,23 @@ describe('the schedule ceremony', () => {
 
   it('wears the second stamp beside the logistics one', () => {
     renderSection();
+    unfold('room-1');
     expect(screen.getByText('Authorized · A2')).toBeInTheDocument();
     expect(
       screen.getAllByLabelText('Not yet released for authorization'),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
+    unfold('room-2');
+    expect(
+      screen.getAllByLabelText('Not yet released for authorization'),
+    ).toHaveLength(1);
+    expect(screen.queryByText('Authorized · A2')).not.toBeInTheDocument();
   });
 
-  it('tells each room what it has released and what it has not', () => {
+  it('prints each room its row figure, not the retired released · not yet tally', () => {
     renderSection();
-    expect(
-      screen.getByText(/\$3,900 released · \$12,300 not yet/),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/\$0 released · \$0 not yet/)).toBeInTheDocument();
+    const bedroom = document.querySelector<HTMLElement>('[data-pieces-room="room-1"]')!;
+    expect(within(bedroom).getByText('~$16,200')).toBeInTheDocument();
+    expect(screen.queryByText(/released · .* not yet/)).not.toBeInTheDocument();
   });
 
   it('offers the head act on a project with billing authority', () => {
@@ -271,12 +293,16 @@ describe('the schedule ceremony', () => {
     ).toBeInTheDocument();
   });
 
-  it('withholds the head act when no agreement stands behind the project', () => {
+  it('holds the head act, and says why, when no agreement stands behind the project', () => {
     mockAuthority = { data: null };
     renderSection();
+    const button = screen.getByRole('button', { name: /release for authorization/i });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(
-      screen.queryByRole('button', { name: /release for authorization/i }),
-    ).not.toBeInTheDocument();
+      screen.getByText('No signed agreement stands behind the job yet.'),
+    ).toBeInTheDocument();
+    fireEvent.click(button);
+    expect(screen.queryByText('Choose what to release')).not.toBeInTheDocument();
   });
 
   it('disables the head act and explains itself when canRelease holds but no line is eligible', () => {
@@ -307,7 +333,7 @@ describe('the schedule ceremony', () => {
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).not.toHaveAttribute('disabled');
     expect(
-      screen.getByText('No lines are currently eligible for release.'),
+      screen.getByText('Nothing is ready to release yet.'),
     ).toBeInTheDocument();
 
     fireEvent.click(button);
@@ -321,7 +347,7 @@ describe('the schedule ceremony', () => {
     });
     expect(button).toBeEnabled();
     expect(
-      screen.queryByText('No lines are currently eligible for release.'),
+      screen.queryByText('Nothing is ready to release yet.'),
     ).not.toBeInTheDocument();
   });
 
@@ -392,7 +418,8 @@ describe('the schedule ceremony', () => {
         name: 'Include Walnut bed, king in this release',
       }),
     );
-    expect(screen.getByText('1 of 2')).toBeInTheDocument();
+    // `one-voice` (F3-20): a count of what is ticked, never `N of M`.
+    expect(screen.getByText('1 ticked')).toBeInTheDocument();
   });
 
   it('puts the ceremony back on Esc, with nothing created', () => {
@@ -475,6 +502,7 @@ describe('the schedule ceremony', () => {
 
   it('lets a line join the next release from its unfold', () => {
     renderSection();
+    unfold('room-1');
     fireEvent.click(
       screen.getByRole('button', { name: /Walnut bed, king/i }),
     );

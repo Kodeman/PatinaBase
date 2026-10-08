@@ -37,6 +37,7 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManifest: () => null }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useInstallWindow: () => ({ data: null, isSuccess: true }),
   useStudioPurchases: () => ({ data: [] }),
@@ -243,17 +244,31 @@ describe('Pieces — #line-<id> landing (US-21 fix-now #8)', () => {
     expect(scrolled).toHaveLength(1);
   });
 
+  it('US-21 a10 — back from the Build room, #pieces-room-<id> bars that row and brings it to the top', () => {
+    window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
+    window.history.replaceState(null, '', '/doc/project-1#pieces-room-room-1');
+    renderProject();
+
+    const row = document.getElementById('pieces-room-room-1');
+    expect(row).not.toBeNull();
+    expect(row).toHaveAttribute('data-returned', 'true');
+    expect(row).toHaveClass('border-l-[color:var(--ink)]');
+    expect(scrolled).toEqual([row]);
+    expect(window.location.hash).toBe('#pieces-room-room-1');
+  });
+
   it('does nothing for a line that is not on the paper, or for any other hash', () => {
     window.history.replaceState(null, '', '/doc/project-1#line-gone');
+    // US-21 Q14 — nothing unfolds: the rooms stay folded, so no line prints.
     const first = renderProject();
     expect(scrolled).toHaveLength(0);
-    expect(rowToggle('ffe-1')).toHaveAttribute('aria-expanded', 'false');
-    expect(rowToggle('ffe-2')).toHaveAttribute('aria-expanded', 'false');
+    expect(rowToggle('ffe-1')).toBeNull();
+    expect(rowToggle('ffe-2')).toBeNull();
     first.unmount();
 
     window.history.replaceState(null, '', '/doc/project-1#ffe-selection-ffe-1');
     renderProject();
     expect(scrolled).toHaveLength(0);
-    expect(rowToggle('ffe-1')).toHaveAttribute('aria-expanded', 'false');
+    expect(rowToggle('ffe-1')).toBeNull();
   });
 });

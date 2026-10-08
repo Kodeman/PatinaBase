@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 /**
  * F58 — the paper and the spine's spec-book shelf over ONE row, at one moment.
@@ -25,6 +25,7 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
@@ -156,10 +157,17 @@ const line = (over: Record<string, unknown> = {}) => ({
 const renderLeaf = () =>
   render(<SpecBookLeaf projectId="project-1" rooms={rooms} />);
 
-const renderPaper = () =>
-  render(
+// US-21 Q14 — the paper opens on room rows; Living unfolds to its lines.
+const renderPaper = () => {
+  const view = render(
     <FFESection projectId="project-1" projectName="Chen" mode="project" />,
   );
+  const room = view.container.querySelector<HTMLButtonElement>(
+    '[data-pieces-room="room-1"] button[aria-expanded="false"]',
+  );
+  if (room) fireEvent.click(room);
+  return view;
+};
 
 /** One row per lifecycle state, with the word the ruling gives it. */
 const STATES: { state: string; row: Record<string, unknown>; word: string }[] =
