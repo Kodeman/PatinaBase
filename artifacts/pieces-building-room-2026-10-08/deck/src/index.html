@@ -1,0 +1,1627 @@
+<title>Building a Job's Pieces</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Building a Job's Pieces - founder deck, 8 October 2026 (US-20).
+   Machinery: artifacts/document-running-a-job-2026-10-07/deck.
+   Visual system: specimens/SPEC.md section 2. Beige is reading, white is
+   working: the deck runs on the drafting stock; Leah's own words sit on
+   the reading stock. Tokens pasted byte for byte from SPEC.md 2.1.
+   ============================================================ */
+:root {
+  color-scheme: light dark;
+
+  /* reading stock: the Document, as today */
+  --paper:            #FAF7F2;
+  --paper-doc:        #FCFAF6;
+  --rail:             #E8E3DB;
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --ink-paper:        #FAF7F2;
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+  --oak:              #8B7355;
+  --clay:             #C4A57B;   --clay-ink:       #7C5E30;
+  --golden:           #E8C547;   --golden-ink:     #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink: #9C5340;
+  --sage:             #A8B5A0;   --sage-ink:       #5F6B57;
+
+  /* drafting stock: the working sheet */
+  --sheet:            #FFFFFF;
+  --sheet-head:       #F3F0EA;
+  --sheet-ink:        #1A1816;
+  --sheet-ink-muted:  #4A4540;
+  --sheet-ink-faint:  #6B655E;
+  --sheet-rule:       #D9D4CC;
+  --sheet-rule-strong:#1A1816;
+  --sheet-row-hover:  #F6F3EE;
+  --sheet-toast:      #1A1816;
+  --sheet-toast-ink:  #FFFFFF;
+
+  /* rhythm */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+  --row: 40px;
+  --head: 48px;
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:            #2A2622;
+    --paper-doc:        #26221E;
+    --rail:             #3A3530;
+    --ink:              #F2EDE6;
+    --ink-muted:        #D6CEC4;
+    --ink-subtle:       #C7BEB3;
+    --ink-faint:        #B8AEA2;
+    --ink-paper:        #2A2622;
+    --hairline:         rgba(242, 237, 230, .14);
+    --hairline-strong:  rgba(242, 237, 230, .22);
+    --oak:              #B39572;
+    --clay-ink:         #D8B98A;
+    --golden-ink:       #E0C963;
+    --terracotta-ink:   #E2A895;
+    --sage-ink:         #AFC0A6;
+    --sheet:            #1C1A17;
+    --sheet-head:       #211E1A;
+    --sheet-ink:        #F4F0EA;
+    --sheet-ink-muted:  #CFC8BF;
+    --sheet-ink-faint:  #A9A198;
+    --sheet-rule:       #3A3631;
+    --sheet-rule-strong:#F4F0EA;
+    --sheet-row-hover:  #24211D;
+    --sheet-toast:      #F4F0EA;
+    --sheet-toast-ink:  #1C1A17;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:            #2A2622;
+  --paper-doc:        #26221E;
+  --rail:             #3A3530;
+  --ink:              #F2EDE6;
+  --ink-muted:        #D6CEC4;
+  --ink-subtle:       #C7BEB3;
+  --ink-faint:        #B8AEA2;
+  --ink-paper:        #2A2622;
+  --hairline:         rgba(242, 237, 230, .14);
+  --hairline-strong:  rgba(242, 237, 230, .22);
+  --oak:              #B39572;
+  --clay-ink:         #D8B98A;
+  --golden-ink:       #E0C963;
+  --terracotta-ink:   #E2A895;
+  --sage-ink:         #AFC0A6;
+  --sheet:            #1C1A17;
+  --sheet-head:       #211E1A;
+  --sheet-ink:        #F4F0EA;
+  --sheet-ink-muted:  #CFC8BF;
+  --sheet-ink-faint:  #A9A198;
+  --sheet-rule:       #3A3631;
+  --sheet-rule-strong:#F4F0EA;
+  --sheet-row-hover:  #24211D;
+  --sheet-toast:      #F4F0EA;
+  --sheet-toast-ink:  #1C1A17;
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--sheet);
+  color: var(--sheet-ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration-color: var(--sheet-ink-faint); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* ---------- type ---------- */
+.t-d0 { font-family: var(--font-display); font-size: clamp(44px, 7vw, 88px); line-height: 1.02; font-weight: 500; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.t-d1 { font-family: var(--font-display); font-size: 36px; line-height: 1.14; font-weight: 500; margin: 0; text-wrap: balance; overflow-wrap: break-word; }
+.t-d2 { font-family: var(--font-display); font-size: 24px; line-height: 1.2; font-weight: 400; margin: 0; overflow-wrap: break-word; }
+.t-d3 { font-family: var(--font-display); font-style: italic; font-size: 20px; line-height: 1.3; font-weight: 400; margin: 0; overflow-wrap: break-word; }
+.t-body { font-size: 16px; line-height: 1.55; margin: 0; }
+.t-sm { font-size: 14px; line-height: 1.5; margin: 0; }
+.t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.5; letter-spacing: .03em; margin: 0; color: var(--sheet-ink-faint); }
+.t-head { font-family: var(--font-meta); font-size: 12px; line-height: 1.4; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; margin: 0; }
+.t-hint { font-family: var(--font-meta); font-size: 11px; line-height: 1.4; letter-spacing: .06em; text-transform: uppercase; margin: 0; color: var(--sheet-ink-faint); }
+@media (max-width: 760px) { .t-d1 { font-size: 28px; } .t-d2 { font-size: 21px; } }
+.muted { color: var(--sheet-ink-muted); }
+.faint { color: var(--sheet-ink-faint); }
+.prose { max-width: 68ch; }
+code, .cite { font-family: var(--font-meta); font-size: 12px; letter-spacing: .02em; color: var(--sheet-ink-faint); overflow-wrap: anywhere; }
+p code { font-size: 13px; }
+strong { font-weight: 600; }
+
+/* ---------- deck shell ---------- */
+#deck { height: 100dvh; overflow-y: auto; overflow-x: hidden; scroll-snap-type: y proximity; }
+#deck:focus { outline: none; }
+#deck:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: -2px; }
+
+.slide { min-height: 100dvh; scroll-snap-align: start; display: flex; flex-direction: column; border-bottom: 1px solid var(--sheet-rule-strong); background: var(--sheet); position: relative; }
+.slide.spec-sheet, .slide.tall { scroll-snap-stop: normal; }
+.slide.tall { scroll-snap-align: none; }
+.slide.reading { background: var(--paper); color: var(--ink); }
+
+/* the standing head: every sheet names where you are, the way the Build room does */
+.shead { min-height: var(--head); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 24px; padding: 0 clamp(16px, 4vw, 64px); background: var(--sheet-head); border-bottom: 1px solid var(--sheet-rule-strong); color: var(--sheet-ink); }
+.shead .no { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+.shead .ch { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.shead .job { margin-left: auto; font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--sheet-ink-faint); }
+.slide.reading .shead { background: var(--rail); color: var(--ink); border-bottom-color: var(--ink); }
+.slide.reading .shead .job { color: var(--ink-faint); }
+@media (max-width: 760px) { .shead { padding: 8px 16px; } .shead .job { display: none; } }
+
+.inner { flex: 1; width: 100%; max-width: 1240px; margin: 0 auto; padding: 48px clamp(16px, 4vw, 64px) 104px; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.slide.center .inner { justify-content: center; }
+@media (max-width: 760px) { .inner { padding: 32px 16px 72px; } }
+
+.stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cols-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 48px; }
+.cols-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 36px; }
+.split { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px 48px; align-items: start; }
+@media (max-width: 980px) { .cols-3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 860px) { .cols-2, .split { grid-template-columns: minmax(0, 1fr); } }
+.rule { height: 1px; background: var(--sheet-rule); border: 0; margin: 0; }
+
+ul.look, ol.look { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 72ch; }
+ul.look li, ol.look li { font-size: 15px; line-height: 1.5; }
+ul.look li::marker, ol.look li::marker { color: var(--sheet-ink-faint); font-family: var(--font-meta); font-size: 12px; }
+
+/* ---------- stamps and acts (SPEC 2.4, 2.5) ---------- */
+.stamp { display: inline-block; font-family: var(--font-meta); font-size: 11px; font-weight: 500; line-height: 1.3; letter-spacing: .06em; text-transform: uppercase; padding: 4px 8px; border-radius: var(--radius-hair); border: 1px solid var(--sheet-rule-strong); color: var(--sheet-ink); white-space: nowrap; }
+.stamp--placeholder { border: 1px dashed var(--sheet-ink-faint); color: var(--sheet-ink-faint); }
+.stamp--roughed { border: 1px dashed var(--sheet-ink-muted); color: var(--sheet-ink-muted); }
+.stamp--released { background: var(--sheet-ink); color: var(--sheet); border-color: var(--sheet-ink); }
+.stamp--today { border-color: var(--terracotta-ink); color: var(--terracotta-ink); }
+.stamp--rec { border-color: var(--sheet-rule-strong); background: var(--sheet-ink); color: var(--sheet); }
+.act-word { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--sheet-ink); white-space: nowrap; }
+
+/* ---------- the ask ---------- */
+.cover { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 48px; align-items: start; }
+@media (max-width: 980px) { .cover { grid-template-columns: minmax(0, 1fr); gap: 36px; } }
+.lanes { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--sheet-rule-strong); }
+.lanes li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--sheet-rule); font-size: 15px; line-height: 1.4; }
+.lanes li b { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .04em; }
+.answer { border-left: 3px solid var(--sheet-ink); padding: 4px 0 4px 16px; display: flex; flex-direction: column; gap: 8px; }
+
+/* ---------- quotes ---------- */
+.said { margin: 0; padding: 0 0 0 16px; border-left: 2px solid var(--clay); display: flex; flex-direction: column; gap: 6px; }
+.said p { margin: 0; font-family: var(--font-display); font-style: italic; font-size: 20px; line-height: 1.35; }
+.said footer, .said cite { font-family: var(--font-meta); font-style: normal; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.said.big p { font-size: clamp(24px, 2.8vw, 34px); line-height: 1.25; }
+.slide:not(.reading) .said footer { color: var(--sheet-ink-faint); }
+.qgroup { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.qgroup > .t-head { color: var(--ink-faint); padding-bottom: 8px; border-bottom: 1px solid var(--ink); }
+.thesis { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: clamp(26px, 3.2vw, 40px); line-height: 1.2; text-wrap: balance; max-width: 34ch; }
+
+/* ---------- tables ---------- */
+.scroller { overflow-x: auto; overflow-y: hidden; max-width: 100%; }
+table.sheet { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+table.sheet th, table.sheet td { text-align: left; vertical-align: top; padding: 9px 16px 9px 0; border-top: 1px solid var(--sheet-rule); }
+table.sheet thead th { border-top: 0; border-bottom: 1px solid var(--sheet-rule-strong); font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sheet-ink); }
+table.sheet tbody tr:last-child td { border-bottom: 1px solid var(--sheet-rule); }
+table.sheet td:last-child, table.sheet th:last-child { padding-right: 0; }
+table.sheet td.id { white-space: nowrap; font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .04em; }
+table.sheet td .cite { display: block; margin-top: 3px; }
+table.sheet tr.hot td { background: var(--sheet-row-hover); }
+table.sheet .num { text-align: right; white-space: nowrap; }
+@media (max-width: 760px) {
+  .scroller.stackable { overflow-x: visible; }
+  .stackable table.sheet { min-width: 0; display: block; }
+  .stackable table.sheet thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .stackable table.sheet tbody, .stackable table.sheet tr, .stackable table.sheet td { display: block; width: 100%; }
+  .stackable table.sheet tr { border-top: 1px solid var(--sheet-rule); padding: 12px 0; }
+  .stackable table.sheet td { border: 0; padding: 0 0 6px; }
+  .stackable table.sheet td[data-label]::before { content: attr(data-label); display: block; font-family: var(--font-meta); font-size: 11px; line-height: 1.5; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sheet-ink-faint); }
+  .stackable table.sheet td.id { white-space: normal; }
+  .stackable table.sheet .num { text-align: left; }
+}
+
+/* coverage matrix: a word in every cell, never a colour alone */
+table.cover-m td.m { white-space: nowrap; font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+.mk { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--sheet-ink); border-radius: 50%; }
+.mk--yes { background: var(--sheet-ink); }
+.mk--part { background: linear-gradient(90deg, var(--sheet-ink) 50%, transparent 50%); }
+.mk--no { border-style: dashed; border-color: var(--sheet-ink-faint); }
+table.cover-m td.m--no { color: var(--sheet-ink-faint); }
+@media (max-width: 760px) { table.cover-m th, table.cover-m td { padding-right: 8px; } table.cover-m td.m { white-space: normal; } .mk { display: block; margin: 0 0 4px; } }
+
+/* ---------- the action-count chart ---------- */
+.chart { margin: 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; border-left: 1px solid var(--sheet-rule-strong); }
+.bars li { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr); gap: 2px 16px; align-items: center; padding-left: 0; }
+.bars .bl { font-size: 14px; line-height: 1.3; padding-left: 12px; }
+.bars .bl small { display: block; font-family: var(--font-meta); font-size: 11px; letter-spacing: .02em; color: var(--sheet-ink-faint); }
+.bars .bt { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bars .bt i { display: block; height: 16px; width: calc(var(--v) / 17 * 80%); min-width: 4px; background: var(--sheet-ink-faint); border-radius: 0 4px 4px 0; }
+.bars .bt b { font-family: var(--font-body); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bars li.hi .bt i { background: var(--clay-ink); }
+.bars li.hi .bl { font-weight: 600; }
+.bars li:hover .bt i { background: var(--sheet-ink); }
+.bars li.hi:hover .bt i { background: var(--clay-ink); }
+@media (max-width: 760px) { .bars li { grid-template-columns: minmax(0, 1fr); } .bars .bt { padding-left: 12px; } }
+.hero { font-family: var(--font-body); font-size: 64px; line-height: 1; font-weight: 600; letter-spacing: -.02em; margin: 0; }
+
+/* ---------- diagrams ---------- */
+.diagram { margin: 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.diagram svg { display: block; width: 100%; height: auto; max-width: 560px; }
+.diagram figcaption { font-size: 14px; line-height: 1.5; color: var(--sheet-ink-muted); max-width: 60ch; }
+.dg-box { fill: var(--sheet); stroke: var(--sheet-rule-strong); stroke-width: 1; }
+.dg-box--faint { fill: var(--sheet); stroke: var(--sheet-ink-faint); stroke-width: 1; stroke-dasharray: 4 3; }
+.dg-box--muted { fill: var(--sheet); stroke: var(--sheet-ink-muted); stroke-width: 1; stroke-dasharray: 4 3; }
+.dg-box--fill { fill: var(--sheet-ink); stroke: var(--sheet-ink); }
+.dg-box--warn { fill: var(--sheet); stroke: var(--terracotta-ink); stroke-width: 1.5; }
+.dg-box--soft { fill: var(--sheet-head); stroke: var(--sheet-rule); stroke-width: 1; }
+.dg-line { stroke: var(--sheet-ink-faint); stroke-width: 1; fill: none; }
+.dg-line--ink { stroke: var(--sheet-ink); stroke-width: 1.5; fill: none; }
+.dg-line--dash { stroke: var(--sheet-ink-faint); stroke-width: 1; fill: none; stroke-dasharray: 3 3; }
+.dg-head { fill: var(--sheet-ink-faint); }
+.dg-head--ink { fill: var(--sheet-ink); }
+.dg-w { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .06em; fill: var(--sheet-ink); }
+.dg-w--faint { fill: var(--sheet-ink-faint); }
+.dg-w--muted { fill: var(--sheet-ink-muted); }
+.dg-w--on { fill: var(--sheet); }
+.dg-w--warn { fill: var(--terracotta-ink); }
+.dg-t { font-family: var(--font-body); font-size: 12.5px; fill: var(--sheet-ink-muted); }
+.dg-t--ink { fill: var(--sheet-ink); font-weight: 500; }
+.dg-t--faint { fill: var(--sheet-ink-faint); }
+.dg-h { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .08em; fill: var(--sheet-ink); }
+.dg-room { font-family: var(--font-display); font-style: italic; font-size: 15px; fill: var(--sheet-ink); }
+
+/* ---------- walk screenshots and specimen frames ---------- */
+figure.shot, figure.spec { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.shot__stage { border: 1px solid var(--sheet-rule-strong); border-radius: var(--radius-box); overflow: hidden; background: var(--paper-doc); }
+.shot__stage img { display: block; width: 100%; height: auto; }
+.shot__stage.scrolly { max-height: 560px; overflow-y: auto; }
+figure.shot figcaption, figure.spec figcaption { color: var(--sheet-ink-muted); font-size: 14px; line-height: 1.5; max-width: 72ch; }
+.pair-label { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.pair-label .src { color: var(--sheet-ink-faint); text-transform: none; letter-spacing: .02em; font-weight: 400; overflow-wrap: anywhere; }
+.pair-label .tag { padding: 2px 6px; border: 1px solid var(--sheet-rule-strong); border-radius: var(--radius-hair); }
+.pair-label .tag--today { border-color: var(--terracotta-ink); color: var(--terracotta-ink); }
+.pair-label .tag--prop { background: var(--sheet-ink); color: var(--sheet); border-color: var(--sheet-ink); }
+.today { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 24px 48px; align-items: start; }
+@media (max-width: 900px) { .today { grid-template-columns: minmax(0, 1fr); } }
+.gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px 36px; }
+@media (max-width: 860px) { .gallery { grid-template-columns: minmax(0, 1fr); } }
+.phones { display: flex; flex-wrap: wrap; gap: 36px 36px; align-items: flex-start; }
+.phones > figure { flex: 0 1 360px; max-width: 100%; }
+.frames { display: flex; flex-direction: column; gap: 48px; }
+
+.spec__stage { overflow: hidden; max-width: 100%; border: 1px solid var(--sheet-rule-strong); border-radius: var(--radius-box); background: var(--paper); }
+.spec__scaler { transform-origin: top left; width: max-content; }
+.spec-frame { border: 0; background: var(--paper); display: block; width: 1440px; height: 900px; color-scheme: light dark; }
+
+/* ---------- direction cards ---------- */
+.dir { border-top: 3px solid var(--sheet-rule-strong); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dir.dir--b, .dir.dir--c { border-top-width: 1px; }
+.dir-letter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.kv { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: 6px 12px; margin: 0; }
+.kv dt { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sheet-ink-faint); padding-top: 2px; }
+.kv dd { margin: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.box { border: 1px solid var(--sheet-rule-strong); border-radius: var(--radius-box); padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.box--soft { border-color: var(--sheet-rule); background: var(--sheet-head); }
+
+/* ---------- slices ---------- */
+.slices { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--sheet-rule-strong); }
+.slices li { padding: 12px 12px 12px 0; border-right: 1px solid var(--sheet-rule); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.slices li + li { padding-left: 12px; }
+.slices li:last-child { border-right: 0; }
+.slices .sn { font-family: var(--font-meta); font-size: 28px; font-weight: 500; line-height: 1; }
+.slices .sz { font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--sheet-ink-faint); }
+.slices .sw { font-size: 14px; line-height: 1.4; font-weight: 500; }
+@media (max-width: 980px) { .slices { grid-template-columns: repeat(2, minmax(0, 1fr)); } .slices li { border-right: 0; border-bottom: 1px solid var(--sheet-rule); padding-left: 0 !important; } }
+@media (max-width: 520px) { .slices { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- questions ---------- */
+.qcards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 36px; }
+@media (max-width: 1100px) { .qcards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .qcards { grid-template-columns: minmax(0, 1fr); } }
+.qcards li { border-top: 1px solid var(--sheet-rule-strong); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.qcards li.first { border-top-width: 3px; }
+.qhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.qno { font-family: var(--font-meta); font-size: 20px; font-weight: 500; line-height: 1.2; }
+.qtag { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sheet-ink-faint); }
+.qtext { margin: 0; font-size: 15px; line-height: 1.45; font-weight: 500; }
+.qrec { margin: 0; font-size: 14px; line-height: 1.5; color: var(--sheet-ink-muted); }
+.qrec b { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sheet-ink-faint); margin-right: 6px; }
+
+/* ---------- the pager ---------- */
+.pager { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; align-items: center; gap: 4px; background: var(--sheet-head); border: 1px solid var(--sheet-rule-strong); border-radius: var(--radius-box); padding: 2px; }
+.pager button { min-width: 44px; min-height: 44px; background: transparent; border: 0; color: var(--sheet-ink); cursor: pointer; font-family: var(--font-meta); font-size: 14px; border-radius: var(--radius-hair); }
+.pager button:hover { background: var(--sheet-row-hover); }
+.pager .where { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--sheet-ink-muted); padding: 0 8px; white-space: nowrap; max-width: 46vw; overflow: hidden; }
+@media (max-width: 760px) { .pager { display: none; } }
+.slide h1:focus, .slide h2:focus { outline: none; }
+.slide h1:focus-visible, .slide h2:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 4px; }
+.skip { position: absolute; left: -9999px; top: 0; }
+.skip:focus { left: 12px; top: 12px; z-index: 70; background: var(--sheet-head); color: var(--sheet-ink); padding: 12px; border: 1px solid var(--sheet-rule-strong); border-radius: var(--radius-box); font-family: var(--font-meta); font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+@media (forced-colors: active) {
+  .stamp, .spec__stage, .shot__stage, .pager, .box, .mk, .pair-label .tag { border-color: CanvasText; }
+  .bars .bt i, .mk--yes { background: CanvasText; forced-color-adjust: none; }
+  a:focus-visible, button:focus-visible, .slide h1:focus-visible, .slide h2:focus-visible { outline-color: Highlight; }
+}
+</style>
+
+<a class="skip" href="#s-quotes">Skip to Leah's words</a>
+<div id="deck" tabindex="0" role="region" aria-label="Building a Job's Pieces, twenty-six sheets. Arrow keys move between sheets.">
+
+<!-- ============ 01 THE ASK ============ -->
+<section class="slide" id="s-ask" data-label="The ask">
+  <header class="shead"><span class="no">01 / 26</span><span class="ch">1 · The ask</span><span class="job">Building a job's pieces · US-20</span></header>
+  <div class="inner">
+    <div class="cover">
+      <div class="stack" style="gap:24px">
+        <p class="t-head faint">Thursday 8 October 2026 · for Kody and Leah · reviewed by Opus 5.5, Fable 5.1 and GPT-6 Sol</p>
+        <h1 class="t-d0">Building a Job's Pieces</h1>
+        <p class="t-d3 muted">Leah sat down to enter the pieces of a real job, Whole Home Renovation, and got lost. Here is why, and a room built for that work.</p>
+        <blockquote class="said">
+          <p>Evaluate this feedback and recommend a course of action that simplifies building a project's pieces. That may deserve its own purpose-built room.</p>
+          <footer>Kody's ask, as written in BRIEF.md</footer>
+        </blockquote>
+        <div class="answer">
+          <p class="t-head">The answer, in three lines</p>
+          <p class="t-body"><strong>Yes, a room: the Build room,</strong> a working sheet at <code>/doc/[id]/pieces</code>, opened from the Document and closed back to it.</p>
+          <p class="t-body"><strong>First, the floor under it.</strong> Four of her eight asks have nothing underneath yet: a floor in four rooms, labor on the wallpaper, a price per square foot, and removing a mistake.</p>
+          <p class="t-body"><strong>This week, twelve fixes,</strong> all but one needing no ruling: Enter adds the next line, a line can be removed, a placeholder says Placeholder, and the time clock stops popping up.</p>
+        </div>
+      </div>
+      <div class="stack">
+        <p class="t-head">Eight scenarios, all in Leah's words</p>
+        <ol class="lanes">
+          <li><b>S1</b><span><strong>Rough in.</strong> Four Living Room lines in under a minute, without leaving the list.</span></li>
+          <li><b>S2</b><span><strong>One piece, many rooms.</strong> The white oak floor is in the Hall, Living, Dining and Kitchen. It isn't "throughout".</span></li>
+          <li><b>S3</b><span><strong>Placeholder to product.</strong> "Hardware, 2 knobs" becomes the real knob, and the intent survives.</span></li>
+          <li><b>S4</b><span><strong>Labor and custom lines.</strong> Wallpaper with its hanger; the floor priced per square foot.</span></li>
+          <li><b>S5</b><span><strong>Remove a mistake.</strong> The Sunroom line; a duplicate in the studio catalog.</span></li>
+          <li><b>S6</b><span><strong>Move between rooms.</strong> Drag a piece from one room to another.</span></li>
+          <li><b>S7</b><span><strong>Where am I, what can I do.</strong> Only what's possible now, an obvious way back, no popup.</span></li>
+          <li><b>S8</b><span><strong>Paint and finish schedule.</strong> A room-by-finish page for the painter.</span></li>
+        </ol>
+        <p class="t-meta">Scenarios from BRIEF.md. Evidence: code on main, a local seeded walk and three reviews. Nothing here touched production. Design canon was waived for this work; every departure is a founder question on sheet 24.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 LEAH IN HER OWN WORDS ============ -->
+<section class="slide reading" id="s-quotes" data-label="Leah, in her own words">
+  <header class="shead"><span class="no">02 / 26</span><span class="ch">2 · Leah, in her own words</span><span class="job">TRANSCRIPT.md · verbatim</span></header>
+  <div class="inner">
+    <h2 class="t-d1">"I'm having a hard time understanding where I am and what I should be doing"</h2>
+    <p class="t-sm" style="color:var(--ink-muted);max-width:72ch">The first first-person capture of Leah entering items, 8 October 2026, with Kody beside her. The transcript runs both speakers together without labels; the lines below are Leah's, quoted as captured, with their line numbers in TRANSCRIPT.md.</p>
+    <div class="cols-3">
+      <div class="qgroup">
+        <p class="t-head">How she works</p>
+        <blockquote class="said"><p>"I want this 'add a line' to be 'add a line, add a line, add a line, add a line.'"</p><cite>:61</cite></blockquote>
+        <blockquote class="said"><p>"Here's all the things in this room. Here's all the things in this room," and just go down the line and then I edit them appropriately.</p><cite>:61, on walking her elevations and SketchUp model</cite></blockquote>
+        <blockquote class="said"><p>Some of it's me outlining stuff. You want just something to hold space.</p><cite>:49</cite></blockquote>
+      </div>
+      <div class="qgroup">
+        <p class="t-head">Where it broke</p>
+        <blockquote class="said"><p>Right now if you click on them, they're all specified.</p><cite>:11</cite></blockquote>
+        <blockquote class="said"><p>The oak floor is in the hallway, the living room, the dining room, and the kitchen.</p><cite>:18</cite></blockquote>
+        <blockquote class="said"><p>How do I get this the heck out of there? … Yeah I can't delete anything.</p><cite>:39</cite></blockquote>
+        <blockquote class="said"><p>If I go to Whole Home Renovation, how do I get back to Project?</p><cite>:41</cite></blockquote>
+        <blockquote class="said"><p>You're still technically working on the project so it's kind of annoying that it popped up there.</p><cite>:33, on the time tracker</cite></blockquote>
+      </div>
+      <div class="qgroup">
+        <p class="t-head">What she asked for</p>
+        <blockquote class="said"><p>I just feel like it's so soft and so beige. I'm like, "Where the f*** am I?"</p><cite>:55</cite></blockquote>
+        <blockquote class="said"><p>The underpinnings are all there … but it's not building the function. It's only presenting you with the function that you need at each step that is missing.</p><cite>:57</cite></blockquote>
+        <blockquote class="said"><p>This project sheet should be more of an overview and there are specific screens you go into.</p><cite>:57</cite></blockquote>
+        <blockquote class="said"><p>Here I'm looking at the job with this lens on. This is all I see. I can do this part, I can't do that part, and then your choices of what you can do become much simpler.</p><cite>:59</cite></blockquote>
+      </div>
+    </div>
+    <p class="t-meta" style="color:var(--ink-faint)">This sheet is set on the reading stock, the beige of the Document today. Every other sheet is on the white drafting stock the recommendation proposes for working sheets. Beige is reading, white is working.</p>
+  </div>
+</section>
+
+<!-- ============ 03 TODAY WALKED (1) ============ -->
+<section class="slide" id="s-walk" data-label="Today, walked">
+  <header class="shead"><span class="no">03 / 26</span><span class="ch">3 · Today, walked</span><span class="job">walk/WALK.md · SQ-588</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Her session, replayed: twelve steps on a seeded copy of the job</h2>
+    <p class="t-body prose">One designer account, the seven rooms of Whole Home Renovation, every line entered through the product's own "Add a line". Counts are clicks by an automated browser, so they are a floor, not her time. <strong>Eight of the twelve steps are trustworthy;</strong> steps 8 to 11 and the phone captures are not, and are marked so.</p>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">Step</th><th scope="col">What she tried</th><th scope="col">Verdict</th><th scope="col">What the walk counted or saw</th><th scope="col">Screenshot</th></tr></thead>
+        <tbody>
+          <tr><td class="id" data-label="Step">1</td><td data-label="What she tried">Open the job, find Pieces</td><td data-label="Verdict">Found</td><td data-label="Saw">One click on the spine</td><td data-label="Screenshot"><code>step1-pieces-1440.jpg</code></td></tr>
+          <tr class="hot"><td class="id" data-label="Step">2</td><td data-label="What she tried">Rough in four Living Room lines</td><td data-label="Verdict">Found, repetitive</td><td data-label="Saw"><strong>3, 3, 2 and 2 clicks; 954, 937, 923 and 944 ms.</strong> The sheet closed after every save: four open-fill-save-close round trips.</td><td data-label="Screenshot"><code>step2-*.jpg</code></td></tr>
+          <tr class="hot"><td class="id" data-label="Step">3</td><td data-label="What she tried">Click a new line</td><td data-label="Verdict">Wrong word</td><td data-label="Saw">A bare name is stamped <span class="stamp stamp--today">Specified</span> at $0 and opens the buyer's desk.</td><td data-label="Screenshot"><code>step3-line-unfold-1440.jpg</code></td></tr>
+          <tr><td class="id" data-label="Step">4</td><td data-label="What she tried">Edit spec details</td><td data-label="Verdict">Found, elsewhere</td><td data-label="Saw">A separate route with no Room field. Back is the global nav. The clock kept running here.</td><td data-label="Screenshot"><code>step4a–d-*.jpg</code></td></tr>
+          <tr class="hot"><td class="id" data-label="Step">5</td><td data-label="What she tried">Remove the Sunroom line</td><td data-label="Verdict">Not possible</td><td data-label="Saw">No remove act anywhere. The nearest control is "Something's wrong…", which files a damage report.</td><td data-label="Screenshot"><code>step5b-*.jpg</code></td></tr>
+          <tr class="hot"><td class="id" data-label="Step">6</td><td data-label="What she tried">The oak floor in four rooms</td><td data-label="Verdict">Not possible as one line</td><td data-label="Saw">Four separate rows, one per room, each with its own price</td><td data-label="Screenshot"><code>step6b-*.jpg</code>, <code>project-1440-full.jpg</code></td></tr>
+          <tr class="hot"><td class="id" data-label="Step">7</td><td data-label="What she tried">Labor on the wallpaper; price per sq ft</td><td data-label="Verdict">Not possible</td><td data-label="Saw">The buy offers Maker, Trade cost and ×1. No unit, no labor line.</td><td data-label="Screenshot"><code>step7a-*.jpg</code>, <code>step7b-*.jpg</code></td></tr>
+          <tr><td class="id" data-label="Step">8</td><td data-label="What she tried">Fill a placeholder from the Library</td><td data-label="Verdict">Could not verify</td><td data-label="Saw">Ten roads on screen (eleven in the code, one flag-gated); the Library picker rendered no cards, and the studio catalog reads STUDIO · 0</td><td data-label="Screenshot"><code>step8a-*.jpg</code>, <code>step8b-*.jpg</code></td></tr>
+          <tr><td class="id" data-label="Step">9</td><td data-label="What she tried">Drag between rooms</td><td data-label="Verdict">Could not verify</td><td data-label="Saw">The script landed on another project. No drag handle appears in any other screenshot.</td><td data-label="Screenshot"><code>step9a/b-*.jpg</code></td></tr>
+          <tr><td class="id" data-label="Step">10</td><td data-label="What she tried">Delete a catalog product</td><td data-label="Verdict">Could not verify</td><td data-label="Saw">The grid never came into view. The code read says no delete is wired.</td><td data-label="Screenshot"><code>step10a-*.jpg</code></td></tr>
+          <tr><td class="id" data-label="Step">11</td><td data-label="What she tried">Add under "Not in a room yet"</td><td data-label="Verdict">Could not verify</td><td data-label="Saw">Save was below the fold. The bug is confirmed in code: <code>add-line-sheet.tsx:62</code> saves it as Throughout.</td><td data-label="Screenshot"><code>step11a-*.jpg</code></td></tr>
+          <tr><td class="id" data-label="Step">12</td><td data-label="What she tried">The whole paper at the end</td><td data-label="Verdict">Captured</td><td data-label="Saw">Hall, Living Room, Dining and Kitchen each hold their own oak-floor row</td><td data-label="Screenshot"><code>project-1440-full.jpg</code></td></tr>
+          <tr><td class="id" data-label="Step">390</td><td data-label="What she tried">The same on the phone</td><td data-label="Verdict">Could not capture</td><td data-label="Saw">1 of 4 captures; the script never reached Pieces. Slice 2 needs a human phone walk.</td><td data-label="Screenshot"><code>pieces-list-390.jpg</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="gallery">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/step2-add-line-sheet-open-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step2-add-line-sheet-open-1440.jpg}}" alt="The Add a line sheet over the Living Room: fields Line and How many, a COM checkbox, the sentence It lands in Living Room as a candidate, and Add the line." width="1440" height="900" loading="lazy" decoding="async"></div>
+        <figcaption>The one surface she likes: one act, three fields. It closes after every save, so a room of twenty lines is twenty round trips.</figcaption>
+      </figure>
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/step2-living-room-after-4-lines-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step2-living-room-after-4-lines-1440.jpg}}" alt="The Pieces region after four lines: the head reads 4 unspecified, 4 uninvoiced, with Spec the 4 unspecified, Add a line and Bill 4 uninvoiced lines. Below, Plan the project work, a folio, Read by room, maker, next act, and the first line stamped Specified at $0." width="1440" height="900" loading="lazy" decoding="async"></div>
+        <figcaption>After four names: "4 unspecified", "Bill 4 uninvoiced lines" on four $0 names, a task planner, a folio and a reading control before the first line, which is stamped Specified.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 TODAY WALKED (2) ============ -->
+<section class="slide" id="s-walk-2" data-label="Today, walked (2)">
+  <header class="shead"><span class="no">04 / 26</span><span class="ch">3 · Today, walked</span><span class="job">walk/*.jpg</span></header>
+  <div class="inner">
+    <h2 class="t-d1">One click on a name opens the buyer's desk</h2>
+    <p class="t-body prose">What the walk saw when it went past the first sheet. Each screenshot is the local seeded job; captions name the step.</p>
+    <div class="gallery">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Step 3</span><span class="src">walk/step3-line-unfold-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step3-line-unfold-1440.jpg}}" alt="Custom cabinet ×2 unfolded: Specified, $0, Piece in hand with maker and source not recorded, then The buy, Quote and Order cells, with Not yet ordered, Needs a maker, Needs a client price." width="1440" height="900" loading="lazy" decoding="async"></div>
+        <figcaption>A name typed a minute ago: <span class="stamp stamp--today">Specified</span>, $0, then The buy, Quote and Order. The head above counts the same line "unspecified".</figcaption>
+      </figure>
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Step 7</span><span class="src">walk/step7a-wallpaper-line-unfolded-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step7a-wallpaper-line-unfolded-1440.jpg}}" alt="The bottom of an unfolded wallpaper line: Submittals, Samples, Movement, Money out, Receiving, Something's wrong, a Room select reading Bedroom, Folio, Bill, Add note, Fold, and Edit spec details outside the unfold." width="1440" height="900" loading="lazy" decoding="async"></div>
+        <figcaption>The rest of the same unfold: Submittals, Samples, Movement, Money out, Receiving, Something's wrong…, a Room select, Folio, Bill, Add note, Fold. "Edit spec details →" sits outside it.</figcaption>
+      </figure>
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Step 5</span><span class="src">walk/step5b-sunroom-line-unfolded-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step5b-sunroom-line-unfolded-1440.jpg}}" alt="The line named Sunroom item that should not be there, unfolded, with Specified and $0, and no remove control anywhere." width="1440" height="900" loading="lazy" decoding="async"></div>
+        <figcaption>"Sunroom item that should not be there." Nothing removes it. <code>archive_project_selection</code> exists and has no caller.</figcaption>
+      </figure>
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Step 4</span><span class="src">walk/step4b-spec-fields-filled-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step4b-spec-fields-filled-1440.jpg}}" alt="The spec book: chapters by room on the left, four Living Room lines each reading Not specified and Incomplete, and the editor with Finish Painted, Material Paint grade, Exact location See drawings, dimensions and notes. No room field." width="1440" height="900" loading="lazy" decoding="async"></div>
+        <figcaption>The spec book is a separate route. The same lines read "Not specified · INCOMPLETE" here. There's no Room field, and the way back is the global nav.</figcaption>
+      </figure>
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Step 8</span><span class="src">walk/step8a-add-to-the-job-roads-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step8a-add-to-the-job-roads-1440.jpg}}" alt="The Add to the job sheet listing roads: From the Library, Paste a link, From a photo, From a vendor's quote, Import a schedule, Bring in a deck, A custom piece, A find, A store buy, Bought it already." width="1440" height="900" loading="lazy" decoding="async"></div>
+        <figcaption>The other button named "Add a line": the head's opens ten roads on screen, eleven in the code. Filling a placeholder lives three levels down, and the fill overwrites the placeholder's name.</figcaption>
+      </figure>
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Step 12</span><span class="src">walk/project-1440-full.jpg · scroll inside</span></p>
+        <div class="shot__stage scrolly" tabindex="0" role="region" aria-label="Full-page screenshot of the project, scrollable"><img src="{{WALK:project-1440-full.jpg}}" alt="The whole Project paper after the walk, with four separate White oak floor, satin Bona finish rows under Hall, Living Room, Dining and Kitchen, each stamped Specified at $0." width="1440" height="4956" loading="lazy" decoding="async"></div>
+        <figcaption>The whole paper at the end: four unrelated "White oak floor, satin Bona finish" rows, one per room, each its own price to keep in step.</figcaption>
+      </figure>
+    </div>
+    <blockquote class="said"><p>The first input matches her method; the next screen changes the subject before she is ready.</p><footer>R3, GPT-6 Sol · review/r3-sol.md, R3-2</footer></blockquote>
+  </div>
+</section>
+
+<!-- ============ 05 THE DIAGNOSIS ============ -->
+<section class="slide" id="s-diagnosis" data-label="The diagnosis">
+  <header class="shead"><span class="no">05 / 26</span><span class="ch">4 · The diagnosis</span><span class="job">briefing/current-state.md §3</span></header>
+  <div class="inner">
+    <blockquote class="said big"><p>It's only presenting you with the function that you need at each step that is missing.</p><footer>Leah · TRANSCRIPT.md:57</footer></blockquote>
+    <p class="thesis">She is right about the second half and wrong about the first.</p>
+    <div class="split">
+      <div class="stack" style="gap:16px">
+        <p class="t-body prose"><strong>The second half holds.</strong> From the moment a name is typed, every line wears the buyer's instrument: a Specified stamp, twelve or thirteen acts when it opens, and "Bill 4 uninvoiced lines" over four names at $0. So neither she nor a first hire can see what to do now.</p>
+        <p class="t-body prose"><strong>The first half doesn't.</strong> "The underpinnings are all there" is true for half her asks. A floor in four rooms, labor on the wallpaper, a price per square foot and removing a mistake have nothing under them (sheet 07). A lens over a missing function still shows a missing function.</p>
+        <p class="t-body prose"><strong>So the direction is two moves, in this order.</strong> First the missing primitives. Then a working surface where <em>what she is doing</em> (a lens she picks) chooses the acts on screen, and <em>where each line is</em> (a stage derived from facts the row already carries) chooses what that line can do.</p>
+        <div class="stack" style="gap:4px">
+          <p class="hero">30+</p>
+          <p class="t-sm muted">visible acts across the four surfaces she touched in the transcript: the Pieces head, a room heading, a line and its unfold, and the Add a line sheet.</p>
+        </div>
+      </div>
+      <figure class="chart" aria-labelledby="chart-title">
+        <p class="t-head" id="chart-title">Visible acts on each surface she met</p>
+        <ol class="bars">
+          <li style="--v:1" class="hi" title="Add a line sheet (room): 1 act, 3 fields. add-line-sheet.tsx"><span class="bl">Add a line, the room sheet<small>3 fields · the one she likes</small></span><span class="bt"><i></i><b>1</b></span></li>
+          <li style="--v:2" title="Room heading: 2 acts in project mode. ffe-section.tsx:751-887"><span class="bl">A room heading<small>ffe-section.tsx:751–887</small></span><span class="bt"><i></i><b>2</b></span></li>
+          <li style="--v:3" title="A line, folded: up to 3 acts. ffe-section.tsx:491-746"><span class="bl">A line, folded<small>up to 3 · ffe-section.tsx:491–746</small></span><span class="bt"><i></i><b>3</b></span></li>
+          <li style="--v:3" title="Spec book editor: 3 acts, about 6 fields, on its own route. spec-book-workspace.tsx:254-626"><span class="bl">The spec book's editor<small>~6 fields · its own route</small></span><span class="bt"><i></i><b>3</b></span></li>
+          <li style="--v:8" title="Pieces head: up to 8 acts live at once. ffe-section.tsx:2130-2186"><span class="bl">The Pieces head<small>up to 8 live at once</small></span><span class="bt"><i></i><b>8</b></span></li>
+          <li style="--v:11" title="Add to the job: 11 roads. add-to-project-sheet.tsx"><span class="bl">"Add to the job"<small>11 roads before a field</small></span><span class="bt"><i></i><b>11</b></span></li>
+          <li style="--v:13" title="One line unfolded: 12 to 13 acts reachable from one click. line-unfold.tsx:218-427"><span class="bl">One line, unfolded<small>12–13 · line-unfold.tsx:218–427</small></span><span class="bt"><i></i><b>13</b></span></li>
+          <li style="--v:17" title="Piece room (a Library item): 17 actions, none of them delete. piece-room.tsx"><span class="bl">A Library piece<small>17, and none of them delete</small></span><span class="bt"><i></i><b>17</b></span></li>
+        </ol>
+        <figcaption class="t-meta">Counts from briefing/current-state.md §3, read off the code. Upper counts where a range is given. A further 16 distinct action keys live in ffe-section.tsx alone.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 LINE LIFE ============ -->
+<section class="slide" id="s-line-life" data-label="Where a line is">
+  <header class="shead"><span class="no">06 / 26</span><span class="ch">4 · The diagnosis</span><span class="job">briefing §2 · synthesis §2 · D1</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Where a line is: six axes and one stamp today, one derived stage proposed</h2>
+    <p class="t-body prose">Today a line carries six state axes, and the stamp reads only one of them: the goods machine, which doesn't move until a vendor and a PO exist. The proposal adds no status column. It derives one stage from facts the row already carries, and prints that word everywhere.</p>
+    <div class="cols-2">
+      <figure class="diagram">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">stamp-derivation.ts:104–144 · 00066:265</span></p>
+        <svg viewBox="0 0 460 560" role="img" aria-labelledby="sm-today-t sm-today-d">
+          <title id="sm-today-t">Line life today</title>
+          <desc id="sm-today-d">The status axis runs specified, quoted, approved, ordered, production, shipped, delivered, installed. Every line is born at specified and the axis is inert until a vendor and a PO exist. Five other axes sit beside it: disposition, product, item type, room and removed. The stamp reads only status, so a name at zero dollars prints Specified.</desc>
+          <defs>
+            <marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="dg-head" d="M0 0 L8 4 L0 8 z"/></marker>
+            <marker id="ah-ink" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="dg-head--ink" d="M0 0 L8 4 L0 8 z"/></marker>
+          </defs>
+          <text class="dg-h" x="0" y="14">STATUS · THE GOODS MACHINE</text>
+          <text class="dg-t dg-t--faint" x="0" y="32">born here, every line</text>
+          <rect class="dg-box--warn" x="0" y="42" width="140" height="30" rx="2"/><text class="dg-w dg-w--warn" x="70" y="62" text-anchor="middle">SPECIFIED</text>
+          <line class="dg-line" x1="70" y1="72" x2="70" y2="88" marker-end="url(#ah)"/>
+          <rect class="dg-box--soft" x="0" y="90" width="140" height="28" rx="2"/><text class="dg-w dg-w--faint" x="70" y="109" text-anchor="middle">QUOTED</text>
+          <line class="dg-line" x1="70" y1="118" x2="70" y2="132" marker-end="url(#ah)"/>
+          <rect class="dg-box--soft" x="0" y="134" width="140" height="28" rx="2"/><text class="dg-w dg-w--faint" x="70" y="153" text-anchor="middle">APPROVED</text>
+          <line class="dg-line" x1="70" y1="162" x2="70" y2="176" marker-end="url(#ah)"/>
+          <rect class="dg-box--soft" x="0" y="178" width="140" height="28" rx="2"/><text class="dg-w dg-w--faint" x="70" y="197" text-anchor="middle">ORDERED</text>
+          <line class="dg-line" x1="70" y1="206" x2="70" y2="220" marker-end="url(#ah)"/>
+          <rect class="dg-box--soft" x="0" y="222" width="140" height="28" rx="2"/><text class="dg-w dg-w--faint" x="70" y="241" text-anchor="middle">PRODUCTION</text>
+          <line class="dg-line" x1="70" y1="250" x2="70" y2="264" marker-end="url(#ah)"/>
+          <rect class="dg-box--soft" x="0" y="266" width="140" height="28" rx="2"/><text class="dg-w dg-w--faint" x="70" y="285" text-anchor="middle">SHIPPED</text>
+          <line class="dg-line" x1="70" y1="294" x2="70" y2="308" marker-end="url(#ah)"/>
+          <rect class="dg-box--soft" x="0" y="310" width="140" height="28" rx="2"/><text class="dg-w dg-w--faint" x="70" y="329" text-anchor="middle">DELIVERED</text>
+          <line class="dg-line" x1="70" y1="338" x2="70" y2="352" marker-end="url(#ah)"/>
+          <rect class="dg-box--soft" x="0" y="354" width="140" height="28" rx="2"/><text class="dg-w dg-w--faint" x="70" y="373" text-anchor="middle">INSTALLED</text>
+          <path class="dg-line--dash" d="M150 90 h8 v292 h-8"/>
+          <text class="dg-t" x="164" y="230">moves only with a</text>
+          <text class="dg-t" x="164" y="246">vendor and a PO</text>
+
+          <text class="dg-h" x="280" y="14">FIVE MORE AXES</text>
+          <rect class="dg-box--soft" x="280" y="42" width="180" height="54" rx="2"/>
+          <text class="dg-w" x="290" y="62">DISPOSITION</text><text class="dg-t" x="290" y="82">set at birth; no act after</text>
+          <rect class="dg-box--soft" x="280" y="106" width="180" height="54" rx="2"/>
+          <text class="dg-w" x="290" y="126">PRODUCT</text><text class="dg-t" x="290" y="146">a fill erases the name</text>
+          <rect class="dg-box--soft" x="280" y="170" width="180" height="54" rx="2"/>
+          <text class="dg-w" x="290" y="190">ITEM TYPE</text><text class="dg-t" x="290" y="210">allowance, before signing</text>
+          <rect class="dg-box--soft" x="280" y="234" width="180" height="54" rx="2"/>
+          <text class="dg-w" x="290" y="254">ROOM</text><text class="dg-t" x="290" y="274">exactly one, by CHECK</text>
+          <rect class="dg-box--soft" x="280" y="298" width="180" height="54" rx="2"/>
+          <text class="dg-w" x="290" y="318">REMOVED</text><text class="dg-t" x="290" y="338">an RPC with no caller</text>
+
+          <line class="dg-line--ink" x1="70" y1="400" x2="70" y2="452" marker-end="url(#ah-ink)"/>
+          <path class="dg-line--dash" d="M370 362 V420 H70"/>
+          <text class="dg-t dg-t--faint" x="230" y="414" text-anchor="middle">the stamp never reads these</text>
+          <rect class="dg-box--warn" x="0" y="456" width="460" height="74" rx="3"/>
+          <text class="dg-h" x="14" y="478">THE STAMP</text>
+          <text class="dg-t dg-t--ink" x="14" y="498">A name typed a minute ago, $0, no maker:</text>
+          <text class="dg-w dg-w--warn" x="14" y="519">SPECIFIED</text>
+          <text class="dg-t" x="100" y="519">while the head counts it "unspecified"</text>
+        </svg>
+        <figcaption>The head counts the same line "unspecified" (<code>ffe-section.tsx:1860</code>) and the spec book calls it INCOMPLETE. A seventh axis, the spec book's readiness, adds a fourth word (R1 F2).</figcaption>
+      </figure>
+      <figure class="diagram">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">D1 · ffe_line_stage(row) · founder question Q3</span></p>
+        <svg viewBox="0 0 460 560" role="img" aria-labelledby="sm-prop-t sm-prop-d">
+          <title id="sm-prop-t">Line life proposed</title>
+          <desc id="sm-prop-d">One derived stage. Placeholder, then Roughed with a rough price, Specced with a product or a maker, Ready when maker, quantity and a price or ceiling are set, Released on an authorization, then the goods words as today once a PO exists. A product can fill a placeholder straight to Specced. Lenses are chosen by the designer; the stage is derived.</desc>
+          <defs>
+            <marker id="ah2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="dg-head--ink" d="M0 0 L8 4 L0 8 z"/></marker>
+          </defs>
+          <text class="dg-h" x="0" y="14">ONE STAGE, DERIVED FROM THE ROW</text>
+          <text class="dg-t dg-t--faint" x="0" y="32">born here</text>
+          <rect class="dg-box--faint" x="0" y="42" width="150" height="32" rx="2"/><text class="dg-w dg-w--faint" x="75" y="63" text-anchor="middle">PLACEHOLDER</text>
+          <line class="dg-line--ink" x1="75" y1="74" x2="75" y2="104" marker-end="url(#ah2)"/>
+          <text class="dg-t" x="166" y="93">+ a rough ~ price</text>
+          <rect class="dg-box--muted" x="0" y="106" width="150" height="32" rx="2"/><text class="dg-w dg-w--muted" x="75" y="127" text-anchor="middle">ROUGHED</text>
+          <line class="dg-line--ink" x1="75" y1="138" x2="75" y2="168" marker-end="url(#ah2)"/>
+          <text class="dg-t" x="166" y="157">+ a product or a maker</text>
+          <rect class="dg-box" x="0" y="170" width="150" height="32" rx="2"/><text class="dg-w" x="75" y="191" text-anchor="middle">SPECCED</text>
+          <line class="dg-line--ink" x1="75" y1="202" x2="75" y2="232" marker-end="url(#ah2)"/>
+          <text class="dg-t" x="166" y="215">+ maker, qty, and a price</text>
+          <text class="dg-t" x="166" y="231">or an allowance ceiling</text>
+          <rect class="dg-box" x="0" y="234" width="150" height="32" rx="2"/><text class="dg-w" x="75" y="255" text-anchor="middle">READY</text>
+          <line class="dg-line--ink" x1="75" y1="266" x2="75" y2="296" marker-end="url(#ah2)"/>
+          <text class="dg-t" x="166" y="285">+ on an authorization</text>
+          <rect class="dg-box--fill" x="0" y="298" width="150" height="32" rx="2"/><text class="dg-w dg-w--on" x="75" y="319" text-anchor="middle">RELEASED</text>
+          <line class="dg-line--ink" x1="75" y1="330" x2="75" y2="360" marker-end="url(#ah2)"/>
+          <text class="dg-t" x="166" y="349">+ a PO</text>
+          <rect class="dg-box--soft" x="0" y="362" width="150" height="32" rx="2"/><text class="dg-w dg-w--faint" x="75" y="383" text-anchor="middle">ORDERED …</text>
+          <text class="dg-t dg-t--faint" x="166" y="383">then the goods words, as today</text>
+          <path class="dg-line--dash" d="M150 58 H157 V186 H150" />
+          <text class="dg-t dg-t--faint" x="166" y="62">a fill can skip Roughed</text>
+
+          <line class="dg-line" x1="0" y1="420" x2="460" y2="420"/>
+          <text class="dg-h" x="0" y="446">TWO DEVICES, NEVER ONE</text>
+          <text class="dg-w" x="0" y="474">LENS</text>
+          <text class="dg-t" x="70" y="474">what she is doing. She picks it.</text>
+          <text class="dg-t dg-t--ink" x="70" y="492">Rough in · Spec · Price · Release</text>
+          <text class="dg-w" x="0" y="522">STAGE</text>
+          <text class="dg-t" x="70" y="522">where the line is. Derived, never set.</text>
+          <text class="dg-t" x="70" y="540">It decides what that line can do.</text>
+        </svg>
+        <figcaption>Any line can sit under any lens, which answers R3's warning against one mandatory stage for the whole job. The lens filters acts; the stage filters what one line can do. Placeholder never reaches the client.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 BUILT UNDERNEATH ============ -->
+<section class="slide" id="s-built" data-label="Built underneath">
+  <header class="shead"><span class="no">07 / 26</span><span class="ch">5 · What's already built underneath</span><span class="job">briefing §1, §2 · R1 · R2 F2</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Half the floor is laid: RPCs and hooks with no button on top</h2>
+    <div class="cols-2">
+      <blockquote class="said"><p>The fix is a single derived stage that drives what each line shows, plus small additive migrations. No rebuild is needed.</p><footer>R1, Opus 5.5 · review/r1-opus.md §0</footer></blockquote>
+      <blockquote class="said"><p>"The underpinnings are all there" is not true for four of her eight asks.</p><footer>R2, Fable 5.1 · review/r2-fable.md F2</footer></blockquote>
+    </div>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">Built</th><th scope="col">Where</th><th scope="col">What it could do for her</th><th scope="col">Who calls it today</th></tr></thead>
+        <tbody>
+          <tr><td data-label="Built"><code>archive_project_selection</code> · <code>useArchiveProjectSelection</code></td><td data-label="Where"><code>00435:521</code> · <code>use-project-ffe-ga.ts:248</code></td><td data-label="Could do">Remove a line, with a reason; refuses authorized and ordered lines</td><td data-label="Called by">Nothing (S5)</td></tr>
+          <tr><td data-label="Built"><code>supersede_project_selection</code> · <code>useSupersedeProjectSelection</code></td><td data-label="Where"><code>00661:374–435</code> · <code>use-project-ffe-ga.ts:263</code></td><td data-label="Could do">Swap the product on a line and keep the need it answers</td><td data-label="Called by">Nothing (S3)</td></tr>
+          <tr><td data-label="Built">The need identity, <code>project_ffe_selection_threads</code></td><td data-label="Where"><code>00661:425</code></td><td data-label="Could do">Carry "Hardware, 2 knobs" through every fill</td><td data-label="Called by">Never printed; the fill writes over the name (S3)</td></tr>
+          <tr><td data-label="Built">Allowances: <code>itemType: 'allowance'</code>, <code>budgetMaxCents</code></td><td data-label="Where"><code>packages/types/src/ffe.ts:131–139</code> · <code>00447:219–241</code></td><td data-label="Could do">A rough price at rough-in, "just so I can get my pricing lined up"</td><td data-label="Called by">Only the pre-signing scope builder (S4)</td></tr>
+          <tr><td data-label="Built"><code>design_disposition</code>: candidate, selected, alternate, not selected</td><td data-label="Where"><code>00434:242–245</code></td><td data-label="Could do">What the client sees; the first hire's hand-back to Leah</td><td data-label="Called by">Set at birth, never changed in place (S7)</td></tr>
+          <tr><td data-label="Built"><code>triage_project_ffe_items</code> · <code>useAssignLineRoom</code></td><td data-label="Where"><code>use-document-rooms.ts:72–90</code></td><td data-label="Could do">Move a line to another room</td><td data-label="Called by">A select inside the unfold; drag deferred (I25) (S6)</td></tr>
+          <tr><td data-label="Built"><code>project_ffe_specs.selected_media</code></td><td data-label="Where"><code>00380:53</code></td><td data-label="Could do">An image on the custom oak floor line</td><td data-label="Called by">No control on the custom or need roads (S4)</td></tr>
+          <tr><td data-label="Built"><code>merged_into_id</code>, <code>deleted_at</code> on products</td><td data-label="Where"><code>00152:55–56</code></td><td data-label="Could do">Merge a catalog duplicate safely</td><td data-label="Called by">Nothing (S5)</td></tr>
+          <tr><td data-label="Built"><code>useDeleteProduct</code> · <code>DeleteProductDialog</code> · <code>DuplicateDetectionPanel</code></td><td data-label="Where"><code>use-products.ts:189</code> · <code>delete-product-dialog.tsx:24</code> · <code>duplicate-detection-panel.tsx:180</code></td><td data-label="Could do">Delete a catalog product</td><td data-label="Called by">Nothing, and it should stay that way: it calls a REST route with no service behind it, mock data reports success, and a real delete un-fills live lines (R1 F30)</td></tr>
+          <tr><td data-label="Built"><code>proposal_palettes</code> · <code>palette_swatches.role</code> · <code>useProjectPalettes</code></td><td data-label="Where"><code>00131:21–58</code> · <code>use-project-v2.ts:101</code></td><td data-label="Could do">Walls, ceiling, trim and floor per room: the painter's page</td><td data-label="Called by">Nothing; keyed to a proposal, not a job (S8)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box">
+      <p class="t-head">And four asks with nothing under them</p>
+      <div class="cols-2" style="gap:12px 48px">
+        <p class="t-sm"><strong>One piece in several rooms.</strong> A <code>CHECK</code> allows one room or "throughout"; there's no row shape for four rooms (<code>00434:246–250</code>).</p>
+        <p class="t-sm"><strong>Labor on a line.</strong> Trade Scope is a lump sum per trade in prose, with no link to any line (<code>00423:144–210</code>).</p>
+        <p class="t-sm"><strong>A unit.</strong> <code>quantity INTEGER</code>, and nothing says sq ft, roll or hour (<code>00066:267</code>).</p>
+        <p class="t-sm"><strong>Undo.</strong> Even once remove is wired, nothing restores a removed line.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 THREE DIRECTIONS ============ -->
+<section class="slide" id="s-directions" data-label="Three directions">
+  <header class="shead"><span class="no">08 / 26</span><span class="ch">6 · Three directions</span><span class="job">synthesis/direction.md §3</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Three directions over one data-model delta. They differ in where building happens.</h2>
+    <p class="t-body prose">The four missing primitives are gaps in the row, not the surface, so all three directions share the same delta (sheet 22). What changes is the place she builds in, and what answers "where am I".</p>
+    <div class="cols-3">
+      <div class="dir dir--a">
+        <p class="dir-letter"><span class="t-head">A · The Build room</span><span class="stamp stamp--rec">Recommended</span></p>
+        <p class="t-sm">A working sheet at <code>/doc/[id]/pieces</code>, on white. A standing head names the job and the lens: Rough in · Spec · Price · Release. The Document's Pieces region becomes an overview of rooms.</p>
+        <dl class="kv">
+          <dt>Where am I</dt><dd>The head names the lens; the stamp names the line's stage</dd>
+          <dt>Way back</dt><dd>←, Esc or back, landing at the room you left</dd>
+          <dt>Cost</dt><dd>Large: about seven weeks after the fix-now days</dd>
+          <dt>Canon</dt><dd>Six rulings: Q1, Q2, Q3, Q8, Q9 and the house-sheet tokens</dd>
+        </dl>
+      </div>
+      <div class="dir dir--b">
+        <p class="dir-letter"><span class="t-head">B · Lenses on the paper</span></p>
+        <p class="t-sm">No new route. The Pieces region of the Document gains a lens strip and re-renders by lens. Beige stays; the region head gets contrast.</p>
+        <dl class="kv">
+          <dt>Where am I</dt><dd>The strip, mid-page, with the band and five regions around it</dd>
+          <dt>Way back</dt><dd>A lens change and a scroll</dd>
+          <dt>Cost</dt><dd>Medium: no route, no overview rework, no rail</dd>
+          <dt>Canon</dt><dd>Tabs on the reading paper itself, the hardest Q1 to scope</dd>
+        </dl>
+      </div>
+      <div class="dir dir--c">
+        <p class="dir-letter"><span class="t-head">C · Room sheets</span></p>
+        <p class="t-sm">The unit is the room. Work this room opens one room's sheet on white, with one table whose columns grow as a line grows. No lenses anywhere.</p>
+        <dl class="kv">
+          <dt>Where am I</dt><dd>The room's name; what you can't do yet is folded</dd>
+          <dt>Way back</dt><dd>← to the overview, or the next room</dd>
+          <dt>Cost</dt><dd>Medium: one sheet, one drawer</dd>
+          <dt>Canon</dt><dd>No tab question; white stock, stamps, I25, folded groups</dd>
+        </dl>
+      </div>
+    </div>
+    <div class="scroller">
+      <table class="sheet cover-m">
+        <thead><tr><th scope="col">Scenario</th><th scope="col">A · Build room</th><th scope="col">B · Lenses</th><th scope="col">C · Room sheets</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">S1 Rough in, four lines</th><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td></tr>
+          <tr><th scope="row">S2 One piece, four rooms</th><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td></tr>
+          <tr><th scope="row">S3 Placeholder to product</th><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td></tr>
+          <tr><th scope="row">S4 Labor, per sq ft, rough price</th><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td></tr>
+          <tr><th scope="row">S5 Remove a mistake</th><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td></tr>
+          <tr><th scope="row">S6 Move between rooms</th><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td></tr>
+          <tr><th scope="row">S7 Where am I, the way back</th><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--part"></span>Partly</td><td class="m"><span class="mk mk--part"></span>Partly</td></tr>
+          <tr><th scope="row">S8 Paint and finish schedule</th><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td></tr>
+          <tr><th scope="row">A job-wide pricing and release pass</th><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m"><span class="mk mk--yes"></span>Yes</td><td class="m m--no"><span class="mk mk--no"></span>No</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-meta">From direction.md §3. B partly answers S7: the lens names the mode, but the band, the letterhead and five other regions still compete with it, and "back" is a scroll. C partly answers S7: the room is the place, but what she can't do yet is folded rather than absent. One room is open at a time, so a move goes to the next room from the row menu or the head, and pricing the whole job means visiting each room.</p>
+  </div>
+</section>
+
+<!-- ============ 09 A THE IDEA ============ -->
+<section class="slide" id="s-a-idea" data-label="A · The Build room">
+  <header class="shead"><span class="no">09 / 26</span><span class="ch">6 · Direction A · The Build room</span><span class="job">Recommended</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A · The Build room: beige is reading, white is working</h2>
+    <p class="t-body prose">A working sheet for a job's pieces at <code>/doc/[id]/pieces</code>, a sibling of the spec book, opened from the Document and closed back to it. A standing head names the job and the lens and never recedes. The Document's Pieces region shrinks to the overview she asked for: one row per room, with counts and a door in.</p>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">Mode</th><th scope="col">Shows</th><th scope="col">Hides</th></tr></thead>
+        <tbody>
+          <tr><td class="id" data-label="Mode">The overview</td><td data-label="Shows">The job total; one row per room with lines, placeholders, specced, the rough total and released; <span class="act-word">Work the pieces →</span>, per room <span class="act-word">Add a line</span> (the quick sheet, kept) and <span class="act-word">Work this room →</span></td><td data-label="Hides">Tasks, the folio preamble, "Build the FF&amp;E schedule", concept renders per room, Bill on unpriced lines, the eleven roads</td></tr>
+          <tr><td class="id" data-label="Mode">The head</td><td data-label="Shows"><code>← Whole Home Renovation</code> · <code>BUILD THE PIECES</code> · the four lenses, the active one in full ink · the room's counts. Esc and back land on the overview at the room you left</td><td data-label="Hides">Nothing else</td></tr>
+          <tr><td class="id" data-label="Mode">Rough in</td><td data-label="Shows">Per room: Line · Qty · Unit · Rough $ · stage. The last row is empty with the cursor in it; Enter adds and starts the next. Paste makes several. Drag handle; Move to room…; remove with a ten-second undo. The elevation beside it</td><td data-label="Hides">Every buying cell, Bill, Release, the roads, spec fields, trade cost, client price</td></tr>
+          <tr><td class="id" data-label="Mode">Spec</td><td data-label="Shows">The room's lines with "3 of 6 fields"; the selected line's fields: what we need, product or maker, image, finish, material, color, dimensions, location, notes, rooms with quantities, unit, labor, COM; <span class="act-word">Next unfinished →</span></td><td data-label="Hides">Money beyond the dim ~ figure, procurement, receiving</td></tr>
+          <tr><td class="id" data-label="Mode">Price</td><td data-label="Shows">Line · Qty · Unit · Trade cost · Markup · Client price · Rough ~; labor indented under its piece; room subtotals; the job total</td><td data-label="Hides">Spec prose, images at scale, procurement. Seats without money don't see the lens</td></tr>
+          <tr><td class="id" data-label="Mode">Release</td><td data-label="Shows">One readiness column naming the blocker; what the client sees per line; per room <span class="act-word">Ready for Leah</span>; the ceremony as the one filled act</td><td data-label="Hides">Everything the release would lock, as editable</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-meta">From direction.md §3, Direction A. The next eight sheets set each state of specimen A beside today's screenshot. Pins and "What changed" notes under each frame come from the specimen.</p>
+  </div>
+</section>
+
+<!-- ============ 10 A OVERVIEW ============ -->
+<section class="slide spec-sheet" id="s-a-overview" data-label="A · The overview">
+  <header class="shead"><span class="no">10 / 26</span><span class="ch">6 · Direction A · The Build room</span><span class="job">frame a1 · S7</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A · The Document keeps an overview of rooms, and one door in</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/step2-living-room-after-4-lines-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step2-living-room-after-4-lines-1440.jpg}}" alt="Today's Pieces region after four lines: Spec the 4 unspecified, Add a line, Bill 4 uninvoiced lines, Plan the project work, Folio, Read by, and room headings with Add a line and Add a concept render." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <ul class="look">
+        <li>The head says what's there: <code>21 placeholders · 4 specced · nothing released</code>, and the job's rough total, <code>~$69,328</code>.</li>
+        <li>One inked act, <span class="act-word">Work the pieces →</span>. Spec the 4 unspecified and Bill 4 uninvoiced lines are gone.</li>
+        <li>Seven room rows replace the room headings and line lists. Each keeps the quick <span class="act-word">Add a line</span> and adds <span class="act-word">Work this room →</span>.</li>
+        <li>Release for authorization is shown and refused with its reason: nothing is ready yet.</li>
+        <li>A released line still unfolds to the buyer's instrument as US-16 built it (Q14).</li>
+      </ul>
+    </div>
+    <figure class="spec" data-w="1440" data-h="1381" data-s="frame-a1">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a1 · specimens/proposed-a-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a1" title="Proposed, frame a1: the Document's Pieces region as an overview of seven rooms, with Work the pieces" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>Whole Home Renovation before any building. The spine reads <code>Pieces 26 LINES</code>.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 11 A ROUGH IN ============ -->
+<section class="slide spec-sheet" id="s-a-rough" data-label="A · Rough in">
+  <header class="shead"><span class="no">11 / 26</span><span class="ch">6 · Direction A · The Build room</span><span class="job">frame a2 · S1</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A · Rough in: add a line, add a line, add a line</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/step2-add-line-sheet-open-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step2-add-line-sheet-open-1440.jpg}}" alt="Today's Add a line sheet, a dialog over the paper with Line, How many and This piece takes COM." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <ul class="look">
+        <li>No sheet. The last row of each room's table is empty with the cursor in it. <strong>Enter adds the line and starts the next</strong> in the same room; Tab moves across.</li>
+        <li>Four lines take about four Enters. The walk's four round trips took 10 clicks.</li>
+        <li><code>ROUGH $</code> is an allowance, printed <code>~$4,800</code>, never a trade cost (Q7).</li>
+        <li>Fill, move, also place and remove live on the line's own menu.</li>
+        <li>No buying cells, no Bill, no roads. The room's elevation sits beside the table.</li>
+      </ul>
+    </div>
+    <figure class="spec" data-w="1440" data-h="1434" data-s="frame-a2">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a2 · specimens/proposed-a-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a2" title="Proposed, frame a2: the Build room on Rough in, Living Room, after four lines, with the empty entry row" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>Living Room, the moment after Custom cabinet, Countertop and the two hardware lines. The key hint sits under the table.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 12 A WHERE AM I ============ -->
+<section class="slide spec-sheet" id="s-a-where" data-label="A · Where am I">
+  <header class="shead"><span class="no">12 / 26</span><span class="ch">6 · Direction A · The Build room</span><span class="job">frame a3 · S7</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A · Where am I: the head names the lens, one sentence says what it does</h2>
+    <div class="cols-2">
+      <p class="t-body">Each lens prints one line under the head. <em>Rough in: Name it, count it, place it. Specs, prices and buying come later.</em> <em>Release: Check what the client will see, then release rooms for authorization. Nothing here edits a spec or a price.</em> That's "I can do this part, I can't do that part" in her own shape.</p>
+      <ul class="look">
+        <li>A readiness column names each blocker: "Needs a product or a maker".</li>
+        <li>Per room, <span class="act-word">Ready for Leah</span>: the first hire's hand-back. It writes the disposition and sends nothing (Q13).</li>
+        <li>The ceremony lives in the room, filled only here, with its consequence sentence above it.</li>
+      </ul>
+    </div>
+    <figure class="spec" data-w="1440" data-h="1339" data-s="frame-a3">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a3 · specimens/proposed-a-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a3" title="Proposed, frame a3: the Build room on the Release lens, the whole job, with readiness and Release 6 lines for authorization" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>The whole job on Release: 25 lines, 6 ready. No today pair: nothing on the paper today answers "where am I" for building.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 13 A SPEC AND ROOMS ============ -->
+<section class="slide spec-sheet" id="s-a-spec" data-label="A · Spec pass, four rooms">
+  <header class="shead"><span class="no">13 / 26</span><span class="ch">6 · Direction A · The Build room</span><span class="job">frames a4, a5 · S2, S7</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A · The spec pass on the same surface, and one floor in four rooms</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/step4b-spec-fields-filled-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step4b-spec-fields-filled-1440.jpg}}" alt="Today's spec book on its own route, with Painted, Paint grade, See drawings and notes, and no room field." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <ul class="look">
+        <li>Spec fields sit beside the room's lines, on the same route, so the clock never drops (D14).</li>
+        <li>The room is editable here; the line can be placed in several.</li>
+        <li>Naming a maker flips the stamp to <span class="stamp">Specced</span>. No money beyond the dim rough figure.</li>
+        <li><span class="act-word">Next unfinished →</span> walks the room line by line, the way she walks her elevations.</li>
+      </ul>
+    </div>
+    <figure class="spec" data-w="1440" data-h="1423" data-s="frame-a4">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a4 · Spec lens, Custom cabinet</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a4" title="Proposed, frame a4: the Spec lens with Custom cabinet's fields filled beside the room's lines" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>Custom cabinet ×2: Hollis Millwork, Painted, Paint grade, Railings No. 31, See drawings. <code>ON HAND TODAY 2h 21m</code>, still counting.</figcaption>
+    </figure>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/project-1440-full.jpg · scroll inside</span></p>
+        <div class="shot__stage scrolly" tabindex="0" role="region" aria-label="Full-page screenshot of today's project, scrollable"><img src="{{WALK:project-1440-full.jpg}}" alt="Today's whole project paper with four separate White oak floor rows, one per room." width="1440" height="4956" loading="lazy" decoding="async"></div>
+      </figure>
+      <ul class="look">
+        <li>One row for the oak floor, with four placement chips carrying square feet: Hall 120, Living Room 320, Dining 180, Kitchen 210.</li>
+        <li><code>830 sq ft × $11.50 / sq ft = $9,545</code>. The unit is a field (D3).</li>
+        <li>Each room's table prints the row with <code>ALSO IN …</code> and its share.</li>
+        <li>The tile carries area notes: <code>back entry</code>, <code>pantry</code>.</li>
+      </ul>
+    </div>
+    <figure class="spec" data-w="1440" data-h="1318" data-s="frame-a5">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a5 · one piece, four rooms</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a5" title="Proposed, frame a5: the white oak floor as one line placed in four rooms with square feet" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>The Hall, with the oak floor active: Nord Hardwood Co., satin Bona, plank width TBD, and an image on file.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 14 A FILL AND LABOR ============ -->
+<section class="slide spec-sheet" id="s-a-fill" data-label="A · Fill and labor">
+  <header class="shead"><span class="no">14 / 26</span><span class="ch">6 · Direction A · The Build room</span><span class="job">frames a6, a7 · S3, S4</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A · A placeholder keeps its intent; labor hangs under its piece</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/step8a-add-to-the-job-roads-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step8a-add-to-the-job-roads-1440.jpg}}" alt="Today's Add to the job sheet with its list of roads." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <ul class="look">
+        <li><span class="act-word">Fill with a product</span> on the line itself, not three levels down the eleven roads.</li>
+        <li>"Hardware, 2 knobs for custom cabinet" stays on the line above the knob's name. The PO carries the product (D2).</li>
+        <li>The stamp flips on the fill.</li>
+      </ul>
+    </div>
+    <figure class="spec" data-w="1440" data-h="1234" data-s="frame-a6">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a6 · placeholder to product</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a6" title="Proposed, frame a6: filling Hardware, 2 knobs from an inline search, the need label kept above the product" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>The fill moment: "knob" typed, the Emtek knob chosen, and the preview of the line as it will read.</figcaption>
+    </figure>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/step7a-wallpaper-line-unfolded-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step7a-wallpaper-line-unfolded-1440.jpg}}" alt="Today's unfolded wallpaper line, with no unit and no way to attach labor." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <ul class="look">
+        <li>The hanger is a line under the wallpaper, <code>↳ Install, wallpaper hanger</code>, 9 rolls at $85, marked <span class="stamp">Labor</span> (D4, D5, Q5).</li>
+        <li>It is released with its piece and never lands on the maker's PO.</li>
+        <li>Trade cost, markup and client price are typed only here, in Price. The <code>~</code> column holds the rough figures still standing.</li>
+      </ul>
+    </div>
+    <figure class="spec" data-w="1440" data-h="1329" data-s="frame-a7">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a7 · the Price lens, Bedroom</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a7" title="Proposed, frame a7: the Price lens in the Bedroom with the wallpaper and its install line indented under it" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>Bedroom · $2,835 priced · ~$6,100 roughed. Job: $30,760 priced, ~$36,368 roughed.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 15 A REMOVE MOVE BACK ============ -->
+<section class="slide spec-sheet" id="s-a-remove" data-label="A · Remove, move, come back">
+  <header class="shead"><span class="no">15 / 26</span><span class="ch">6 · Direction A · The Build room</span><span class="job">frames a8, a9, a10 · S5, S6, S7</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A · Remove with undo, move by drag or menu, and come back to the room you left</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/step5b-sunroom-line-unfolded-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:step5b-sunroom-line-unfolded-1440.jpg}}" alt="Today: the Sunroom line unfolded with no remove control." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <ul class="look">
+        <li>Remove from the row; a toast offers <span class="act-word">Undo</span> for ten seconds. <code>Removed · 1</code> stays in the rail and restores for the life of the job (D8).</li>
+        <li>A released line refuses and names the door: "Released lines change through Record a change."</li>
+        <li>"Something's wrong…" is for damage. It's hidden until a line is ordered (fix-now 9).</li>
+      </ul>
+    </div>
+    <figure class="spec" data-w="1440" data-h="1192" data-s="frame-a8">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a8 · remove with undo</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a8" title="Proposed, frame a8: the Sunroom after the rattan chairs were removed, with an undo toast" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>"Removed Rattan lounge chair ×2 from Sunroom." Undo, ten seconds.</figcaption>
+    </figure>
+    <figure class="spec" data-w="1440" data-h="1213" data-s="frame-a9">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a9 · drag between rooms</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a9" title="Proposed, frame a9: counter stools dragged from Dining onto the Kitchen heading, and Move to room in a menu" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>Counter stools, entered in Dining, dragged onto Kitchen. <span class="act-word">Move to room…</span> does the same for keyboard, touch and locked lines (Q8 reopens I25). No today pair: the walk's drag test ran on the wrong project.</figcaption>
+    </figure>
+    <figure class="spec" data-w="1440" data-h="1161" data-s="frame-a10">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a10 · back on the overview</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a10" title="Proposed, frame a10: back on the Document's overview at the Living Room row, with the worked counts" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>←, Esc and back land here, at the Living Room row. $30,760 priced, ~$36,368 roughed. <code>2h 27m</code>, and no Log or Discard strip.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 16 A FINISHES AND PHONE ============ -->
+<section class="slide spec-sheet" id="s-a-phone" data-label="A · Finishes and the phone">
+  <header class="shead"><span class="no">16 / 26</span><span class="ch">6 · Direction A · The Build room</span><span class="job">frames a11–a15 · S8</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A · The painter's page, and the room on a phone</h2>
+    <p class="t-body prose">A fifth lens, Finishes: per room, surface × product · sheen · swatch, and one act that prints a page addressed to the painter. It ships last, because she said it "does not have to live in Patina" (Q10).</p>
+    <figure class="spec" data-w="1440" data-h="1192" data-s="frame-a11">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a11 · paint and finish schedule</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a11" title="Proposed, frame a11: the Finishes lens for the Bedroom, with walls, ceiling and trim and Print the paint and finish schedule" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>Bedroom: walls Setting Plaster in eggshell, ceiling and trim Chantilly Lace. Colours are illustrative.</figcaption>
+    </figure>
+    <p class="t-body prose">On the phone the head becomes two rows: <code>← WHOLE HOME</code> with a room picker, then the four lenses as a full-width row of 44px targets. The entry row has a visible <span class="act-word">Add</span>, not only Enter. The automated walk never reached Pieces on a phone, so slice 2's gate includes a human walk at 390.</p>
+    <div class="phones">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/pieces-list-390.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:pieces-list-390.jpg}}" alt="Today's project on a phone: the title, Set dates, Message the client, Link a client, and the dock with In this document and More." width="390" height="844" loading="lazy" decoding="async"></div>
+        <figcaption>The project at 390 today. Pieces sits behind the dock's More.</figcaption>
+      </figure>
+      <figure class="spec" data-w="390" data-h="1241" data-s="frame-a12">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a12</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a12" title="Proposed, frame a12: the overview of rooms on the phone" srcdoc="{{SPECIMEN_A_390}}"></iframe>
+        </div></div>
+        <figcaption>The overview of rooms, each with Work this room.</figcaption>
+      </figure>
+      <figure class="spec" data-w="390" data-h="1168" data-s="frame-a13">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a13</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a13" title="Proposed, frame a13: rough in on the phone, with the entry row and Add" srcdoc="{{SPECIMEN_A_390}}"></iframe>
+        </div></div>
+        <figcaption>Rough in: cards, and the entry row above the dock.</figcaption>
+      </figure>
+      <figure class="spec" data-w="390" data-h="1220" data-s="frame-a14">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a14</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a14" title="Proposed, frame a14: the spec pass on the phone" srcdoc="{{SPECIMEN_A_390}}"></iframe>
+        </div></div>
+        <figcaption>Spec: the fields stacked, rooms editable here.</figcaption>
+      </figure>
+      <figure class="spec" data-w="390" data-h="1094" data-s="frame-a15">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame a15</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a15" title="Proposed, frame a15: remove with undo on the phone, and the way back" srcdoc="{{SPECIMEN_A_390}}"></iframe>
+        </div></div>
+        <figcaption>Remove with undo; <code>← WHOLE HOME</code> lands at the Sunroom row.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 17 A COVERAGE COST CANON ============ -->
+<section class="slide" id="s-a-cost" data-label="A · Coverage, cost, canon">
+  <header class="shead"><span class="no">17 / 26</span><span class="ch">6 · Direction A · The Build room</span><span class="job">direction.md §3, A</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A · Every scenario covered, at the largest cost, breaking the most canon on purpose</h2>
+    <div class="split">
+      <div class="scroller stackable">
+        <table class="sheet">
+          <thead><tr><th scope="col">Scenario</th><th scope="col">How A answers it</th></tr></thead>
+          <tbody>
+            <tr><td class="id" data-label="Scenario">S1</td><td data-label="How">Four lines in about four Enters, no sheet: under twenty seconds by hand</td></tr>
+            <tr><td class="id" data-label="Scenario">S2</td><td data-label="How">One oak-floor row, four placement chips with square feet; each room prints it with "also in"</td></tr>
+            <tr><td class="id" data-label="Scenario">S3</td><td data-label="How">Fill with a product on the line; the need label stays above the product. The shower is a group of six placeholder lines</td></tr>
+            <tr><td class="id" data-label="Scenario">S4</td><td data-label="How">Add labor under the wallpaper; the floor is one custom line in sq ft with an image and three fields</td></tr>
+            <tr><td class="id" data-label="Scenario">S5</td><td data-label="How">Remove with undo before release, a reason after a client review, Record a change after approval; catalog duplicates merge</td></tr>
+            <tr><td class="id" data-label="Scenario">S6</td><td data-label="How">Drag a row onto a room heading, or Move to room…; Shift-click for several</td></tr>
+            <tr><td class="id" data-label="Scenario">S7</td><td data-label="How">The head names the lens, the stamp names the stage; ←, Esc and back return to the room; the clock lives on the layout</td></tr>
+            <tr><td class="id" data-label="Scenario">S8</td><td data-label="How">A Finishes table per room and a page printed for the painter; the wall swatch on the room row</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="stack" style="gap:24px">
+        <div class="box">
+          <p class="t-head">Cost · large</p>
+          <p class="t-sm">Fix-now in days. The primitives are one migration wave, about two weeks. Rough in, Spec and the overview, about three weeks. Price and Release, about two weeks.</p>
+        </div>
+        <div class="box">
+          <p class="t-head">Risks</p>
+          <ul class="look">
+            <li>A third place lines live, if the overview keeps too much. Mitigated: the overview is rooms, not lines.</li>
+            <li>The lens head reads as tabs.</li>
+            <li>A six-column Price table at 390 needs a stacked form.</li>
+            <li>"Work this room" on a 50-room job needs the rail to scroll.</li>
+          </ul>
+        </div>
+        <div class="box">
+          <p class="t-head">Canon it breaks, each a ruling</p>
+          <ul class="look">
+            <li>VISION §6 no tabs: the lens head (Q1)</li>
+            <li>V9 P5 three stocks and "absence is silence": the white drafting stock (Q2)</li>
+            <li>The stamp machine: new stage words (Q3)</li>
+            <li>DECISIONS I25: drag between rooms (Q8)</li>
+            <li>VISION §6 no zones: a group heading in a room (Q9)</li>
+            <li>The house-sheet tokens (Q2)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 18 B ============ -->
+<section class="slide spec-sheet" id="s-b" data-label="B · Lenses on the paper">
+  <header class="shead"><span class="no">18 / 26</span><span class="ch">6 · Direction B · Lenses on the paper</span><span class="job">frames b2, b3, b7, b13</span></header>
+  <div class="inner">
+    <h2 class="t-d1">B · Lenses on the paper: the same lenses, inside today's Document</h2>
+    <div class="split">
+      <p class="t-body">No new route. The Pieces region's <code>READ BY · ROOM · MAKER · NEXT ACT</code> becomes a lens strip, <code>OVERVIEW · ROUGH IN · SPEC · PRICE · RELEASE</code>, and the region re-renders by lens inside the 900px paper column. Beige stays. A line unfolds in place with the fields until it is released. "Back to the overview" is a lens change and a scroll, which is its strength and its weakness.</p>
+      <dl class="kv">
+        <dt>S1–S8</dt><dd>S1–S6 and S8 as A, inside the region. S7 partly: the band, the letterhead and five other regions still compete with the strip</dd>
+        <dt>Cost</dt><dd>Medium. No route, no overview rework, no rail. The Price table must fit 900px</dd>
+        <dt>Risks</dt><dd>The everything-at-once page stands around the region, so "this tool has gotten so big" stands. The builder's drawer and the buyer's unfold share a seam</dd>
+        <dt>Canon</dt><dd>VISION §6 no tabs, on the reading paper itself: a worse break than A's and harder to scope. V9 presence. The stamp machine. I25</dd>
+      </dl>
+    </div>
+    <figure class="spec" data-w="1440" data-h="1417" data-s="frame-b2">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame b2 · Rough in, Living Room · specimens/proposed-b-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b2" title="Proposed, frame b2: the lens strip on Rough in inside the Document's Pieces region" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
+      </div></div>
+      <figcaption>The same entry row as A, in the paper column, with the spine, the margin and the regions above and below still on screen.</figcaption>
+    </figure>
+    <figure class="spec" data-w="1440" data-h="1321" data-s="frame-b3">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame b3 · where am I, the Release lens</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b3" title="Proposed, frame b3: the Release lens on the paper, with the letterhead band above it" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
+      </div></div>
+      <figcaption>Release on the paper. The letterhead band above still speaks for the whole job, so two devices answer "where am I".</figcaption>
+    </figure>
+    <figure class="spec" data-w="1440" data-h="1306" data-s="frame-b7">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame b7 · labor, the Price lens</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b7" title="Proposed, frame b7: the Price table squeezed into the 900 pixel paper column" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
+      </div></div>
+      <figcaption>Seven price columns in 900px: names wrap to two lines.</figcaption>
+    </figure>
+    <div class="phones">
+      <figure class="spec" data-w="390" data-h="973" data-s="frame-b13">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame b13</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b13" title="Proposed, frame b13: rough in on the phone, with the lens strip in two rows" srcdoc="{{SPECIMEN_B_390}}"></iframe>
+        </div></div>
+        <figcaption>On the phone the five-word strip wraps to two rows.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 19 C ============ -->
+<section class="slide spec-sheet" id="s-c" data-label="C · Room sheets">
+  <header class="shead"><span class="no">19 / 26</span><span class="ch">6 · Direction C · Room sheets</span><span class="job">frames c2, c3, c9, c13</span></header>
+  <div class="inner">
+    <h2 class="t-d1">C · Room sheets: the room is the place, and nothing names a mode</h2>
+    <div class="split">
+      <p class="t-body">Leah thinks in rooms and elevations, not stages. <span class="act-word">Work this room →</span> opens one room's sheet at <code>/doc/[id]/pieces/[roomId]</code> on white, with ← and → to the neighbouring rooms. One table whose columns grow as a line grows. A drawer holds every field in four groups, Spec · Rooms · Price · Labor, with the groups beyond the line's stage folded. Release and the buying acts stay on the Document.</p>
+      <dl class="kv">
+        <dt>S1–S8</dt><dd>S1–S6 and S8 as A; a move goes to the next room from the row menu or the head. S7 partly: what she can't do yet is folded, not absent</dd>
+        <dt>Cost</dt><dd>Medium. One sheet, one drawer, no lens machinery</dd>
+        <dt>Risks</dt><dd>A wide all-columns row is everything-at-once in miniature. The first hire sees price columns during rough-in. No job-wide price or release pass. An edit to the floor from one room reaches three others</dd>
+        <dt>Canon</dt><dd>V9 P5 (white stock). The stamp machine. I25. VISION §6 no zones (the folded groups). No tab question</dd>
+      </dl>
+    </div>
+    <figure class="spec" data-w="1440" data-h="1225" data-s="frame-c2">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame c2 · Living Room sheet · specimens/proposed-c-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-c2" title="Proposed, frame c2: the Living Room sheet after four lines, with empty price columns" srcdoc="{{SPECIMEN_C_1440}}"></iframe>
+      </div></div>
+      <figcaption>The same four lines. Product, Rough $ and Client price columns are on screen during rough-in.</figcaption>
+    </figure>
+    <figure class="spec" data-w="1440" data-h="1154" data-s="frame-c3">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame c3 · where am I, the folded groups</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-c3" title="Proposed, frame c3: the countertop open in the drawer with Price and Labor folded and their reasons" srcdoc="{{SPECIMEN_C_1440}}"></iframe>
+      </div></div>
+      <figcaption>"Price · after a maker or a product." The room's name is the only answer to "where am I".</figcaption>
+    </figure>
+    <figure class="spec" data-w="1440" data-h="1062" data-s="frame-c9">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame c9 · move to another room</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-c9" title="Proposed, frame c9: counter stools dragged onto the head's Kitchen act" srcdoc="{{SPECIMEN_C_1440}}"></iframe>
+      </div></div>
+      <figcaption>One room per sheet, so the drop target is the head's <span class="act-word">Kitchen →</span>.</figcaption>
+    </figure>
+    <div class="phones">
+      <figure class="spec" data-w="390" data-h="1232" data-s="frame-c13">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed</span><span class="src">frame c13</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-c13" title="Proposed, frame c13: the Living Room sheet on the phone" srcdoc="{{SPECIMEN_C_390}}"></iframe>
+        </div></div>
+        <figcaption>The room sheet at 390: previous and next room under the head.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 20 THE COURSE ============ -->
+<section class="slide" id="s-course" data-label="The recommended course">
+  <header class="shead"><span class="no">20 / 26</span><span class="ch">7 · The recommended course</span><span class="job">synthesis §1, §5</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Build the floor, then the room. Fix twelve things this week.</h2>
+    <p class="t-d2 prose">Recommended: Direction A, the Build room, on top of the primitives, after a fix-now track that ships whatever the founders decide.</p>
+    <div class="cols-3">
+      <div class="dir dir--a">
+        <p class="t-head">This week · fix-now</p>
+        <p class="t-sm">Twelve canon-safe repairs on today's paper (next sheet). Enter adds the next line, a line can be removed, a placeholder says Placeholder, and the clock stops popping up. Four of her complaints, gone before any ruling except Q3.</p>
+      </div>
+      <div class="dir dir--a">
+        <p class="t-head">Then · the primitives</p>
+        <p class="t-sm">One migration wave: a derived stage, a need label that survives the fill, a unit, a labor line, placements in several rooms, restore, a rough price, paste, the clock on the layout, an image. The oak floor becomes one line; the wallpaper gets its hanger; a mistake is undone.</p>
+      </div>
+      <div class="dir dir--a">
+        <p class="t-head">Then · the Build room</p>
+        <p class="t-sm">Rough in and Spec first, with the overview on the Document. Then Price and Release. Each slice is accepted by someone who didn't build the job, walking S1–S8 at 1440 and 390.</p>
+      </div>
+    </div>
+    <div class="cols-2">
+      <div class="box">
+        <p class="t-head">Why A over B and C</p>
+        <ul class="look">
+          <li>Only A answers S7 in full: the head names what she is doing, every lens says in one sentence what it does, and the way back lands at the room.</li>
+          <li>B keeps the everything-at-once page around the lenses and puts tabs on the reading paper.</li>
+          <li>C answers "where" with a room name but leaves "what now" folded, shows price columns in rough-in, and has no job-wide pass for pricing or release.</li>
+          <li>All three reviews want a working surface with the Document as the overview; R2 and R3 choose a route, and R1 leaves route versus lens open (A14).</li>
+        </ul>
+      </div>
+      <div class="box box--soft">
+        <p class="t-head">What stays exactly as she likes it</p>
+        <ul class="look">
+          <li>The quick <span class="act-word">Add a line</span> per room stays on the overview, and stops closing.</li>
+          <li>The Library: "The library is fine. The library is great." (<code>TRANSCRIPT.md:55</code>)</li>
+          <li>The spec book stays the issue-and-preflight instrument; the Build room writes the same spec rows (Q6).</li>
+          <li>A released line unfolds on the paper as US-16 built it.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 21 FIX-NOW ============ -->
+<section class="slide" id="s-fixnow" data-label="Fix-now track">
+  <header class="shead"><span class="no">21 / 26</span><span class="ch">7 · The fix-now track</span><span class="job">synthesis §4 · ships regardless of direction</span></header>
+  <div class="inner">
+    <h2 class="t-d1">The fix-now track: twelve repairs on this job, whatever we choose</h2>
+    <p class="t-body prose">Each is canon-safe, needs no migration, and is cited. Number 4 needs Q3's word; the rest need no ruling.</p>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">#</th><th scope="col">Defect</th><th scope="col">Where</th><th scope="col">Fix</th></tr></thead>
+        <tbody>
+          <tr><td class="id" data-label="#">1</td><td data-label="Defect">Add a line closes after every save; Enter does nothing</td><td data-label="Where"><code>add-line-sheet.tsx:89–90</code></td><td data-label="Fix">Enter adds and clears, focus back to Line; Esc closes; a <span class="act-word">Done adding</span> act</td></tr>
+          <tr><td class="id" data-label="#">2</td><td data-label="Defect">"Not in a room yet" lines are saved as Throughout; three labels for one state</td><td data-label="Where"><code>add-line-sheet.tsx:62</code> · <code>ffe-section.tsx:2679–2684</code></td><td data-label="Fix">Pass the scope, never a display string; one label in all three places</td></tr>
+          <tr><td class="id" data-label="#">3</td><td data-label="Defect">Two buttons named "Add a line"</td><td data-label="Where"><code>ffe-section.tsx:1875</code> vs <code>:882</code></td><td data-label="Fix">The head's reads <span class="act-word">Add to the job</span>, the sheet's own title; the room's stays Add a line</td></tr>
+          <tr><td class="id" data-label="#">4</td><td data-label="Defect">Name-only lines stamped Specified; the head counts them "unspecified"</td><td data-label="Where"><code>stamp-derivation.ts:140–143</code></td><td data-label="Fix">Stamp <span class="stamp stamp--placeholder">Placeholder</span> with no product and no maker; lead act <span class="act-word">Fill the 4 placeholders</span> (Q3)</td></tr>
+          <tr><td class="id" data-label="#">5</td><td data-label="Defect"><code>$0</code> on every rough line; Bill offered on unpriced names</td><td data-label="Where"><code>00066:268</code> · <code>ffe-section.tsx:1405–1410</code></td><td data-label="Fix">Print "Not priced"; Bill skips those lines</td></tr>
+          <tr><td class="id" data-label="#">6</td><td data-label="Defect">No way to remove a line</td><td data-label="Where"><code>line-unfold.tsx:386–428</code> · <code>use-project-ffe-ga.ts:248</code></td><td data-label="Fix"><span class="act-word">Remove this line</span> with a reason; the refusal names Record a change. Undo waits on D8</td></tr>
+          <tr><td class="id" data-label="#">7</td><td data-label="Defect">The time hold drops on every sub-route; the Log / Discard popup</td><td data-label="Where"><code>document-time-provider.tsx:916–925</code></td><td data-label="Fix">Add <code>doc/[id]/layout.tsx</code> and hold the clock there (D14)</td></tr>
+          <tr><td class="id" data-label="#">8</td><td data-label="Defect">The spec book's way back loses your place; no room there</td><td data-label="Where"><code>spec-book-workspace.tsx:1095–1100</code></td><td data-label="Fix">Back lands on <code>#line-…</code>; a Room select in the editor</td></tr>
+          <tr><td class="id" data-label="#">9</td><td data-label="Defect">"Something's wrong…" under a rough line files a damage report</td><td data-label="Where"><code>exception-overlay.tsx:150–160</code></td><td data-label="Fix">Hide it until the line is ordered</td></tr>
+          <tr><td class="id" data-label="#">10</td><td data-label="Defect">A rough price has no home at rough-in</td><td data-label="Where"><code>ffe.ts:131–139</code> · <code>00447:219–241</code></td><td data-label="Fix">A Rough $ field on the quick sheet writing an allowance, printed <code>~$4,800</code></td></tr>
+          <tr><td class="id" data-label="#">11</td><td data-label="Defect">"the FF&amp;E schedule, by room", "Build the FF&amp;E schedule", "selections"</td><td data-label="Where"><code>ffe-section.tsx:1847, 2550</code></td><td data-label="Fix">Ship the <code>one-voice</code> flag (US-19); "lines" in the spec book</td></tr>
+          <tr><td class="id" data-label="#">12</td><td data-label="Defect">"Everything ordered is moving." with nothing ordered</td><td data-label="Where"><code>walk/step1-project-1440.jpg</code></td><td data-label="Fix">Silence, or "Nothing ordered yet."</td></tr>
+          <tr class="hot"><td class="id" data-label="#">Not</td><td data-label="Defect">Do not wire <code>DeleteProductDialog</code> / <code>useDeleteProduct</code></td><td data-label="Where"><code>use-products.ts:189–197</code> · <code>mock-data.ts:14–38</code></td><td data-label="Fix">It would ship a button that lies or un-fills live lines. Wait for merge (D11)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 22 DATA MODEL DELTA ============ -->
+<section class="slide" id="s-delta" data-label="The data-model delta">
+  <header class="shead"><span class="no">22 / 26</span><span class="ch">8 · The data-model delta</span><span class="job">synthesis §3.4 · shared by A, B and C</span></header>
+  <div class="inner">
+    <h2 class="t-d1">The data-model delta: one piece in many rooms, and the smaller primitives around it</h2>
+    <div class="split">
+      <figure class="diagram">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="tag tag--prop">Proposed</span><span class="src">D7 · project_ffe_placements · Q4</span></p>
+        <svg viewBox="0 0 560 470" role="img" aria-labelledby="pl-t pl-d">
+          <title id="pl-t">The multi-room placement model</title>
+          <desc id="pl-d">Today the white oak floor is four separate lines, one per room, each with its own price. Proposed, it is one line of 830 square feet at 11 dollars 50 per square foot, 9,545 dollars, with four placements: Hall 120, Living Room 320 marked primary, Dining 180, Kitchen 210. The line's quantity is the sum of its placements. Consumers that only read the primary room show less, never double the money.</desc>
+          <defs>
+            <marker id="ah3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="dg-head--ink" d="M0 0 L8 4 L0 8 z"/></marker>
+          </defs>
+          <text class="dg-h" x="0" y="14">TODAY · FOUR LINES</text>
+          <rect class="dg-box--warn" x="0" y="30" width="200" height="44" rx="2"/><text class="dg-t dg-t--ink" x="10" y="48">White oak floor, satin Bona</text><text class="dg-t" x="10" y="65">Hall · ×1 · $0</text>
+          <rect class="dg-box--warn" x="0" y="84" width="200" height="44" rx="2"/><text class="dg-t dg-t--ink" x="10" y="102">White oak floor, satin Bona</text><text class="dg-t" x="10" y="119">Living Room · ×1 · $0</text>
+          <rect class="dg-box--warn" x="0" y="138" width="200" height="44" rx="2"/><text class="dg-t dg-t--ink" x="10" y="156">White oak floor, satin Bona</text><text class="dg-t" x="10" y="173">Dining · ×1 · $0</text>
+          <rect class="dg-box--warn" x="0" y="192" width="200" height="44" rx="2"/><text class="dg-t dg-t--ink" x="10" y="210">White oak floor, satin Bona</text><text class="dg-t" x="10" y="227">Kitchen · ×1 · $0</text>
+          <text class="dg-t dg-t--faint" x="0" y="258">four specs, four prices, no unit;</text>
+          <text class="dg-t dg-t--faint" x="0" y="274">one room each, by CHECK (00434:246)</text>
+
+          <text class="dg-h" x="260" y="14">PROPOSED · ONE LINE, FOUR PLACEMENTS</text>
+          <rect class="dg-box" x="260" y="30" width="300" height="64" rx="2"/>
+          <text class="dg-t dg-t--ink" x="272" y="50">White oak floor, satin Bona finish</text>
+          <text class="dg-t" x="272" y="68">830 sq ft × $11.50 / sq ft = $9,545</text>
+          <text class="dg-w dg-w--faint" x="272" y="85">PROJECT_FFE_ITEMS · UNIT SQ_FT</text>
+          <line class="dg-line--ink" x1="410" y1="94" x2="410" y2="118"/>
+          <line class="dg-line--ink" x1="305" y1="118" x2="515" y2="118"/>
+          <line class="dg-line--ink" x1="305" y1="118" x2="305" y2="138" marker-end="url(#ah3)"/>
+          <line class="dg-line--ink" x1="375" y1="118" x2="375" y2="138" marker-end="url(#ah3)"/>
+          <line class="dg-line--ink" x1="445" y1="118" x2="445" y2="138" marker-end="url(#ah3)"/>
+          <line class="dg-line--ink" x1="515" y1="118" x2="515" y2="138" marker-end="url(#ah3)"/>
+          <rect class="dg-box" x="272" y="140" width="66" height="96" rx="2"/>
+          <text class="dg-room" x="305" y="164" text-anchor="middle">Hall</text><text class="dg-t dg-t--ink" x="305" y="190" text-anchor="middle">120</text><text class="dg-t" x="305" y="206" text-anchor="middle">sq ft</text><text class="dg-t" x="305" y="225" text-anchor="middle">$1,380</text>
+          <rect class="dg-box--fill" x="342" y="140" width="66" height="96" rx="2"/>
+          <text class="dg-room" x="375" y="164" text-anchor="middle" style="fill:var(--sheet)">Living</text><text class="dg-t" x="375" y="190" text-anchor="middle" style="fill:var(--sheet);font-weight:500">320</text><text class="dg-t" x="375" y="206" text-anchor="middle" style="fill:var(--sheet)">sq ft</text><text class="dg-t" x="375" y="225" text-anchor="middle" style="fill:var(--sheet)">$3,680</text>
+          <rect class="dg-box" x="412" y="140" width="66" height="96" rx="2"/>
+          <text class="dg-room" x="445" y="164" text-anchor="middle">Dining</text><text class="dg-t dg-t--ink" x="445" y="190" text-anchor="middle">180</text><text class="dg-t" x="445" y="206" text-anchor="middle">sq ft</text><text class="dg-t" x="445" y="225" text-anchor="middle">$2,070</text>
+          <rect class="dg-box" x="482" y="140" width="78" height="96" rx="2"/>
+          <text class="dg-room" x="521" y="164" text-anchor="middle">Kitchen</text><text class="dg-t dg-t--ink" x="521" y="190" text-anchor="middle">210</text><text class="dg-t" x="521" y="206" text-anchor="middle">sq ft</text><text class="dg-t" x="521" y="225" text-anchor="middle">$2,415</text>
+          <text class="dg-w" x="375" y="256" text-anchor="middle">PRIMARY</text>
+          <text class="dg-w dg-w--faint" x="272" y="278">PROJECT_FFE_PLACEMENTS</text><text class="dg-t dg-t--faint" x="272" y="295">item · room · qty · area note</text>
+
+          <line class="dg-line" x1="0" y1="304" x2="560" y2="304"/>
+          <text class="dg-h" x="0" y="330">THE RULES</text>
+          <text class="dg-t dg-t--ink" x="0" y="356">The line's quantity is the sum of its placements.</text>
+          <text class="dg-t" x="0" y="378">The primary room stays on the row, so the CHECK and the 33 files that</text>
+          <text class="dg-t" x="0" y="396">read it still work: an unaware consumer shows less, and never doubles money.</text>
+          <text class="dg-t" x="0" y="418">Placements lock at Released and change through Record a change.</text>
+          <text class="dg-t" x="0" y="440">Throughout stays a scope in the data; the Build room never defaults to it.</text>
+        </svg>
+        <figcaption>The tile works the same way, with area notes: Primary Bath 72, Sunroom 148, Hall 36 (back entry), Kitchen 24 (pantry). Phase 1 renders it on Pieces and in the spec book; phase 2 (slice 4) carries it to client selections, the authorization snapshot, the PO sidemark and room budgets.</figcaption>
+      </figure>
+      <div class="stack" style="gap:16px">
+        <div class="scroller stackable">
+          <table class="sheet">
+            <thead><tr><th scope="col">#</th><th scope="col">Change</th><th scope="col">Risk · size</th></tr></thead>
+            <tbody>
+              <tr><td class="id" data-label="#">D1</td><td data-label="Change">Derived stage <code>ffe_line_stage(row)</code>; Specified stops printing before an order</td><td data-label="Risk · size">None · S</td></tr>
+              <tr><td class="id" data-label="#">D2</td><td data-label="Change"><code>need_label</code> on the selection thread; fill and supersede leave it alone</td><td data-label="Risk · size">Low · S</td></tr>
+              <tr><td class="id" data-label="#">D3</td><td data-label="Change"><code>unit</code>: each, sq ft, lin ft, roll, yard, box, hour, lot</td><td data-label="Risk · size">Low · S</td></tr>
+              <tr><td class="id" data-label="#">D4</td><td data-label="Change"><code>link_kind</code>: com, labor, accessory, with the COM filters in the same release</td><td data-label="Risk · size">Medium · S</td></tr>
+              <tr><td class="id" data-label="#">D5</td><td data-label="Change"><code>line_kind</code>: goods or labor; POs skip labor</td><td data-label="Risk · size">Medium · M</td></tr>
+              <tr class="hot"><td class="id" data-label="#">D7</td><td data-label="Change"><code>project_ffe_placements</code>, primary room kept (the diagram)</td><td data-label="Risk · size">Medium · L, phased</td></tr>
+              <tr><td class="id" data-label="#">D8</td><td data-label="Change"><code>restore_project_selection</code>; relax the reason before publish</td><td data-label="Risk · size">Low · S</td></tr>
+              <tr><td class="id" data-label="#">D9</td><td data-label="Change">Supersede carries spec, notes, placements and children</td><td data-label="Risk · size">Medium · S</td></tr>
+              <tr><td class="id" data-label="#">D6</td><td data-label="Change">Line groups for components (the shower), no money</td><td data-label="Risk · size">Low · S–M</td></tr>
+              <tr><td class="id" data-label="#">D10</td><td data-label="Change">Allowance fill after signing when at or under the ceiling</td><td data-label="Risk · size">Medium · M (Q12)</td></tr>
+              <tr><td class="id" data-label="#">D11</td><td data-label="Change"><code>merge_studio_product</code>; narrow catalog delete to unreferenced</td><td data-label="Risk · size">Medium · S–M</td></tr>
+              <tr><td class="id" data-label="#">D12</td><td data-label="Change">Rough $ at rough-in as an allowance through existing fields</td><td data-label="Risk · size">None · S</td></tr>
+              <tr><td class="id" data-label="#">D13</td><td data-label="Change">Batch need creation for paste</td><td data-label="Risk · size">Low · S</td></tr>
+              <tr><td class="id" data-label="#">D14</td><td data-label="Change">The time hold on <code>doc/[id]/layout.tsx</code></td><td data-label="Risk · size">Low · S</td></tr>
+              <tr><td class="id" data-label="#">D15</td><td data-label="Change">An image on outline and custom lines</td><td data-label="Risk · size">Low · S</td></tr>
+              <tr><td class="id" data-label="#">D16</td><td data-label="Change">Palettes re-keyed to the job and the room</td><td data-label="Risk · size">Medium · M</td></tr>
+              <tr><td class="id" data-label="#">D17</td><td data-label="Change">Fractional quantity, for half a yard. <strong>Deferred</strong> until one bites</td><td data-label="Risk · size">High · L</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="t-meta">Full table with every touched consumer and citation: direction.md §3.4. Numbering follows the synthesis.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 23 SLICES ============ -->
+<section class="slide" id="s-slices" data-label="Slices">
+  <header class="shead"><span class="no">23 / 26</span><span class="ch">9 · Slices</span><span class="job">synthesis §5</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Six slices, ordered so she feels it on Whole Home Renovation, not the next job</h2>
+    <ol class="slices">
+      <li><span class="sn">0</span><span class="sz">Days</span><span class="sw">Fix-now</span><span class="t-sm muted">The twelve repairs. Enter-add, remove, Placeholder, no popup.</span><span class="t-meta">Needs Q3</span></li>
+      <li><span class="sn">1</span><span class="sz">~2 weeks · one migration wave</span><span class="sw">The primitives</span><span class="t-sm muted">D1–D5, D7 phase 1, D8, D12–D15. The floor becomes one line; the hanger hangs.</span><span class="t-meta">Needs Q4, Q5</span></li>
+      <li><span class="sn">2</span><span class="sz">~3 weeks</span><span class="sw">Build room: Rough in + Spec</span><span class="t-sm muted">The route, the head, the rail, the keyboard table, the fields, drag, the overview rows.</span><span class="t-meta">Needs Q1, Q2, Q8, Q14</span></li>
+      <li><span class="sn">3</span><span class="sz">~2 weeks</span><span class="sw">Price + Release</span><span class="t-sm muted">Her pricing pass, Ready for Leah, readiness with named blockers, the ceremony in the room.</span><span class="t-meta">Needs Q7, Q13</span></li>
+      <li><span class="sn">4</span><span class="sz">Second wave</span><span class="sw">Correctness underneath</span><span class="t-sm muted">D7 phase 2, D9, D6 groups, D10 allowance fill, D11 merge.</span><span class="t-meta">Needs Q9, Q11, Q12</span></li>
+      <li><span class="sn">5</span><span class="sz">Last</span><span class="sw">Paint and finish schedule</span><span class="t-sm muted">D16, the Finishes table, the painter's print, the wall swatch on the room row.</span><span class="t-meta">Needs Q10</span></li>
+    </ol>
+    <div class="cols-2">
+      <div class="box">
+        <p class="t-head">Why this order</p>
+        <ul class="look">
+          <li>Slice 0 removes four of her complaints this week, on today's paper.</li>
+          <li>Slice 1 before any room: without the primitives, the lenses present functions that still don't exist (R2 F2).</li>
+          <li>Slice 2 answers "where am I" and makes "add a line, add a line" sheet-free.</li>
+          <li>Slice 5 last: the paint schedule passes 3 of 4 on the feature test, and she said it need not live in Patina.</li>
+        </ul>
+      </div>
+      <div class="box box--soft">
+        <p class="t-head">Acceptance for every slice</p>
+        <p class="t-sm">S1–S8 performed by someone who did not build the job, at 1440 and 390, with the step count, the time by hand for S1, one named refusal met, and the way back to the overview. Slice 2's gate includes a human phone walk, because the automated one never reached Pieces.</p>
+      </div>
+    </div>
+    <p class="t-meta">Durations are the synthesis's rough estimates for Direction A, not a plan. Slices 4 and 5 carry no estimate.</p>
+  </div>
+</section>
+
+<!-- ============ 24 FOUNDER QUESTIONS ============ -->
+<section class="slide" id="s-questions" data-label="Founder questions">
+  <header class="shead"><span class="no">24 / 26</span><span class="ch">10 · Founder questions</span><span class="job">synthesis §6 · decide Q1–Q4 first</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Fifteen questions for the founders. Decide the first four before anything else.</h2>
+    <ol class="qcards">
+      <li class="first"><div class="qhead"><span class="qno">Q1</span><span class="qtag">VISION §6 · decide first</span></div><p class="qtext">Is a lens head a tab bar?</p><p class="qrec"><b>Recommend</b>Rule it as V7 did: a working sheet opened from the Document may carry a lens head; the reading paper may not. A lens that removes acts is a lens; one that duplicates content is a tab. A passes, B fails.</p></li>
+      <li class="first"><div class="qhead"><span class="qno">Q2</span><span class="qtag">V9 P5 · decide first</span></div><p class="qtext">May a working sheet use a third stock, white with full ink?</p><p class="qrec"><b>Recommend</b>Yes. Name it the drafting stock, bind it to working sheets, keep the type families, radii and rhythm. The spec book already runs white.</p></li>
+      <li class="first"><div class="qhead"><span class="qno">Q3</span><span class="qtag">The stamp · decide first</span></div><p class="qtext">New stage words: Placeholder · Roughed · Specced · Ready · Released, derived, before the goods words?</p><p class="qrec"><b>Recommend</b>Yes. One derivation, one word (F58). Placeholder never reaches the client.</p></li>
+      <li class="first"><div class="qhead"><span class="qno">Q4</span><span class="qtag">R8 · decide first</span></div><p class="qtext">One line in several rooms: a join table, with the primary room kept?</p><p class="qrec"><b>Recommend</b>Yes. Placements lock at Released and change through Record a change. The authorized row stays one row with a room breakdown.</p></li>
+      <li><div class="qhead"><span class="qno">Q5</span><span class="qtag">Labor</span></div><p class="qtext">Is labor a line or Trade Scope?</p><p class="qrec"><b>Recommend</b>A line attached to its piece, released with it, billed on its own line. Trade Scope stays for lump-sum trades and can draw labor lines in.</p></li>
+      <li><div class="qhead"><span class="qno">Q6</span><span class="qtag">Spec book</span></div><p class="qtext">Does the spec book survive as its own route?</p><p class="qrec"><b>Recommend</b>Yes, for now. Preflight, Audience preview and Revisions stay there. Revisit after slice 3.</p></li>
+      <li><div class="qhead"><span class="qno">Q7</span><span class="qtag">Money by seat</span></div><p class="qtext">Who sees money in Rough in?</p><p class="qrec"><b>Recommend</b>Every seat sees the rough ~ allowance in Rough in and Spec. Trade cost, markup and client price live only in Price.</p></li>
+      <li><div class="qhead"><span class="qno">Q8</span><span class="qtag">DECISIONS I25</span></div><p class="qtext">Reopen drag between rooms?</p><p class="qrec"><b>Recommend</b>Yes, with Move to room… as the visible act for keyboard, touch and locked lines; drag is the extra gesture.</p></li>
+      <li><div class="qhead"><span class="qno">Q9</span><span class="qtag">VISION §6 no zones</span></div><p class="qtext">A group heading inside a room, for the shower's components?</p><p class="qrec"><b>Recommend</b>Yes: a heading with no money, no stage and no acts of its own.</p></li>
+      <li><div class="qhead"><span class="qno">Q10</span><span class="qtag">Feature test 3 of 4</span></div><p class="qtext">The paint and finish schedule in Patina?</p><p class="qrec"><b>Recommend</b>In, minimally and last: a Finishes table per room, one swatch, one print for the painter. Log the test as a V-entry.</p></li>
+      <li><div class="qhead"><span class="qno">Q11</span><span class="qtag">Catalog</span></div><p class="qtext">Catalog duplicates: merge, never hard delete?</p><p class="qrec"><b>Recommend</b>Yes. A hard delete un-fills live lines (<code>00066:261</code>). Narrow catalog delete to unreferenced products.</p></li>
+      <li><div class="qhead"><span class="qno">Q12</span><span class="qtag">Commercial authority</span></div><p class="qtext">May an allowance be filled after signing, at or under its ceiling, without voiding the authorization?</p><p class="qrec"><b>Recommend</b>Yes, recording the variance. Over the ceiling it's Record a change (US-19).</p></li>
+      <li><div class="qhead"><span class="qno">Q13</span><span class="qtag">The one new act</span></div><p class="qtext">Ready for Leah: a per-room hand-back that writes the disposition and sends nothing?</p><p class="qrec"><b>Recommend</b>Yes. It uses the axis that was built and never wired.</p></li>
+      <li><div class="qhead"><span class="qno">Q14</span><span class="qtag">The overview</span></div><p class="qtext">The Pieces region becomes room rows; the buyer's unfold opens only for released lines?</p><p class="qrec"><b>Recommend</b>Yes. Before release a line opens in the Build room; after, on the paper as US-16 built it.</p></li>
+      <li><div class="qhead"><span class="qno">Q15</span><span class="qtag">VISION §4</span></div><p class="qtext">"The studio won't notice Patina", and a sheet she works in for an hour?</p><p class="qrec"><b>Recommend</b>No ruling needed: the promise is about not being summoned. Record the reading.</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 25 ASKS FOR LEAH ============ -->
+<section class="slide" id="s-leah" data-label="Asks for Leah">
+  <header class="shead"><span class="no">25 / 26</span><span class="ch">11 · Asks for Leah</span><span class="job">synthesis §7</span></header>
+  <div class="inner">
+    <h2 class="t-d1">What we need from Leah before slice 2</h2>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">Ask</th><th scope="col">What we need</th><th scope="col">Why it matters</th></tr></thead>
+        <tbody>
+          <tr><td class="id" data-label="Ask">Time her</td><td data-label="What">The four Living Room lines, by hand, in the A mockup and then in today's product</td><td data-label="Why">The walk's 954 ms per line is a floor, not her time</td></tr>
+          <tr><td class="id" data-label="Ask">Her words</td><td data-label="What"><em>Placeholder</em>, <em>hold space</em> or <em>outline</em>; <em>rough price</em> or <em>allowance</em>; <em>Rough in · Spec · Price · Release</em>, or what she calls those passes</td><td data-label="Why">The lens head and the stamp print them</td></tr>
+          <tr><td class="id" data-label="Ask">The oak floor</td><td data-label="What">Square feet per room, or one total? Does the local supplier quote waste on top?</td><td data-label="Why">Sets what a placement carries</td></tr>
+          <tr><td class="id" data-label="Ask">Labor's unit</td><td data-label="What">Is the wallpaper hanger priced per roll, per hour or as a lot? The tile setter?</td><td data-label="Why">Sets the unit list (D3)</td></tr>
+          <tr><td class="id" data-label="Ask">Who may remove</td><td data-label="What">Can the first hire remove a line she entered this week? Merge a catalog duplicate?</td><td data-label="Why">Permission on remove and merge</td></tr>
+          <tr><td class="id" data-label="Ask">The duplicate</td><td data-label="What">Which product she couldn't delete</td><td data-label="Why">So merge is tested on the real pair</td></tr>
+          <tr><td class="id" data-label="Ask">An elevation</td><td data-label="What">A real elevation or SketchUp export for one room</td><td data-label="Why">Seeds the pane beside the Rough in table</td></tr>
+          <tr><td class="id" data-label="Ask">The painter</td><td data-label="What">Names only, or swatches? In Patina at all, given "this does not have to live in Patina" (<code>TRANSCRIPT.md:63</code>)?</td><td data-label="Why">Decides slice 5</td></tr>
+          <tr><td class="id" data-label="Ask">The first hire</td><td data-label="What">Who is closest to that seat today</td><td data-label="Why">The S1–S8 walk on a job she didn't build</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 26 TEAM AND PROVENANCE ============ -->
+<section class="slide" id="s-made" data-label="Team and provenance">
+  <header class="shead"><span class="no">26 / 26</span><span class="ch">12 · Team and provenance</span><span class="job">artifacts/pieces-building-room-2026-10-08/</span></header>
+  <div class="inner">
+    <h2 class="t-d1">How this was made</h2>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">Seat</th><th scope="col">Model</th><th scope="col">Ticket</th><th scope="col">Wrote</th></tr></thead>
+        <tbody>
+          <tr><td data-label="Seat">B0 Briefing</td><td data-label="Model">Sonnet</td><td class="id" data-label="Ticket">SQ-587</td><td data-label="Wrote"><code>briefing/current-state.md</code>: 23 recon bullets checked, 21 confirmed outright</td></tr>
+          <tr><td data-label="Seat">B0 Walk</td><td data-label="Model">Sonnet</td><td class="id" data-label="Ticket">SQ-588</td><td data-label="Wrote"><code>walk/WALK.md</code> and 23 screenshots, on a local seeded job (<code>walk/pieces_walk_dev.sql</code>)</td></tr>
+          <tr><td data-label="Seat">R1 · interaction and data model</td><td data-label="Model">Opus 5.5</td><td class="id" data-label="Ticket">SQ-589</td><td data-label="Wrote"><code>review/r1-opus.md</code></td></tr>
+          <tr><td data-label="Seat">R2 · product, workflow and vision</td><td data-label="Model">Fable 5.1</td><td class="id" data-label="Ticket">SQ-590</td><td data-label="Wrote"><code>review/r2-fable.md</code></td></tr>
+          <tr><td data-label="Seat">R3 · heuristics and competitor patterns</td><td data-label="Model">GPT-6 Sol, single-shot through the local model gateway</td><td class="id" data-label="Ticket">SQ-592</td><td data-label="Wrote"><code>review/r3-sol.md</code>, with a provenance header</td></tr>
+          <tr><td data-label="Seat">Synthesis</td><td data-label="Model">Fable 5.1</td><td class="id" data-label="Ticket">SQ-593</td><td data-label="Wrote"><code>synthesis/direction.md</code>, <code>specimens/SPEC.md</code></td></tr>
+          <tr><td data-label="Seat">Specimens A, B, C</td><td data-label="Model">Opus 5.5</td><td class="id" data-label="Ticket">SQ-594 · SQ-595 · SQ-596</td><td data-label="Wrote"><code>specimens/proposed-{a,b,c}-{1440,390}.html</code></td></tr>
+          <tr><td data-label="Seat">Deck</td><td data-label="Model">Opus 5.5</td><td class="id" data-label="Ticket">SQ-597</td><td data-label="Wrote">This deck: <code>deck/src/index.html</code>, <code>deck/build.mjs</code>, <code>specimens/check.mjs</code></td></tr>
+          <tr><td data-label="Seat">Adversarial review</td><td data-label="Model">GPT-6 Sol, single-shot through the local model gateway</td><td class="id" data-label="Ticket">SQ-598</td><td data-label="Wrote">A review of this deck and its sources</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols-2">
+      <div class="box">
+        <p class="t-head">The two single-shot seats</p>
+        <p class="t-sm">R3 and the adversarial review were produced single-shot through the local model gateway (<code>tools/sol-single-shot.mjs</code>), because the board refuses cross-provider routes. R3 had no code access and cites <code>file:line</code> through the briefing. The synthesis counts it as a third voice where it agrees with R1 or R2, and as a question where it stands alone.</p>
+      </div>
+      <div class="box box--soft">
+        <p class="t-head">Evidence</p>
+        <p class="t-sm">Code on main, one local seeded walk and Leah's own words. No production data, no product code, migrations, flags or Sanity were touched. Design canon was waived; every departure is named as a founder question.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<nav class="pager" aria-label="Sheets">
+  <button type="button" id="pg-prev" aria-label="Previous sheet">&uarr;</button>
+  <span class="where" id="pg-where" aria-live="polite">01 / 26 &middot; The ask</span>
+  <button type="button" id="pg-next" aria-label="Next sheet">&darr;</button>
+</nav>
+
+<script>
+(function () {
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(document.querySelectorAll('section.slide'));
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- specimen frames ----------
+     Each iframe's name carries a frame token; the build's bootstrap turns it into
+     "#frame-x&nobar" inside the specimen and posts the specimen's content height
+     back, so each frame shows its frame and its notes. data-h starts at the
+     measured height, so the first layout is already close. */
+  var figs = Array.prototype.slice.call(document.querySelectorAll('figure.spec'));
+  function num(fig, attr, d) { var v = parseInt(fig.getAttribute(attr), 10); return isNaN(v) ? d : v; }
+  function fit(fig) {
+    var frame = fig.querySelector('.spec-frame');
+    var stage = fig.querySelector('.spec__stage');
+    var scaler = fig.querySelector('.spec__scaler');
+    if (!frame || !stage || !scaler) return;
+    var w = num(fig, 'data-w', 1440), h = num(fig, 'data-h', 900);
+    frame.style.width = w + 'px';
+    frame.style.height = h + 'px';
+    stage.style.maxWidth = w + 2 + 'px';
+    var avail = (stage.clientWidth || w);
+    var k = Math.min(1, avail / w);
+    scaler.style.transform = 'scale(' + k + ')';
+    stage.style.height = Math.round(h * k) + 'px';
+  }
+  function post(fig) {
+    var frame = fig.querySelector('.spec-frame');
+    if (!frame || !frame.contentWindow) return;
+    try { frame.contentWindow.postMessage({ frame: fig.getAttribute('data-s') }, '*'); } catch (e) {}
+  }
+  figs.forEach(function (fig) {
+    var frame = fig.querySelector('.spec-frame');
+    if (frame) { frame.addEventListener('load', function () { post(fig); fit(fig); }); }
+    fit(fig);
+  });
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || typeof d !== 'object' || typeof d.deckSpecH !== 'number') return;
+    for (var i = 0; i < figs.length; i++) {
+      var frame = figs[i].querySelector('.spec-frame');
+      if (frame && frame.contentWindow === e.source) {
+        var h = Math.max(320, Math.min(6000, Math.ceil(d.deckSpecH)));
+        if (Math.abs(h - num(figs[i], 'data-h', 0)) > 2) { figs[i].setAttribute('data-h', String(h)); fit(figs[i]); talls(); hold(); }
+        break;
+      }
+    }
+  });
+
+  /* A sheet taller than the viewport stops snapping, so it can be read through. */
+  function talls() {
+    var view = deck.clientHeight;
+    slides.forEach(function (s) { s.classList.toggle('tall', s.offsetHeight > view + 8); });
+  }
+
+  var t = null;
+  function refit() { figs.forEach(fit); talls(); hold(); }
+
+  /* A deep link (#s-questions) is placed once, then held while the frames above it
+     settle their heights, until the reader scrolls, taps or presses a key. */
+  function hashSlide() {
+    var id = (location.hash || '').slice(1);
+    if (!/^s-[a-z0-9-]+$/.test(id)) return null;
+    var el = document.getElementById(id);
+    return el && (' ' + el.className + ' ').indexOf(' slide ') >= 0 ? el : null;
+  }
+  var settle = hashSlide(), settleUntil = Date.now() + 8000;
+  function holding() { return !!settle && Date.now() < settleUntil; }
+  function hold() { if (holding() && Math.abs(deck.scrollTop - settle.offsetTop) > 1) { deck.scrollTop = settle.offsetTop; } }
+  function letGo() { settle = null; }
+  ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function (ev) {
+    window.addEventListener(ev, letGo, { passive: true, capture: true });
+  });
+  window.addEventListener('resize', function () { if (t) { clearTimeout(t); } t = setTimeout(refit, 120); });
+  window.addEventListener('load', refit);
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(refit); }
+  refit();
+
+  /* ---------- navigation: keys, pager, hash ---------- */
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function current() {
+    var top = deck.scrollTop + 2, idx = 0;
+    for (var i = 0; i < slides.length; i++) { if (slides[i].offsetTop <= top) { idx = i; } }
+    return idx;
+  }
+  slides.forEach(function (s) { var h = s.querySelector('h1, h2'); if (h) { h.setAttribute('tabindex', '-1'); } });
+  function go(i) {
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    deck.scrollTo({ top: slides[i].offsetTop, behavior: reduce ? 'auto' : 'smooth' });
+    var h = slides[i].querySelector('h1, h2');
+    if (h) { try { h.focus({ preventScroll: true }); } catch (e) { h.focus(); } }
+  }
+  /* Keys belong to whatever holds focus when it can use them: a control, a frame,
+     or a box that scrolls on its own. */
+  function ownsKeys(el) {
+    if (!el || el === deck || el === document.body || el === document.documentElement) return false;
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A|IFRAME|SUMMARY)$/.test(el.tagName) || el.isContentEditable) return true;
+    for (var n = el; n && n !== deck; n = n.parentElement) {
+      var cs = getComputedStyle(n);
+      if ((/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1)
+        || (/(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1)) return true;
+    }
+    return false;
+  }
+  /* Down moves within a tall sheet first, then to the next sheet. */
+  function step(dir) {
+    var i = current(), s = slides[i], view = deck.clientHeight;
+    if (dir > 0) {
+      var bottom = s.offsetTop + s.offsetHeight;
+      if (bottom - (deck.scrollTop + view) > 8) { deck.scrollBy({ top: Math.round(view * 0.85), behavior: reduce ? 'auto' : 'smooth' }); return; }
+      go(i + 1);
+    } else {
+      if (deck.scrollTop - s.offsetTop > 8) {
+        deck.scrollTo({ top: Math.max(s.offsetTop, deck.scrollTop - Math.round(view * 0.85)), behavior: reduce ? 'auto' : 'smooth' });
+        return;
+      }
+      go(i - 1);
+    }
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (ownsKeys(e.target)) return;
+    switch (e.key) {
+      case 'ArrowDown': case 'PageDown': step(1); e.preventDefault(); break;
+      case 'ArrowUp': case 'PageUp': step(-1); e.preventDefault(); break;
+      case ' ': step(e.shiftKey ? -1 : 1); e.preventDefault(); break;
+      case 'ArrowRight': case 'j': go(current() + 1); e.preventDefault(); break;
+      case 'ArrowLeft': case 'k': go(current() - 1); e.preventDefault(); break;
+      case 'Home': go(0); e.preventDefault(); break;
+      case 'End': go(slides.length - 1); e.preventDefault(); break;
+    }
+  });
+  document.getElementById('pg-prev').addEventListener('click', function () { go(current() - 1); });
+  document.getElementById('pg-next').addEventListener('click', function () { go(current() + 1); });
+
+  var where = document.getElementById('pg-where'), last = -1, raf = 0;
+  function mark() {
+    raf = 0;
+    var i = current();
+    if (i === last) return;
+    last = i;
+    where.textContent = pad(i + 1) + ' / ' + slides.length + ' ' + String.fromCharCode(183) + ' ' + slides[i].getAttribute('data-label');
+    if (holding()) return;
+    if (history.replaceState) { try { history.replaceState(null, '', '#' + slides[i].id); } catch (e) {} }
+  }
+  deck.addEventListener('scroll', function () { if (!raf) { raf = requestAnimationFrame(mark); } }, { passive: true });
+
+  function place() {
+    var el = hashSlide();
+    if (el) { deck.scrollTop = el.offsetTop; }
+  }
+  window.addEventListener('hashchange', function () {
+    settle = hashSlide(); settleUntil = Date.now() + 8000; place();
+  });
+  try { deck.focus({ preventScroll: true }); } catch (e) { deck.focus(); }
+  place();
+  setTimeout(function () { hold(); mark(); }, 400);
+  setTimeout(function () { hold(); settle = null; last = -1; mark(); }, 8100);
+  mark();
+})();
+</script>
