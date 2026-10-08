@@ -190,6 +190,8 @@ jest.mock('@/components/document/rooms/drafting/terms-agreement-body', () => ({
    the Finalize table. What it does with that is finalize-leader-hoist.test.tsx. */
 const mockInstruments = jest.fn();
 jest.mock('@/components/document/proposal-instruments', () => ({
+  // FR6 F6-1b — the Finalize head mounts the real reminder arm.
+  ...jest.requireActual('@/components/document/proposal-instruments'),
   ProposalInstruments: (props: { onFinalizeTable?: boolean }) => {
     mockInstruments(props.onFinalizeTable ?? false);
     return <div data-instruments />;

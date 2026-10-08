@@ -2592,7 +2592,7 @@ describe('DocumentPage guide activation', () => {
           render(<DocumentPage params={fulfilledParams} />);
           fireEvent.click(screen.getByRole('button', { name: 'Nudge Avery' }));
           expect(events.heard).toEqual([
-            { type: 'document:compose-message', detail: { named: ['Primary bedroom rug'] } },
+            { type: 'document:compose-message', detail: { named: ['Primary bedroom rug'], act: 'Nudge Avery' } },
           ]);
         } finally {
           events.stop();

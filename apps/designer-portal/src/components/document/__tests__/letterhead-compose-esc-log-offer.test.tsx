@@ -129,7 +129,7 @@ describe('walk D2 — band Nudge composer takes Esc over a hidden log-time offer
   });
 
   // SQ-546 (SQ-552 follow-up) — the composer is an open thing: it wears
-  // `data-dismissible-popover`, so a VISIBLE offer yields Esc on <body> to it.
+  // `data-open-thing`, so a VISIBLE offer yields Esc on <body> to it.
   it('a visible offer leaves Esc on <body> alone while the composer is open', async () => {
     mockOwnsEdge = true;
     renderAspenPaper();

@@ -714,7 +714,7 @@ export function LetterheadInstruments({
           ref={composerRef}
           // An open thing (529-6): a visible log-time offer yields Esc on
           // <body> to it rather than discarding its entry.
-          data-dismissible-popover=""
+          data-open-thing=""
           className="mt-2 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] p-2.5"
           onKeyDown={(e) => {
             if (e.key === 'Escape') {

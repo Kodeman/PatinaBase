@@ -258,7 +258,9 @@ import {
 } from '@/lib/document/shelves';
 import { deriveSectionStageLine } from '@/lib/document/section-stage-line';
 import { deriveSectionWorkflowStageDocument } from '@/lib/document/workflow-stage-derivation';
-import { ROSTER_STAGE_ORDER } from '@/lib/document/desk-roster-derivation';
+import { ROSTER_STAGE_ORDER, sentProposalReasonLine } from '@/lib/document/desk-roster-derivation';
+import { overdueApprovalTitles, overdueMarginDecisionTitles, waitingOnNamed } from '@/lib/document/nudge-named';
+import { useMarginItems } from '@/hooks/use-margin-items';
 import { afterArrival, useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
 import { suppressNextArrival } from '@/lib/arrival/nav';
 import { consumeArriveToken } from '@/lib/arrival/session';
@@ -1032,6 +1034,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     data: any;
     isError: boolean;
   };
+  // FR6 F6-1 (D1-d). A proposal paper's decisions hang off the proposal
+  // (project_id null), so useProjectApprovals (project-only) never sees them;
+  // the margin does. Same args, same cache key as MarginRail.
+  const nudgeMargin = useMarginItems(row?.project_id ?? null, row?.proposal_id ?? null);
+  const nudgeNamed = useCallback(
+    () =>
+      waitingOnNamed(
+        { status: liveProposal?.status, sentAt: liveProposal?.sent_at },
+        projectId
+          ? overdueApprovalTitles(approvalsQuery.data ?? [])
+          : overdueMarginDecisionTitles(nudgeMargin.data ?? [], new Date()),
+      ),
+    [liveProposal?.status, liveProposal?.sent_at, projectId, approvalsQuery.data, nudgeMargin.data],
+  );
   const discoveryQuery = useDiscovery(
     row?.active_section === 'discovery' ? row.engagement_id : null,
   );
@@ -1929,19 +1945,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'follow-up')
             : need.kind === 'po_unsent'
               ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'send')
-            : need.kind === 'overdue_decision'
-              ? () =>
-                  landAct(ACT_LANDING_EVENTS.composeMessage, {
-                    named: (approvalsQuery.data ?? [])
-                      .filter(
-                        (approval) =>
-                          approval.disposition === 'active' &&
-                          approval.outcome !== 'approved' &&
-                          approval.isOverdue,
-                      )
-                      .map((approval) => approval.artifactTitle)
-                      .filter(Boolean),
-                  })
+            : need.kind === 'overdue_decision' || need.kind === 'hesitating_proposal'
+              ? () => landAct(ACT_LANDING_EVENTS.composeMessage, { named: nudgeNamed(), act: action.label })
               : null;
       return {
         key: `${need.kind}-${index}`,
@@ -1963,7 +1968,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         ...(oneVoice && need.draft ? { draft: need.draft } : {}),
       };
     });
-  }, [row, rankedOperationalNeeds, activateDestination, oneVoice, approvalsQuery.data]);
+  }, [row, rankedOperationalNeeds, activateDestination, oneVoice, nudgeNamed]);
 
   // NF4-01 — the ranked need's act, elected from the rows that already carry
   // each need's kind beside the destination the guide offers, so the approvals
@@ -2553,6 +2558,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               ? 'accepted'
               : null,
       clientFirstName: family === 'the client' ? null : clientShortName(family),
+      clientMessageable: Boolean(row?.client_profile_id),
       unspecifiedCount: unspecified,
       // DESIGN-Q (SQ-500): release eligibility is not read on this page.
       releaseEligible: false,
@@ -2573,9 +2579,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       sentence:
         bandSection === 'project' && unspecified > 0
           ? `${unspecified} ${unspecified === 1 ? 'line' : 'lines'} unspecified.`
-          : (repair?.sentence ?? null),
+          : (repair?.sentence ??
+            (bandSection === 'proposal' && row ? sentProposalReasonLine(row, new Date()) : null)),
       ...(repair ? { shortSentence: repair.shortSentence ?? '' } : {}),
       onAct: () => {
+        // FR6 F6-1 (D1) — `Nudge {first}` is the composer, naming what waits.
+        if (
+          act.targetId === ACT_TARGET_IDS.proposalNudge &&
+          landAct(ACT_LANDING_EVENTS.composeMessage, { named: nudgeNamed(), act: act.label })
+        )
+          return;
         // US-19 F3-2 (P-2) — `Ask the maker for a date` is the Install row's
         // own act: the row takes it and opens its sheet on the first field,
         // rather than the band pointing at the row's copy of the act.
@@ -2594,7 +2607,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // never click.
           activate:
             act.targetId !== ACT_TARGET_IDS.installWindow &&
-            act.targetId !== ACT_TARGET_IDS.inquiryReply,
+            act.targetId !== ACT_TARGET_IDS.inquiryReply &&
+            // FR6 F6-1b — the reminder arms on a press: land, never press.
+            act.targetId !== ACT_TARGET_IDS.proposalReminder,
         });
       },
     };
@@ -2611,6 +2626,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     windowHeld,
     activateDestination,
     bandLeadStatus,
+    row,
+    nudgeNamed,
   ]);
 
   const bandModel = useMemo<LensBandModel | null>(() => {

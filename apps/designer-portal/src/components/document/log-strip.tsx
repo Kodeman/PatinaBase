@@ -39,11 +39,13 @@ const REGION_KEY = 'log-offer';
 // palette instead and measured 2.14:1 / 3.23:1 against the strip.
 const STRIP_LIGHT_INK = 'max-[1179px]:!text-[rgba(250,247,242,0.72)]';
 
-/** 529-6's "nothing else open": a rendered dialog, modal or dismissible
- *  popover outside the strip means Esc on <body> belongs to that, not the
- *  offer. */
+/** 529-6's "nothing else open": a rendered dialog, modal, dismissible
+ *  popover or other open thing outside the strip means Esc on <body> belongs
+ *  to that, not the offer. `data-open-thing` is read here only — unlike
+ *  `data-dismissible-popover`, it never scopes a sheet's Tab trap or the
+ *  margin's Esc. */
 const OPEN_THING_SELECTOR =
-  '[role="dialog"], [role="alertdialog"], [aria-modal], [data-dismissible-popover]';
+  '[role="dialog"], [role="alertdialog"], [aria-modal], [data-dismissible-popover], [data-open-thing]';
 function anotherThingOpen(strip: HTMLElement | null) {
   return Array.from(document.querySelectorAll<HTMLElement>(OPEN_THING_SELECTOR)).some(
     (el) => !strip?.contains(el) && isElementRendered(el),

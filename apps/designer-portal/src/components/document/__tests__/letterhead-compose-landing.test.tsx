@@ -375,9 +375,9 @@ describe('FR6 F6-1 — Tanaka: the sent proposal’s Nudge Mei is the composer',
     for (const flag of [true, false]) {
       mockOneVoice = flag;
       const { unmount } = renderTanaka();
-      expect(document.querySelector('[data-dismissible-popover]')).toBeNull();
+      expect(document.querySelector('[data-open-thing]')).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: flag ? 'Message Mei' : 'Message Mei Tanaka' }));
-      expect(document.querySelector('[data-dismissible-popover]')).toContainElement(
+      expect(document.querySelector('[data-open-thing]')).toContainElement(
         screen.getByPlaceholderText(/^A quick note to Mei/),
       );
       unmount();
