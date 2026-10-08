@@ -2077,6 +2077,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const ladderSegments = ticketInput
     ? deriveLadderSegments({
         ticket: ticketInput,
+        oneVoice,
         mountedKeys: ladderMountedKeys,
         approvals: {
           settled: !approvalsQuery.isLoading,
@@ -3487,6 +3488,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     projectId={row.project_id}
                     projectName={row.title}
                     mode="project"
+                    projectStatus={row.project_status}
                     needs={rankedOperationalNeeds}
                     highlightId={highlightLineId ?? requestedFfeItemId}
                     requestedLineId={requestedFfeItemId}
