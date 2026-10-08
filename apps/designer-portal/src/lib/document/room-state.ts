@@ -11,7 +11,12 @@
  * that disagreement, so both now enter through `roomStateRow*` below.
  */
 
-import { deriveLineStamp, type LineStampInput, type TradeLineProgress } from './stamp-derivation';
+import {
+  deriveLineStamp,
+  lineStageInputFromRow,
+  type LineStampRow,
+  type TradeLineProgress,
+} from './stamp-derivation';
 
 export type RoomState = 'settled' | 'active' | 'future';
 
@@ -28,10 +33,13 @@ export function roomStateRowFromStamp(stamp: { kind: string }): RoomStateRow {
 /** From a raw schedule line — the spine's path. Runs the SAME derivation the
  *  section runs, so the two words agree wherever the inputs agree. */
 export function roomStateRowFromLine(
-  line: LineStampInput,
+  line: LineStampRow,
   tradeProgress?: TradeLineProgress | null,
 ): RoomStateRow {
-  return roomStateRowFromStamp(deriveLineStamp(line, tradeProgress));
+  // Settled reads only `installed`, so a labor line's piece changes nothing here.
+  return roomStateRowFromStamp(
+    deriveLineStamp({ ...line, stage: lineStageInputFromRow(line) }, tradeProgress),
+  );
 }
 
 export function roomState(rows: readonly RoomStateRow[]): RoomState {

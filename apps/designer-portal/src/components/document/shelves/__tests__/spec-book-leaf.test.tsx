@@ -126,6 +126,7 @@ import { SpecBookLeaf } from '../spec-book-leaf';
 import { FFESection } from '../../ffe-section';
 import {
   deriveLineStamp,
+  lineStageInputFromRow,
   lineStampLabel,
 } from '@/lib/document/stamp-derivation';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
@@ -196,10 +197,27 @@ const STATES: { state: string; row: Record<string, unknown>; word: string }[] =
       row: { status: 'ordered', received_quantity: null },
       word: 'Released to maker',
     },
+    // US-21 D1: before an order the word is the stage (a3, a4). SPECIFIED
+    // never prints.
     {
-      state: 'unspecified',
+      state: 'a name with no product and no maker (a3)',
       row: { status: 'specified', received_quantity: null },
-      word: 'Specified',
+      word: 'Placeholder',
+    },
+    {
+      state: 'a custom piece with a maker and no price (a4)',
+      row: {
+        status: 'specified',
+        received_quantity: null,
+        vendor_name: 'Hollis Millwork',
+        unit_price_cents: 0,
+      },
+      word: 'Specced',
+    },
+    {
+      state: 'a product, a quantity and a client price (a3)',
+      row: { status: 'specified', received_quantity: null, product_id: 'product-1' },
+      word: 'Ready',
     },
     {
       state: 'blocked on a pending decision',
@@ -249,11 +267,92 @@ describe('F58 — one line, one word, on the paper and on the shelf', () => {
   it.each(STATES)(
     '$state prints exactly what the shared derivation says',
     ({ row, word }) => {
-      expect(lineStampLabel(deriveLineStamp(line(row) as never, null).kind)).toBe(
-        word,
-      );
+      const r = line(row);
+      expect(
+        lineStampLabel(
+          deriveLineStamp({ ...r, stage: lineStageInputFromRow(r) } as never, null).kind,
+        ),
+      ).toBe(word);
     },
   );
+
+  it('SPECIFIED never prints on either surface', () => {
+    mockItems = [line({ status: 'specified', received_quantity: null })];
+    const leaf = renderLeaf();
+    expect(screen.queryByText('Specified')).not.toBeInTheDocument();
+    leaf.unmount();
+    renderPaper();
+    expect(screen.queryByText('Specified')).not.toBeInTheDocument();
+  });
+});
+
+describe('US-21 D1 — labor, and the placeholder count', () => {
+  const piece = line({
+    id: 'piece-1',
+    name: 'Manila Hemp wallpaper',
+    status: 'specified',
+    received_quantity: null,
+    product_id: 'product-1',
+    vendor_id: 'vendor-1',
+    quantity: 9,
+    unit_price_cents: 23_000,
+  });
+  const install = line({
+    id: 'labor-1',
+    name: 'Install, wallpaper hanger',
+    status: 'specified',
+    received_quantity: null,
+    vendor_id: 'vendor-2',
+    quantity: 9,
+    unit_price_cents: 8_500,
+    line_kind: 'labor',
+    link_kind: 'labor',
+    parent_ffe_item_id: 'piece-1',
+  });
+
+  it('a labor line reads LABOR beside its stage word, ready with its ready piece', () => {
+    mockItems = [piece, install];
+    const leaf = renderLeaf();
+    expect(screen.getByText('Labor · Ready')).toBeInTheDocument();
+    leaf.unmount();
+
+    renderPaper();
+    // One LABOR stamp, beside the labor line's READY; the piece reads READY alone.
+    expect(screen.getAllByText('Labor')).toHaveLength(1);
+    expect(screen.getAllByText('Ready')).toHaveLength(2);
+  });
+
+  it('a labor line under a piece with no price stays specced', () => {
+    mockItems = [{ ...piece, unit_price_cents: 0 }, install];
+    renderLeaf();
+    expect(screen.getByText('Labor · Specced')).toBeInTheDocument();
+  });
+
+  it('counts exactly the lines it stamps PLACEHOLDER — not a custom line with a maker, not a trade line', () => {
+    mockItems = [
+      line({ id: 'ph-1', name: 'Countertop', status: 'specified', received_quantity: null }),
+      line({
+        id: 'cab-1',
+        name: 'Custom cabinet',
+        status: 'specified',
+        received_quantity: null,
+        vendor_name: 'Hollis Millwork',
+        unit_price_cents: 0,
+      }),
+      line({
+        id: 'trade-1',
+        name: 'Tile setting',
+        status: 'specified',
+        received_quantity: null,
+        trade_scope_document_id: 'pcd-1',
+      }),
+      piece,
+    ];
+    renderPaper();
+    expect(screen.getAllByText('Placeholder')).toHaveLength(1);
+    expect(screen.getAllByText(/\b1 placeholder\b/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\b[2-9] placeholders\b/)).not.toBeInTheDocument();
+  });
 });
 
 describe('the shelf leaf stopped printing the raw column', () => {

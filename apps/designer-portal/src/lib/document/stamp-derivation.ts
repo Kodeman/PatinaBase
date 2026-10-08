@@ -27,9 +27,15 @@ const MACHINE = new Set([
 ]);
 
 export type LineStampKind =
-  // US-21 Q3: a pre-order line with no product and no maker is a placeholder,
-  // not "specified" — nothing about it is specified yet.
+  // US-21 D1 (Q3): the four pre-order stage words, from deriveLineStage. They
+  // replace the `specified` fallthrough; `quoted` and `approved` keep their
+  // words, as every word from `ordered` on does.
   | 'placeholder'
+  | 'specced'
+  | 'ready'
+  | 'released'
+  // Never derived any more (SPECIFIED never prints). Kept because the stage
+  // dropdown still names it (F58's parity spec) and ticket-derivation keys on it.
   | 'specified'
   | 'quoted'
   | 'approved'
@@ -67,11 +73,128 @@ export interface LineStampInput {
   item_claims?: { state: string }[] | null;
   /** Set on a trade scope's presence lines — the pcd this line belongs to. */
   trade_scope_document_id?: string | null;
-  /** US-21 D1 inputs. Only an explicit `null` on all three says "no product,
-   *  no maker"; a caller that omits them keeps today's word. */
-  productId?: string | null;
-  vendorId?: string | null;
-  vendorName?: string | null;
+  /** US-21 D1: the pre-order stage's inputs, always built from the row with
+   *  `lineStageInputFromRow`. Read only when nothing above it decides. */
+  stage: LineStageInput;
+}
+
+/** US-21 D1 (Q3): where a line stands before an order. `ffe_line_stage` (00736)
+ *  computes the same word server-side. */
+export type LineStage = 'placeholder' | 'specced' | 'ready' | 'released';
+
+export type LineAuthorizationState = 'sent' | 'client_signed' | 'executed';
+
+/** CONTRACT §3.3. Rough $ (`rough_cents`) is deliberately not an input: a rough
+ *  figure never changes the word (R7c, R9a). */
+export interface LineStageInput {
+  productId: string | null;
+  vendorId: string | null;
+  vendorName: string | null;
+  quantity: number;
+  itemType: 'fixed' | 'allowance' | 'tbd';
+  unitPriceCents: number | null;
+  budgetMaxCents: number | null;
+  /** `ffe_line_authorization` (00736): the line's OWN authorization, never its piece's. */
+  authorizationState: LineAuthorizationState | null;
+  lineKind: 'goods' | 'labor';
+  /** Labor only: its piece's stage. */
+  parentStage?: LineStage | null;
+}
+
+/** The `project_ffe_items` columns (and the 00736 computed field) D1 reads, as
+ *  `useProjectFFEItems` returns them. */
+export interface LineStageRow {
+  status?: string | null;
+  product_id?: string | null;
+  vendor_id?: string | null;
+  vendor_name?: string | null;
+  quantity?: number | null;
+  item_type?: string | null;
+  unit_price_cents?: number | null;
+  budget_max_cents?: number | null;
+  ffe_line_authorization?: string | null;
+  line_kind?: string | null;
+  parent_ffe_item_id?: string | null;
+}
+
+/** A schedule row as the stamp's callers hold it, before the stage is built. */
+export type LineStampRow = Omit<LineStampInput, 'stage'> & LineStageRow;
+
+const AUTHORIZATION_STATES: ReadonlySet<string> = new Set(['sent', 'client_signed', 'executed']);
+/** Where `ffe_line_stage` returns NULL and the goods words take over (row 5). */
+const ORDERED_ON: ReadonlySet<string> = new Set([
+  'ordered',
+  'production',
+  'shipped',
+  'delivered',
+  'installed',
+]);
+
+/**
+ * D1 rows 6–9 and the labor rule, first match wins; the SQL mirror is
+ * `ffe_line_stage` (00736). A maker is a vendor, or a vendor name that is not
+ * blank. `tbd` is never ready. A labor line is ready only when its piece is,
+ * and is released only by its own authorization (00733 puts it on its piece's).
+ */
+export function deriveLineStage(input: LineStageInput): LineStage {
+  if (input.authorizationState != null) return 'released';
+  const hasMaker =
+    input.productId != null ||
+    input.vendorId != null ||
+    (input.vendorName ?? '').trim() !== '';
+  if (!hasMaker) return 'placeholder';
+  const priced =
+    (input.itemType === 'fixed' && (input.unitPriceCents ?? 0) > 0) ||
+    (input.itemType === 'allowance' && (input.budgetMaxCents ?? 0) > 0);
+  const pieceReady =
+    input.lineKind !== 'labor' ||
+    input.parentStage === 'ready' ||
+    input.parentStage === 'released';
+  return input.quantity > 0 && priced && pieceReady ? 'ready' : 'specced';
+}
+
+/** The one mapping from a snake_case row to D1's input. Pass a labor line's
+ *  piece as `parent`; it is ignored on any other line. */
+export function lineStageInputFromRow(
+  row: LineStageRow,
+  parent?: LineStageRow | null,
+): LineStageInput {
+  const lineKind = isLaborLine(row) ? 'labor' : 'goods';
+  const authorization = row.ffe_line_authorization ?? null;
+  return {
+    productId: row.product_id ?? null,
+    vendorId: row.vendor_id ?? null,
+    vendorName: row.vendor_name ?? null,
+    quantity: row.quantity ?? 0,
+    itemType:
+      row.item_type === 'fixed' || row.item_type === 'allowance' ? row.item_type : 'tbd',
+    unitPriceCents: row.unit_price_cents ?? null,
+    budgetMaxCents: row.budget_max_cents ?? null,
+    authorizationState:
+      authorization != null && AUTHORIZATION_STATES.has(authorization)
+        ? (authorization as LineAuthorizationState)
+        : null,
+    lineKind,
+    // As 00736 reads it: a piece from `ordered` on has no pre-order stage.
+    parentStage:
+      lineKind === 'labor' && parent && !ORDERED_ON.has(parent.status ?? '')
+        ? deriveLineStage(lineStageInputFromRow(parent))
+        : null,
+  };
+}
+
+/** A labor line prints LABOR beside its stage word, never instead of it. */
+export function isLaborLine(row: { line_kind?: string | null }): boolean {
+  return row.line_kind === 'labor';
+}
+
+/** A labor line's piece, from the rows already in hand; `null` on any other line. */
+export function laborPiece<T extends { id: string }>(
+  row: { line_kind?: string | null; parent_ffe_item_id?: string | null },
+  rows: readonly T[] | null | undefined,
+): T | null {
+  if (!isLaborLine(row) || !row.parent_ffe_item_id) return null;
+  return (rows ?? []).find((r) => r.id === row.parent_ffe_item_id) ?? null;
 }
 
 /**
@@ -145,19 +268,12 @@ export function deriveLineStamp(
     return { kind: short ? 'partial' : 'received', dueDate: null };
   }
 
-  const kind = MACHINE.has(item.status) ? (item.status as LineStampKind) : 'specified';
-  // D1 row 9: no product and no maker is a placeholder, whatever its price —
-  // a price never promotes it. Every other pre-order line keeps its current
-  // word until the full stage derivation lands (T-19).
-  if (
-    kind === 'specified' &&
-    item.productId === null &&
-    item.vendorId === null &&
-    item.vendorName === null
-  ) {
-    return { kind: 'placeholder', dueDate: null };
+  // D1 rows 6–9 replace the `specified` fallthrough (and an unknown status):
+  // SPECIFIED never prints. Every other machine word stands.
+  if (item.status !== 'specified' && MACHINE.has(item.status)) {
+    return { kind: item.status as LineStampKind, dueDate: null };
   }
-  return { kind, dueDate: null };
+  return { kind: deriveLineStage(item.stage), dueDate: null };
 }
 
 /**
@@ -195,8 +311,11 @@ export function priceWord(row: {
  * callers render nothing for it.
  */
 const LINE_STAMP_LABEL: Record<LineStampKind, string> = {
-  // Q3's word; the stamp's CSS uppercases it to PLACEHOLDER like every other.
+  // Q3's words; the stamp's CSS uppercases them like every other.
   placeholder: 'Placeholder',
+  specced: 'Specced',
+  ready: 'Ready',
+  released: 'Released',
   specified: 'Specified',
   quoted: 'Quoted',
   approved: 'Approved',
@@ -219,3 +338,6 @@ const LINE_STAMP_LABEL: Record<LineStampKind, string> = {
 export function lineStampLabel(kind: LineStampKind): string {
   return LINE_STAMP_LABEL[kind];
 }
+
+/** The word printed beside a labor line's stage word (SPEC §2.4). */
+export const LABOR_STAMP_LABEL = 'Labor';

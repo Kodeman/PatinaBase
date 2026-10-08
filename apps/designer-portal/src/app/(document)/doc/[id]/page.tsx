@@ -234,8 +234,10 @@ import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { selectUndrawnVendorPayments } from '@/lib/document/vendor-payouts';
 import {
   deriveLineStamp,
+  laborPiece,
+  lineStageInputFromRow,
   OPEN_DAMAGE_CLAIM_STATES,
-  type LineStampInput,
+  type LineStampRow,
 } from '@/lib/document/stamp-derivation';
 import { deriveTableComposition } from '@/lib/document/table-derivation';
 import { useTablePin } from '@/components/document/worktable/use-table-pin';
@@ -299,19 +301,18 @@ interface ProjectVitalsRecord {
 }
 
 /**
- * The FF&E columns the ticket counts: the stamp machine's own input, plus the
- * two fields the ticket reads directly — which room a line belongs to, and
- * whether it carries a product yet.
+ * The FF&E columns the ticket counts: the stamp machine's own row (D1's
+ * columns included), plus which room a line belongs to.
  */
-interface TicketFFERow extends LineStampInput {
+type TicketFFERow = LineStampRow & {
+  id: string;
   project_room_id?: string | null;
-  product_id?: string | null;
   removed_at?: string | null;
   /** `damage_claims!ffe_item_id(id, state, created_at)` — the embed
-   *  `use-project-v2.ts:192` already selects. `LineStampInput` reads only the
+   *  `use-project-v2.ts:192` already selects. The stamp reads only the
    *  state; the rail's Pieces value reads the date beside it. */
   item_claims?: { state: string; created_at?: string | null }[] | null;
-}
+};
 
 /**
  * R108 — the header speaks the resolver's selection and its target in the
@@ -638,20 +639,23 @@ function ProjectTicketFacts({
   const purchaseOrdersQuery = usePurchaseOrders({ projectId });
   const moneyRead = useMoneyLadder(projectId);
 
-  const lines = useMemo<TicketLine[]>(
-    () =>
-      (ffeQuery.data ?? [])
-        .filter((item) => item.removed_at == null)
-        .map((item) => ({
-          stamp: deriveLineStamp(item).kind,
-          roomId: item.project_room_id ?? null,
-          // The same test the FF&E ledger's own "Spec the N unspecified"
-          // leader runs, so the ticket's numerator and the region's act can
-          // never count different lines.
-          specified: Boolean(item.product_id),
-        })),
-    [ffeQuery.data],
-  );
+  const lines = useMemo<TicketLine[]>(() => {
+    const live = (ffeQuery.data ?? []).filter((item) => item.removed_at == null);
+    return live.map((item) => {
+      const stamp = deriveLineStamp({
+        ...item,
+        stage: lineStageInputFromRow(item, laborPiece(item, live)),
+      }).kind;
+      return {
+        stamp,
+        roomId: item.project_room_id ?? null,
+        // US-21 D1: the same test the FF&E ledger's placeholder count runs —
+        // the stamp itself — so the ticket, the region and the stamps can
+        // never count different lines.
+        specified: stamp !== 'placeholder',
+      };
+    });
+  }, [ffeQuery.data]);
 
   // The oldest OPEN claim standing on any line — the same claim
   // `deriveLineStamp` reads to stamp the line `damaged`, so the rail's date
@@ -2549,7 +2553,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     withLifecycle: true,
   }) as {
     data:
-      | (InstallReadingPiece & { product_id?: string | null; removed_at?: string | null })[]
+      | (InstallReadingPiece & TicketFFERow)[]
       | undefined;
   };
   const ownActWindow = useInstallWindow(ownActProjectId || undefined);
@@ -2606,7 +2610,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     }
     if (bandSection === 'proposal' && !liveProposalStatus) return undefined;
     const family = familyLabel(bandHousehold);
-    const unspecified = (ownActPieces ?? []).filter((item) => !item.product_id).length;
+    // US-21 D1: the lines the paper stamps PLACEHOLDER, and only those.
+    const unspecified = (ownActPieces ?? []).filter(
+      (item) =>
+        deriveLineStamp({
+          ...item,
+          stage: lineStageInputFromRow(item, laborPiece(item, ownActPieces)),
+        }).kind === 'placeholder',
+    ).length;
     const act = ownAct(bandSection, {
       inquiryOpen: bandLeadStatus === 'new' || bandLeadStatus === 'viewed',
       firstMissingEssential: null,

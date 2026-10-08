@@ -66,6 +66,10 @@ import {
 } from 'react';
 import {
   deriveLineStamp,
+  isLaborLine,
+  LABOR_STAMP_LABEL,
+  laborPiece,
+  lineStageInputFromRow,
   lineStampLabel,
   priceWord,
   type LineStamp,
@@ -241,9 +245,12 @@ function stampProps(stamp: LineStamp): {
     // 'trade_pending' entry and would throw).
     case 'trade_pending':
       return { label, color: 'var(--color-aged-oak)' };
-    // US-21 Q3: not a machine stage, so not in STAGE_CONFIG. It keeps the
-    // pre-order outline of the word it replaces.
+    // US-21 D1 (Q3): not machine stages, so not in STAGE_CONFIG. They keep
+    // the pre-order outline of the word they replace.
     case 'placeholder':
+    case 'specced':
+    case 'ready':
+    case 'released':
       return { label, color: STAGE_CONFIG.specified.color };
     case 'decision_due':
       return {
@@ -653,7 +660,19 @@ function FFELine({
         // The status moved into the detail line; the empty cell keeps the
         // grid's stamp track so the price stays in its column.
         <span aria-hidden />
-      ) : stamp.kind === 'trade_pending' ? null : (
+      ) : stamp.kind === 'trade_pending' ? null : isLaborLine(item) ? (
+        // US-21 D1: LABOR beside the stage word, never instead of it; one
+        // cell, so the price keeps its column.
+        <span className="inline-flex items-center gap-1.5">
+          <Stamp label={LABOR_STAMP_LABEL} color={STAGE_CONFIG.specified.color} />
+          <Stamp
+            label={sp.label}
+            color={sp.color}
+            ink={sp.ink}
+            {...(tone ? ({ variant: 'filled', tone } as const) : {})}
+          />
+        </span>
+      ) : (
         <Stamp
           label={sp.label}
           color={sp.color}
@@ -1355,7 +1374,7 @@ function FFESectionBody({
     return {
       item,
       stamp: deriveLineStamp(
-        item,
+        { ...item, stage: lineStageInputFromRow(item, laborPiece(item, items)) },
         tradeHold.onTradeScope
           ? tradeProgressKnown
             ? (tradeHold.progressState as TradeLineProgress)
@@ -1905,12 +1924,13 @@ function FFESectionBody({
         ? `${ffeCounts} · ${ffeAwaiting}`
         : ffeCounts;
 
-  // A line with no piece behind it is a placeholder — the same set the
-  // Add-to-project sheet already offers to fill. The head counts and names
-  // them through the act table (`N placeholders`, `Fill the N placeholders`).
-  const placeholderLineIds = (items ?? [])
-    .filter((it) => !it.product_id && it.removed_at == null)
-    .map((it) => String(it.id));
+  // US-21 D1: a placeholder is a line the paper stamps PLACEHOLDER — no
+  // product and no maker. A custom line with a maker (row 8) and a Trade Scope
+  // presence line (row 3) are not. The head counts and names them through the
+  // act table (`N placeholders`, `Fill the N placeholders`).
+  const placeholderLineIds = rows
+    .filter((r) => r.stamp.kind === 'placeholder' && r.item.removed_at == null)
+    .map((r) => String(r.item.id));
   const uninvoicedLineIds = billableUninvoiced.map((it) => String(it.id));
   const ffeLeader = electFfeLeader({
     releaseLift: releaseInHead,

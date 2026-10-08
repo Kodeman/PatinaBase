@@ -84,8 +84,12 @@ import { NAMED_ACTS, NEED_ACT_LABELS, STAGE_WORD, ownAct } from '@/lib/document/
 import { installReading } from '@/lib/document/install-reading';
 import {
   deriveLineStamp,
+  isLaborLine,
+  LABOR_STAMP_LABEL,
+  laborPiece,
+  lineStageInputFromRow,
   lineStampLabel,
-  type LineStampInput,
+  type LineStampRow,
 } from '@/lib/document/stamp-derivation';
 import {
   paperRegionsForSection,
@@ -184,7 +188,7 @@ function pressBandNext(next: MobilePrimaryAction) {
 const ASK_THE_PAPER_FLAG = 'ask-the-paper';
 
 /** The FF&E row fields ⌘K reads off `useProjectFFEItems` (an untyped hook). */
-type PaperLine = LineStampInput & {
+type PaperLine = LineStampRow & {
   id: string;
   name: string | null;
   vendor_name: string | null;
@@ -1298,9 +1302,17 @@ export function CommandBar() {
         const lineRows: PaletteRow[] = lines.flatMap((line) => {
           const po = linePoNumber(line);
           const maker = line.vendor_name ?? line.product?.brand ?? null;
-          const stampWord = lineStampLabel(deriveLineStamp(line).kind) || null;
+          const stampWord =
+            lineStampLabel(
+              deriveLineStamp({
+                ...line,
+                stage: lineStageInputFromRow(line, laborPiece(line, lines)),
+              }).kind,
+            ) || null;
+          // US-21 D1: LABOR beside the stage word, never instead of it.
+          const laborWord = isLaborLine(line) ? LABOR_STAMP_LABEL : null;
           const label = line.name ?? '';
-          const match = [label, maker, stampWord, po ? `po ${po}` : null, line.room?.name, line.doc_code]
+          const match = [label, maker, laborWord, stampWord, po ? `po ${po}` : null, line.room?.name, line.doc_code]
             .filter(Boolean)
             .join(' ')
             .toLowerCase();
@@ -1310,7 +1322,7 @@ export function CommandBar() {
               kind: 'paper' as const,
               key: `paper-line:${line.id}`,
               label,
-              sub: [maker, stampWord, po ? `PO ${po}` : null].filter(Boolean).join(' · '),
+              sub: [maker, laborWord, stampWord, po ? `PO ${po}` : null].filter(Boolean).join(' · '),
               act: po ? NAMED_ACTS.openOrder : undefined,
               // ffe-section.tsx lands it: Pieces and the line unfold, the Order
               // cell in view, focus on the PO (R28). The request waits in

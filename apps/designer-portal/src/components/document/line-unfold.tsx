@@ -31,7 +31,7 @@ import {
   useAssignLineRoom,
   useDocumentRooms,
 } from '@/hooks/use-document-rooms';
-import { deriveLineStamp } from '@/lib/document/stamp-derivation';
+import { deriveLineStamp, lineStageInputFromRow } from '@/lib/document/stamp-derivation';
 import { deriveProcurementLifecycle } from '@/lib/document/procurement-lifecycle';
 import { ProcurementTrail } from './procurement-trail';
 import {
@@ -196,7 +196,9 @@ export function LineUnfold({
   canEditSelection?: boolean;
   showArtifactPlate?: boolean;
 }) {
-  const stamp = deriveLineStamp(item);
+  // The unfold reads only the trade and receiving stamps, which no piece
+  // changes, so a labor line's piece is not looked up here.
+  const stamp = deriveLineStamp({ ...item, stage: lineStageInputFromRow(item) });
   const po = item.purchase_order ?? null;
   // R7: one derivation, read by the trail here and by the orders book.
   const lifecycle = useMemo(() => deriveProcurementLifecycle(item), [item]);

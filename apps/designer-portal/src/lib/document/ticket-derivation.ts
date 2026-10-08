@@ -142,7 +142,8 @@ export interface TicketLine {
   stamp: LineStampKind;
   roomId: string | null;
   /** Whether the line carries its spec. The Spec row's numerator, and the
-   *  Pieces row's `unspecified` count. */
+   *  Pieces row's `unspecified` count. US-21 D1: false exactly when `stamp`
+   *  is `placeholder`, so the placeholder count and the stamps agree. */
   specified: boolean;
 }
 
@@ -409,6 +410,9 @@ function countPieces(lines: readonly TicketLine[]): PieceCounts {
       case 'trade_pending':
         counts.ordered += 1;
         break;
+      case 'specced':
+      case 'ready':
+      case 'released':
       case 'specified':
       case 'quoted':
       case 'approved':
