@@ -11,8 +11,9 @@
 -- (00434:208).
 --
 -- Asserts:
---   1. an unchanged default line, a line with a single placement and a COM
---      child each hash exactly as under 00714, and carry none of the new keys;
+--   1. an unchanged default line, a line with a single placement, a COM
+--      child, and a two-line thread (primary plus alternate, 00737 F8) each
+--      hash exactly as under 00714, and carry none of the new keys;
 --   2. a four-room line's hash changes and its placements print in sort order;
 --   3. a sq_ft line with its own need label carries unit and needLabel;
 --   4. a labor line carries lineKind and parentFfeItemId;
@@ -206,8 +207,31 @@ INSERT INTO public.project_ffe_items(
  '73500000-0000-4000-8000-000000000201','room','Headboard fabric','FB-01','specified',4,5,6000,'USD',
  '73500000-0000-4000-8000-000000000601','com','goods','each');
 
+-- 608 + 609: one thread, a primary and its alternate (00737, F8). 608 is the
+-- thread's primary (lowest id; neither is 'selected'), 609 is an alternate
+-- with its own product name.
+INSERT INTO public.project_ffe_items(
+  id,project_id,project_room_id,assignment_scope,name,doc_code,status,quantity,sort_order,
+  unit_price_cents,currency,unit
+) VALUES
+('73500000-0000-4000-8000-000000000608','73500000-0000-4000-8000-000000000101',
+ '73500000-0000-4000-8000-000000000202','room','Walnut Nightstand','NS-01','specified',2,7,64000,'USD','each');
+INSERT INTO public.project_ffe_items(
+  id,project_id,project_room_id,assignment_scope,name,doc_code,status,quantity,sort_order,
+  unit_price_cents,currency,unit,selection_thread_id,design_disposition
+) VALUES
+('73500000-0000-4000-8000-000000000609','73500000-0000-4000-8000-000000000101',
+ '73500000-0000-4000-8000-000000000202','room','Oak Nightstand','NS-02','specified',2,8,51000,'USD','each',
+ (SELECT selection_thread_id FROM public.project_ffe_items WHERE id = '73500000-0000-4000-8000-000000000608'),
+ 'alternate');
+
 -- Need labels: 601's equals its name (the 00729 backfill shape); 604's is the
--- studio's own word for the need.
+-- studio's own word for the need. The 608/609 thread is backfilled as 00729
+-- does it: from the primary's name, which differs from the alternate's.
+UPDATE public.project_ffe_selection_threads t
+SET need_label = i.name
+FROM public.project_ffe_items i
+WHERE i.id = '73500000-0000-4000-8000-000000000608' AND t.id = i.selection_thread_id;
 UPDATE public.project_ffe_selection_threads t
 SET need_label = i.name
 FROM public.project_ffe_items i
@@ -269,15 +293,22 @@ BEGIN
   END IF;
 
   SELECT count(*) INTO v_old_count FROM pg_temp.spec_book_snapshots_00714(v_book);
-  IF v_old_count <> 7 THEN
-    RAISE EXCEPTION 'fixture: expected 7 lines in the 00714 snapshot, got %', v_old_count;
+  IF v_old_count <> 9 THEN
+    RAISE EXCEPTION 'fixture: expected 9 lines in the 00714 snapshot, got %', v_old_count;
+  END IF;
+  IF (SELECT t.primary_ffe_item_id FROM public.project_ffe_selection_threads t
+      JOIN public.project_ffe_items i ON i.selection_thread_id = t.id
+      WHERE i.id = '73500000-0000-4000-8000-000000000609') IS DISTINCT FROM '73500000-0000-4000-8000-000000000608'::uuid THEN
+    RAISE EXCEPTION 'fixture: 608 must be the primary of the 608/609 thread';
   END IF;
 
   -- 1. Unchanged lines keep their 00714 hash and gain no key.
   FOREACH v_id IN ARRAY ARRAY[
     '73500000-0000-4000-8000-000000000601',  -- default, need label = name
     '73500000-0000-4000-8000-000000000602',  -- one placement prints nothing
-    '73500000-0000-4000-8000-000000000606'   -- COM child: parent stays out
+    '73500000-0000-4000-8000-000000000606',  -- COM child: parent stays out
+    '73500000-0000-4000-8000-000000000608',  -- thread primary, need label = name
+    '73500000-0000-4000-8000-000000000609'   -- its alternate: no needLabel (00737 F8)
   ]::uuid[] LOOP
     SELECT content_hash INTO v_old_hash FROM pg_temp.spec_book_snapshots_00714(v_book) WHERE ffe_item_id = v_id;
     SELECT content_hash, item_snapshot INTO v_new_hash, v_snap
@@ -342,8 +373,8 @@ BEGIN
     RAISE EXCEPTION 'removed line: still in the 00735 snapshot';
   END IF;
   SELECT count(*) INTO v_new_count FROM public._spec_book_current_item_snapshots(v_book);
-  IF v_new_count <> 6 THEN
-    RAISE EXCEPTION 'expected 6 lines in the 00735 snapshot, got %', v_new_count;
+  IF v_new_count <> 8 THEN
+    RAISE EXCEPTION 'expected 8 lines in the 00735 snapshot, got %', v_new_count;
   END IF;
 
   -- 6. Every spec book in the database: a default line keeps its hash, and
@@ -358,7 +389,10 @@ BEGIN
   WHERE i.removed_at IS NULL
     AND i.unit = 'each'
     AND i.line_kind = 'goods'
-    AND (t.need_label IS NULL OR t.need_label = i.name)
+    -- 00737 (F8): needLabel prints only on the thread's primary line, so a
+    -- non-primary line is a default line whatever its thread's label.
+    AND (t.need_label IS NULL OR t.need_label = i.name
+         OR t.primary_ffe_item_id IS DISTINCT FROM i.id)
     AND (SELECT count(*) FROM public.project_ffe_placements fp WHERE fp.ffe_item_id = i.id) <= 1
     AND n.content_hash IS DISTINCT FROM o.content_hash;
   IF v_n > 0 THEN

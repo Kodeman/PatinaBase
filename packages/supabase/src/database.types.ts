@@ -37322,7 +37322,11 @@ export type Database = {
         }
       }
       add_labor_line: {
-        Args: { p_parent_ffe_item_id: string; p_request: Json }
+        Args: {
+          p_parent_ffe_item_id: string
+          p_request: Json
+          p_unit_price_cents?: number
+        }
         Returns: Json
       }
       admin_add_studio_member: {
@@ -44158,6 +44162,10 @@ export type Database = {
       set_invoice_link_stripe_customer: {
         Args: { p_link_id: string; p_stripe_customer_id: string }
         Returns: string
+      }
+      set_labor_line_price: {
+        Args: { p_ffe_item_id: string; p_unit_price_cents: number }
+        Returns: Json
       }
       set_line_placements: {
         Args: { p_ffe_item_id: string; p_placements: Json }

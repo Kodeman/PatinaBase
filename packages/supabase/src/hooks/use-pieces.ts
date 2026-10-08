@@ -1,7 +1,7 @@
 /**
  * The pieces primitives (US-21 W2, CONTRACT §3.2): room placements (00734),
  * batch needs and build fields (00730), restore (00731) and labor lines
- * (00732). Every write is a SECURITY DEFINER RPC; each one invalidates the
+ * (00732; client price 00737). Every write is a SECURITY DEFINER RPC; each one invalidates the
  * FF&E caches (invalidateFfeCaches) plus its own key.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -194,14 +194,51 @@ export type AddLaborLineInput = { projectId: string; parentItemId: string } & Ad
 export function useAddLaborLine() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ projectId: _projectId, parentItemId, ...request }: AddLaborLineInput): Promise<{ selectionId: string }> => {
+    mutationFn: async ({
+      projectId: _projectId,
+      parentItemId,
+      unitPriceCents,
+      ...request
+    }: AddLaborLineInput): Promise<{ selectionId: string }> => {
+      // The client price is its own argument (00737); p_request refuses unknown keys.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (getSupabase() as any).rpc('add_labor_line', {
         p_parent_ffe_item_id: parentItemId,
         p_request: request,
+        ...(unitPriceCents !== undefined ? { p_unit_price_cents: unitPriceCents } : {}),
       });
       if (error) throw error;
       return data as { selectionId: string };
+    },
+    onSuccess: (_result, { projectId }) => invalidateFfeCaches(queryClient, projectId),
+  });
+}
+
+export interface SetLaborLinePriceInput {
+  projectId: string;
+  itemId: string;
+  /** The client price per unit, whole cents; the line total follows quantity × price. */
+  unitPriceCents: number;
+}
+
+export interface SetLaborLinePriceResult {
+  selectionId: string;
+  unitPriceCents: number;
+  lineTotalCents: number;
+}
+
+/** Prices a labor line for the client (00737). Refused once the line is released. */
+export function useSetLaborLinePrice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId, unitPriceCents }: SetLaborLinePriceInput): Promise<SetLaborLinePriceResult> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (getSupabase() as any).rpc('set_labor_line_price', {
+        p_ffe_item_id: itemId,
+        p_unit_price_cents: unitPriceCents,
+      });
+      if (error) throw error;
+      return data as SetLaborLinePriceResult;
     },
     onSuccess: (_result, { projectId }) => invalidateFfeCaches(queryClient, projectId),
   });

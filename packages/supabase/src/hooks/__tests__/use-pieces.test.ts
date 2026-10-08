@@ -46,6 +46,7 @@ import {
   useRemovedProjectLines,
   useRestoreProjectSelection,
   useSetFfeLineBuildFields,
+  useSetLaborLinePrice,
   useSetLinePlacements,
 } from '../use-pieces';
 import { useProjectFFEItems } from '../use-project-v2';
@@ -257,7 +258,50 @@ describe('useAddLaborLine', () => {
       p_request: { name: 'Install wallpaper', quantity: 9, unit: 'roll', vendorId: 'v-installer' },
     });
     expect(result).toMatchObject({ selectionId: 'lab-1' });
+    expect(rpc.mock.calls[0][1]).not.toHaveProperty('p_unit_price_cents');
     expectFfeCachesInvalidated();
+  });
+
+  it('sends unitPriceCents as p_unit_price_cents, never inside p_request (00737)', async () => {
+    rpc.mockResolvedValue({ data: { selectionId: 'lab-2', parentFfeItemId: 'i1' }, error: null });
+    await runMutation(useAddLaborLine(), {
+      projectId: 'p1',
+      parentItemId: 'i1',
+      name: 'Install wallpaper',
+      quantity: 9,
+      unit: 'roll' as const,
+      unitPriceCents: 8500,
+    });
+
+    expect(rpc).toHaveBeenCalledWith('add_labor_line', {
+      p_parent_ffe_item_id: 'i1',
+      p_request: { name: 'Install wallpaper', quantity: 9, unit: 'roll' },
+      p_unit_price_cents: 8500,
+    });
+    expectFfeCachesInvalidated();
+  });
+});
+
+describe('useSetLaborLinePrice', () => {
+  it('calls set_labor_line_price with p_ffe_item_id and p_unit_price_cents, and invalidates the ffe caches', async () => {
+    rpc.mockResolvedValue({
+      data: { selectionId: 'lab-1', unitPriceCents: 8500, lineTotalCents: 76500 },
+      error: null,
+    });
+    const result = await runMutation(useSetLaborLinePrice(), { projectId: 'p1', itemId: 'lab-1', unitPriceCents: 8500 });
+
+    expect(rpc).toHaveBeenCalledWith('set_labor_line_price', { p_ffe_item_id: 'lab-1', p_unit_price_cents: 8500 });
+    expect(result).toEqual({ selectionId: 'lab-1', unitPriceCents: 8500, lineTotalCents: 76500 });
+    expectFfeCachesInvalidated();
+  });
+
+  it('throws the RPC error and invalidates nothing', async () => {
+    const error = { message: 'Released labor changes through Record a change.' };
+    rpc.mockResolvedValue({ data: null, error });
+    const mutation = useSetLaborLinePrice() as unknown as MutationConfig<unknown, unknown>;
+
+    await expect(mutation.mutationFn({ projectId: 'p1', itemId: 'lab-1', unitPriceCents: 9000 })).rejects.toBe(error);
+    expect(invalidateQueries).not.toHaveBeenCalled();
   });
 });
 

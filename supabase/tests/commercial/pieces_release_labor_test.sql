@@ -173,12 +173,22 @@ BEGIN
     'Client travelling; proceeding on the reviewed budget.');
 END $$;
 
--- The install's client price ($85 / roll, no markup) and selection are set as
--- every line's are; the second line is removed. (Fixture writes, as postgres.)
+-- The install's client price ($85 / roll, no markup) goes through
+-- set_labor_line_price (00737, F1), as the studio. Its trade price and
+-- selection are set as every line's are; the second line is removed.
+-- (Fixture writes, as postgres.)
+DO $$
+DECLARE
+  v_priced jsonb;
+BEGIN
+  PERFORM pg_temp.t13_as('73300000-0000-4000-8000-0000000000a1');
+  v_priced := public.set_labor_line_price((SELECT id FROM t13_ids WHERE key = 'labor'), 8500);
+  ASSERT (v_priced->>'unitPriceCents')::int = 8500 AND (v_priced->>'lineTotalCents')::int = 76500,
+    format('fixture: the install prices at 9 roll x $85 = $765: %s', v_priced);
+END $$;
 SELECT set_config('app.ffe_mutation_rpc', 'on', true);
 UPDATE project_ffe_items
-   SET unit_price_cents = 8500, trade_price_cents = 8500, line_total_cents = 76500,
-       item_type = 'fixed', design_disposition = 'selected'
+   SET trade_price_cents = 8500, item_type = 'fixed', design_disposition = 'selected'
  WHERE id = (SELECT id FROM t13_ids WHERE key = 'labor');
 UPDATE project_ffe_items
    SET unit_price_cents = 30000, line_total_cents = 30000, item_type = 'fixed',
@@ -275,7 +285,7 @@ BEGIN
 
   -- X4: the piece cannot leave its labor behind. With the install unpriced,
   -- releasing the wallpaper refuses, naming the install, and writes nothing.
-  UPDATE project_ffe_items SET unit_price_cents = 0, line_total_cents = 0 WHERE id = v_labor;
+  PERFORM public.set_labor_line_price(v_labor, 0);
   BEGIN
     PERFORM public.create_furnishings_authorization_from_schedule(v_project, 'Wallpaper without its install',
       ARRAY['73300000-0000-4000-8000-000000000206'::uuid], NULL);
@@ -285,7 +295,7 @@ BEGIN
   END;
   ASSERT v_err = format('schedule line %s is not ready for authorization: ["clientPrice"]', v_labor),
     format('X4: the refusal must name the install and its blocker: %L', v_err);
-  UPDATE project_ffe_items SET unit_price_cents = 8500, line_total_cents = 76500 WHERE id = v_labor;
+  PERFORM public.set_labor_line_price(v_labor, 8500);
   PERFORM set_config('app.ffe_mutation_rpc', '', true);
 
   ASSERT NOT EXISTS (SELECT 1 FROM project_commercial_documents

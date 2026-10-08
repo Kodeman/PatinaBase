@@ -117,6 +117,8 @@ export interface AddLaborLineRequest {
   unit?: FfeLineUnit;
   roughCents?: number | null;
   vendorId?: string | null;
+  /** The client price per unit, whole cents (00737; sent as `p_unit_price_cents`). Above 0 it prices the line. */
+  unitPriceCents?: number;
 }
 
 export interface ProjectFfeSelection {

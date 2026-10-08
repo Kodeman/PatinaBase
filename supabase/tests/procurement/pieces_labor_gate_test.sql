@@ -209,8 +209,8 @@ BEGIN
   PERFORM pg_temp.check(
     has_function_privilege('authenticated', 'public.link_ffe_pair(uuid,uuid,text)', 'EXECUTE')
     AND NOT has_function_privilege('anon', 'public.link_ffe_pair(uuid,uuid,text)', 'EXECUTE')
-    AND has_function_privilege('authenticated', 'public.add_labor_line(uuid,jsonb)', 'EXECUTE')
-    AND NOT has_function_privilege('anon', 'public.add_labor_line(uuid,jsonb)', 'EXECUTE'),
+    AND has_function_privilege('authenticated', 'public.add_labor_line(uuid,jsonb,integer)', 'EXECUTE')
+    AND NOT has_function_privilege('anon', 'public.add_labor_line(uuid,jsonb,integer)', 'EXECUTE'),
     'FAIL L0: authenticated executes both RPCs; anon executes neither');
   -- Fixture check (authenticated cannot execute this helper): 205 is released.
   PERFORM pg_temp.check(public.ffe_line_authorization_state('73200000-0000-4000-8000-000000000205') = 'sent',
