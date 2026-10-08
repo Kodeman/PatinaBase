@@ -555,8 +555,34 @@ describe('wrap (F9-2)', () => {
     expect(wrapped).toHaveClass('whitespace-normal', 'text-left');
     expect(wrapped).not.toHaveClass('whitespace-nowrap');
     expect(wrapped.className).toBe(
-      plain.className.replace('whitespace-nowrap', 'whitespace-normal text-left'),
+      plain.className
+        .replace('whitespace-nowrap', 'whitespace-normal text-left')
+        .replace('shrink-0', 'min-w-0'),
     );
     expect(wrapped).not.toHaveAttribute('wrap');
+  });
+
+  it('also drops shrink-0 for min-w-0 so the label can shrink to its wrapped width (F9-2c)', () => {
+    render(
+      <DocumentAction actionKey="log" variant="tertiary" wrap>
+        Accept theirs
+      </DocumentAction>,
+    );
+    const wrapped = screen.getByRole('button', { name: 'Accept theirs' });
+    expect(wrapped).not.toHaveClass('shrink-0');
+    expect(wrapped).toHaveClass('min-w-0');
+  });
+
+  it('keeps shrink-0 and whitespace-nowrap, byte-identical, when wrap is unset', () => {
+    render(
+      <DocumentAction actionKey="log" variant="tertiary">
+        Accept theirs
+      </DocumentAction>,
+    );
+    const plain = screen.getByRole('button', { name: 'Accept theirs' });
+    expect(plain).toHaveClass('shrink-0');
+    expect(plain).toHaveClass('whitespace-nowrap');
+    expect(plain).not.toHaveClass('min-w-0');
+    expect(plain).not.toHaveClass('whitespace-normal');
   });
 });

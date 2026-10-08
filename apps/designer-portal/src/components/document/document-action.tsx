@@ -55,7 +55,7 @@ const BASE_CLASS =
 const WRAP_BASE_CLASS = BASE_CLASS.replace(
   'whitespace-nowrap',
   'whitespace-normal text-left',
-);
+).replace('shrink-0', 'min-w-0');
 
 const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
   primary: 'da-primary font-medium tracking-[0.12em]',
