@@ -1595,10 +1595,10 @@ describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
 
   it('498-c — prints the region’s status sentence beside the own act where it states one', () => {
     const { voice } = deriveLensBand(
-      input({ ownAct: { ...OWN, sentence: '3 lines unspecified.', shortSentence: null } }),
+      input({ ownAct: { ...OWN, sentence: '3 placeholders.', shortSentence: null } }),
     );
     expect(voice.lead).toBe('Next ─');
-    expect(voice.sentence).toBe('3 lines unspecified.');
+    expect(voice.sentence).toBe('3 placeholders.');
     expect(voice.next?.act.label).toBe('Fill the 3 placeholders');
   });
 

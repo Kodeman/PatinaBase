@@ -561,10 +561,20 @@ function FFELine({
     installState && stamp.kind !== 'trade_pending' && !damageIsTheStamp ? sp.label : null,
   );
   const billing = coverageNote(item, coverage);
+  // US-21 fix-now #5: a rough line reads `Not priced`, never `$0`, and an
+  // allowance with no figure of its own prints its ceiling, the figure it
+  // signs at (signableCents), rather than `$0`.
+  const allowanceCents =
+    item.item_type === 'allowance' && !(item.line_total_cents > 0)
+      ? signableCents(item)
+      : null;
   const price =
-    item.line_total_cents != null
-      ? formatMoney(item.line_total_cents, rowCurrency(item))
-      : '—';
+    priceWord(item) ??
+    (allowanceCents != null
+      ? formatMoney(allowanceCents, rowCurrency(item))
+      : item.line_total_cents != null
+        ? formatMoney(item.line_total_cents, rowCurrency(item))
+        : '—');
   const thumbSrc = ffeThumbSrc(item);
   const washTone = ffeWashTone(stamp.kind);
   const tone = ffeStampTone(stamp.kind);

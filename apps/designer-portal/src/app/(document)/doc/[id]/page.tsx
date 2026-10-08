@@ -161,6 +161,7 @@ import {
   ffeActLandingOf,
   householdDisplayName,
   ownAct,
+  placeholderCount,
 } from '@/lib/document/act-names';
 import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending, landRecordPayment } from '@/lib/document/registry';
 import {
@@ -2646,7 +2647,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       tier: act.tier,
       sentence:
         bandSection === 'project' && unspecified > 0
-          ? `${unspecified} ${unspecified === 1 ? 'line' : 'lines'} unspecified.`
+          ? `${placeholderCount(unspecified)}.`
           : act.targetId === ACT_TARGET_IDS.countersign
             ? sentProposalSignedLine(family === 'the client' ? null : clientShortName(family))
             : (repair?.sentence ??

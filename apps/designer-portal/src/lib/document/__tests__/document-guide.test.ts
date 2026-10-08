@@ -1260,6 +1260,25 @@ describe('the sixth rung derives from the ticket (B2-L3)', () => {
     expect(guide.headline).toBe('');
   });
 
+  // T-7a (F7): the empty-state sentence and a pending read never cover an
+  // exception the ticket prints. Rung six elects the exception before the rest
+  // branch (where `Nothing ordered yet.` lives) is reached; this pins that order.
+  it('leads with a ticket exception over the zero-pieces and reading sentences', () => {
+    for (const value of ['No pieces yet', 'Reading…']) {
+      for (const oneVoice of [false, true]) {
+        const guide = deriveDocumentGuide({
+          row: row('project'),
+          now: NOW,
+          oneVoice,
+          ticketRows: ticketRows({ money: OWED }).map((r) =>
+            r.key === 'pieces' ? { ...r, value } : r,
+          ),
+        });
+        expect(guide.headline).toBe('Money · $17,500 owed you');
+      }
+    }
+  });
+
   it('keeps the rest sentence once the job has lines', () => {
     const guide = deriveDocumentGuide({
       row: row('project'),

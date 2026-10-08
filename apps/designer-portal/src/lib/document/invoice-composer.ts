@@ -38,6 +38,7 @@ import {
   type TimeLineDateRow,
   type TimeLineEntryInput,
 } from "@/lib/time-billing";
+import { priceWord } from "./stamp-derivation";
 
 /** Discriminates a time line's JSON `metadata.attribution` from the plain
  *  vendor-name strings furnishings lines already store there (00588). */
@@ -72,6 +73,10 @@ export interface ComposerFfeItem {
   name: string;
   quantity: number | null;
   unit_price_cents: number | null;
+  /** With `item_type`, what `priceWord` reads: a $0 line with no product
+   *  that is not an allowance prints `Not priced` (US-21 fix-now #5). */
+  product_id?: string | null;
+  item_type?: string | null;
   room?: { name: string | null } | null;
 }
 
@@ -136,7 +141,8 @@ export interface FfePartition<T extends ComposerFfeItem> {
   billable: T[];
   /** Already on a live invoice line (the 00187 partial-unique guard). */
   covered: T[];
-  /** NULL client unit price — nothing to bill yet. */
+  /** NULL client unit price, or a line that prints `Not priced` — nothing
+   *  to bill yet. */
   unpriced: T[];
 }
 
@@ -157,7 +163,12 @@ export function partitionFfeBillable<T extends ComposerFfeItem>(
     if (cov && cov.coverage !== "uninvoiced") covered.push(item);
     else if (
       item.unit_price_cents === null ||
-      item.unit_price_cents === undefined
+      item.unit_price_cents === undefined ||
+      priceWord({
+        unit_price_cents: item.unit_price_cents,
+        product_id: item.product_id ?? null,
+        item_type: item.item_type,
+      }) === "Not priced"
     )
       unpriced.push(item);
     else billable.push(item);
