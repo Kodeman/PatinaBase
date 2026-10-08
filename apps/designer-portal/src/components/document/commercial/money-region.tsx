@@ -96,6 +96,8 @@ function figureOf(rung: MoneyRung): string | null {
   return rung.note ? `${money(rung.cents)} ${rung.note}` : money(rung.cents);
 }
 
+const RECORD_A_CHANGE_KEY = 'record-a-change-money-head';
+
 export function MoneyRegion({
   projectId,
   projectName,
@@ -126,6 +128,9 @@ export function MoneyRegion({
   // The same word the accounts band uses for this act, derived the same way.
   const changeOnly = activeSection === 'install' || activeSection === 'care';
   const askThePaper = useFeatureFlag('ask-the-paper').value;
+  // FR2 508-1 / F2-18 (`one-voice`): the door is `Record a change` at every
+  // state of ask-the-paper, and it prints at quiet beside the leader.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   const account = accountQuery.data ?? null;
   const accountFailed = Boolean(accountQuery.isError);
@@ -251,10 +256,10 @@ export function MoneyRegion({
     // (R33): it opens the router (`What changed?`), never a sheet of its own.
     // F16 — with it, the amendment is reached through `Record a change` →
     // `On the agreement` only, so the head's own Amendment leaves.
-    ...(askThePaper
+    ...(askThePaper || oneVoice
       ? [
           {
-            key: 'record-a-change-money-head',
+            key: RECORD_A_CHANGE_KEY,
             label: NAMED_ACTS.recordChange,
             onClick: () => openRecordAChange({ origin: 'money-head' }),
           },
@@ -323,8 +328,12 @@ export function MoneyRegion({
         eyebrow="The money · one region"
         surfaceKey="accounts"
         regionKey="money-head"
-        actions={ledger}
-        actsAtQuiet={quiet ? 'leader' : 'all'}
+        actions={
+          quiet && oneVoice
+            ? ledger.filter((entry, i) => i === 0 || entry.key === RECORD_A_CHANGE_KEY)
+            : ledger
+        }
+        actsAtQuiet={quiet && !oneVoice ? 'leader' : 'all'}
         bodyId={BODY_ID}
         onFold={() => setFolded(true)}
       />

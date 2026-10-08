@@ -105,7 +105,12 @@ import {
   type RecordAChangeOnPieceDetail,
 } from './overlays/record-a-change-sheet';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { NAMED_ACTS, needActLabel } from '@/lib/document/act-names';
+import {
+  NAMED_ACTS,
+  needActLabel,
+  ownAct,
+  type OwnActFacts,
+} from '@/lib/document/act-names';
 import { StrataMark } from './strata-mark';
 import { StrataMiniRule } from './strata-mini-rule';
 import { WorkBlock } from './work-block';
@@ -323,6 +328,20 @@ function livePurchaseOrder(item: FFERow) {
   return po && po.status !== 'cancelled' ? po : null;
 }
 
+/** What `ownAct` reads where the head supplies only its own count. */
+const OWN_ACT_NO_FACTS: OwnActFacts = {
+  inquiryOpen: false,
+  firstMissingEssential: null,
+  proposalState: null,
+  clientFirstName: null,
+  unspecifiedCount: 0,
+  releaseEligible: false,
+  install: null,
+};
+
+/** D5 (US-19): the Pieces head's `Record a change` ledger key. */
+const PIECES_RECORD_A_CHANGE_KEY = 'record-a-change-pieces-head';
+
 /** F13 / R12: on Install the procurement status (`status`) is a fact in this
  *  line, not a second stamp beside the row's state word. */
 function vendorLine(
@@ -480,7 +499,11 @@ function FFELine({
   purchase,
   installState,
   recordChange = false,
+  damageStamp = false,
 }: LineRow & {
+  /** FR2 508-3 (`one-voice`): on Install, a damaged row's one stamp is
+   *  DAMAGED and the state word yields. */
+  damageStamp?: boolean;
   /** D5 (US-19): the unfolded line leads with `Record a change`. */
   recordChange?: boolean;
   /** C-25: the purchase record the line was bought on, if any. */
@@ -507,12 +530,15 @@ function FFELine({
   showArtifactPlate: boolean;
 }) {
   const sp = stampProps(stamp);
+  // FR2 508-3 (`one-voice`): damage is the row's exception, so on a damaged
+  // Install row DAMAGED is the one stamp and the state word yields.
+  const damageIsTheStamp = Boolean(damageStamp && installState && stamp.kind === 'damaged');
   // F13 / R12: on Install the state word is the row's only stamp.
   const line = vendorLine(
     item,
     stamp,
     showRoom,
-    installState && stamp.kind !== 'trade_pending' ? sp.label : null,
+    installState && stamp.kind !== 'trade_pending' && !damageIsTheStamp ? sp.label : null,
   );
   const billing = coverageNote(item, coverage);
   const price =
@@ -527,14 +553,24 @@ function FFELine({
   const body = (
     <>
       <div className="flex items-center gap-3.5">
-        {installState && (
-          <span
-            data-install-state={installState}
-            className="w-[68px] shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
-          >
-            {STATE_WORDS[installState]}
-          </span>
-        )}
+        {installState &&
+          (damageIsTheStamp ? (
+            <span
+              data-install-state={installState}
+              data-install-stamp="damaged"
+              className="w-[68px] shrink-0 font-mono text-[11px] font-semibold uppercase tracking-[0.08em]"
+              style={{ color: sp.ink }}
+            >
+              {sp.label}
+            </span>
+          ) : (
+            <span
+              data-install-state={installState}
+              className="w-[68px] shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
+            >
+              {STATE_WORDS[installState]}
+            </span>
+          ))}
         {thumbSrc ? (
           <img
             src={thumbSrc}
@@ -1056,6 +1092,9 @@ function FFESectionBody({
   // US-19 D1 (`one-voice`) — the head's act names and the region's printed
   // name come from the one table.
   const [oneVoice, setOneVoice] = useState(false);
+  // FR2 508-1/508-2 (`one-voice`): the heads print `Record a change` on every
+  // spread whatever ask-the-paper says, so the router's `On a piece` lands too.
+  const recordChangeAtHead = askThePaper || oneVoice;
   const [choosingPiece, setChoosingPiece] = useState(false);
   const [changeOrderLineId, setChangeOrderLineId] = useState<string | null>(null);
   const choosePieceRef = useRef<HTMLParagraphElement | null>(null);
@@ -1348,6 +1387,7 @@ function FFESectionBody({
     canEditSelection: mode === 'project',
     showArtifactPlate: mode === 'project',
     installState: mode === 'install' ? pieceInstallState(row.item) : undefined,
+    damageStamp: oneVoice,
   });
 
   // The maker and next-act readings open the same unfold the room reading does.
@@ -1483,7 +1523,7 @@ function FFESectionBody({
     if (opener?.isConnected) opener.focus({ preventScroll: true });
   }, []);
   useEffect(() => {
-    if (!askThePaper) return;
+    if (!recordChangeAtHead) return;
     const onPiece = (event: Event) => {
       const itemId = (event as CustomEvent<RecordAChangeOnPieceDetail | undefined>)
         .detail?.itemId;
@@ -1502,7 +1542,7 @@ function FFESectionBody({
     };
     window.addEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, onPiece);
     return () => window.removeEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, onPiece);
-  }, [askThePaper, openFfeRegion, recordChangeOnLine]);
+  }, [recordChangeAtHead, openFfeRegion, recordChangeOnLine]);
   // R34: while she chooses, Esc puts the choosing back and never reaches the
   // shell's Put down (page.tsx listens on the document, bubbling). Captured on
   // the document so it holds wherever focus is in the paper; a sheet opened
@@ -1741,9 +1781,13 @@ function FFESectionBody({
   const ffeSpecBookEntry: RegionLedgerEntry = {
     key: 'open-spec-book',
     // F48's sibling: one spec-book door, naming its scope when it has one.
+    // FR2 499-10 — the name is the own-act table's, never a hand template.
     label:
       unspecifiedLineIds.length > 0
-        ? `Spec the ${unspecifiedLineIds.length} unspecified`
+        ? ownAct('project', {
+            ...OWN_ACT_NO_FACTS,
+            unspecifiedCount: unspecifiedLineIds.length,
+          })!.label
         : 'Spec book',
     href: `/doc/${projectId}/spec-book`,
     variant: 'tertiary',
@@ -1792,11 +1836,11 @@ function FFESectionBody({
         : [...ffeLedgerByKind, ...atCostDoors]
       : ffeLedgerByKind;
   // D5 (US-19): Record a change is the head's second act, after the leader.
-  const ffeLedger: RegionLedgerEntry[] = askThePaper
+  const ffeLedger: RegionLedgerEntry[] = recordChangeAtHead
     ? [
         ...ffeLedgerDoors.slice(0, 1),
         {
-          key: 'record-a-change-pieces-head',
+          key: PIECES_RECORD_A_CHANGE_KEY,
           label: NAMED_ACTS.recordChange,
           onClick: () => openRecordAChange({ origin: 'pieces-head' }),
         },
@@ -1980,8 +2024,16 @@ function FFESectionBody({
                 exceptions={ffeExceptions}
                 surfaceKey="project"
                 regionKey="ffe"
-                actions={ffeLedger}
-                actsAtQuiet={ffeQuiet ? 'leader' : 'all'}
+                // F2-18 (`one-voice`): at quiet the named act prints beside
+                // the leader, as it does on the install and care heads.
+                actions={
+                  ffeQuiet && oneVoice
+                    ? ffeLedger.filter(
+                        (entry, i) => i === 0 || entry.key === PIECES_RECORD_A_CHANGE_KEY,
+                      )
+                    : ffeLedger
+                }
+                actsAtQuiet={ffeQuiet && !oneVoice ? 'leader' : 'all'}
                 bodyId={ffeBodyId}
                 onFold={() => ffeFold.setFolded(true)}
               />
@@ -1999,7 +2051,7 @@ function FFESectionBody({
           {sectionKey !== 'care' && (
             <InstallReadingLine projectId={projectId} items={items} />
           )}
-          {askThePaper && (
+          {recordChangeAtHead && (
             <DocumentAction
               actionKey="record-a-change-install-head"
               surfaceKey="project"
@@ -2103,15 +2155,16 @@ function FFESectionBody({
           sectionLabel={sectionLabel}
           // R40: where the reading says `Everything is here.`, its act `Open
           // the punch list` lands on this block, so the block wears that name.
-          heading={
-            askThePaper &&
-            mode === 'install' &&
-            sectionKey !== 'care' &&
-            (items ?? []).length > 0 &&
-            (items ?? []).every(isPieceHere)
-              ? 'The punch list'
-              : undefined
-          }
+          // FR2 508-4 (`one-voice`): `Punch list · {N} open`, never a ratio.
+          {...(askThePaper &&
+          mode === 'install' &&
+          sectionKey !== 'care' &&
+          (items ?? []).length > 0 &&
+          (items ?? []).every(isPieceHere)
+            ? oneVoice
+              ? { heading: 'Punch list', tally: 'open' as const }
+              : { heading: 'The punch list' }
+            : {})}
           clientUserId={clientUserId}
           clientName={clientName}
         />
@@ -2148,7 +2201,9 @@ function FFESectionBody({
       {!isLoading && !isError && total === 0 && (
         mode === 'project' ? (
           <GuidedEmptyState
-            title="Build the FF&E schedule"
+            // FR2 499-7 (`one-voice`): `FF&E schedule` retires as a printed
+            // name; the act beneath keeps its label verbatim.
+            title={oneVoice ? 'No pieces yet.' : 'Build the FF&E schedule'}
             description="Add the pieces and allowances the studio will specify, price, authorize, procure, and install."
             inputs={['Room', 'Piece or allowance', 'Budget']}
             action={{ key: 'start-ffe-schedule', label: 'Open the spec book', href: `/doc/${projectId}/spec-book` }}

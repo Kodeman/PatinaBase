@@ -271,6 +271,7 @@ function LegacyProposalInstruments({
     state: draftState,
     pct,
     fill,
+    gaps,
   } = useDraftingState(proposalId, isDraft);
   // No new legacy sending, so this no longer drives an act — only the tint
   // and the label below, sharing the Drafting Room's same rewording.
@@ -369,7 +370,12 @@ function LegacyProposalInstruments({
             fill={fill}
             label={
               oneVoice
-                ? `The proposal — ${pct}% written`
+                ? // FR2 499-6: a count of what is left, never a percentage.
+                  gaps.length === 0
+                  ? 'The proposal — written'
+                  : `The proposal — ${gaps.length} ${
+                      gaps.length === 1 ? 'section' : 'sections'
+                    } to write`
                 : `Drafting the proposal — ${pct}% written`
             }
           />

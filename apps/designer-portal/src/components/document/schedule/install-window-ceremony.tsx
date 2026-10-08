@@ -34,6 +34,8 @@ import {
   type InstallWindowRow,
 } from "@patina/supabase";
 import { formatCalendarDate, todayYmd } from "@/lib/document/format";
+import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { ownAct, type OwnActFacts } from "@/lib/document/act-names";
 import {
   deriveScheduleImpact,
   deriveUnpinImpact,
@@ -63,6 +65,17 @@ import {
 } from "../approvals/gate-anatomy";
 
 export type InstallWindowFace = "hold" | "confirm" | "release";
+
+/** The own-act table's facts for a window not yet held (D1, D6). */
+const HOLD_A_WINDOW_FACTS: OwnActFacts = {
+  inquiryOpen: false,
+  firstMissingEssential: null,
+  proposalState: null,
+  clientFirstName: null,
+  unspecifiedCount: 0,
+  releaseEligible: false,
+  install: { state: "not_here_ahead", windowHeld: false },
+};
 
 /** The face a window's state asks for. No window at all asks to hold one. */
 export function installWindowFace(
@@ -401,6 +414,7 @@ function InstallWindowSheet({
   };
 
   const copy = FACE_COPY[face];
+  const oneVoice = useFeatureFlag("one-voice").value === true;
 
   return (
     <DocSheet open={open} onClose={onClose} title={copy.sheetTitle}>
@@ -531,7 +545,11 @@ function InstallWindowSheet({
                 loadingLabel={copy.submittingLabel}
                 trailing="→"
               >
-                {copy.submitLabel}
+                {/* FR2 499-8 (11) (`one-voice`): the hold's control is the
+                    act's one name, `Hold a window`. */}
+                {face === "hold" && oneVoice
+                  ? ownAct("install", HOLD_A_WINDOW_FACTS)!.label
+                  : copy.submitLabel}
               </DocumentAction>
               {face === "confirm" && (
                 <DocumentAction

@@ -750,6 +750,8 @@ const NO_FACTS: OwnActFacts = {
  *   control; the head's is `Release for authorization` (contradiction 10).
  * - Proposal accepted: the signed-proposal control is `Open the project`
  *   (contradiction 7).
+ * - Install at rest: `Hold a window`; Care at rest: `Run the closeout
+ *   checklist` (FR2 499-8, contradictions 11 and 12).
  */
 function oneVoiceActLabel(
   key: string,
@@ -772,6 +774,16 @@ function oneVoiceActLabel(
       return eyebrow === 'Proposal · signed'
         ? ownAct('proposal', { ...NO_FACTS, proposalState: 'accepted' })!.label
         : null;
+    // FR2 499-8 (11): Install at rest holds a window, in the act's one name.
+    case 'rest-install':
+      return ownAct('install', {
+        ...NO_FACTS,
+        install: { state: 'not_here_ahead', windowHeld: false },
+      })!.label;
+    // FR2 499-8 (12): Care's own act is the studio's closeout checklist, not
+    // the owner's `Close the book`.
+    case 'rest-care':
+      return ownAct('care', NO_FACTS)!.label;
     default:
       return null;
   }

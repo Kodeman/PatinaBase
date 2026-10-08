@@ -13,6 +13,7 @@ import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { useRegionFold } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
 import {
@@ -229,6 +230,7 @@ export function ProjectApprovalDocument({
   const approvals = approvalsQuery.data ?? [];
   const candidates = candidatesQuery.data ?? [];
   const authority = authorityQuery.data;
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const authorityMatches =
     Boolean(clientProfileId) &&
     authority?.decisionLeadId === clientProfileId &&
@@ -522,8 +524,16 @@ export function ProjectApprovalDocument({
   const leadName = authorityMatches
     ? clientName?.trim() || 'the designated client'
     : null;
-  const headStatus =
-    openCount > 0
+  // FR2 F2-26 (`one-voice`): with nothing awaiting and no lead, the head and
+  // the body's sentence are one sentence, `No decision lead named yet.`
+  const noLeadSentence =
+    oneVoice &&
+    openCount === 0 &&
+    authority === null &&
+    !authorityQuery.isLoading;
+  const headStatus = noLeadSentence
+    ? 'No decision lead named yet.'
+    : openCount > 0
       ? `${openCount} awaiting decision · ${leadName ?? 'no decision lead'}`
       : `${decidedCount} decided · ${leadName ?? 'no decision lead'}`;
 
@@ -708,7 +718,7 @@ export function ProjectApprovalDocument({
           Add the project client before assigning decision authority.
         </p>
       )}
-      {clientProfileId && authority === null && !authorityQuery.isLoading && (
+      {clientProfileId && authority === null && !authorityQuery.isLoading && !noLeadSentence && (
         <div className="mt-4 border-l-2 border-[var(--color-golden-hour)] pl-3">
           <p className="text-[13px] text-[var(--color-charcoal)]">
             This project does not have a designated decision lead yet.

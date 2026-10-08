@@ -15,7 +15,8 @@
  *
  * The 13 cross-device contradictions are those of
  * `artifacts/document-running-a-job-2026-10-07/briefing/current-state.md`.
- * The ones this slice does not settle stand as `it.todo`, each with its reason.
+ * The ones this slice does not settle stand as `it.todo`, each with its reason;
+ * FR2 499-8 made 3, 11 and 12 live (5 belongs to its own ticket).
  */
 import type { ProjectContextualHandoff } from '@patina/supabase';
 import {
@@ -267,9 +268,17 @@ describe('the 13 cross-device contradictions, under one-voice', () => {
     expect(deskActionLabel(lead, true)).toBeNull();
   });
 
-  it.todo(
-    '3 · Discovery: the guide’s essential names vs the facets’ names — `Add the {essential}` is not wired into the guide (needs the discovery facet names; out of this slice)',
-  );
+  it('3 · Discovery: the own act is Add the {first missing essential}, in the essentials’ order (FR2 499-8)', () => {
+    const order = ['project_type', 'rooms', 'scope', 'budget_band'] as const;
+    expect(
+      order.map((essential) => ownAct('discovery', facts({ firstMissingEssential: essential }))!.label),
+    ).toEqual(['Add the project type', 'Add the rooms', 'Add the scope', 'Add the budget band']);
+    for (const essential of order) {
+      expect(ownAct('discovery', facts({ firstMissingEssential: essential }))!.tier).toBe('scored');
+    }
+    // Every essential set: no own act (FR1 R8).
+    expect(ownAct('discovery', quietFacts)).toBeNull();
+  });
 
   it('4 · Direction: Open the Contract Room and Send the agreement collapse to Write the proposal', () => {
     const drafting = deriveDocumentGuide({ row: row('direction'), inputsPending: true });
@@ -355,13 +364,50 @@ describe('the 13 cross-device contradictions, under one-voice', () => {
     );
   });
 
-  it.todo(
-    '11 · Install at rest: Hold the window lands on the FF&E anchor, not the window ceremony — the install reading (D6) owns the act; out of this slice',
-  );
+  it('11 · Install at rest: Hold the window becomes Hold a window, the own act’s name (FR2 499-8)', () => {
+    const own = ownAct(
+      'install',
+      facts({ install: { state: 'not_here_ahead', windowHeld: false } }),
+    )!;
+    expect(own.label).toBe('Hold a window');
+    // At rest: a committed install day ahead of today.
+    const atRest = {
+      row: row('install'),
+      now: new Date('2026-10-07T12:00:00Z'),
+      schedule: {
+        selection: 'install',
+        fidelity: 'committed',
+        positionText: 'Committed',
+        install: { date: '2026-11-12', fidelity: 'committed' },
+      },
+    } as unknown as Parameters<typeof deriveDocumentGuide>[0];
+    expect(deriveDocumentGuide(atRest).action?.label).toBe('Hold the window');
+    expect(deriveDocumentGuide({ ...atRest, oneVoice: true }).action?.label).toBe(own.label);
+  });
 
-  it.todo(
-    '12 · Care: the guide is not ownership-aware — behavioural (who may close the book), not a name; out of this slice',
-  );
+  it('12 · Care: the own act is Run the closeout checklist, the studio’s, never in the custody form (FR2 499-8)', () => {
+    const own = ownAct('care', quietFacts)!;
+    expect(own.label).toBe('Run the closeout checklist');
+    expect(own.tier).toBe('scored');
+    // At rest: the care band's closure gate stands ready.
+    const care = row('care');
+    expect(deriveDocumentGuide({ row: care, closureReady: true }).action?.label).toBe(
+      'Close the book',
+    );
+    expect(
+      deriveDocumentGuide({ row: care, closureReady: true, oneVoice: true }).action?.label,
+    ).toBe(own.label);
+    // Studio-owned: the band names it with no custody (`Waiting on …`, `With
+    // the maker`), even where the client has a first name.
+    const next = deriveNext({
+      standing: [],
+      ownAct: lensOwnAct('care', {}),
+      clientFirstName: 'Mei',
+      closed: false,
+    });
+    expect(next?.act.label).toBe(own.label);
+    expect(next?.sentence).not.toMatch(/^(Waiting on|With the maker)/);
+  });
 
   it('13 · a gate keeps the seven stage words, never the workflow’s eleven', () => {
     const gate = deriveGate(

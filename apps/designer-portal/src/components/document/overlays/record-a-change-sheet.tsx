@@ -74,14 +74,16 @@ const CHOICES = [
 
 type Choice = (typeof CHOICES)[number]['value'];
 
-/** Behind `ask-the-paper`: with the flag off nothing mounts and nothing
- *  listens. */
+/** Behind `ask-the-paper` or `one-voice` (FR2 508-1: the Money head's door is
+ *  `Record a change` under one-voice whatever ask-the-paper says): with both
+ *  off nothing mounts and nothing listens. */
 export function RecordAChangeSheet(props: {
   projectId: string;
   clientName: string | null;
 }) {
   const askThePaper = useFeatureFlag('ask-the-paper').value;
-  if (!askThePaper) return null;
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  if (!askThePaper && !oneVoice) return null;
   return <RecordAChangeRouter {...props} />;
 }
 
