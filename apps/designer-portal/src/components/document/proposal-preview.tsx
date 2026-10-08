@@ -14,6 +14,8 @@ import { ProposalPreviewRail } from './drafting/proposal-mirror';
 import { useProposal } from '@/hooks/use-proposals';
 import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
 import { ServiceAgreementDocumentBody } from './commercial/commercial-document-body';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { householdDisplayName } from '@/lib/document/act-names';
 
 export function ProposalPreview({
   proposalId,
@@ -26,11 +28,15 @@ export function ProposalPreview({
 }) {
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const experience = commercialDocumentExperience(proposal?.document_kind);
+  // US-19 FR7 F7-10 (D14) — under one-voice a placeholder (`Client User`,
+  // `Client`) is no name: every slot falls to its own no-name words.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const shown = oneVoice ? householdDisplayName(clientName) || undefined : clientName;
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`What ${clientName} sees`}
+      aria-label={oneVoice && !shown ? 'What the client sees' : `What ${shown} sees`}
       data-testid="proposal-preview"
       className="fixed inset-0 z-[60] flex flex-col bg-[var(--doc-paper)]"
       onKeyDown={(e) => {
@@ -57,13 +63,13 @@ export function ProposalPreview({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-7 py-8 min-[980px]:px-16">
         {experience === 'design_services' ? (
-          <ServiceAgreementDocumentBody proposalId={proposalId} clientName={clientName} />
+          <ServiceAgreementDocumentBody proposalId={proposalId} clientName={shown} />
         ) : experience === 'commercial_readonly' ? (
           <p className="text-[12px] text-[var(--text-muted)]">
             This commercial edition is read-only in Wave 1.
           </p>
         ) : (
-          <ProposalPreviewRail proposalId={proposalId} clientName={clientName} />
+          <ProposalPreviewRail proposalId={proposalId} clientName={shown} />
         )}
       </div>
     </div>

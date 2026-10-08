@@ -50,6 +50,8 @@ import {
   BoardComposition,
 } from '@patina/design-system';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { householdDisplayName } from '@/lib/document/act-names';
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -517,6 +519,10 @@ export function ProposalPreviewRail({
   clientName?: string;
 }) {
   const { data, error, refetch } = useProposalMirrorData(proposalId);
+  // US-19 FR7 F7-10 (D14) — under one-voice a placeholder (`Client User`,
+  // `Client`) is no name: every slot falls to its own no-name words.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const shown = oneVoice ? householdDisplayName(clientName) || undefined : clientName;
 
   if (error) {
     return (
@@ -539,7 +545,7 @@ export function ProposalPreviewRail({
   if (!data) {
     return (
       <p className="text-[12px] italic text-[var(--text-muted)]">
-        Composing {clientName ? `${clientName}'s` : 'their'} copy…
+        Composing {shown ? `${shown}'s` : 'their'} copy…
       </p>
     );
   }
@@ -553,7 +559,7 @@ export function ProposalPreviewRail({
       className="mx-auto max-w-[680px]"
       data-testid="proposal-preview-rail"
       aria-label={
-        clientName ? `What ${clientName} sees` : 'What the client sees'
+        shown ? `What ${shown} sees` : 'What the client sees'
       }
     >
       <MirrorPresentationAnalytics
@@ -566,7 +572,7 @@ export function ProposalPreviewRail({
         {data.proposal?.title ?? 'Your proposal'}
       </h1>
       <p className="mb-6 mt-1 text-[11px] text-[var(--text-muted)]">
-        {clientName ? `Prepared for ${clientName}` : 'Prepared for you'}
+        {shown ? `Prepared for ${shown}` : 'Prepared for you'}
       </p>
 
       {data.sections.map((section) => (

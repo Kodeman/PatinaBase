@@ -16,6 +16,8 @@ import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { householdDisplayName } from '@/lib/document/act-names';
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -87,6 +89,10 @@ export function ClientMirror({
   onClose: () => void;
 }) {
   const { data } = useClientMirrorData(projectId);
+  // US-19 FR7 F7-10 (D14) — under one-voice a placeholder (`Client User`,
+  // `Client`) is no name: the label falls to its own no-name words.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const shown = oneVoice ? householdDisplayName(clientName) || undefined : clientName;
   const restoreRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -108,7 +114,7 @@ export function ClientMirror({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`What ${clientName} sees`}
+      aria-label={oneVoice && !shown ? 'What the client sees' : `What ${shown} sees`}
       className="fixed inset-0 z-[60] flex flex-col bg-[var(--doc-paper)]"
       data-testid="client-mirror"
     >

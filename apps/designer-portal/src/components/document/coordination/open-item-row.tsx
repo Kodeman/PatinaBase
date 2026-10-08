@@ -33,7 +33,7 @@ export interface OpenItemRowProps {
    *  section heads already name the court; when absent the row renders exactly
    *  as before. Resolution mirrors court-group: a concrete party row wins,
    *  else the generic court token / the client's name (partyFor). */
-  court?: { court: Court; party?: PartyLike | null; clientName?: string };
+  court?: { court: Court; party?: PartyLike | null; clientName?: string | null };
 }
 
 export function OpenItemRow({ item, tasks, onOpen, court }: OpenItemRowProps) {

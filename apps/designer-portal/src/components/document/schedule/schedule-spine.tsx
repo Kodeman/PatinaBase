@@ -161,7 +161,9 @@ export interface ScheduleSpineProps {
   /** The client's AUTH user id (profiles.id) — row.client_profile_id. The spine
    *  feeds this to useDesignerClientForClientUser to produce designerClientId. */
   clientUserId: string | null;
-  clientName: string;
+  /** US-19 FR7 F7-11 — null under one-voice when the row's name is a
+   *  placeholder: the client court's chip falls to its own word (`Client`). */
+  clientName: string | null;
   /** projects.status as the page already read it. Optional, so the mount stays
    *  drop-in compatible with the band it replaces; when it says 'completed' the
    *  ongoing +add line stands down (the same gate CareBand keeps). */
@@ -1218,7 +1220,7 @@ export function ScheduleSpine({
             parties={allParties}
             projectId={projectId}
             designerClientId={designerClientId ?? ''}
-            clientName={clientName}
+            clientName={clientName ?? undefined}
             onClose={closeSheet}
           />
         )}

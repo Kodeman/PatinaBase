@@ -64,7 +64,7 @@ export interface PhaseSectionProps {
   tasks: SectionTask[];
   /** Concrete party rows for the ball-in-court chip resolution. */
   parties: ProjectParty[];
-  clientName: string;
+  clientName: string | null;
   /** Thread-lane phases stitched into this entry (threadsFor hosting). */
   threads: Array<{ phase: ResolvedPhase; name: string }>;
   onOpenItem: (id: string) => void;
