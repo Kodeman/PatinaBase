@@ -55,7 +55,7 @@ import {
   unbilledRiders,
 } from '@/lib/document/invoice-composer';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
-import type { FFEStageKey } from '@patina/types';
+import type { FfeAssignmentScope, FFEStageKey } from '@patina/types';
 import {
   useCallback,
   useEffect,
@@ -1211,6 +1211,7 @@ function FFESectionBody({
   const [addLineRoom, setAddLineRoom] = useState<{
     id: string | null;
     name: string;
+    scope: FfeAssignmentScope;
   } | null>(null);
   // withLifecycle: the line unfold draws R7's trail, which needs the PO's
   // delivered_date and payment rows. Opt-in so no other portal pays for it.
@@ -2635,7 +2636,7 @@ function FFESectionBody({
                 budgetCents={room.budget_cents}
                 rows={roomRows}
                 onAddLine={() =>
-                  setAddLineRoom({ id: room.id, name: room.name })
+                  setAddLineRoom({ id: room.id, name: room.name, scope: 'room' })
                 }
                 {...roomHeadingProps(roomRows)}
               />
@@ -2661,7 +2662,7 @@ function FFESectionBody({
                 budgetCents={0}
                 rows={throughout}
                 onAddLine={() =>
-                  setAddLineRoom({ id: null, name: 'Throughout' })
+                  setAddLineRoom({ id: null, name: 'Throughout', scope: 'throughout' })
                 }
                 {...roomHeadingProps(throughout)}
               />
@@ -2680,7 +2681,7 @@ function FFESectionBody({
                 budgetCents={0}
                 rows={unassigned}
                 onAddLine={() =>
-                  setAddLineRoom({ id: null, name: 'Not in a room yet' })
+                  setAddLineRoom({ id: null, name: 'Not in a room yet', scope: 'unassigned' })
                 }
                 {...roomHeadingProps(unassigned)}
               />
@@ -2788,6 +2789,7 @@ function FFESectionBody({
           projectId={projectId}
           roomId={addLineRoom.id}
           roomName={addLineRoom.name}
+          assignmentScope={addLineRoom.scope}
           onClose={() => setAddLineRoom(null)}
         />
       )}

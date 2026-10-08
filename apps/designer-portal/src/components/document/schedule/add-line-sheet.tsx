@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { PlusCircle } from 'lucide-react';
 import { useCreateNamedProjectNeed } from '@patina/supabase';
+import type { FfeAssignmentScope } from '@patina/types';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { useAddComFabricLine } from '../buying/com-piece';
@@ -13,21 +14,30 @@ const FIELD_CLASS =
 const LABEL_CLASS =
   'mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
+/**
+ * Enter in the Line field adds the line and starts the next one; the sheet
+ * stays open until Esc or `Done adding`. The caller names where lines land:
+ * `assignmentScope` is sent as given (`room` carries `roomId`; `throughout`
+ * and `unassigned` carry none). The room's display name is never compared.
+ */
 export function AddLineSheet({
   open,
   projectId,
   roomId,
   roomName,
+  assignmentScope,
   onClose,
 }: {
   open: boolean;
   projectId: string;
   roomId: string | null;
   roomName: string;
+  assignmentScope: FfeAssignmentScope;
   onClose: () => void;
 }) {
   const addLine = useCreateNamedProjectNeed();
   const addFabric = useAddComFabricLine();
+  const lineRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('1');
@@ -40,29 +50,18 @@ export function AddLineSheet({
   const pending = addLine.isPending || addFabric.isPending;
   const canSave = trimmedName.length > 0 && !pending;
 
-  const reset = () => {
-    setName('');
-    setQuantity('1');
-    setTakesCom(false);
-    setError(null);
-    requestKey.current = null;
-  };
-
   const save = async () => {
     if (!canSave) return;
     setError(null);
+    const submittedName = name;
     try {
       const request = {
         projectId,
         name: trimmedName,
         quantity: parsedQuantity,
         itemType: 'tbd' as const,
-        assignmentScope: roomId
-          ? ('room' as const)
-          : roomName === 'Unsorted'
-            ? ('unassigned' as const)
-            : ('throughout' as const),
-        roomId,
+        assignmentScope,
+        roomId: assignmentScope === 'room' ? roomId : null,
         disposition: 'candidate' as const,
         source: 'named-need' as const,
       };
@@ -82,12 +81,16 @@ export function AddLineSheet({
         await addFabric.add(projectId, {
           id: created.selectionId,
           name: trimmedName,
-          project_room_id: roomId,
+          project_room_id: request.roomId,
           assignment_scope: request.assignmentScope,
         });
       }
-      reset();
-      onClose();
+      // The next line starts here. A name typed while this one saved is kept.
+      setName((current) => (current === submittedName ? '' : current));
+      setQuantity('1');
+      setTakesCom(false);
+      requestKey.current = null;
+      lineRef.current?.focus();
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -97,6 +100,12 @@ export function AddLineSheet({
     }
   };
 
+  const onLineKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    void save();
+  };
+
   return (
     <DocSheet
       open={open}
@@ -104,14 +113,16 @@ export function AddLineSheet({
       icon={PlusCircle}
       title="Add a line"
       pageLabel={roomName}
+      initialFocusRef={lineRef}
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="sm:col-span-2">
           <span className={LABEL_CLASS}>Line</span>
           <input
-            autoFocus
+            ref={lineRef}
             value={name}
             onChange={(event) => setName(event.target.value)}
+            onKeyDown={onLineKeyDown}
             placeholder="Walnut bed, king"
             aria-label="Line name"
             className={FIELD_CLASS}
@@ -165,6 +176,13 @@ export function AddLineSheet({
           onClick={save}
         >
           {takesCom ? 'Add the pair' : 'Add the line'}
+        </DocumentAction>
+        <DocumentAction
+          actionKey="close-add-schedule-line"
+          variant="secondary"
+          onClick={onClose}
+        >
+          Done adding
         </DocumentAction>
       </DocumentActionGroup>
     </DocSheet>
