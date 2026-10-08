@@ -43,6 +43,23 @@
 -- Seed data only: no migration, never Strata.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- F3-13 (design-review-3.md §3): the no-login household titles never printed
+-- the ' (no-login household)' parenthetical again once designer-clients.sql
+-- stopped seeding it, but a local database seeded before that change still
+-- carries the old suffix on the two fixed rows it created (dc_discovery
+-- 'The Ashfords (no-login household)', dc_direction 'Elena Marlowe (no-login
+-- household)'). This repairs an existing database without a reset.
+-- Idempotent: regexp_replace is a no-op once the suffix is gone.
+-- ═══════════════════════════════════════════════════════════════════════════
+UPDATE public.designer_clients
+   SET client_name = regexp_replace(client_name, ' \(no-login household\)$', '')
+ WHERE id IN (
+   'd0c10000-0000-0000-0000-0000000000a2',  -- The Ashfords (Discovery)
+   'd0c10000-0000-0000-0000-0000000000b1'   -- Elena Marlowe (Direction)
+ )
+   AND client_name LIKE '%(no-login household)';
+
 DO $$
 DECLARE
   uid_designer   UUID := 'a0000000-0000-0000-0000-000000000004';  -- Leah Hartwell

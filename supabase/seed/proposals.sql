@@ -215,7 +215,8 @@ $$;
 -- The local Elena analog: a DRAFT proposal for a no-login household (client_id
 -- NULL) linked to designer_clients d0c10000…b1 via proposals.designer_client_id
 -- (seeded in designer-clients.sql). Exercises document_state Shape B's client_name
--- rescue — the row must read 'Elena Marlowe (no-login household)', NOT 'Client'.
+-- rescue — the row must read 'Elena Marlowe', NOT 'Client' (F3-13: the seed's
+-- household title no longer carries the '(no-login household)' parenthetical).
 -- Idempotent via fixed UUID + ON CONFLICT (id) DO NOTHING.
 -- Prerequisite: designer-clients.sql (runs earlier in config.toml [db.seed]).
 -- ═══════════════════════════════════════════════════════════════════════════

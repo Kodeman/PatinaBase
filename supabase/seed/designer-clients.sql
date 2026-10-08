@@ -160,7 +160,7 @@ BEGIN
   INSERT INTO public.designer_clients
     (id, designer_id, client_id, status, client_name, source, lead_id, created_at, updated_at)
   VALUES (dc_discovery, uid_designer, NULL, 'lead',
-          'The Ashfords (no-login household)', 'manual', lead_nologin,
+          'The Ashfords', 'manual', lead_nologin,
           now() - interval '20 days', now() - interval '20 days')
   ON CONFLICT (id) DO NOTHING;
 
@@ -170,7 +170,7 @@ BEGIN
   INSERT INTO public.designer_clients
     (id, designer_id, client_id, status, client_name, source, created_at, updated_at)
   VALUES (dc_direction, uid_designer, NULL, 'proposal',
-          'Elena Marlowe (no-login household)', 'manual',
+          'Elena Marlowe', 'manual',
           now() - interval '15 days', now() - interval '15 days')
   ON CONFLICT (id) DO NOTHING;
 END $$;
