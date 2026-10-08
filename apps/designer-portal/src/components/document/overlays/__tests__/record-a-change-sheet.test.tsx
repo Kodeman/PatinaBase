@@ -590,7 +590,7 @@ describe('Record a change — focus lands on a control, one Esc puts back (walk 
     rects.mockRestore();
   });
 
-  it('Change this order opens on the preselected Cancel, named by its title; one Esc returns to the line', async () => {
+  it('Change this order opens with nothing preselected, named by its title; one Esc returns to the line (F6-4)', async () => {
     mockRealChangeOrder = true;
     renderPaper();
     const headAct = screen.getByRole('button', { name: 'Record a change' });
@@ -608,7 +608,7 @@ describe('Record a change — focus lands on a control, one Esc puts back (walk 
     expect(nameOf(dialog)).toBe('Change NA-2026-077');
     expect(dialog).toHaveAccessibleName('Change NA-2026-077');
     const cancel = within(dialog).getByRole('radio', { name: /Cancel/ });
-    expect(cancel).toBeChecked();
+    expect(cancel).not.toBeChecked();
     await waitFor(() => expect(cancel).toHaveFocus());
 
     fireEvent.keyDown(cancel, { key: 'Escape' });
