@@ -1,0 +1,1516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build room 1440</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light dark;
+
+  /* reading stock: the Document, as today */
+  --paper:            #FAF7F2;
+  --paper-doc:        #FCFAF6;
+  --rail:             #E8E3DB;
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --ink-paper:        #FAF7F2;
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+  --oak:              #8B7355;
+  --clay:             #C4A57B;   --clay-ink:       #7C5E30;
+  --golden:           #E8C547;   --golden-ink:     #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink: #9C5340;
+  --sage:             #A8B5A0;   --sage-ink:       #5F6B57;
+
+  /* drafting stock: the working sheet */
+  --sheet:            #FFFFFF;
+  --sheet-head:       #F3F0EA;
+  --sheet-ink:        #1A1816;
+  --sheet-ink-muted:  #4A4540;
+  --sheet-ink-faint:  #6B655E;
+  --sheet-rule:       #D9D4CC;
+  --sheet-rule-strong:#1A1816;
+  --sheet-row-hover:  #F6F3EE;
+  --sheet-toast:      #1A1816;
+  --sheet-toast-ink:  #FFFFFF;
+
+  /* rhythm */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+  --row: 40px;
+  --head: 48px;
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:            #2A2622;
+    --paper-doc:        #26221E;
+    --rail:             #3A3530;
+    --ink:              #F2EDE6;
+    --ink-muted:        #D6CEC4;
+    --ink-subtle:       #C7BEB3;
+    --ink-faint:        #B8AEA2;
+    --ink-paper:        #2A2622;
+    --hairline:         rgba(242, 237, 230, .14);
+    --hairline-strong:  rgba(242, 237, 230, .22);
+    --oak:              #B39572;
+    --clay-ink:         #D8B98A;
+    --golden-ink:       #E0C963;
+    --terracotta-ink:   #E2A895;
+    --sage-ink:         #AFC0A6;
+    --sheet:            #1C1A17;
+    --sheet-head:       #211E1A;
+    --sheet-ink:        #F4F0EA;
+    --sheet-ink-muted:  #CFC8BF;
+    --sheet-ink-faint:  #A9A198;
+    --sheet-rule:       #3A3631;
+    --sheet-rule-strong:#F4F0EA;
+    --sheet-row-hover:  #24211D;
+    --sheet-toast:      #F4F0EA;
+    --sheet-toast-ink:  #1C1A17;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:            #2A2622;
+  --paper-doc:        #26221E;
+  --rail:             #3A3530;
+  --ink:              #F2EDE6;
+  --ink-muted:        #D6CEC4;
+  --ink-subtle:       #C7BEB3;
+  --ink-faint:        #B8AEA2;
+  --ink-paper:        #2A2622;
+  --hairline:         rgba(242, 237, 230, .14);
+  --hairline-strong:  rgba(242, 237, 230, .22);
+  --oak:              #B39572;
+  --clay-ink:         #D8B98A;
+  --golden-ink:       #E0C963;
+  --terracotta-ink:   #E2A895;
+  --sage-ink:         #AFC0A6;
+  --sheet:            #1C1A17;
+  --sheet-head:       #211E1A;
+  --sheet-ink:        #F4F0EA;
+  --sheet-ink-muted:  #CFC8BF;
+  --sheet-ink-faint:  #A9A198;
+  --sheet-rule:       #3A3631;
+  --sheet-rule-strong:#F4F0EA;
+  --sheet-row-hover:  #24211D;
+  --sheet-toast:      #F4F0EA;
+  --sheet-toast-ink:  #1C1A17;
+}
+
+
+/* base */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
+p, h2, h3, h4, ol, ul, table, figure { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+h2, h3, h4 { font-weight: 400; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; }
+input { font: inherit; color: inherit; }
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.num { font-variant-numeric: tabular-nums; }
+.t-head { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); }
+.t-meta { display: block; font-family: var(--font-meta); font-size: 11px; letter-spacing: .04em; color: var(--ink-subtle); }
+.ic { width: 14px; height: 14px; fill: none; stroke: var(--ink-faint); stroke-width: 1; flex: none; }
+.ic--sheet { stroke: var(--sheet-ink-faint); }
+
+/* frame bar */
+#bar { background: var(--rail); font-family: var(--font-meta); font-size: 11px; color: var(--ink-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 0 24px; padding: 0 24px; border-bottom: 1px solid var(--hairline-strong); }
+#bar .fb-cap { padding: 12px 0; max-width: 100%; }
+#bar .fb-acts { display: flex; flex-wrap: wrap; gap: 0 12px; }
+#bar .act { font-size: 11px; }
+#bar .act[aria-pressed="true"] { color: var(--ink); }
+#bar .act[aria-pressed="true"] .w { padding-bottom: 6px; background: linear-gradient(var(--oak), var(--oak)) left calc(100% - 3px) / 100% 1px no-repeat, linear-gradient(var(--clay), var(--clay)) left bottom / 100% 1px no-repeat; }
+
+/* frames, captions, notes */
+.fw { padding-bottom: 48px; }
+.cap { padding: 48px 24px 12px; }
+body.nobar .cap { display: none; }
+body.nobar .fw { padding-bottom: 0; }
+.notes { max-width: 960px; padding: 24px 24px 0; }
+.notes ol { margin-top: 12px; display: grid; gap: 12px; }
+.notes li { display: grid; grid-template-columns: 22px 1fr; gap: 3px 12px; font-size: 14px; line-height: 1.5; color: var(--ink); }
+.notes li .pin { margin: 0; grid-row: span 2; }
+.notes li .t-meta { grid-column: 2; }
+
+/* pins */
+.pin { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 22px; height: 22px; margin-left: 8px; border: 1px solid var(--clay-ink); border-radius: 2px; background: var(--paper); color: var(--clay-ink); font-family: var(--font-meta); font-size: 11px; font-weight: 500; font-style: normal; line-height: 1; letter-spacing: 0; text-transform: none; vertical-align: middle; }
+.sheet .pin, .psheet .pin { background: var(--sheet); }
+body.nopins .pin { display: none; }
+
+/* acts: scored words; on paper the rule is oak, on the sheet it is ink */
+.act { --act-ink: var(--ink-muted); --act-rule: var(--oak); --act-strong: var(--ink); display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 2px; font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--act-ink); white-space: nowrap; text-decoration: none; }
+.act .w { padding-bottom: 3px; background: linear-gradient(var(--act-rule), var(--act-rule)) left bottom / 100% 1px no-repeat; }
+.act--inked { color: var(--act-strong); }
+.act--inked .w { padding-bottom: 6px; background: linear-gradient(var(--act-rule), var(--act-rule)) left calc(100% - 3px) / 100% 1px no-repeat, linear-gradient(var(--clay), var(--clay)) left bottom / 100% 1px no-repeat; }
+.act[aria-pressed="true"] { color: var(--act-strong); }
+.sheet .act, .psheet .act { --act-ink: var(--sheet-ink-muted); --act-rule: var(--sheet-ink); --act-strong: var(--sheet-ink); }
+.act[aria-disabled="true"] { color: var(--ink-faint); cursor: not-allowed; }
+.sheet .act[aria-disabled="true"] { color: var(--sheet-ink-faint); }
+.act[aria-disabled="true"] .w { background: none; padding-bottom: 0; }
+.gated { display: inline-flex; align-items: center; gap: 12px; }
+.why { font-size: 13px; line-height: 1.4; color: var(--ink-muted); }
+.sheet .why { color: var(--sheet-ink-muted); }
+.act--terminal { display: inline-flex; align-items: center; min-height: 44px; background: var(--sheet-ink); color: var(--sheet); border-radius: 3px; padding: 12px 20px; font-family: var(--font-body); font-size: 16px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.consequence { font-size: 14px; line-height: 1.5; max-width: 56ch; color: var(--sheet-ink); text-align: right; }
+.act:focus-visible, .lens:focus-visible, .rr:focus-visible, .mi:focus-visible, .dots:focus-visible, .lrow:focus-visible, .act--terminal:focus-visible, .picker:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* stage stamps */
+.stamp { display: inline-block; font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; line-height: 1; padding: 4px 8px; border-radius: 2px; border: 1px solid var(--hairline-strong); color: var(--ink); white-space: nowrap; vertical-align: middle; }
+.st-placeholder { border-style: dashed; border-color: var(--ink-faint); color: var(--ink-faint); }
+.sheet .stamp, .psheet .stamp { border-color: var(--sheet-rule-strong); color: var(--sheet-ink); }
+.sheet .st-placeholder, .psheet .st-placeholder { border: 1px dashed var(--sheet-ink-faint); color: var(--sheet-ink-faint); }
+.sheet .st-roughed, .psheet .st-roughed { border: 1px dashed var(--sheet-ink-muted); color: var(--sheet-ink-muted); }
+.sheet .st-released, .psheet .st-released { background: var(--sheet-ink); border-color: var(--sheet-ink); color: var(--sheet); }
+.sheet .st-labor, .psheet .st-labor { border-color: var(--sheet-rule); color: var(--sheet-ink-muted); }
+
+/* strata mark */
+.strata { display: inline-flex; flex-direction: column; gap: 3px; width: 44px; flex: none; }
+.strata i { display: block; height: 2px; border-radius: 999px; background: var(--hairline-strong); }
+.strata i:nth-child(1) { width: 100%; background: var(--clay); }
+.strata i:nth-child(2) { width: 80%; }
+.strata i:nth-child(3) { width: 40%; }
+
+/* the desk: 1440 x 900 */
+.desk { width: 1440px; height: 900px; overflow: hidden; display: flex; flex-direction: column; background: var(--paper-doc); border-top: 1px solid var(--hairline-strong); border-bottom: 1px solid var(--hairline-strong); }
+body.nobar .desk { border: 0; }
+.cols { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px 1fr 232px; }
+
+/* spine */
+.spine { background: var(--rail); padding: 40px 18px 0; display: flex; flex-direction: column; overflow: hidden; }
+.spine .putdown { align-self: flex-start; margin-left: 6px; font-size: 11px; }
+.spine .putdown .ar { font-family: var(--font-body); margin-right: 8px; letter-spacing: 0; }
+.spine-name { margin-top: 18px; font-size: 14px; color: var(--ink); }
+.spine-strata { display: grid; gap: 3px; margin-top: 8px; width: 88px; }
+.spine-strata i { display: block; height: 2px; background: var(--hairline-strong); }
+.spine-strata i:first-child { height: 3px; background: var(--oak); }
+.spine-strata i:nth-child(3) { width: 70%; }
+.spine-state { margin-top: 18px; font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); line-height: 1.3; padding-bottom: 18px; border-bottom: 1px solid var(--ink); }
+.spine-list { margin: 18px 0 0; display: grid; gap: 4px; }
+.spine-list > li { padding: 3px 0 3px 13px; border-left: 1px solid transparent; }
+.spine-list > li.on { border-left-color: var(--ink); }
+.sl-n { display: block; font-size: 14px; color: var(--ink); line-height: 1.3; }
+.sl-s { display: block; font-family: var(--font-meta); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); }
+.spine-sub { margin: 12px 0 4px 14px; display: grid; gap: 10px; font-size: 14px; color: var(--ink); }
+.spine-sub .more { font-family: var(--font-meta); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); }
+.spine-sub .on-room { font-weight: 500; }
+.filed { margin-top: auto; padding-bottom: 12px; }
+.filed .t-head { display: block; padding-top: 12px; letter-spacing: .1em; }
+.filed ul { margin-top: 18px; display: grid; gap: 22px; }
+.filed li { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); }
+
+/* the paper column */
+.sheet-col { background: var(--paper-doc); padding: 0 54px; overflow: hidden; }
+.paper { width: 900px; }
+.strip { padding: 12px 0 8px; border-bottom: 1px solid var(--ink); }
+.strip-eye { font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); }
+.strip-row { display: flex; align-items: center; gap: 12px; min-height: 30px; }
+.strip-n { font-size: 16px; color: var(--terracotta-ink); }
+.strip .act { font-size: 11px; min-height: 30px; }
+.rrule { margin-top: 18px; height: 5px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--hairline); }
+.rhead { display: grid; grid-template-columns: 1fr auto; gap: 24px; padding-top: 10px; }
+.rh-name { font-family: var(--font-display); font-size: 26px; line-height: 1.2; color: var(--ink); display: flex; align-items: center; }
+.rh-sub { font-size: 13px; color: var(--ink-muted); }
+.rh-sub2 { font-size: 13px; color: var(--ink-muted); }
+.rh-acts { display: grid; justify-items: end; }
+.rh-row { display: flex; align-items: center; gap: 24px; }
+.front { margin-top: 18px; font-size: 16px; color: var(--ink); display: flex; align-items: center; }
+.front .num { font-variant-numeric: tabular-nums; }
+.gone { height: 48px; display: flex; align-items: center; gap: 12px; font-family: var(--font-meta); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+.gone .pin { margin-left: 0; }
+.rooms { border-top: 1px solid var(--hairline-strong); }
+.orow { position: relative; display: grid; grid-template-columns: 64px 180px 1fr 120px auto; align-items: center; height: 56px; border-bottom: 1px solid var(--hairline); }
+.orow.here::before { content: ""; position: absolute; left: -14px; top: 8px; bottom: 8px; width: 3px; background: var(--ink); }
+.or-name { font-family: var(--font-display); font-style: italic; font-size: 16px; color: var(--ink); }
+.or-c { font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); display: flex; align-items: center; }
+.or-m { font-size: 14px; font-variant-numeric: tabular-nums; text-align: right; padding-right: 24px; color: var(--ink); }
+.or-a { display: flex; align-items: center; gap: 24px; }
+.peek { height: 14px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+
+/* margin rail */
+.mrail { background: var(--rail); padding: 24px 18px 0; overflow: hidden; }
+.mnote { position: relative; padding-top: 6px; }
+.mnote p { font-family: var(--font-display); font-style: italic; font-size: 15px; line-height: 1.55; color: var(--ink-muted); padding-right: 24px; }
+.mnote .x { position: absolute; right: -6px; top: 0; min-width: 44px; min-height: 44px; display: inline-flex; align-items: flex-start; justify-content: flex-end; color: var(--ink-muted); font-size: 18px; line-height: 1; }
+.mnote .act { font-size: 11px; }
+.mnote .t-meta { margin-top: 2px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); line-height: 1.6; }
+.mhead { margin-top: 24px; display: flex; justify-content: space-between; align-items: center; }
+.mhead .t-head { font-size: 12px; color: var(--ink); }
+.mhead .act { font-size: 11px; }
+.mempty { margin-top: 24px; font-family: var(--font-display); font-style: italic; font-size: 15px; line-height: 1.55; color: var(--ink); }
+
+/* studio drawer: the frame's last row */
+.drawer { flex: none; height: 60px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; padding: 0 24px 0 48px; background: var(--paper); border-top: 1px solid var(--hairline); }
+.dr-left { display: flex; align-items: baseline; gap: 12px; }
+.dr-word { font-family: var(--font-display); font-size: 15px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink); }
+.dr-sep { color: var(--ink-faint); }
+.dr-crumb { font-family: var(--font-meta); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-muted); }
+.dr-center { display: flex; align-items: center; gap: 24px; }
+.dr-item { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; color: var(--ink-muted); }
+.kbd { font-family: var(--font-meta); font-size: 10px; color: var(--ink-muted); border: 1px solid var(--hairline-strong); border-radius: 3px; padding: 2px 6px; }
+.dr-right { display: flex; align-items: center; justify-content: flex-end; gap: 24px; }
+.dr-mono { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--ink); display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.dr-time { font-family: var(--font-display); font-style: italic; font-size: 15px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--clay-ink); }
+.bell { position: relative; display: inline-flex; }
+.bell .dot { position: absolute; right: -2px; top: -1px; width: 5px; height: 5px; border-radius: 50%; background: var(--clay); }
+.who { display: flex; align-items: center; gap: 10px; }
+.avatar { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--hairline-strong); display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-meta); font-size: 10px; color: var(--ink-muted); }
+.who-n { font-family: var(--font-display); font-size: 13px; color: var(--ink); white-space: nowrap; }
+
+/* the drafting stock: the working sheet */
+.sheet { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--sheet); color: var(--sheet-ink); }
+.shead { flex: none; height: var(--head); display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; gap: 24px; padding: 0 24px; background: var(--sheet-head); border-bottom: 1px solid var(--sheet-rule-strong); }
+.sh-l { display: flex; align-items: center; gap: 24px; min-width: 0; }
+.sh-l .act .ar { font-family: var(--font-body); letter-spacing: 0; margin-right: 6px; }
+.s-title { font-family: var(--font-meta); font-size: 12px; font-weight: 500; line-height: 1; letter-spacing: .08em; text-transform: uppercase; color: var(--sheet-ink); padding-left: 24px; border-left: 1px solid var(--sheet-rule); display: flex; align-items: center; height: 20px; }
+.lenses { display: flex; align-items: flex-end; gap: 6px; }
+.lens { height: 44px; display: inline-flex; align-items: center; padding: 0 8px; font-family: var(--font-meta); font-size: 13px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--sheet-ink-faint); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.lens[aria-pressed="true"] { color: var(--sheet-ink); border-bottom-color: var(--sheet-ink); }
+.lsep { height: 44px; display: inline-flex; align-items: center; color: var(--sheet-ink-faint); }
+.lenses .pin { align-self: center; }
+.sh-r { justify-self: end; align-self: center; display: flex; align-items: center; font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .02em; color: var(--sheet-ink); white-space: nowrap; }
+.sread { flex: none; display: flex; align-items: center; min-height: 40px; padding: 0 24px; font-size: 14px; line-height: 1.5; color: var(--sheet-ink-muted); border-bottom: 1px solid var(--sheet-rule); }
+.sread b { font-weight: 500; color: var(--sheet-ink); }
+.swork { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px 1fr; }
+.srail { border-right: 1px solid var(--sheet-rule); padding: 24px 0 12px; display: flex; flex-direction: column; overflow: hidden; background: var(--sheet); }
+.sr-h { padding: 0 24px 8px; font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sheet-ink-faint); }
+.rr { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 0 24px 0 21px; border-left: 3px solid transparent; font-size: 14px; color: var(--sheet-ink-muted); }
+.rr[aria-current="true"] { color: var(--sheet-ink); border-left-color: var(--sheet-ink); font-weight: 500; }
+.rr-n { font-family: var(--font-meta); font-size: 11px; font-weight: 400; color: var(--sheet-ink-faint); display: inline-flex; align-items: center; }
+.rr[aria-current="true"] .rr-n { color: var(--sheet-ink); }
+.rr.is-drop { color: var(--sheet-ink); }
+.sr-x { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--sheet-rule); }
+.sr-foot { margin-top: auto; padding: 0 24px; }
+.sbody { position: relative; min-height: 0; overflow: hidden; padding: 24px; display: flex; flex-direction: column; }
+.sbody--pane { flex-direction: row; gap: 24px; align-items: flex-start; }
+.sb-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.clip-top { flex: none; height: 24px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; margin-bottom: 24px; }
+
+/* room heading on the sheet */
+.rhd { display: flex; align-items: center; justify-content: space-between; min-height: 48px; gap: 24px; }
+.rh-n { font-family: var(--font-display); font-style: italic; font-size: 18px; line-height: 1.2; color: var(--sheet-ink); display: flex; align-items: center; }
+.rh-n .rh-c { font-family: var(--font-meta); font-style: normal; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--sheet-ink-faint); margin-left: 12px; }
+.rh-a { display: flex; align-items: center; gap: 12px; }
+.rhd.drop { border-top: 2px solid var(--sheet-ink); }
+.drop-k { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--sheet-ink); display: inline-flex; align-items: center; }
+.room-gap { height: 24px; flex: none; }
+
+/* tables */
+.st { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.st th { height: 32px; padding: 0 12px 6px 0; text-align: left; vertical-align: bottom; font-family: var(--font-meta); font-size: 12px; font-weight: 500; line-height: 1; letter-spacing: .06em; text-transform: uppercase; color: var(--sheet-ink); border-bottom: 1px solid var(--sheet-rule-strong); white-space: nowrap; }
+.st th .pin { margin-left: 6px; vertical-align: -6px; }
+.st td { height: var(--row); padding: 0 12px 0 0; font-size: 14px; line-height: 1.4; color: var(--sheet-ink); border-bottom: 1px solid var(--sheet-rule); vertical-align: middle; font-variant-numeric: tabular-nums; }
+.st th:first-child, .st td:first-child { padding-left: 12px; }
+.st .r { text-align: right; }
+.st td.tall { height: 56px; padding-top: 6px; padding-bottom: 6px; }
+.st tr:hover td, .st tr.hov td { background: var(--sheet-row-hover); }
+.st tr.on { outline: 1px solid var(--sheet-rule-strong); outline-offset: -1px; }
+.st tr.lifted { outline: 1px solid var(--sheet-rule-strong); outline-offset: -1px; transform: translateX(8px); background: var(--sheet); position: relative; z-index: 2; }
+.st tr.grp th { height: 48px; padding-top: 12px; vertical-align: middle; font-family: var(--font-display); font-style: italic; font-size: 18px; font-weight: 400; letter-spacing: 0; text-transform: none; border-bottom: 1px solid var(--sheet-rule-strong); }
+.st tr.grp .grp-in { display: flex; align-items: center; justify-content: space-between; }
+.st tr.grp .act { font-style: normal; }
+.st tr.sum td { border-top: 1px solid var(--sheet-rule-strong); border-bottom: 0; font-weight: 500; }
+.ln { font-weight: 500; }
+.ln-sub { display: block; font-size: 13px; font-weight: 400; color: var(--sheet-ink-muted); }
+.also { display: block; font-family: var(--font-meta); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--sheet-ink-faint); line-height: 1.4; }
+.rough { color: var(--sheet-ink-faint); }
+.muted { color: var(--sheet-ink-faint); }
+.caret { display: inline-block; width: 1px; height: 18px; background: var(--sheet-ink); vertical-align: middle; }
+.kid td:first-child { padding-left: 36px; }
+.kid .ar { color: var(--sheet-ink-faint); margin-right: 6px; }
+.grip { display: inline-block; width: 18px; color: var(--sheet-ink-faint); font-size: 12px; letter-spacing: -3px; cursor: grab; }
+.c-menu { text-align: right; position: relative; }
+.dots { min-width: 44px; min-height: 38px; font-size: 18px; line-height: 1; color: var(--sheet-ink-muted); border-radius: 2px; }
+.dots.is-open { color: var(--sheet-ink); background: var(--sheet-row-hover); outline: 1px solid var(--sheet-rule); }
+.mw { position: relative; display: inline-block; }
+.menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 6; min-width: 200px; background: var(--sheet); border: 1px solid var(--sheet-rule-strong); border-radius: 3px; padding: 4px 0; text-align: left; }
+.mi { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 40px; padding: 0 16px; font-size: 14px; font-weight: 400; color: var(--sheet-ink); white-space: nowrap; }
+.mi:hover, .mi.is-on { background: var(--sheet-row-hover); }
+.mi[aria-disabled="true"] { color: var(--sheet-ink-faint); cursor: not-allowed; }
+.mi .k { font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; color: var(--sheet-ink-faint); }
+.mi-why { padding: 0 16px 10px; font-size: 13px; line-height: 1.5; color: var(--sheet-ink); max-width: 260px; white-space: normal; }
+.menu.open-right { left: 0; right: auto; }
+.submenu { position: absolute; right: calc(100% + 4px); z-index: 7; min-width: 190px; background: var(--sheet); border: 1px solid var(--sheet-rule-strong); border-radius: 3px; padding: 4px 0; text-align: left; }
+.submenu .mi { min-height: 30px; }
+.submenu .here { font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; color: var(--sheet-ink); }
+.khint { margin-top: 12px; max-width: 520px; font-family: var(--font-meta); font-size: 11px; line-height: 1.7; letter-spacing: .04em; text-transform: uppercase; color: var(--sheet-ink-faint); }
+.khint .pin { margin-left: 6px; }
+
+/* elevation pane */
+.pane { flex: none; width: 360px; border: 1px solid var(--sheet-rule); border-radius: 2px; padding: 12px 19px 12px; }
+.pane-h { display: flex; align-items: center; justify-content: space-between; font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--sheet-ink-faint); min-height: 24px; }
+.pane svg { display: block; margin-top: 12px; }
+.pane .sv-line { stroke: var(--sheet-ink-faint); fill: none; stroke-width: 1; }
+.pane .sv-text { fill: var(--sheet-ink-faint); font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; }
+.pane-acts { display: flex; justify-content: center; }
+
+/* spec lens: two panes */
+.spec2 { flex: 1; min-height: 0; display: grid; grid-template-columns: 520px 1fr; gap: 24px; }
+.lpane { display: flex; flex-direction: column; min-height: 0; }
+.llist { border-top: 1px solid var(--sheet-rule-strong); }
+.lrow { display: grid; grid-template-columns: 1fr auto 64px; align-items: center; gap: 12px; width: 100%; min-height: var(--row); padding: 8px 12px; border-bottom: 1px solid var(--sheet-rule); text-align: left; }
+.lrow[aria-current="true"] { outline: 1px solid var(--sheet-rule-strong); outline-offset: -1px; }
+.lrow:hover { background: var(--sheet-row-hover); }
+.lrow .of { font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; color: var(--sheet-ink-faint); text-align: right; }
+.lrow .nm { font-size: 14px; font-weight: 500; color: var(--sheet-ink); }
+.lfoot { padding-top: 12px; display: flex; align-items: center; }
+.fpane { border-left: 1px solid var(--sheet-rule); padding-left: 24px; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.f-need { display: flex; align-items: center; font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--sheet-ink-muted); min-height: 22px; }
+.f-title { display: flex; align-items: center; gap: 12px; margin-top: 4px; flex-wrap: wrap; }
+.f-h { font-family: var(--font-display); font-size: 24px; line-height: 1.2; color: var(--sheet-ink); }
+.fields { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px 48px; }
+.fld { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.fld.wide { grid-column: 1 / -1; }
+.fld.tall2 { grid-row: span 2; }
+.fl { display: flex; align-items: center; font-family: var(--font-meta); font-size: 11px; font-weight: 500; line-height: 1; letter-spacing: .06em; text-transform: uppercase; color: var(--sheet-ink-muted); min-height: 16px; }
+.fl .pin { margin-left: 6px; }
+.fv { font-size: 15px; line-height: 1.5; color: var(--sheet-ink); display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
+.fv.empty { height: 24px; border-bottom: 1px solid var(--sheet-rule); }
+.fv .act { min-height: 32px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip { font-size: 13px; line-height: 1.4; border: 1px solid var(--sheet-rule-strong); border-radius: 2px; padding: 4px 10px; color: var(--sheet-ink); white-space: nowrap; }
+.chips .act { min-height: 32px; }
+.arith { font-size: 14px; color: var(--sheet-ink); font-variant-numeric: tabular-nums; }
+.imgbox { width: 200px; height: 140px; border: 1px dashed var(--sheet-ink-faint); border-radius: 2px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 18px; font-family: var(--font-meta); font-size: 11px; line-height: 1.6; letter-spacing: .06em; text-transform: uppercase; color: var(--sheet-ink-faint); }
+.swatch { display: block; }
+.swatch rect.frame { fill: none; stroke: var(--sheet-rule); }
+.swatch path { fill: none; stroke: var(--sheet-ink-faint); stroke-width: 1; }
+.chk { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; color: var(--sheet-ink); min-height: 32px; }
+.chk input { width: 16px; height: 16px; margin: 0; accent-color: var(--sheet-ink); }
+.f-dim { margin-top: auto; align-self: flex-end; font-size: 14px; color: var(--sheet-ink-faint); display: flex; align-items: center; }
+
+/* search and fill */
+.search { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; border: 1px solid var(--sheet-rule-strong); border-radius: 2px; background: var(--sheet); }
+.search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 15px; color: var(--sheet-ink); }
+.search .k { font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; color: var(--sheet-ink-faint); }
+.results { margin-top: 4px; border: 1px solid var(--sheet-rule); border-radius: 2px; }
+.res { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; min-height: 44px; padding: 0 12px; border-bottom: 1px solid var(--sheet-rule); border-left: 2px solid transparent; font-size: 14px; color: var(--sheet-ink); }
+.res[aria-selected="true"] { border-left-color: var(--sheet-ink); background: var(--sheet-row-hover); }
+.res .rs { color: var(--sheet-ink-muted); }
+.res-more { padding: 0 12px; }
+.preview { margin-top: 18px; border: 1px solid var(--sheet-rule-strong); border-radius: 2px; padding: 16px 18px; display: grid; gap: 4px; justify-items: start; }
+.pv-need { font-size: 14px; font-weight: 500; color: var(--sheet-ink); display: flex; align-items: center; }
+.pv-prod { font-size: 13px; color: var(--sheet-ink-muted); }
+.pv-s { margin-top: 8px; font-size: 14px; line-height: 1.5; color: var(--sheet-ink); max-width: 56ch; }
+
+/* front matter on the sheet */
+.sfront { flex: none; display: flex; align-items: center; font-size: 16px; color: var(--sheet-ink); font-variant-numeric: tabular-nums; margin-bottom: 12px; }
+.sfront .rough { margin-left: 0; }
+
+/* release foot */
+.clipbox { flex: 1; min-height: 0; overflow: hidden; }
+.rfoot { flex: none; padding-top: 18px; border-top: 1px solid var(--sheet-rule-strong); display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.rfoot-row { display: flex; align-items: center; }
+.pick { display: inline-flex; align-items: center; min-height: 32px; }
+
+/* undo toast */
+.toast { flex: none; width: 560px; display: flex; align-items: center; gap: 24px; margin-top: auto; background: var(--sheet-toast); color: var(--sheet-toast-ink); border-radius: 3px; padding: 4px 16px; font-size: 14px; min-height: 52px; }
+.toast p { flex: 1; }
+.sheet .toast .act, .psheet .toast .act { --act-ink: var(--sheet-toast-ink); --act-rule: var(--sheet-toast-ink); --act-strong: var(--sheet-toast-ink); }
+.toast .secs { font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; }
+.toast .pin { background: var(--sheet); }
+.example { margin-top: 36px; width: 760px; }
+.ex-k { font-family: var(--font-meta); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--sheet-ink-faint); display: flex; align-items: center; margin-bottom: 6px; }
+.example .st td { color: var(--sheet-ink-faint); }
+.example .st-released { background: var(--sheet-ink-faint); border-color: var(--sheet-ink-faint); }
+
+/* finishes */
+.sw24 { display: block; }
+.sw24 rect { stroke: var(--sheet-rule-strong); stroke-width: 1; }
+.fin-foot { margin-top: 24px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.fin-s { font-size: 14px; line-height: 1.5; max-width: 56ch; color: var(--sheet-ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+@media (forced-colors: active) {
+  .pin, .act--terminal, .stamp { border: 1px solid ButtonText; }
+  .st tr.on, .lrow[aria-current="true"] { outline: 1px solid ButtonText; }
+  .act:focus-visible, .lens:focus-visible, .rr:focus-visible, .mi:focus-visible, .dots:focus-visible, .lrow:focus-visible, .act--terminal:focus-visible { outline: 2px solid Highlight; }
+  .act .w { text-decoration: underline; }
+}
+
+
+</style>
+</head>
+<body>
+<h1 class="vh">Proposed: Direction A, The Build room, at 1440</h1>
+<div id="bar">
+  <span class="fb-cap">Proposed · Direction A, The Build room · Thu 8 Oct 2026 · fixture from the local walk · illustrative values marked in the notes</span>
+  <span class="fb-acts">
+    <button class="act" type="button" data-go="frame-a1" aria-pressed="false"><span class="w">a1</span></button>
+    <button class="act" type="button" data-go="frame-a2" aria-pressed="false"><span class="w">a2</span></button>
+    <button class="act" type="button" data-go="frame-a3" aria-pressed="false"><span class="w">a3</span></button>
+    <button class="act" type="button" data-go="frame-a4" aria-pressed="false"><span class="w">a4</span></button>
+    <button class="act" type="button" data-go="frame-a5" aria-pressed="false"><span class="w">a5</span></button>
+    <button class="act" type="button" data-go="frame-a6" aria-pressed="false"><span class="w">a6</span></button>
+    <button class="act" type="button" data-go="frame-a7" aria-pressed="false"><span class="w">a7</span></button>
+    <button class="act" type="button" data-go="frame-a8" aria-pressed="false"><span class="w">a8</span></button>
+    <button class="act" type="button" data-go="frame-a9" aria-pressed="false"><span class="w">a9</span></button>
+    <button class="act" type="button" data-go="frame-a10" aria-pressed="false"><span class="w">a10</span></button>
+    <button class="act" type="button" data-go="frame-a11" aria-pressed="false"><span class="w">a11</span></button>
+  </span>
+</div>
+<p class="vh" id="announce" role="status" aria-live="polite"></p>
+<main class="frames">
+<section class="fw" data-frame="frame-a1" aria-labelledby="cap-a1">
+  <h2 class="t-head cap" id="cap-a1">a1 · The overview and the door in</h2>
+  <div class="desk">
+    <div class="cols">
+      <nav class="spine" aria-label="The spine">
+        <button class="act putdown" type="button"><span class="ar" aria-hidden="true">⟵</span><span class="w">Put down</span></button>
+        <p class="spine-name">the client</p>
+        <span class="spine-strata" aria-hidden="true"><i></i><i></i><i></i></span>
+        <p class="spine-state">Project<br>Active</p>
+        <ul class="spine-list">
+          <li><span class="sl-n">Client approvals</span><span class="sl-s">Nothing yet</span></li>
+          <li><span class="sl-n">Schedule</span><span class="sl-s">Not known yet</span></li>
+          <li class="on"><span class="sl-n">Pieces</span><span class="sl-s">26 lines<span class="pin" aria-hidden="true">6</span></span>
+            <ul class="spine-sub"><li>Hall</li><li>Living Room</li><li class="more">+5 more</li></ul>
+          </li>
+          <li><span class="sl-n">Money</span><span class="sl-s">Nothing yet</span></li>
+          <li><span class="sl-n">Closing the book</span><span class="sl-s">Nothing yet</span></li>
+          <li><span class="sl-n">The record</span><span class="sl-s">Nothing yet</span></li>
+        </ul>
+        <div class="filed">
+          <span class="t-head">Filed with this job</span>
+          <ul>
+            <li><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.5"/><path d="M5 9l1.2-3.2L9 5 7.8 8.2z"/></svg>Plan room</li>
+            <li><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Spec book</li>
+            <li><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="1.5" width="4.5" height="4.5"/><rect x="8" y="1.5" width="4.5" height="4.5"/><rect x="1.5" y="8" width="4.5" height="4.5"/><rect x="8" y="8" width="4.5" height="4.5"/></svg>Boards</li>
+            <li><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="5" r="2.5"/><path d="M2.5 12.5c.5-2.3 2.3-3.5 4.5-3.5s4 1.2 4.5 3.5"/></svg>Call sheet</li>
+          </ul>
+        </div>
+      </nav>
+      <div class="sheet-col">
+        <article class="paper" aria-labelledby="t-a1">
+          <div class="strip">
+            <p class="strip-eye">The client · Project</p>
+            <div class="strip-row"><span class="strip-n">21 placeholders</span><button class="act" type="button"><span class="w">+4 more</span></button><span class="pin" aria-hidden="true">1</span></div>
+          </div>
+          <section aria-labelledby="t-a1">
+            <div class="rrule"></div>
+            <div class="rhead">
+              <div>
+                <h3 class="rh-name" id="t-a1">Pieces</h3>
+                <p class="rh-sub">by room · 7 rooms · 26 lines</p>
+                <p class="rh-sub2">21 placeholders · 4 specced · nothing released</p>
+              </div>
+              <div class="rh-acts">
+                <div class="rh-row"><button class="act act--inked" type="button"><span class="w">Work the pieces →</span></button><button class="act" type="button"><span class="w">Add to the job</span></button><span class="pin" aria-hidden="true">2</span></div>
+                <div class="rh-row"><span class="gated"><button class="act" type="button" aria-disabled="true" aria-describedby="why-a1-rel"><span class="w">Release for authorization</span></button><span class="why" id="why-a1-rel">Nothing is ready to release yet.</span></span><button class="act" type="button"><span class="w">Fold ↑</span></button></div>
+              </div>
+            </div>
+            <p class="front"><span class="num">~$69,328 roughed · nothing released</span><span class="pin" aria-hidden="true">3</span></p>
+            <div class="gone"><span class="pin" aria-hidden="true">4</span></div>
+            <div class="rooms">
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Hall</h4><p class="or-c">4 lines · 2 placeholders</p><p class="or-m">~$3,505</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Living Room</h4><p class="or-c">6 lines · 5 placeholders<span class="pin" aria-hidden="true">5</span></p><p class="or-m">~$23,564</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Dining</h4><p class="or-c">4 lines · 2 placeholders</p><p class="or-m">~$17,330</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Kitchen</h4><p class="or-c">4 lines · 2 placeholders</p><p class="or-m">~$5,648</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Primary Bath</h4><p class="or-c">8 lines · 7 placeholders</p><p class="or-m">~$7,140</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Sunroom</h4><p class="or-c">2 lines · 1 placeholder</p><p class="or-m">~$3,206</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Bedroom</h4><p class="or-c">4 lines · 2 placeholders</p><p class="or-m">~$8,935</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            </div>
+          </section>
+          <section aria-labelledby="t-a1-mo">
+            <div class="rrule" style="margin-top:48px"></div>
+            <div class="rhead"><div><h3 class="rh-name" id="t-a1-mo">Money</h3><p class="rh-sub">Nothing yet</p></div><div class="rh-acts"><div class="rh-row"><button class="act" type="button"><span class="w">Fold ↑</span></button></div></div></div>
+          </section>
+        </article>
+      </div>
+      <aside class="mrail" aria-label="The margin">
+        <div class="mnote">
+          <p>– One client, one paper. The rail on the left says…</p>
+          <button class="x" type="button" aria-label="Dismiss">×</button>
+          <button class="act" type="button"><span class="w">More</span></button>
+          <span class="t-meta">Appears once ·<br>recedes on use</span>
+        </div>
+        <div class="mhead"><span class="t-head">In the margin</span><button class="act" type="button"><span class="w">+ Note</span></button></div>
+        <p class="mempty">The margin — decisions, messages, and money gather here</p>
+      </aside>
+    </div>
+    <footer class="drawer">
+      <div class="dr-left"><span class="dr-word">Patina</span><span class="dr-sep">/</span><span class="dr-crumb">Document</span></div>
+      <div class="dr-center">
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Library</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.5"/><path d="M2 12.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg>People</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 4.5v-3h3M9.5 1.5h3v3M12.5 9.5v3h-3M4.5 12.5h-3v-3"/></svg>The Scans</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Ledgers ↑</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>Find anything <span class="kbd">⌘K</span></span>
+      </div>
+      <div class="dr-right">
+        <span class="dr-mono">On hand today <span class="dr-time">2h 13m</span></span>
+        <span class="dr-mono"><span class="bell"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 10V6.5a3.5 3.5 0 0 1 7 0V10l1 1.5h-9zM5.8 12.8a1.3 1.3 0 0 0 2.4 0"/></svg><span class="dot" aria-hidden="true"></span></span>The post</span>
+        <span class="who"><span class="avatar">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>The letterhead strip counts placeholders. A line that is only a name, with no product and no maker, is a placeholder and says so; today the same strip reads “4 unspecified” while each of those lines is stamped as specified.</span><span class="t-meta">R1-F1 · R2-F1 · D1 · Q3</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>One act opens building: WORK THE PIECES →. The head’s other act is renamed ADD TO THE JOB, so “Add a line” means one thing on this paper. RELEASE FOR AUTHORIZATION sits here, withheld with its reason. Today’s spec act and bill act are gone from the head: there is nothing to bill on a name at $0.</span><span class="t-meta">R1-F13 · R1-F4 · R2-F4 · R3-11</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>The job’s rough total is front matter. It prints with ~ because every figure under it is a rough price (an allowance), never a quote.</span><span class="t-meta">R1-F23 · D12 · Q7</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>Plan the project work, ADD THE FIRST TASK, the FOLIO + FILE preamble, READ BY · ROOM · MAKER · NEXT ACT and each room’s ADD A CONCEPT RENDER leave this region. Tasks belong to Schedule; the room’s folio opens beside the table in the Build room.</span><span class="t-meta">R2-F9 · R1-F14</span></li>
+      <li><span class="pin" aria-hidden="true">5</span><span>Rooms, not lines, are the overview: one row per room with its counts and rough total, the quick ADD A LINE kept, and WORK THIS ROOM → into the Build room at that room. A room row unfolds to its lines; a released line still unfolds to the buyer’s instrument as today.</span><span class="t-meta">Q14 · R2-F4 · R3-11 · R1-F14</span></li>
+      <li><span class="pin" aria-hidden="true">6</span><span>The spine counts the region in lines, so the reader sees its size before opening it.</span><span class="t-meta">R2-F12</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="fw" data-frame="frame-a2" aria-labelledby="cap-a2">
+  <h2 class="t-head cap" id="cap-a2">a2 · Rough in, Living Room, the moment after four lines</h2>
+  <div class="desk">
+    <div class="sheet">
+      <header class="shead">
+        <div class="sh-l"><button class="act" type="button"><span class="w"><span class="ar" aria-hidden="true">←</span>Whole Home Renovation</span></button><h3 class="s-title">Build the pieces</h3></div>
+        <div class="lenses" role="group" aria-label="Lens"><button class="lens" type="button" aria-pressed="true">Rough in</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Spec</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Price</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Release</button></div>
+        <p class="sh-r">Living Room · 4 lines · 4 placeholders</p>
+      </header>
+      <p class="sread"><span><b>Rough in</b> · Name it, count it, place it. Specs, prices and buying come later.</span></p>
+      <div class="swork">
+        <nav class="srail" aria-label="Rooms">
+          <p class="sr-h">Rooms</p>
+          <ul>
+          <li><button class="rr" type="button"><span>Hall</span><span class="rr-n">2</span></button></li>
+          <li><button class="rr" type="button" aria-current="true"><span>Living Room</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Dining</span><span class="rr-n">3</span></button></li>
+          <li><button class="rr" type="button"><span>Kitchen</span><span class="rr-n">2</span></button></li>
+          <li><button class="rr" type="button"><span>Primary Bath</span><span class="rr-n">8</span></button></li>
+          <li><button class="rr" type="button"><span>Sunroom</span><span class="rr-n">1</span></button></li>
+          <li><button class="rr" type="button"><span>Bedroom</span><span class="rr-n">4</span></button></li>
+          </ul>
+          <ul class="sr-x">
+            <li><button class="rr" type="button"><span>Not in a room yet</span><span class="rr-n">0</span></button></li>
+            <li><button class="rr" type="button"><span>Removed</span><span class="rr-n">0</span></button></li>
+          </ul>
+          <div class="sr-foot"><button class="act" type="button"><span class="w">+ Room</span></button></div>
+        </nav>
+        <div class="sbody sbody--pane">
+          <div class="sb-main">
+            <div class="clip-top"><table class="st"><colgroup><col style="width:auto"><col style="width:72px"><col style="width:96px"><col style="width:120px"><col style="width:140px"><col style="width:52px"></colgroup><tbody>
+<tr><td><span class="ln">Console table</span></td><td class="r">1</td><td>each</td><td class="r rough">~$1,200</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Console table">⋯</button></td></tr>
+<tr><td><span class="ln">Runner, 2′6″ × 10′</span></td><td class="r">1</td><td>each</td><td class="r rough">~$680</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Runner, 2′6″ × 10′">⋯</button></td></tr>
+<tr class="entry"><td><span class="vh">New line in Hall</span></td><td></td><td></td><td></td><td></td><td></td></tr>
+</tbody></table></div>
+            <div class="rhd"><h4 class="rh-n" id="rm-a2">Living Room</h4><div class="rh-a"><button class="act" type="button" aria-pressed="true"><span class="w">Elevation</span></button><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Living Room">⋯</button></div></div>
+            <table class="st" aria-labelledby="rm-a2"><colgroup><col style="width:auto"><col style="width:72px"><col style="width:96px"><col style="width:120px"><col style="width:140px"><col style="width:52px"></colgroup>
+            <thead><tr><th scope="col">Line</th><th scope="col" class="r">Qty</th><th scope="col">Unit</th><th scope="col" class="r">Rough $<span class="pin" aria-hidden="true">4</span></th><th scope="col">Stage<span class="pin" aria-hidden="true">5</span></th><th scope="col"><span class="vh">Line menu</span></th></tr></thead>
+            <tbody>
+            <tr><td><span class="ln">Custom cabinet</span></td><td class="r">2</td><td>each</td><td class="r rough">~$4,800</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Custom cabinet">⋯</button></td></tr>
+            <tr><td><span class="ln">Countertop for custom cabinets</span></td><td class="r">2</td><td>each</td><td class="r rough">~$1,400</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Countertop for custom cabinets">⋯</button></td></tr>
+            <tr class="hov"><td><span class="ln">Hardware, 2 knobs for custom cabinet</span></td><td class="r">2</td><td>each</td><td class="r rough"></td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><div class="mw"><button class="dots is-open" type="button" aria-haspopup="menu" aria-expanded="true" aria-label="More for Hardware, 2 knobs for custom cabinet">⋯</button><ul class="menu" role="menu" aria-label="Hardware, 2 knobs for custom cabinet"><li role="none"><button class="mi" type="button" role="menuitem">Fill with a product</button></li><li role="none"><button class="mi" type="button" role="menuitem">Move to room…</button></li><li role="none"><button class="mi" type="button" role="menuitem">Also place in…</button></li><li role="none"><button class="mi" type="button" role="menuitem">Remove<span class="pin" aria-hidden="true">3</span></button></li></ul></div></td></tr>
+            <tr><td><span class="ln">Hardware, 4 pulls for custom cabinet</span></td><td class="r">4</td><td>each</td><td class="r rough"></td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Hardware, 4 pulls for custom cabinet">⋯</button></td></tr>
+            <tr class="entry on"><td><span class="vh">New line in Living Room</span><i class="caret" aria-hidden="true"></i><span class="pin" aria-hidden="true">1</span></td><td></td><td></td><td></td><td></td><td></td></tr>
+            </tbody></table>
+            <p class="khint">Enter adds the line · Tab moves across · ⌘↓ next room · Paste a list to add several · / searches the Library<span class="pin" aria-hidden="true">2</span></p>
+            <div class="room-gap"></div>
+            <div class="rhd"><h4 class="rh-n" id="rm-a2d">Dining</h4><div class="rh-a"><button class="act" type="button" aria-pressed="false"><span class="w">Elevation</span></button><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Dining">⋯</button></div></div>
+            <table class="st" aria-labelledby="rm-a2d"><colgroup><col style="width:auto"><col style="width:72px"><col style="width:96px"><col style="width:120px"><col style="width:140px"><col style="width:52px"></colgroup>
+            <thead><tr><th scope="col">Line</th><th scope="col" class="r">Qty</th><th scope="col">Unit</th><th scope="col" class="r">Rough $</th><th scope="col">Stage</th><th scope="col"><span class="vh">Line menu</span></th></tr></thead>
+            <tbody>
+            <tr><td><span class="ln">Dining table, custom walnut</span></td><td class="r">1</td><td>each</td><td class="r rough">—</td><td><span class="stamp st-specced">SPECCED</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Dining table, custom walnut">⋯</button></td></tr>
+            <tr><td><span class="ln">Dining chairs</span></td><td class="r">8</td><td>each</td><td class="r rough">~$900</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Dining chairs">⋯</button></td></tr>
+            <tr><td><span class="ln">Counter stools</span></td><td class="r">3</td><td>each</td><td class="r rough">~$420</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Counter stools">⋯</button></td></tr>
+            <tr class="entry"><td><span class="vh">New line in Dining</span></td><td></td><td></td><td></td><td></td><td></td></tr>
+            </tbody></table>
+          </div>
+          <aside class="pane" aria-label="Living Room elevation">
+            <p class="pane-h"><span>Living Room · Elevation</span><span class="pin" aria-hidden="true">6</span></p>
+            <svg width="320" height="200" viewBox="0 0 320 200" role="img" aria-label="Elevation not on file">
+              <rect class="sv-line" x="0.5" y="0.5" width="319" height="199"/>
+              <path class="sv-line" d="M24 168h272M60 168V96h80v72M150 168V96h80v72M60 120h170M260 168V64" stroke-dasharray="3 4"/>
+              <text class="sv-text" x="160" y="44" text-anchor="middle">ELEVATION NOT ON FILE</text>
+            </svg>
+            <div class="pane-acts"><button class="act" type="button"><span class="w">+ File</span></button></div>
+          </aside>
+        </div>
+      </div>
+    </div>
+    <footer class="drawer">
+      <div class="dr-left"><span class="dr-word">Patina</span><span class="dr-sep">/</span><span class="dr-crumb">Document</span></div>
+      <div class="dr-center">
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Library</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.5"/><path d="M2 12.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg>People</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 4.5v-3h3M9.5 1.5h3v3M12.5 9.5v3h-3M4.5 12.5h-3v-3"/></svg>The Scans</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Ledgers ↑</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>Find anything <span class="kbd">⌘K</span></span>
+      </div>
+      <div class="dr-right">
+        <span class="dr-mono">On hand today <span class="dr-time">2h 21m</span></span>
+        <span class="dr-mono"><span class="bell"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 10V6.5a3.5 3.5 0 0 1 7 0V10l1 1.5h-9zM5.8 12.8a1.3 1.3 0 0 0 2.4 0"/></svg><span class="dot" aria-hidden="true"></span></span>The post</span>
+        <span class="who"><span class="avatar">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>The next line is already open, with the cursor in it. Enter saves the line and starts the next one in the same room. No sheet opens and nothing closes, so four lines are four Enters. Today the Add a line sheet closes after every save and Enter does nothing.</span><span class="t-meta">R1-F11 · R2-F6 · R3-7</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>The keys are printed once, under the table: Enter, Tab, ⌘↓ for the next room, paste for a list, / for the Library.</span><span class="t-meta">R3-2 · D13</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>Everything a rough line needs is on the line itself: fill with a product, move to another room, place it in more rooms, remove it. Nothing sends her to another page.</span><span class="t-meta">R3-6 · R3-3</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>Rough $ writes an allowance and prints with ~. The two hardware lines are left blank: a rough price is optional, and a blank cell is not $0.</span><span class="t-meta">R1-F23 · R1-F3 · D12 · Q7</span></li>
+      <li><span class="pin" aria-hidden="true">5</span><span>What is absent: no buying cells, no Bill, no eleven roads, no trade cost and no client price. Rough in only names, counts and places. The stage reads PLACEHOLDER until a product or a maker is named.</span><span class="t-meta">R1-F6 · R2-F3 · R1-F1</span></li>
+      <li><span class="pin" aria-hidden="true">6</span><span>The room’s elevation opens beside the table, so she types from the drawing she is walking. Nothing is on file for this job yet, so the pane offers + FILE.</span><span class="t-meta">R2 §5</span></li>
+      <li><span class="pin" aria-hidden="true">7</span><span>At this moment the rail counts primary rooms only: the oak floor and the tile have not been placed yet, and the sofa has not been added. Hall’s table is scrolled past at the top.</span><span class="t-meta">§4.2 · frame state</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="fw" data-frame="frame-a3" aria-labelledby="cap-a3">
+  <h2 class="t-head cap" id="cap-a3">a3 · Where am I: the standing head, on the Release lens</h2>
+  <div class="desk">
+    <div class="sheet">
+      <header class="shead">
+        <div class="sh-l"><button class="act" type="button"><span class="w"><span class="ar" aria-hidden="true">←</span>Whole Home Renovation</span></button><h3 class="s-title">Build the pieces</h3></div>
+        <div class="lenses" role="group" aria-label="Lens"><button class="lens" type="button" aria-pressed="false">Rough in</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Spec</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Price</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="true">Release</button><span class="pin" aria-hidden="true">1</span></div>
+        <p class="sh-r">Whole job · 25 lines · 6 ready</p>
+      </header>
+      <p class="sread"><span><b>Release</b> · Check what the client will see, then release rooms for authorization. Nothing here edits a spec or a price.</span><span class="pin" aria-hidden="true">2</span></p>
+      <div class="swork">
+        <nav class="srail" aria-label="Rooms">
+          <p class="sr-h">Rooms</p>
+          <ul>
+          <li><button class="rr" type="button"><span>Hall</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Living Room</span><span class="rr-n">6</span></button></li>
+          <li><button class="rr" type="button"><span>Dining</span><span class="rr-n">3</span></button></li>
+          <li><button class="rr" type="button"><span>Kitchen</span><span class="rr-n">5</span></button></li>
+          <li><button class="rr" type="button"><span>Primary Bath</span><span class="rr-n">8</span></button></li>
+          <li><button class="rr" type="button"><span>Sunroom</span><span class="rr-n">1</span></button></li>
+          <li><button class="rr" type="button"><span>Bedroom</span><span class="rr-n">4</span></button></li>
+          </ul>
+          <ul class="sr-x">
+            <li><button class="rr" type="button"><span>Not in a room yet</span><span class="rr-n">0</span></button></li>
+            <li><button class="rr" type="button"><span>Removed</span><span class="rr-n">1</span></button></li>
+          </ul>
+          <div class="sr-foot"><button class="act" type="button"><span class="w">+ Room</span></button></div>
+        </nav>
+        <div class="sbody">
+          <div class="clipbox">
+            <table class="st">
+            <colgroup><col style="width:auto"><col style="width:300px"><col style="width:150px"><col style="width:250px"><col style="width:150px"><col style="width:52px"></colgroup>
+            <thead><tr><th scope="col">Line</th><th scope="col">Room</th><th scope="col">Stage</th><th scope="col">Readiness<span class="pin" aria-hidden="true">3</span></th><th scope="col">For the client<span class="pin" aria-hidden="true">6</span></th><th scope="col"><span class="vh">Line menu</span></th></tr></thead>
+            <tbody>
+            <tr class="grp"><th scope="rowgroup" colspan="6"><span class="grp-in"><span>Hall</span><span><button class="act" type="button"><span class="w">Ready for Leah</span></button></span></span></th></tr>
+            <tr><td><span class="ln">Console table</span></td><td>Hall</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td><span class="muted">Needs a product or a maker</span></td><td><span class="muted">—</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Console table">⋯</button></td></tr>
+            <tr><td><span class="ln">Runner, 2′6″ × 10′</span></td><td>Hall</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td><span class="muted">Needs a product or a maker</span></td><td><span class="muted">—</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Runner, 2′6″ × 10′">⋯</button></td></tr>
+            </tbody><tbody>
+            <tr class="grp"><th scope="rowgroup" colspan="6"><span class="grp-in"><span>Living Room</span><span><button class="act" type="button"><span class="w">Ready for Leah</span></button><span class="pin" aria-hidden="true">4</span></span></span></th></tr>
+            <tr><td><span class="ln">Custom cabinet</span></td><td>Living Room</td><td><span class="stamp st-ready">READY</span></td><td>Ready</td><td><button class="act pick" type="button" aria-haspopup="listbox"><span class="w">Selected ▾</span></button></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Custom cabinet">⋯</button></td></tr>
+            <tr><td><span class="ln">Countertop for custom cabinets</span></td><td>Living Room</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td><span class="muted">Needs a product or a maker</span></td><td><span class="muted">—</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Countertop for custom cabinets">⋯</button></td></tr>
+            <tr><td><span class="ln">Hardware, 2 knobs for custom cabinet</span></td><td>Living Room</td><td><span class="stamp st-ready">READY</span></td><td>Ready</td><td><button class="act pick" type="button" aria-haspopup="listbox"><span class="w">Selected ▾</span></button></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Hardware, 2 knobs for custom cabinet">⋯</button></td></tr>
+            <tr><td><span class="ln">Hardware, 4 pulls for custom cabinet</span></td><td>Living Room</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td><span class="muted">Needs a product or a maker</span></td><td><span class="muted">—</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Hardware, 4 pulls for custom cabinet">⋯</button></td></tr>
+            <tr><td><span class="ln">Sofa, 96 in</span></td><td>Living Room</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td><span class="muted">Needs a product or a maker</span></td><td><span class="muted">—</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Sofa, 96 in">⋯</button></td></tr>
+            <tr><td><span class="ln">White oak floor, satin Bona finish</span></td><td>Hall · Living Room · Dining · Kitchen</td><td><span class="stamp st-ready">READY</span></td><td>Ready</td><td><button class="act pick" type="button" aria-haspopup="listbox"><span class="w">Selected ▾</span></button></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for White oak floor, satin Bona finish">⋯</button></td></tr>
+            </tbody><tbody>
+            <tr class="grp"><th scope="rowgroup" colspan="6"><span class="grp-in"><span>Dining</span><span><button class="act" type="button"><span class="w">Ready for Leah</span></button></span></span></th></tr>
+            <tr><td><span class="ln">Dining table, custom walnut</span></td><td>Dining</td><td><span class="stamp st-ready">READY</span></td><td>Ready</td><td><button class="act pick" type="button" aria-haspopup="listbox"><span class="w">Selected ▾</span></button></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Dining table, custom walnut">⋯</button></td></tr>
+            <tr><td><span class="ln">Dining chairs</span></td><td>Dining</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td><span class="muted">Needs a product or a maker</span></td><td><span class="muted">—</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Dining chairs">⋯</button></td></tr>
+            <tr><td><span class="ln">Counter stools</span></td><td>Kitchen</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td><span class="muted">Needs a product or a maker</span></td><td><span class="muted">—</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Counter stools">⋯</button></td></tr>
+            </tbody></table>
+          </div>
+          <div class="rfoot">
+            <p class="consequence">Releasing sends 6 lines to the client for authorization. Their prices lock when the client signs.</p>
+            <div class="rfoot-row"><button class="act--terminal" type="button">Release 6 lines for authorization</button><span class="pin" aria-hidden="true">5</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="drawer">
+      <div class="dr-left"><span class="dr-word">Patina</span><span class="dr-sep">/</span><span class="dr-crumb">Document</span></div>
+      <div class="dr-center">
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Library</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.5"/><path d="M2 12.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg>People</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 4.5v-3h3M9.5 1.5h3v3M12.5 9.5v3h-3M4.5 12.5h-3v-3"/></svg>The Scans</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Ledgers ↑</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>Find anything <span class="kbd">⌘K</span></span>
+      </div>
+      <div class="dr-right">
+        <span class="dr-mono">On hand today <span class="dr-time">2h 21m</span></span>
+        <span class="dr-mono"><span class="bell"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 10V6.5a3.5 3.5 0 0 1 7 0V10l1 1.5h-9zM5.8 12.8a1.3 1.3 0 0 0 2.4 0"/></svg><span class="dot" aria-hidden="true"></span></span>The post</span>
+        <span class="who"><span class="avatar">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>The head names the place and the work: the job to go back to, BUILD THE PIECES, and the lens in full ink with a 2px rule. It never recedes. The four lens words remove acts; they never duplicate content, which is the test that separates a lens from a tab.</span><span class="t-meta">R2-F10 · R1-F15 · Q1</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>One sentence under the head says what this lens does and what it does not do. It changes with the lens.</span><span class="t-meta">R2 §4 · R2-F12 · R1-F2</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>Readiness names the blocker in plain words. The sentence that today waits in the unfold’s Order cell moves to the stage where it can be acted on.</span><span class="t-meta">R3 §5 · R2 §2 · R1-F6</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>READY FOR LEAH is the first hire’s hand-back for a room: it writes each line’s disposition and sends nothing. The first hire is Maya Reyes [illustrative].</span><span class="t-meta">R2 §5 · Q13</span></li>
+      <li><span class="pin" aria-hidden="true">5</span><span>The release is the one filled act in the Build room, and only here, with its consequence sentence directly above it.</span><span class="t-meta">R1-F6 · R2-F1 · Q14</span></li>
+      <li><span class="pin" aria-hidden="true">6</span><span>What the client will see is set per ready line (Selected, Alternate or Candidate). A placeholder prints — and never reaches the client page.</span><span class="t-meta">R2-F8 · Q3</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="fw" data-frame="frame-a4" aria-labelledby="cap-a4">
+  <h2 class="t-head cap" id="cap-a4">a4 · Spec pass, Custom cabinet</h2>
+  <div class="desk">
+    <div class="sheet">
+      <header class="shead">
+        <div class="sh-l"><button class="act" type="button"><span class="w"><span class="ar" aria-hidden="true">←</span>Whole Home Renovation</span></button><h3 class="s-title">Build the pieces</h3></div>
+        <div class="lenses" role="group" aria-label="Lens"><button class="lens" type="button" aria-pressed="false">Rough in</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="true">Spec</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Price</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Release</button></div>
+        <p class="sh-r">Living Room · 6 lines · 3 placeholders</p>
+      </header>
+      <p class="sread"><span><b>Spec</b> · Fill each line’s details and its product. No money here.</span></p>
+      <div class="swork">
+        <nav class="srail" aria-label="Rooms">
+          <p class="sr-h">Rooms</p>
+          <ul>
+          <li><button class="rr" type="button"><span>Hall</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button" aria-current="true"><span>Living Room</span><span class="rr-n">6</span></button></li>
+          <li><button class="rr" type="button"><span>Dining</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Kitchen</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Primary Bath</span><span class="rr-n">8</span></button></li>
+          <li><button class="rr" type="button"><span>Sunroom</span><span class="rr-n">2</span></button></li>
+          <li><button class="rr" type="button"><span>Bedroom</span><span class="rr-n">4</span></button></li>
+          </ul>
+          <ul class="sr-x">
+            <li><button class="rr" type="button"><span>Not in a room yet</span><span class="rr-n">0</span></button></li>
+            <li><button class="rr" type="button"><span>Removed</span><span class="rr-n">0</span></button></li>
+          </ul>
+          <div class="sr-foot"><button class="act" type="button"><span class="w">+ Room</span></button></div>
+        </nav>
+        <div class="sbody">
+          <div class="spec2">
+            <div class="lpane">
+              <div class="rhd"><h4 class="rh-n">Living Room</h4></div>
+              <ul class="llist">
+              <li><button class="lrow" type="button" aria-current="true"><span><span class="nm">Custom cabinet</span></span><span><span class="stamp st-specced">SPECCED</span></span><span class="of">5 OF 6</span></button></li>
+              <li><button class="lrow" type="button"><span><span class="nm">Countertop for custom cabinets</span></span><span><span class="stamp st-placeholder">PLACEHOLDER</span></span><span class="of">0 OF 6</span></button></li>
+              <li><button class="lrow" type="button"><span><span class="nm">Hardware, 2 knobs for custom cabinet</span></span><span><span class="stamp st-specced">SPECCED</span></span><span class="of">1 OF 6</span></button></li>
+              <li><button class="lrow" type="button"><span><span class="nm">Hardware, 4 pulls for custom cabinet</span></span><span><span class="stamp st-placeholder">PLACEHOLDER</span></span><span class="of">0 OF 6</span></button></li>
+              <li><button class="lrow" type="button"><span><span class="nm">Sofa, 96 in</span></span><span><span class="stamp st-placeholder">PLACEHOLDER</span></span><span class="of">0 OF 6</span></button></li>
+              <li><button class="lrow" type="button"><span><span class="nm">White oak floor, satin Bona finish</span><span class="also">Also in Hall · Dining · Kitchen · 320 sq ft here</span></span><span><span class="stamp st-specced">SPECCED</span></span><span class="of">4 OF 6</span></button></li>
+              </ul>
+              <div class="lfoot"><button class="act act--inked" type="button"><span class="w">Next unfinished →</span></button><span class="pin" aria-hidden="true">5</span></div>
+            </div>
+            <div class="fpane" aria-labelledby="ln-a4">
+              <p class="f-need">What we need</p>
+              <div class="f-title"><h4 class="f-h" id="ln-a4">Custom cabinet · ×2</h4><span class="stamp st-specced">SPECCED</span><span class="pin" aria-hidden="true">3</span></div>
+              <div class="fields">
+                <div class="fld"><span class="fl">Maker</span><span class="fv">Hollis Millwork</span></div>
+                <div class="fld tall2"><span class="fl">Image<span class="pin" aria-hidden="true">6</span></span><span class="imgbox">Drop an image or paste a link</span></div>
+                <div class="fld"><span class="fl">Product</span><span class="fv"><button class="act" type="button"><span class="w">Fill with a product</span></button><button class="act" type="button"><span class="w">Bring in…</span></button></span></div>
+                <div class="fld"><span class="fl">Finish<span class="pin" aria-hidden="true">1</span></span><span class="fv">Painted</span></div>
+                <div class="fld"><span class="fl">Material</span><span class="fv">Paint grade</span></div>
+                <div class="fld"><span class="fl">Color</span><span class="fv">Farrow &amp; Ball Railings No. 31</span></div>
+                <div class="fld"><span class="fl">Dimensions</span><span class="fv empty" aria-label="Dimensions, empty"></span></div>
+                <div class="fld"><span class="fl">Exact location</span><span class="fv">See drawings</span></div>
+                <div class="fld"><span class="fl">Notes</span><span class="fv">Fluted doors, see elevation 3</span></div>
+                <div class="fld"><span class="fl">Rooms<span class="pin" aria-hidden="true">2</span></span><span class="chips"><span class="chip">Living Room · ×2</span><button class="act" type="button"><span class="w">+ Room</span></button></span></div>
+                <div class="fld"><span class="fl">Unit</span><span class="fv">each</span></div>
+                <div class="fld"><span class="fl">Labor</span><span class="fv"><button class="act" type="button"><span class="w">Add labor</span></button></span></div>
+                <div class="fld"><span class="fl">COM</span><label class="chk"><input type="checkbox"> This piece takes COM</label></div>
+              </div>
+              <p class="f-dim"><span class="num">~$4,800 each · set the price in Price</span><span class="pin" aria-hidden="true">4</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="drawer">
+      <div class="dr-left"><span class="dr-word">Patina</span><span class="dr-sep">/</span><span class="dr-crumb">Document</span></div>
+      <div class="dr-center">
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Library</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.5"/><path d="M2 12.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg>People</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 4.5v-3h3M9.5 1.5h3v3M12.5 9.5v3h-3M4.5 12.5h-3v-3"/></svg>The Scans</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Ledgers ↑</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>Find anything <span class="kbd">⌘K</span></span>
+      </div>
+      <div class="dr-right">
+        <span class="dr-mono">On hand today <span class="dr-time">2h 21m</span><span class="pin" aria-hidden="true">7</span></span>
+        <span class="dr-mono"><span class="bell"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 10V6.5a3.5 3.5 0 0 1 7 0V10l1 1.5h-9zM5.8 12.8a1.3 1.3 0 0 0 2.4 0"/></svg><span class="dot" aria-hidden="true"></span></span>The post</span>
+        <span class="who"><span class="avatar">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>The line’s fields are on the same surface as the line: maker, product, finish, material, color, dimensions, exact location and notes. Today they live on the spec-book route, a separate page with its own way back.</span><span class="t-meta">R1-F8 · R3-6 · R1-F10</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>The room is editable here, as placement chips. Today the spec book cannot assign a room at all.</span><span class="t-meta">R2-F5 · fix-now 8</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>The stamp flipped to SPECCED the moment a maker was named. It is derived from facts on the row, never typed.</span><span class="t-meta">R1-F1 · D1</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>No money on the Spec lens beyond the dim rough figure and where to set the real one.</span><span class="t-meta">R2 Q7 · Q7</span></li>
+      <li><span class="pin" aria-hidden="true">5</span><span>NEXT UNFINISHED → walks the room’s lines in order, skipping the ones already specced. The count beside each line is how many of six fields are filled.</span><span class="t-meta">R3 §6</span></li>
+      <li><span class="pin" aria-hidden="true">6</span><span>An image drops or pastes straight onto the line, even before there is a product.</span><span class="t-meta">R1-F25 · D15</span></li>
+      <li><span class="pin" aria-hidden="true">7</span><span>The clock still counts. The hold lives on the Document’s layout, so opening the Build room does not stop it and nothing pops up.</span><span class="t-meta">R1-F9 · D14 · R3-10</span></li>
+      <li><span class="pin" aria-hidden="true">8</span><span>Illustrative values on this frame: the maker Hollis Millwork, the color Farrow &amp; Ball Railings No. 31 and the note “Fluted doors, see elevation 3”.</span><span class="t-meta">§4.2 L1 [illustrative]</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="fw" data-frame="frame-a5" aria-labelledby="cap-a5">
+  <h2 class="t-head cap" id="cap-a5">a5 · One piece, four rooms</h2>
+  <div class="desk">
+    <div class="sheet">
+      <header class="shead">
+        <div class="sh-l"><button class="act" type="button"><span class="w"><span class="ar" aria-hidden="true">←</span>Whole Home Renovation</span></button><h3 class="s-title">Build the pieces</h3></div>
+        <div class="lenses" role="group" aria-label="Lens"><button class="lens" type="button" aria-pressed="false">Rough in</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="true">Spec</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Price</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Release</button></div>
+        <p class="sh-r">Hall · 4 lines · 2 placeholders</p>
+      </header>
+      <p class="sread"><span><b>Spec</b> · Fill each line’s details and its product. No money here.</span></p>
+      <div class="swork">
+        <nav class="srail" aria-label="Rooms">
+          <p class="sr-h">Rooms</p>
+          <ul>
+          <li><button class="rr" type="button" aria-current="true"><span>Hall</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Living Room</span><span class="rr-n">6</span></button></li>
+          <li><button class="rr" type="button"><span>Dining</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Kitchen</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Primary Bath</span><span class="rr-n">8</span></button></li>
+          <li><button class="rr" type="button"><span>Sunroom</span><span class="rr-n">2</span></button></li>
+          <li><button class="rr" type="button"><span>Bedroom</span><span class="rr-n">4</span></button></li>
+          </ul>
+          <ul class="sr-x">
+            <li><button class="rr" type="button"><span>Not in a room yet</span><span class="rr-n">0</span></button></li>
+            <li><button class="rr" type="button"><span>Removed</span><span class="rr-n">0</span></button></li>
+          </ul>
+          <div class="sr-foot"><button class="act" type="button"><span class="w">+ Room</span></button></div>
+        </nav>
+        <div class="sbody">
+          <div class="spec2">
+            <div class="lpane">
+              <div class="rhd"><h4 class="rh-n">Hall</h4></div>
+              <ul class="llist">
+              <li><button class="lrow" type="button"><span><span class="nm">Console table</span></span><span><span class="stamp st-placeholder">PLACEHOLDER</span></span><span class="of">0 OF 6</span></button></li>
+              <li><button class="lrow" type="button"><span><span class="nm">Runner, 2′6″ × 10′</span></span><span><span class="stamp st-placeholder">PLACEHOLDER</span></span><span class="of">0 OF 6</span></button></li>
+              <li><button class="lrow" type="button" aria-current="true"><span><span class="nm">White oak floor, satin Bona finish</span><span class="also">Also in Living Room · Dining · Kitchen · 120 sq ft here</span></span><span><span class="stamp st-specced">SPECCED</span><span class="pin" aria-hidden="true">3</span></span><span class="of">4 OF 6</span></button></li>
+              <li><button class="lrow" type="button"><span><span class="nm">Porcelain floor tile, 12 × 24, matte</span><span class="also">Also in Primary Bath · Sunroom · Kitchen · 36 sq ft here · back entry</span></span><span><span class="stamp st-specced">SPECCED</span><span class="pin" aria-hidden="true">5</span></span><span class="of">3 OF 6</span></button></li>
+              </ul>
+              <div class="lfoot"><button class="act act--inked" type="button"><span class="w">Next unfinished →</span></button></div>
+            </div>
+            <div class="fpane" aria-labelledby="ln-a5">
+              <p class="f-need">What we need</p>
+              <div class="f-title"><h4 class="f-h" id="ln-a5">White oak floor, satin Bona finish</h4><span class="stamp st-specced">SPECCED</span></div>
+              <div class="fields">
+                <div class="fld"><span class="fl">Maker</span><span class="fv">Nord Hardwood Co. · local</span></div>
+                <div class="fld"><span class="fl">Image</span><svg class="swatch" width="120" height="80" viewBox="0 0 120 80" role="img" aria-label="White oak sample"><rect class="frame" x="0.5" y="0.5" width="119" height="79"/><path d="M4 10c20-4 36 4 56 0s36-4 56 0"/><path d="M4 22c18 3 38-3 58 1s34 3 54-1"/><path d="M4 35c22-5 34 5 56 1s36-5 56-1"/><path d="M4 47c16 4 40-4 58 0s38 3 54-1"/><path d="M4 59c20-3 36 4 56 0s36-4 56 1"/><path d="M4 71c22 3 36-4 56-1s34 3 56-1"/></svg></div>
+                <div class="fld"><span class="fl">Finish</span><span class="fv">Satin Bona</span></div>
+                <div class="fld"><span class="fl">Plank width</span><span class="fv">TBD</span></div>
+                <div class="fld"><span class="fl">Unit<span class="pin" aria-hidden="true">4</span></span><span class="fv">sq ft</span></div>
+                <div class="fld"><span class="fl">Labor</span><span class="fv"><button class="act" type="button"><span class="w">Add labor</span></button></span></div>
+                <div class="fld wide"><span class="fl">Rooms<span class="pin" aria-hidden="true">1</span></span><span class="chips"><span class="chip">Hall · 120 sq ft</span><span class="chip">Living Room · 320 sq ft</span><span class="chip">Dining · 180 sq ft</span><span class="chip">Kitchen · 210 sq ft</span><button class="act" type="button"><span class="w">+ Room</span></button></span><p class="arith">830 sq ft × $11.50 / sq ft = $9,545<span class="pin" aria-hidden="true">2</span></p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="drawer">
+      <div class="dr-left"><span class="dr-word">Patina</span><span class="dr-sep">/</span><span class="dr-crumb">Document</span></div>
+      <div class="dr-center">
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Library</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.5"/><path d="M2 12.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg>People</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 4.5v-3h3M9.5 1.5h3v3M12.5 9.5v3h-3M4.5 12.5h-3v-3"/></svg>The Scans</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Ledgers ↑</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>Find anything <span class="kbd">⌘K</span></span>
+      </div>
+      <div class="dr-right">
+        <span class="dr-mono">On hand today <span class="dr-time">2h 21m</span></span>
+        <span class="dr-mono"><span class="bell"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 10V6.5a3.5 3.5 0 0 1 7 0V10l1 1.5h-9zM5.8 12.8a1.3 1.3 0 0 0 2.4 0"/></svg><span class="dot" aria-hidden="true"></span></span>The post</span>
+        <span class="who"><span class="avatar">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>The oak floor is one line with four placements. Today the walk had to make four separate rows, one per room, because a line can hold only one room.</span><span class="t-meta">R1-F16 · D7 · Q4</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>Each placement carries its own square feet; the quantity is their sum and the price is one sentence of arithmetic. That sentence is the only money on the Spec lens.</span><span class="t-meta">R3 S2 · R1 §3a</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>The line prints in every room it is placed in, with ALSO IN naming the others and this room’s share, so an edit here is visibly an edit there.</span><span class="t-meta">R1 §3</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>A unit: sq ft. Quantity stays a whole number; the unit says what it counts.</span><span class="t-meta">R1-F26 · D3</span></li>
+      <li><span class="pin" aria-hidden="true">5</span><span>An area note rides on a placement: the tile’s 36 sq ft in the Hall is the back entry; its 24 in the Kitchen is the pantry.</span><span class="t-meta">D7 area_note · R3 S2</span></li>
+      <li><span class="pin" aria-hidden="true">6</span><span>Illustrative values on this frame: the supplier Nord Hardwood Co. and the store The Tile Shop (on the tile line, not open here).</span><span class="t-meta">§4.2 F1 · T1 [illustrative]</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="fw" data-frame="frame-a6" aria-labelledby="cap-a6">
+  <h2 class="t-head cap" id="cap-a6">a6 · Placeholder to product</h2>
+  <div class="desk">
+    <div class="sheet">
+      <header class="shead">
+        <div class="sh-l"><button class="act" type="button"><span class="w"><span class="ar" aria-hidden="true">←</span>Whole Home Renovation</span></button><h3 class="s-title">Build the pieces</h3></div>
+        <div class="lenses" role="group" aria-label="Lens"><button class="lens" type="button" aria-pressed="false">Rough in</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="true">Spec</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Price</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Release</button></div>
+        <p class="sh-r">Living Room · 6 lines · 4 placeholders</p>
+      </header>
+      <p class="sread"><span><b>Spec</b> · Fill each line’s details and its product. No money here.</span></p>
+      <div class="swork">
+        <nav class="srail" aria-label="Rooms">
+          <p class="sr-h">Rooms</p>
+          <ul>
+          <li><button class="rr" type="button"><span>Hall</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button" aria-current="true"><span>Living Room</span><span class="rr-n">6</span></button></li>
+          <li><button class="rr" type="button"><span>Dining</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Kitchen</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Primary Bath</span><span class="rr-n">8</span></button></li>
+          <li><button class="rr" type="button"><span>Sunroom</span><span class="rr-n">2</span></button></li>
+          <li><button class="rr" type="button"><span>Bedroom</span><span class="rr-n">4</span></button></li>
+          </ul>
+          <ul class="sr-x">
+            <li><button class="rr" type="button"><span>Not in a room yet</span><span class="rr-n">0</span></button></li>
+            <li><button class="rr" type="button"><span>Removed</span><span class="rr-n">0</span></button></li>
+          </ul>
+          <div class="sr-foot"><button class="act" type="button"><span class="w">+ Room</span></button></div>
+        </nav>
+        <div class="sbody">
+          <div class="spec2">
+            <div class="lpane">
+              <div class="rhd"><h4 class="rh-n">Living Room</h4></div>
+              <ul class="llist">
+              <li><button class="lrow" type="button"><span><span class="nm">Custom cabinet</span></span><span><span class="stamp st-specced">SPECCED</span></span><span class="of">5 OF 6</span></button></li>
+              <li><button class="lrow" type="button"><span><span class="nm">Countertop for custom cabinets</span></span><span><span class="stamp st-placeholder">PLACEHOLDER</span></span><span class="of">0 OF 6</span></button></li>
+              <li><button class="lrow" type="button" aria-current="true"><span><span class="nm">Hardware, 2 knobs for custom cabinet</span></span><span><span class="stamp st-placeholder">PLACEHOLDER</span></span><span class="of">0 OF 6</span></button></li>
+              <li><button class="lrow" type="button"><span><span class="nm">Hardware, 4 pulls for custom cabinet</span></span><span><span class="stamp st-placeholder">PLACEHOLDER</span></span><span class="of">0 OF 6</span></button></li>
+              <li><button class="lrow" type="button"><span><span class="nm">Sofa, 96 in</span></span><span><span class="stamp st-placeholder">PLACEHOLDER</span></span><span class="of">0 OF 6</span></button></li>
+              <li><button class="lrow" type="button"><span><span class="nm">White oak floor, satin Bona finish</span><span class="also">Also in Hall · Dining · Kitchen · 320 sq ft here</span></span><span><span class="stamp st-specced">SPECCED</span></span><span class="of">4 OF 6</span></button></li>
+              </ul>
+              <div class="lfoot"><button class="act act--inked" type="button"><span class="w">Next unfinished →</span></button></div>
+            </div>
+            <div class="fpane" aria-labelledby="ln-a6">
+              <p class="f-need">What we need<span class="pin" aria-hidden="true">2</span></p>
+              <div class="f-title"><h4 class="f-h" id="ln-a6">Hardware, 2 knobs for custom cabinet · ×2</h4><span class="stamp st-placeholder">PLACEHOLDER</span></div>
+              <div class="fields">
+                <div class="fld wide"><span class="fl">Product<span class="pin" aria-hidden="true">1</span></span>
+                  <div>
+                    <label class="search"><svg class="ic ic--sheet" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg><span class="vh">Search for a product</span><input type="search" value="knob" aria-controls="res-a6" aria-activedescendant="res-a6-1"><span class="k">ESC CLOSES</span></label>
+                    <ul class="results" id="res-a6" role="listbox" aria-label="Products matching knob">
+                      <li class="res" id="res-a6-1" role="option" aria-selected="true"><span>Emtek Ribbon &amp; Reed knob · <span class="rs">satin brass</span></span><span class="num">$38 each</span></li>
+                      <li class="res" id="res-a6-2" role="option" aria-selected="false"><span>Rejuvenation Mission knob · <span class="rs">aged brass</span></span><span class="num">$24 each</span></li>
+                      <li class="res-more" role="presentation"><button class="act" type="button"><span class="w">Search the Library for “knob” →</span></button></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div class="preview">
+                <p class="pv-need">Hardware, 2 knobs for custom cabinet</p>
+                <p class="pv-prod num">Emtek Ribbon &amp; Reed knob, satin brass · ×2 · $38 each</p>
+                <p class="pv-s">The need stays on the line. The PO carries the product.</p>
+                <div class="rfoot-row" style="margin-top:6px"><button class="act act--inked" type="button"><span class="w">Fill this line</span></button><span class="pin" aria-hidden="true">3</span></div>
+              </div>
+              <div class="fields">
+                <div class="fld"><span class="fl">Rooms</span><span class="chips"><span class="chip">Living Room · ×2</span><button class="act" type="button"><span class="w">+ Room</span></button></span></div>
+                <div class="fld"><span class="fl">Unit</span><span class="fv">each</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="drawer">
+      <div class="dr-left"><span class="dr-word">Patina</span><span class="dr-sep">/</span><span class="dr-crumb">Document</span></div>
+      <div class="dr-center">
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Library</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.5"/><path d="M2 12.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg>People</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 4.5v-3h3M9.5 1.5h3v3M12.5 9.5v3h-3M4.5 12.5h-3v-3"/></svg>The Scans</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Ledgers ↑</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>Find anything <span class="kbd">⌘K</span></span>
+      </div>
+      <div class="dr-right">
+        <span class="dr-mono">On hand today <span class="dr-time">2h 21m</span></span>
+        <span class="dr-mono"><span class="bell"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 10V6.5a3.5 3.5 0 0 1 7 0V10l1 1.5h-9zM5.8 12.8a1.3 1.3 0 0 0 2.4 0"/></svg><span class="dot" aria-hidden="true"></span></span>The post</span>
+        <span class="who"><span class="avatar">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>The fill starts from the line: type in Product and the Library answers inline. Today a placeholder is filled from LineCard, one of eleven roads behind Add to the job.</span><span class="t-meta">R1 §4 · R3-6 · R1-F13</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>The need label survives. “Hardware, 2 knobs for custom cabinet” stays as the line’s name and the product prints under it. Today the fill overwrites the name with the product’s, so the intent is lost.</span><span class="t-meta">R1-F19 · R1-F20 · D2 · R2-F7 · R3-9</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>FILL THIS LINE flips the stamp from PLACEHOLDER to SPECCED; nothing else changes. The PO, when there is one, carries the product, not the need.</span><span class="t-meta">D1 · R1 ruling on need_label</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>Illustrative values on this frame: both products, Emtek Ribbon &amp; Reed knob in satin brass at $38 each and Rejuvenation Mission knob in aged brass at $24 each.</span><span class="t-meta">§4.2 L3 · SPEC a6 [illustrative]</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="fw" data-frame="frame-a7" aria-labelledby="cap-a7">
+  <h2 class="t-head cap" id="cap-a7">a7 · Labor attached, on the Price lens</h2>
+  <div class="desk">
+    <div class="sheet">
+      <header class="shead">
+        <div class="sh-l"><button class="act" type="button"><span class="w"><span class="ar" aria-hidden="true">←</span>Whole Home Renovation</span></button><h3 class="s-title">Build the pieces</h3></div>
+        <div class="lenses" role="group" aria-label="Lens"><button class="lens" type="button" aria-pressed="false">Rough in</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Spec</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="true">Price</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Release</button></div>
+        <p class="sh-r">Bedroom · 4 lines · 2 placeholders</p>
+      </header>
+      <p class="sread"><span><b>Price</b> · Line up trade cost, markup and client price. Rough figures stay as ~ until you set them.</span></p>
+      <div class="swork">
+        <nav class="srail" aria-label="Rooms">
+          <p class="sr-h">Rooms</p>
+          <ul>
+          <li><button class="rr" type="button"><span>Hall</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Living Room</span><span class="rr-n">6</span></button></li>
+          <li><button class="rr" type="button"><span>Dining</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Kitchen</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Primary Bath</span><span class="rr-n">8</span></button></li>
+          <li><button class="rr" type="button"><span>Sunroom</span><span class="rr-n">2</span></button></li>
+          <li><button class="rr" type="button" aria-current="true"><span>Bedroom</span><span class="rr-n">4</span></button></li>
+          </ul>
+          <ul class="sr-x">
+            <li><button class="rr" type="button"><span>Not in a room yet</span><span class="rr-n">0</span></button></li>
+            <li><button class="rr" type="button"><span>Removed</span><span class="rr-n">0</span></button></li>
+          </ul>
+          <div class="sr-foot"><button class="act" type="button"><span class="w">+ Room</span></button></div>
+        </nav>
+        <div class="sbody">
+          <p class="sfront">Job · $30,760 priced · <span class="rough">&nbsp;~$36,368 roughed</span><span class="pin" aria-hidden="true">6</span></p>
+          <div class="rhd" style="width:1032px"><h4 class="rh-n" id="rm-a7">Bedroom</h4><div class="rh-a"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Bedroom">⋯</button></div></div>
+          <table class="st" aria-labelledby="rm-a7" style="width:1032px">
+            <colgroup><col style="width:400px"><col style="width:64px"><col style="width:80px"><col style="width:120px"><col style="width:80px"><col style="width:130px"><col style="width:110px"><col style="width:52px"></colgroup>
+            <thead><tr><th scope="col">Line</th><th scope="col" class="r">Qty</th><th scope="col">Unit</th><th scope="col" class="r">Trade cost<span class="pin" aria-hidden="true">4</span></th><th scope="col" class="r">Markup</th><th scope="col" class="r">Client price</th><th scope="col" class="r">Rough ~<span class="pin" aria-hidden="true">5</span></th><th scope="col"><span class="vh">Line menu</span></th></tr></thead>
+            <tbody>
+              <tr class="on"><td class="tall"><span class="ln">Wallpaper, grasscloth</span><span class="ln-sub">Phillip Jeffries Manila Hemp, Chalk</span></td><td class="r">9</td><td>roll<span class="pin" aria-hidden="true">2</span></td><td class="r">$184</td><td class="r">25%</td><td class="r">$230</td><td class="r rough">—</td><td class="c-menu"><div class="mw"><button class="dots is-open" type="button" aria-haspopup="menu" aria-expanded="true" aria-label="More for Wallpaper, grasscloth">⋯</button><ul class="menu open-right" role="menu" aria-label="Wallpaper, grasscloth"><li role="none"><button class="mi" type="button" role="menuitem">Add labor</button></li><li role="none"><button class="mi" type="button" role="menuitem">Make it an allowance</button></li><li role="none"><button class="mi" type="button" role="menuitem">Move to room…</button></li><li role="none"><button class="mi" type="button" role="menuitem">Remove</button></li></ul></div></td></tr>
+              <tr class="kid"><td><span class="ar" aria-hidden="true">↳</span><span class="ln">Install, wallpaper hanger</span> <span class="stamp st-labor">LABOR</span><span class="pin" aria-hidden="true">1</span><span class="pin" aria-hidden="true">3</span></td><td class="r">9</td><td>roll</td><td class="r">$85</td><td class="r muted">—</td><td class="r">$85</td><td class="r rough">—</td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Install, wallpaper hanger">⋯</button></td></tr>
+              <tr><td><span class="ln">Bed, king, upholstered</span> <span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="r">1</td><td>each</td><td class="r muted">—</td><td class="r muted">—</td><td class="r muted">—</td><td class="r rough">~$4,200</td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Bed, king, upholstered">⋯</button></td></tr>
+              <tr><td><span class="ln">Nightstands</span> <span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="r">2</td><td>each</td><td class="r muted">—</td><td class="r muted">—</td><td class="r muted">—</td><td class="r rough">~$950</td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Nightstands">⋯</button></td></tr>
+              <tr class="sum"><td colspan="8">Bedroom · $2,835 priced · <span class="rough">~$6,100 roughed</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <footer class="drawer">
+      <div class="dr-left"><span class="dr-word">Patina</span><span class="dr-sep">/</span><span class="dr-crumb">Document</span></div>
+      <div class="dr-center">
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Library</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.5"/><path d="M2 12.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg>People</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 4.5v-3h3M9.5 1.5h3v3M12.5 9.5v3h-3M4.5 12.5h-3v-3"/></svg>The Scans</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Ledgers ↑</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>Find anything <span class="kbd">⌘K</span></span>
+      </div>
+      <div class="dr-right">
+        <span class="dr-mono">On hand today <span class="dr-time">2h 21m</span></span>
+        <span class="dr-mono"><span class="bell"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 10V6.5a3.5 3.5 0 0 1 7 0V10l1 1.5h-9zM5.8 12.8a1.3 1.3 0 0 0 2.4 0"/></svg><span class="dot" aria-hidden="true"></span></span>The post</span>
+        <span class="who"><span class="avatar">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>The hanger is a labor line attached to the wallpaper, indented under it with ↳ and stamped LABOR beside its stage. Today labor exists only as Trade Scope, a lump sum per trade that cannot attach to a line.</span><span class="t-meta">R1-F27 · D4 · D5 · Q5</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>Both lines count rolls. The unit is on the line, so 9 rolls of paper and 9 rolls hung read the same way.</span><span class="t-meta">D3 · R1-F26</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>The labor line is released with its piece and billed on its own line. It never prints on the maker’s PO.</span><span class="t-meta">R1 §5 · R1-F28 · D4</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>Trade cost and markup are typed here, and the client price follows. This is the only lens where they exist.</span><span class="t-meta">R1-F26 · 00692 allow-list · Q7</span></li>
+      <li><span class="pin" aria-hidden="true">5</span><span>The ~ column keeps the rough figures of lines not yet priced, so the room still adds up while it is half done.</span><span class="t-meta">D12 · R1-F23</span></li>
+      <li><span class="pin" aria-hidden="true">6</span><span>The job total is front matter on the Price lens: what is priced, and what is still rough.</span><span class="t-meta">§4.4 · R1-F3</span></li>
+      <li><span class="pin" aria-hidden="true">7</span><span>Illustrative values on this frame: the product Phillip Jeffries Manila Hemp, Chalk, and the hanger’s $85 a roll with no markup.</span><span class="t-meta">§4.2 R1 · R1a [illustrative]</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="fw" data-frame="frame-a8" aria-labelledby="cap-a8">
+  <h2 class="t-head cap" id="cap-a8">a8 · Remove with undo</h2>
+  <div class="desk">
+    <div class="sheet">
+      <header class="shead">
+        <div class="sh-l"><button class="act" type="button"><span class="w"><span class="ar" aria-hidden="true">←</span>Whole Home Renovation</span></button><h3 class="s-title">Build the pieces</h3></div>
+        <div class="lenses" role="group" aria-label="Lens"><button class="lens" type="button" aria-pressed="true">Rough in</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Spec</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Price</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Release</button></div>
+        <p class="sh-r">Sunroom · 1 line · 0 placeholders</p>
+      </header>
+      <p class="sread"><span><b>Rough in</b> · Name it, count it, place it. Specs, prices and buying come later.</span></p>
+      <div class="swork">
+        <nav class="srail" aria-label="Rooms">
+          <p class="sr-h">Rooms</p>
+          <ul>
+          <li><button class="rr" type="button"><span>Hall</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Living Room</span><span class="rr-n">6</span></button></li>
+          <li><button class="rr" type="button"><span>Dining</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Kitchen</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Primary Bath</span><span class="rr-n">8</span></button></li>
+          <li><button class="rr" type="button" aria-current="true"><span>Sunroom</span><span class="rr-n">1</span></button></li>
+          <li><button class="rr" type="button"><span>Bedroom</span><span class="rr-n">4</span></button></li>
+          </ul>
+          <ul class="sr-x">
+            <li><button class="rr" type="button"><span>Not in a room yet</span><span class="rr-n">0</span></button></li>
+            <li><button class="rr" type="button"><span>Removed</span><span class="rr-n">1<span class="pin" aria-hidden="true">2</span></span></button></li>
+          </ul>
+          <div class="sr-foot"><button class="act" type="button"><span class="w">+ Room</span></button></div>
+        </nav>
+        <div class="sbody">
+          <div class="rhd"><h4 class="rh-n" id="rm-a8">Sunroom</h4><div class="rh-a"><button class="act" type="button" aria-pressed="false"><span class="w">Elevation</span></button><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Sunroom">⋯</button></div></div>
+          <table class="st" aria-labelledby="rm-a8"><colgroup><col style="width:auto"><col style="width:72px"><col style="width:96px"><col style="width:120px"><col style="width:140px"><col style="width:52px"></colgroup>
+            <thead><tr><th scope="col">Line</th><th scope="col" class="r">Qty</th><th scope="col">Unit</th><th scope="col" class="r">Rough $</th><th scope="col">Stage</th><th scope="col"><span class="vh">Line menu</span></th></tr></thead>
+            <tbody>
+            <tr><td class="tall"><span class="ln">Porcelain floor tile, 12 × 24, matte</span><span class="pin" aria-hidden="true">4</span><span class="also">Also in Primary Bath · Hall · Kitchen · 148 sq ft here</span></td><td class="r">148</td><td>sq ft</td><td class="r rough">—</td><td><span class="stamp st-specced">SPECCED</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Porcelain floor tile, 12 × 24, matte">⋯</button></td></tr>
+            <tr class="entry on"><td><span class="vh">New line in Sunroom</span><i class="caret" aria-hidden="true"></i></td><td></td><td></td><td></td><td></td><td></td></tr>
+            </tbody>
+          </table>
+          <div class="example" aria-label="A released line, for comparison">
+            <p class="ex-k">From Dining, for comparison<span class="pin" aria-hidden="true">3</span></p>
+            <table class="st"><colgroup><col style="width:auto"><col style="width:72px"><col style="width:96px"><col style="width:120px"><col style="width:140px"><col style="width:52px"></colgroup>
+              <thead><tr><th scope="col">Line</th><th scope="col" class="r">Qty</th><th scope="col">Unit</th><th scope="col" class="r">Rough $</th><th scope="col">Stage</th><th scope="col"><span class="vh">Line menu</span></th></tr></thead>
+              <tbody><tr><td><span class="ln">Dining table, custom walnut</span></td><td class="r">1</td><td>each</td><td class="r rough">—</td><td><span class="stamp st-released">RELEASED</span></td><td class="c-menu"><div class="mw"><button class="dots is-open" type="button" aria-haspopup="menu" aria-expanded="true" aria-label="More for Dining table, custom walnut">⋯</button><ul class="menu" role="menu" aria-label="Dining table, custom walnut"><li role="none"><button class="mi" type="button" role="menuitem">Move to room…</button></li><li role="none"><button class="mi" type="button" role="menuitem" aria-disabled="true" aria-describedby="why-a8-rm">Remove</button></li><li role="none" class="mi-why" id="why-a8-rm">Released lines change through Record a change.</li></ul></div></td></tr></tbody>
+            </table>
+          </div>
+          <div class="toast" role="status"><p>Removed Rattan lounge chair ×2 from Sunroom.</p><button class="act" type="button"><span class="w">Undo</span></button><span class="secs">10 S</span><span class="pin" aria-hidden="true">1</span></div>
+        </div>
+      </div>
+    </div>
+    <footer class="drawer">
+      <div class="dr-left"><span class="dr-word">Patina</span><span class="dr-sep">/</span><span class="dr-crumb">Document</span></div>
+      <div class="dr-center">
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Library</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.5"/><path d="M2 12.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg>People</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 4.5v-3h3M9.5 1.5h3v3M12.5 9.5v3h-3M4.5 12.5h-3v-3"/></svg>The Scans</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Ledgers ↑</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>Find anything <span class="kbd">⌘K</span></span>
+      </div>
+      <div class="dr-right">
+        <span class="dr-mono">On hand today <span class="dr-time">2h 21m</span></span>
+        <span class="dr-mono"><span class="bell"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 10V6.5a3.5 3.5 0 0 1 7 0V10l1 1.5h-9zM5.8 12.8a1.3 1.3 0 0 0 2.4 0"/></svg><span class="dot" aria-hidden="true"></span></span>The post</span>
+        <span class="who"><span class="avatar">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>The stray rattan chairs are gone, with ten seconds to undo. Before a line is released, removing it needs no reason. Today no line can be removed from the screen at all.</span><span class="t-meta">R1-F29 · R1 §6 · D8 · R2-F2</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>Removed · 1 stands in the rail for the life of the job; anything there can be restored.</span><span class="t-meta">D8 · R1 §6</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>A released line refuses and names the door: “Released lines change through Record a change.” The damage report (“Something’s wrong…”) stays hidden until a line is ordered. This Dining row is [illustrative: D1 is not released in this fixture].</span><span class="t-meta">R3-3 · R1-F7</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>The tile stays in the Sunroom with its 148 sq ft; its other three rooms are untouched.</span><span class="t-meta">§4.3 T1</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="fw" data-frame="frame-a9" aria-labelledby="cap-a9">
+  <h2 class="t-head cap" id="cap-a9">a9 · Drag between rooms</h2>
+  <div class="desk">
+    <div class="sheet">
+      <header class="shead">
+        <div class="sh-l"><button class="act" type="button"><span class="w"><span class="ar" aria-hidden="true">←</span>Whole Home Renovation</span></button><h3 class="s-title">Build the pieces</h3></div>
+        <div class="lenses" role="group" aria-label="Lens"><button class="lens" type="button" aria-pressed="true">Rough in</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Spec</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Price</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Release</button></div>
+        <p class="sh-r">Dining · 4 lines · 2 placeholders</p>
+      </header>
+      <p class="sread"><span><b>Rough in</b> · Name it, count it, place it. Specs, prices and buying come later.</span></p>
+      <div class="swork">
+        <nav class="srail" aria-label="Rooms">
+          <p class="sr-h">Rooms</p>
+          <ul>
+          <li><button class="rr" type="button"><span>Hall</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Living Room</span><span class="rr-n">6</span></button></li>
+          <li><button class="rr" type="button" aria-current="true"><span>Dining</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr is-drop" type="button"><span>Kitchen</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Primary Bath</span><span class="rr-n">8</span></button></li>
+          <li><button class="rr" type="button"><span>Sunroom</span><span class="rr-n">1</span></button></li>
+          <li><button class="rr" type="button"><span>Bedroom</span><span class="rr-n">4</span></button></li>
+          </ul>
+          <ul class="sr-x">
+            <li><button class="rr" type="button"><span>Not in a room yet</span><span class="rr-n">0</span></button></li>
+            <li><button class="rr" type="button"><span>Removed</span><span class="rr-n">1</span></button></li>
+          </ul>
+          <div class="sr-foot"><button class="act" type="button"><span class="w">+ Room</span></button></div>
+        </nav>
+        <div class="sbody">
+          <div class="rhd"><h4 class="rh-n" id="rm-a9d">Dining</h4><div class="rh-a"><button class="act" type="button" aria-pressed="false"><span class="w">Elevation</span></button><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Dining">⋯</button></div></div>
+          <table class="st" aria-labelledby="rm-a9d"><colgroup><col style="width:auto"><col style="width:72px"><col style="width:96px"><col style="width:120px"><col style="width:140px"><col style="width:52px"></colgroup>
+            <thead><tr><th scope="col">Line</th><th scope="col" class="r">Qty</th><th scope="col">Unit</th><th scope="col" class="r">Rough $</th><th scope="col">Stage</th><th scope="col"><span class="vh">Line menu</span></th></tr></thead>
+            <tbody>
+            <tr><td><span class="grip" aria-hidden="true">⋮⋮</span><span class="ln">Dining table, custom walnut</span></td><td class="r">1</td><td>each</td><td class="r rough">—</td><td><span class="stamp st-specced">SPECCED</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Dining table, custom walnut">⋯</button></td></tr>
+            <tr><td><span class="grip" aria-hidden="true">⋮⋮</span><span class="ln">Dining chairs</span></td><td class="r">8</td><td>each</td><td class="r rough">~$900</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Dining chairs">⋯</button></td></tr>
+            <tr class="lifted"><td><span class="grip" aria-hidden="true">⋮⋮</span><span class="ln">Counter stools</span><span class="pin" aria-hidden="true">1</span></td><td class="r">3</td><td>each</td><td class="r rough">~$420</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Counter stools">⋯</button></td></tr>
+            <tr><td class="tall"><span class="grip" aria-hidden="true">⋮⋮</span><span class="ln">White oak floor, satin Bona finish</span><span class="also">Also in Hall · Living Room · Kitchen · 180 sq ft here</span></td><td class="r">180</td><td>sq ft</td><td class="r rough">—</td><td><span class="stamp st-specced">SPECCED</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for White oak floor, satin Bona finish">⋯</button></td></tr>
+            <tr class="entry"><td><span class="grip" aria-hidden="true">⋮⋮</span><span class="vh">New line in Dining</span></td><td></td><td></td><td></td><td></td><td></td></tr>
+            </tbody>
+          </table>
+          <div class="room-gap"></div>
+          <div class="rhd drop"><h4 class="rh-n" id="rm-a9k">Kitchen</h4><div class="rh-a"><span class="drop-k">Move to Kitchen<span class="pin" aria-hidden="true">2</span></span></div></div>
+          <table class="st" aria-labelledby="rm-a9k"><colgroup><col style="width:auto"><col style="width:72px"><col style="width:96px"><col style="width:120px"><col style="width:140px"><col style="width:52px"></colgroup>
+            <thead><tr><th scope="col">Line</th><th scope="col" class="r">Qty</th><th scope="col">Unit</th><th scope="col" class="r">Rough $</th><th scope="col">Stage</th><th scope="col"><span class="vh">Line menu</span></th></tr></thead>
+            <tbody>
+            <tr><td><span class="grip" aria-hidden="true">⋮⋮</span><span class="ln">Pendant lights, island</span></td><td class="r">3</td><td>each</td><td class="r rough">~$640</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Pendant lights, island">⋯</button></td></tr>
+            <tr class="hov"><td><span class="grip" aria-hidden="true">⋮⋮</span><span class="ln">Faucet, bridge, unlacquered brass</span></td><td class="r">1</td><td>each</td><td class="r rough">~$1,150</td><td><span class="stamp st-placeholder">PLACEHOLDER</span></td><td class="c-menu"><div class="mw"><button class="dots is-open" type="button" aria-haspopup="menu" aria-expanded="true" aria-label="More for Faucet, bridge, unlacquered brass">⋯</button><ul class="menu" role="menu" aria-label="Faucet, bridge, unlacquered brass"><li role="none"><button class="mi" type="button" role="menuitem">Fill with a product</button></li><li role="none"><button class="mi is-on" type="button" role="menuitem" aria-haspopup="menu" aria-expanded="true"><span>Move to room…<span class="pin" aria-hidden="true">3</span></span><span class="k">◂</span></button></li><li role="none"><button class="mi" type="button" role="menuitem">Also place in…</button></li><li role="none"><button class="mi" type="button" role="menuitem">Remove</button></li></ul><ul class="submenu" role="menu" aria-label="Move to room" style="top:42px;right:208px"><li role="none"><button class="mi" type="button" role="menuitem">Hall</button></li><li role="none"><button class="mi" type="button" role="menuitem">Living Room</button></li><li role="none"><button class="mi" type="button" role="menuitem">Dining</button></li><li role="none"><button class="mi" type="button" role="menuitem" aria-current="true">Kitchen<span class="here">· HERE</span></button></li><li role="none"><button class="mi" type="button" role="menuitem">Primary Bath</button></li><li role="none"><button class="mi" type="button" role="menuitem">Sunroom</button></li><li role="none"><button class="mi" type="button" role="menuitem">Bedroom</button></li></ul></div></td></tr>
+            <tr><td class="tall"><span class="grip" aria-hidden="true">⋮⋮</span><span class="ln">White oak floor, satin Bona finish</span><span class="also">Also in Hall · Living Room · Dining · 210 sq ft here</span></td><td class="r">210</td><td>sq ft</td><td class="r rough">—</td><td><span class="stamp st-specced">SPECCED</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for White oak floor, satin Bona finish">⋯</button></td></tr>
+            <tr><td class="tall"><span class="grip" aria-hidden="true">⋮⋮</span><span class="ln">Porcelain floor tile, 12 × 24, matte</span><span class="also">Also in Primary Bath · Sunroom · Hall · 24 sq ft here · pantry</span></td><td class="r">24</td><td>sq ft</td><td class="r rough">—</td><td><span class="stamp st-specced">SPECCED</span></td><td class="c-menu"><button class="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="More for Porcelain floor tile, 12 × 24, matte">⋯</button></td></tr>
+            <tr class="entry"><td><span class="grip" aria-hidden="true">⋮⋮</span><span class="vh">New line in Kitchen</span></td><td></td><td></td><td></td><td></td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <footer class="drawer">
+      <div class="dr-left"><span class="dr-word">Patina</span><span class="dr-sep">/</span><span class="dr-crumb">Document</span></div>
+      <div class="dr-center">
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Library</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.5"/><path d="M2 12.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg>People</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 4.5v-3h3M9.5 1.5h3v3M12.5 9.5v3h-3M4.5 12.5h-3v-3"/></svg>The Scans</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Ledgers ↑</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>Find anything <span class="kbd">⌘K</span></span>
+      </div>
+      <div class="dr-right">
+        <span class="dr-mono">On hand today <span class="dr-time">2h 21m</span></span>
+        <span class="dr-mono"><span class="bell"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 10V6.5a3.5 3.5 0 0 1 7 0V10l1 1.5h-9zM5.8 12.8a1.3 1.3 0 0 0 2.4 0"/></svg><span class="dot" aria-hidden="true"></span></span>The post</span>
+        <span class="who"><span class="avatar">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>The counter stools were entered in Dining. Every row carries a handle (⋮⋮); the stools are lifted mid-drag. Dragging between rooms reopens DECISIONS I25, which deferred it.</span><span class="t-meta">R1-F17 · Q8</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>The Kitchen heading is the drop target, marked by a 2px rule and MOVE TO KITCHEN. A room in the rail takes a drop too. The data path already exists (triage_project_ffe_items).</span><span class="t-meta">R1-F17 · R2-F13</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>Move to room… is the visible act for keyboard, touch and locked lines; dragging is the extra gesture. Kitchen is marked HERE. Shift-click moves several at once.</span><span class="t-meta">R3 §5 · R3 S6</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>The oak floor and the tile print in both rooms with their share; a drag moves only the line you hold.</span><span class="t-meta">§4.3</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="fw" data-frame="frame-a10" aria-labelledby="cap-a10">
+  <h2 class="t-head cap" id="cap-a10">a10 · Back on the overview</h2>
+  <div class="desk">
+    <div class="cols">
+      <nav class="spine" aria-label="The spine">
+        <button class="act putdown" type="button"><span class="ar" aria-hidden="true">⟵</span><span class="w">Put down</span></button>
+        <p class="spine-name">the client</p>
+        <span class="spine-strata" aria-hidden="true"><i></i><i></i><i></i></span>
+        <p class="spine-state">Project<br>Active</p>
+        <ul class="spine-list">
+          <li><span class="sl-n">Client approvals</span><span class="sl-s">Nothing yet</span></li>
+          <li><span class="sl-n">Schedule</span><span class="sl-s">Not known yet</span></li>
+          <li class="on"><span class="sl-n">Pieces</span><span class="sl-s">25 lines</span>
+            <ul class="spine-sub"><li>Hall</li><li>Living Room</li><li class="more">+5 more</li></ul>
+          </li>
+          <li><span class="sl-n">Money</span><span class="sl-s">Nothing yet</span></li>
+          <li><span class="sl-n">Closing the book</span><span class="sl-s">Nothing yet</span></li>
+          <li><span class="sl-n">The record</span><span class="sl-s">Nothing yet</span></li>
+        </ul>
+        <div class="filed">
+          <span class="t-head">Filed with this job</span>
+          <ul>
+            <li><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.5"/><path d="M5 9l1.2-3.2L9 5 7.8 8.2z"/></svg>Plan room</li>
+            <li><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Spec book</li>
+            <li><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="1.5" width="4.5" height="4.5"/><rect x="8" y="1.5" width="4.5" height="4.5"/><rect x="1.5" y="8" width="4.5" height="4.5"/><rect x="8" y="8" width="4.5" height="4.5"/></svg>Boards</li>
+            <li><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="5" r="2.5"/><path d="M2.5 12.5c.5-2.3 2.3-3.5 4.5-3.5s4 1.2 4.5 3.5"/></svg>Call sheet</li>
+          </ul>
+        </div>
+      </nav>
+      <div class="sheet-col">
+        <article class="paper" aria-labelledby="t-a10">
+          <div class="strip">
+            <p class="strip-eye">The client · Project</p>
+            <div class="strip-row"><span class="strip-n">18 placeholders</span><button class="act" type="button"><span class="w">+4 more</span></button><span class="pin" aria-hidden="true">2</span></div>
+          </div>
+          <section aria-labelledby="t-a10">
+            <div class="rrule"></div>
+            <div class="rhead">
+              <div>
+                <h3 class="rh-name" id="t-a10">Pieces</h3>
+                <p class="rh-sub">by room · 7 rooms · 25 lines</p>
+                <p class="rh-sub2">18 placeholders · 6 specced · nothing released</p>
+              </div>
+              <div class="rh-acts">
+                <div class="rh-row"><button class="act act--inked" type="button"><span class="w">Work the pieces →</span></button><button class="act" type="button"><span class="w">Add to the job</span></button></div>
+                <div class="rh-row"><button class="act" type="button"><span class="w">Release for authorization</span></button><button class="act" type="button"><span class="w">Fold ↑</span></button></div>
+              </div>
+            </div>
+            <p class="front"><span class="num">$30,760 priced · ~$36,368 roughed · nothing released</span><span class="pin" aria-hidden="true">2</span></p>
+            
+            <div class="rooms" style="margin-top:24px">
+            <div class="orow here"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Living Room</h4><p class="or-c">6 lines · 3 placeholders<span class="pin" aria-hidden="true">1</span></p><p class="or-m">~$23,564</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Dining</h4><p class="or-c">3 lines · 1 placeholder</p><p class="or-m">~$16,070</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Kitchen</h4><p class="or-c">5 lines · 3 placeholders</p><p class="or-m">~$6,908</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Primary Bath</h4><p class="or-c">8 lines · 7 placeholders</p><p class="or-m">~$7,140</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Sunroom</h4><p class="or-c">1 line · 0 placeholders</p><p class="or-m">~$1,006</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            <div class="orow"><span class="strata" aria-hidden="true"><i></i><i></i><i></i></span><h4 class="or-name">Bedroom</h4><p class="or-c">4 lines · 2 placeholders</p><p class="or-m">~$8,935</p><div class="or-a"><button class="act" type="button"><span class="w">Add a line</span></button><button class="act" type="button"><span class="w">Work this room →</span></button></div></div>
+            </div>
+          </section>
+          <section aria-labelledby="t-a10-mo">
+            <div class="rrule" style="margin-top:48px"></div>
+            <div class="rhead"><div><h3 class="rh-name" id="t-a10-mo">Money</h3><p class="rh-sub">Nothing yet</p></div><div class="rh-acts"><div class="rh-row"><button class="act" type="button"><span class="w">Fold ↑</span></button></div></div></div>
+          </section>
+        </article>
+      </div>
+      <aside class="mrail" aria-label="The margin">
+        <div class="mnote">
+          <p>– One client, one paper. The rail on the left says…</p>
+          <button class="x" type="button" aria-label="Dismiss">×</button>
+          <button class="act" type="button"><span class="w">More</span></button>
+          <span class="t-meta">Appears once ·<br>recedes on use</span>
+        </div>
+        <div class="mhead"><span class="t-head">In the margin</span><button class="act" type="button"><span class="w">+ Note</span></button></div>
+        <p class="mempty">The margin — decisions, messages, and money gather here</p>
+      </aside>
+    </div>
+    <footer class="drawer">
+      <div class="dr-left"><span class="dr-word">Patina</span><span class="dr-sep">/</span><span class="dr-crumb">Document</span></div>
+      <div class="dr-center">
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Library</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.5"/><path d="M2 12.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg>People</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 4.5v-3h3M9.5 1.5h3v3M12.5 9.5v3h-3M4.5 12.5h-3v-3"/></svg>The Scans</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Ledgers ↑</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>Find anything <span class="kbd">⌘K</span></span>
+      </div>
+      <div class="dr-right">
+        <span class="dr-mono">On hand today <span class="dr-time">2h 27m</span><span class="pin" aria-hidden="true">3</span></span>
+        <span class="dr-mono"><span class="bell"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 10V6.5a3.5 3.5 0 0 1 7 0V10l1 1.5h-9zM5.8 12.8a1.3 1.3 0 0 0 2.4 0"/></svg><span class="dot" aria-hidden="true"></span></span>The post</span>
+        <span class="who"><span class="avatar">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>← WHOLE HOME RENOVATION, Esc and the browser’s back all land here. The region head stands while its rows scroll, and the room you left is first under it, marked by a 3px ink bar; Hall is one row up.</span><span class="t-meta">R1-F10 · R2 §3</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>The counts follow the work: 18 placeholders, 6 specced, $30,760 priced and ~$36,368 still rough. Sunroom lost its stray line and Kitchen gained the stools.</span><span class="t-meta">§4.4 worked</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>The clock never stopped. The hold lives on the Document’s layout, so moving between the paper and the Build room writes no time entry and no Log / Discard strip appears. 2h 13m became 2h 27m.</span><span class="t-meta">R1-F9 · R3-10 · D14</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="fw" data-frame="frame-a11" aria-labelledby="cap-a11">
+  <h2 class="t-head cap" id="cap-a11">a11 · Paint and finish schedule (optional)</h2>
+  <div class="desk">
+    <div class="sheet">
+      <header class="shead">
+        <div class="sh-l"><button class="act" type="button"><span class="w"><span class="ar" aria-hidden="true">←</span>Whole Home Renovation</span></button><h3 class="s-title">Build the pieces</h3></div>
+        <div class="lenses" role="group" aria-label="Lens"><button class="lens" type="button" aria-pressed="false">Rough in</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Spec</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Price</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="false">Release</button><span class="lsep" aria-hidden="true">·</span><button class="lens" type="button" aria-pressed="true">Finishes</button><span class="pin" aria-hidden="true">1</span></div>
+        <p class="sh-r">Bedroom · 3 surfaces</p>
+      </header>
+      <p class="sread"><span><b>Finishes</b> · Note each room’s surfaces, products and sheens for the painter. Nothing here edits a line.</span></p>
+      <div class="swork">
+        <nav class="srail" aria-label="Rooms">
+          <p class="sr-h">Rooms</p>
+          <ul>
+          <li><button class="rr" type="button"><span>Hall</span><span class="rr-n">4</span></button></li>
+          <li><button class="rr" type="button"><span>Living Room</span><span class="rr-n">6</span></button></li>
+          <li><button class="rr" type="button"><span>Dining</span><span class="rr-n">3</span></button></li>
+          <li><button class="rr" type="button"><span>Kitchen</span><span class="rr-n">5</span></button></li>
+          <li><button class="rr" type="button"><span>Primary Bath</span><span class="rr-n">8</span></button></li>
+          <li><button class="rr" type="button"><span>Sunroom</span><span class="rr-n">1</span></button></li>
+          <li><button class="rr" type="button" aria-current="true"><span>Bedroom</span><span class="rr-n">4</span></button></li>
+          </ul>
+          <ul class="sr-x">
+            <li><button class="rr" type="button"><span>Not in a room yet</span><span class="rr-n">0</span></button></li>
+            <li><button class="rr" type="button"><span>Removed</span><span class="rr-n">1</span></button></li>
+          </ul>
+          <div class="sr-foot"><button class="act" type="button"><span class="w">+ Room</span></button></div>
+        </nav>
+        <div class="sbody">
+          <div class="rhd"><h4 class="rh-n" id="rm-a11">Bedroom · Finishes</h4></div>
+          <table class="st" aria-labelledby="rm-a11" style="width:860px">
+            <colgroup><col style="width:200px"><col style="width:auto"><col style="width:140px"><col style="width:100px"></colgroup>
+            <thead><tr><th scope="col">Surface</th><th scope="col">Product</th><th scope="col">Sheen</th><th scope="col">Swatch<span class="pin" aria-hidden="true">2</span></th></tr></thead>
+            <tbody>
+              <tr><td><span class="ln">Walls</span></td><td>Farrow &amp; Ball Setting Plaster No. 231</td><td>Eggshell</td><td><svg class="sw24" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="Setting Plaster swatch"><rect x="0.5" y="0.5" width="23" height="23" fill="#F2DCD2"/></svg></td></tr>
+              <tr><td><span class="ln">Ceiling</span></td><td>Benjamin Moore Chantilly Lace OC-65</td><td>Flat</td><td><svg class="sw24" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="Chantilly Lace swatch"><rect x="0.5" y="0.5" width="23" height="23" fill="#F7F6F1"/></svg></td></tr>
+              <tr><td><span class="ln">Trim and doors</span></td><td>Chantilly Lace OC-65</td><td>Satin</td><td><svg class="sw24" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="Chantilly Lace swatch"><rect x="0.5" y="0.5" width="23" height="23" fill="#F7F6F1"/></svg></td></tr>
+              <tr class="entry on"><td><span class="vh">New surface in Bedroom</span><i class="caret" aria-hidden="true"></i></td><td></td><td></td><td></td></tr>
+            </tbody>
+          </table>
+          <div class="fin-foot">
+            <div class="rfoot-row"><button class="act act--inked" type="button"><span class="w">Print the paint and finish schedule</span></button><span class="pin" aria-hidden="true">3</span></div>
+            <p class="fin-s">One page per room, addressed to the painter. Nothing else prints on it.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="drawer">
+      <div class="dr-left"><span class="dr-word">Patina</span><span class="dr-sep">/</span><span class="dr-crumb">Document</span></div>
+      <div class="dr-center">
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Library</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="4.5" r="2.5"/><path d="M2 12.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg>People</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 4.5v-3h3M9.5 1.5h3v3M12.5 9.5v3h-3M4.5 12.5h-3v-3"/></svg>The Scans</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 3h4c.8 0 1.5.7 1.5 1.5V12c0-.6-.5-1-1-1H1.5zM12.5 3h-4C7.7 3 7 3.7 7 4.5V12c0-.6.5-1 1-1h4.5z"/></svg>Ledgers ↑</span>
+        <span class="dr-item"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4"/><path d="M9 9l3.5 3.5"/></svg>Find anything <span class="kbd">⌘K</span></span>
+      </div>
+      <div class="dr-right">
+        <span class="dr-mono">On hand today <span class="dr-time">2h 21m</span></span>
+        <span class="dr-mono"><span class="bell"><svg class="ic" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 10V6.5a3.5 3.5 0 0 1 7 0V10l1 1.5h-9zM5.8 12.8a1.3 1.3 0 0 0 2.4 0"/></svg><span class="dot" aria-hidden="true"></span></span>The post</span>
+        <span class="who"><span class="avatar">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <div class="notes">
+    <p class="t-head">What changed</p>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span><span>A fifth lens, FINISHES, after Release. It edits no line; it is a per-room table of surfaces. Last in the order, and minimal: it passes three of four on the feature test.</span><span class="t-meta">Q10 · R2 §6</span></li>
+      <li><span class="pin" aria-hidden="true">2</span><span>One swatch per surface, so “this room is this color” is a visual note for everybody. The wall swatch would also show on the room row of the overview.</span><span class="t-meta">R3 S8 · D16</span></li>
+      <li><span class="pin" aria-hidden="true">3</span><span>The schedule prints for the painter only. Leah said it “does not have to live in Patina”; this is the least that would help.</span><span class="t-meta">R3 S8 · TRANSCRIPT.md:63</span></li>
+      <li><span class="pin" aria-hidden="true">4</span><span>Illustrative values on this frame: every product, sheen and swatch color (Setting Plaster No. 231 and Chantilly Lace OC-65).</span><span class="t-meta">SPEC §5 state 11 [illustrative]</span></li>
+    </ol>
+  </div>
+</section>
+</main>
+<script>
+(function () {
+  'use strict';
+  var FRAMES = {
+    'frame-a1': 'a1, the overview',
+    'frame-a2': 'a2, rough in',
+    'frame-a3': 'a3, where am I, the Release lens',
+    'frame-a4': 'a4, spec pass',
+    'frame-a5': 'a5, one piece in four rooms',
+    'frame-a6': 'a6, placeholder to product',
+    'frame-a7': 'a7, labor attached in Price',
+    'frame-a8': 'a8, remove with undo',
+    'frame-a9': 'a9, drag between rooms',
+    'frame-a10': 'a10, back on the overview',
+    'frame-a11': 'a11, paint and finish schedule'
+  };
+  var has = function (k) { return Object.prototype.hasOwnProperty.call(FRAMES, k); };
+  var state = { frame: null, nobar: false, nopins: false };
+  function parse(hash) {
+    var toks = String(hash || '').replace(/^#/, '').split('&');
+    var out = { frame: null, nobar: false, nopins: false };
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i].trim();
+      if (!out.frame && t.indexOf('frame-') === 0) out.frame = t;
+      if (t === 'nobar') out.nobar = true;
+      if (t === 'nopins') out.nopins = true;
+    }
+    return out;
+  }
+  function apply() {
+    var one = !!state.frame && has(state.frame);
+    var secs = document.querySelectorAll('[data-frame]');
+    for (var i = 0; i < secs.length; i++) secs[i].hidden = one && secs[i].getAttribute('data-frame') !== state.frame;
+    document.getElementById('bar').hidden = state.nobar;
+    document.body.classList.toggle('nobar', state.nobar);
+    document.body.classList.toggle('nopins', state.nopins);
+    var notes = document.querySelectorAll('.notes');
+    for (var n = 0; n < notes.length; n++) notes[n].hidden = state.nopins;
+    var btns = document.querySelectorAll('[data-go]');
+    for (var b = 0; b < btns.length; b++) btns[b].setAttribute('aria-pressed', one && btns[b].getAttribute('data-go') === state.frame ? 'true' : 'false');
+    document.getElementById('announce').textContent = one ? 'Showing frame ' + FRAMES[state.frame] : 'Showing all frames';
+  }
+  function fromHash() { state = parse(location.hash); apply(); }
+  document.addEventListener('DOMContentLoaded', fromHash);
+  window.addEventListener('hashchange', fromHash);
+  window.addEventListener('message', function (e) {
+    var d = e && e.data;
+    if (!d || typeof d !== 'object' || typeof d.frame !== 'string') return;
+    var f = d.frame.indexOf('frame-') === 0 ? d.frame : 'frame-' + d.frame;
+    if (!has(f)) return;
+    state.frame = f; apply();
+  });
+  document.addEventListener('click', function (e) {
+    var go = e.target.closest && e.target.closest('[data-go]');
+    if (!go) return;
+    var toks = [go.getAttribute('data-go')];
+    if (state.nopins) toks.push('nopins');
+    var next = '#' + toks.join('&');
+    if (location.hash === next) fromHash(); else location.hash = next;
+  });
+})();
+</script>
+</body>
+</html>
+<!-- SPECIMEN COMPLETE -->
