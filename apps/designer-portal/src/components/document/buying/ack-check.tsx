@@ -563,6 +563,7 @@ export function AckRecord({
                           regionKey="po-ack-record"
                           variant="tertiary"
                           disabled={resolve.isPending}
+                          wrap={inCell}
                           onClick={() => void answer(line, 'accepted')}
                         >
                           Accept theirs
@@ -574,6 +575,7 @@ export function AckRecord({
                             regionKey="po-ack-record"
                             variant="tertiary"
                             disabled={resolve.isPending}
+                            wrap={inCell}
                             onClick={() => void answer(line, 'disputed')}
                           >
                             Dispute

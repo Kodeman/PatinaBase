@@ -393,6 +393,26 @@ describe('F9-2 — the acknowledgment inside the Order cell wraps at 390', () =>
     expect(table.className).not.toContain('22rem');
     expect(door).toHaveClass('whitespace-normal', 'text-left');
   });
+
+  it('F9-2b: inCell wraps the Accept theirs / Dispute decisions; the default keeps them nowrap', () => {
+    const { rerender } = render(<AckRecord purchaseOrderId="po-1" projectId="project-1" inCell />);
+    const finishInCell = screen.getByTestId('ack-line-line-finish');
+    const acceptInCell = within(finishInCell).getByRole('button', { name: 'Accept theirs' });
+    const disputeInCell = within(finishInCell).getByRole('button', { name: 'Dispute' });
+    expect(acceptInCell).toHaveClass('whitespace-normal');
+    expect(acceptInCell).not.toHaveClass('whitespace-nowrap');
+    expect(disputeInCell).toHaveClass('whitespace-normal');
+    expect(disputeInCell).not.toHaveClass('whitespace-nowrap');
+
+    rerender(<AckRecord purchaseOrderId="po-1" projectId="project-1" />);
+    const finishDefault = screen.getByTestId('ack-line-line-finish');
+    const acceptDefault = within(finishDefault).getByRole('button', { name: 'Accept theirs' });
+    const disputeDefault = within(finishDefault).getByRole('button', { name: 'Dispute' });
+    expect(acceptDefault).toHaveClass('whitespace-nowrap');
+    expect(acceptDefault).not.toHaveClass('whitespace-normal');
+    expect(disputeDefault).toHaveClass('whitespace-nowrap');
+    expect(disputeDefault).not.toHaveClass('whitespace-normal');
+  });
 });
 
 describe('US-19 F6-9 (D17, one-voice) — the acknowledgment form behind a door', () => {
