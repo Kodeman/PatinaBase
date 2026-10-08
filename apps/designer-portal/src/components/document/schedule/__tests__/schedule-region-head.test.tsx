@@ -69,6 +69,15 @@ jest.mock("@patina/supabase", () => ({
   mapMilestoneRowToScheduleInput: () => ({}),
 }));
 
+// US-19 `one-voice` is off unless a case turns it on.
+let mockOneVoice = false;
+jest.mock("@/hooks/use-feature-flag", () => ({
+  useFeatureFlag: (key: string) => ({
+    value: key === "one-voice" ? mockOneVoice : false,
+    isLoading: false,
+  }),
+}));
+
 // W4 — the lens is a page-level observer and never runs in jsdom, so the store
 // is mocked per suite. `'full'` is the reading every claim below was written
 // against (today's body, on the paper); the quiet cases at the foot drive
@@ -232,6 +241,7 @@ function renderSpine() {
 }
 
 beforeEach(() => {
+  mockOneVoice = false;
   window.localStorage.clear();
   __setDensityForTest("full");
   useDesignerClientForClientUserMock.mockReturnValue({ data: { id: "dc-1" } });
@@ -265,6 +275,34 @@ describe("ScheduleSpine region head", () => {
     expect(
       document.querySelectorAll('[data-action-variant="inked"]'),
     ).toHaveLength(1);
+  });
+
+  // FR2 F2-13 (R150 R5) — under one-voice a create act with no standing need
+  // is not the region's scored leader: `+ New open item` prints plain.
+  it("one-voice: `+ New open item` is not inked", () => {
+    mockOneVoice = true;
+    useResolvedScheduleMock.mockReturnValue(onePhaseSchedule("in_progress"));
+    phaseStateMock.mockReturnValue("active");
+
+    renderSpine();
+
+    expect(
+      screen.getByRole("button", { name: "+ New open item" }),
+    ).toHaveAttribute("data-action-variant", "secondary");
+    expect(
+      document.querySelectorAll('[data-action-variant="inked"]'),
+    ).toHaveLength(0);
+  });
+
+  it("flag off: `+ New open item` stays the inked leader", () => {
+    useResolvedScheduleMock.mockReturnValue(onePhaseSchedule("in_progress"));
+    phaseStateMock.mockReturnValue("active");
+
+    renderSpine();
+
+    expect(
+      screen.getByRole("button", { name: "+ New open item" }),
+    ).toHaveAttribute("data-action-variant", "inked");
   });
 
   it("renders open with zero phases so ScheduleBirth stays reachable, with no seam", () => {

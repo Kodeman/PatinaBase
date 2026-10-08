@@ -18,6 +18,7 @@ import {
   useCoordinationItems,
   useUpdateProjectPhaseStatus,
 } from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
 type PhaseRow = Database['public']['Tables']['project_phases']['Row'];
@@ -217,12 +218,15 @@ function PhaseActionRow({
   pending,
   notice,
   onTransition,
+  leads,
 }: {
   action: ActivePhaseAction;
   disabled: boolean;
   pending: boolean;
   notice: PhaseNotice | null;
   onTransition: (action: ActivePhaseAction) => void;
+  /** Whether this row's act is the region's one scored leader. */
+  leads: boolean;
 }) {
   const descriptionId = useId();
   const phaseHeadingId = useId();
@@ -276,7 +280,7 @@ function PhaseActionRow({
           actionKey={
             completing ? 'complete-project-phase' : 'resume-project-phase'
           }
-          variant="primary"
+          variant={leads ? 'primary' : 'secondary'}
           aria-label={actionLabel}
           aria-describedby={descriptionId}
           disabled={disabled}
@@ -324,6 +328,7 @@ export function PhaseAdvanceControl({
   phases: readonly PhaseRow[] | undefined;
 }) {
   const headingId = useId();
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const updatePhase = useUpdateProjectPhaseStatus();
   const coordination = useCoordinationItems(projectId);
   const pendingPhaseRef = useRef<string | null>(null);
@@ -421,7 +426,7 @@ export function PhaseAdvanceControl({
       </h3>
 
       <ul className="mt-2">
-        {actions.map((action) => (
+        {actions.map((action, index) => (
           <PhaseActionRow
             key={action.phase.id}
             action={action}
@@ -429,6 +434,10 @@ export function PhaseAdvanceControl({
             pending={pendingPhaseId === action.phase.id}
             notice={noticeByPhase[action.phase.id] ?? null}
             onTransition={handleTransition}
+            // US-19 FR2 F2-13 (R150 R5, `one-voice`) — one scored leader per
+            // region: the first row's act keeps it, every later row prints
+            // plain. Flag off, every row is scored as before.
+            leads={!oneVoice || index === 0}
           />
         ))}
       </ul>

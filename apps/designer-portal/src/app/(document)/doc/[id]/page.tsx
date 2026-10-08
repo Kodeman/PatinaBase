@@ -2991,6 +2991,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // ledger column: at ≥1180 they print beside the title block, below it they
   // fall under the vitals (the same `grid-cols-1` collapse `region-head.tsx`
   // uses). Two mounts would register `useMobilePrimaryAction` twice.
+  // US-19 FR2 F2-17 / 500-4 (`one-voice`) — every proposal paper mounts them,
+  // a client login or not, with the proposal: More carries Message (held when
+  // no client can be messaged), Preview the client's copy and Keys.
+  const proposalPaper = oneVoice && row.engagement_kind === 'proposal';
   const letterheadInstruments =
     row.engagement_kind === 'project' && row.project_id ? (
       <LetterheadInstruments
@@ -3000,9 +3004,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         clientName={row.client_name}
         engagementId={row.engagement_id}
       />
-    ) : row.engagement_kind !== 'project' && row.client_profile_id ? (
+    ) : (row.engagement_kind !== 'project' && row.client_profile_id) || proposalPaper ? (
       <LetterheadInstruments
         voice={bandModel?.voice ?? null}
+        {...(proposalPaper && {
+          proposalId: row.proposal_id,
+          designerClientId,
+          proposalStatus: liveProposal?.status ?? null,
+        })}
         clientProfileId={row.client_profile_id}
         clientName={row.client_name}
         engagementId={row.engagement_id}

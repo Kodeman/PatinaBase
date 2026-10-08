@@ -28,6 +28,15 @@ jest.mock('@/lib/analytics/document-events', () => ({
   },
 }));
 
+// US-19 `one-voice` is off unless a case turns it on.
+let mockOneVoice = false;
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (key: string) => ({
+    value: key === 'one-voice' ? mockOneVoice : false,
+    isLoading: false,
+  }),
+}));
+
 type PhaseRow = Database['public']['Tables']['project_phases']['Row'];
 
 function phase({
@@ -146,6 +155,50 @@ describe('PhaseAdvanceControl', () => {
     mockPending = false;
     mockCoordinationItems = [];
     mockMutate.mockReset();
+    mockOneVoice = false;
+  });
+
+  // US-19 FR2 F2-13 (R150 R5) — Aspen: two phases in progress at once printed
+  // two scored `Complete phase` acts. One scored leader per region: the first
+  // row keeps it, the rest print plain. The label is unchanged.
+  describe('one scored leader (FR2 F2-13)', () => {
+    const aspenPhases = [
+      phase({
+        id: 'aspen-dd',
+        name: 'Design Development',
+        status: 'in_progress',
+      }),
+      phase({
+        id: 'aspen-proc',
+        name: 'Procurement & Orders',
+        status: 'in_progress',
+        lane: 'thread',
+      }),
+    ];
+    const completePhaseActs = () =>
+      screen.getAllByRole('button', { name: /^Complete / });
+
+    it('one-voice, Aspen: exactly one scored `Complete phase`', () => {
+      mockOneVoice = true;
+      render(<PhaseAdvanceControl projectId="project-1" phases={aspenPhases} />);
+
+      const acts = completePhaseActs();
+      expect(acts).toHaveLength(2);
+      for (const act of acts) expect(act).toHaveTextContent('Complete phase');
+      expect(
+        acts.filter((act) => act.getAttribute('data-action-variant') === 'primary'),
+      ).toHaveLength(1);
+      expect(acts[0]).toHaveAttribute('data-action-variant', 'primary');
+      expect(acts[1]).toHaveAttribute('data-action-variant', 'secondary');
+    });
+
+    it('flag off: every row keeps its scored act, as today', () => {
+      render(<PhaseAdvanceControl projectId="project-1" phases={aspenPhases} />);
+
+      for (const act of completePhaseActs()) {
+        expect(act).toHaveAttribute('data-action-variant', 'primary');
+      }
+    });
   });
 
   // FR1 F12 (D11) — the machinery paragraph is deleted; the rows stand alone.

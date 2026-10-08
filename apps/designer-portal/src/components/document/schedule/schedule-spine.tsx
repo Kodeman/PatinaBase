@@ -93,6 +93,7 @@ import {
   type RegionFold,
 } from '../region/use-region-fold';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
@@ -871,6 +872,13 @@ export function ScheduleSpine({
         ]
       : scheduleLedger;
 
+  // US-19 FR2 F2-13 (R150 R5, `one-voice`) — one scored leader per region, and
+  // a create act with no standing need behind it is not one: when the head's
+  // first act is `+ New open item`, the head prints no inked leader at all.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const scheduleHeadLeaderless =
+    oneVoice && scheduleHeadLedger[0]?.key === 'new-open-item';
+
   // W4-R1 — the quiet head's own status line: the install day and how far out
   // it stands. Phases never print here (the rail carries the count), and a
   // fact that is not known prints NOTHING rather than a placeholder.
@@ -1163,6 +1171,7 @@ export function ScheduleSpine({
             surfaceKey="open-document"
             regionKey="schedule"
             actions={scheduleHeadLedger}
+            leaderless={scheduleHeadLeaderless}
             actsAtQuiet={density === 'quiet' ? 'leader' : 'all'}
             bodyId={scheduleBodyId}
             onFold={() => scheduleFold.setFolded(true)}

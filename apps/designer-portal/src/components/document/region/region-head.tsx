@@ -39,7 +39,7 @@ export interface RegionLedgerEntry {
   onClick?: () => void;
   /** Link-form entries render as an anchor rather than a button. */
   href?: string;
-  /** Ignored at index 0, which is always the inked leader. */
+  /** Ignored at index 0, which is the inked leader unless the head is `leaderless`. */
   variant?: 'secondary' | 'tertiary' | 'danger';
   disabled?: boolean;
   /**
@@ -119,6 +119,13 @@ export interface RegionHeadProps {
    * removes.
    */
   silent?: boolean;
+  /**
+   * US-19 FR2 F2-13 (R150 R5, `one-voice`) — the region has no scored leader
+   * at all: entry 0 keeps its declared variant (secondary by default). The
+   * caller sets it when its first act is a create act with no standing need
+   * behind it; it can still never promote a second leader.
+   */
+  leaderless?: boolean;
 }
 
 export function RegionHead({
@@ -137,6 +144,7 @@ export function RegionHead({
   actsAtQuiet = 'all',
   leader = true,
   silent = false,
+  leaderless = false,
 }: RegionHeadProps) {
   const showFold = Boolean(bodyId && onFold);
   const printedActions =
@@ -249,7 +257,7 @@ export function RegionHead({
         >
           {printedActions.map((entry, index) => {
             const variant: DocumentActionVariant =
-              index === 0 && leader ? 'inked' : (entry.variant ?? 'secondary');
+              index === 0 && leader && !leaderless ? 'inked' : (entry.variant ?? 'secondary');
             const shared = {
               actionKey: entry.key,
               variant,

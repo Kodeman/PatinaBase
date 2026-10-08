@@ -456,8 +456,14 @@ jest.mock('@/components/document/folio-strip', () => ({ FolioLetterhead: () => n
 // W3 — the instruments are handed to the letterhead as a node now, so the
 // stub prints a marker rather than nothing: where it lands, and how many of
 // it there are, is the assertion.
+// FR2 F2-17 — the stub keeps the props it was mounted with, so the inputs the
+// page hands the letterhead are assertable.
+let mockLetterheadProps: Record<string, unknown> | null = null;
 jest.mock('@/components/document/letterhead-instruments', () => ({
-  LetterheadInstruments: () => <span data-testid="instruments-row" />,
+  LetterheadInstruments: (props: Record<string, unknown>) => {
+    mockLetterheadProps = props;
+    return <span data-testid="instruments-row" />;
+  },
 }));
 jest.mock('@/components/document/schedule/schedule-nav-context', () => ({
   ScheduleNavProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -684,6 +690,7 @@ describe('DocumentPage hydration render behavior', () => {
 describe('DocumentPage guide activation', () => {
   beforeEach(() => {
     mockHydrated = true;
+    mockLetterheadProps = null;
     mockHistoryToggled.mockReset();
     mockDiscoveryFacetOpen.mockReset();
     mockDiscoveryFacetExpanded = false;
@@ -2012,6 +2019,71 @@ describe('DocumentPage guide activation', () => {
       expect(
         document.querySelectorAll('[data-testid="instruments-row"]'),
       ).toHaveLength(1);
+    });
+
+    // US-19 FR2 F2-17 / 500-4 (`one-voice`) — a Direction paper (every proposal
+    // paper) mounts the letterhead whether or not its client has a login, and
+    // hands it the proposal: More then carries Message (held when no client can
+    // be messaged), Preview the client's copy and Keys.
+    describe('a Direction paper (FR2 F2-17)', () => {
+      function asDirection(clientProfileId: string | null) {
+        const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+        mockDocumentQuery = {
+          ...mockDocumentQuery,
+          data: { kind: 'engagement', row: {
+            ...current, engagement_kind: 'proposal', active_section: 'direction',
+            engagement_id: 'proposal-1', proposal_id: 'proposal-1', lead_id: null,
+            client_profile_id: clientProfileId, proposal_status: 'draft',
+          } },
+        };
+        mockProposalData = {
+          id: 'proposal-1', status: 'draft', document_kind: 'design_services',
+          commercial_state: 'draft', project_id: null, designer_client_id: 'dc-1',
+        };
+      }
+      const rows = () => document.querySelectorAll('[data-testid="instruments-row"]');
+
+      it('one-voice, with a client: mounts once with the proposal and the household', () => {
+        mockEnabledFlags = ['one-voice'];
+        asDirection('client-1');
+        render(<DocumentPage params={fulfilledParams} />);
+
+        expect(rows()).toHaveLength(1);
+        expect(mockLetterheadProps).toMatchObject({
+          proposalId: 'proposal-1',
+          clientProfileId: 'client-1',
+          designerClientId: 'dc-1',
+          proposalStatus: 'draft',
+        });
+        expect(mockLetterheadProps?.projectId).toBeUndefined();
+      });
+
+      it('one-voice, a linked household with no login: still mounts, handed the household', () => {
+        mockEnabledFlags = ['one-voice'];
+        asDirection(null);
+        render(<DocumentPage params={fulfilledParams} />);
+
+        expect(rows()).toHaveLength(1);
+        expect(mockLetterheadProps).toMatchObject({
+          proposalId: 'proposal-1',
+          clientProfileId: null,
+          designerClientId: 'dc-1',
+        });
+      });
+
+      it('flag off: no login mounts nothing, and a client’s mount gets no proposal, as today', () => {
+        asDirection(null);
+        const { unmount } = render(<DocumentPage params={fulfilledParams} />);
+        expect(rows()).toHaveLength(0);
+        unmount();
+
+        asDirection('client-1');
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(rows()).toHaveLength(1);
+        expect(mockLetterheadProps?.proposalId).toBeUndefined();
+        expect(mockLetterheadProps?.designerClientId).toBeUndefined();
+        expect(mockLetterheadProps?.proposalStatus).toBeUndefined();
+      });
     });
   });
 

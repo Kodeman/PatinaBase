@@ -272,6 +272,8 @@ export function LetterheadInstruments({
   clientName,
   engagementId = null,
   voice = null,
+  designerClientId = null,
+  proposalStatus = null,
 }: {
   /** US-19 D7 (`one-voice`) — the band's Next and its door, which the phone
    *  dock repeats: the centre is Next's act in the band's words, and More
@@ -289,6 +291,11 @@ export function LetterheadInstruments({
    *  document. Optional: callers that don't yet carry it degrade to the
    *  door's un-scoped canonical-doc fallback. */
   engagementId?: string | null;
+  /** US-19 FR2 F2-17 (`one-voice`) — a proposal paper's household, for held
+   *  Message's repair: it opens the household sheet the chip opens. */
+  designerClientId?: string | null;
+  /** The proposal's status, so that sheet keeps a sent proposal's client. */
+  proposalStatus?: string | null;
 }) {
   const router = useRouter();
   const [mirrorOpen, setMirrorOpen] = useState(false);
@@ -325,13 +332,17 @@ export function LetterheadInstruments({
   // "Send a note" needs a linked client AND a thread route: a project group
   // thread, or (pre-project) a direct thread to the client's profile.
   const canSendNote = hasClient && Boolean(projectId || clientProfileId);
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   // A project with nobody linked still offers Message, held with its reason and
-  // the repair beside it (D3 Gated, D7) — never as the dock's centre.
-  const messageHeld = Boolean(projectId) && !hasClient;
+  // the repair beside it (D3 Gated, D7) — never as the dock's centre. FR2
+  // F2-17 (`one-voice`): so does a proposal paper with no client to message —
+  // none linked, or a household with no login (no thread route).
+  const messageHeld =
+    (Boolean(projectId) && !hasClient) ||
+    (oneVoice && !projectId && Boolean(proposalId) && !canSendNote);
   const [linking, setLinking] = useState(false);
   const messageReasonId = useId();
 
-  const oneVoice = useFeatureFlag('one-voice').value === true;
   const firstName = family === 'the client' ? null : clientShortName(family);
 
   useMobilePrimaryAction(
@@ -541,15 +552,17 @@ export function LetterheadInstruments({
 
       {/* The repair opens the same sheet the household chip opens — mounted
           only while open, so a client-less page issues none of its reads. */}
-      {messageHeld && linking && projectId && (
+      {messageHeld && linking && (projectId || proposalId) && (
         <HouseholdSheet
           open
           onClose={() => setLinking(false)}
-          engagementKind="project"
+          engagementKind={projectId ? 'project' : 'proposal'}
           projectId={projectId}
           proposalId={proposalId}
           clientProfileId={null}
+          designerClientId={designerClientId}
           clientName={clientName}
+          proposalStatus={proposalStatus}
         />
       )}
 

@@ -50,6 +50,19 @@ describe('RegionHead', () => {
     );
   });
 
+  // FR2 F2-13 (R150 R5) — a head whose caller says it has no leader inks
+  // nothing: entry 0 keeps its declared variant, secondary by default.
+  it('inks nothing when the head is leaderless', () => {
+    renderHead({ leaderless: true });
+    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAttribute(
+      'data-action-variant',
+      'secondary',
+    );
+    expect(
+      document.querySelectorAll('[data-action-variant="inked"]'),
+    ).toHaveLength(0);
+  });
+
   it('prints the region name at the Life Review’s 24px, over its eyebrow', () => {
     const { container } = renderHead({ eyebrow: 'The job · project' });
     const heading = screen.getByRole('heading', { name: 'Approvals' });

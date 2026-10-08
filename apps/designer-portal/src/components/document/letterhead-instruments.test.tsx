@@ -94,8 +94,25 @@ jest.mock('./lens-band', () => ({
 jest.mock('./client-mirror', () => ({ ClientMirror: () => null }));
 jest.mock('./proposal-preview', () => ({ ProposalPreview: () => null }));
 jest.mock('./overlays/household-sheet', () => ({
-  HouseholdSheet: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="household-sheet" /> : null,
+  HouseholdSheet: ({
+    open,
+    engagementKind,
+    designerClientId,
+    proposalStatus,
+  }: {
+    open: boolean;
+    engagementKind: string;
+    designerClientId?: string | null;
+    proposalStatus?: string | null;
+  }) =>
+    open ? (
+      <div
+        data-testid="household-sheet"
+        data-kind={engagementKind}
+        data-designer-client={designerClientId ?? ''}
+        data-status={proposalStatus ?? ''}
+      />
+    ) : null,
 }));
 
 /** jsdom evaluates no media queries: this is how the tier is driven, the same
@@ -556,5 +573,125 @@ describe('the phone dock under one-voice (D7, §3 2-6)', () => {
     expect(primary).toHaveBeenCalledWith(
       expect.objectContaining({ actionKey: 'message-family', label: 'Message The Ellsworths' }),
     );
+  });
+});
+
+/**
+ * US-19 FR2 F2-17 / 500-4 (`one-voice`) — every proposal paper (a Direction
+ * paper among them) carries More's paper-wide rows: `Standing · N` when the
+ * band moved its door to the dock, `Message {first}` (its held form when no
+ * client can be messaged), `Preview the client's copy`, `Keys`. The four
+ * project rows stay on project papers.
+ */
+describe('a proposal paper’s More under one-voice (FR2 F2-17, 500-4)', () => {
+  const secondary = useMobileSecondaryAction as jest.Mock;
+  const primary = useMobilePrimaryAction as jest.Mock;
+
+  beforeEach(() => {
+    installTier(false);
+    secondary.mockClear();
+    primary.mockClear();
+    mockProject = {};
+    mockOneVoice = true;
+  });
+  afterAll(() => {
+    mockOneVoice = false;
+  });
+
+  function renderProposal({
+    clientProfileId,
+    designerClientId = null,
+    doorInDock = false,
+  }: {
+    clientProfileId: string | null;
+    designerClientId?: string | null;
+    doorInDock?: boolean;
+  }) {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <LetterheadInstruments
+          proposalId="proposal-1"
+          designerClientId={designerClientId}
+          proposalStatus="draft"
+          clientProfileId={clientProfileId}
+          clientName="Elena Marlowe"
+          voice={{ next: null, standingCount: 3, doorInDock }}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  function more(): MobileSecondaryAction[] {
+    const latest = new Map<string, MobileSecondaryAction>();
+    for (const [action] of secondary.mock.calls) {
+      if (action) latest.set(action.actionKey, action);
+    }
+    return [...latest.values()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+
+  it('with a client: Message {first} · Preview the client’s copy · Keys', () => {
+    renderProposal({ clientProfileId: 'client-1' });
+    expect(more().map((act) => act.label)).toEqual([
+      'Message Elena',
+      "Preview the client's copy",
+      'Keys',
+    ]);
+    expect(more().find((act) => act.actionKey === 'message-family')?.held).toBeUndefined();
+  });
+
+  it('leads with `Standing · N` when the fallback is in force', () => {
+    renderProposal({ clientProfileId: 'client-1', doorInDock: true });
+    expect(more().map((act) => act.label)).toEqual([
+      'Standing · 3',
+      'Message Elena',
+      "Preview the client's copy",
+      'Keys',
+    ]);
+  });
+
+  it('a linked household with no login: Message is held, with its reason and repair', () => {
+    renderProposal({ clientProfileId: null, designerClientId: 'dc-1' });
+    expect(more().map((act) => act.label)).toEqual([
+      'Message the client',
+      "Preview the client's copy",
+      'Keys',
+    ]);
+    const message = more().find((act) => act.actionKey === 'message-family')!;
+    expect(message.held).toMatchObject({
+      reason: 'Link a client first.',
+      repair: { label: 'Link a client' },
+    });
+    // Never the dock's centre while held.
+    for (const [action] of primary.mock.calls) {
+      expect(action?.actionKey).not.toBe('message-family');
+    }
+
+    // The letterhead prints the same held form, its reason linked beneath.
+    const held = screen.getByRole('button', { name: 'Message the client' });
+    expect(held).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Link a client first.')).toBeInTheDocument();
+
+    // The repair opens the household sheet the chip opens, on this proposal.
+    act(() => message.held!.repair!.onPress());
+    const sheet = screen.getByTestId('household-sheet');
+    expect(sheet).toHaveAttribute('data-kind', 'proposal');
+    expect(sheet).toHaveAttribute('data-designer-client', 'dc-1');
+    expect(sheet).toHaveAttribute('data-status', 'draft');
+  });
+
+  it('no client at all: the same held Message', () => {
+    renderProposal({ clientProfileId: null });
+    const message = more().find((act) => act.actionKey === 'message-family');
+    expect(message).toMatchObject({
+      label: 'Message the client',
+      held: { reason: 'Link a client first.' },
+    });
+  });
+
+  it('flag off: nothing is published to More and no held Message prints', () => {
+    mockOneVoice = false;
+    renderProposal({ clientProfileId: null, designerClientId: 'dc-1' });
+    expect(secondary).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /^Message/ })).not.toBeInTheDocument();
   });
 });
