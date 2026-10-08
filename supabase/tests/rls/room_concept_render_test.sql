@@ -316,8 +316,9 @@ DECLARE
     'clientUnitPriceCents', 'conceptRenderCaption', 'conceptRenderUploadedAt',
     'conceptRenderUploadedBy', 'conceptRenderUrl', 'docCode', 'id', 'imageUrl',
     'instrument', 'itemType', 'kind', 'logisticsStatus', 'name', 'productId',
-    'quantity', 'roomId', 'roomName', 'threadId', 'tradeJourney', 'updatedAt'
-  ];
+    'quantity', 'roomId', 'roomName', 'rooms', 'threadId', 'tradeJourney',
+    'unit', 'updatedAt'
+  ];  -- rooms and unit: 00745 (US-21 T-37), additive; roomName stays the primary.
   v_keys text[];
   v_line jsonb;
   v_kinds text[];
