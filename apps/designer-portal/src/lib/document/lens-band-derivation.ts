@@ -192,6 +192,9 @@ export interface LensInputItem {
   sentence: string;
   /** The guide's act, where the guide gives one. */
   act: LensAct | null;
+  /** F2-7 — the need this count stands for, where one exists: the sheet row
+   *  borrows that need's act (`2 overdue client decisions` → `Nudge Mei`). */
+  needKind?: NeedKind | null;
 }
 
 /**
@@ -331,11 +334,13 @@ export interface LensOwnAct {
   key: string;
   label: string;
   /** The control a press lands on (L-10). Null where the press runs its own
-   *  landing: the guide line standing in for an own act the caller did not
-   *  pass. */
+   *  landing (R5's Retry). */
   targetId: ActTargetId | null;
   tier: ActTier;
-  sentence: string;
+  /** 498-c — the region's own status sentence (`3 lines unspecified.`), or
+   *  null where the region states none: the act then prints alone. Never the
+   *  guide line. */
+  sentence: string | null;
   shortSentence?: string | null;
   onAct: () => void;
   disabled?: boolean;
@@ -351,6 +356,7 @@ export interface LensNextAct extends Omit<LensAct, 'shortLabel'> {
 /** D2 — the one thing the band names on line 2's left. The dock (D7) prints
  *  the same act in the same words. */
 export interface LensNext {
+  /** Empty where the act prints alone (498-c: an own act with no status). */
   sentence: string;
   /** D-B24 / W6-R1 — the 390 form. The act is never shortened (D1: never the
    *  bare `Record`). */
@@ -361,30 +367,51 @@ export interface LensNext {
   rowKey: string | null;
 }
 
-export interface LensVoice {
-  /** Line 1, left (D1): `Project · Chen Residence`, `Project · On hold`,
-   *  `Care · Closed`. Caps in CSS; never a count. */
+/** One printable form of the voice's line 2. `act` is F2-4's last rung: the
+ *  lead and the act, the sentence given up whole. */
+export interface LensVoiceRung {
+  form: LensBandLine2['form'] | 'act';
+  /** `Next ─` beside the long sentence and the act alone, `Next` beside the
+   *  short one and alone while the own act loads; null where no Next prints
+   *  (a closed or held job). */
+  lead: string | null;
+  /** Next's, in the form that fit; the hold sentence; or today's line-2
+   *  sentence where there is no Next. */
+  sentence: string;
+}
+
+export interface LensVoice extends LensVoiceRung {
+  /** Line 1, left (D1, F2-1): `Project · Chen Residence` — the JOB's name,
+   *  never the household — `Project · On hold`, `Care · Closed`. Caps in CSS;
+   *  never a count. */
   eyebrow: string;
+  /** F2-1 — the eyebrow's two halves: the stage word never clips, the name
+   *  may ellipsise. Null where there is no name to print. */
+  eyebrowStage: string;
+  eyebrowDetail: string | null;
   /** Line 1, right — the agreed figure, yielding where Next names it (D-B26). */
   rightFlush: string | null;
   moneyOnly: string | null;
   next: LensNext | null;
-  /** Line 2's lead word: `Next ─` beside the long sentence, `Next` beside
-   *  the short one; null where no Next prints (a closed job). */
-  lead: string | null;
-  /** The sentence line 2 prints — Next's, in the form that fit, or today's
-   *  line-2 sentence where there is no Next. */
-  sentence: string;
-  form: LensBandLine2['form'];
+  /** F2-4 — the printed form first, then every form below it in yield order:
+   *  the band measures the printed sentence and drops a rung while it clips.
+   *  The act never yields. */
+  rungs: readonly LensVoiceRung[];
   /** `Standing · N` — every sheet row minus the one Next names. 0 is silence. */
   standingCount: number;
+  /** F2-22 — a class-1 row (money or a signature) stands behind the door, Next
+   *  excluded: the door's terracotta. Clay otherwise. */
+  doorClassOne: boolean;
   /** D2 at 390 — the measure cannot fit the door after the act, so the band
    *  prints Next alone and the dock's More carries `Standing · N` (SQ-2C). */
   doorInDock: boolean;
-  /** The sheet's exception rows, each act named from the one table (D1). */
+  /** The sheet's exception rows, each act named from the one table (D1), each
+   *  row carrying its own act where one can be named (F2-7). */
   standing: readonly LensStandingItem[];
   /** The open inputs behind the door; they file under `NEEDS YOU` (D2). */
   inputs: readonly LensInputItem[];
+  /** The sheet's `SETUP` rows — none on a closed or held job (F2-10, F2-11). */
+  setup: readonly LensSetupItem[];
 }
 
 export interface LensBandInput {
@@ -405,6 +432,12 @@ export interface LensBandInput {
    *  state it and so the model does not change under the reader at midnight. */
   now?: Date;
   household: string;
+  /** F2-1 — the job's own name (`Chen Residence`), the voice's line 1. Never
+   *  the household. */
+  jobName?: string | null;
+  /** 499-1 — the client's first name, through the placeholder guard; null
+   *  where there is none. Left out, it is read from the household. */
+  clientFirstName?: string | null;
   /** `Procurement & Orders`, `Proposal`, `Brief` — the stage, never the stop. */
   stageWord: string;
   stageIndex: { position: number; of: number } | null;
@@ -423,9 +456,9 @@ export interface LensBandInput {
   /** D10 — `project_status`. `No client linked` is suppressed on a
    *  `completed` or `on_hold` job. */
   projectStatus?: string | null;
-  /** D1 — the stage's own act, from `ownAct()` and the facts it reads. Left
-   *  out, the guide line stands in as the stage's own act; null states the
-   *  stage has none. */
+  /** D1 — the stage's own act, from `ownAct()` and the facts it reads; null
+   *  states the stage has none. Left out, it is not known yet (500-5): the
+   *  guide line never stands in for it (498-c). */
   ownAct?: LensOwnAct | null;
   /** D6 — the install reading; line 2 quotes it when its act is Next. */
   installReading?: InstallReading | null;
@@ -909,11 +942,96 @@ const shortSentenceOf = (item: LensStandingItem) =>
 /** D2's door, in its own words: the word and the count, nothing else. */
 export const standingDoorLabel = (count: number) => `Standing · ${count}`;
 
-/** D1 — a need's act is named from the one table, whatever its source printed.
- *  A ticket exception has no kind, and no act to rename. */
-function voiceItem(item: LensStandingItem): LensStandingItem {
+/** D1 — a need's act is named from the one table, whatever its source printed,
+ *  with the client's first name where the act names her (499-1: `Nudge Mei`;
+ *  `the client` only as the family fallback). A ticket exception has no kind,
+ *  and no act to rename. */
+function voiceItem(item: LensStandingItem, clientFirstName: string | null): LensStandingItem {
   if (!item.act || !item.needKind) return item;
-  return { ...item, act: { ...item.act, label: needActLabel(item.needKind) } };
+  return {
+    ...item,
+    act: { ...item.act, label: needActLabel(item.needKind, clientFirstName) },
+  };
+}
+
+/** The desk's `payment_due` line (`desk-derivation.ts`, PAYMENT_KIND_WORD):
+ *  `Balance to Woodward & Sons · $3,400 due 12 May — WS-188`. The need holds
+ *  no structured payee, figure or PO, so the band reads its own template back.
+ *  The figure and the day are each optional; anything else is not this line. */
+const PAYMENT_LINE =
+  /^(Payment in full|Deposit|Balance|Payment) to (.+?)(?: · (\$[\d,]+(?:\.\d+)?))? due(?: [^—]+?)? — (.+)$/;
+
+const dayCount = (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`;
+
+/**
+ * 498-j — the payment Next as prose, not the Desk's ledger cell:
+ * `Pay Woodward & Sons the WS-188 balance, $3,400 — 148 days overdue.` and
+ * `WS-188 balance, 148 days overdue.` Every part is read from the need; a
+ * line the template does not describe keeps its own words (null).
+ */
+function paymentProse(
+  item: LensStandingItem,
+): { sentence: string; shortSentence: string } | null {
+  if (item.needKind !== 'payment_due') return null;
+  const match = PAYMENT_LINE.exec(item.sentence);
+  if (!match) return null;
+  const [, word, payee, figure, po] = match;
+  const what = `${po} ${word.toLowerCase()}`;
+  const distance = item.distance;
+  // DESIGN-Q (SQ-512): 498-j states the overdue form only; a payment not yet
+  // due reads `due today` / `due in N days`, and an undated one names no day.
+  const when =
+    item.sense === 'past' && distance != null && distance < 0
+      ? `${dayCount(-distance)} overdue`
+      : item.sense === 'ahead' && distance != null
+        ? distance === 0
+          ? 'due today'
+          : `due in ${dayCount(distance)}`
+        : null;
+  const sentence = `Pay ${payee} the ${what}${figure ? `, ${figure}` : ''}${
+    when ? ` — ${when}` : ''
+  }.`;
+  const shortSentence = `${what}${when ? `, ${when}` : ''}.`;
+  return { sentence, shortSentence };
+}
+
+/** F2-7 — the ticket's Pieces clause for a maker's silence. */
+const UNANSWERED_PO = / unanswered, \d+ days?$/;
+/** F2-7 — the ticket's Spec clause. */
+const UNSPECIFIED = /^(\d+) unspecified$/;
+
+/**
+ * F2-7 / 498-e — every sheet row carries its own act. A ticket exception may
+ * not mint one (A-11), so it carries the act the paper already holds for the
+ * same fact: `3 unspecified` the stage's `Spec the 3 unspecified`, a PO's
+ * silence the standing `po_unacknowledged` need's `Follow up with the maker`,
+ * an input that counts a need that need's act. Where the paper holds none, the
+ * row keeps none. Next is chosen before this and never from a borrowed act.
+ */
+function borrowedAct(
+  key: string,
+  sentence: string,
+  needKind: NeedKind | null | undefined,
+  voiced: readonly LensStandingItem[],
+  ownAct: LensOwnAct | null,
+): LensAct | null {
+  const actOfKind = (kind: NeedKind) =>
+    voiced.find((item) => item.needKind === kind && item.act)?.act ?? null;
+  if (needKind) return actOfKind(needKind);
+  if (key === 'ticket:pieces' && UNANSWERED_PO.test(sentence)) {
+    return actOfKind('po_unacknowledged');
+  }
+  const unspecified = key === 'ticket:spec' ? UNSPECIFIED.exec(sentence) : null;
+  if (unspecified && ownAct?.label === `Spec the ${unspecified[1]} unspecified`) {
+    return {
+      key: ownAct.key,
+      label: ownAct.label,
+      onAct: ownAct.onAct,
+      disabled: ownAct.disabled,
+      held: ownAct.held,
+    };
+  }
+  return null;
 }
 
 /** D8 — custody, only as a recorded owner allows it. The studio's own pen
@@ -973,7 +1091,8 @@ export function deriveNext({
   type Row = (StandingNeedRow | SetupRow) & { next: LensNext | null };
   const rows: Row[] = [
     ...standing.map((item): Row => {
-      const { act } = voiceItem(item);
+      const { act } = voiceItem(item, clientFirstName);
+      const prose = paymentProse(item);
       return {
         needKind: item.needKind,
         tier: item.tier,
@@ -982,8 +1101,12 @@ export function deriveNext({
         standingSince: item.standingSince,
         next: act
           ? {
-              sentence: withCustody(item.sentence, item.owner, clientFirstName),
-              shortSentence: shortSentenceOf(item),
+              sentence: withCustody(
+                prose?.sentence ?? item.sentence,
+                item.owner,
+                clientFirstName,
+              ),
+              shortSentence: prose?.shortSentence ?? shortSentenceOf(item),
               act: nextAct(act, null, ACT_TIER[act.label] ?? 'plain'),
               rowKey: item.key,
             }
@@ -1008,7 +1131,7 @@ export function deriveNext({
   const choice = selectNext<Row>({
     needs: rows,
     // `selectNext` only places the own act; it never reads the landing, which
-    // the guide line standing in for one does not have.
+    // R5's Retry does not have.
     ownAct: ownAct
       ? ({ label: ownAct.label, tier: ownAct.tier, targetId: ownAct.targetId } as OwnAct)
       : null,
@@ -1023,10 +1146,12 @@ export function deriveNext({
   if (!ownAct) return null;
 
   const quoted = Boolean(installReading?.act && installReading.act.label === ownAct.label);
-  const sentence = quoted && installReading ? installReading.sentence : ownAct.sentence;
+  // 498-c — the region's status where it states one, else the act alone.
+  const sentence =
+    quoted && installReading ? installReading.sentence : (ownAct.sentence ?? '');
   return {
     sentence,
-    shortSentence: quoted ? sentence : (ownAct.shortSentence ?? ownAct.sentence),
+    shortSentence: quoted ? sentence : (ownAct.shortSentence ?? sentence),
     act: nextAct(ownAct, ownAct.targetId, ownAct.tier),
     rowKey: null,
   };
@@ -1247,6 +1372,9 @@ export function deriveLensBand(input: LensBandInput): LensBandModel {
   };
 }
 
+/** F2-10 — what a held job's line 2 says in place of Next. */
+export const HELD_SENTENCE = 'Paused — nothing moves until it resumes.';
+
 /**
  * Slice 2 (`one-voice`) — D1's eyebrow on line 1; D2's two fixed positions on
  * line 2: Next ─ sentence and act at the left, the `Standing · N` door at the
@@ -1266,47 +1394,52 @@ function deriveVoice(
     line2: LensBandLine2;
   },
 ): LensVoice {
-  const household = input.household.trim();
-  const guideAct = input.guide?.act ?? null;
-  // Until the caller passes the D1 own act, the guide line — today's line 2
-  // when nothing stands — stands in for it, so a quiet job never prints setup.
-  const ownAct: LensOwnAct | null =
-    input.ownAct !== undefined
-      ? input.ownAct
-      : input.guide && guideAct
-        ? {
-            key: guideAct.key,
-            label: guideAct.label,
-            targetId: null,
-            tier: ACT_TIER[guideAct.label] ?? 'scored',
-            sentence: input.guide.text,
-            shortSentence: input.guide.short ?? null,
-            onAct: guideAct.onAct,
-            disabled: guideAct.disabled,
-          }
-        : null;
-  const client = familyLabel(household);
-  const next = deriveNext({
-    standing,
-    setup,
-    ownAct,
-    installReading: input.installReading,
-    clientFirstName: client === 'the client' ? null : clientShortName(client),
-    closed: input.projectStatus === 'completed',
-  });
+  const status = input.projectStatus ?? null;
+  // F2-11 — a closed job prints today's closed sentence, no Next, no setup
+  // rows and a silent door. F2-10 — a held job prints no Next and no setup
+  // rows; its door speaks only while a class 1–2 row stands.
+  const closed = status === 'completed';
+  const held = status === 'on_hold';
+  // 500-5 / 498-c — an own act left out is not known yet. Nothing stands in
+  // for it, and setup waits too: it is never Next while an own act may stand.
+  const pending = input.ownAct === undefined;
+  const ownAct = input.ownAct ?? null;
+  const household = familyLabel(input.household.trim());
+  const clientFirstName =
+    input.clientFirstName !== undefined
+      ? input.clientFirstName
+      : household === 'the client'
+        ? null
+        : clientShortName(household);
+  const next =
+    closed || held
+      ? null
+      : deriveNext({
+          standing,
+          setup: pending ? [] : setup,
+          ownAct,
+          installReading: input.installReading,
+          clientFirstName,
+          closed: false,
+        });
+  const loading = pending && next === null && !closed && !held;
 
-  // D1 (I154) — the input the guide's act names is not a row behind the door,
-  // exactly when that act is the one line 2 prints.
   // F14 — the proposal's collapsed row is named whenever Next is its act.
-  const guideIsNext = next !== null && next.rowKey === null && input.ownAct === undefined;
   const nextIsOwn = next !== null && next.rowKey === null;
-  const inputs = allInputs.filter((item) =>
-    item.key === PROPOSAL_INPUTS_KEY
-      ? !(nextIsOwn && namesInput(item, null, next?.act.label))
-      : !(guideIsNext && namesInput(item, input.namedInputKey, null)),
+  const inputs = allInputs.filter(
+    (item) =>
+      !(item.key === PROPOSAL_INPUTS_KEY && nextIsOwn && namesInput(item, null, next?.act.label)),
   );
+  const voicedSetup = closed || held ? [] : setup;
   const standingCount =
-    standing.length + inputs.length + setup.length - (next?.rowKey ? 1 : 0);
+    closed || loading
+      ? 0
+      : standing.length + inputs.length + voicedSetup.length - (next?.rowKey ? 1 : 0);
+  // F2-22 — terracotta only for a class-1 row behind the door; Next's own row
+  // is not behind it.
+  const doorClassOne =
+    standingCount > 0 &&
+    standing.some((item) => item.key !== next?.rowKey && classOfStandingRow(item) === 1);
 
   const named = next?.rowKey ? standing.find((item) => item.key === next.rowKey) : undefined;
   const { rightFlush, moneyOnly } = rightSlot(
@@ -1314,50 +1447,77 @@ function deriveVoice(
     input.readingStop?.key === 'money',
     Boolean(named?.namesMoney),
   );
-  const { stage, detail } = stageEyebrow(
-    input.spreadKind,
-    input.projectStatus ?? null,
-    printedHousehold(household),
-  );
+  // F2-1 — the job's name, never the household (nor its no-login suffix).
+  const { stage, detail } = stageEyebrow(input.spreadKind, status, (input.jobName ?? '').trim());
+  const eyebrowDetail = detail || null;
 
-  // D2 / I154 — the measure picks the form, as the three forms already are.
-  // The act is never shortened, so only the sentence gives way; at the
-  // phone's measure the door is the next thing to give, moving to the dock.
+  // D2 / 498-g — the measure picks the form. The order of yield is the door,
+  // then the sentence, never the act: at the phone's measure the door goes to
+  // the dock first; elsewhere it stays and the sentence gives way.
   const doorPx =
     standingCount > 0 ? monoPx(standingDoorLabel(standingCount)) + LENS_LINE2_GAP_PX : 0;
   const actPx = next ? monoPx(next.act.label) + LENS_LINE2_GAP_PX : 0;
-  type Form = { form: LensVoice['form']; lead: string | null; sentence: string };
-  const fits = ({ lead, sentence }: Form, withDoor: boolean) =>
+  const fits = ({ lead, sentence }: LensVoiceRung, withDoor: boolean) =>
     (lead ? monoPx(lead) + LENS_LINE2_GAP_PX : 0) +
       sentencePx(sentence) +
       actPx +
       (withDoor ? doorPx : 0) <=
     LENS_LINE2_MEASURE_PX[input.tier];
-  // A closed job, or one with nothing to take, keeps today's line 2 sentence.
-  const forms: Form[] = next
+  const forms: LensVoiceRung[] = next
     ? [
-        { form: 'long', lead: 'Next ─', sentence: next.sentence },
-        { form: 'short', lead: 'Next', sentence: next.shortSentence },
+        ...(next.sentence
+          ? [{ form: 'long' as const, lead: 'Next ─', sentence: next.sentence }]
+          : []),
+        ...(next.shortSentence
+          ? [{ form: 'short' as const, lead: 'Next', sentence: next.shortSentence }]
+          : []),
+        // F2-4 — the last rung: `NEXT ─ RECORD THE PAYMENT`, the sentence
+        // given up whole rather than clipped.
+        { form: 'act', lead: 'Next ─', sentence: '' },
       ]
-    : [{ form: line2.form, lead: null, sentence: line2.sentence }];
-  const withDoor = forms.find((form) => fits(form, true));
-  const doorInDock = !withDoor && standingCount > 0 && input.tier === 'mobile';
-  const printed =
-    withDoor ??
-    (doorInDock ? forms.find((form) => fits(form, false)) : undefined) ??
-    forms[forms.length - 1];
+    : held
+      ? [{ form: 'long', lead: null, sentence: HELD_SENTENCE }]
+      : loading
+        ? [{ form: 'long', lead: 'Next', sentence: '' }]
+        : [{ form: line2.form, lead: null, sentence: line2.sentence }];
+  const doorInDock =
+    standingCount > 0 && input.tier === 'mobile' && !fits(forms[0], true);
+  const withDoor = standingCount > 0 && !doorInDock;
+  const at = forms.findIndex((form) => fits(form, withDoor));
+  const rungs = forms.slice(at === -1 ? forms.length - 1 : at);
+  const printed = rungs[0];
 
+  const voicedStanding = standing.map((item) => voiceItem(item, clientFirstName));
   return {
-    eyebrow: detail ? `${stage} · ${detail}` : stage,
+    eyebrow: eyebrowDetail ? `${stage} · ${eyebrowDetail}` : stage,
+    eyebrowStage: stage,
+    eyebrowDetail,
     rightFlush,
     moneyOnly,
     next,
     lead: printed.lead,
     sentence: printed.sentence,
     form: printed.form,
+    rungs,
     standingCount,
+    doorClassOne,
     doorInDock,
-    standing: standing.map(voiceItem),
-    inputs,
+    standing: voicedStanding.map((item) =>
+      item.act
+        ? item
+        : {
+            ...item,
+            act: borrowedAct(item.key, item.sentence, item.needKind, voicedStanding, ownAct),
+          },
+    ),
+    inputs: inputs.map((item) =>
+      item.act
+        ? item
+        : {
+            ...item,
+            act: borrowedAct(item.key, item.sentence, item.needKind, voicedStanding, ownAct),
+          },
+    ),
+    setup: voicedSetup,
   };
 }

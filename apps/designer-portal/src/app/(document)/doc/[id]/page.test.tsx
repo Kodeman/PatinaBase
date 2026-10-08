@@ -2400,6 +2400,33 @@ describe('DocumentPage guide activation', () => {
       expect(bandSentence()).toMatch(/^Waiting on .+: Primary bedroom approval overdue 6 days/);
     });
 
+    // US-19 FR2 F2-1 / 499-1 (SQ-512) — line 1 is the job's name, never the
+    // household; the band's act names the client by her first name.
+    it('one-voice: line 1 prints the job’s name and the act names the client’s first name', () => {
+      asProjectDocument();
+      mockEnabledFlags = ['one-voice'];
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: null,
+          needs: [{
+            kind: 'overdue_decision', text: 'Primary bedroom approval overdue 6 days',
+            actionLabel: 'Send a reminder', urgent: true, stamp: { label: 'OVERDUE' },
+            owner: 'client',
+          }],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const identity = document.querySelector('[data-lens-identity]')?.textContent ?? '';
+      expect(identity).toBe('Project · Stone Residence');
+      expect(identity).not.toContain('Avery');
+      expect(screen.getByRole('button', { name: 'Nudge Avery' })).toBeInTheDocument();
+    });
+
     it('prints the guide sentence on a non-project document', () => {
       // The default mockDocumentQuery row from the outer beforeEach is a lead
       // (Brief) document — unaffected by the project-only swap.

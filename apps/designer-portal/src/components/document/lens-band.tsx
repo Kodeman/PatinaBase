@@ -20,7 +20,7 @@
  * yield) with a different geometry, and is not a substitute for this one.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
   LENS_ANNOUNCE_DEDUPE_MS,
@@ -43,6 +43,21 @@ export const OPEN_STANDING_SHEET_EVENT = 'document:open-standing-sheet';
 /** Both lines, at every width — the backstop only, after the derivation has
  *  chosen the form that fits (D-B24). */
 const LINE_CLIP = 'overflow-hidden text-ellipsis whitespace-nowrap';
+
+/** F2-1 — the eyebrow's two halves: the stage word never clips; the job's
+ *  name, with its separator, is what ellipsises. */
+function Eyebrow({ voice }: { voice: LensVoice }) {
+  return (
+    <>
+      <span className="shrink-0">{voice.eyebrowStage}</span>
+      {voice.eyebrowDetail && (
+        <span className="min-w-0 overflow-hidden text-ellipsis whitespace-pre">
+          {` · ${voice.eyebrowDetail}`}
+        </span>
+      )}
+    </>
+  );
+}
 
 /**
  * The same STANDING ITEM, whatever form it is printed in.
@@ -201,6 +216,34 @@ export function LensBand({
     return () => window.removeEventListener(OPEN_STANDING_SHEET_EVENT, openSheet);
   }, [speaks, onStandingOpened]);
 
+  // F2-4 / 498-g — the measure decides, never the tier: the derivation's
+  // estimate picks a rung, and while the printed sentence still clips the band
+  // drops to the next (the act never yields). Keyed on the rungs' words and
+  // the band's width, so new words or a wider window start again at the top.
+  const sentenceRef = useRef<HTMLSpanElement | null>(null);
+  const [bandWidth, setBandWidth] = useState(0);
+  useEffect(() => {
+    if (!speaks) return;
+    const measure = () => setBandWidth(bandRef.current?.clientWidth ?? 0);
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [speaks]);
+  const rungKey = spoken
+    ? `${spoken.rungs.map((r) => `${r.form}:${r.sentence}`).join('|')}@${bandWidth}`
+    : '';
+  const [yielded, setYielded] = useState({ key: '', by: 0 });
+  const dropped = yielded.key === rungKey ? yielded.by : 0;
+  const rung = spoken
+    ? (spoken.rungs[Math.min(dropped, spoken.rungs.length - 1)] ?? spoken)
+    : null;
+  useLayoutEffect(() => {
+    const sentence = sentenceRef.current;
+    if (!spoken || !sentence || dropped >= spoken.rungs.length - 1) return;
+    if (sentence.scrollWidth > sentence.clientWidth) {
+      setYielded({ key: rungKey, by: dropped + 1 });
+    }
+  }, [spoken, rungKey, dropped]);
+
   const [announcement, setAnnouncement] = useState('');
   const lastAnnouncedKey = useRef<string | null>(null);
   const lastAnnouncedAt = useRef(0);
@@ -250,9 +293,6 @@ export function LensBand({
   const spokenRow = spoken?.next?.rowKey ?? null;
   const nextIsException =
     spokenRow !== null && (spoken?.standing.some((item) => item.key === spokenRow) ?? false);
-  // D1 — the door keeps the register of what stands behind it.
-  const doorHoldsException =
-    spoken?.standing.some((item) => item.key !== spokenRow) ?? false;
   const door = spoken && spoken.standingCount > 0 && !spoken.doorInDock ? spoken : null;
 
   return (
@@ -289,7 +329,10 @@ export function LensBand({
           {/* At s0 the letterhead 60px above prints the household at 40px, the
               stage as its arc and the date in its vitals, so both yield; the
               letterhead prints no money, so money keeps its printing. */}
-          <span className={`min-w-0 ${LINE_CLIP}`} data-lens-identity>
+          <span
+            className={`min-w-0 ${spoken ? 'flex items-baseline overflow-hidden whitespace-nowrap' : LINE_CLIP}`}
+            data-lens-identity
+          >
             {spoken ? (
               // D1 — `STAGE · Name` at every stop: the letterhead prints the
               // name but never the stage word, so line 1 does not yield it.
@@ -299,12 +342,12 @@ export function LensBand({
                   type="button"
                   onClick={onToTop}
                   data-lens-to-top
-                  className="inline p-0 text-left uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] hover:underline"
+                  className="flex min-w-0 items-baseline p-0 text-left uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--text-primary)] hover:underline"
                 >
-                  {spoken.eyebrow}
+                  <Eyebrow voice={spoken} />
                 </button>
               ) : (
-                spoken.eyebrow
+                <Eyebrow voice={spoken} />
               )
             ) : open ? null : (
               <>
@@ -339,11 +382,11 @@ export function LensBand({
             44px control is inset by -12px into the 19.5px line, so an
             `overflow: hidden` here would cut 12px off its box for painting and
             for hit-testing — and at 390 line 2 is that act's only printing. */}
-        {spoken ? (
+        {spoken && rung ? (
           <p
             data-lens-line="2"
             data-lens-line2-kind={spoken.next ? 'next' : printed.kind}
-            data-lens-line2-form={spoken.form}
+            data-lens-line2-form={rung.form}
             aria-live="polite"
             aria-atomic="true"
             className={`flex items-center gap-2 whitespace-nowrap text-[15px] leading-[1.3] ${
@@ -352,19 +395,22 @@ export function LensBand({
                 : 'text-[var(--text-primary)]'
             }`}
           >
-            {spoken.lead && (
+            {rung.lead && (
               <span
                 data-lens-next-lead
                 className="shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
               >
-                {spoken.lead}
+                {rung.lead}
               </span>
             )}
             <span
+              ref={sentenceRef}
               data-lens-sentence
-              data-part={spoken.sentence ? 'headline' : undefined}
+              data-part={rung.sentence ? 'headline' : undefined}
               data-arr-long={
-                spoken.next && spoken.form === 'short' ? spoken.next.sentence : undefined
+                spoken.next && rung.sentence && rung.form === 'short'
+                  ? spoken.next.sentence
+                  : undefined
               }
               className={`min-w-0 ease-[var(--ease-editorial)] transition-opacity motion-reduce:transition-none ${LINE_CLIP} ${
                 voiceTurning
@@ -372,7 +418,7 @@ export function LensBand({
                   : 'opacity-100 duration-[150ms]'
               }`}
             >
-              {spoken.sentence}
+              {rung.sentence}
             </span>
             {spoken.next && (
               <DocumentAction
@@ -406,9 +452,10 @@ export function LensBand({
                   setSheetOpen(true);
                 }}
                 // D2 — `Standing · 3`, the word and the count, in her words:
-                // not caps, never a kind summary.
+                // not caps, never a kind summary. F2-22 — terracotta only for
+                // money or a signature behind it, clay otherwise.
                 className={`ml-auto shrink-0 whitespace-nowrap font-mono text-[11px] tracking-[0.04em] underline underline-offset-[3px] ${
-                  doorHoldsException
+                  door.doorClassOne
                     ? 'text-[var(--color-terracotta-ink)]'
                     : 'text-[var(--color-clay-ink)]'
                 }`}
@@ -507,8 +554,12 @@ export function LensBand({
         onClose={() => setSheetOpen(false)}
         items={voice ? voice.standing : model.standing}
         inputs={voice ? voice.inputs : model.inputs}
-        setup={model.setup}
+        setup={voice ? voice.setup : model.setup}
         grouped={voice !== null}
+        // F2-6 — the title reads the door's own count; Next's row is first in
+        // its group and not counted.
+        count={voice ? voice.standingCount : undefined}
+        nextKey={voice?.next?.rowKey ?? null}
         triggerRef={fallbackFocusRef}
       />
     </>

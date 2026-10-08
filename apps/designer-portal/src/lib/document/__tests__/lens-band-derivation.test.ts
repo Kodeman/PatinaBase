@@ -1,5 +1,6 @@
 import type { RedLetterRow } from '@/components/document/red-letter-zone';
 import {
+  HELD_SENTENCE,
   deriveLensBand,
   deriveNext,
   rankStanding,
@@ -214,19 +215,42 @@ describe('deriveLensBand · the placeholder guard on line 1 (F9)', () => {
     (household) => {
       const model = deriveLensBand(input({ household }));
       expect(model.line1.identity).toBe('THE CLIENT');
-      expect(model.voice.eyebrow).toBe('Project · the client');
+      // F2-1 — the voice prints the job, never the household.
+      expect(model.voice.eyebrow).toBe('Project');
     },
   );
-
-  it('keeps an authored household verbatim', () => {
-    const model = deriveLensBand(input({ household: 'Vandersteen residence' }));
-    expect(model.voice.eyebrow).toBe('Project · Vandersteen residence');
-  });
 
   it('prints no name at all when there is no household', () => {
     const model = deriveLensBand(input({ household: '  ' }));
     expect(model.line1.identity).toBe('');
     expect(model.voice.eyebrow).toBe('Project');
+  });
+});
+
+describe('deriveLensBand · the voice’s line 1 is the job (F2-1)', () => {
+  it('prints the job’s name, never the household or its no-login suffix', () => {
+    const model = deriveLensBand(
+      input({ household: 'Chen family (no-login household)', jobName: 'Chen Residence' }),
+    );
+    expect(model.voice.eyebrow).toBe('Project · Chen Residence');
+    expect(model.voice.eyebrowStage).toBe('Project');
+    expect(model.voice.eyebrowDetail).toBe('Chen Residence');
+    expect(model.voice.eyebrow).not.toMatch(/no-login|Chen family/);
+  });
+
+  it('prints the stage alone where the job has no name', () => {
+    const model = deriveLensBand(input({ household: 'Vandersteen residence', jobName: '  ' }));
+    expect(model.voice.eyebrow).toBe('Project');
+    expect(model.voice.eyebrowDetail).toBeNull();
+  });
+
+  it('keeps the held and closed forms', () => {
+    expect(
+      deriveLensBand(input({ jobName: 'Harrow', projectStatus: 'on_hold' })).voice.eyebrow,
+    ).toBe('Project · On hold');
+    expect(
+      deriveLensBand(input({ jobName: 'Lindqvist', projectStatus: 'completed' })).voice.eyebrow,
+    ).toBe('Care · Closed');
   });
 });
 
@@ -1255,7 +1279,7 @@ const CHEN_NEEDS: LensNeedRow[] = [
   { ...need('po-0', 'po_unacknowledged', 'PO-2026-0418 sent — no acknowledgment, 14 days', 'Follow up with the maker'), owner: 'maker' },
 ];
 const chen = (over: Partial<LensBandInput> = {}) =>
-  input({ household: 'Chen Residence', needs: CHEN_NEEDS, now: NOW, ...over });
+  input({ household: 'Chen Residence', jobName: 'Chen Residence', needs: CHEN_NEEDS, now: NOW, ...over });
 
 const OWN: LensOwnAct = {
   key: 'own',
@@ -1281,7 +1305,9 @@ describe('deriveNext · D2’s order', () => {
       closed: false,
     });
     expect(next?.rowKey).toBe('need:pay-0');
-    expect(next?.sentence).toBe(CHEN_PAYMENT);
+    // 498-j — prose, read from the need: payee, PO, word, figure, days past.
+    expect(next?.sentence).toBe('Pay Woodward & Sons the PO WS-188 balance, $12,400 — 9 days overdue.');
+    expect(next?.shortSentence).toBe('PO WS-188 balance, 9 days overdue.');
     // D1 — named from the one table, whatever the source printed.
     expect(next?.act.label).toBe('Record the payment');
     expect(next?.act.tier).toBe('filled');
@@ -1396,6 +1422,63 @@ describe('deriveNext · D2’s order', () => {
   });
 });
 
+describe('deriveNext · the payment as prose (498-j)', () => {
+  const payment = (text: string, dueOn: string | null, now: Date) =>
+    deriveNext({
+      standing: rankStanding([], [need('pay', 'payment_due', text, 'Record payment', dueOn)], now),
+      ownAct: null,
+      clientFirstName: null,
+      closed: false,
+    });
+
+  it('prints Chen’s balance in the review’s words, long and short', () => {
+    const next = payment(
+      'Balance to Woodward & Sons · $3,400 due 12 May — WS-188',
+      '2026-05-12',
+      new Date('2026-10-07T12:00:00'),
+    );
+    expect(next?.sentence).toBe('Pay Woodward & Sons the WS-188 balance, $3,400 — 148 days overdue.');
+    expect(next?.shortSentence).toBe('WS-188 balance, 148 days overdue.');
+  });
+
+  it('derives every part from the need, never from Chen', () => {
+    const next = payment(
+      'Deposit to Halloran Joinery · $900 due Sep 1 — NA-2026-077',
+      '2026-09-01',
+      new Date('2026-09-02T12:00:00'),
+    );
+    expect(next?.sentence).toBe('Pay Halloran Joinery the NA-2026-077 deposit, $900 — 1 day overdue.');
+    expect(next?.shortSentence).toBe('NA-2026-077 deposit, 1 day overdue.');
+  });
+
+  it('keeps the need’s own words where the line is not the payment template', () => {
+    const text = '2 payments to makers due — first Aug 20';
+    const next = payment(text, '2026-08-20', NOW);
+    expect(next?.sentence).toBe(text);
+  });
+});
+
+describe('deriveNext · the band names the client’s first name (499-1)', () => {
+  const decision = [
+    { ...need('d', 'overdue_decision', 'Bedroom approval overdue 6 days', 'Send a reminder', '2026-08-23'), owner: 'client' as const },
+  ];
+
+  it('prints Nudge Mei, and the client only as the family fallback', () => {
+    const named = deriveNext({ standing: standingOf(decision), ownAct: null, clientFirstName: 'Mei', closed: false });
+    expect(named?.act.label).toBe('Nudge Mei');
+    const unnamed = deriveNext({ standing: standingOf(decision), ownAct: null, clientFirstName: null, closed: false });
+    expect(unnamed?.act.label).toBe('Nudge the client');
+  });
+
+  it('names the sheet rows from the first name the caller passes', () => {
+    const { voice } = deriveLensBand(
+      input({ needs: decision, household: 'Client User', clientFirstName: 'Mei', now: NOW, ownAct: null }),
+    );
+    expect(voice.next?.act.label).toBe('Nudge Mei');
+    expect(voice.standing[0].act?.label).toBe('Nudge Mei');
+  });
+});
+
 describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
   it('prints `STAGE · Name` on line 1 — the word alone, never `N OF M`', () => {
     const { voice } = deriveLensBand(chen());
@@ -1421,7 +1504,12 @@ describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
     const { voice } = deriveLensBand(chen());
     expect(voice.lead).toBe('Next ─');
     expect(voice.form).toBe('long');
-    expect(voice.sentence).toBe(CHEN_PAYMENT);
+    expect(voice.sentence).toBe(
+      'Pay Woodward & Sons the PO WS-188 balance, $12,400 — 9 days overdue.',
+    );
+    // F2-4 — every rung below it, in yield order; the act never yields.
+    expect(voice.rungs.map((rung) => rung.form)).toEqual(['long', 'short', 'act']);
+    expect(voice.rungs[2]).toEqual({ form: 'act', lead: 'Next ─', sentence: '' });
     expect(voice.next?.act.label).toBe('Record the payment');
     expect(voice.standingCount).toBe(2);
     expect(standingDoorLabel(voice.standingCount)).toBe('Standing · 2');
@@ -1449,16 +1537,148 @@ describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
       input({
         needs: [],
         setup: [{ kind: 'no_client_linked', onAct: jest.fn() }],
+        ownAct: { ...OWN, label: 'Open the pieces', sentence: null, shortSentence: null },
+      }),
+    );
+    expect(voice.next?.rowKey).toBeNull();
+    expect(voice.next?.act.label).toBe('Open the pieces');
+    expect(voice.standingCount).toBe(1);
+  });
+
+  it('498-c — never lets the guide line stand in for the own act', () => {
+    const { voice } = deriveLensBand(
+      input({
+        needs: [],
+        guide: {
+          text: 'Place the orders for the approved pieces.',
+          act: { key: 'guide', label: 'Open the pieces', onAct: jest.fn() },
+        },
+        ownAct: { ...OWN, label: 'Open the pieces', sentence: null, shortSentence: null },
+      }),
+    );
+    // No status sentence: the act alone, NEXT ─ OPEN THE PIECES.
+    expect(voice.lead).toBe('Next ─');
+    expect(voice.sentence).toBe('');
+    expect(voice.form).toBe('act');
+    expect(voice.next?.act.label).toBe('Open the pieces');
+  });
+
+  it('498-c — prints the region’s status sentence beside the own act where it states one', () => {
+    const { voice } = deriveLensBand(
+      input({ ownAct: { ...OWN, sentence: '3 lines unspecified.', shortSentence: null } }),
+    );
+    expect(voice.lead).toBe('Next ─');
+    expect(voice.sentence).toBe('3 lines unspecified.');
+    expect(voice.next?.act.label).toBe('Spec the 3 unspecified');
+  });
+
+  it('500-5 — while the own act is not known, line 2 prints the NEXT eyebrow and nothing else', () => {
+    const { voice } = deriveLensBand(
+      input({
+        needs: [],
+        setup: [{ kind: 'target_date_unset', onAct: jest.fn() }],
         guide: {
           text: 'Place the orders for the approved pieces.',
           act: { key: 'guide', label: 'Open the pieces', onAct: jest.fn() },
         },
       }),
     );
-    expect(voice.next?.rowKey).toBeNull();
-    expect(voice.next?.act.label).toBe('Open the pieces');
-    expect(voice.sentence).toBe('Place the orders for the approved pieces.');
-    expect(voice.standingCount).toBe(1);
+    expect(voice.next).toBeNull();
+    expect(voice.lead).toBe('Next');
+    expect(voice.sentence).toBe('');
+    expect(voice.standingCount).toBe(0);
+    expect(voice.doorInDock).toBe(false);
+  });
+
+  it('500-5 — a standing row is still Next while the own act loads', () => {
+    const { voice } = deriveLensBand(
+      chen({ setup: [{ kind: 'target_date_unset', onAct: jest.fn() }] }),
+    );
+    expect(voice.next?.rowKey).toBe('need:pay-0');
+    expect(voice.standingCount).toBe(3);
+  });
+
+  it('F2-10 — a held job prints the hold sentence, no Next and no setup rows', () => {
+    const setup = [{ kind: 'target_date_unset' as const, onAct: jest.fn() }];
+    const { voice } = deriveLensBand(chen({ projectStatus: 'on_hold', setup, ownAct: OWN }));
+    expect(voice.next).toBeNull();
+    expect(voice.lead).toBeNull();
+    expect(voice.sentence).toBe(HELD_SENTENCE);
+    expect(voice.sentence).toBe('Paused — nothing moves until it resumes.');
+    expect(voice.setup).toEqual([]);
+    // Every class 1–2 row stands behind the door; setup never does.
+    expect(voice.standingCount).toBe(3);
+    expect(voice.doorClassOne).toBe(true);
+  });
+
+  it('F2-10 — a held job’s door is silent when only setup stands', () => {
+    const { voice } = deriveLensBand(
+      input({
+        projectStatus: 'on_hold',
+        setup: [{ kind: 'target_date_unset', onAct: jest.fn() }],
+        ownAct: OWN,
+      }),
+    );
+    expect(voice.sentence).toBe(HELD_SENTENCE);
+    expect(voice.standingCount).toBe(0);
+  });
+
+  it('F2-11 — a closed job keeps today’s sentence, no Next, no setup rows, a silent door', () => {
+    const { voice, line2 } = deriveLensBand(
+      chen({
+        projectStatus: 'completed',
+        setup: [{ kind: 'target_date_unset', onAct: jest.fn() }],
+        ownAct: OWN,
+      }),
+    );
+    expect(voice.next).toBeNull();
+    expect(voice.lead).toBeNull();
+    expect(voice.sentence).toBe(line2.sentence);
+    expect(voice.setup).toEqual([]);
+    expect(voice.standingCount).toBe(0);
+  });
+
+  it('F2-22 — the door is terracotta only for a class-1 row behind it, Next excluded', () => {
+    // Chen: Next is the class-1 payment; a decision and a PO (class 2) stand
+    // behind the door.
+    expect(deriveLensBand(chen()).voice.doorClassOne).toBe(false);
+    const twoPayments = [
+      ...CHEN_NEEDS,
+      need('pay-1', 'payment_due', 'Deposit to Halloran Joinery · $900 due Aug 25 — NA-7', 'Record payment', '2026-08-25'),
+    ];
+    expect(deriveLensBand(chen({ needs: twoPayments })).voice.doorClassOne).toBe(true);
+  });
+
+  it('F2-7 — every sheet row carries its own act where the paper holds one', () => {
+    const { voice } = deriveLensBand(
+      chen({
+        clientFirstName: 'Mei',
+        ownAct: OWN,
+        ticket: [
+          ticketRow('spec', { rank: 'piece-stuck', phrase: '3 unspecified', standingSince: null }),
+          ticketRow('pieces', {
+            rank: 'piece-stuck',
+            phrase: 'NA-2026-077 unanswered, 6 days',
+            standingSince: '2026-08-23',
+          }),
+        ],
+        inputs: [
+          {
+            key: '0:2 overdue client decisions',
+            eyebrow: 'DECISIONS',
+            sentence: '2 overdue client decisions',
+            act: null,
+            needKind: 'overdue_decision',
+          },
+        ],
+      }),
+    );
+    const act = (key: string) => voice.standing.find((item) => item.key === key)?.act?.label;
+    expect(act('ticket:spec')).toBe('Spec the 3 unspecified');
+    expect(act('ticket:pieces')).toBe('Follow up with the maker');
+    expect(voice.inputs[0].act?.label).toBe('Nudge Mei');
+    // Borrowed acts never choose Next.
+    expect(voice.next?.rowKey).toBe('need:pay-0');
   });
 
   it('takes the caller’s own act over the guide line when it is passed', () => {
@@ -1476,8 +1696,11 @@ describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
 
   it('at 390 the measure moves the door to the dock when it cannot fit after the act', () => {
     const phone = deriveLensBand(chen({ tier: 'mobile' })).voice;
-    expect(phone.lead).toBe('Next');
-    expect(phone.form).toBe('short');
+    // 498-g / F2-4 — the door yields first, then the sentence; never the act.
+    expect(phone.lead).toBe('Next ─');
+    expect(phone.form).toBe('act');
+    expect(phone.sentence).toBe('');
+    expect(phone.next?.act.label).toBe('Record the payment');
     expect(phone.doorInDock).toBe(true);
     expect(phone.standingCount).toBe(2);
     // Nothing behind the door: there is no door to move.
@@ -1587,7 +1810,10 @@ describe('deriveLensBand · the proposal’s inputs collapse to one row (F14)', 
     );
     expect(model.inputs).toEqual([]);
     expect(model.line2.standingCount).toBe(0);
-    expect(model.voice.inputs).toEqual([]);
+    // 498-c — the guide never stands in: under one-voice the row is named only
+    // when the own act, Write the proposal, is Next.
+    expect(model.voice.next).toBeNull();
+    expect(model.voice.inputs.map((item) => item.key)).toEqual(['proposal-inputs']);
   });
 
   it('leaves every other paper’s inputs one row each', () => {

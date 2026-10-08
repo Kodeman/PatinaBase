@@ -352,9 +352,23 @@ describe('the 13 cross-device contradictions, under one-voice', () => {
       }
     });
 
-    it.todo(
-      '9b · the band names the client’s first name — lens-band-derivation’s voiceItem passes none (SQ-2A’s file), so it prints “Nudge the client” where the Desk prints “Nudge Mei”',
-    );
+    it('9b · the band names the client’s first name, as the Desk and the guide do (499-1)', () => {
+      const need = needOf('overdue_decision', { owner: 'client' });
+      const guide = needGuideAction(need, 'project', 'project-1', null, {
+        oneVoice: true,
+        clientFirstName: 'Mei',
+      }).label;
+      // The row arrives with its source's label; the band renames it.
+      const next = deriveNext({
+        standing: [standingOf(need, 'Send a reminder')],
+        ownAct: null,
+        clientFirstName: 'Mei',
+        closed: false,
+      });
+      expect(next?.act.label).toBe('Nudge Mei');
+      expect(next?.act.label).toBe(guide);
+      expect(next?.act.label).toBe(deskActionLabel(need, true, 'Mei'));
+    });
   });
 
   it('10 · Project at rest names the real control, Release for authorization', () => {

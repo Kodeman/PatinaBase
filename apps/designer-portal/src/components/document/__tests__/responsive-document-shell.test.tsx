@@ -637,6 +637,8 @@ function bandModelFor(section: 'project' | 'install' | 'care'): LensBandModel {
     needs: [],
     guide: { text: 'Name the phases for this project', act: null },
     household: 'Vandersteen residence',
+    // F2-1 — the voice's line 1 is the job's name (`row.title`).
+    jobName: 'Vandersteen residence',
     stageWord: stage.word,
     stageIndex: stage.index,
     installDate: 'Sep 15',

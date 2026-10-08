@@ -864,7 +864,15 @@ const CHEN_NEEDS: RedLetterRow[] = [
   dueNeed('po', 'po_unacknowledged', 'PO-2026-0418 unanswered, 14 days', 'Follow up with the maker', null),
 ];
 const chen = (over: Partial<LensBandInput> = {}) =>
-  model({ household: 'Chen Residence', needs: CHEN_NEEDS, now: NOW, ...over });
+  model({
+    household: 'Chen family (no-login household)',
+    jobName: 'Chen Residence',
+    clientFirstName: 'Mei',
+    needs: CHEN_NEEDS,
+    now: NOW,
+    ...over,
+  });
+const CHEN_PROSE = 'Pay Woodward & Sons the PO WS-188 balance, $12,400 — 9 days overdue.';
 const door = () => document.querySelector('[data-lens-door]') as HTMLElement | null;
 
 describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
@@ -901,7 +909,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
   it('on Chen, reads `Next ─ … RECORD THE PAYMENT` left and `Standing · 2` right, in the 56px box', () => {
     render(<LensBand model={chen()} docId="doc-1" />);
     expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next ─');
-    expect(sentence()).toHaveTextContent(CHEN_PAYMENT);
+    expect(sentence()).toHaveTextContent(CHEN_PROSE);
     expect(line('2')).toHaveClass('text-[15px]');
     const act = screen.getByRole('button', { name: 'Record the payment' });
     expect(act).toHaveAttribute('data-action-variant', 'primary');
@@ -945,7 +953,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     // Deadline order inside the group: the dated decision before the silence.
     const needsYou = Array.from(group('needs-you').querySelectorAll('[data-standing-row]'));
     expect(needsYou.map((row) => row.querySelector('button')?.textContent)).toEqual([
-      'Nudge the client',
+      'Nudge Mei',
       'Follow up with the maker',
     ]);
     // SETUP stays clay and plain.
@@ -1040,5 +1048,143 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(line('1').querySelector('[data-lens-identity]')).toHaveTextContent('');
     // The 0b act keeps its source label.
     expect(screen.getByRole('button', { name: 'Record payment' })).toBeInTheDocument();
+  });
+
+  it('F2-1 — prints the job’s name, never the household, and only the name may clip', () => {
+    render(<LensBand model={chen()} docId="doc-1" />);
+    const identity = line('1').querySelector('[data-lens-identity]') as HTMLElement;
+    expect(identity.textContent).toBe('Project · Chen Residence');
+    expect(identity.textContent).not.toMatch(/no-login|Chen family/);
+    const [stage, name] = Array.from(identity.children) as HTMLElement[];
+    expect(stage).toHaveTextContent('Project');
+    expect(stage).toHaveClass('shrink-0');
+    expect(name).toHaveClass('min-w-0', 'text-ellipsis');
+  });
+
+  describe('F2-4 — the measure, not the tier, drops the sentence; the act never yields', () => {
+    let clips: (text: string) => boolean = () => false;
+    let spies: jest.SpyInstance[] = [];
+    beforeEach(() => {
+      spies = [
+        jest
+          .spyOn(Element.prototype, 'scrollWidth', 'get')
+          .mockImplementation(function (this: Element) {
+            return this.hasAttribute('data-lens-sentence') && clips(this.textContent ?? '')
+              ? 200
+              : 0;
+          }),
+        jest
+          .spyOn(Element.prototype, 'clientWidth', 'get')
+          .mockImplementation(function (this: Element) {
+            return this.hasAttribute('data-lens-sentence') ? 112 : 0;
+          }),
+      ];
+    });
+    afterEach(() => spies.forEach((spy) => spy.mockRestore()));
+
+    it('at 600–1100, prints the short form beside the door when the long one clips', () => {
+      clips = (text) => text.length > 40;
+      render(<LensBand model={chen({ tier: 'narrow' })} docId="doc-1" />);
+      expect(line('2')).toHaveAttribute('data-lens-line2-form', 'short');
+      expect(sentence()).toHaveTextContent('PO WS-188 balance, 9 days overdue.');
+      expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next');
+      expect(door()).toHaveTextContent('Standing · 2');
+    });
+
+    it('prints NEXT ─ RECORD THE PAYMENT alone when the short form clips too', () => {
+      clips = (text) => text.length > 0;
+      render(<LensBand model={chen({ tier: 'narrow' })} docId="doc-1" />);
+      expect(line('2')).toHaveAttribute('data-lens-line2-form', 'act');
+      expect(sentence().textContent).toBe('');
+      expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next ─');
+      expect(screen.getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
+      // The door yields only at the phone's measure.
+      expect(door()).toHaveTextContent('Standing · 2');
+    });
+
+    it('keeps the long form when nothing clips', () => {
+      clips = () => false;
+      render(<LensBand model={chen()} docId="doc-1" />);
+      expect(line('2')).toHaveAttribute('data-lens-line2-form', 'long');
+      expect(sentence()).toHaveTextContent(CHEN_PROSE);
+    });
+  });
+
+  it('F2-22 — paints the door clay unless money or a signature stands behind it', () => {
+    const { unmount } = render(<LensBand model={chen()} docId="doc-1" />);
+    expect(door()).toHaveClass('text-[var(--color-clay-ink)]');
+    unmount();
+    const second = dueNeed(
+      'pay-2',
+      'payment_due',
+      'Deposit to Halloran Joinery · $900 due Aug 25 — NA-7',
+      'Record payment',
+      '2026-08-25',
+    );
+    render(<LensBand model={chen({ needs: [...CHEN_NEEDS, second] })} docId="doc-1" />);
+    expect(door()).toHaveClass('text-[var(--color-terracotta-ink)]');
+  });
+
+  it('F2-6 — the sheet’s title is the door’s count, and Next’s row stands first under NEXT', () => {
+    render(<LensBand model={chen()} docId="doc-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Standing · 2' }));
+    const panel = screen.getByRole('dialog');
+    expect(panel).toHaveAccessibleName('Standing · 2');
+    const money = panel.querySelector('[data-standing-group="money"]') as HTMLElement;
+    const first = money.querySelector('[data-standing-row]') as HTMLElement;
+    expect(first).toHaveAttribute('data-standing-next');
+    expect(first.querySelector('[data-standing-next-eyebrow]')).toHaveTextContent('NEXT');
+    expect(first).toHaveTextContent(CHEN_PAYMENT);
+  });
+
+  it('498-k — sheet acts are plain, except the four named acts, which stay scored', () => {
+    const claim = dueNeed('claim', 'damage_claim', 'Console arrived cracked', 'Review the claim', null);
+    render(<LensBand model={chen({ needs: [...CHEN_NEEDS, claim] })} docId="doc-1" />);
+    fireEvent.click(door() as HTMLElement);
+    const panel = screen.getByRole('dialog');
+    const variant = (name: string) =>
+      Array.from(panel.querySelectorAll('button'))
+        .find((button) => button.textContent === name)
+        ?.getAttribute('data-action-variant');
+    expect(variant('File the claim')).toBe('primary');
+    expect(variant('Record the payment')).toBe('secondary');
+    expect(variant('Follow up with the maker')).toBe('secondary');
+  });
+
+  it('F2-10 — a held job prints the hold sentence and no Next; setup never stands behind its door', () => {
+    render(
+      <LensBand
+        model={chen({
+          projectStatus: 'on_hold',
+          ownAct: null,
+          setup: [{ kind: 'target_date_unset', onAct: jest.fn() }],
+        })}
+        docId="doc-1"
+      />,
+    );
+    expect(sentence()).toHaveTextContent('Paused — nothing moves until it resumes.');
+    expect(line('2').querySelector('[data-lens-next-lead]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Record the payment' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Standing · 3' }));
+    expect(screen.getByRole('dialog').querySelector('[data-standing-group="setup"]')).toBeNull();
+  });
+
+  it('500-5 — prints the NEXT eyebrow alone while the own act is not known', () => {
+    render(
+      <LensBand
+        model={model({
+          jobName: 'Chen Residence',
+          guide: {
+            text: 'Place the orders for the approved pieces.',
+            act: { key: 'guide', label: 'Open the pieces', onAct: jest.fn() },
+          },
+        })}
+        docId="doc-1"
+      />,
+    );
+    expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next');
+    expect(sentence().textContent).toBe('');
+    expect(screen.queryByRole('button', { name: 'Open the pieces' })).toBeNull();
+    expect(door()).toBeNull();
   });
 });

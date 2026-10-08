@@ -232,3 +232,62 @@ describe('StandingSheet (OD-6 / L-11)', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
+
+describe('StandingSheet · one voice (US-19 FR2)', () => {
+  const pay: LensStandingItem = {
+    ...item('pay', 'PAYMENT DUE', 'Balance to Woodward & Sons', 'Record the payment', 'overdue'),
+    needKind: 'payment_due',
+    sense: 'past',
+    distance: -9,
+  };
+  const claim: LensStandingItem = {
+    ...item('claim', 'CLAIM OPEN', 'Console arrived cracked', 'File the claim', 'damage'),
+    needKind: 'damage_claim',
+  };
+  const silence: LensStandingItem = {
+    ...item('po', 'NO ACK', 'PO-2026-0418 unanswered', 'Follow up with the maker', 'po-silence'),
+    needKind: 'po_unacknowledged',
+  };
+
+  it('F2-6 — titles itself with the door’s count, not every row', () => {
+    render(
+      <StandingSheet open onClose={jest.fn()} items={[pay, claim, silence]} grouped count={2} nextKey="pay" />,
+    );
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Standing · 2');
+  });
+
+  it('F2-6 — stands Next’s row first in its group, under a NEXT eyebrow', () => {
+    render(
+      <StandingSheet open onClose={jest.fn()} items={[claim, silence]} grouped count={1} nextKey="po" />,
+    );
+    const rows = Array.from(
+      document.querySelectorAll('[data-standing-group="needs-you"] [data-standing-row]'),
+    );
+    expect(rows[0]).toHaveAttribute('data-standing-next');
+    expect(rows[0]).toHaveTextContent('PO-2026-0418 unanswered');
+    expect(within(rows[0] as HTMLElement).getByText('NEXT')).toHaveAttribute(
+      'data-standing-next-eyebrow',
+    );
+    expect(rows[1]).not.toHaveAttribute('data-standing-next');
+    expect(screen.getAllByText('NEXT')).toHaveLength(1);
+  });
+
+  it('498-k — scores only the four named acts; every other act is plain', () => {
+    render(<StandingSheet open onClose={jest.fn()} items={[pay, claim, silence]} grouped />);
+    const variant = (name: string) =>
+      screen.getByRole('button', { name }).getAttribute('data-action-variant');
+    expect(variant('File the claim')).toBe('primary');
+    expect(variant('Record the payment')).toBe('secondary');
+    expect(variant('Follow up with the maker')).toBe('secondary');
+  });
+
+  it('keeps every act plain and the whole count while the flag is off', () => {
+    render(<StandingSheet open onClose={jest.fn()} items={[pay, claim, silence]} nextKey="pay" />);
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Standing · 3');
+    expect(screen.getByRole('button', { name: 'File the claim' })).toHaveAttribute(
+      'data-action-variant',
+      'secondary',
+    );
+    expect(screen.queryByText('NEXT')).toBeNull();
+  });
+});

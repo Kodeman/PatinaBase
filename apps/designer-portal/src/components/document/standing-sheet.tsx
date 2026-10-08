@@ -15,6 +15,7 @@
 
 import { AlertCircle } from 'lucide-react';
 import { useId, type ReactNode, type RefObject } from 'react';
+import { NAMED_ACTS } from '@/lib/document/act-names';
 import type {
   LensAct,
   LensInputItem,
@@ -24,6 +25,15 @@ import type {
 import { classOfStandingRow, compareForNext } from '@/lib/document/need-class';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { DocSheet } from './overlays/doc-sheet';
+
+/** 498-k — the four named acts stay scored wherever they print (D3); every
+ *  other sheet act is plain. */
+const SCORED_IN_SHEET: ReadonlySet<string> = new Set([
+  NAMED_ACTS.recordChange,
+  NAMED_ACTS.askMakerForDate,
+  NAMED_ACTS.openOrder,
+  NAMED_ACTS.fileClaim,
+]);
 
 const ROW =
   'grid grid-cols-[1fr_auto] items-center gap-x-3 border-b border-dashed border-[rgba(139,115,85,0.14)] py-2.5 last:border-b-0';
@@ -56,15 +66,17 @@ function SheetAct({
   actionKey,
   act,
   onPress,
+  variant = 'secondary',
 }: {
   actionKey: string;
   act: LensAct;
   onPress: () => void;
+  variant?: 'primary' | 'secondary';
 }) {
   const reasonId = useId();
   if (!act.held) {
     return (
-      <DocumentAction actionKey={actionKey} variant="secondary" onClick={onPress}>
+      <DocumentAction actionKey={actionKey} variant={variant} onClick={onPress}>
         {act.label}
       </DocumentAction>
     );
@@ -75,7 +87,7 @@ function SheetAct({
       <div className="flex items-center gap-1">
         <DocumentAction
           actionKey={actionKey}
-          variant="secondary"
+          variant={variant}
           held
           disabled
           aria-describedby={reasonId}
@@ -106,11 +118,19 @@ export function StandingSheet({
   inputs = [],
   setup = [],
   grouped = false,
+  count,
+  nextKey = null,
   triggerRef,
 }: {
   open: boolean;
   onClose: () => void;
   items: readonly LensStandingItem[];
+  /** F2-6 (498-b) — the door's count, so the title reads the number the door
+   *  printed. Left out, every row is counted. */
+  count?: number;
+  /** F2-6 — the row Next names (grouped only): first in its group, under a
+   *  `NEXT` eyebrow, and not in `count`. */
+  nextKey?: string | null;
   /** W3-R2 — the stage's open inputs, their own section under the exceptions. */
   inputs?: readonly LensInputItem[];
   /** D10 — the `SETUP` group, at the sheet's foot, in clay ink at the plain
@@ -140,19 +160,38 @@ export function StandingSheet({
     window.requestAnimationFrame(() => window.requestAnimationFrame(run));
   };
 
+  // 498-k — under `one-voice` the four named acts are scored; off, every
+  // sheet act is the 0b sheet's plain act.
+  const variantOf = (act: LensAct) =>
+    grouped && SCORED_IN_SHEET.has(act.label) ? 'primary' : 'secondary';
+  // F2-6 — Next's row, under its own eyebrow in place of a count.
+  const nextEyebrow = (key: string) =>
+    grouped && key === nextKey ? (
+      <p data-standing-next-eyebrow className={GROUP_EYEBROW}>
+        NEXT
+      </p>
+    ) : null;
+
   const itemRow = (item: LensStandingItem) => (
     <li
       key={item.key}
       data-standing-row
       data-standing-tier={item.tier}
+      data-standing-next={grouped && item.key === nextKey ? '' : undefined}
       className={ROW}
     >
       <div className="min-w-0">
+        {nextEyebrow(item.key)}
         <p className={EYEBROW}>{item.eyebrow}</p>
         <p className={SENTENCE}>{item.sentence}</p>
       </div>
       {item.act && (
-        <SheetAct actionKey={`standing-${item.key}`} act={item.act} onPress={item.act.onAct} />
+        <SheetAct
+          actionKey={`standing-${item.key}`}
+          act={item.act}
+          onPress={item.act.onAct}
+          variant={variantOf(item.act)}
+        />
       )}
     </li>
   );
@@ -167,18 +206,32 @@ export function StandingSheet({
           actionKey={`standing-input-${item.key}`}
           act={item.act}
           onPress={item.act.onAct}
+          variant={variantOf(item.act)}
         />
       )}
     </li>
   );
   const setupRow = (item: LensSetupItem) => (
-    <li key={item.key} data-standing-setup-row className={ROW}>
-      <p className={SETUP_SENTENCE}>{item.sentence}</p>
+    <li
+      key={item.key}
+      data-standing-setup-row
+      data-standing-next={grouped && item.key === nextKey ? '' : undefined}
+      className={ROW}
+    >
+      {grouped && item.key === nextKey ? (
+        <div className="min-w-0">
+          {nextEyebrow(item.key)}
+          <p className={SETUP_SENTENCE}>{item.sentence}</p>
+        </div>
+      ) : (
+        <p className={SETUP_SENTENCE}>{item.sentence}</p>
+      )}
       {item.act && (
         <SheetAct
           actionKey={`standing-setup-${item.key}`}
           act={item.act}
           onPress={() => pressSetup(item)}
+          variant={variantOf(item.act)}
         />
       )}
     </li>
@@ -186,23 +239,28 @@ export function StandingSheet({
 
   let content: ReactNode;
   if (grouped) {
-    // D2 — the class table, then W3-R1's deadline order inside each class.
+    // D2 — the class table, then W3-R1's deadline order inside each class;
+    // F2-6 — Next's own row stands first in its group.
+    const nextFirst = <T extends { key: string }>(rows: readonly T[]) => [
+      ...rows.filter((row) => row.key === nextKey),
+      ...rows.filter((row) => row.key !== nextKey),
+    ];
     const ranked = [...items].sort(compareForNext);
     const groups = [
       {
         key: 'money',
         title: 'BLOCKS MONEY OR A SIGNATURE',
-        rows: ranked.filter((item) => classOfStandingRow(item) === 1).map(itemRow),
+        rows: nextFirst(ranked.filter((item) => classOfStandingRow(item) === 1)).map(itemRow),
       },
       {
         key: 'needs-you',
         title: 'NEEDS YOU',
         rows: [
-          ...ranked.filter((item) => classOfStandingRow(item) !== 1).map(itemRow),
+          ...nextFirst(ranked.filter((item) => classOfStandingRow(item) !== 1)).map(itemRow),
           ...inputs.map(inputRow),
         ],
       },
-      { key: 'setup', title: 'SETUP', rows: setup.map(setupRow) },
+      { key: 'setup', title: 'SETUP', rows: nextFirst(setup).map(setupRow) },
     ].filter((group) => group.rows.length > 0);
     content = groups.map((group, index) => (
       <div key={group.key} data-standing-group={group.key}>
@@ -260,7 +318,7 @@ export function StandingSheet({
     <DocSheet
       open={open}
       onClose={onClose}
-      title={`Standing · ${items.length + inputs.length + setup.length}`}
+      title={`Standing · ${count ?? items.length + inputs.length + setup.length}`}
       icon={AlertCircle}
       kind="standing"
       fallbackFocusRef={triggerRef}

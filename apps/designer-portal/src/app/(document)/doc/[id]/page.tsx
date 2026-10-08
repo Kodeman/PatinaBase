@@ -2381,6 +2381,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     .map((fact) => `${fact.label}|${fact.owner}|${fact.blocks}|${fact.focusId ?? ''}`)
     .join(';');
   const bandHousehold = row?.client_name ?? '';
+  const bandJobName = row?.title ?? null;
   const bandStageIndex = ticketPhase
     ? `${ticketPhase.position}/${ticketPhase.of}`
     : null;
@@ -2422,8 +2423,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // US-19 D1 / D6 (`one-voice`) — the stage's own act and the install reading,
   // from the facts the paper already reads. Read only behind the flag; a stage
   // whose deciding fact is not read here (Brief's open inquiry, Discovery's
-  // four essentials) or not yet answered leaves `ownAct` undefined, and the
-  // guide line stands in for it as before.
+  // four essentials) or not yet answered leaves `ownAct` undefined: not known
+  // yet, so line 2 prints `NEXT` alone (500-5). The guide line never stands in
+  // (498-c).
   const ownActProjectId =
     oneVoice && row?.engagement_kind === 'project' ? (row.project_id ?? '') : '';
   const ownActFfe = useProjectFFEItems(ownActProjectId, undefined, {
@@ -2448,13 +2450,26 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     [bandSection, ownActPieces, windowHeld],
   );
   const bandOwnAct = useMemo<LensOwnAct | null | undefined>(() => {
-    if (!oneVoice || !bandSection || !guideHeadline) return undefined;
+    if (!oneVoice || !bandSection) return undefined;
+    // R5 — a failed seed is stated on line 2 with its Retry, as before the
+    // flag: there is no second band to print it in.
+    if (beginDirectionError && guideHeadline) {
+      return {
+        key: 'retry-begin-direction',
+        label: 'Retry',
+        targetId: null,
+        tier: 'plain',
+        sentence: guideHeadline,
+        onAct: activateGuide,
+      };
+    }
     if (bandSection === 'brief' || bandSection === 'discovery') return undefined;
     if ((bandSection === 'project' || bandSection === 'install') && !ownActPieces) {
       return undefined;
     }
     if (bandSection === 'proposal' && !liveProposalStatus) return undefined;
     const family = familyLabel(bandHousehold);
+    const unspecified = (ownActPieces ?? []).filter((item) => !item.product_id).length;
     const act = ownAct(bandSection, {
       inquiryOpen: false,
       firstMissingEssential: null,
@@ -2467,7 +2482,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               ? 'accepted'
               : null,
       clientFirstName: family === 'the client' ? null : clientShortName(family),
-      unspecifiedCount: (ownActPieces ?? []).filter((item) => !item.product_id).length,
+      unspecifiedCount: unspecified,
       // DESIGN-Q (SQ-500): release eligibility is not read on this page.
       releaseEligible: false,
       install: bandInstallReading
@@ -2475,13 +2490,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         : null,
     });
     if (!act) return null;
+    // 498-c — the region's own status beside its act, where it states one;
+    // the act alone otherwise. Never the guide line.
     return {
       key: `own:${act.targetId}`,
       label: act.label,
       targetId: act.targetId,
       tier: act.tier,
-      sentence: guideHeadline,
-      shortSentence: guideShortHeadline,
+      sentence:
+        bandSection === 'project' && unspecified > 0
+          ? `${unspecified} ${unspecified === 1 ? 'line' : 'lines'} unspecified.`
+          : null,
       onAct: () =>
         activateDestination({
           kind: 'anchor',
@@ -2493,8 +2512,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   }, [
     oneVoice,
     bandSection,
+    beginDirectionError,
     guideHeadline,
-    guideShortHeadline,
+    activateGuide,
     ownActPieces,
     liveProposalStatus,
     bandHousehold,
@@ -2522,7 +2542,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       key: bandInputKey(index, fact.label),
       // The input's own kind word — `Client signature` stands under SIGNATURE.
       eyebrow: (fact.label.split(/\s+/).pop() ?? fact.label).toUpperCase(),
-      sentence: `${fact.label} · ${fact.owner} · blocks ${fact.blocks}`,
+      // F2-7 — under `one-voice` the row is its fact: the group eyebrow
+      // already says what it blocks, and `blocks` never prints.
+      sentence: oneVoice ? fact.label : `${fact.label} · ${fact.owner} · blocks ${fact.blocks}`,
+      needKind: fact.needKind ?? null,
       act:
         fact.focusId && bandSection
           ? {
@@ -2554,6 +2577,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         : null,
       tier: lensTier,
       household: bandHousehold,
+      // F2-1 / 499-1 — the job's name for line 1, and the client's first name
+      // for the acts that name her, through the one placeholder guard.
+      jobName: bandJobName,
+      clientFirstName: voiceFirstName(bandHousehold),
       stageWord: bandStageWord,
       stageIndex: ticketPhase
         ? { position: ticketPhase.position, of: ticketPhase.of }
@@ -2592,6 +2619,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     bandSection,
     lensTier,
     bandHousehold,
+    bandJobName,
+    oneVoice,
     bandStageWord,
     bandStageIndex,
     bandInstall,

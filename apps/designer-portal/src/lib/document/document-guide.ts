@@ -48,6 +48,9 @@ export interface DocumentGuideInputFact {
   owner: 'Designer' | 'Client' | 'Studio' | 'Project team';
   blocks: string;
   focusId?: string;
+  /** The need this count stands for, when one exists — the band's sheet row
+   *  borrows that need's act (US-19 FR2 F2-7). */
+  needKind?: NeedKind;
 }
 
 export type DocumentGuideState =
