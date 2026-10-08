@@ -116,7 +116,7 @@ jest.mock('./overlays/household-sheet', () => ({
   // FR4 524-a — which invite control the relationship sheet can mount.
   useNoLoginRepair: () => mockNoLoginRepair,
 }));
-let mockNoLoginRepair: 'invite' | 'write' | null = 'invite';
+let mockNoLoginRepair: 'invite' | 'write' | 'write-again' | null = 'invite';
 
 /** jsdom evaluates no media queries: this is how the tier is driven, the same
  *  shape as responsive-document-shell.test.tsx's `installMatchMedia`. */
@@ -783,6 +783,19 @@ describe('a relationship paper’s letterhead under one-voice (FR3 F3-25, F3-6)'
     expect(screen.getByRole('button', { name: 'Write to the Ashfords' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Invite/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Write to the Ashfords' }));
+    expect(screen.getByTestId('household-sheet')).toHaveAttribute('data-kind', 'relationship');
+  });
+
+  it('FR5 529-3: a lapsed letter — held Message’s repair is `Write again`, opening the sheet', () => {
+    mockNoLoginRepair = 'write-again';
+    renderRelationship(true, 'The Ashfords');
+    expect(screen.getByText('The Ashfords have no login yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Invite|^Write to/ })).not.toBeInTheDocument();
+    expect(more().find((act) => act.actionKey === 'message-family')?.held).toMatchObject({
+      reason: 'The Ashfords have no login yet.',
+      repair: { label: 'Write again' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Write again' }));
     expect(screen.getByTestId('household-sheet')).toHaveAttribute('data-kind', 'relationship');
   });
 

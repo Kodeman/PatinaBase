@@ -38,6 +38,7 @@ function renderLine(props: {
   designerClientId: string;
   clientName: string | null;
   clientEmail?: string | null;
+  indent?: boolean;
 }) {
   const qc = new QueryClient();
   return {
@@ -243,6 +244,21 @@ describe('Write to {given} is an act', () => {
     renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
     expect(screen.getByTestId('client-letter-line')).toHaveTextContent('Letter sent 9 Sept');
     expect(screen.queryByRole('button', { name: /^Write to/ })).not.toBeInTheDocument();
+  });
+
+  it('FR5 529-5: keeps the directory gutter by default, and sits flush with indent={false}', () => {
+    const { unmount } = renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo' });
+    expect(screen.getByTestId('client-letter-line').className).toBe(
+      'mt-1 pl-[3.25rem] text-[0.7rem] leading-snug text-[var(--color-aged-oak)]',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Write to Dave' }));
+    expect(screen.getByTestId('client-letter-compose').className).toBe('pl-[3.25rem]');
+    unmount();
+
+    renderLine({ designerClientId: 'dc1', clientName: 'Dave Okonkwo', indent: false });
+    expect(screen.getByTestId('client-letter-line').className).not.toContain('pl-[3.25rem]');
+    fireEvent.click(screen.getByRole('button', { name: 'Write to Dave' }));
+    expect(screen.getByTestId('client-letter-compose').className).not.toContain('pl-[3.25rem]');
   });
 
   it('opens the same field the add-person sheet uses', () => {

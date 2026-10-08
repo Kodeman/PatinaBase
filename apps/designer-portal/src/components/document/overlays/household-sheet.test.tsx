@@ -36,13 +36,19 @@ jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (key: string) => ({ value: mockFlags[key] === true, isLoading: false }),
 }));
 
-// The People room's row, as the sheet mounts it: its own act is a button.
+// The People room's row, as the sheet mounts it: its own act is a button —
+// `Write to …` before any letter, `Write again` once the link lapsed.
 jest.mock('../people/directory/client-letter-line', () => ({
-  ClientLetterLine: ({ clientName }: { clientName: string }) => (
-    <p data-testid="client-letter-line">
-      On your roster · no letter sent · <button type="button">{`Write to ${clientName}`}</button>
-    </p>
-  ),
+  ClientLetterLine: ({ clientName, indent }: { clientName: string; indent?: boolean }) =>
+    (mockLetterStatus.data as { state?: string } | null)?.state === 'lapsed' ? (
+      <p data-testid="client-letter-line" data-indent={String(indent)}>
+        Link lapsed 2 Oct · <button type="button">Write again</button>
+      </p>
+    ) : (
+      <p data-testid="client-letter-line" data-indent={String(indent)}>
+        On your roster · no letter sent · <button type="button">{`Write to ${clientName}`}</button>
+      </p>
+    ),
 }));
 
 jest.mock('@/hooks/use-attach-client', () => ({
@@ -140,6 +146,47 @@ describe('HouseholdSheet — FR4 Fix 7: the relationship sheet’s invite contro
     expect(screen.queryByRole('button', { name: /^Invite/ })).toBeNull();
     const write = screen.getByRole('button', { name: 'Write to The Ashfords' });
     await waitFor(() => expect(write).toHaveFocus());
+  });
+
+  it('FR5 529-2: after Send invite succeeds, focus moves to the sheet title, never <body>', () => {
+    mockInvite.mockImplementation((_vars: unknown, opts?: { onSuccess?: () => void }) =>
+      opts?.onSuccess?.(),
+    );
+    renderRelationship(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Invite the Ashfords' }));
+    const send = screen.getByRole('button', { name: 'Send invite' });
+    send.focus();
+    fireEvent.click(send);
+    expect(mockInvite).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Send invite' })).toBeNull();
+    const dialog = screen.getByRole('dialog');
+    expect(document.activeElement).not.toBe(document.body);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement?.id).toBe(dialog.getAttribute('aria-labelledby'));
+  });
+
+  it('FR5 529-3: a lapsed letter mounts the row and the repair lands on its `Write again`', async () => {
+    mockFlags = { 'one-voice': true, 'client-invite-letter': true };
+    mockLetterStatus = { data: { state: 'lapsed' }, isLoading: false, isError: false };
+    renderRelationship();
+    expect(
+      screen.getByTestId('client-letter-line').closest('[data-household-invite]'),
+    ).toHaveAttribute('data-household-invite', 'write-again');
+    const again = screen.getByRole('button', { name: 'Write again' });
+    await waitFor(() => expect(again).toHaveFocus());
+  });
+
+  it('FR5 529-5: the sheet mounts the letter line flush (indent={false})', () => {
+    mockFlags = { 'one-voice': true, 'client-invite-letter': true };
+    renderRelationship(false);
+    expect(screen.getByTestId('client-letter-line')).toHaveAttribute('data-indent', 'false');
+  });
+
+  it('FR5 529-3: a letter still out (opened) offers no repair — nothing mounts', () => {
+    mockFlags = { 'one-voice': true, 'client-invite-letter': true };
+    mockLetterStatus = { data: { state: 'opened' }, isLoading: false, isError: false };
+    renderRelationship();
+    expect(screen.queryByTestId('client-letter-line')).toBeNull();
   });
 
   it('a letter already sent, no email on file, or a login: nothing mounts', () => {

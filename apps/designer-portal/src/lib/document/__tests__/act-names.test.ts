@@ -186,6 +186,27 @@ describe('Message (D1, D3, D7)', () => {
     expect(messageNoLogin(null, null).repair).toBeNull();
   });
 
+  it('FR5 529-3 — a lapsed letter’s repair is the row’s own `Write again`', () => {
+    expect(messageNoLogin('the Ashfords', 'write-again')).toEqual({
+      reason: 'The Ashfords have no login yet.',
+      repair: 'Write again',
+    });
+    expect(messageNoLogin('Elena', 'write-again').repair).toBe('Write again');
+  });
+
+  it('FR5 529-4 — a conjoined household is plural; a single name stays singular', () => {
+    expect(messageNoLogin('Sam & Alex')).toEqual({
+      reason: 'Sam & Alex have no login yet.',
+      repair: 'Invite Sam & Alex',
+    });
+    expect(messageNoLogin('Sam and Alex').reason).toBe('Sam and Alex have no login yet.');
+    expect(messageNoLogin('Sam AND Alex').reason).toBe('Sam AND Alex have no login yet.');
+    expect(messageLabel('Sam & Alex')).toBe('Message Sam & Alex');
+    // `and` inside a name is not a pair.
+    expect(messageNoLogin('Alexandra').reason).toBe('Alexandra has no login yet.');
+    expect(messageNoLogin('Elena').reason).toBe('Elena has no login yet.');
+  });
+
   it('FR3 F3-13 — the household display name drops the no-login suffix, and only that', () => {
     expect(householdDisplayName('Elena Marlowe (no-login household)')).toBe('Elena Marlowe');
     expect(householdDisplayName('The Ashfords (no-login household)')).toBe('The Ashfords');

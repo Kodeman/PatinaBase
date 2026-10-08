@@ -194,15 +194,18 @@ export const MESSAGE_WITHHELD = {
 } as const;
 
 /** The control a no-login household's repair lands on (FR4 524-a): an invite,
- *  the First Letter (`client-invite-letter`), or none the paper can mount. */
-export type NoLoginRepair = 'invite' | 'write' | null;
+ *  the First Letter (`client-invite-letter`), the lapsed letter's `Write again`
+ *  (FR5 529-3), or none the paper can mount. */
+export type NoLoginRepair = 'invite' | 'write' | 'write-again' | null;
 
 /** FR3 F3-6 (516-3 / 518-2) — Message held for a LINKED household with no
  *  login: the blocking condition is the login, not the link. `Invite Elena`,
  *  or the family fallback `Invite the client`. FR4 524-b — an article-led
  *  household keeps its article and takes the plural verb: `The Ashfords have
  *  no login yet.` 524-a — the repair's label follows its control (`Write to
- *  …` for the letter), and with no control there is no repair. */
+ *  …` for the letter), and with no control there is no repair. FR5 529-3 — a
+ *  lapsed letter's control is the row's own `Write again`. 529-4 — a conjoined
+ *  household (`Sam & Alex`, `Sam and Alex`) is plural too. */
 export function messageNoLogin(
   firstName: string | null,
   control: NoLoginRepair = 'invite',
@@ -212,10 +215,18 @@ export function messageNoLogin(
 } {
   const first = firstName?.trim() || null;
   const who = first ?? 'the client';
-  const verb = first && /^the\s/i.test(first) ? 'have' : 'has';
+  const plural = first !== null && (/^the\s/i.test(first) || /\S\s+(?:&|and)\s+\S/i.test(first));
+  const verb = plural ? 'have' : 'has';
   return {
     reason: `${who.charAt(0).toUpperCase()}${who.slice(1)} ${verb} no login yet.`,
-    repair: control === 'invite' ? `Invite ${who}` : control === 'write' ? `Write to ${who}` : null,
+    repair:
+      control === 'invite'
+        ? `Invite ${who}`
+        : control === 'write'
+          ? `Write to ${who}`
+          : control === 'write-again'
+            ? 'Write again'
+            : null,
   };
 }
 

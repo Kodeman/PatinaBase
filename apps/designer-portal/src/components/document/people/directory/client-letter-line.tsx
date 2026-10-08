@@ -74,12 +74,16 @@ export function ClientLetterLine({
   designerClientId,
   clientName,
   clientEmail = null,
+  indent = true,
 }: {
   designerClientId: string;
   clientName: string | null;
   /** Shown in the field's facts line; the send resolves it server-side from
    *  the roster row, so a missing one costs the facts line, not the letter. */
   clientEmail?: string | null;
+  /** FR5 529-5 — the directory's gutter sits under its avatar column; the
+   *  household sheet has none and passes false to sit flush. */
+  indent?: boolean;
 }) {
   const { value: letterOn, isLoading: flagLoading } = useFeatureFlag('client-invite-letter');
   const { data: status, isLoading, isError } = useClientInvitationStatus(
@@ -182,7 +186,7 @@ export function ClientLetterLine({
     <>
       <p
         data-testid="client-letter-line"
-        className="mt-1 pl-[3.25rem] text-[0.7rem] leading-snug text-[var(--color-aged-oak)]"
+        className={`mt-1 ${indent ? 'pl-[3.25rem] ' : ''}text-[0.7rem] leading-snug text-[var(--color-aged-oak)]`}
       >
         {letterNeedsAttention ? (
           <DeliveryWord
@@ -224,7 +228,7 @@ export function ClientLetterLine({
       {/* Sibling of the <p>, never inside it: the field is block content and a
           <p> may not carry a <div>. */}
       {action === 'write-to' && composing ? (
-        <div data-testid="client-letter-compose" className="pl-[3.25rem]">
+        <div data-testid="client-letter-compose" className={indent ? 'pl-[3.25rem]' : undefined}>
           <LetterLineField
             facts={{
               clientName,

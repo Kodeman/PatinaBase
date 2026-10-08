@@ -78,7 +78,23 @@ export function useNoLoginRepair(designerClientId: string): NoLoginRepair {
   if (!letterOn) return 'invite';
   if (letter.isLoading || letter.isError) return null;
   // `rowCopy`'s `write-to` state: no letter has ever been written.
-  return letter.data ? null : 'write';
+  if (!letter.data) return 'write';
+  // FR5 529-3 — a lapsed link: the row mounts its own `Write again`. A letter
+  // still out (sent / opened) offers nothing, so Message is held with no repair.
+  return letter.data.state === 'lapsed' ? 'write-again' : null;
+}
+
+/** FR5 529-2 — focus leaves `Send invite` for the sheet's title (its
+ *  aria-labelledby target) before the row unmounts, never `<body>`. The title
+ *  is not a tab stop, so it takes `tabIndex = -1`; the dialog itself (already
+ *  `tabIndex={-1}`) is the fallback. */
+function focusSheetTitle(from: HTMLElement | null) {
+  const dialog = from?.closest<HTMLElement>('[role="dialog"]');
+  if (!dialog) return;
+  const titleId = dialog.getAttribute('aria-labelledby');
+  const title = titleId ? document.getElementById(titleId) : null;
+  if (title && !title.hasAttribute('tabindex')) title.tabIndex = -1;
+  (title ?? dialog).focus({ preventScroll: true });
 }
 
 /** The household's name as held Message speaks it (the letterhead's own
@@ -111,13 +127,17 @@ function NoLoginInviteRow({
   const [armed, setArmed] = useState(false);
   const label = messageNoLogin(spokenHousehold(clientName), control).repair;
 
-  if (control === 'write') {
+  // The letter row: `Write to …` before any letter, `Write again` once the
+  // link lapsed (FR5 529-3). Flush here — the directory's indent sits under
+  // an avatar column this sheet does not have (529-5).
+  if (control === 'write' || control === 'write-again') {
     return (
-      <div ref={controlRef} data-household-invite="write" className="mt-5">
+      <div ref={controlRef} data-household-invite={control} className="mt-5">
         <ClientLetterLine
           designerClientId={designerClientId}
           clientName={clientName}
           clientEmail={email}
+          indent={false}
         />
       </div>
     );
@@ -147,7 +167,15 @@ function NoLoginInviteRow({
               disabled={invite.isPending}
               loading={invite.isPending}
               onClick={() =>
-                invite.mutate({ designerClientId }, { onSuccess: () => setArmed(false) })
+                invite.mutate(
+                  { designerClientId },
+                  {
+                    onSuccess: () => {
+                      focusSheetTitle(controlRef.current);
+                      setArmed(false);
+                    },
+                  },
+                )
               }
             >
               Send invite
