@@ -80,6 +80,15 @@ export interface AudienceItem {
   category: string | null;
   roomName: string | null;
   quantity: number | null;
+  /** What `quantity` counts, as stored (`sq_ft`, 00729). Absent for `each`. */
+  unit?: string;
+  /** The need the line was written for (D2), printed above the name. Absent
+   *  when it is the name, and on the client, care and vendor editions. */
+  needLabel?: string;
+  /** Present only on a labor line (D5). */
+  lineKind?: "labor";
+  /** Every room the line is placed in (D7 phase 1). Absent for one room. */
+  placements?: AudiencePlacement[];
   selection: Record<string, unknown>;
   configuration?: AudienceConfigurationSummary;
   media: RenderMedia[];
@@ -88,6 +97,12 @@ export interface AudienceItem {
   vendor: Record<string, unknown>;
   contentHash: string;
   raw?: JsonRecord;
+}
+
+export interface AudiencePlacement {
+  roomName: string;
+  quantity: number;
+  areaNote?: string;
 }
 
 export interface RenderChapter {
@@ -293,7 +308,7 @@ function itemCode(item: JsonRecord): string | null {
 
 function itemName(item: JsonRecord): string {
   return stringValue(item.name ?? item.productName ?? item.product_name) ??
-    "Untitled selection";
+    "Untitled line";
 }
 
 function itemKind(item: JsonRecord): "fixed" | "allowance" | "tbd" {
@@ -679,6 +694,26 @@ function buildSafeItem(
     vendor,
     contentHash: stringValue(item.contentHash ?? item.content_hash) ?? "",
   };
+  // 00735's keys are NULL, so absent, in a line's default state. Each is set
+  // only when present, so a default line's audience hash is unchanged.
+  const unit = stringValue(item.unit);
+  if (normalized.quantity !== null && unit && unit !== "each") {
+    normalized.unit = unit;
+  }
+  const needLabel = stringValue(item.needLabel);
+  if (
+    needLabel && needLabel !== normalized.name &&
+    NEED_LABEL_AUDIENCES.has(audience) && allows("identity")
+  ) {
+    normalized.needLabel = needLabel;
+  }
+  if (stringValue(item.lineKind) === "labor" && allows("identity")) {
+    normalized.lineKind = "labor";
+  }
+  if (allows("quantity")) {
+    const placements = normalizePlacements(item.placements);
+    if (placements.length > 1) normalized.placements = placements;
+  }
   // Only the client edition carries the configuration summary; the internal
   // edition already has the whole envelope in `raw`, and vendor/installer/care
   // hold no token for it at all.
@@ -690,6 +725,60 @@ function buildSafeItem(
     normalized.raw = canonicalClone(item) as JsonRecord;
   }
   return normalized;
+}
+
+// The need label is the studio's working name for the line. Client payloads
+// never carry it (CONTRACT 00745), and the vendor edition names the product,
+// as the PO does, so it prints only where the studio and its installers read.
+const NEED_LABEL_AUDIENCES: ReadonlySet<SpecBookAudience> = new Set([
+  "internal",
+  "installer",
+]);
+
+function normalizePlacements(value: unknown): AudiencePlacement[] {
+  if (!Array.isArray(value)) return [];
+  const placements: AudiencePlacement[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) continue;
+    const roomName = stringValue(entry.roomName);
+    const quantity = numberValue(entry.quantity);
+    if (!roomName || quantity === null) continue;
+    const areaNote = stringValue(entry.areaNote);
+    placements.push(
+      areaNote ? { roomName, quantity, areaNote } : {
+        roomName,
+        quantity,
+      },
+    );
+  }
+  return placements;
+}
+
+/** A quantity and the unit it counts: `913 sq ft`, or the bare number for
+ *  `each` (the PO's Qty cell reads the same way, `_shared/po-pdf.ts`). */
+export function quantityText(quantity: number, unit?: string | null): string {
+  if (!unit || unit === "each") return String(quantity);
+  return `${quantity} ${unit.replace(/_/g, " ")}`;
+}
+
+/** The also-in line under a placed line's name: the other rooms, then this
+ *  room's share and its area note,
+ *  `ALSO IN DINING · KITCHEN · 320 SQ FT HERE · BACK ENTRY`. Null for a line
+ *  in one room. */
+export function alsoInText(
+  item: Pick<AudienceItem, "roomName" | "unit" | "placements">,
+): string | null {
+  const placements = item.placements ?? [];
+  if (placements.length < 2) return null;
+  const others = placements.filter((entry) => entry.roomName !== item.roomName);
+  if (others.length === 0) return null;
+  const here = placements.find((entry) => entry.roomName === item.roomName);
+  const parts = [
+    `Also in ${others.map((entry) => entry.roomName).join(" · ")}`,
+    here ? `${quantityText(here.quantity, item.unit)} here` : null,
+    here?.areaNote ?? null,
+  ];
+  return parts.filter(Boolean).join(" · ").toLocaleUpperCase("en-US");
 }
 
 async function audienceItemHash(

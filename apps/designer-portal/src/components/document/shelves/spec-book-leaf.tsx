@@ -12,8 +12,13 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { useProjectFFEItems } from '@patina/supabase';
+import { useProjectFFEItems, useProjectRoomPlacements } from '@patina/supabase';
 import { fmtUsd } from '@/lib/document/format';
+import {
+  specAlsoInLine,
+  specQuantityLabel,
+  type SpecRoomPlacement,
+} from '@/lib/spec-books/model';
 import { liftByRoom } from '@/lib/document/room-state';
 import {
   deriveLineStamp,
@@ -43,6 +48,7 @@ type SpecRow = LineStampRow & {
   name: string;
   project_room_id: string | null;
   line_total_cents: number | null;
+  unit?: string | null;
 };
 
 export function SpecBookLeaf({
@@ -77,6 +83,23 @@ export function SpecBookLeaf({
     ];
   }, [data, rooms, heldRoomId]);
 
+  // D7 phase 1: a line placed in several rooms stays one row, in its primary
+  // room, with the others named under it. Money is never split or repeated.
+  const { data: roomPlacements } = useProjectRoomPlacements(projectId);
+  const placementsByLine = useMemo(() => {
+    const roomName = new Map(rooms.map((room) => [room.id, room.name]));
+    const byLine = new Map<string, SpecRoomPlacement[]>();
+    for (const placement of roomPlacements ?? []) {
+      const name = roomName.get(placement.projectRoomId);
+      if (!name) continue;
+      byLine.set(placement.ffeItemId, [
+        ...(byLine.get(placement.ffeItemId) ?? []),
+        { roomName: name, quantity: placement.quantity, areaNote: placement.areaNote },
+      ]);
+    }
+    return byLine;
+  }, [roomPlacements, rooms]);
+
   if (isError) return <ShelfNote>The spec book could not be read.</ShelfNote>;
   if (isLoading) return <ShelfNote>Reading the schedule…</ShelfNote>;
 
@@ -103,12 +126,15 @@ export function SpecBookLeaf({
                   <ShelfRow
                     key={row.id}
                     name={row.name}
-                    value={stampWord(row, data)}
-                    sub={
-                      row.line_total_cents != null
-                        ? fmtUsd(row.line_total_cents)
-                        : undefined
+                    meta={
+                      specAlsoInLine(
+                        placementsByLine.get(row.id),
+                        group.id != null ? group.name : null,
+                        row.unit,
+                      ) ?? undefined
                     }
+                    value={stampWord(row, data)}
+                    sub={rowSub(row)}
                   />
                 ))}
               </ShelfGroup>
@@ -127,6 +153,18 @@ export function SpecBookLeaf({
       </ShelfDoor>
     </>
   );
+}
+
+/** The money, after the quantity when the line counts something other than
+ *  pieces (`913 sq ft · $9,545`). A line counted in `each` prints as before. */
+function rowSub(row: SpecRow): string | undefined {
+  const parts = [
+    row.unit && row.unit !== 'each' && row.quantity != null
+      ? specQuantityLabel(row.quantity, row.unit)
+      : null,
+    row.line_total_cents != null ? fmtUsd(row.line_total_cents) : null,
+  ].filter((part): part is string => part != null);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
 /** F58: the same derivation the paper stamps from, so one line reads one word

@@ -18,7 +18,11 @@ import type {
   AudienceItem,
   AudienceRenderModel,
 } from "./render-model.ts";
-import { renderMediaIdentity } from "./render-model.ts";
+import {
+  alsoInText,
+  quantityText,
+  renderMediaIdentity,
+} from "./render-model.ts";
 import { DEFAULT_CURRENCY, formatMinorUnits } from "../_shared/currency-totals.ts";
 
 const h = React.createElement;
@@ -241,7 +245,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginBottom: 5,
   },
+  itemNeed: { fontFamily: "Helvetica-Bold", fontSize: 12, marginBottom: 3 },
   itemName: { fontFamily: "Helvetica-Bold", fontSize: 20, marginBottom: 5 },
+  itemAlsoIn: { color: "#6F665F", fontSize: 8, marginBottom: 5 },
   itemMeta: { color: "#6F665F", fontSize: 9 },
   imageBox: {
     height: 230,
@@ -444,6 +450,7 @@ function itemPage(
   const firstImage = item.media
     .map((media) => imageData.get(renderMediaIdentity(media)))
     .find(Boolean);
+  const alsoIn = alsoInText(item);
   // The client price prints in its own currency; `currency` is not a row.
   const { currency = DEFAULT_CURRENCY, ...commercial } = item.commercial;
   const fields = [
@@ -476,16 +483,24 @@ function itemPage(
       h(
         Text,
         { style: styles.itemCode },
-        item.documentCode ?? "UNASSIGNED CODE",
+        item.lineKind === "labor"
+          ? `${item.documentCode ?? "UNASSIGNED CODE"}  ·  LABOR`
+          : item.documentCode ?? "UNASSIGNED CODE",
       ),
+      item.needLabel
+        ? h(Text, { style: styles.itemNeed }, item.needLabel)
+        : null,
       h(Text, { style: styles.itemName }, item.name),
+      alsoIn ? h(Text, { style: styles.itemAlsoIn }, alsoIn) : null,
       h(
         Text,
         { style: styles.itemMeta },
         [
           item.roomName,
           item.category,
-          item.quantity === null ? null : `Quantity ${item.quantity}`,
+          item.quantity === null
+            ? null
+            : `Quantity ${quantityText(item.quantity, item.unit)}`,
         ].filter(
           Boolean,
         ).join("  ·  "),
@@ -630,8 +645,11 @@ function documentNode(
             h(Text, { style: styles.rowLabel }, item.name),
             h(
               Text,
-              { style: { width: 48, textAlign: "right" } },
-              item.quantity === null ? "" : `Qty ${item.quantity}`,
+              // A unit needs the room `Qty 913 sq ft` takes; a count keeps 48.
+              { style: { width: item.unit ? 84 : 48, textAlign: "right" } },
+              item.quantity === null
+                ? ""
+                : `Qty ${quantityText(item.quantity, item.unit)}`,
             ),
           )
         ),

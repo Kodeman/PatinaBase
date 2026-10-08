@@ -7,6 +7,7 @@ import { render, screen } from '@testing-library/react';
  */
 
 let mockItems: Record<string, unknown>[] = [];
+let mockPlacements: Record<string, unknown>[] = [];
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -40,6 +41,7 @@ jest.mock('@patina/supabase', () => ({
       missingFields: [],
     })),
   }),
+  useProjectRoomPlacements: () => ({ data: mockPlacements }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
   useUnresolvedProcurementExceptions: () => ({ data: [] }),
@@ -402,5 +404,65 @@ describe('the shelf leaf stopped printing the raw column', () => {
 
     expect(screen.getByText('Released to maker')).toBeInTheDocument();
     expect(screen.queryByText(/STAGE_CONFIG:/)).not.toBeInTheDocument();
+  });
+});
+
+describe('US-21 T-32 — the unit and the also-in line on the shelf', () => {
+  const fourRooms = [
+    { id: 'room-hall', name: 'Hall', budget_cents: 0 },
+    { id: 'room-1', name: 'Living Room', budget_cents: 0 },
+    { id: 'room-dining', name: 'Dining', budget_cents: 0 },
+    { id: 'room-kitchen', name: 'Kitchen', budget_cents: 0 },
+  ];
+  const placed = (roomId: string, quantity: number, sortOrder: number) => ({
+    id: `pl-${roomId}`,
+    ffeItemId: 'oak-1',
+    projectRoomId: roomId,
+    quantity,
+    areaNote: null,
+    sortOrder,
+  });
+
+  afterEach(() => {
+    mockPlacements = [];
+  });
+
+  it('prints the oak floor once, in its primary room, with its unit and the others named under it', () => {
+    mockItems = [
+      line({
+        id: 'oak-1',
+        name: 'White oak floor, satin Bona finish',
+        status: 'specified',
+        received_quantity: null,
+        quantity: 913,
+        unit: 'sq_ft',
+        line_total_cents: 1_049_500,
+      }),
+    ];
+    mockPlacements = [
+      placed('room-hall', 120, 0),
+      placed('room-1', 320, 1),
+      placed('room-dining', 210, 2),
+      placed('room-kitchen', 180, 3),
+    ];
+    render(<SpecBookLeaf projectId="project-1" rooms={fourRooms} />);
+
+    expect(screen.getAllByText('White oak floor, satin Bona finish')).toHaveLength(1);
+    expect(
+      screen.getByText('ALSO IN HALL · DINING · KITCHEN · 320 SQ FT HERE'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/913 sq ft · \$10,495$/)).toBeInTheDocument();
+  });
+
+  it('a line in one room and counted in each prints exactly as before', () => {
+    mockItems = [line({ status: 'ordered', received_quantity: null, line_total_cents: 680_000 })];
+    mockPlacements = [{ ...placed('room-1', 1, 0), ffeItemId: 'line-1' }];
+    renderLeaf();
+
+    expect(screen.queryByText(/ALSO IN/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ each/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Released to maker/).textContent).toBe(
+      'Released to maker$6,800',
+    );
   });
 });
