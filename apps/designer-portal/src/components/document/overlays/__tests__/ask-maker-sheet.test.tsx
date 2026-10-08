@@ -45,9 +45,12 @@ jest.mock('@patina/supabase', () => {
 });
 
 let mockFlag = { value: true, isLoading: false };
+let mockOneVoice = false;
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (name: string) =>
-    name === 'ask-the-paper' ? mockFlag : { value: false, isLoading: false },
+    name === 'ask-the-paper'
+      ? mockFlag
+      : { value: name === 'one-voice' && mockOneVoice, isLoading: false },
 }));
 
 import { AskMakerSheet, InstallReadingLine, type AskMakerPiece } from '../ask-maker-sheet';
@@ -290,6 +293,19 @@ describe('InstallReadingLine', () => {
     const act = await screen.findByRole('button', { name: 'Ask the maker for a date' });
     fireEvent.click(act);
     expect(await screen.findByRole('button', { name: 'Hold for review' })).toBeInTheDocument();
+  });
+
+  // US-19 F2-12 (P-1) — a named act is scored, never filled weight.
+  it('F2-12 one-voice: the install row prints Ask the maker for a date scored', async () => {
+    mockOneVoice = true;
+    try {
+      renderWithQuery(<InstallReadingLine projectId={PROJECT} items={CEDAR_LANE} />);
+      const act = await screen.findByRole('button', { name: 'Ask the maker for a date' });
+      expect(act).toHaveClass('da-primary');
+      expect(act).not.toHaveClass('da-inked');
+    } finally {
+      mockOneVoice = false;
+    }
   });
 
   it('F4: reads held notes from procurement_drafts, never the route', async () => {

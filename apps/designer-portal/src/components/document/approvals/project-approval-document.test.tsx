@@ -179,6 +179,23 @@ const approvalsArriveOpen = () => {
 };
 
 describe('ProjectApprovalDocument authority and composer', () => {
+  // US-19 F2-12 (P-1) — assigning the client is not one of D3's four: the
+  // head prints it plain, with no scored leader.
+  it('F2-12 one-voice: Assign project client prints plain, not as the inked leader', () => {
+    const prior = process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
+    process.env.NEXT_PUBLIC_FLAG_OVERRIDES = 'one-voice:true';
+    try {
+      renderDocument();
+      approvalsArriveOpen();
+      const assign = screen.getByRole('button', { name: 'Assign project client' });
+      expect(assign).not.toHaveClass('da-inked');
+      expect(assign).toHaveClass('da-secondary');
+    } finally {
+      if (prior === undefined) delete process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
+      else process.env.NEXT_PUBLIC_FLAG_OVERRIDES = prior;
+    }
+  });
+
   it('assigns only the exact project client with first-write CAS', async () => {
     renderDocument();
     approvalsArriveOpen();
