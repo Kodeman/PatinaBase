@@ -5,7 +5,7 @@ import {
   useUpdatePurchaseOrderETA,
   useVendors,
 } from '@patina/supabase';
-import { OrdersLedger } from './orders-ledger';
+import { OrdersLedger, ordersSendLanding } from './orders-ledger';
 
 const mockPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
@@ -743,5 +743,65 @@ describe('OrdersLedger · held for release (C-32)', () => {
     expect(heldGroup(container)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Oak House' }));
     expect(heldGroup(container)).not.toBeNull();
+  });
+});
+
+describe('OrdersLedger · Send the purchase order lands on its row (walk D3)', () => {
+  // Lake House carries a drafted PO no Pieces line holds: the press arrives
+  // here and lands on that row's own send act, never the book's head.
+  const DRAFTED = {
+    id: 'po-4',
+    po_number: null,
+    vendor_po_number: null,
+    vendor_id: 'vendor-2',
+    project_id: 'project-2',
+    project: { id: 'project-2', name: 'Lake House' },
+    total_cents: 340_000,
+    status: 'draft',
+    sent_at: null,
+    acknowledged_at: null,
+    confirmed_eta: null,
+    is_patina_catalog: false,
+    payments: [],
+  };
+  const lensed = { page: 'ledger', projectId: 'project-2' };
+
+  beforeEach(() => {
+    ordersSendLanding.pending = false;
+    mockHeld.data = [];
+    mockUsePurchaseOrders.mockReturnValue({ data: [...ORDERS, DRAFTED], isLoading: false });
+    mockUseVendors.mockReturnValue({ data: { data: VENDORS } });
+    mockUseUpdatePurchaseOrderETA.mockReturnValue({ mutateAsync: mockMutateEta });
+  });
+
+  const draftedSend = () =>
+    [...document.querySelectorAll<HTMLElement>('[data-orders-po-row]')]
+      .find((row) => row.textContent?.includes('send →'))
+      ?.querySelector<HTMLElement>('[data-action-key="open-purchase-order-preview"]');
+
+  it('spends the armed landing once the orders read, focusing the drafted row’s send →', async () => {
+    mockUsePurchaseOrders.mockReturnValue({ data: undefined, isLoading: true });
+    ordersSendLanding.pending = true;
+    const { rerender } = render(<OrdersLedger onClose={jest.fn()} initialContext={lensed} />);
+    // Still opening the book: the flag waits.
+    expect(ordersSendLanding.pending).toBe(true);
+
+    mockUsePurchaseOrders.mockReturnValue({ data: [...ORDERS, DRAFTED], isLoading: false });
+    rerender(<OrdersLedger onClose={jest.fn()} initialContext={lensed} />);
+    expect(ordersSendLanding.pending).toBe(false);
+    // Lake House reads Atelier One's shipped row, then Atelier Two's
+    // confirmed and drafted rows: the landing is the third row's act.
+    expect(document.querySelectorAll('[data-orders-po-row]')).toHaveLength(3);
+    const send = draftedSend();
+    expect(send).toHaveTextContent('send →');
+    await waitFor(() => expect(document.activeElement).toBe(send));
+  });
+
+  it('unarmed, the book opens without moving focus', async () => {
+    render(<OrdersLedger onClose={jest.fn()} initialContext={lensed} />);
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+    expect(document.activeElement).toBe(document.body);
   });
 });

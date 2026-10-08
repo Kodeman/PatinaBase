@@ -60,6 +60,7 @@ jest.mock('../command-bar', () => ({
   openLedger: (...args: unknown[]) => mockOpenLedger(...args),
 }));
 jest.mock('../orders-book-receiving', () => ({ receivingClaimLanding: { pending: false } }));
+jest.mock('../orders-ledger', () => ({ ordersSendLanding: { pending: false } }));
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn(), regionFolded: jest.fn() },
@@ -137,6 +138,7 @@ jest.mock('@/hooks/use-section-work', () => {
 
 import { FFESection, ffeActLine } from '../ffe-section';
 import { receivingClaimLanding } from '../orders-book-receiving';
+import { ordersSendLanding } from '../orders-ledger';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 /** The follow-up composer holds a draft through react-query's mutation. */
@@ -204,6 +206,7 @@ beforeEach(() => {
   mockOneVoice = false;
   mockAuthority = null;
   receivingClaimLanding.pending = false;
+  ordersSendLanding.pending = false;
   window.localStorage.clear();
 });
 afterEach(() => {
@@ -354,6 +357,51 @@ describe('a need’s act lands on its line’s control (F3-2)', () => {
     expect(document.getElementById('ffe-selection-line-drafted')).toContainElement(
       document.activeElement as HTMLElement,
     );
+  });
+
+  it('Send the purchase order with no line on the drafted PO (walk D3): opens the Orders ledger with its send landing armed', async () => {
+    // Olsen: the need counts the project's drafted PO; no line carries it.
+    mockItems = [answered];
+    render(
+      <FFESection
+        projectId="project-1"
+        projectName="Olsen"
+        mode="project"
+        needs={[need('po_unsent')]}
+      />,
+    );
+
+    let taken = false;
+    act(() => {
+      taken = press('send');
+    });
+    expect(taken).toBe(true);
+    await waitFor(() =>
+      expect(mockOpenLedger).toHaveBeenCalledWith('orders', {
+        page: 'ledger',
+        projectId: 'project-1',
+      }),
+    );
+    expect(ordersSendLanding.pending).toBe(true);
+  });
+
+  it('a held order’s po_unsent need leaves Send untaken with no drafted line', () => {
+    mockItems = [answered];
+    render(
+      <FFESection
+        projectId="project-1"
+        projectName="Olsen"
+        mode="project"
+        needs={[{ ...need('po_unsent'), releaseHeld: true } as NeedLine]}
+      />,
+    );
+    let taken = true;
+    act(() => {
+      taken = press('send');
+    });
+    expect(taken).toBe(false);
+    expect(mockOpenLedger).not.toHaveBeenCalled();
+    expect(ordersSendLanding.pending).toBe(false);
   });
 
   it('Spec the N unspecified (522-3): focuses the first unspecified line’s spec act', async () => {

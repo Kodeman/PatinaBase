@@ -1890,6 +1890,18 @@ function FFESectionBody({
       setFollowUpLineId(String(line.id));
       return true;
     }
+    if (!line && act === 'send') {
+      // Walk D3 — a drafted PO no line carries (the need counts the project's
+      // POs): the Orders ledger lands on its row's own send act.
+      if (!needs.some((need) => need.kind === 'po_unsent' && !need.releaseHeld)) return false;
+      void Promise.all([import('./orders-ledger'), import('./command-bar')]).then(
+        ([ledger, { openLedger }]) => {
+          ledger.ordersSendLanding.pending = true;
+          openLedger('orders', { page: 'ledger', projectId });
+        },
+      );
+      return true;
+    }
     if (!line) {
       // 520-4 — a claim at PO grain stands on no line: Receiving lands on the
       // claim card's own act. The flag is the Receiving page's to spend.

@@ -14,7 +14,7 @@
  * acknowledgment claim (R16: a batch ETA is not a vendor act).
  */
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -117,6 +117,15 @@ const PO_STAMP: Record<string, { color: string; ink?: string }> = {
   delivered: { color: 'var(--color-sage)' },
   cancelled: { color: 'var(--color-terracotta)', ink: 'var(--color-terracotta-ink)' },
 };
+
+/**
+ * US-19 walk D3 — `Send the purchase order` where no Pieces line carries the
+ * drafted PO (the need counts the project's POs, not its lines) sets this
+ * before it opens the ledger on the project; the page spends it once its
+ * orders have read, landing on the first drafted, unsent row's own `send →`.
+ * The ledger is never the landing (520-4's grammar).
+ */
+export const ordersSendLanding = { pending: false };
 
 export function OrdersLedger({
   onClose,
@@ -270,6 +279,29 @@ export function OrdersLedger({
       .sort((a, b) => a.vendorName.localeCompare(b.vendorName));
   }, [live, projectLens, paymentLens, vendorById, releasableIds]);
 
+  // Walk D3 — two frames, so the landing follows the sheet's own focus. Never
+  // cancelled: StrictMode's second pass finds the flag already spent.
+  const bookRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!ordersSendLanding.pending || isLoading || page !== 'ledger') return;
+    ordersSendLanding.pending = false;
+    const index = groups
+      .flatMap((g) => g.pos)
+      .findIndex((po) => !po.sent_at && po.status === 'draft');
+    if (index < 0) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const control = bookRef.current
+          ?.querySelectorAll<HTMLElement>('[data-orders-po-row]')
+          [index]?.querySelector<HTMLElement>(
+            '[data-action-key="open-purchase-order-preview"]',
+          );
+        control?.scrollIntoView?.({ block: 'center' });
+        control?.focus({ preventScroll: true });
+      }),
+    );
+  }, [isLoading, page, groups]);
+
   const selectedVendor = useMemo(() => {
     const pos = (orders ?? []).filter((o) => selected.includes(o.id));
     const vendorIds = new Set(pos.map((o) => o.vendor_id));
@@ -321,7 +353,11 @@ export function OrdersLedger({
   };
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-3xl" data-orders-book>
+    <div
+      ref={bookRef}
+      className="mx-auto w-full min-w-0 max-w-3xl"
+      data-orders-book
+    >
       <DocSheetHead
         icon={ORDERS_ICON}
         title="Orders"
