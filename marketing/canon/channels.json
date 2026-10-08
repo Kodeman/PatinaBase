@@ -1,0 +1,12 @@
+{
+  "instagram-4x5": { "width": 1080, "height": 1350, "unit": "px", "format": "png", "ar": "4:5" },
+  "pinterest-2x3": { "width": 1000, "height": 1500, "unit": "px", "format": "png", "ar": "2:3" },
+  "linkedin-landscape": { "width": 1200, "height": 627, "unit": "px", "format": "png", "ar": "191:100" },
+  "linkedin-portrait": { "width": 1080, "height": 1350, "unit": "px", "format": "png", "ar": "4:5" },
+  "email": { "width": 600, "height": null, "unit": "px", "format": "html", "ar": "3:2" },
+  "one-pager-letter": { "width": 8.5, "height": 11, "unit": "in", "format": "pdf", "ar": "4:5" },
+  "deck-16x9": { "width": 1920, "height": 1080, "unit": "px", "format": "html", "ar": "16:9" },
+  "poster-18x24": { "width": 18, "height": 24, "unit": "in", "dpi": 300, "format": "pdf", "ar": "3:4" },
+  "video-9x16": { "width": 1080, "height": 1920, "unit": "px", "format": "mp4", "ar": "9:16", "maxSeconds": 30 },
+  "video-16x9": { "width": 1920, "height": 1080, "unit": "px", "format": "mp4", "ar": "16:9", "maxSeconds": 60 }
+}

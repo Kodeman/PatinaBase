@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "runId": "2026-10-08-sample",
+  "contentTest": {
+    "pass": true,
+    "audience": "a Midwest design studio taking on its first hire while the workload doubles",
+    "moment": "the studio just signed its first employment agreement",
+    "stream": "subscription",
+    "promise": "the studio keeps its rhythm; Patina keeps the paperwork and the pace",
+    "reason": "fits the Document surface and the subscription stream"
+  },
+  "concept": {
+    "name": "First Hire",
+    "idea": "Show the studio handing off the busywork the moment it adds hands.",
+    "artDirection": "Warm Midwest studio light, paper and fabric swatches on a worktable."
+  },
+  "pieces": [
+    { "id": "P01", "kind": "social", "channel": "instagram-4x5", "angle": "the handoff", "brief": "Show the first hire at the worktable.", "claims": ["C01"], "visuals": ["J01"] },
+    { "id": "P02", "kind": "pin", "channel": "pinterest-2x3", "angle": "the swatch wall", "brief": "A pinnable detail shot of the studio's swatch wall.", "claims": [], "visuals": ["J02"] },
+    { "id": "P03", "kind": "email", "channel": "email", "angle": "the first hire note", "brief": "A short note to studios about adding their first hire.", "claims": ["C01"], "visuals": [] },
+    { "id": "P04", "kind": "one-pager", "channel": "one-pager-letter", "angle": "studio overview", "brief": "A leave-behind summarizing the subscription.", "claims": [], "visuals": ["J01"] },
+    { "id": "P05", "kind": "deck", "channel": "deck-16x9", "angle": "studio walkthrough", "brief": "A short deck walking through the studio's first week.", "claims": ["C01"], "visuals": ["J01"] },
+    { "id": "P06", "kind": "pr-pitch", "channel": "linkedin-landscape", "angle": "trade press pitch", "brief": "A short pitch to a Midwest trade outlet.", "claims": [], "visuals": [] },
+    { "id": "P07", "kind": "poster", "channel": "poster-18x24", "angle": "studio open house", "brief": "A poster for a studio open house.", "claims": [], "visuals": ["J01"] },
+    { "id": "P08", "kind": "video", "channel": "video-9x16", "angle": "a day in the studio", "brief": "A short vertical video following the first hire's day.", "claims": ["C01"], "visuals": ["J03"] }
+  ],
+  "jobs": [
+    { "id": "J01", "pieceIds": ["P01", "P04", "P05", "P07"], "kind": "still", "channel": "instagram-4x5", "prompt": "A Midwest design studio worktable with fabric swatches and warm afternoon light", "params": "--ar 4:5 --style raw --v 8.1 --sref {{SREF}}", "variants": 3, "fluxPrompt": "" },
+    { "id": "J02", "pieceIds": ["P02"], "kind": "still", "channel": "pinterest-2x3", "prompt": "Close detail of a studio swatch wall, warm light", "params": "--ar 2:3 --style raw --v 8.1 --sref {{SREF}}", "variants": 2, "fluxPrompt": "" },
+    { "id": "J03", "pieceIds": ["P08"], "kind": "video", "channel": "video-9x16", "prompt": "", "params": "--ar 9:16", "variants": 1, "fluxPrompt": "", "startFrom": "J01" }
+  ]
+}
