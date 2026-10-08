@@ -16,7 +16,8 @@
  *
  * Degradation (§12.1 rung 2): when the inference worker can't answer inside
  * its 1.5 s budget the fn returns FTS-only results with { degraded: true } and
- * this surface says "the Engine is resting" — quietly, results still shown.
+ * this surface says "Keyword matches for now." — quietly, results still shown
+ * (F3-18: no "Engine" where a person reads; code comments keep the word).
  * When the fn itself is unreachable (not deployed / network), the old
  * cross-layer keyword search stands in client-side under the same resting
  * line, so the librarian never goes silent.
@@ -147,7 +148,7 @@ export function EngineResults({
   if (isLoading) {
     return (
       <div className="flex items-center gap-2.5 py-5">
-        <StrataSweep size="sm" label="The Engine is reading your shelves" />
+        <StrataSweep size="sm" label="Reading your shelves" />
         <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
           reading your shelves…
         </span>
@@ -157,7 +158,7 @@ export function EngineResults({
 
   const restingNote = resting ? (
     <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] opacity-80">
-      the Engine is resting — keyword results for now
+      Keyword matches for now.
     </p>
   ) : null;
 
@@ -166,8 +167,8 @@ export function EngineResults({
       <div className="py-5">
         {restingNote}
         <p className="font-heading text-[13px] italic text-[var(--text-muted)]">
-          Nothing on your shelves answers that yet — teach more, and the Engine
-          sees more.
+          Nothing on your shelves answers that yet — the more pieces you add,
+          the more it can find.
         </p>
       </div>
     );
@@ -277,10 +278,6 @@ export function EngineResults({
           {placeError}
         </p>
       )}
-
-      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] opacity-70">
-        The Engine · every ask teaches your eye · Designer-Taught Intelligence
-      </p>
     </div>
   );
 }
@@ -290,8 +287,8 @@ export function EngineResults({
 function matchNote(matchedOn?: EngineAskMatchSource[]): string {
   if (!matchedOn || matchedOn.length === 0) return '';
   return matchedOn.includes('vector')
-    ? ' · the Engine’s read'
-    : ' · keyword match';
+    ? ' · matched by eye'
+    : ' · matched by word';
 }
 
 const LAYER_NOTE: Record<string, string> = {

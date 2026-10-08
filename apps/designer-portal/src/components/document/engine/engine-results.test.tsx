@@ -2,7 +2,7 @@
  * EngineResults (Wave 3C) — the ask surface shared by ⌘K and the librarian.
  * Asserts the surface laws:
  *   • the Engine's ranked items render with matched-on chips (never "AI");
- *   • server degradation ({degraded:true}) shows "the Engine is resting"
+ *   • server degradation ({degraded:true}) shows "Keyword matches for now."
  *     quietly WITH the FTS results (§12.1 rung 2);
  *   • an unreachable fn falls back to the keyword cross-layer search under
  *     the same resting line (the librarian never goes silent);
@@ -81,21 +81,27 @@ describe('EngineResults', () => {
         result_count: 2,
       },
     };
-    render(<EngineResults query="warm oak sideboard" />);
+    const { container } = render(<EngineResults query="warm oak sideboard" />);
 
     expect(screen.getByText('Piece a')).toBeInTheDocument();
-    expect(screen.getByText(/the Engine’s read/)).toBeInTheDocument();
-    expect(screen.getByText(/keyword match/)).toBeInTheDocument();
+    // F3-18 (513-4e): house voice on the match chips.
+    expect(screen.getByText(/· matched by eye/)).toBeInTheDocument();
+    expect(screen.getByText(/· matched by word/)).toBeInTheDocument();
     expect(
-      screen.queryByText(/the Engine is resting/i),
+      screen.queryByText('Keyword matches for now.'),
     ).not.toBeInTheDocument();
+    // F3-18 (513-4d): the tagline footer is gone; no "Engine" a person reads.
+    expect(
+      screen.queryByText(/every ask teaches your eye/i),
+    ).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Engine/);
     // Copy law: nothing user-facing says "AI".
     expect(screen.queryByText(/\bAI\b/)).not.toBeInTheDocument();
     // Ask path healthy → keyword fallback stays disabled.
     expect(crossLayerCalls.every((c) => c.enabled === false)).toBe(true);
   });
 
-  it('server degradation: shows "the Engine is resting" with the FTS results', () => {
+  it('server degradation: shows "Keyword matches for now." with the FTS results', () => {
     askState = {
       data: {
         items: [item('a', ['fts'])],
@@ -104,10 +110,11 @@ describe('EngineResults', () => {
         result_count: 1,
       },
     };
-    render(<EngineResults query="warm oak sideboard" />);
+    const { container } = render(<EngineResults query="warm oak sideboard" />);
 
-    expect(screen.getByText(/the Engine is resting/i)).toBeInTheDocument();
+    expect(screen.getByText('Keyword matches for now.')).toBeInTheDocument();
     expect(screen.getByText('Piece a')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Engine/);
   });
 
   it('unreachable fn: falls back to keyword cross-layer results under the resting line', () => {
@@ -125,7 +132,7 @@ describe('EngineResults', () => {
     };
     render(<EngineResults query="warm oak sideboard" />);
 
-    expect(screen.getByText(/the Engine is resting/i)).toBeInTheDocument();
+    expect(screen.getByText('Keyword matches for now.')).toBeInTheDocument();
     // Fallback ordering: studio before catalog.
     const names = screen.getAllByText(/Piece /).map((n) => n.textContent);
     expect(names).toEqual(['Piece s1', 'Piece c1']);
@@ -168,13 +175,23 @@ describe('EngineResults', () => {
     expect(screen.getByText('placed ✓')).toBeInTheDocument();
   });
 
-  it('empty answer: teach-more copy', () => {
+  it('empty answer: add-more copy, no "Engine"', () => {
     askState = {
       data: { items: [], degraded: false, latency_ms: 40, result_count: 0 },
     };
-    render(<EngineResults query="cursed obelisk" />);
+    const { container } = render(<EngineResults query="cursed obelisk" />);
     expect(
-      screen.getByText(/Nothing on your shelves answers that yet/i),
+      screen.getByText(
+        'Nothing on your shelves answers that yet — the more pieces you add, the more it can find.',
+      ),
     ).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Engine/);
+  });
+
+  it('loading: the sweep reads "Reading your shelves" (F3-18, 513-4a)', () => {
+    askState = { isLoading: true };
+    const { container } = render(<EngineResults query="cursed obelisk" />);
+    expect(screen.getByLabelText('Reading your shelves')).toBeInTheDocument();
+    expect(container.innerHTML).not.toMatch(/Engine/);
   });
 });

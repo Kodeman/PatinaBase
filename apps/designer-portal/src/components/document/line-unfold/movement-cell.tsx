@@ -8,8 +8,14 @@ import {
   useUpdatePurchaseOrderETA,
   useUpdatePurchaseOrderStatus,
 } from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { dayMonth } from '@/lib/document/dates';
 import { fmtDay } from '@/lib/document/format';
-import { lineMaker } from '@/lib/document/install-reading';
+import {
+  LIVE_MAKER_ASK_STATUSES,
+  lineMaker,
+  standingMakerAsk,
+} from '@/lib/document/install-reading';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction } from '../document-action';
 import { CellValue, FIELD_CLS, LABEL_CLS, UnfoldCell } from './cell';
@@ -31,10 +37,45 @@ export const MOVEMENT_DRAFT_KINDS = ['receiver_inbound_notice'] as const;
  * (506-2).
  */
 function LineDateRequests({ item, projectId }: { item: FFERow; projectId: string }) {
-  const { data } = useProcurementDrafts(projectId, OPEN_PROCUREMENT_DRAFT_STATUSES);
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const { data } = useProcurementDrafts(
+    projectId,
+    oneVoice ? LIVE_MAKER_ASK_STATUSES : OPEN_PROCUREMENT_DRAFT_STATUSES,
+  );
   const drafts = (data ?? []).filter(
     (d) => d.kind === 'maker_eta_request' && d.ffe_item_id === item.id,
   );
+  if (oneVoice) {
+    // US-19 F3-22 (517-4): one status line in every state, the Desk's words,
+    // for the request that stands on this line (506-3's rule, as the install
+    // row reads it). The no-address reason stays beneath the held Send.
+    const standing = standingMakerAsk(drafts, new Date());
+    if (!standing) return null;
+    const askedDay = dayMonth(standing.sent_at ?? standing.created_at);
+    const status =
+      standing.status === 'sending'
+        ? 'Sending…'
+        : standing.status === 'sent'
+          ? askedDay
+            ? `Asked ${askedDay} · sent`
+            : 'Sent.'
+          : `Date request to ${lineMaker(item) ?? 'the maker'} drafted — not sent.`;
+    return (
+      <div>
+        <p data-testid="line-date-request-status" className="text-[11px] text-[var(--text-muted)]">
+          {status}
+        </p>
+        {standing.status !== 'sent' && (
+          <DraftReview
+            draft={standing}
+            regionKey="line-unfold"
+            addressee={lineMaker(item)}
+            onAddAddress={() => landOnMakerAddress(item, { onTerms: true })}
+          />
+        )}
+      </div>
+    );
+  }
   if (drafts.length === 0) return null;
   return (
     <>

@@ -165,6 +165,8 @@ export function AskMakerSheet({
   const [opened, setOpened] = useState<ProcurementDraftRow | null>(null);
   const review = held ?? opened;
   const standing = hold.error instanceof HoldRefused ? hold.error.draft : null;
+  // US-19 F3-22 (517-1): Add an address lands on the vendor's terms.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   // DocSheet focuses its panel in a frame on open; its effect runs before this
   // one (child first), so this frame lands focus on the body after it.
@@ -202,7 +204,7 @@ export function AskMakerSheet({
               addressee={lineMaker(piece)}
               onAddAddress={() => {
                 onClose();
-                landOnMakerAddress(piece);
+                landOnMakerAddress(piece, { onTerms: oneVoice });
               }}
             />
           </div>
@@ -392,7 +394,15 @@ function InstallReadingLive({
         : piece && !maker
           ? NO_MAKER
           : null;
-  const actLabel = unsettled ? null : held ? 'Open the held draft' : reading.act?.label ?? null;
+  // US-19 F3-22 (517-3, one-voice): a sending note is in flight, not held
+  // (511-R5): its act reads `Open the draft`.
+  const actLabel = unsettled
+    ? null
+    : held
+      ? oneVoice && held.status === 'sending'
+        ? 'Open the draft'
+        : 'Open the held draft'
+      : reading.act?.label ?? null;
 
   const press = () => {
     switch (reading.act?.targetId) {

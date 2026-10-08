@@ -11,6 +11,7 @@
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import {
   deskActionLabel,
@@ -19,12 +20,14 @@ import {
   type DeskFolder,
 } from '@/lib/document/desk-derivation';
 import { voiceFirstName } from '@/lib/document/document-guide';
+import { lineMakerRecord } from '@/lib/document/install-reading';
+import { focusFfeLinePending } from '@/lib/document/registry';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { StatusChip } from './status-chip';
 import { openLedger } from './command-bar';
 import { TriageBar } from './triage-bar';
-import { DraftReview } from './buying/draft-review';
+import { DraftReview, landOnMakerAddress } from './buying/draft-review';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
 export const DESK_FOLIO_PREVIEW_LIMIT = 4;
@@ -166,6 +169,22 @@ export function FolderCard({
   const actionLabel = deskActionLabel(need, oneVoice, voiceFirstName(row.client_name));
   const needText = deskNeedText(need, oneVoice);
   const shown = useRef(false);
+  const router = useRouter();
+  // US-19 F3-22 (517-5, `one-voice`): a held date request with no address
+  // repairs from the Desk too, to 517-1's landing — the maker's vendor terms,
+  // or, with no vendor record, the line's maker selector on its document (the
+  // landing waits across the walk in focusFfeLinePending).
+  const makerLine = oneVoice ? need.draft?.makerLine : undefined;
+  const addAddress = makerLine
+    ? () => {
+        if (lineMakerRecord(makerLine)?.vendorId) {
+          landOnMakerAddress(makerLine, { onTerms: true });
+          return;
+        }
+        focusFfeLinePending.request = { itemId: makerLine.id, cell: 'maker' };
+        router.push(`/doc/${row.engagement_id}`);
+      }
+    : undefined;
 
   useEffect(() => {
     if (!visible || !need.actionLabel || shown.current) return;
@@ -233,6 +252,8 @@ export function FolderCard({
         tabLabel={tabLabel}
         actionLabel={actionLabel}
         needText={needText}
+        draftAddressee={oneVoice ? (need.draft?.maker ?? null) : undefined}
+        onAddAddress={addAddress}
       />
     </div>
   );
@@ -244,12 +265,18 @@ function FolderFace({
   tabLabel,
   actionLabel,
   needText,
+  draftAddressee,
+  onAddAddress,
 }: {
   folder: DeskFolder;
   stageLine: string;
   tabLabel: string;
   actionLabel: string | null;
   needText: string;
+  /** F3-22 517-5: the held draft's maker, for its Send's reason. */
+  draftAddressee?: string | null;
+  /** F3-22 517-5: the held draft's repair (517-1's landing). */
+  onAddAddress?: () => void;
 }) {
   const { row, need } = folder;
   return (
@@ -316,6 +343,8 @@ function FolderFace({
                 draft={need.draft}
                 surfaceKey="desk"
                 regionKey="needs-your-hand"
+                addressee={draftAddressee}
+                onAddAddress={onAddAddress}
               />
             </div>
           )}

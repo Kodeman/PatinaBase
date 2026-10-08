@@ -361,6 +361,8 @@ export function OrdersLedger({
           vendors={vendors ?? []}
           orders={orders ?? []}
           initialVendorId={initialContext?.vendorId ?? null}
+          initialVendorPage={initialContext?.vendorPage ?? null}
+          focusField={initialContext?.focus ?? null}
           briefProjectId={initialContext?.projectId ?? null}
           onOpenDocument={openDocument}
         />

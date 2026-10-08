@@ -13,7 +13,7 @@
  * profile. A vendor without a profile has no thread yet — the page says so.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
@@ -80,6 +80,7 @@ const MSG_ACCENT = {
 };
 
 type VendorPage = 'terms' | 'thread' | 'orders';
+const VENDOR_PAGES: readonly VendorPage[] = ['terms', 'thread', 'orders'];
 
 const PO_STAMP: Record<string, { color: string; ink?: string }> = {
   draft: { color: 'var(--color-aged-oak)', ink: 'var(--color-aged-oak)' },
@@ -253,7 +254,15 @@ function TermsField({
  * shows only to a viewer who may see the studio's margin (C-36, R1): the read
  * nulls it otherwise, so it is hidden, never shown as zero.
  */
-export function VendorAccountTerms({ vendor }: { vendor: AnyRecord }) {
+export function VendorAccountTerms({
+  vendor,
+  focusOrdersEmail = false,
+}: {
+  vendor: AnyRecord;
+  /** US-19 F3-22 (517-1): `Add an address` lands here — the account opens for
+   *  editing with focus on its Orders email, the address a maker's note uses. */
+  focusOrdersEmail?: boolean;
+}) {
   const { studio } = useInternalTimeStudio();
   const studioId = studio?.id ?? null;
   const { data: accountRow, isLoading } = useStudioVendorAccount(studioId, vendor.id);
@@ -264,6 +273,24 @@ export function VendorAccountTerms({ vendor }: { vendor: AnyRecord }) {
   const upsert = useUpsertStudioVendorAccount({ errorSurface: 'inline' });
   const [form, setForm] = useState<AccountForm | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 517-1: land once, after the account read settles (the field lives in the
+  // editor), then focus in a frame so the sheet's own panel focus lands first.
+  const [landing, setLanding] = useState<'waiting' | 'opened' | 'done'>(
+    focusOrdersEmail ? 'waiting' : 'done',
+  );
+  useEffect(() => {
+    if (landing !== 'waiting' || !studioId || isLoading) return;
+    setForm(formFromAccount(account));
+    setLanding('opened');
+  }, [landing, studioId, isLoading, account]);
+  useEffect(() => {
+    if (landing !== 'opened') return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`vendor-account-${vendor.id}-ordersEmailOverride`)?.focus();
+      setLanding('done');
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [landing, vendor.id]);
 
   if (!studioId) {
     return (
@@ -951,19 +978,29 @@ export function VendorsBookPage({
   vendors,
   orders,
   initialVendorId,
+  initialVendorPage = null,
+  focusField = null,
   briefProjectId,
   onOpenDocument,
 }: {
   vendors: AnyRecord[];
   orders: AnyRecord[];
   initialVendorId: string | null;
+  /** US-19 F3-22 (517-1): the sub-page the vendor opens on; `thread` otherwise. */
+  initialVendorPage?: string | null;
+  /** US-19 F3-22 (517-1): `orders-email` lands focus on the terms' Orders email. */
+  focusField?: string | null;
   /** R29 pre-addressing: the document the brief is about. */
   briefProjectId: string | null;
   onOpenDocument: (projectId: string | null) => void;
 }) {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(initialVendorId);
-  const [page, setPage] = useState<VendorPage>('thread');
+  const [page, setPage] = useState<VendorPage>(
+    VENDOR_PAGES.find((p) => p === initialVendorPage) ?? 'thread',
+  );
+  // The landing is spent once the designer moves: back on terms, no re-focus.
+  const [landField, setLandField] = useState(focusField);
   const vendor = vendors.find((v) => v.id === selectedId) ?? null;
   const { studio } = useInternalTimeStudio();
   const { data: accounts } = useStudioVendorAccounts(studio?.id ?? null);
@@ -1054,7 +1091,10 @@ export function VendorsBookPage({
     <div className="min-w-0">
       <button
         type="button"
-        onClick={() => setSelectedId(null)}
+        onClick={() => {
+          setLandField(null);
+          setSelectedId(null);
+        }}
         className={`${ROW_LINK} mb-2 uppercase tracking-[0.07em]`}
       >
         ← all vendors
@@ -1065,13 +1105,20 @@ export function VendorsBookPage({
         account={accountByVendor.get(vendor.id) ?? null}
         page={page}
         openCount={openPos.length}
-        onPage={setPage}
+        onPage={(p) => {
+          setLandField(null);
+          setPage(p);
+        }}
       />
 
       {/* ── Terms page: the trade account + the brief opener ── */}
       {page === 'terms' && (
         <div>
-          <VendorAccountTerms key={vendor.id} vendor={vendor} />
+          <VendorAccountTerms
+            key={vendor.id}
+            vendor={vendor}
+            focusOrdersEmail={landField === 'orders-email' && vendor.id === initialVendorId}
+          />
           {/* R78/R60 cross-link contract: trade lives here; the RELATIONSHIP lives in People. */}
           <a
             href={`/people?person=${vendor.id}&role=maker`}

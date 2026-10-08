@@ -36,6 +36,7 @@ import { dayMonth } from './dates';
 // the filled-stamp tones are the Stamp component's contract, not a second
 // vocabulary declared here.
 import type { StampTone } from '@/components/document/stamp';
+import type { LineMakerSource } from './install-reading';
 
 export type EngagementKind = 'project' | 'proposal' | 'lead' | 'relationship';
 
@@ -377,6 +378,10 @@ export interface DeskDraftSignal {
   /** R42's maker for a line-level draft (`maker_eta_request`): the line's
    *  vendor, else its PO's vendor, else its product's brand. Absent otherwise. */
   maker?: string | null;
+  /** US-19 F3-22 (517-5): the line a line-level draft was asked from, as R42's
+   *  selector reads it, so the Desk's `Add an address` lands where the maker's
+   *  address is kept (517-1). Absent otherwise. */
+  makerLine?: LineMakerSource & { id: string };
 }
 
 /** Which Desk need a draft rides: the act it answers. */

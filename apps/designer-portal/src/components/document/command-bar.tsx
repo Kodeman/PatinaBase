@@ -324,6 +324,12 @@ export interface OpenLedgerContext {
   invoiceId?: string;
   /** C-22: the Orders ledger opens this PO's money band unfolded. */
   purchaseOrderId?: string;
+  /** US-19 F3-22 (517-1): the vendor page's own sub-page (Orders: terms /
+   *  thread / orders), validated by the book like `page`. */
+  vendorPage?: string;
+  /** US-19 F3-22 (517-1): the field the landing puts focus on (Orders vendor
+   *  terms: `orders-email`). */
+  focus?: string;
 }
 
 /** Open a Studio Drawer ledger from anywhere (the drawer listens). */

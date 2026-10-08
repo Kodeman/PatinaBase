@@ -62,12 +62,23 @@ const INPUT_CLS =
  * lands on the line's own maker selector. Reached at press time, as
  * order-cell's `Open the order` is: a static `../command-bar` import drags
  * @patina/help-system's ESM into every suite that renders the unfold.
+ *
+ * US-19 F3-22 (517-1, `one-voice`): `onTerms` opens the vendor page on its
+ * `terms` sub-page with focus on the Orders email, not the default `thread`.
  */
-export function landOnMakerAddress(line: LineMakerSource & { id: string }) {
+export function landOnMakerAddress(
+  line: LineMakerSource & { id: string },
+  { onTerms = false }: { onTerms?: boolean } = {},
+) {
   const vendorId = lineMakerRecord(line)?.vendorId;
   if (vendorId) {
     void import('../command-bar').then(({ openLedger }) =>
-      openLedger('orders', { page: 'vendors', vendorId }),
+      openLedger(
+        'orders',
+        onTerms
+          ? { page: 'vendors', vendorId, vendorPage: 'terms', focus: 'orders-email' }
+          : { page: 'vendors', vendorId },
+      ),
     );
     return;
   }
