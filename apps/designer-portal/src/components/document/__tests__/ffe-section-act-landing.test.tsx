@@ -4,18 +4,21 @@
  * grain, Receiving's claim card), `Follow up with the maker` in the maker
  * composer with the body focused, `Send the purchase order` on the drafted
  * PO's send act, `Spec the N unspecified` on the first unspecified line's spec
- * act, and the held head's `Open the pieces` on the first line's unfold
- * control. The press is taken (the event cancelled) only when Pieces carries
+ * act, the held head's `Open the pieces` on the first line's unfold control,
+ * and `Release for authorization` on the Pieces head's own entry (FR5 F5-1),
+ * held form included. The press is taken (the event cancelled) only when Pieces carries
  * the act; otherwise it keeps its old landing.
  */
 import type { ReactElement } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ACT_LANDING_EVENTS, type FfeActLanding } from '@/lib/document/act-names';
+import { ACT_LANDING_EVENTS, ffeActLandingOf, type FfeActLanding } from '@/lib/document/act-names';
 import type { NeedLine } from '@/lib/document/desk-derivation';
 
 let mockItems: Record<string, unknown>[] = [];
 let mockOneVoice = false;
+// An executed agreement behind the project is what lets Pieces release.
+let mockAuthority: unknown = null;
 // Stands in for the unfold: the Order cell's PO control (order-cell.tsx), the
 // drafted PO's send act (line-unfold.tsx) and, on a line with an open claim,
 // the claim's act (claim-acts.tsx).
@@ -91,7 +94,7 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
   commercialDocumentKeys: { budget: (id: string) => ['working-budget', id] },
   useProjectInstruments: () => ({ data: [] }),
   useTradeScopes: () => ({ data: [], isPending: false }),
-  useProjectBillingAuthority: () => ({ data: null }),
+  useProjectBillingAuthority: () => ({ data: mockAuthority }),
   useWorkingBudget: () => ({ isLoading: false, data: null }),
   useReleaseForAuthorization: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSendFurnishingsAuthorization: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -199,6 +202,7 @@ beforeEach(() => {
   mockLineUnfold.mockClear();
   mockOpenLedger.mockClear();
   mockOneVoice = false;
+  mockAuthority = null;
   receivingClaimLanding.pending = false;
   window.localStorage.clear();
 });
@@ -406,5 +410,66 @@ describe('the held head’s Open the pieces (523-1)', () => {
     await waitFor(() =>
       expect(document.activeElement).toBe(document.getElementById('ffe-region-heading-project-1')),
     );
+  });
+});
+
+describe('the band’s Release for authorization lands on the head’s own entry (F5-1)', () => {
+  /** What page.tsx's band press does with the own act's printed name. */
+  const pressRelease = () => {
+    const landing = ffeActLandingOf('Release for authorization');
+    expect(landing).toBe('release');
+    return press(landing as FfeActLanding);
+  };
+
+  it('unfolds a folded Pieces and focuses the entry, without pressing it', async () => {
+    window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
+    mockOneVoice = true;
+    mockAuthority = { state: 'active', agreementId: 'agreement-1' };
+    mockItems = [specified('line-ready')];
+    render(<FFESection projectId="project-1" projectName="Chen" mode="project" />);
+
+    let taken = false;
+    act(() => {
+      taken = pressRelease();
+    });
+    expect(taken).toBe(true);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Release for authorization' }),
+      ),
+    );
+    expect(document.activeElement).toHaveAttribute('data-action-key', 'release-for-authorization');
+    // Landed, never clicked: the schedule is not turned into a selection.
+    expect(screen.queryByText('Choose what to release')).not.toBeInTheDocument();
+  });
+
+  it('lands on the held form, which keeps aria-disabled and its printed reason', async () => {
+    mockOneVoice = true;
+    mockAuthority = { state: 'active', agreementId: 'agreement-1' };
+    mockItems = [specified('line-blocked', { blocked: true })];
+    render(<FFESection projectId="project-1" projectName="Chen" mode="project" />);
+
+    let taken = false;
+    act(() => {
+      taken = pressRelease();
+    });
+    expect(taken).toBe(true);
+    const entry = screen.getByRole('button', { name: 'Release for authorization' });
+    await waitFor(() => expect(document.activeElement).toBe(entry));
+    expect(entry).toHaveAttribute('aria-disabled', 'true');
+    expect(entry).not.toHaveAttribute('disabled');
+    expect(screen.getByText('No lines are currently eligible for release.')).toBeInTheDocument();
+  });
+
+  it('leaves the press untaken when the head prints no release', () => {
+    mockOneVoice = true;
+    mockItems = [specified('line-ready')];
+    render(<FFESection projectId="project-1" projectName="Chen" mode="project" />);
+
+    let taken = true;
+    act(() => {
+      taken = pressRelease();
+    });
+    expect(taken).toBe(false);
   });
 });

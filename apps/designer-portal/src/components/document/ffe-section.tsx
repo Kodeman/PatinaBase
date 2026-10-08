@@ -1084,7 +1084,7 @@ export function ffeActLine<
       status?: string | null;
     } | null;
   },
->(items: readonly T[], act: Exclude<FfeActLanding, 'open'>): T | null {
+>(items: readonly T[], act: Exclude<FfeActLanding, 'open' | 'release'>): T | null {
   const live = items.filter((item) => item.removed_at == null);
   if (act === 'claim') {
     return (
@@ -1117,12 +1117,14 @@ export function ffeActLine<
   );
 }
 
-/** The line's own control each landing focuses, inside its unfold. */
+/** The control each landing focuses: a line's, inside its unfold, or (for
+ *  `release`) the Pieces head's own entry. */
 const FFE_ACT_CONTROL = {
   claim:
     '[data-action-key="notify-vendor-of-ffe-claim"], [data-action-key="open-resolve-ffe-claim"]',
   send: '[data-action-key="send-ffe-line-to-vendor"]',
   spec: '[data-action-key="edit-ffe-line-spec-details"]',
+  release: '[data-action-key="release-for-authorization"]',
 } as const;
 
 /**
@@ -1864,6 +1866,20 @@ function FFESectionBody({
               .getElementById(ffeBodyId)
               ?.querySelector<HTMLElement>('[id^="ffe-selection-"] button[aria-expanded]')
           : document.getElementById(ffeHeadingId),
+      );
+      return true;
+    }
+    if (act === 'release') {
+      // FR5 F5-1 (530-7) — the head's own entry, held form included: its
+      // reason prints beneath and the press is hers. Never clicked. A head
+      // not printing it (the release lifted to another head) leaves the press.
+      if (!releaseInHead) return false;
+      openRegion();
+      landOnControl(() =>
+        document
+          .getElementById(ffeHeadingId)
+          ?.closest('[data-index-region="ffe"]')
+          ?.querySelector<HTMLElement>(FFE_ACT_CONTROL.release),
       );
       return true;
     }

@@ -248,8 +248,10 @@ export const ACT_LANDING_EVENTS = {
  * Receiving claim card's at PO grain. `follow-up`: the maker composer for the
  * oldest unanswered PO. `send`: the drafted PO's send act. `spec`: the first
  * unspecified line's spec act. `open`: the first line's unfold control.
+ * `release`: the Pieces head's own `Release for authorization` entry, held or
+ * not (FR5 F5-1).
  */
-export type FfeActLanding = 'claim' | 'follow-up' | 'send' | 'spec' | 'open';
+export type FfeActLanding = 'claim' | 'follow-up' | 'send' | 'spec' | 'open' | 'release';
 
 const SPEC_THE_UNSPECIFIED = /^Spec the \d+ unspecified$/;
 
@@ -263,6 +265,7 @@ export function ffeActLandingOf(label: string): FfeActLanding | null {
   if (label === NEED_ACT_LABELS.po_unacknowledged) return 'follow-up';
   if (label === NEED_ACT_LABELS.po_unsent) return 'send';
   if (label === 'Open the pieces') return 'open';
+  if (label === 'Release for authorization') return 'release';
   return SPEC_THE_UNSPECIFIED.test(label) ? 'spec' : null;
 }
 

@@ -7,6 +7,7 @@ import {
   NEED_ACT_LABELS,
   STAGE_WORD,
   STAGE_WORDS,
+  ffeActLandingOf,
   householdDisplayName,
   messageLabel,
   messageNoLogin,
@@ -295,5 +296,20 @@ describe('every act string', () => {
     ]) {
       expect(ACT_TIER[label]).toBe('scored');
     }
+  });
+});
+
+describe('ffeActLandingOf (FR4 522-3, FR5 F5-1)', () => {
+  it('maps the project own act Release for authorization to its Pieces landing', () => {
+    const release = ownAct('project', facts({ releaseEligible: true }));
+    expect(release?.label).toBe('Release for authorization');
+    expect(ffeActLandingOf(release!.label)).toBe('release');
+  });
+
+  it('keeps the other Pieces landings and leaves unowned acts null', () => {
+    expect(ffeActLandingOf(NAMED_ACTS.fileClaim)).toBe('claim');
+    expect(ffeActLandingOf('Open the pieces')).toBe('open');
+    expect(ffeActLandingOf('Spec the 3 unspecified')).toBe('spec');
+    expect(ffeActLandingOf('Hold a window')).toBeNull();
   });
 });
