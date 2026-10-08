@@ -23,8 +23,17 @@ jest.mock('@patina/supabase', () => ({
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
+const mockOpenLedger = jest.fn();
+jest.mock('../../command-bar', () => ({
+  openLedger: (...args: unknown[]) => mockOpenLedger(...args),
+}));
 
-import { DraftReview, PurchaseOrderDrafts, type ReviewableDraft } from '../draft-review';
+import {
+  DraftReview,
+  PurchaseOrderDrafts,
+  landOnMakerAddress,
+  type ReviewableDraft,
+} from '../draft-review';
 import { MOVEMENT_DRAFT_KINDS } from '../../line-unfold/movement-cell';
 
 const DRAFT: ReviewableDraft = {
@@ -91,10 +100,43 @@ describe('DraftReview', () => {
     await screen.findByText('Discarded.');
   });
 
-  it('cannot send without a recipient', () => {
-    render(<DraftReview draft={{ ...DRAFT, to_email: null }} />);
+  it('506-2/R12: with no address the Send is held, described by its reason, with Add an address', () => {
+    const onAddAddress = jest.fn();
+    render(
+      <DraftReview
+        draft={{ ...DRAFT, to_email: null }}
+        addressee="Fixture Metalworks"
+        onAddAddress={onAddAddress}
+      />,
+    );
     expect(screen.getByTestId('draft-recipient')).toHaveTextContent('no address on file');
-    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    const send = screen.getByRole('button', { name: 'Send' });
+    // D3 held: offered, focusable, never native disabled.
+    expect(send).toHaveAttribute('aria-disabled', 'true');
+    expect(send).not.toBeDisabled();
+    expect(send).toHaveAccessibleDescription('No address on file for Fixture Metalworks.');
+    fireEvent.click(send);
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add an address' }));
+    expect(onAddAddress).toHaveBeenCalledTimes(1);
+  });
+
+  it('with no addressee known, the held Send still says why, and offers no repair it cannot land', () => {
+    render(<DraftReview draft={{ ...DRAFT, to_email: null }} />);
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect(send).toHaveAttribute('aria-disabled', 'true');
+    expect(send).toHaveAccessibleDescription('No address on file.');
+    expect(screen.queryByRole('button', { name: 'Add an address' })).toBeNull();
+  });
+
+  it('with an address the Send is plain: no reason, no repair', () => {
+    render(<DraftReview draft={DRAFT} addressee="Hale Upholstery" onAddAddress={jest.fn()} />);
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect(send).not.toHaveAttribute('aria-disabled');
+    expect(send).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByRole('button', { name: 'Add an address' })).toBeNull();
   });
 
   it('is read-only once sent', () => {
@@ -135,6 +177,38 @@ describe('DraftReview', () => {
   });
 });
 
+describe('landOnMakerAddress (506-2 repair)', () => {
+  it("a maker with a vendor record lands on that record's Orders-book page", async () => {
+    mockOpenLedger.mockReset();
+    landOnMakerAddress({ id: 'line-1', vendor_name: 'Hewn Studio', vendor_id: 'vendor-1' });
+    await waitFor(() =>
+      expect(mockOpenLedger).toHaveBeenCalledWith('orders', { page: 'vendors', vendorId: 'vendor-1' }),
+    );
+  });
+
+  it("the PO's vendor, when that is the name printed, is the record", async () => {
+    mockOpenLedger.mockReset();
+    landOnMakerAddress({
+      id: 'line-1',
+      vendor_name: null,
+      purchase_order: { vendor_id: 'vendor-po', vendor: { name: 'Hale Upholstery' } },
+    });
+    await waitFor(() =>
+      expect(mockOpenLedger).toHaveBeenCalledWith('orders', { page: 'vendors', vendorId: 'vendor-po' }),
+    );
+  });
+
+  it('a maker named by brand has no record: it lands on the line maker selector', () => {
+    const heard = jest.fn();
+    window.addEventListener('document:focus-ffe-line', heard);
+    mockOpenLedger.mockReset();
+    landOnMakerAddress({ id: 'line-1', vendor_name: null, product: { brand: 'Fixture Metalworks' } });
+    expect((heard.mock.calls[0][0] as CustomEvent).detail).toEqual({ itemId: 'line-1', cell: 'maker' });
+    expect(mockOpenLedger).not.toHaveBeenCalled();
+    window.removeEventListener('document:focus-ffe-line', heard);
+  });
+});
+
 describe('PurchaseOrderDrafts', () => {
   it("renders only this PO's drafts of the cell's kinds", () => {
     mockDrafts.data = [
@@ -149,25 +223,20 @@ describe('PurchaseOrderDrafts', () => {
     expect(screen.getByText('Reply to the maker')).toBeInTheDocument();
   });
 
-  it("R37: the Movement cell's PO lists the held arrival date request, and a member sends it", async () => {
+  it("511-R6: the Movement cell's PO list leaves a line's date request to that line", () => {
     const ask = {
       ...DRAFT,
       id: 'draft-eta',
       kind: 'maker_eta_request',
       purchase_order_id: 'po-1',
-      to_email: 'orders@woodward.test',
-      subject: 'Arrival date: Library ladder and rail · PO WS-214',
+      ffe_item_id: 'line-1',
     };
-    mockDrafts.data = [ask, { ...ask, id: 'draft-other-po', purchase_order_id: 'po-2' }];
+    const notice = { ...DRAFT, id: 'draft-notice', kind: 'receiver_inbound_notice', purchase_order_id: 'po-1' };
+    mockDrafts.data = [ask, notice];
     render(
       <PurchaseOrderDrafts projectId="project-1" purchaseOrderId="po-1" kinds={MOVEMENT_DRAFT_KINDS} />,
     );
     expect(screen.getAllByTestId('draft-review')).toHaveLength(1);
-    expect(
-      screen.getByRole('region', { name: 'Arrival date request to the maker, drafted' }),
-    ).toBeInTheDocument();
-    expect(mockSend).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    await waitFor(() => expect(mockSend).toHaveBeenCalledWith('draft-eta'));
+    expect(screen.getByText('Inbound notice to the receiver')).toBeInTheDocument();
   });
 });

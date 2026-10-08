@@ -49,6 +49,8 @@ function builder(result: () => Result, calls: Call[]) {
 
 let user: { id: string } | null;
 let lineRow: Record<string, unknown> | null;
+/** The line's own vendor record, as the caller's session reads it (R7). */
+let vendorRow: Record<string, unknown> | null;
 let existingDrafts: Record<string, unknown>[];
 let insertResult: Result;
 const sessionTables: string[] = [];
@@ -81,6 +83,7 @@ beforeEach(() => {
     project: { studio_id: STUDIO, designer_id: USER },
     purchase_order: { id: PO, vendor_id: VENDOR, vendor: { name: 'Woodward & Sons' } },
   };
+  vendorRow = null;
   existingDrafts = [];
   insertResult = { data: HELD_ROW, error: null };
   sessionTables.length = 0;
@@ -101,7 +104,9 @@ beforeEach(() => {
         () =>
           table === 'project_ffe_items'
             ? { data: lineRow, error: null }
-            : { data: existingDrafts, error: null },
+            : table === 'vendors'
+              ? { data: vendorRow, error: null }
+              : { data: existingDrafts, error: null },
         sessionCalls,
       );
     },
@@ -255,6 +260,43 @@ describe('POST /api/document/ask-maker-date', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  describe('R7: the address belongs to the record the printed maker names', () => {
+    const HEWN = '44444444-4444-4444-8444-444444444444';
+
+    it("the line's own maker, not the PO's vendor, when the line names another maker", async () => {
+      lineRow = { ...lineRow, vendor_id: HEWN, vendor_name: 'Hewn Woodworks' };
+      vendorRow = { name: 'Hewn Woodworks' };
+      expect((await post(hold)).status).toBe(200);
+      expect(rpc).toHaveBeenCalledWith('_procurement_vendor_email', { p_org: STUDIO, p_vendor: HEWN });
+      expect(rpc).not.toHaveBeenCalledWith('_procurement_vendor_email', expect.objectContaining({ p_vendor: VENDOR }));
+      // The record is read back through the caller's own session.
+      expect(sessionTables).toContain('vendors');
+      expect(sessionCalls).toEqual(expect.arrayContaining([['eq', ['id', HEWN]]]));
+    });
+
+    it('no address when the line vendor record no longer bears the printed name', async () => {
+      lineRow = { ...lineRow, vendor_id: HEWN, vendor_name: 'Hewn Woodworks' };
+      vendorRow = { name: 'Hewn & Daughters' };
+      expect((await post(hold)).status).toBe(200);
+      expect(inserted()[0]).toMatchObject({ to_email: null });
+      expect(rpc).not.toHaveBeenCalledWith('_procurement_vendor_email', expect.anything());
+    });
+
+    it('no address for a maker named by hand with no record, even on a PO', async () => {
+      lineRow = { ...lineRow, vendor_id: null, vendor_name: 'Hewn Woodworks' };
+      expect((await post(hold)).status).toBe(200);
+      expect(inserted()[0]).toMatchObject({ to_email: null, purchase_order_id: PO });
+      expect(rpc).not.toHaveBeenCalledWith('_procurement_vendor_email', expect.anything());
+    });
+
+    it("the PO's vendor when the line prints the PO's vendor", async () => {
+      lineRow = { ...lineRow, vendor_id: null, vendor_name: null };
+      expect((await post(hold)).status).toBe(200);
+      expect(rpc).toHaveBeenCalledWith('_procurement_vendor_email', { p_org: STUDIO, p_vendor: VENDOR });
+      expect(inserted()[0]).toMatchObject({ to_email: 'orders@woodward.test' });
+    });
+  });
+
   it('R37: a line with no recorded maker is refused, and nothing is written', async () => {
     lineRow = {
       ...lineRow,
@@ -275,7 +317,7 @@ describe('POST /api/document/ask-maker-date', () => {
     const res = await post(hold);
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
-      error: 'A note for this piece is already held for review.',
+      error: 'A date request for this line is already drafted.',
       draft: HELD_ROW,
     });
     expect(inserted()).toEqual([]);
@@ -295,42 +337,69 @@ describe('POST /api/document/ask-maker-date', () => {
     expect(inserted()).toEqual([]);
   });
 
-  it('F1: a note sent or discarded earlier the same studio day answers 409, and nothing is resurrected', async () => {
+  it('506-3: a held draft from an earlier day still answers 409 until it is sent or discarded', async () => {
+    at('2026-10-09T15:00:00Z');
+    existingDrafts = [{ ...HELD_ROW, created_at: '2026-10-07T15:00:00Z' }];
+    const res = await post(hold);
+    expect(res.status).toBe(409);
+    expect((await res.json()).draft).toEqual(existingDrafts[0]);
+    expect(inserted()).toEqual([]);
+  });
+
+  it('F1: a draft sent earlier the same studio day answers 409 with that draft', async () => {
     at('2026-10-07T21:00:00Z');
-    existingDrafts = [{ ...HELD_ROW, status: 'sent', created_at: '2026-10-07T15:00:00Z' }];
-    let res = await post(hold);
+    existingDrafts = [
+      { ...HELD_ROW, status: 'sent', created_at: '2026-10-07T15:00:00Z', sent_at: '2026-10-07T16:00:00Z' },
+    ];
+    const res = await post(hold);
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
-      error: 'A note for this piece was already sent today.',
+      error: 'A date request for this line is already drafted.',
       draft: existingDrafts[0],
     });
-
-    existingDrafts = [{ ...HELD_ROW, status: 'discarded', created_at: '2026-10-07T15:00:00Z' }];
-    res = await post(hold);
-    expect(res.status).toBe(409);
-    expect((await res.json()).error).toBe('A note for this piece was already discarded today.');
     expect(inserted()).toEqual([]);
+  });
+
+  it('506-3: a Discard releases the day — discard, then ask again the same day', async () => {
+    at('2026-10-07T21:00:00Z');
+    existingDrafts = [
+      { ...HELD_ROW, status: 'discarded', created_at: '2026-10-07T15:00:00Z', discarded_at: '2026-10-07T15:05:00Z' },
+    ];
+    const res = await post(hold);
+    expect(res.status).toBe(200);
+    expect(inserted()).toHaveLength(1);
+    expect(inserted()[0]).toMatchObject({ status: 'awaiting_review', ffe_item_id: LINE });
+  });
+
+  it('511-R3: the day is the day it was sent, not the day it was drafted', async () => {
+    // Drafted yesterday, sent this morning: a second ask today is refused.
+    at('2026-10-08T21:00:00Z');
+    existingDrafts = [
+      { ...HELD_ROW, status: 'sent', created_at: '2026-10-07T15:00:00Z', sent_at: '2026-10-08T15:00:00Z' },
+    ];
+    expect((await post(hold)).status).toBe(409);
+
+    // Drafted and sent yesterday: today is a new day.
+    existingDrafts = [
+      { ...HELD_ROW, status: 'sent', created_at: '2026-10-07T15:00:00Z', sent_at: '2026-10-07T16:00:00Z' },
+    ];
+    expect((await post(hold)).status).toBe(200);
+    expect(inserted()).toHaveLength(1);
   });
 
   it('F6: the day is the studio day in America/Chicago, not the UTC day', async () => {
     // 02:30 UTC on the 8th is 21:30 on the 7th in Chicago: a note sent at
     // 10:00 Chicago on the 7th is the same studio day.
     at('2026-10-08T02:30:00Z');
-    existingDrafts = [{ ...HELD_ROW, status: 'sent', created_at: '2026-10-07T15:00:00Z' }];
+    existingDrafts = [{ ...HELD_ROW, status: 'sent', sent_at: '2026-10-07T15:00:00Z' }];
     expect((await post(hold)).status).toBe(409);
 
     // 06:00 UTC on the 8th is 01:00 on the 8th in Chicago; a note sent at
     // 03:00 UTC on the 8th was 22:00 on the 7th there: a new studio day.
     at('2026-10-08T06:00:00Z');
-    existingDrafts = [{ ...HELD_ROW, status: 'sent', created_at: '2026-10-08T03:00:00Z' }];
+    existingDrafts = [{ ...HELD_ROW, status: 'sent', sent_at: '2026-10-08T03:00:00Z' }];
     expect((await post(hold)).status).toBe(200);
     expect(inserted()).toHaveLength(1);
-  });
-
-  it('a note sent on an earlier studio day does not stop a new ask', async () => {
-    at('2026-10-09T15:00:00Z');
-    existingDrafts = [{ ...HELD_ROW, status: 'sent', created_at: '2026-10-07T15:00:00Z' }];
-    expect((await post(hold)).status).toBe(200);
   });
 
   it('two presses at once: the one-open-note index refuses the second, answered 409 with the first', async () => {
@@ -350,7 +419,7 @@ describe('POST /api/document/ask-maker-date', () => {
     const res = await post(hold);
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
-      error: 'A note for this piece is already held for review.',
+      error: 'A date request for this line is already drafted.',
       draft: HELD_ROW,
     });
   });

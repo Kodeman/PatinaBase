@@ -44,9 +44,27 @@ function startOfDay(date: Date): Date {
 /** What R42's maker selector reads off a line: `useProjectFFEItems`'s row, or
  *  the ask route's read of the same record. */
 export interface LineMakerSource {
+  vendor_id?: string | null;
   vendor_name?: string | null;
-  purchase_order?: { vendor?: { name?: string | null } | null } | null;
+  purchase_order?: { vendor_id?: string | null; vendor?: { name?: string | null } | null } | null;
   product?: { brand?: string | null } | null;
+}
+
+/**
+ * The maker R42 prints, and the vendor record that name came from: the line's
+ * own vendor for its `vendor_name` (00692 copies the vendor's name onto the
+ * line), the PO's vendor for the PO's name, none for a brand. R7: only that
+ * record's address may carry a note to the maker.
+ */
+export function lineMakerRecord(
+  line: LineMakerSource,
+): { name: string; vendorId: string | null } | null {
+  const own = line.vendor_name?.trim();
+  if (own) return { name: own, vendorId: line.vendor_id ?? null };
+  const po = line.purchase_order?.vendor?.name?.trim();
+  if (po) return { name: po, vendorId: line.purchase_order?.vendor_id ?? null };
+  const brand = line.product?.brand?.trim();
+  return brand ? { name: brand, vendorId: null } : null;
 }
 
 /**
@@ -56,11 +74,49 @@ export interface LineMakerSource {
  * recorded, which is R37's held form.
  */
 export function lineMaker(line: LineMakerSource): string | null {
-  for (const name of [line.vendor_name, line.purchase_order?.vendor?.name, line.product?.brand]) {
-    const trimmed = name?.trim();
-    if (trimmed) return trimmed;
-  }
-  return null;
+  return lineMakerRecord(line)?.name ?? null;
+}
+
+/** No studio stores a time zone yet: the studio clock is Chicago's (F6, 506-5). */
+export const STUDIO_TIME_ZONE = 'America/Chicago';
+
+const STUDIO_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: STUDIO_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** The studio day an instant falls on (YYYY-MM-DD). */
+export const studioDay = (at: Date | string) => STUDIO_DAY.format(new Date(at));
+
+/** 506-3: a date request that still stands: held for review, sending, or sent. */
+export const LIVE_MAKER_ASK_STATUSES = ['awaiting_review', 'sending', 'sent'] as const;
+
+interface MakerAskDraft {
+  status: string;
+  created_at: string;
+  sent_at?: string | null;
+}
+
+/**
+ * 506-3 / 511-R3 — the draft that stands against a second ask on its line, or
+ * null. A held or sending draft stands until it is sent or discarded; a sent
+ * one stands for the rest of the studio day it was sent on. A Discard
+ * releases the day.
+ */
+export function standingMakerAsk<T extends MakerAskDraft>(
+  drafts: readonly T[],
+  now: Date,
+): T | null {
+  const today = studioDay(now);
+  return (
+    drafts.find((draft) => draft.status === 'awaiting_review' || draft.status === 'sending') ??
+    drafts.find(
+      (draft) => draft.status === 'sent' && studioDay(draft.sent_at ?? draft.created_at) === today,
+    ) ??
+    null
+  );
 }
 
 /** A line's name as the reading speaks it: the piece, without the spec after

@@ -12,6 +12,7 @@ import {
 } from '@patina/supabase';
 import { centsToInput, parseDollarsToCents } from '@/lib/currency-ui';
 import { fmtUsd } from '@/lib/document/format';
+import { FOCUS_FFE_LINE_EVENT, type FocusFfeLineRequest } from '@/lib/document/registry';
 import { DocumentAction } from '../document-action';
 import { ComPiece } from '../buying/com-piece';
 import { CellSub, FIELD_CLS, LABEL_CLS, UnfoldCell } from './cell';
@@ -186,10 +187,19 @@ export function MakerSearch({
 }
 
 /**
+ * 511-R1: the line `Add the maker` is landing on. The landing names it before
+ * the line unfolds, so the cell reads it as it mounts; a cell already mounted
+ * hears the landing itself.
+ */
+export const makerLandingPending: { itemId: string | null } = { itemId: null };
+
+/**
  * C-05 (S5): the buy's commercials — who makes it and what it costs the
  * studio. Editable only while the line is on no purchase order; after that it
  * changes through the PO. The client price and markup are never shown or
  * edited here (R1, R5, R8) — `set_project_ffe_line_commercials` refuses them.
+ * Where the buy is otherwise read-only (install mode), `Add the maker` still
+ * lands on a maker field (511-R1); the trade cost stays read-only there.
  */
 function LineCommercials({
   item,
@@ -210,6 +220,19 @@ function LineCommercials({
   const onPo = !!item.purchase_order_id;
   const editable = canEdit && !onPo;
   const pending = commercials.isPending || addMaker.isPending;
+  const [landing, setLanding] = useState(() => makerLandingPending.itemId === String(item.id));
+  useEffect(() => {
+    if (landing && makerLandingPending.itemId === String(item.id)) makerLandingPending.itemId = null;
+  }, [landing, item.id]);
+  useEffect(() => {
+    const onLand = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<FocusFfeLineRequest> | undefined>).detail;
+      if (detail?.cell === 'maker' && detail.itemId === String(item.id)) setLanding(true);
+    };
+    window.addEventListener(FOCUS_FFE_LINE_EVENT, onLand);
+    return () => window.removeEventListener(FOCUS_FFE_LINE_EVENT, onLand);
+  }, [item.id]);
+  const makerLanding = landing && !editable && !onPo;
 
   const storedTrade: number | null = item.trade_price_cents ?? null;
   const [trade, setTrade] = useState(() => centsToInput(storedTrade));
@@ -299,12 +322,71 @@ function LineCommercials({
     ? (po?.po_number ?? po?.vendor_po_number ?? po?.sidemark ?? 'a purchase order')
     : null;
 
+  const searching = changing || !item.vendor_id;
+  const makerField = (
+    <div className="flex min-w-0 flex-1 basis-full items-baseline gap-2">
+      <span className={LABEL_CLS}>Maker</span>
+      {searching ? (
+        <MakerSearch
+          disabled={pending}
+          autoFocus={changing}
+          onChoose={chooseMaker}
+          onCancel={
+            item.vendor_id
+              ? () => {
+                  addMaker.clearMatch();
+                  setChanging(false);
+                }
+              : undefined
+          }
+        />
+      ) : (
+        <>
+          <span className="min-w-0 text-[11.5px] text-[var(--color-charcoal)]">
+            {makerName || 'Selected'}
+          </span>
+          <DocumentAction
+            actionKey="change-ffe-line-maker"
+            surfaceKey="project"
+            regionKey="ffe-commercials"
+            variant="tertiary"
+            disabled={pending}
+            onClick={() => setChanging(true)}
+          >
+            Change
+          </DocumentAction>
+        </>
+      )}
+    </div>
+  );
+  const makerNotes = (
+    <>
+      {searching && addMaker.match && (
+        <MakerMatchLine match={addMaker.match} disabled={pending} onUse={chooseMaker} />
+      )}
+      {pending && (
+        <p aria-live="polite" className="text-[11px] text-[var(--text-muted)]">
+          Saving…
+        </p>
+      )}
+    </>
+  );
+  const errorNote = error && !pending && (
+    <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
+      {error}
+    </p>
+  );
+
   if (!editable) {
     return (
       <div data-testid="line-commercials" className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <p className="text-[11px] text-[var(--color-charcoal)]">
-          <span className={LABEL_CLS}>Maker</span> {makerName || 'Not recorded'}
-        </p>
+        {makerLanding ? (
+          makerField
+        ) : (
+          <p className="text-[11px] text-[var(--color-charcoal)]">
+            <span className={LABEL_CLS}>Maker</span> {makerName || 'Not recorded'}
+          </p>
+        )}
         <p className="text-[11px] text-[var(--color-charcoal)]">
           <span className={LABEL_CLS}>Trade cost</span>{' '}
           {storedTrade != null ? fmtUsd(storedTrade) : 'Not recorded'}
@@ -312,49 +394,20 @@ function LineCommercials({
         {poLabel && (
           <p className={LABEL_CLS}>On {poLabel}</p>
         )}
+        {makerLanding && (
+          <div className="basis-full">
+            {makerNotes}
+            {errorNote}
+          </div>
+        )}
       </div>
     );
   }
 
-  const searching = changing || !item.vendor_id;
-
   return (
     <div data-testid="line-commercials">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
-        <div className="flex min-w-0 flex-1 basis-full items-baseline gap-2">
-          <span className={LABEL_CLS}>Maker</span>
-          {searching ? (
-            <MakerSearch
-              disabled={pending}
-              autoFocus={changing}
-              onChoose={chooseMaker}
-              onCancel={
-                item.vendor_id
-                  ? () => {
-                      addMaker.clearMatch();
-                      setChanging(false);
-                    }
-                  : undefined
-              }
-            />
-          ) : (
-            <>
-              <span className="min-w-0 text-[11.5px] text-[var(--color-charcoal)]">
-                {makerName || 'Selected'}
-              </span>
-              <DocumentAction
-                actionKey="change-ffe-line-maker"
-                surfaceKey="project"
-                regionKey="ffe-commercials"
-                variant="tertiary"
-                disabled={pending}
-                onClick={() => setChanging(true)}
-              >
-                Change
-              </DocumentAction>
-            </>
-          )}
-        </div>
+        {makerField}
         <label className="flex items-baseline gap-2">
           <span className={LABEL_CLS}>Trade cost</span>
           <span className="text-[11px] text-[var(--text-muted)]">$</span>
@@ -376,24 +429,13 @@ function LineCommercials({
           />
         </label>
       </div>
-      {searching && addMaker.match && (
-        <MakerMatchLine match={addMaker.match} disabled={pending} onUse={chooseMaker} />
-      )}
-      {pending && (
-        <p aria-live="polite" className="text-[11px] text-[var(--text-muted)]">
-          Saving…
-        </p>
-      )}
+      {makerNotes}
       {tradeMatchesRetail && (
         <p className="text-[11px] text-[var(--color-charcoal)]">
           Trade cost matches retail. Confirm the studio&rsquo;s cost with the maker.
         </p>
       )}
-      {error && !pending && (
-        <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
-          {error}
-        </p>
-      )}
+      {errorNote}
     </div>
   );
 }

@@ -99,6 +99,7 @@ import { Stamp, type StampTone } from './stamp';
 import { RowWash, useRowWash, type RowWashTone } from './row-wash';
 import { LineUnfold } from './line-unfold';
 import { ChangeOrderSheet } from './line-unfold/change-order';
+import { makerLandingPending } from './line-unfold/the-buy-cell';
 import {
   openRecordAChange,
   RECORD_A_CHANGE_ON_PIECE_EVENT,
@@ -1585,6 +1586,8 @@ function FFESectionBody({
       const itemId = request?.itemId;
       if (!itemId || !(items ?? []).some((item) => String(item.id) === itemId)) return false;
       if (focusFfeLinePending.request?.itemId === itemId) focusFfeLinePending.request = null;
+      // 511-R1: the buy cell offers its maker field to this landing in any mode.
+      if (request?.cell === 'maker') makerLandingPending.itemId = itemId;
       setOpenLineId(itemId);
       if (mode === 'project') ffeSetFolded(false);
       let waited = 0;

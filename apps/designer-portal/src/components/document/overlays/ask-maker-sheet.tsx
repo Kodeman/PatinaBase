@@ -11,9 +11,10 @@
  * Nothing is emailed and nothing reaches the maker from the sheet.
  *
  * A held note is the studio's own procurement draft: `Open the held draft`
- * opens its DraftReview, the same review the PO's Movement cell and the Desk
+ * opens its DraftReview, the same review the line's Movement cell and the Desk
  * mount, where a studio member sends or discards it. Only that Send press
- * hands it to `procurement-draft-send`.
+ * hands it to `procurement-draft-send`. A Discard releases the line for
+ * another ask; a send holds it for the rest of the studio day (506-3).
  *
  * `InstallReadingLine` is the Install head's own status line (the reading and
  * its act). It lives here because it owns this sheet's open state and the
@@ -25,7 +26,6 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CalendarClock } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  OPEN_PROCUREMENT_DRAFT_STATUSES,
   buyingPhase2Keys,
   useInstallWindow,
   useProcurementDrafts,
@@ -36,19 +36,22 @@ import { Input, Textarea } from '@/components/ui/controls';
 import { ACT_TARGET_IDS } from '@/lib/document/act-names';
 import { dayMonth, parseSourceDate } from '@/lib/document/dates';
 import {
+  LIVE_MAKER_ASK_STATUSES,
   installReading,
   lineMaker,
   pieceName,
   readingDay,
+  standingMakerAsk,
   type InstallReadingPiece,
   type LineMakerSource,
 } from '@/lib/document/install-reading';
-import { DraftReview } from '../buying/draft-review';
+import { DraftReview, landOnMakerAddress } from '../buying/draft-review';
 import { DocSheet } from './doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 /** The line as `useProjectFFEItems` returns it, as far as the note reads it. */
 export interface AskMakerPiece extends InstallReadingPiece {
+  vendor_id?: string | null;
   vendor_name?: string | null;
   product?: LineMakerSource['product'];
   purchase_order?: {
@@ -56,6 +59,7 @@ export interface AskMakerPiece extends InstallReadingPiece {
     confirmed_eta?: string | null;
     vendor_po_number?: string | null;
     po_number?: string | null;
+    vendor_id?: string | null;
     vendor?: { name?: string | null } | null;
   } | null;
 }
@@ -89,6 +93,16 @@ export function askMakerDraft(
   };
 }
 
+/** A refused hold, with the draft that stands against it on a 409 (506-3). */
+class HoldRefused extends Error {
+  constructor(
+    message: string,
+    readonly draft: ProcurementDraftRow | null,
+  ) {
+    super(message);
+  }
+}
+
 function useHoldMakerDraft(projectId: string) {
   const queryClient = useQueryClient();
   // The PO's DraftReview, the Desk drafts list and this line's held read.
@@ -102,8 +116,14 @@ function useHoldMakerDraft(projectId: string) {
         body: JSON.stringify({ projectId, ...input }),
       });
       if (!response.ok) {
-        const detail = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(detail?.error ?? 'Could not hold that note just now.');
+        const detail = (await response.json().catch(() => null)) as {
+          error?: string;
+          draft?: ProcurementDraftRow | null;
+        } | null;
+        throw new HoldRefused(
+          detail?.error ?? 'Could not hold that note just now.',
+          detail?.draft ?? null,
+        );
       }
       return (await response.json()) as { draft: ProcurementDraftRow };
     },
@@ -138,8 +158,13 @@ export function AskMakerSheet({
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const reviewRef = useRef<HTMLDivElement | null>(null);
   const hold = useHoldMakerDraft(projectId);
   const canHold = subject.trim().length > 0 && body.trim().length > 0;
+  // 506-3: the draft a refused hold named, opened from the refusal.
+  const [opened, setOpened] = useState<ProcurementDraftRow | null>(null);
+  const review = held ?? opened;
+  const standing = hold.error instanceof HoldRefused ? hold.error.draft : null;
 
   // DocSheet focuses its panel in a frame on open; its effect runs before this
   // one (child first), so this frame lands focus on the body after it.
@@ -148,6 +173,16 @@ export function AskMakerSheet({
     const frame = window.requestAnimationFrame(() => bodyRef.current?.focus());
     return () => window.cancelAnimationFrame(frame);
   }, [open, held]);
+
+  // L-10: `Open the held draft` lands on the review it opened, in a frame as
+  // the body's focus does, so it lands after DocSheet's own.
+  useEffect(() => {
+    if (!opened) return;
+    const frame = window.requestAnimationFrame(() =>
+      reviewRef.current?.querySelector<HTMLElement>('input, textarea, button')?.focus(),
+    );
+    return () => window.cancelAnimationFrame(frame);
+  }, [opened]);
 
   return (
     <DocSheet
@@ -158,8 +193,19 @@ export function AskMakerSheet({
       kind="ask-maker-date"
     >
       <div data-overlay-ask-maker className="mx-auto w-full max-w-[34rem] space-y-5">
-        {held ? (
-          <DraftReview draft={held} surfaceKey="open-document" regionKey="ask-maker-sheet" />
+        {review ? (
+          <div ref={reviewRef}>
+            <DraftReview
+              draft={review}
+              surfaceKey="open-document"
+              regionKey="ask-maker-sheet"
+              addressee={lineMaker(piece)}
+              onAddAddress={() => {
+                onClose();
+                landOnMakerAddress(piece);
+              }}
+            />
+          </div>
         ) : (
           <>
             <p className="text-[14px] text-[var(--color-charcoal)]">
@@ -197,12 +243,25 @@ export function AskMakerSheet({
               />
             </div>
             {hold.isError && (
-              <p
-                role="alert"
-                className="border-l-2 border-[var(--color-terracotta)] pl-3 text-[14px] text-[var(--color-charcoal)]"
-              >
-                {hold.error.message}
-              </p>
+              <div className="flex flex-col items-start gap-1">
+                <p
+                  role="alert"
+                  className="border-l-2 border-[var(--color-terracotta)] pl-3 text-[14px] text-[var(--color-charcoal)]"
+                >
+                  {hold.error.message}
+                </p>
+                {standing && (
+                  <DocumentAction
+                    actionKey="open-held-maker-draft"
+                    surfaceKey="open-document"
+                    regionKey="ask-maker-sheet"
+                    variant="inked"
+                    onClick={() => setOpened(standing)}
+                  >
+                    Open the held draft
+                  </DocumentAction>
+                )}
+              </div>
             )}
             <p className="text-[13px] text-[var(--color-mocha)]">
               A held note waits for review. Nothing reaches the maker until a person sends it.
@@ -281,8 +340,9 @@ function InstallReadingLive({
   items: readonly AskMakerPiece[];
 }) {
   const windowQuery = useInstallWindow(projectId);
-  // Read under procurement_drafts RLS, the authority the route writes under (F4).
-  const draftsQuery = useProcurementDrafts(projectId, OPEN_PROCUREMENT_DRAFT_STATUSES);
+  // Read under procurement_drafts RLS, the authority the route writes under
+  // (F4), with the statuses the route refuses on (506-3).
+  const draftsQuery = useProcurementDrafts(projectId, LIVE_MAKER_ASK_STATUSES);
   // The held draft as it stood when the sheet opened: a Send or Discard inside
   // the sheet settles the review there instead of flipping it back to a compose.
   const [sheet, setSheet] = useState<{ held: ProcurementDraftRow | null } | null>(null);
@@ -302,22 +362,36 @@ function InstallReadingLive({
 
   const piece = items.find((item) => String(item.id) === reading.firstItemId) ?? null;
   const asks = reading.act?.targetId === ACT_TARGET_IDS.installReading;
-  const held = asks
-    ? (draftsQuery.data ?? []).find(
-        (draft) => draft.kind === KIND && draft.ffe_item_id === reading.firstItemId,
-      ) ?? null
+  // The route's own rule (506-3): the line's held or sending note, else one
+  // sent this studio day.
+  const standing = asks
+    ? standingMakerAsk(
+        (draftsQuery.data ?? []).filter(
+          (draft) => draft.kind === KIND && draft.ffe_item_id === reading.firstItemId,
+        ),
+        new Date(),
+      )
     : null;
-  const askedDay = held ? dayMonth(held.created_at) : null;
+  const held = standing?.status === 'sent' ? null : standing;
+  const sentToday = standing?.status === 'sent' ? standing : null;
+  const askedDay = held
+    ? dayMonth(held.created_at)
+    : sentToday
+      ? dayMonth(sentToday.sent_at ?? sentToday.created_at)
+      : null;
   // Until the held read settles the act could be either; offer neither.
   const unsettled = asks && draftsQuery.isPending;
+  const maker = piece ? lineMaker(piece) : null;
   // R37: an act that cannot be taken stays, with its reason beneath it.
   const heldReason = !asks || held
     ? null
     : draftsQuery.isError
       ? 'Could not read the held notes just now.'
-      : piece && !lineMaker(piece)
-        ? NO_MAKER
-        : null;
+      : sentToday
+        ? `A date request already went to ${maker ?? 'the maker'} today.`
+        : piece && !maker
+          ? NO_MAKER
+          : null;
   const actLabel = unsettled ? null : held ? 'Open the held draft' : reading.act?.label ?? null;
 
   const press = () => {
@@ -348,9 +422,13 @@ function InstallReadingLive({
     >
       <p className="text-[12.5px] text-[var(--color-mocha)]">
         {reading.sentence}
-        {held && (
+        {(held || sentToday) && (
           <span className="block">
-            {askedDay ? `Asked ${askedDay} · draft held for review` : 'Draft held for review'}
+            {held?.status === 'sending'
+              ? 'Sending…'
+              : askedDay
+                ? `Asked ${askedDay} · ${sentToday ? 'sent' : 'draft held for review'}`
+                : 'Draft held for review'}
           </span>
         )}
       </p>

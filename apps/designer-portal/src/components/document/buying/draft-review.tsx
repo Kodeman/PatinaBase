@@ -10,6 +10,8 @@ import {
   useUpdateProcurementDraft,
   type ProcurementDraftRow,
 } from '@patina/supabase';
+import { lineMakerRecord, type LineMakerSource } from '@/lib/document/install-reading';
+import { FOCUS_FFE_LINE_EVENT, type FocusFfeLineRequest } from '@/lib/document/registry';
 import { DocumentAction } from '../document-action';
 import { LABEL_CLS } from '../line-unfold/cell';
 
@@ -53,14 +55,40 @@ export const DRAFT_KIND_LABEL: Record<string, string> = {
 const INPUT_CLS =
   'w-full rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[13px] text-[var(--color-charcoal)] outline-none focus-visible:border-[var(--color-clay)] disabled:opacity-60';
 
+/**
+ * 506-2 `Add an address`: where a maker's address is kept today. A maker with
+ * a vendor record keeps it on that record's Orders-book page (the Orders
+ * email); a maker named only by hand or by brand has no record yet, so the act
+ * lands on the line's own maker selector. Reached at press time, as
+ * order-cell's `Open the order` is: a static `../command-bar` import drags
+ * @patina/help-system's ESM into every suite that renders the unfold.
+ */
+export function landOnMakerAddress(line: LineMakerSource & { id: string }) {
+  const vendorId = lineMakerRecord(line)?.vendorId;
+  if (vendorId) {
+    void import('../command-bar').then(({ openLedger }) =>
+      openLedger('orders', { page: 'vendors', vendorId }),
+    );
+    return;
+  }
+  const request: FocusFfeLineRequest = { itemId: line.id, cell: 'maker' };
+  window.dispatchEvent(new CustomEvent(FOCUS_FFE_LINE_EVENT, { detail: request }));
+}
+
 export function DraftReview({
   draft,
   surfaceKey = 'project',
   regionKey = 'procurement-draft',
+  addressee,
+  onAddAddress,
 }: {
   draft: ReviewableDraft;
   surfaceKey?: string;
   regionKey?: string;
+  /** The maker the letter is to, for the held Send's reason (R12). */
+  addressee?: string | null;
+  /** 506-2: the repair for a draft with no address; offered only when given. */
+  onAddAddress?: () => void;
 }) {
   const update = useUpdateProcurementDraft({ errorSurface: 'inline' });
   const send = useSendProcurementDraft({ errorSurface: 'inline' });
@@ -122,11 +150,7 @@ export function DraftReview({
       <p className={LABEL_CLS}>{label}</p>
       <p className="text-[12px] text-[var(--color-charcoal)]" data-testid="draft-recipient">
         To{' '}
-        {recipient ?? (
-          <span className="text-[var(--color-terracotta-ink)]">
-            no address on file — add an email to the contact card
-          </span>
-        )}
+        {recipient ?? <span className="text-[var(--color-terracotta-ink)]">no address on file</span>}
       </p>
       {editable ? (
         <>
@@ -154,11 +178,15 @@ export function DraftReview({
             className={`${INPUT_CLS} resize-y font-heading leading-snug`}
           />
           <div className="flex flex-wrap items-baseline gap-x-3">
+            {/* 506-2: no address holds the Send (§A5), never native disabled,
+                so its reason is reachable by keyboard. */}
             <DocumentAction
               actionKey="send-procurement-draft"
               surfaceKey={surfaceKey}
               regionKey={regionKey}
               variant="primary"
+              held={!recipient}
+              aria-describedby={recipient ? undefined : `${fieldId}-no-address`}
               disabled={pending || !recipient || blank}
               loading={update.isPending || send.isPending}
               loadingLabel="Sending"
@@ -166,6 +194,17 @@ export function DraftReview({
             >
               Send
             </DocumentAction>
+            {!recipient && onAddAddress && (
+              <DocumentAction
+                actionKey="add-maker-address"
+                surfaceKey={surfaceKey}
+                regionKey={regionKey}
+                variant="tertiary"
+                onClick={onAddAddress}
+              >
+                Add an address
+              </DocumentAction>
+            )}
             <DocumentAction
               actionKey="discard-procurement-draft"
               surfaceKey={surfaceKey}
@@ -177,6 +216,11 @@ export function DraftReview({
               Discard
             </DocumentAction>
           </div>
+          {!recipient && (
+            <p id={`${fieldId}-no-address`} className="text-[11px] text-[var(--text-muted)]">
+              {addressee ? `No address on file for ${addressee}.` : 'No address on file.'}
+            </p>
+          )}
         </>
       ) : (
         <>
@@ -219,7 +263,8 @@ export function DraftReview({
 /**
  * The drafts awaiting review (or sending) on one purchase order, of the kinds
  * the host cell owns (the Order cell answers the acknowledgment; Movement, the
- * receiver; Receiving, the claim). Renders nothing when there are none.
+ * receiver; Receiving, the claim). Renders nothing when there are none. A
+ * line's own date request is that line's, not its PO's (511-R6).
  */
 export function PurchaseOrderDrafts({
   projectId,

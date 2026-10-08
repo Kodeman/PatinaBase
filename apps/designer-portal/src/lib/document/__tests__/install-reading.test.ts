@@ -3,7 +3,9 @@ import { join } from 'path';
 import {
   installReading,
   lineMaker,
+  lineMakerRecord,
   pieceName,
+  standingMakerAsk,
   type InstallReading,
   type InstallReadingPiece,
 } from '../install-reading';
@@ -180,6 +182,54 @@ describe('lineMaker — R42, the one maker selector', () => {
     expect(
       lineMaker({ vendor_name: '', purchase_order: { vendor: null }, product: { brand: null } }),
     ).toBeNull();
+  });
+});
+
+describe('lineMakerRecord — R7, the record the printed maker names', () => {
+  it("the line's own name is the line's vendor; the PO's name is the PO's; a brand has none", () => {
+    expect(lineMakerRecord({ vendor_name: 'Hewn', vendor_id: 'v-line' })).toEqual({
+      name: 'Hewn',
+      vendorId: 'v-line',
+    });
+    expect(
+      lineMakerRecord({
+        vendor_name: null,
+        vendor_id: 'v-line',
+        purchase_order: { vendor_id: 'v-po', vendor: { name: 'Hale' } },
+      }),
+    ).toEqual({ name: 'Hale', vendorId: 'v-po' });
+    expect(
+      lineMakerRecord({
+        vendor_name: null,
+        vendor_id: 'v-line',
+        purchase_order: null,
+        product: { brand: 'Fixture Metalworks' },
+      }),
+    ).toEqual({ name: 'Fixture Metalworks', vendorId: null });
+  });
+});
+
+describe('standingMakerAsk — 506-3, keyed on the studio day', () => {
+  // 02:00 UTC on 8 October is still 7 October in Chicago.
+  const NOW = new Date('2026-10-08T02:00:00Z');
+  const draft = (status: string, sentAt: string | null = null) => ({
+    status,
+    created_at: '2026-10-06T15:00:00Z',
+    sent_at: sentAt,
+  });
+
+  it('a held or sending draft stands whatever day it was made', () => {
+    expect(standingMakerAsk([draft('awaiting_review')], NOW)?.status).toBe('awaiting_review');
+    expect(standingMakerAsk([draft('sending')], NOW)?.status).toBe('sending');
+  });
+
+  it('a sent draft stands for the studio day it was sent, by sent_at', () => {
+    expect(standingMakerAsk([draft('sent', '2026-10-07T20:00:00Z')], NOW)).not.toBeNull();
+    expect(standingMakerAsk([draft('sent', '2026-10-07T04:00:00Z')], NOW)).toBeNull();
+  });
+
+  it('a discarded draft releases the day', () => {
+    expect(standingMakerAsk([draft('discarded')], NOW)).toBeNull();
   });
 });
 

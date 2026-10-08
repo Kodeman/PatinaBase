@@ -21,7 +21,9 @@
 --        · Cedar Lane Study — the Reading chair keeps no PO and so no
 --          confirmed_eta; one further piece (a picture light, ordered, no PO,
 --          later in the Pieces order) is also not here, so the reading counts
---          the rest. Nothing else on Cedar Lane changes.
+--          the rest. A maker-less Side table (no vendor, no PO, no brand;
+--          506-1) leads the Pieces order, so R37's held form is walkable.
+--          Nothing else on Cedar Lane changes.
 --        · "Wren Street Library" (install) — one piece whose confirmed_eta
 --          passed five days ago and has not arrived.
 --        · "Alder Court Bedroom" (install) — one piece arriving in two days.
@@ -69,6 +71,7 @@ DECLARE
   v_line_alder   UUID := 'f1900000-0000-4000-8000-000000000034';
   v_line_quill   UUID := 'f1900000-0000-4000-8000-000000000035';
   v_line_cedar   UUID := 'f1900000-0000-4000-8000-000000000036';
+  v_line_side    UUID := 'f1900000-0000-4000-8000-000000000037';
 
   v_nordic       UUID;
   v_apparatus    UUID;
@@ -346,4 +349,20 @@ BEGIN
   ELSE
     RAISE NOTICE 'running_a_job_walk_dev.sql: Cedar Lane Study is not seeded, skipping its extra piece';
   END IF;
+
+  -- 506-1: Cedar Lane's maker-less piece, so R37's held form is walkable: no
+  -- vendor, no PO (so no PO vendor) and no product (so no brand). First in the
+  -- Pieces order (sort 0, laid before the chair), so the install reading names
+  -- it. The Reading chair is not touched and stays un-held.
+  INSERT INTO public.project_ffe_items (
+    id, project_id, product_id, purchase_order_id, name, ffe_category,
+    item_type, status, quantity, vendor_name, vendor_id, sort_order,
+    design_disposition, created_at, updated_at
+  )
+  SELECT
+    v_line_side, v_cedar, NULL, NULL, 'Side table', 'furniture',
+    'fixed', 'approved', 1, NULL, NULL, 0,
+    'selected', ts - INTERVAL '40 days', ts - INTERVAL '6 days'
+  WHERE EXISTS (SELECT 1 FROM public.projects WHERE id = v_cedar)
+    AND NOT EXISTS (SELECT 1 FROM public.project_ffe_items WHERE id = v_line_side);
 END $$;

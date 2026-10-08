@@ -3,23 +3,59 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  OPEN_PROCUREMENT_DRAFT_STATUSES,
+  useProcurementDrafts,
   useUpdatePurchaseOrderETA,
   useUpdatePurchaseOrderStatus,
 } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
+import { lineMaker } from '@/lib/document/install-reading';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction } from '../document-action';
 import { CellValue, FIELD_CLS, LABEL_CLS, UnfoldCell } from './cell';
 import { ShipmentTracking, etaMoveText, etaMoves } from './movement-tracking';
 import { NEXT_PO_STATUS } from './next-act';
 import { PoShipments } from './shipments';
-import { PurchaseOrderDrafts } from '../buying/draft-review';
+import { DraftReview, PurchaseOrderDrafts, landOnMakerAddress } from '../buying/draft-review';
 
 type FFERow = any;
 
-/** The receiver's inbound notice, and R37's arrival date request to the maker:
- *  the reply is a date this cell records. */
-export const MOVEMENT_DRAFT_KINDS = ['receiver_inbound_notice', 'maker_eta_request'] as const;
+/** The receiver's inbound notice, the PO's own. A line's arrival date request
+ *  is the line's (LineDateRequests). */
+export const MOVEMENT_DRAFT_KINDS = ['receiver_inbound_notice'] as const;
+
+/**
+ * R37's arrival date request, on the line it was asked from and only there
+ * (511-R6), PO or none: the reply is a date this cell records. A request with
+ * no address says so, and its held Send repairs to where the address is kept
+ * (506-2).
+ */
+function LineDateRequests({ item, projectId }: { item: FFERow; projectId: string }) {
+  const { data } = useProcurementDrafts(projectId, OPEN_PROCUREMENT_DRAFT_STATUSES);
+  const drafts = (data ?? []).filter(
+    (d) => d.kind === 'maker_eta_request' && d.ffe_item_id === item.id,
+  );
+  if (drafts.length === 0) return null;
+  return (
+    <>
+      {drafts.map((d) => (
+        <div key={d.id}>
+          {!d.to_email?.trim() && (
+            <p className="text-[11px] text-[var(--text-muted)]">
+              Date request drafted · no address
+            </p>
+          )}
+          <DraftReview
+            draft={d}
+            regionKey="line-unfold"
+            addressee={lineMaker(item)}
+            onAddAddress={() => landOnMakerAddress(item)}
+          />
+        </div>
+      ))}
+    </>
+  );
+}
 
 /**
  * The status act's own component, so the mutation mounts only where a move
@@ -254,6 +290,7 @@ export function MovementCell({
           </p>
         )
       )}
+      <LineDateRequests item={item} projectId={projectId} />
     </UnfoldCell>
   );
 }

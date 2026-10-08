@@ -5,16 +5,19 @@ import {
   badRequest,
   serverError,
 } from '@/lib/supabase-admin';
-import { lineMaker, type LineMakerSource } from '@/lib/document/install-reading';
+import {
+  lineMakerRecord,
+  standingMakerAsk,
+  type LineMakerSource,
+} from '@/lib/document/install-reading';
 
 /**
  * /api/document/ask-maker-date — "Ask the maker for a date" (US-19 D6, R37).
  *
  * POST holds ONE `procurement_drafts` row (kind `maker_eta_request`) in
- * `awaiting_review` and stops there. It lands on the line's PO, where the
- * PO's DraftReview and the Desk's drafts list already read procurement drafts,
- * and a studio member sends or discards it there through
- * `procurement-draft-send`. Nothing is emailed and nothing reaches the maker
+ * `awaiting_review` and stops there. It shows in the DraftReview of the line's
+ * own Movement cell (511-R6) and in the Desk's drafts list, and a studio member
+ * sends or discards it there through `procurement-draft-send`. Nothing is emailed and nothing reaches the maker
  * from here (AGENTS.md: drafts land `awaiting_review`).
  *
  * Access is proven through the caller's OWN RLS: the line is read back through
@@ -27,17 +30,15 @@ import { lineMaker, type LineMakerSource } from '@/lib/document/install-reading'
  * grants INSERT to service_role only. service_role never reaches the browser.
  *
  * The maker, the PO and the address come from the record, never the request.
+ * The address is the one on the record the printed maker names (R7), or none.
  */
 
 const KIND = 'maker_eta_request';
 const SUBJECT_MAX = 200;
 const BODY_MAX = 4000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** A draft still on its way: held for review, or claimed by a send. */
-const OPEN = ['awaiting_review', 'sending'];
-const HELD_ERROR = 'A note for this piece is already held for review.';
-/** No studio stores a time zone yet; the studio clock is Chicago's (F6). */
-const STUDIO_TIME_ZONE = 'America/Chicago';
+/** 506-3: the refusal while a live draft stands for the line. */
+const HELD_ERROR = 'A date request for this line is already drafted.';
 
 interface HoldRequestBody {
   projectId?: unknown;
@@ -62,17 +63,13 @@ interface LineRow extends LineMakerSource {
 interface DraftRow {
   status: string;
   created_at: string;
+  sent_at?: string | null;
 }
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
-const STUDIO_DAY = new Intl.DateTimeFormat('en-CA', {
-  timeZone: STUDIO_TIME_ZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-const studioDay = (at: Date) => STUDIO_DAY.format(at);
+const sameName = (a: string | null | undefined, b: string) =>
+  a?.trim().toLowerCase() === b.toLowerCase();
 
 const conflict = (error: string, draft: unknown) =>
   NextResponse.json({ error, draft }, { status: 409 });
@@ -123,7 +120,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   // R37/R42: the same selector the row and the sheet print.
-  if (!lineMaker(line)) {
+  const maker = lineMakerRecord(line);
+  if (!maker) {
     return NextResponse.json({ error: 'No maker is recorded on this line.' }, { status: 422 });
   }
 
@@ -140,17 +138,11 @@ export async function POST(request: NextRequest) {
     console.error('[ask-maker-date] held notes read failed', notesError);
     return serverError('Could not read the held notes just now.');
   }
-  const rows = (notes ?? []) as DraftRow[];
-  // F2: one open note per piece; the sheet opens the one already held.
-  const open = rows.find((row) => OPEN.includes(row.status));
-  if (open) return conflict(HELD_ERROR, open);
-  // F1/F6: one note per piece per studio day. A note already sent or
-  // discarded today is reported, never re-held over.
-  const today = studioDay(new Date());
-  const earlier = rows.find((row) => studioDay(new Date(row.created_at)) === today);
-  if (earlier) {
-    return conflict(`A note for this piece was already ${earlier.status} today.`, earlier);
-  }
+  // F1/F2 as amended by 506-3: a held or sending draft stands until it is
+  // sent or discarded, a sent one for the studio day it went. A Discard
+  // releases the day. The sheet opens the draft that stands.
+  const standing = standingMakerAsk((notes ?? []) as DraftRow[], new Date());
+  if (standing) return conflict(HELD_ERROR, standing);
 
   const po = line.purchase_order;
   let studioId = line.project?.studio_id ?? null;
@@ -162,8 +154,29 @@ export async function POST(request: NextRequest) {
     studioId = (primary as string | null) ?? null;
   }
 
-  // The PO's vendor first, as po-send addresses it; else the line's own.
-  const vendorId = po?.vendor_id ?? line.vendor_id;
+  // R7: the maker the line prints wins. Its address carries the note only
+  // while it is that same record's; otherwise the draft holds no address and
+  // its Send waits on one (506-2). The line's vendor is read back through the
+  // caller's session, so a vendor renamed since never takes the note.
+  let vendorId = maker.vendorId;
+  if (vendorId) {
+    let recordName: string | null | undefined;
+    if (po?.vendor_id === vendorId) {
+      recordName = po.vendor?.name;
+    } else {
+      const { data: vendor, error: vendorError } = await session
+        .from('vendors')
+        .select('name')
+        .eq('id', vendorId)
+        .maybeSingle();
+      if (vendorError) {
+        console.error('[ask-maker-date] maker record read failed', vendorError);
+        return serverError('Could not hold that note just now.');
+      }
+      recordName = (vendor as { name?: string | null } | null)?.name ?? null;
+    }
+    if (!sameName(recordName, maker.name)) vendorId = null;
+  }
   let toEmail: string | null = null;
   if (studioId && vendorId) {
     const { data: email, error: emailError } = await adminClient.rpc(
@@ -199,8 +212,7 @@ export async function POST(request: NextRequest) {
     // Two presses at once: the one-open-note index refused the second.
     if ((error as { code?: string }).code === '23505') {
       const { data: again } = await readNotes();
-      const held = ((again ?? []) as DraftRow[]).find((row) => OPEN.includes(row.status));
-      return conflict(HELD_ERROR, held ?? null);
+      return conflict(HELD_ERROR, standingMakerAsk((again ?? []) as DraftRow[], new Date()));
     }
     console.error('[ask-maker-date] hold failed', error);
     return serverError('Could not hold that note just now.');

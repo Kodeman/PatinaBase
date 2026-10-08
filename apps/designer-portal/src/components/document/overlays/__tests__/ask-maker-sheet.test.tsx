@@ -54,6 +54,7 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 }));
 
 import { AskMakerSheet, InstallReadingLine, type AskMakerPiece } from '../ask-maker-sheet';
+import { dayMonth } from '@/lib/document/dates';
 
 const PROJECT = '33333333-3333-4333-8333-333333333333';
 const CHAIR: AskMakerPiece = {
@@ -215,9 +216,9 @@ describe('AskMakerSheet', () => {
     });
   });
 
-  it('F1/F2: a refused hold says why in the sheet and keeps the edited note', async () => {
+  it('506-3: a refused hold says why in the sheet and keeps the edited note', async () => {
     fetchMock.mockImplementation(() =>
-      json({ error: 'A note for this piece was already sent today.', draft: HELD }, 409),
+      json({ error: 'A date request for this line is already drafted.', draft: HELD }, 409),
     );
     const onHeld = jest.fn();
     const onClose = jest.fn();
@@ -235,11 +236,57 @@ describe('AskMakerSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hold for review' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'A note for this piece was already sent today.',
+      'A date request for this line is already drafted.',
     );
     expect(screen.getByLabelText('Note')).toHaveValue('Edited by Leah.');
     expect(onHeld).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("506-3/511-R4: the refusal's Open the held draft opens the 409's draft, with focus in it", async () => {
+    fetchMock.mockImplementation(() =>
+      json({ error: 'A date request for this line is already drafted.', draft: HELD }, 409),
+    );
+    renderWithQuery(
+      <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Hold for review' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open the held draft' }));
+
+    const review = await screen.findByRole('region', {
+      name: 'Arrival date request to the maker, drafted',
+    });
+    expect(screen.getByLabelText('Subject')).toHaveValue('Arrival date: Reading chair');
+    await waitFor(() => expect(review).toContainElement(document.activeElement as HTMLElement));
+    expect(screen.queryByRole('button', { name: 'Hold for review' })).toBeNull();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('506-2: a held note with no address holds its Send, names the maker, and Add an address lands', () => {
+    const heard = jest.fn();
+    window.addEventListener('document:focus-ffe-line', heard);
+    const onClose = jest.fn();
+    renderWithQuery(
+      <AskMakerSheet
+        open
+        onClose={onClose}
+        projectId={PROJECT}
+        piece={CHAIR}
+        held={{ ...(HELD as object), to_email: null } as never}
+      />,
+    );
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect(send).toHaveAttribute('aria-disabled', 'true');
+    expect(send).toHaveAccessibleDescription('No address on file for Nordic Atelier.');
+    fireEvent.click(send);
+    expect(mockSend).not.toHaveBeenCalled();
+
+    // A maker named by hand has no record yet: the repair lands on the line's
+    // maker selector, and the sheet steps aside for it.
+    fireEvent.click(screen.getByRole('button', { name: 'Add an address' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect((heard.mock.calls[0][0] as CustomEvent).detail).toEqual({ itemId: CHAIR.id, cell: 'maker' });
+    window.removeEventListener('document:focus-ffe-line', heard);
   });
 
   it('Discard closes and writes nothing', () => {
@@ -311,7 +358,12 @@ describe('InstallReadingLine', () => {
   it('F4: reads held notes from procurement_drafts, never the route', async () => {
     renderWithQuery(<InstallReadingLine projectId={PROJECT} items={CEDAR_LANE} />);
     await screen.findByRole('button', { name: 'Ask the maker for a date' });
-    expect(mockUseProcurementDrafts).toHaveBeenCalledWith(PROJECT, ['awaiting_review', 'sending']);
+    // 506-3: a sent note stands for its studio day, so the read carries sent.
+    expect(mockUseProcurementDrafts).toHaveBeenCalledWith(PROJECT, [
+      'awaiting_review',
+      'sending',
+      'sent',
+    ]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -393,6 +445,49 @@ describe('InstallReadingLine', () => {
     await act(async () => {});
     expect(screen.queryByRole('button', { name: 'Hold for review' })).toBeNull();
     expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('511-R5: a sending note reads plain Sending…, not the held form', async () => {
+    mockDraftsRead = async () => [{ ...(HELD as object), status: 'sending' }];
+    renderWithQuery(<InstallReadingLine projectId={PROJECT} items={CEDAR_LANE} />);
+    expect(await screen.findByText('Sending…')).toBeInTheDocument();
+    expect(screen.queryByText(/draft held for review/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Open the held draft' })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+  });
+
+  it('506-3: after a same-day send the row reads Asked {day} · sent and holds the ask with its reason', async () => {
+    const sentAt = new Date().toISOString();
+    mockDraftsRead = async () => [
+      { ...(HELD as object), status: 'sent', created_at: sentAt, sent_at: sentAt },
+    ];
+    renderWithQuery(<InstallReadingLine projectId={PROJECT} items={CEDAR_LANE} />);
+    expect(await screen.findByText(`Asked ${dayMonth(sentAt)} · sent`)).toBeInTheDocument();
+    const ask = screen.getByRole('button', { name: 'Ask the maker for a date' });
+    expect(ask).toHaveAttribute('aria-disabled', 'true');
+    expect(ask).toHaveAccessibleDescription('A date request already went to Nordic Atelier today.');
+    fireEvent.click(ask);
+    expect(screen.queryByRole('button', { name: 'Hold for review' })).toBeNull();
+  });
+
+  it('506-3: a send on an earlier studio day, or a discarded note, does not stand', async () => {
+    const earlier = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    let read = false;
+    mockDraftsRead = async () => {
+      read = true;
+      return [
+        { ...(HELD as object), id: 'sent-before', status: 'sent', created_at: earlier, sent_at: earlier },
+        { ...(HELD as object), id: 'discarded', status: 'discarded' },
+      ];
+    };
+    renderWithQuery(<InstallReadingLine projectId={PROJECT} items={CEDAR_LANE} />);
+    const ask = await screen.findByRole('button', { name: 'Ask the maker for a date' });
+    expect(read).toBe(true);
+    expect(ask).not.toHaveAttribute('aria-disabled');
+    expect(screen.queryByText(/· sent/)).toBeNull();
+    fireEvent.click(ask);
+    expect(await screen.findByRole('button', { name: 'Hold for review' })).toBeInTheDocument();
   });
 
   it('a held note for another piece does not stand for this one', async () => {
