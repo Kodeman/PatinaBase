@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en" data-channel="{{channel}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width={{width}}, initial-scale=1">
+<title>{{title}}</title>
+<!-- Patina pin (pinterest-2x3, 1000x1500). Tall image; the headline sits on a paper band at the
+     foot, never over the photo. Filled by marketing/tools/compose.mjs. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDE9E4;      /* patinaOffWhite */
+    --clay:#A3927C;       /* clayBeige */
+    --mocha:#655B52;      /* mochaBrown */
+    --ink:#3F3B37;        /* charcoal */
+    --font-display:'Playfair Display', Georgia, 'Times New Roman', serif;
+    --font-body:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --font-mono:'DM Mono', 'SF Mono', Menlo, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html, body{ margin:0; padding:0; background:var(--paper); }
+  .frame{
+    width:{{width}}px; height:{{height}}px; overflow:hidden; position:relative;
+    display:grid; grid-template-rows:1110px 1fr;
+    background:var(--paper); color:var(--ink); font-family:var(--font-body);
+  }
+  .media{ position:relative; overflow:hidden; background:var(--clay); }
+  .image{ display:block; width:100%; height:100%; object-fit:cover; }
+  .image-pending{ display:flex; align-items:center; justify-content:center; background:var(--clay); }
+  .image-pending span{ font-family:var(--font-mono); letter-spacing:0.2em; color:var(--paper); font-size:20px; }
+  .band{ padding:44px 64px 48px; display:flex; flex-direction:column; gap:18px; }
+  .eyebrow{
+    font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.18em; color:var(--clay);
+    font-size:18px; display:flex; align-items:center; gap:0.7em; margin:0;
+  }
+  .eyebrow::before{ content:''; display:inline-block; width:1.4em; height:1px; background:var(--clay); }
+  h1{ font-family:var(--font-display); font-weight:400; font-size:58px; line-height:1.1; margin:0; text-wrap:balance; color:var(--ink); }
+  .foot{ margin-top:auto; display:flex; justify-content:flex-end; }
+  .wordmark-type{ font-family:var(--font-display); font-size:28px; color:var(--mocha); }
+  .wordmark-logo{ height:28px; display:block; }
+</style>
+</head>
+<body>
+<main class="frame" data-piece="{{piece}}">
+  <div class="media">{{{image}}}</div>
+  <div class="band">
+    <p class="eyebrow">{{eyebrow}}</p>
+    <h1>{{headline}}</h1>
+    <div class="foot">{{{wordmark}}}</div>
+  </div>
+</main>
+</body>
+</html>
