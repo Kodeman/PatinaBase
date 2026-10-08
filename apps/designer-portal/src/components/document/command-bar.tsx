@@ -44,6 +44,7 @@ import { openAccount } from './account/account-sheet';
 import { openInvoiceComposer, openInvoiceFolio } from './accounts/invoice-overlays';
 import { openPost } from './overlays/post-sheet';
 import {
+  BAND_ACT_SELECTOR,
   isElementRendered,
   topActiveModalDialog,
 } from './overlays/active-dialog';
@@ -172,9 +173,6 @@ interface PaletteSection {
   /** US-19 D4 — a printed line above the rows (the dry query's sentence). */
   note?: string;
 }
-
-/** The band's act on line 2 (`lens-band.tsx`), FR3 F3-17's Esc landing. */
-const BAND_ACT_SELECTOR = '[data-lens-line="2"] [data-part="act"]';
 
 /** FR3 F3-5 — a ⌘K row for the band's Next lands as the band's press does:
  *  the press the letterhead registered for the dock's centre (D7). */

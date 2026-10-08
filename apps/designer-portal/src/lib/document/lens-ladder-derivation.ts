@@ -354,8 +354,9 @@ function piecesRegister(input: LadderInput): Register {
   const counts = countPieces(ticket);
   if (counts.total === 0) return empty('Nothing yet');
 
-  const lines = `${counts.total} LINES`;
-  const rooms = counts.rooms > 0 ? `${counts.rooms} ROOMS` : null;
+  const lines = `${counts.total} ${counts.total === 1 ? 'LINE' : 'LINES'}`;
+  const rooms =
+    counts.rooms > 0 ? `${counts.rooms} ${counts.rooms === 1 ? 'ROOM' : 'ROOMS'}` : null;
   const damageDate = input.damagedOn ? railDate(input.damagedOn) : null;
   const damaged =
     counts.damaged > 0

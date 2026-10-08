@@ -1788,7 +1788,8 @@ function FFESectionBody({
   const ffeAwaitingCount = rows.filter(
     (row) => row.auth.track === 'awaiting',
   ).length;
-  const ffeCounts = `${ffeGroupCount} ${ffeGroupWord} · ${total} lines`;
+  const ffeLineCount = `${total} ${total === 1 ? 'line' : 'lines'}`;
+  const ffeCounts = `${ffeGroupCount} ${ffeGroupWord} · ${ffeLineCount}`;
   const ffeAwaiting =
     ffeAwaitingCount > 0
       ? `${ffeAwaitingCount} awaiting authorization`
@@ -1799,9 +1800,9 @@ function FFESectionBody({
   // region is Pieces, which the head's name already prints.
   const ffeTradeWord = oneVoice ? '' : 'the FF&E schedule, ';
   const ffeStatus = byMaker
-    ? `${ffeTradeWord}by maker · ${total} lines`
+    ? `${ffeTradeWord}by maker · ${ffeLineCount}`
     : byNextAct
-      ? `${ffeTradeWord}by next act · ${total} lines`
+      ? `${ffeTradeWord}by next act · ${ffeLineCount}`
       : `${ffeTradeWord}by room · ${ffeCounts}`;
   const ffeSeamSummary =
     total === 0

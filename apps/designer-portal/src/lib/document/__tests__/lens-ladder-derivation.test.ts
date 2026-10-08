@@ -157,6 +157,23 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
     }
   });
 
+  it('counts one line and one room in the singular (walk D15)', () => {
+    const one = byKey(
+      input({
+        ticket: ticket({
+          rooms: { settled: true, list: ROOMS.slice(0, 1) },
+          pieces: {
+            settled: true,
+            lines: [{ stamp: 'ordered', roomId: ROOMS[0].id, specified: true }],
+          },
+        }),
+      }),
+    );
+    expect(one.ffe.value).toBe('1 LINE');
+    expect(one.ffe.narrowValue).toBe('1 LINE · 1 ROOM');
+    expect(one.ffe.countLine).toBe('1 line · 1 room');
+  });
+
   it('carries the paper’s own count line for the stop announcement (OD-7)', () => {
     const segments = byKey(input());
     expect(segments.ffe.countLine).toBe('36 lines · 4 rooms · 1 damaged');

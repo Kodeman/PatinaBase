@@ -25,7 +25,7 @@
  * band's entry is Track 8's to mount (post-merge wiring).
  */
 
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   useAcceptClientScopeChangeRequest,
   useProjectV2,
@@ -41,6 +41,7 @@ import { dollarsToCents } from '@/lib/document/closure-derivation';
 import { familyLabel } from '@/lib/document/family-label';
 import { fmtDay } from '@/lib/document/format';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { bandNextAct } from './active-dialog';
 import { DocSheet } from './doc-sheet';
 import { HouseholdSheet } from './household-sheet';
 
@@ -101,6 +102,19 @@ export function AmendmentSheet({
   const [error, setError] = useState<string | null>(null);
   // R51 — the quiet inline confirmations.
   const [confirmation, setConfirmation] = useState<string | null>(null);
+  // P-2: the sheet opens on its first field; it is named by its visible title.
+  const titleFieldRef = useRef<HTMLInputElement | null>(null);
+  const headingId = useId();
+  // Walk D18: opened from a ⌘K row, the opener is gone when the sheet is put
+  // back, so focus goes home to the band's Next act rather than <body>.
+  const bandHomeRef = useMemo(
+    () => ({
+      get current() {
+        return bandNextAct();
+      },
+    }),
+    [],
+  );
 
   // Fresh compose every open, seeded from the escalating note when any.
   useEffect(() => {
@@ -183,13 +197,20 @@ export function AmendmentSheet({
   };
 
   return (
-    <DocSheet open={open} onClose={onClose} title="Amendment">
+    <DocSheet
+      open={open}
+      onClose={onClose}
+      title="Amendment"
+      initialFocusRef={titleFieldRef}
+      fallbackFocusRef={bandHomeRef}
+      labelledBy={headingId}
+    >
       <div data-overlay-amendment className="mx-auto max-w-xl">
         <p className={labelCls}>
           {project?.name ?? 'Project'}
           {currentCents > 0 && <> &middot; current {fmtMoney(currentCents)}</>}
         </p>
-        <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
+        <h2 id={headingId} className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
           {reviewing ? 'The amendment' : 'Amend the scope'}
         </h2>
 
@@ -382,6 +403,7 @@ export function AmendmentSheet({
                 What&rsquo;s changing
               </label>
               <input
+                ref={titleFieldRef}
                 id="amendment-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}

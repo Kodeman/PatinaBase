@@ -298,6 +298,15 @@ describe('FF&E project-mode region head', () => {
     ).toBeInTheDocument();
   });
 
+  it('counts one line in the singular (walk D15)', () => {
+    mockRooms = [];
+    mockItems = [line({ id: 'ffe-1', project_room_id: null, room: null })];
+    renderProject();
+    expect(
+      screen.getByText('the FF&E schedule, by room · 1 group · 1 line'),
+    ).toBeInTheDocument();
+  });
+
   it('opens from the seam back to the full head, round-trip', () => {
     mockItems = [];
     // The fold she made herself is the only seam a stop can wear (OD-10).

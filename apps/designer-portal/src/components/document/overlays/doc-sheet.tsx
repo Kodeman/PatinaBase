@@ -215,6 +215,8 @@ export function DocSheet({
   helpKey,
   headOwnedByChild = false,
   fallbackFocusRef,
+  initialFocusRef,
+  labelledBy,
   kind,
 }: {
   open: boolean;
@@ -242,6 +244,13 @@ export function DocSheet({
    *  sheet is open (e.g. a disclosure row), focus restores here instead of
    *  silently dropping to `<body>`. */
   fallbackFocusRef?: React.RefObject<HTMLElement | null>;
+  /** P-2 — the control the sheet opens on (its first field, or the checked
+   *  option of a radio group). Without one, or while it is not mounted, the
+   *  panel itself takes focus. */
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
+  /** The id of the sheet's own visible title, when the body prints one; the
+   *  dialog is named by it instead of the sr-only `title`. */
+  labelledBy?: string;
   /** OD-6 — which sheet this is, published beside `data-doc-sheet-origin` so a
    *  walk can name the panel it is standing in. */
   kind?: string;
@@ -273,7 +282,7 @@ export function DocSheet({
     }
     const unlockBodyScroll = lockBodyScroll();
     const focusFrame = window.requestAnimationFrame(() => {
-      panelRef.current?.focus({ preventScroll: true });
+      (initialFocusRef?.current ?? panelRef.current)?.focus({ preventScroll: true });
     });
 
     return () => {
@@ -297,7 +306,7 @@ export function DocSheet({
         }
       });
     };
-  }, [open, origin, fallbackFocusRef]);
+  }, [open, origin, fallbackFocusRef, initialFocusRef]);
 
   // Keep keyboard focus on the laid sheet and let Escape put it back.
   useEffect(() => {
@@ -371,7 +380,7 @@ export function DocSheet({
         ref={panelRef}
         role="dialog"
         aria-modal={isTopModal ? true : undefined}
-        aria-labelledby={titleId}
+        aria-labelledby={labelledBy ?? titleId}
         tabIndex={-1}
         data-doc-sheet-panel
         data-doc-sheet-kind={kind}

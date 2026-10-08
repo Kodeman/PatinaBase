@@ -19,11 +19,12 @@
  * Money region, which is not mounted while Money is folded.
  */
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { PencilLine } from 'lucide-react';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { NAMED_ACTS } from '@/lib/document/act-names';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { bandNextAct, isElementRendered } from './active-dialog';
 import { AmendmentSheet } from './amendment-sheet';
 import { DocSheet } from './doc-sheet';
 
@@ -98,6 +99,19 @@ function RecordAChangeRouter({
   const [choice, setChoice] = useState<Choice | null>(null);
   const [amending, setAmending] = useState(false);
   const openerRef = useRef<HTMLElement | null>(null);
+  // Walk D18: a ⌘K row is gone by the time the router is put back, so home is
+  // then the band's Next act. Read when used, never snapshotted at open.
+  const homeRef = useMemo(
+    () => ({
+      get current(): HTMLElement | null {
+        const opener = openerRef.current;
+        return opener?.isConnected && isElementRendered(opener) ? opener : bandNextAct();
+      },
+    }),
+    [],
+  );
+  // P-2: the chooser opens on its first option (nothing is chosen on open).
+  const firstChoiceRef = useRef<HTMLInputElement | null>(null);
   const groupName = useId();
   const reasonId = useId();
   const helperId = useId();
@@ -123,7 +137,7 @@ function RecordAChangeRouter({
     if (!choice) return;
     // Focus goes home before the router is put back, so the destination's own
     // sheet records the pressing control as the place it returns to.
-    openerRef.current?.focus({ preventScroll: true });
+    homeRef.current?.focus({ preventScroll: true });
     setOpen(false);
     if (choice === 'agreement') setAmending(true);
     else toPiece();
@@ -142,7 +156,8 @@ function RecordAChangeRouter({
         onClose={() => setOpen(false)}
         title={NAMED_ACTS.recordChange}
         icon={PencilLine}
-        fallbackFocusRef={openerRef}
+        fallbackFocusRef={homeRef}
+        initialFocusRef={firstChoiceRef}
         kind="record-a-change"
       >
         <div data-overlay-record-a-change className="mx-auto max-w-xl">
@@ -151,12 +166,13 @@ function RecordAChangeRouter({
               What changed?
             </legend>
             <div className="mt-4 space-y-3">
-              {CHOICES.map((option) => (
+              {CHOICES.map((option, index) => (
                 <label
                   key={option.value}
                   className="flex cursor-pointer items-start gap-3 text-[13px] text-[var(--color-charcoal)]"
                 >
                   <input
+                    ref={index === 0 ? firstChoiceRef : undefined}
                     type="radio"
                     name={groupName}
                     value={option.value}

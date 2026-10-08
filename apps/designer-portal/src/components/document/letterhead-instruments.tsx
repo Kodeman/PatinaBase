@@ -53,6 +53,7 @@ import { MOBILE_ACTION_PRIORITY } from './mobile/lifecycle-mobile-action';
 import { OPEN_STANDING_SHEET_EVENT } from './lens-band';
 import { openVitalsEditor } from './letterhead-vitals';
 import { openKeys } from './overlays/keys-sheet';
+import { bandNextAct } from './overlays/active-dialog';
 import { ClientMirror } from './client-mirror';
 import {
   DocumentAction,
@@ -62,30 +63,15 @@ import {
 import { ProposalPreview } from './proposal-preview';
 import { HouseholdSheet, useNoLoginRepair } from './overlays/household-sheet';
 
-/** FR3 F3-17's selector for the band's act (command-bar.tsx), and the dock
- *  centre the band's Next publishes (`next:` keys, D7). */
-const BAND_ACT_SELECTOR = '[data-lens-line="2"] [data-part="act"]';
-const DOCK_NEXT_SELECTOR = '[data-action-region="lens-band"][data-action-key^="next:"]';
-
-/** FR4 Fix 2 — the Next act a `Nudge` press came from when the browser left
- *  focus on <body> (Safari does not focus a pressed button): the band's act
- *  at desk width, the dock centre on the phone. */
-function pressedNextAct(): HTMLElement | null {
-  const rendered = (el: HTMLElement | null) =>
-    el && el.getClientRects().length > 0 ? el : null;
-  const band = rendered(document.querySelector<HTMLElement>(BAND_ACT_SELECTOR));
-  const dock = rendered(document.querySelector<HTMLElement>(DOCK_NEXT_SELECTOR));
-  return window.matchMedia?.('(min-width: 1180px)').matches ? (band ?? dock) : (dock ?? band);
-}
-
 /** The control focus returns to when the composer is cancelled: whatever was
- *  pressed to open it, or (a Next landing) the act it was pressed from. */
+ *  pressed to open it, or (a Next landing, FR4 Fix 2: Safari does not focus a
+ *  pressed button) the act it was pressed from. */
 function composerOpener(composer: HTMLElement | null, landing: boolean): HTMLElement | null {
   const active = document.activeElement;
   if (active instanceof HTMLElement && active !== document.body && !composer?.contains(active)) {
     return active;
   }
-  return landing ? pressedNextAct() : null;
+  return landing ? bandNextAct() : null;
 }
 
 /** `Elena’s`, `the client’s`; an article-led plural household takes the

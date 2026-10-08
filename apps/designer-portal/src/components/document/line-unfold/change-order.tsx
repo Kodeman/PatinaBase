@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { PencilLine } from 'lucide-react';
 import {
@@ -168,6 +168,8 @@ export function ChangeOrderSheet({
   const [confirmed, setConfirmed] = useState<string | null>(null);
   const heldId = useId();
   const kindName = useId();
+  // P-2: the sheet opens on the checked kind.
+  const checkedKindRef = useRef<HTMLInputElement | null>(null);
 
   const gate = changeGate(kind, auth);
   const pending = startChange.isPending || addMaker.isPending;
@@ -223,6 +225,7 @@ export function ChangeOrderSheet({
       onClose={onClose}
       title={`Change ${poLabel}`}
       icon={PencilLine}
+      initialFocusRef={checkedKindRef}
       kind="po-change"
     >
       <div data-testid="po-change-sheet" className="space-y-4">
@@ -232,6 +235,7 @@ export function ChangeOrderSheet({
             {CHANGE_KINDS.map((k) => (
               <label key={k.kind} className="flex items-baseline gap-2 text-[12px]">
                 <input
+                  ref={kind === k.kind ? checkedKindRef : undefined}
                   type="radio"
                   name={kindName}
                   value={k.kind}

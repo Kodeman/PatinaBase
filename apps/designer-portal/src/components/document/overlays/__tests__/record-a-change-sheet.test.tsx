@@ -27,13 +27,22 @@ jest.mock('@/components/document/overlays/amendment-sheet', () => ({
     open ? <div data-testid="amendment-sheet">{projectId}</div> : null,
 }));
 
-jest.mock('@/components/document/line-unfold/change-order', () => ({
-  ChangeOrderSheet: ({ item, poLabel }: { item: { id: string }; poLabel: string }) => (
-    <div data-testid="change-order-sheet">
-      {item.id} · {poLabel}
-    </div>
-  ),
-}));
+// D10/D11 (SQ-545): the focus and Esc tests stand in the real sheet.
+let mockRealChangeOrder = false;
+jest.mock('@/components/document/line-unfold/change-order', () => {
+  const actual = jest.requireActual('@/components/document/line-unfold/change-order');
+  return {
+    ...actual,
+    ChangeOrderSheet: (props: { item: { id: string }; poLabel: string }) =>
+      mockRealChangeOrder ? (
+        <actual.ChangeOrderSheet {...props} />
+      ) : (
+        <div data-testid="change-order-sheet">
+          {props.item.id} · {props.poLabel}
+        </div>
+      ),
+  };
+});
 
 // ── The Pieces region's harness (ffe-section-spec-details-link.test.tsx) ──
 
@@ -72,6 +81,10 @@ jest.mock('@patina/supabase', () => ({
   }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
+  useStartPurchaseOrderChange: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useFindVendorMatch: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useResolveOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useVendors: () => ({ data: { data: [] } }),
 }));
 
 jest.mock('@/components/document/schedule/add-to-project-sheet', () => ({
@@ -188,6 +201,7 @@ const continueAct = () => screen.getByRole('button', { name: /Continue/ });
 
 beforeEach(() => {
   mockAskThePaper = true;
+  mockRealChangeOrder = false;
   mockItems = [onPO, noPO];
   __setDensityForTest('full');
 });
@@ -526,5 +540,81 @@ describe('Record a change on Install and Care spreads (R33)', () => {
     expect(lineAct).toHaveTextContent('Record a change');
     fireEvent.click(lineAct);
     expect(screen.getByTestId('change-order-sheet')).toHaveTextContent('line-sofa');
+  });
+});
+
+describe('Record a change — focus lands on a control, one Esc puts back (walk D10, D11)', () => {
+  const nameOf = (dialog: HTMLElement) => {
+    const ids = (dialog.getAttribute('aria-labelledby') ?? '').split(/\s+/).filter(Boolean);
+    expect(ids.length).toBeGreaterThan(0);
+    return ids.map((id) => document.getElementById(id)?.textContent?.trim()).join(' ');
+  };
+
+  it('the chooser opens on its first option and is named by its visible title', async () => {
+    renderRouter();
+    act(() => openRecordAChange({ origin: 'pieces-head' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(nameOf(dialog)).toBe('Record a change');
+    expect(dialog).toHaveAccessibleName('Record a change');
+    await waitFor(() =>
+      expect(within(dialog).getByRole('radio', { name: /On a piece/ })).toHaveFocus(),
+    );
+  });
+
+  it('opened from a ⌘K row that is then gone, Esc returns focus to the band’s Next act (D18)', async () => {
+    const rects = jest
+      .spyOn(HTMLElement.prototype, 'getClientRects')
+      .mockImplementation(() => [{}] as unknown as DOMRectList);
+    const band = document.createElement('div');
+    band.setAttribute('data-lens-line', '2');
+    band.innerHTML = '<button type="button" data-part="act">Send the purchase order</button>';
+    document.body.appendChild(band);
+    const row = document.createElement('input');
+    document.body.appendChild(row);
+    row.focus();
+
+    renderRouter();
+    act(() => openRecordAChange({ origin: 'cmdk' }));
+    // The palette closes as its row runs.
+    row.remove();
+    const dialog = screen.getByRole('dialog');
+    await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
+
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+    expect(screen.queryByText('What changed?')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Send the purchase order' })).toHaveFocus(),
+    );
+    band.remove();
+    rects.mockRestore();
+  });
+
+  it('Change this order opens on the preselected Cancel, named by its title; one Esc returns to the line', async () => {
+    mockRealChangeOrder = true;
+    renderPaper();
+    const headAct = screen.getByRole('button', { name: 'Record a change' });
+    headAct.focus();
+    fireEvent.click(headAct);
+    fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
+    fireEvent.click(continueAct());
+    await waitFor(() => expect(screen.getByText('Choose the piece')).toHaveFocus());
+
+    const line = screen.getByRole('button', { name: /Linen slipcovered sofa/ });
+    line.focus();
+    fireEvent.click(line);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(nameOf(dialog)).toBe('Change NA-2026-077');
+    expect(dialog).toHaveAccessibleName('Change NA-2026-077');
+    const cancel = within(dialog).getByRole('radio', { name: /Cancel/ });
+    expect(cancel).toBeChecked();
+    await waitFor(() => expect(cancel).toHaveFocus());
+
+    fireEvent.keyDown(cancel, { key: 'Escape' });
+    expect(screen.queryByTestId('po-change-sheet')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Linen slipcovered sofa/ })).toHaveFocus(),
+    );
   });
 });

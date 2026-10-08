@@ -16,6 +16,22 @@ export function isElementRendered(element: HTMLElement) {
   return true;
 }
 
+/** FR3 F3-17's selector for the band's act, and the dock centre the band's
+ *  Next publishes (`next:` keys, D7). */
+export const BAND_ACT_SELECTOR = '[data-lens-line="2"] [data-part="act"]';
+const DOCK_NEXT_SELECTOR = '[data-action-region="lens-band"][data-action-key^="next:"]';
+
+/** The band's Next act as it stands on this width: the band's act at desk
+ *  width, the dock centre on the phone — where focus goes home when the
+ *  control that opened something is gone (FR4 Fix 2, walk D18). */
+export function bandNextAct(): HTMLElement | null {
+  const rendered = (el: HTMLElement | null) =>
+    el && el.getClientRects().length > 0 ? el : null;
+  const band = rendered(document.querySelector<HTMLElement>(BAND_ACT_SELECTOR));
+  const dock = rendered(document.querySelector<HTMLElement>(DOCK_NEXT_SELECTOR));
+  return window.matchMedia?.('(min-width: 1180px)').matches ? (band ?? dock) : (dock ?? band);
+}
+
 export function topActiveModalDialog() {
   return Array.from(
     document.querySelectorAll<HTMLElement>(
