@@ -767,7 +767,7 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
     expect(mockOpenInvoiceFolio).toHaveBeenCalledWith('invoice-late');
   });
 
-  it('has no scored leader when nothing is due: Draw an invoice is plain', () => {
+  it('leads with Record a change when nothing is due: Draw an invoice is plain (F3-7)', () => {
     mockInvoices = {
       data: [
         invoice({ id: 'invoice-draft', status: 'draft' }),
@@ -781,7 +781,11 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
 
     const head = document.querySelector('[data-region-head="money-head"]') as HTMLElement;
     expect(within(head).queryByRole('button', { name: 'Record the payment' })).not.toBeInTheDocument();
-    expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(0);
+    expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
+    expect(within(head).getByRole('button', { name: 'Record a change' })).toHaveAttribute(
+      'data-action-variant',
+      'inked',
+    );
     expect(within(head).getByRole('button', { name: 'Draw an invoice' })).toHaveAttribute(
       'data-action-variant',
       'secondary',

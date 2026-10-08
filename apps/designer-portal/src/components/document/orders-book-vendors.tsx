@@ -35,6 +35,7 @@ import {
 } from '@patina/supabase';
 import { Select } from '@/components/ui/controls';
 import { useInternalTimeStudio } from '@/hooks/use-viewer-studio';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { VendorSamples } from './line-unfold/sample-request';
 import {
   OrderPaperQueue,
@@ -632,6 +633,9 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
   const unsigned = orderable.filter(
     (it) => (readinessById.get(it.id)?.warnings.length ?? 0) > 0,
   ).length;
+  // US-19 FR3 F3-20 / 515-6 (`one-voice`) — a count of what is beneath, never
+  // `N of M`.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const [queue, setQueue] = useState<PendingOrder[]>([]);
   const active = queue.length > 0;
 
@@ -716,7 +720,9 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
         <p className="doc-type-meta mb-2 text-[var(--color-charcoal)]">
           {unsigned === orderable.length
             ? 'No signed agreement behind these yet. You can still order.'
-            : `${unsigned} of ${orderable.length} have no signed agreement behind them yet. You can still order.`}
+            : oneVoice
+              ? `${unsigned} have no signed agreement behind them yet. You can still order.`
+              : `${unsigned} of ${orderable.length} have no signed agreement behind them yet. You can still order.`}
         </p>
       )}
       {active && <OrderPaperQueue orders={queue} onClose={() => setQueue([])} />}

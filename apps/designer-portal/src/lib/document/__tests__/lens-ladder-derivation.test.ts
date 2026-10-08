@@ -528,6 +528,63 @@ describe('deriveLadderSegments · the pre-work stops', () => {
     expect(segments.discovery.fallback).toBeNull();
   });
 
+  // US-19 FR3 F3-19 / 515-1 (`one-voice`) — the gate's five, counted down,
+  // never a ratio and never the names.
+  describe('the discovery stop under one-voice (F3-19)', () => {
+    const discovery = (essentialsDone: number) =>
+      byKey(
+        input({
+          ticket: ticket({ section: 'discovery', project: false }),
+          oneVoice: true,
+          prework: {
+            settled: true,
+            sentOn: null,
+            openedOn: null,
+            scopeRooms: 0,
+            stageLine: null,
+            investmentCents: null,
+            essentialsDone,
+          },
+        }),
+      ).discovery;
+
+    it.each([
+      [0, 'In hand', 'Every essential in hand'],
+      [3, '3 still to add', '3 essentials still to add'],
+      [5, '5 still to add', '5 essentials still to add'],
+    ])('with %i missing prints %s / %s', (missing, value, countLine) => {
+      const stop = discovery(5 - missing);
+      expect(stop.value).toBe(value);
+      expect(stop.narrowValue).toBe(value);
+      expect(stop.countLine).toBe(countLine);
+      expect(stop.fallback).toBeNull();
+      expect(stop.value!.length).toBeLessThanOrEqual(30);
+      expect(stop.narrowValue!.length).toBeLessThanOrEqual(30);
+      expect(stop.countLine.length).toBeLessThanOrEqual(40);
+      expect(`${stop.value} ${stop.countLine}`).not.toMatch(/\bof\b/i);
+    });
+
+    it('still says Nothing yet while readiness has not answered', () => {
+      const stop = byKey(
+        input({
+          ticket: ticket({ section: 'discovery', project: false }),
+          oneVoice: true,
+          prework: {
+            settled: true,
+            sentOn: null,
+            openedOn: null,
+            scopeRooms: 0,
+            stageLine: null,
+            investmentCents: null,
+            essentialsDone: null,
+          },
+        }),
+      ).discovery;
+      expect(stop.value).toBeNull();
+      expect(stop.fallback).toBe('NOTHING YET');
+    });
+  });
+
   it('says Nothing yet on the discovery stop while readiness has not answered', () => {
     const segments = byKey(
       input({

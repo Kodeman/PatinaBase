@@ -47,20 +47,23 @@ function phase({
   followsPhaseId = null,
   sortOrder = 0,
   gateCondition = null,
+  targetEndDate = null,
 }: {
   id: string;
   name: string;
   status: string;
-  lane?: 'main' | 'thread';
+  lane?: 'main' | 'thread' | 'install';
   followsPhaseId?: string | null;
   sortOrder?: number;
   gateCondition?: string | null;
+  targetEndDate?: string | null;
 }): PhaseRow {
   return {
     id,
     name,
     status,
     lane,
+    target_end_date: targetEndDate,
     follows_phase_id: followsPhaseId,
     sort_order: sortOrder,
     gate_condition: gateCondition,
@@ -178,13 +181,13 @@ describe('PhaseAdvanceControl', () => {
     const completePhaseActs = () =>
       screen.getAllByRole('button', { name: /^Complete / });
 
-    it('one-voice, Aspen: exactly one scored `Complete phase`', () => {
+    it('one-voice, Aspen: exactly one scored `Complete the phase`', () => {
       mockOneVoice = true;
       render(<PhaseAdvanceControl projectId="project-1" phases={aspenPhases} />);
 
       const acts = completePhaseActs();
       expect(acts).toHaveLength(2);
-      for (const act of acts) expect(act).toHaveTextContent('Complete phase');
+      for (const act of acts) expect(act).toHaveTextContent('Complete the phase');
       expect(
         acts.filter((act) => act.getAttribute('data-action-variant') === 'primary'),
       ).toHaveLength(1);
@@ -192,12 +195,84 @@ describe('PhaseAdvanceControl', () => {
       expect(acts[1]).toHaveAttribute('data-action-variant', 'secondary');
     });
 
-    it('flag off: every row keeps its scored act, as today', () => {
+    it('flag off: every row keeps its scored act and today’s name', () => {
       render(<PhaseAdvanceControl projectId="project-1" phases={aspenPhases} />);
 
       for (const act of completePhaseActs()) {
         expect(act).toHaveAttribute('data-action-variant', 'primary');
+        expect(act).toHaveTextContent('Complete phase');
       }
+    });
+  });
+
+  // US-19 FR3 F3-21 / 518-1 — the main-lane row leads, whatever the server
+  // order; among parallel lanes the phase that ends soonest. Exactly one.
+  describe('which handoff leads (FR3 518-1)', () => {
+    const scored = () =>
+      screen
+        .getAllByRole('button', { name: /^(Complete|Resume) / })
+        .filter((act) => act.getAttribute('data-action-variant') === 'primary');
+
+    it('the main-lane row leads even when the server lists it second', () => {
+      mockOneVoice = true;
+      render(
+        <PhaseAdvanceControl
+          projectId="project-1"
+          phases={[
+            phase({
+              id: 'proc',
+              name: 'Procurement & Orders',
+              status: 'in_progress',
+              lane: 'thread',
+              targetEndDate: '2026-10-01',
+            }),
+            phase({
+              id: 'dd',
+              name: 'Design Development',
+              status: 'in_progress',
+              lane: 'main',
+              targetEndDate: '2026-12-01',
+            }),
+          ]}
+        />,
+      );
+      const lead = scored();
+      expect(lead).toHaveLength(1);
+      expect(lead[0]).toHaveAccessibleName('Complete Design Development (main lane)');
+      expect(
+        screen.getByRole('button', { name: 'Complete Procurement & Orders (thread lane)' }),
+      ).toHaveAttribute('data-action-variant', 'secondary');
+    });
+
+    it('with no main-lane row, the phase that ends soonest leads', () => {
+      mockOneVoice = true;
+      render(
+        <PhaseAdvanceControl
+          projectId="project-1"
+          phases={[
+            phase({
+              id: 'drapery',
+              name: 'Custom Drapery',
+              status: 'delayed',
+              lane: 'thread',
+              targetEndDate: '2026-11-20',
+            }),
+            phase({
+              id: 'install',
+              name: 'Install Prep',
+              status: 'in_progress',
+              lane: 'install',
+              targetEndDate: '2026-11-02',
+            }),
+          ]}
+        />,
+      );
+      const lead = scored();
+      expect(lead).toHaveLength(1);
+      expect(lead[0]).toHaveAccessibleName('Complete Install Prep (install lane)');
+      expect(
+        screen.getByRole('button', { name: 'Resume Custom Drapery (thread lane)' }),
+      ).toHaveTextContent('Resume the phase');
     });
   });
 

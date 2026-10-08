@@ -751,6 +751,7 @@ function RoomHeading({
   onAddLine,
   heldRoomId,
   toggleRoom,
+  oneVoice = false,
 }: {
   name: string;
   roomId?: string;
@@ -765,6 +766,8 @@ function RoomHeading({
   onAddLine?: () => void;
   heldRoomId: string | null;
   toggleRoom: (roomId: string) => void;
+  /** US-19 FR3 F3-20 — counts, never `N of M`. */
+  oneVoice?: boolean;
 }) {
   // SQ-207 — each figure is one currency's sum, or the mixed-currency note.
   const lineTotals = (subset: LineRow[]) =>
@@ -783,14 +786,20 @@ function RoomHeading({
 
   // R33 F5 — one schedule, one vocabulary: rooms speak the section's word.
   // "Placed" retires until it can truthfully mean installed.
+  // FR3 F3-20 / 515-6 (`one-voice`): a count of what is beneath, never `N of
+  // M`; `committed $X of $Y` is a money figure and stays.
   const meta = selecting
-    ? `${selectedCount} of ${eligibleCount}`
+    ? oneVoice
+      ? `${selectedCount} ticked`
+      : `${selectedCount} of ${eligibleCount}`
     : [
         budgetCents > 0
           ? `committed ${committed} of ${fmtUsd(budgetCents)}`
           : null,
         rows.length > 0
-          ? `${underway} of ${rows.length} underway`
+          ? oneVoice
+            ? `${underway} underway`
+            : `${underway} of ${rows.length} underway`
           : 'no lines yet',
         showAuthorization && rows.length > 0
           ? `${released} released · ${notYet} not yet`
@@ -1052,6 +1061,9 @@ interface FFESectionProps {
    *  outside it. Reported, never asked for: `canRelease` and per-line
    *  eligibility are derived here and nowhere else. Pass a stable callback. */
   onReleaseOffered?: (offered: boolean) => void;
+  /** US-19 FR3 F3-10 — the project's status (`on_hold` holds the head's
+   *  leader to the own act). Undefined keeps today's head. */
+  projectStatus?: string | null;
 }
 
 /**
@@ -1086,6 +1098,7 @@ function FFESectionBody({
   releaseLeaderElsewhere = false,
   needs = [],
   onReleaseOffered,
+  projectStatus = null,
   instruments,
 }: FFESectionProps & { instruments: InstrumentLike[] }) {
   const { heldRoomId, toggleRoom } = useRoomLens();
@@ -1338,7 +1351,9 @@ function FFESectionBody({
     mode === 'install'
       ? ''
       : total > 0
-        ? `${underway} of ${total} underway`
+        ? oneVoice
+          ? `${underway} underway`
+          : `${underway} of ${total} underway`
         : '';
 
   const sectionLabel = sectionKey
@@ -1432,6 +1447,7 @@ function FFESectionBody({
       selectedCount: ids.filter((id) => ceremony?.isSelected(id)).length,
       heldRoomId,
       toggleRoom,
+      oneVoice,
     };
   };
 
@@ -1860,18 +1876,33 @@ function FFESectionBody({
           ]
         : [...ffeLedgerByKind, ...atCostDoors]
       : ffeLedgerByKind;
+  // US-19 FR3 F3-10 (`one-voice`) — a held job moves nothing, so its Pieces
+  // head leads with the own act `Open the pieces`, never an exception or a
+  // Bill door; those stand plain behind it.
+  const ffeHeld = oneVoice && mode === 'project' && projectStatus === 'on_hold';
+  const ffeLeaderDoors: RegionLedgerEntry[] = ffeHeld
+    ? [
+        {
+          key: 'open-the-pieces',
+          label: ownAct('project', OWN_ACT_NO_FACTS)!.label,
+          onClick: () =>
+            document.getElementById(ffeBodyId)?.scrollIntoView({ block: 'start' }),
+        },
+        ...ffeLedgerDoors,
+      ]
+    : ffeLedgerDoors;
   // D5 (US-19): Record a change is the head's second act, after the leader.
   const ffeLedger: RegionLedgerEntry[] = recordChangeAtHead
     ? [
-        ...ffeLedgerDoors.slice(0, 1),
+        ...ffeLeaderDoors.slice(0, 1),
         {
           key: PIECES_RECORD_A_CHANGE_KEY,
           label: NAMED_ACTS.recordChange,
           onClick: () => openRecordAChange({ origin: 'pieces-head' }),
         },
-        ...ffeLedgerDoors.slice(1),
+        ...ffeLeaderDoors.slice(1),
       ]
-    : ffeLedgerDoors;
+    : ffeLeaderDoors;
   const changeOrderLine = changeOrderLineId
     ? (rows.find((row) => String(row.item.id) === changeOrderLineId) ?? null)
     : null;
@@ -2189,7 +2220,10 @@ function FFESectionBody({
             ? oneVoice
               ? { heading: 'Punch list', tally: 'open' as const }
               : { heading: 'The punch list' }
-            : {})}
+            : // FR3 F3-20 / 515-6 (`one-voice`): `The work · {N} open`.
+              oneVoice
+              ? { tally: 'open' as const }
+              : {})}
           clientUserId={clientUserId}
           clientName={clientName}
         />

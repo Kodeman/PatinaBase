@@ -564,7 +564,9 @@ export function ProjectApprovalDocument({
   } else if (reassignAvailable) {
     headLedger.push({
       key: 'reassign-project-decision-lead',
-      label: 'Assign current project client',
+      // FR3 F3-21 / 514-4 (`one-voice`): one act, one name; "current" is
+      // machinery.
+      label: oneVoice ? 'Assign project client' : 'Assign current project client',
       loading: setAuthority.isPending,
       loadingLabel: 'Assigning…',
       onClick: () => void assignAuthority(),
@@ -704,7 +706,13 @@ export function ProjectApprovalDocument({
         regionKey="approvals-head"
         actions={quietLedger}
         actsAtQuiet={quiet ? 'leader' : 'all'}
-        leader={!(oneVoice && quietLedger[0]?.key === 'assign-project-decision-lead')}
+        leader={
+          !(
+            oneVoice &&
+            (quietLedger[0]?.key === 'assign-project-decision-lead' ||
+              quietLedger[0]?.key === 'reassign-project-decision-lead')
+          )
+        }
         bodyId={APPROVALS_BODY_ID}
         onFold={() => fold.setFolded(true)}
       />

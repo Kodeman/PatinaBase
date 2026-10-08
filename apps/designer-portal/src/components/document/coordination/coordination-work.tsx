@@ -21,6 +21,7 @@
 
 import { useMemo, useState } from 'react';
 import { fmtDay } from '@/lib/document/format';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
   useToggleSectionTask,
   useCreateSectionTask,
@@ -74,6 +75,17 @@ export function CoordinationWork({
 
   const doneN = sectionTasks.filter((t) => t.status === 'done').length;
   const total = sectionTasks.length;
+  // US-19 FR3 F3-20 / 515-6 (`one-voice`) — `The work · {N} open`, or
+  // `{N} done` once done is the fact; never `N of M`.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const workTally =
+    total === 0
+      ? ''
+      : !oneVoice
+        ? ` · ${doneN} of ${total} done`
+        : doneN === total
+          ? ` · ${doneN} done`
+          : ` · ${total - doneN} open`;
 
   const save = () => {
     const trimmed = title.trim();
@@ -115,7 +127,7 @@ export function CoordinationWork({
     <div className="mb-2 mt-4 rounded-[6px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)]">
       <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-3 py-1.5">
         <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
-          The work{total > 0 ? ` · ${doneN} of ${total} done` : ''}
+          The work{workTally}
         </span>
         <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           the dependency web

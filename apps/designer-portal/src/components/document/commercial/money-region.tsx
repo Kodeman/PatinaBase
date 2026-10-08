@@ -134,7 +134,8 @@ export function MoneyRegion({
   // US-19 499-2 / 507-1 (one-voice) — the head leads with `Record the
   // payment` only while a client receivable on this paper is due: an invoice
   // sent and unpaid (the folio's own record test). A maker balance leads its
-  // order's row in Pieces, never this head. Nothing due: no scored leader.
+  // order's row in Pieces, never this head. FR3 F3-7: nothing due, `Record a
+  // change` leads (scored) with `Draw an invoice` plain beside it.
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const { data: projectInvoices } = useProjectInvoices(oneVoice ? projectId : null);
   const receivableDue = oneVoice
@@ -307,6 +308,18 @@ export function MoneyRegion({
       onClick: () => openLedger('hours', { projectId }),
     },
   ];
+  // US-19 FR3 F3-7 / 515-2 (one-voice) — one scored leader per head, and the
+  // head's entry 0 is its leader. A receivable due: `Record the payment`
+  // leads, `Record a change` plain. Nothing due: `Record a change` leads and
+  // `Draw an invoice` prints plain beside it, at quiet too.
+  const leaderLedger =
+    oneVoice && !receivableDue
+      ? [
+          ...ledger.filter((entry) => entry.key === RECORD_A_CHANGE_KEY),
+          ...ledger.filter((entry) => entry.key !== RECORD_A_CHANGE_KEY),
+        ]
+      : ledger;
+  const quietCompanionKey = receivableDue ? RECORD_A_CHANGE_KEY : 'draw-project-invoice';
 
   if (folded) {
     return (
@@ -350,11 +363,10 @@ export function MoneyRegion({
         regionKey="money-head"
         actions={
           quiet && oneVoice
-            ? ledger.filter((entry, i) => i === 0 || entry.key === RECORD_A_CHANGE_KEY)
-            : ledger
+            ? leaderLedger.filter((entry, i) => i === 0 || entry.key === quietCompanionKey)
+            : leaderLedger
         }
         actsAtQuiet={quiet && !oneVoice ? 'leader' : 'all'}
-        leader={!oneVoice || receivableDue !== null}
         bodyId={BODY_ID}
         onFold={() => setFolded(true)}
       />

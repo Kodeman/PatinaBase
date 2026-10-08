@@ -10,6 +10,7 @@ import { act, render } from '@testing-library/react';
 
 let mockAskThePaper = false;
 let mockOneVoice = true;
+let mockInvoices: { id: string; status: string; due_date?: string | null }[] = [];
 
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (flag: string) => ({
@@ -26,7 +27,7 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
   usePurchaseOrders: () => ({ data: [], isLoading: false, error: null }),
-  useProjectInvoices: () => ({ data: [], isLoading: false, error: null }),
+  useProjectInvoices: () => ({ data: mockInvoices, isLoading: false, error: null }),
 }));
 
 // Live money, so the region stands open rather than at its seam.
@@ -78,6 +79,7 @@ beforeEach(() => {
   window.localStorage.clear();
   mockAskThePaper = false;
   mockOneVoice = true;
+  mockInvoices = [];
   act(() => {
     __setDensityForTest('full');
   });
@@ -104,8 +106,8 @@ describe('The Money head’s door under one-voice (508-1)', () => {
       mockAskThePaper = askThePaper;
       render(<MoneyRegion projectId="project-1" />);
       expect(headKeys().slice(0, 2)).toEqual([
-        'draw-project-invoice',
         'record-a-change-money-head',
+        'draw-project-invoice',
       ]);
       expect(headText()).toContain('Record a change');
       expect(headText()).not.toContain('Amendment');
@@ -120,7 +122,7 @@ describe('The Money head’s door under one-voice (508-1)', () => {
     (activeSection) => {
       render(<MoneyRegion projectId="project-1" activeSection={activeSection} />);
       expect(headText()).not.toContain('Add a change');
-      expect(headKeys()[1]).toBe('record-a-change-money-head');
+      expect(headKeys()[0]).toBe('record-a-change-money-head');
     },
   );
 
@@ -132,6 +134,31 @@ describe('The Money head’s door under one-voice (508-1)', () => {
   });
 });
 
+describe('One scored leader per Money head at full density (F3-7)', () => {
+  it('nothing due: Record a change leads, scored; Draw an invoice is plain', () => {
+    render(<MoneyRegion projectId="project-1" />);
+    const head = document.querySelector('[data-region-head="money-head"]')!;
+    expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
+    expect(
+      document.querySelector('[data-action-key="record-a-change-money-head"]'),
+    ).toHaveAttribute('data-action-variant', 'inked');
+    expect(
+      document.querySelector('[data-action-key="draw-project-invoice"]'),
+    ).toHaveAttribute('data-action-variant', 'secondary');
+  });
+
+  it('a receivable due: Record the payment leads; Record a change is plain', () => {
+    mockInvoices = [{ id: 'invoice-1', status: 'sent', due_date: '2026-08-03' }];
+    render(<MoneyRegion projectId="project-1" />);
+    const head = document.querySelector('[data-region-head="money-head"]')!;
+    expect(headKeys()[0]).toBe('record-client-payment');
+    expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
+    expect(
+      document.querySelector('[data-action-key="record-a-change-money-head"]'),
+    ).toHaveAttribute('data-action-variant', 'secondary');
+  });
+});
+
 describe('Record a change at quiet on the project spread (F2-18)', () => {
   beforeEach(() => {
     act(() => {
@@ -139,9 +166,24 @@ describe('Record a change at quiet on the project spread (F2-18)', () => {
     });
   });
 
-  it('prints beside the leader, scored, and nothing else of the ledger', () => {
+  it('leads, scored, with Draw an invoice plain beside it when nothing is due (F3-7)', () => {
     render(<MoneyRegion projectId="project-1" />);
-    expect(headKeys()).toEqual(['draw-project-invoice', 'record-a-change-money-head']);
+    expect(headKeys()).toEqual(['record-a-change-money-head', 'draw-project-invoice']);
+    expect(
+      document.querySelector('[data-action-key="record-a-change-money-head"]'),
+    ).toHaveAttribute('data-action-variant', 'inked');
+    expect(
+      document.querySelector('[data-action-key="draw-project-invoice"]'),
+    ).toHaveAttribute('data-action-variant', 'secondary');
+  });
+
+  it('prints plain beside Record the payment when a receivable is due (F3-7)', () => {
+    mockInvoices = [{ id: 'invoice-1', status: 'sent', due_date: '2026-08-03' }];
+    render(<MoneyRegion projectId="project-1" />);
+    expect(headKeys()).toEqual(['record-client-payment', 'record-a-change-money-head']);
+    expect(
+      document.querySelector('[data-action-key="record-client-payment"]'),
+    ).toHaveAttribute('data-action-variant', 'inked');
     expect(
       document.querySelector('[data-action-key="record-a-change-money-head"]'),
     ).toHaveAttribute('data-action-variant', 'secondary');

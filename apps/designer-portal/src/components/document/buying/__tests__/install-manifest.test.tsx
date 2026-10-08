@@ -225,4 +225,29 @@ describe('InstallManifest', () => {
       expect(mockUpsertPunch).toHaveBeenCalledWith({ ffeItemId: 'item-1', note: 'touch-up on left arm' }),
     );
   });
+
+  // US-19 FR3 F3-21 / 516-2 — the line's act adds to the punch list.
+  describe('the line’s punch act under one-voice (516-2)', () => {
+    const flags = process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
+    afterEach(() => {
+      process.env.NEXT_PUBLIC_FLAG_OVERRIDES = flags;
+    });
+
+    it('reads Add to the punch list, and opens the same note form', () => {
+      process.env.NEXT_PUBLIC_FLAG_OVERRIDES = 'one-voice:true';
+      render(<InstallManifest projectId="p1" lines={[sofa]} />);
+      expect(screen.queryByRole('button', { name: 'Punch' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Add to the punch list' }));
+      expect(screen.getByLabelText('Punch note for Sofa, COM')).toBeInTheDocument();
+    });
+
+    it('keeps Punch with one-voice off', () => {
+      process.env.NEXT_PUBLIC_FLAG_OVERRIDES = '';
+      render(<InstallManifest projectId="p1" lines={[sofa]} />);
+      expect(screen.getByRole('button', { name: 'Punch' })).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Add to the punch list' }),
+      ).not.toBeInTheDocument();
+    });
+  });
 });

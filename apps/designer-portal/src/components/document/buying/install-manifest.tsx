@@ -16,6 +16,7 @@ import {
   type RecordFfeInstalledInput,
 } from '@patina/supabase';
 import { fmtDay, todayYmd } from '@/lib/document/format';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { uploadInspectionPhoto } from '@/components/portal/procurement/log-inspection-drawer';
 import { inspectionPhotoIds } from '../line-unfold/inspection-photo-strip';
 import { DocumentAction } from '../document-action';
@@ -279,6 +280,9 @@ function PunchItem({ item }: { item: InstallPunchItemRow }) {
 
 function AddPunch({ projectId, line }: { projectId: string; line: ManifestLine }) {
   const upsert = useUpsertInstallPunchItem({ errorSurface: 'inline' });
+  // US-19 FR3 F3-21 / 516-2 (`one-voice`): the line's act adds to the list;
+  // the list's own act stays `Open the punch list`.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState('');
   const [dueOn, setDueOn] = useState('');
@@ -297,7 +301,7 @@ function AddPunch({ projectId, line }: { projectId: string; line: ManifestLine }
         variant="tertiary"
         onClick={() => setOpen(true)}
       >
-        Punch
+        {oneVoice ? 'Add to the punch list' : 'Punch'}
       </DocumentAction>
     );
   }

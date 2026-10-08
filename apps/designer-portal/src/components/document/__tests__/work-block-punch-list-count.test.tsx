@@ -49,7 +49,10 @@ const task = (id: string, status: 'todo' | 'done') => ({
 
 const tasks = [task('a', 'done'), task('b', 'todo'), task('c', 'todo')];
 
-const renderBlock = (extra: { heading?: string; tally?: 'ratio' | 'open' }) =>
+const renderBlock = (
+  extra: { heading?: string; tally?: 'ratio' | 'open' },
+  rows: ReturnType<typeof task>[] = tasks,
+) =>
   render(
     <WorkBlock
       projectId="project-1"
@@ -57,7 +60,7 @@ const renderBlock = (extra: { heading?: string; tally?: 'ratio' | 'open' }) =>
       sectionLabel="Install"
       clientUserId={null}
       clientName="Avery"
-      tasks={tasks as never}
+      tasks={rows as never}
       gates={[]}
       loggedMinutes={0}
       workLoading={false}
@@ -80,5 +83,23 @@ describe('The punch list heading (508-4)', () => {
   it('keeps the ratio where the caller does not ask for the open count', () => {
     renderBlock({ heading: 'The punch list' });
     expect(headingText()).toBe('The punch list · 1 of 3');
+  });
+});
+
+describe('The work heading’s tally (F3-20, 515-6)', () => {
+  it('prints The work · 2 open, never a ratio', () => {
+    renderBlock({ tally: 'open' });
+    expect(headingText()).toBe('The work · 2 open');
+    expect(headingText()).not.toMatch(/ of /);
+  });
+
+  it('prints The work · 3 done once nothing is open', () => {
+    renderBlock({ tally: 'open' }, [task('a', 'done'), task('b', 'done'), task('c', 'done')]);
+    expect(headingText()).toBe('The work · 3 done');
+  });
+
+  it('keeps The work · 1 of 3 by default', () => {
+    renderBlock({});
+    expect(headingText()).toBe('The work · 1 of 3');
   });
 });

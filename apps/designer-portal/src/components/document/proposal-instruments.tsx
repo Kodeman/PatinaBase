@@ -403,6 +403,12 @@ function LegacyProposalInstruments({
                 <>
                   <b>{displayDraftingState(draftState)}</b> — every facet is written
                 </>
+              ) : oneVoice ? (
+                // US-19 FR3 F3-20 / 515-3 — V11 is the whole paper: the count
+                // lives in the mark only.
+                <>
+                  <b>A draft taking shape</b> — keep going.
+                </>
               ) : (
                 <>
                   <b>A draft taking shape</b> · {pct}% written — keep going

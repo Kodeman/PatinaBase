@@ -27,6 +27,7 @@ import {
   paperRegionsForSection,
   type DocumentIndexKey,
 } from './document-index';
+import { ESSENTIAL_KEYS } from './discovery-readiness';
 import { fmtDay } from './format';
 import { money } from './project-commerce';
 import type { TicketInput } from './ticket-derivation';
@@ -149,6 +150,8 @@ export interface LadderInput {
   /** Stops whose root is actually on the paper. Defaults to every stop this
    *  spread prints. */
   mountedKeys?: readonly DocumentIndexKey[];
+  /** The `one-voice` flag (US-19 FR3 F3-19). Absent prints today's stops. */
+  oneVoice?: boolean;
 }
 
 const READING = 'READING…';
@@ -554,9 +557,28 @@ function investmentRegister(facts: LadderPreworkFacts | undefined): Register {
   };
 }
 
-function discoveryRegister(facts: LadderPreworkFacts | undefined): Register {
+function discoveryRegister(
+  facts: LadderPreworkFacts | undefined,
+  oneVoice: boolean,
+): Register {
   const done = facts?.essentialsDone ?? null;
   if (done == null) return empty('Nothing yet');
+  // US-19 FR3 F3-19 / 515-1 (`one-voice`) — the ladder counts what is left of
+  // the readiness gate's five and never prints a ratio; the names belong to
+  // the own act.
+  if (oneVoice) {
+    const left = Math.max(ESSENTIAL_KEYS.length - done, 0);
+    const value = left === 0 ? 'In hand' : `${left} still to add`;
+    return {
+      value: cap(value, LENS_VALUE_MAX_CHARS),
+      narrowValue: cap(value, LENS_VALUE_MAX_CHARS),
+      countLine: cap(
+        left === 0 ? 'Every essential in hand' : `${left} essentials still to add`,
+        LENS_COUNT_MAX_CHARS,
+      ),
+      fallback: null,
+    };
+  }
   return {
     value: `${done} OF 5`,
     narrowValue: `${done} OF 5`,
@@ -589,7 +611,7 @@ function registerFor(key: DocumentIndexKey, input: LadderInput): Register {
     // essentials. The brief, the direction and the vision are still prose, and
     // print their name over `NOTHING YET` at every state (OD-2, DL-02).
     case 'discovery':
-      return discoveryRegister(input.prework);
+      return discoveryRegister(input.prework, input.oneVoice === true);
     case 'brief':
     case 'direction':
       return empty('Nothing yet');

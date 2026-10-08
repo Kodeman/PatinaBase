@@ -209,6 +209,25 @@ function laneLabel(lane: string) {
   return `${lane.charAt(0).toUpperCase()}${lane.slice(1)} lane`;
 }
 
+/**
+ * US-19 FR3 518-1 — which handoff leads. The main-lane row; among parallel
+ * lanes, the phase that ends soonest (`target_end_date`, undated last).
+ * Server order is an accident of insertion and only breaks a tie.
+ */
+function leadingPhaseId(actions: readonly ActivePhaseAction[]): string | null {
+  const main = actions.filter((action) => action.phase.lane === 'main');
+  const pool = main.length > 0 ? main : actions;
+  let leader: ActivePhaseAction | null = null;
+  for (const action of pool) {
+    const end = action.phase.target_end_date;
+    const best = leader?.phase.target_end_date ?? null;
+    if (leader === null || (end !== null && (best === null || end < best))) {
+      leader = action;
+    }
+  }
+  return leader?.phase.id ?? null;
+}
+
 const shellCls =
   'mb-5 border-y border-[var(--color-pearl)] py-3 text-[var(--color-charcoal)]';
 
@@ -219,6 +238,7 @@ function PhaseActionRow({
   notice,
   onTransition,
   leads,
+  oneVoice,
 }: {
   action: ActivePhaseAction;
   disabled: boolean;
@@ -227,6 +247,7 @@ function PhaseActionRow({
   onTransition: (action: ActivePhaseAction) => void;
   /** Whether this row's act is the region's one scored leader. */
   leads: boolean;
+  oneVoice: boolean;
 }) {
   const descriptionId = useId();
   const phaseHeadingId = useId();
@@ -288,7 +309,15 @@ function PhaseActionRow({
           loadingLabel={completing ? 'Completing…' : 'Resuming…'}
           onClick={() => onTransition(action)}
         >
-          {completing ? 'Complete phase' : 'Resume phase'}
+          {/* US-19 FR3 F3-21 / 516-1 (`one-voice`): D1's grammar, verb + the
+              + noun. */}
+          {oneVoice
+            ? completing
+              ? 'Complete the phase'
+              : 'Resume the phase'
+            : completing
+              ? 'Complete phase'
+              : 'Resume phase'}
         </DocumentAction>
       </DocumentActionGroup>
 
@@ -373,6 +402,7 @@ export function PhaseAdvanceControl({
   if (actions.length === 0) return null;
 
   const transitionPending = pendingPhaseId !== null || updatePhase.isPending;
+  const leaderId = leadingPhaseId(actions);
 
   const handleTransition = (action: ActivePhaseAction) => {
     if (pendingPhaseRef.current !== null || updatePhase.isPending) return;
@@ -426,7 +456,7 @@ export function PhaseAdvanceControl({
       </h3>
 
       <ul className="mt-2">
-        {actions.map((action, index) => (
+        {actions.map((action) => (
           <PhaseActionRow
             key={action.phase.id}
             action={action}
@@ -435,9 +465,11 @@ export function PhaseAdvanceControl({
             notice={noticeByPhase[action.phase.id] ?? null}
             onTransition={handleTransition}
             // US-19 FR2 F2-13 (R150 R5, `one-voice`) — one scored leader per
-            // region: the first row's act keeps it, every later row prints
-            // plain. Flag off, every row is scored as before.
-            leads={!oneVoice || index === 0}
+            // region, every other row plain; FR3 518-1 chooses it by a fact
+            // the person can see (`leadingPhaseId`). Flag off, every row is
+            // scored as before.
+            leads={!oneVoice || action.phase.id === leaderId}
+            oneVoice={oneVoice}
           />
         ))}
       </ul>

@@ -147,7 +147,8 @@ export function WorkBlock({
    *  list`, the name its reading's act lands on. */
   heading?: string;
   /** How the heading counts its lines: ` · N of M` (`ratio`), or FR2 508-4's
-   *  ` · N open` (`open`), a count of what is beneath and never a ratio. */
+   *  ` · N open` (`open`), a count of what is beneath and never a ratio —
+   *  ` · N done` once nothing is open (FR3 F3-20, done is the fact). */
   tally?: 'ratio' | 'open';
   clientUserId: string | null;
   clientName: string;
@@ -275,7 +276,9 @@ export function WorkBlock({
           {heading}
           {total > 0
             ? tally === 'open'
-              ? ` · ${total - doneCount} open`
+              ? doneCount === total
+                ? ` · ${doneCount} done`
+                : ` · ${total - doneCount} open`
               : ` · ${doneCount} of ${total}`
             : ''}
         </span>

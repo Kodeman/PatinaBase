@@ -254,6 +254,89 @@ describe('The Pieces head reads its spec act from the own-act table (F2-19, 499-
   });
 });
 
+describe('A held job’s Pieces head leads with the own act (F3-10)', () => {
+  /** Harrow's line: specified, ordered, priced, never invoiced. */
+  const uninvoiced = { ...unspecified, product_id: 'product-1', status: 'ordered' };
+  const renderHarrow = (projectStatus?: string) =>
+    render(
+      <FFESection
+        projectId="project-1"
+        projectName="Harrow"
+        mode="project"
+        projectStatus={projectStatus}
+      />,
+    );
+
+  beforeEach(() => {
+    mockItems = [uninvoiced];
+    act(() => {
+      __setDensityForTest('full');
+    });
+  });
+
+  it('leads with Open the pieces, inked, and Bill 1 uninvoiced line prints plain', () => {
+    renderHarrow('on_hold');
+    expect(headActs()[0]).toBe('open-the-pieces');
+    const lead = document.querySelector('[data-action-key="open-the-pieces"]');
+    expect(lead).toHaveTextContent('Open the pieces');
+    expect(lead).toHaveAttribute('data-action-variant', 'inked');
+    expect(
+      document.querySelectorAll('[data-region-head="ffe"] [data-action-variant="inked"]'),
+    ).toHaveLength(1);
+    expect(document.querySelector('[data-action-key="bill-project-ffe"]')).toHaveAttribute(
+      'data-action-variant',
+      'secondary',
+    );
+    expect(headActs()[1]).toBe('record-a-change-pieces-head');
+  });
+
+  it('prints Open the pieces beside Record a change at quiet', () => {
+    act(() => {
+      __setDensityForTest(null);
+    });
+    renderHarrow('on_hold');
+    expect(headActs()).toEqual(['open-the-pieces', 'record-a-change-pieces-head']);
+  });
+
+  it('keeps the bill leader on a job that is not held', () => {
+    renderHarrow('active');
+    expect(headActs()[0]).toBe('bill-project-ffe');
+    expect(headActs()).not.toContain('open-the-pieces');
+  });
+
+  it('keeps today’s head with one-voice off, held or not', () => {
+    mockOneVoice = false;
+    renderHarrow('on_hold');
+    expect(headActs()[0]).toBe('bill-project-ffe');
+    expect(headActs()).not.toContain('open-the-pieces');
+  });
+});
+
+describe('The work block counts what is open (F3-20)', () => {
+  beforeEach(() => {
+    act(() => {
+      __setDensityForTest('full');
+    });
+  });
+  const renderWork = () =>
+    render(
+      <FFESection projectId="project-1" projectName="Chen" mode="project" sectionKey="project" />,
+    );
+
+  it('asks the block for the open count on the project spread', () => {
+    renderWork();
+    const block = screen.getByTestId('work-block');
+    expect(block).toHaveAttribute('data-heading', '');
+    expect(block).toHaveAttribute('data-tally', 'open');
+  });
+
+  it('keeps the default tally with one-voice off', () => {
+    mockOneVoice = false;
+    renderWork();
+    expect(screen.getByTestId('work-block')).toHaveAttribute('data-tally', '');
+  });
+});
+
 describe('The empty schedule (499-7)', () => {
   it('titles it No pieces yet. and keeps the act beneath verbatim', () => {
     mockItems = [];

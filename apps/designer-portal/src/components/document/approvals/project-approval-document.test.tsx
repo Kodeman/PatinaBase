@@ -235,6 +235,39 @@ describe('ProjectApprovalDocument authority and composer', () => {
     );
   });
 
+  // US-19 FR3 F3-21 / 514-4 — one act, one name: the reassign entry reads
+  // `Assign project client` too, and prints plain.
+  it('F3-21 one-voice: the reassign entry reads Assign project client, plain', async () => {
+    const prior = process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
+    process.env.NEXT_PUBLIC_FLAG_OVERRIDES = 'one-voice:true';
+    try {
+      authority = {
+        projectId: 'project-1',
+        decisionLeadId: 'former-client',
+        requiredCoapproverId: null,
+        revision: 7,
+      };
+      renderDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Assign current project client' }),
+      ).not.toBeInTheDocument();
+      const assign = screen.getByRole('button', { name: 'Assign project client' });
+      expect(assign).not.toHaveClass('da-inked');
+      expect(assign).toHaveClass('da-secondary');
+      fireEvent.click(assign);
+      await waitFor(() =>
+        expect(setAuthority).toHaveBeenCalledWith({
+          projectId: 'project-1',
+          decisionLeadId: 'client-1',
+          expectedRevision: 7,
+        }),
+      );
+    } finally {
+      if (prior === undefined) delete process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
+      else process.env.NEXT_PUBLIC_FLAG_OVERRIDES = prior;
+    }
+  });
+
   it('excludes completed phases from new approval authoring', () => {
     authority = {
       projectId: 'project-1',

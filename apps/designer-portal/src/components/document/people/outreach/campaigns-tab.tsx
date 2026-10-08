@@ -11,6 +11,7 @@
  */
 
 import { useState } from 'react';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
   useCampaigns,
   useCreateCampaign,
@@ -30,7 +31,7 @@ import {
   QuietNote,
 } from './outreach-bits';
 
-function campaignStat(c: Campaign): string {
+function campaignStat(c: Campaign, oneVoice = false): string {
   if (c.status === 'sent') {
     const recipients = c.total_recipients || c.sent_count || 0;
     const opened = c.open_count || c.campaign_analytics?.opened || 0;
@@ -54,13 +55,18 @@ function campaignStat(c: Campaign): string {
     });
     return `Scheduled · ${when} · ${c.total_recipients || 0} recipients`;
   }
+  // US-19 FR3 F3-20 / 515-6 (`one-voice`) — what is left to send, never
+  // `N of M`.
   if (c.status === 'sending')
-    return `Sending · ${c.sent_count || 0} of ${c.total_recipients || 0}`;
+    return oneVoice
+      ? `Sending · ${Math.max((c.total_recipients || 0) - (c.sent_count || 0), 0)} left`
+      : `Sending · ${c.sent_count || 0} of ${c.total_recipients || 0}`;
   return 'Draft';
 }
 
 export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
   const { data: campaigns, isLoading } = useCampaigns();
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const { data: dash } = useCommsDashboard('30d');
   const { data: templates } = useTemplates();
   const { data: segments } = useAudienceSegments();
@@ -209,7 +215,7 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
           <CampRow
             key={c.id}
             name={c.name}
-            stat={campaignStat(c)}
+            stat={campaignStat(c, oneVoice)}
             right={
               <div className="flex items-center gap-2">
                 <CampBadge status={c.status} />

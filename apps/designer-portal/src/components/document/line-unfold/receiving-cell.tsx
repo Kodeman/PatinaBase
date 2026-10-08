@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { CellValue, UnfoldCell } from './cell';
 import { ClaimClockLine } from './claim-clock';
 import { PurchaseOrderDrafts } from '../buying/draft-review';
@@ -16,11 +17,20 @@ export function ReceivingCell({
   stampKind: string;
   openClaims: readonly { state: string }[];
 }) {
+  // US-19 FR3 F3-20 / 515-6 (`one-voice`) — what is left to inspect, or what
+  // was inspected once that is the fact; never `N of M`.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const inspected = item.received_quantity ?? 0;
+  const toInspect = Math.max((item.quantity ?? 0) - inspected, 0);
   const value =
     stampKind === 'damaged'
       ? `Open claim${openClaims.length > 1 ? 's' : ''} · ${openClaims[0]?.state === 'vendor_notified' ? 'vendor notified' : 'drafted'}`
       : stampKind === 'received'
-        ? `${item.received_quantity ?? 0} of ${item.quantity} inspected`
+        ? !oneVoice
+          ? `${item.received_quantity ?? 0} of ${item.quantity} inspected`
+          : toInspect > 0
+            ? `${toInspect} to inspect`
+            : `${inspected} inspected`
         : stampKind === 'delivered'
           ? 'Awaiting inspection'
           : '—';

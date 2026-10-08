@@ -24,6 +24,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { M_TO_IN, REFINE_COPY as COPY } from './refine-copy';
 
 export interface RefineReadoutProps {
@@ -78,6 +79,9 @@ export function RefineReadout({
   // state. Referenced here so the prop is not silently dead and the test that
   // passes `true` is exercising something real.
   void absoluteAccuracyCertified;
+  // US-19 FR3 F3-20 / 515-6 (`one-voice`) — a count of what is beneath; the
+  // `Unreadable poses` row beside it already states what is left out.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   const summary = [
     COPY.keyframes(usableCount),
@@ -110,7 +114,7 @@ export function RefineReadout({
           <Row label={COPY.labelDriftMedian} value={bothUnits(driftMedianM)} />
           <Row
             label={COPY.labelKeyframes}
-            value={`${usableCount} of ${frameCount}`}
+            value={oneVoice ? String(usableCount) : `${usableCount} of ${frameCount}`}
           />
           <Row label={COPY.labelDropped} value={String(droppedCount)} />
           <Row
