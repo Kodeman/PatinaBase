@@ -18012,7 +18012,9 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          line_kind: string
           line_total_cents: number | null
+          link_kind: string | null
           markup_percent: number | null
           name: string
           notes: string | null
@@ -18027,7 +18029,9 @@ export type Database = {
           removal_reason: string | null
           removed_at: string | null
           removed_by: string | null
+          removed_disposition: string | null
           role_identity: string
+          rough_cents: number | null
           selection_thread_id: string
           sort_order: number
           source_authorization_item_id: string | null
@@ -18038,6 +18042,7 @@ export type Database = {
           supersedes_ffe_item_id: string | null
           trade_price_cents: number | null
           trade_scope_document_id: string | null
+          unit: string
           unit_price_cents: number | null
           updated_at: string
           vendor_id: string | null
@@ -18062,7 +18067,9 @@ export type Database = {
           installed_on?: string | null
           item_type?: string
           last_status_change_at?: string | null
+          line_kind?: string
           line_total_cents?: number | null
+          link_kind?: string | null
           markup_percent?: number | null
           name: string
           notes?: string | null
@@ -18077,7 +18084,9 @@ export type Database = {
           removal_reason?: string | null
           removed_at?: string | null
           removed_by?: string | null
+          removed_disposition?: string | null
           role_identity?: string
+          rough_cents?: number | null
           selection_thread_id: string
           sort_order?: number
           source_authorization_item_id?: string | null
@@ -18088,6 +18097,7 @@ export type Database = {
           supersedes_ffe_item_id?: string | null
           trade_price_cents?: number | null
           trade_scope_document_id?: string | null
+          unit?: string
           unit_price_cents?: number | null
           updated_at?: string
           vendor_id?: string | null
@@ -18112,7 +18122,9 @@ export type Database = {
           installed_on?: string | null
           item_type?: string
           last_status_change_at?: string | null
+          line_kind?: string
           line_total_cents?: number | null
+          link_kind?: string | null
           markup_percent?: number | null
           name?: string
           notes?: string | null
@@ -18127,7 +18139,9 @@ export type Database = {
           removal_reason?: string | null
           removed_at?: string | null
           removed_by?: string | null
+          removed_disposition?: string | null
           role_identity?: string
+          rough_cents?: number | null
           selection_thread_id?: string
           sort_order?: number
           source_authorization_item_id?: string | null
@@ -18138,6 +18152,7 @@ export type Database = {
           supersedes_ffe_item_id?: string | null
           trade_price_cents?: number | null
           trade_scope_document_id?: string | null
+          unit?: string
           unit_price_cents?: number | null
           updated_at?: string
           vendor_id?: string | null
@@ -18455,6 +18470,123 @@ export type Database = {
           },
         ]
       }
+      project_ffe_placement_events: {
+        Row: {
+          after: Json
+          before: Json
+          changed_at: string
+          changed_by: string | null
+          ffe_item_id: string
+          id: string
+          project_id: string
+        }
+        Insert: {
+          after: Json
+          before: Json
+          changed_at?: string
+          changed_by?: string | null
+          ffe_item_id: string
+          id?: string
+          project_id: string
+        }
+        Update: {
+          after?: Json
+          before?: Json
+          changed_at?: string
+          changed_by?: string | null
+          ffe_item_id?: string
+          id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_placement_events_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_placement_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_placement_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_ffe_placements: {
+        Row: {
+          area_note: string | null
+          created_at: string
+          ffe_item_id: string
+          id: string
+          project_id: string
+          project_room_id: string
+          quantity: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          area_note?: string | null
+          created_at?: string
+          ffe_item_id: string
+          id?: string
+          project_id: string
+          project_room_id: string
+          quantity: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          area_note?: string | null
+          created_at?: string
+          ffe_item_id?: string
+          id?: string
+          project_id?: string
+          project_room_id?: string
+          quantity?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_placements_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_placements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_placements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_placements_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_ffe_receipt_commands: {
         Row: {
           created_at: string
@@ -18499,6 +18631,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          need_label: string | null
           primary_ffe_item_id: string | null
           project_id: string
           updated_at: string
@@ -18507,6 +18640,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          need_label?: string | null
           primary_ffe_item_id?: string | null
           project_id: string
           updated_at?: string
@@ -18515,6 +18649,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          need_label?: string | null
           primary_ffe_item_id?: string | null
           project_id?: string
           updated_at?: string
@@ -37186,6 +37321,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      add_labor_line: {
+        Args: { p_parent_ffe_item_id: string; p_request: Json }
+        Returns: Json
+      }
       admin_add_studio_member: {
         Args: {
           p_actor: string
@@ -37787,7 +37926,7 @@ export type Database = {
         }
       }
       archive_project_selection: {
-        Args: { p_ffe_item_id: string; p_reason: string }
+        Args: { p_ffe_item_id: string; p_reason?: string }
         Returns: Json
       }
       archive_studio_contact: {
@@ -37918,6 +38057,10 @@ export type Database = {
       }
       backfill_channel_consent_from_parties: { Args: never; Returns: number }
       backfill_why_author_display_names: { Args: never; Returns: number }
+      batch_create_named_project_needs: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
       batch_place_library_products_in_project: {
         Args: { p_request: Json }
         Returns: Json
@@ -39895,8 +40038,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      ffe_line_authorization: {
+        Args: { p: Database["public"]["Tables"]["project_ffe_items"]["Row"] }
+        Returns: string
+      }
       ffe_line_authorization_state: {
         Args: { p_item_id: string }
+        Returns: string
+      }
+      ffe_line_stage: {
+        Args: { p: Database["public"]["Tables"]["project_ffe_items"]["Row"] }
         Returns: string
       }
       ffe_status_rank: { Args: { p_status: string }; Returns: number }
@@ -41002,7 +41153,7 @@ export type Database = {
         Returns: string
       }
       link_ffe_pair: {
-        Args: { p_child: string; p_parent: string }
+        Args: { p_child: string; p_kind?: string; p_parent: string }
         Returns: {
           added_via: string | null
           assignment_scope: string
@@ -41022,7 +41173,9 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          line_kind: string
           line_total_cents: number | null
+          link_kind: string | null
           markup_percent: number | null
           name: string
           notes: string | null
@@ -41037,7 +41190,9 @@ export type Database = {
           removal_reason: string | null
           removed_at: string | null
           removed_by: string | null
+          removed_disposition: string | null
           role_identity: string
+          rough_cents: number | null
           selection_thread_id: string
           sort_order: number
           source_authorization_item_id: string | null
@@ -41048,6 +41203,7 @@ export type Database = {
           supersedes_ffe_item_id: string | null
           trade_price_cents: number | null
           trade_scope_document_id: string | null
+          unit: string
           unit_price_cents: number | null
           updated_at: string
           vendor_id: string | null
@@ -42330,7 +42486,9 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          line_kind: string
           line_total_cents: number | null
+          link_kind: string | null
           markup_percent: number | null
           name: string
           notes: string | null
@@ -42345,7 +42503,9 @@ export type Database = {
           removal_reason: string | null
           removed_at: string | null
           removed_by: string | null
+          removed_disposition: string | null
           role_identity: string
+          rough_cents: number | null
           selection_thread_id: string
           sort_order: number
           source_authorization_item_id: string | null
@@ -42356,6 +42516,7 @@ export type Database = {
           supersedes_ffe_item_id: string | null
           trade_price_cents: number | null
           trade_scope_document_id: string | null
+          unit: string
           unit_price_cents: number | null
           updated_at: string
           vendor_id: string | null
@@ -43361,6 +43522,10 @@ export type Database = {
         }
         Returns: Json
       }
+      restore_project_selection: {
+        Args: { p_ffe_item_id: string }
+        Returns: Json
+      }
       restore_studio_contact: {
         Args: { p_contact_id: string }
         Returns: string
@@ -43994,6 +44159,10 @@ export type Database = {
         Args: { p_link_id: string; p_stripe_customer_id: string }
         Returns: string
       }
+      set_line_placements: {
+        Args: { p_ffe_item_id: string; p_placements: Json }
+        Returns: Json
+      }
       set_my_member_title: {
         Args: { p_job_title: string; p_organization_id: string }
         Returns: undefined
@@ -44020,6 +44189,70 @@ export type Database = {
         }
         Returns: Json
       }
+      set_project_ffe_line_build_fields: {
+        Args: { p_item_id: string; p_request: Json }
+        Returns: {
+          added_via: string | null
+          assignment_scope: string
+          blocked: boolean | null
+          blocked_by_decision_id: string | null
+          blocked_reason: string | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          created_at: string
+          currency: string
+          custom_fields: Json
+          design_disposition: string
+          doc_code: string | null
+          eta: string | null
+          ffe_category: string | null
+          id: string
+          installed_on: string | null
+          item_type: string
+          last_status_change_at: string | null
+          line_kind: string
+          line_total_cents: number | null
+          link_kind: string | null
+          markup_percent: number | null
+          name: string
+          notes: string | null
+          parent_ffe_item_id: string | null
+          po_number: string | null
+          product_id: string | null
+          project_id: string
+          project_room_id: string | null
+          purchase_order_id: string | null
+          quantity: number
+          received_quantity: number | null
+          removal_reason: string | null
+          removed_at: string | null
+          removed_by: string | null
+          removed_disposition: string | null
+          role_identity: string
+          rough_cents: number | null
+          selection_thread_id: string
+          sort_order: number
+          source_authorization_item_id: string | null
+          source_commercial_document_id: string | null
+          source_decision_id: string | null
+          source_proposal_item_id: string | null
+          status: string
+          supersedes_ffe_item_id: string | null
+          trade_price_cents: number | null
+          trade_scope_document_id: string | null
+          unit: string
+          unit_price_cents: number | null
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_project_ffe_line_commercials: {
         Args: { p_item_id: string; p_request: Json }
         Returns: {
@@ -44041,7 +44274,9 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          line_kind: string
           line_total_cents: number | null
+          link_kind: string | null
           markup_percent: number | null
           name: string
           notes: string | null
@@ -44056,7 +44291,9 @@ export type Database = {
           removal_reason: string | null
           removed_at: string | null
           removed_by: string | null
+          removed_disposition: string | null
           role_identity: string
+          rough_cents: number | null
           selection_thread_id: string
           sort_order: number
           source_authorization_item_id: string | null
@@ -44067,6 +44304,7 @@ export type Database = {
           supersedes_ffe_item_id: string | null
           trade_price_cents: number | null
           trade_scope_document_id: string | null
+          unit: string
           unit_price_cents: number | null
           updated_at: string
           vendor_id: string | null
