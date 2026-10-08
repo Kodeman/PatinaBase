@@ -10,12 +10,22 @@
  * an empty name or ⌘⌫ removes. Each line's `⋯` menu carries `Fill with a
  * product`, `Move to room…`, `Also place in…` and `Remove`. A gated act is
  * `aria-disabled` with its reason printed and linked, never `disabled`.
+ *
+ * Below md (a13) the lines are 56px cards: the name, then `×2 · each ·
+ * ~$4,800 · PLACEHOLDER`, and the same `⋯` menu. The entry row carries a
+ * visible `ADD` and, above it, `DONE ADDING`, so adding is never Enter alone
+ * (R3-7), and the hint names no keyboard-only key.
+ *
+ * At 1440 with the elevation pane open the table has about 790px: the fixed
+ * columns keep their a2 widths and LINE takes what is left, so STAGE and `⋯`
+ * stay on screen. Under 640px (md to lg, no pane) it scrolls sideways.
  */
 import {
   useEffect,
   useId,
   useRef,
   useState,
+  useSyncExternalStore,
   type ClipboardEvent,
   type FocusEvent,
   type HTMLAttributes,
@@ -32,6 +42,8 @@ import {
 import {
   ENTRY_NAME_ATTR,
   ROUGH_IN_KEY_HINT,
+  ROUGH_IN_PHONE_QUERY,
+  ROUGH_IN_TOUCH_HINT,
   ROUGH_IN_UNITS,
   focusNextRoomEntry,
   formatRough,
@@ -94,15 +106,41 @@ export interface RoughInTableProps {
   headingActs?: ReactNode;
 }
 
-/** Columns and widths, SPEC a2: 480 · 72 · 96 · 120 · 140 · 48. */
-const COLUMNS: Array<{ label: string; width: number; numeric?: boolean }> = [
-  { label: "Line", width: 480 },
+/**
+ * Columns and widths, SPEC a2: 480 · 72 · 96 · 120 · 140 · 48. LINE has no
+ * fixed width: it takes the rest, 480 at full width and less beside the pane.
+ */
+const COLUMNS: Array<{ label: string; width?: number; numeric?: boolean }> = [
+  { label: "Line" },
   { label: "Qty", width: 72, numeric: true },
   { label: "Unit", width: 96 },
   { label: "Rough $", width: 120, numeric: true },
   { label: "Stage", width: 140 },
   { label: "", width: 48 },
 ];
+
+const ACT =
+  "inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[12px] font-medium uppercase tracking-[0.06em] underline decoration-[var(--sheet-ink)] decoration-1 underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]";
+
+function subscribePhone(onChange: () => void): () => void {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function")
+    return () => {};
+  const query = window.matchMedia(ROUGH_IN_PHONE_QUERY);
+  query.addEventListener?.("change", onChange);
+  return () => query.removeEventListener?.("change", onChange);
+}
+
+function phoneSnapshot(): boolean {
+  return (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(ROUGH_IN_PHONE_QUERY).matches === true
+  );
+}
+
+/** Below md: the cards (a13). The server renders the table; the phone swaps on hydration. */
+export function useRoughInPhone(): boolean {
+  return useSyncExternalStore(subscribePhone, phoneSnapshot, () => false);
+}
 
 const CELL_INPUT =
   "h-[40px] w-full min-w-0 bg-transparent px-2 font-sans text-[14px] leading-[1.4] text-[var(--sheet-ink)] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay-ink)]";
@@ -134,8 +172,10 @@ export function RoughInTable({
   const headingId = `${uid}-heading`;
   const hintId = `${uid}-hint`;
   const entryNameRef = useRef<HTMLInputElement>(null);
+  const doneRef = useRef<HTMLButtonElement>(null);
   const nameRefs = useRef(new Map<string, HTMLInputElement>());
   const [announcement, setAnnouncement] = useState("");
+  const phone = useRoughInPhone();
 
   const [entryName, setEntryName] = useState("");
   const [entryQty, setEntryQty] = useState("1");
@@ -148,7 +188,10 @@ export function RoughInTable({
 
   function addEntry() {
     const name = entryName.trim();
-    if (!name) return;
+    if (!name) {
+      focusEntry();
+      return;
+    }
     onAdd({
       name,
       quantity: parseQuantity(entryQty) ?? 1,
@@ -160,6 +203,13 @@ export function RoughInTable({
     setEntryUnit("each");
     setEntryRough("");
     focusEntry();
+    setAnnouncement(`Added ${name} to ${room.name}.`);
+  }
+
+  /** `DONE ADDING`: the entry lets go (the phone's keyboard closes); what is typed stays. */
+  function doneAdding() {
+    entryNameRef.current?.blur();
+    doneRef.current?.focus();
   }
 
   function removeRow(row: RoughInRow) {
@@ -218,6 +268,29 @@ export function RoughInTable({
     onPaste(text);
   }
 
+  const entryNameInput = (className: string) => (
+    <>
+      <input
+        ref={entryNameRef}
+        {...{ [ENTRY_NAME_ATTR]: "" }}
+        aria-label={`New line in ${room.name}`}
+        aria-describedby={hintId}
+        value={entryName}
+        onChange={(e) => setEntryName(e.target.value)}
+        onKeyDown={(e) => onCellKey(e, null, "name")}
+        onPaste={onEntryPaste}
+        className={cn(CELL_INPUT, "peer font-medium", className)}
+      />
+      {entryName === "" ? (
+        <i
+          aria-hidden="true"
+          data-caret
+          className="pointer-events-none absolute left-2 top-[11px] h-[18px] w-px bg-[var(--sheet-ink)] peer-focus:hidden"
+        />
+      ) : null}
+    </>
+  );
+
   return (
     <section
       data-rough-in-room={room.id}
@@ -242,113 +315,155 @@ export function RoughInTable({
         ) : null}
       </div>
 
-      <table
-        aria-labelledby={headingId}
-        className="w-[956px] max-w-full table-fixed border-collapse"
-      >
-        <colgroup>
-          {COLUMNS.map((col, i) => (
-            <col key={i} style={{ width: col.width }} />
-          ))}
-        </colgroup>
-        <thead>
-          <tr className="border-b border-[var(--sheet-rule-strong)]">
-            {COLUMNS.map((col, i) => (
-              <th
-                key={i}
-                scope="col"
-                className={cn(
-                  "h-[40px] px-2 font-mono text-[12px] font-medium uppercase leading-none tracking-[0.06em] text-[var(--sheet-ink)]",
-                  col.numeric ? "text-right" : "text-left",
-                )}
-              >
-                {col.label || <span className="sr-only">Acts</span>}
-              </th>
+      {phone ? (
+        <>
+          <ul
+            aria-labelledby={headingId}
+            data-rough-in-cards=""
+            className="border-t border-[var(--sheet-rule-strong)]"
+          >
+            {rows.map((row, index) => (
+              <LineCard
+                key={row.id}
+                row={row}
+                index={index}
+                room={room}
+                rooms={rooms}
+                nameRef={(el) => {
+                  if (el) nameRefs.current.set(row.id, el);
+                  else nameRefs.current.delete(row.id);
+                }}
+                onKey={onCellKey}
+                onUpdate={onUpdate}
+                onRemove={removeRow}
+                onMove={moveRow}
+                onFill={onFill}
+                onAlsoPlace={onAlsoPlace}
+              />
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <LineRow
-              key={row.id}
-              row={row}
-              index={index}
-              room={room}
-              rooms={rooms}
-              dragProps={rowDragProps?.(row.id)}
-              nameRef={(el) => {
-                if (el) nameRefs.current.set(row.id, el);
-                else nameRefs.current.delete(row.id);
-              }}
-              onKey={onCellKey}
-              onUpdate={onUpdate}
-              onRemove={removeRow}
-              onMove={moveRow}
-              onFill={onFill}
-              onAlsoPlace={onAlsoPlace}
-            />
-          ))}
+          </ul>
+          <div data-entry-row className="mt-2 flex flex-col">
+            <button
+              ref={doneRef}
+              type="button"
+              aria-label={`Done adding, ${room.name}`}
+              onClick={doneAdding}
+              className={cn(ACT, "self-end text-[var(--sheet-ink-muted)]")}
+            >
+              Done adding
+            </button>
+            <div
+              className={cn("flex min-h-[56px] items-center gap-2", ACTIVE_ROW)}
+            >
+              <div className="relative min-w-0 flex-1">
+                {entryNameInput("h-[44px]")}
+              </div>
+              <button
+                type="button"
+                aria-label={`Add to ${room.name}`}
+                // The entry keeps focus, so the phone's keyboard stays up.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={addEntry}
+                className={cn(ACT, "shrink-0 px-2 text-[var(--sheet-ink)]")}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <table
+          aria-labelledby={headingId}
+          className="w-full min-w-[640px] max-w-[956px] table-fixed border-collapse"
+        >
+          <colgroup>
+            {COLUMNS.map((col, i) => (
+              <col
+                key={i}
+                style={col.width ? { width: col.width } : undefined}
+              />
+            ))}
+          </colgroup>
+          <thead>
+            <tr className="border-b border-[var(--sheet-rule-strong)]">
+              {COLUMNS.map((col, i) => (
+                <th
+                  key={i}
+                  scope="col"
+                  className={cn(
+                    "h-[40px] px-2 font-mono text-[12px] font-medium uppercase leading-none tracking-[0.06em] text-[var(--sheet-ink)]",
+                    col.numeric ? "text-right" : "text-left",
+                  )}
+                >
+                  {col.label || <span className="sr-only">Acts</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <LineRow
+                key={row.id}
+                row={row}
+                index={index}
+                room={room}
+                rooms={rooms}
+                dragProps={rowDragProps?.(row.id)}
+                nameRef={(el) => {
+                  if (el) nameRefs.current.set(row.id, el);
+                  else nameRefs.current.delete(row.id);
+                }}
+                onKey={onCellKey}
+                onUpdate={onUpdate}
+                onRemove={removeRow}
+                onMove={moveRow}
+                onFill={onFill}
+                onAlsoPlace={onAlsoPlace}
+              />
+            ))}
 
-          <tr data-entry-row className={cn(ROW, ACTIVE_ROW)}>
-            <td className="relative">
-              <input
-                ref={entryNameRef}
-                {...{ [ENTRY_NAME_ATTR]: "" }}
-                aria-label={`New line in ${room.name}`}
-                aria-describedby={hintId}
-                value={entryName}
-                onChange={(e) => setEntryName(e.target.value)}
-                onKeyDown={(e) => onCellKey(e, null, "name")}
-                onPaste={onEntryPaste}
-                className={cn(CELL_INPUT, "peer font-medium")}
-              />
-              {entryName === "" ? (
-                <i
-                  aria-hidden="true"
-                  data-caret
-                  className="pointer-events-none absolute left-2 top-[11px] h-[18px] w-px bg-[var(--sheet-ink)] peer-focus:hidden"
+            <tr data-entry-row className={cn(ROW, ACTIVE_ROW)}>
+              <td className="relative">{entryNameInput("")}</td>
+              <td>
+                <input
+                  aria-label="Qty, new line"
+                  inputMode="numeric"
+                  value={entryQty}
+                  onChange={(e) => setEntryQty(e.target.value)}
+                  onKeyDown={(e) => onCellKey(e, null, "other")}
+                  className={NUM_INPUT}
                 />
-              ) : null}
-            </td>
-            <td>
-              <input
-                aria-label="Qty, new line"
-                inputMode="numeric"
-                value={entryQty}
-                onChange={(e) => setEntryQty(e.target.value)}
-                onKeyDown={(e) => onCellKey(e, null, "other")}
-                className={NUM_INPUT}
-              />
-            </td>
-            <td>
-              <UnitSelect
-                label="Unit, new line"
-                value={entryUnit}
-                onChange={setEntryUnit}
-                onKeyDown={(e) => onCellKey(e, null, "other")}
-              />
-            </td>
-            <td>
-              <input
-                aria-label="Rough $, new line"
-                inputMode="decimal"
-                value={entryRough}
-                onChange={(e) => setEntryRough(e.target.value)}
-                onKeyDown={(e) => onCellKey(e, null, "other")}
-                className={cn(NUM_INPUT, "text-[var(--sheet-ink-faint)]")}
-              />
-            </td>
-            <td />
-            <td />
-          </tr>
-        </tbody>
-      </table>
+              </td>
+              <td>
+                <UnitSelect
+                  label="Unit, new line"
+                  value={entryUnit}
+                  onChange={setEntryUnit}
+                  onKeyDown={(e) => onCellKey(e, null, "other")}
+                />
+              </td>
+              <td>
+                <input
+                  aria-label="Rough $, new line"
+                  inputMode="decimal"
+                  value={entryRough}
+                  onChange={(e) => setEntryRough(e.target.value)}
+                  onKeyDown={(e) => onCellKey(e, null, "other")}
+                  className={cn(NUM_INPUT, "text-[var(--sheet-ink-faint)]")}
+                />
+              </td>
+              <td />
+              <td />
+            </tr>
+          </tbody>
+        </table>
+      )}
 
       <p
         id={hintId}
         className="mt-3 font-mono text-[11px] uppercase leading-[1.4] text-[var(--sheet-ink-faint)]"
       >
-        {ROUGH_IN_KEY_HINT}
+        {phone ? ROUGH_IN_TOUCH_HINT : ROUGH_IN_KEY_HINT}
       </p>
       <p role="status" className="sr-only">
         {announcement}
@@ -418,19 +533,12 @@ function LineRow({
   onFill,
   onAlsoPlace,
 }: LineRowProps) {
-  const [name, setName] = useState(row.name);
+  const [name, setName, commitName] = useNameCell(row, onUpdate);
   const [qty, setQty] = useState(String(row.quantity));
   /** The raw figure while the cell has focus; `~$4,800` otherwise. */
   const [rough, setRough] = useState<string | null>(null);
 
-  useEffect(() => setName(row.name), [row.name]);
   useEffect(() => setQty(String(row.quantity)), [row.quantity]);
-
-  function commitName() {
-    const next = name.trim();
-    if (next && next !== row.name) onUpdate(row.id, { name: next });
-    else setName(row.name);
-  }
 
   function commitQty() {
     const next = parseQuantity(qty);
@@ -543,6 +651,88 @@ function LineRow({
         />
       </td>
     </tr>
+  );
+}
+
+/** The name cell's text, kept on blur when it changed and put back when blank. */
+function useNameCell(
+  row: RoughInRow,
+  onUpdate: (rowId: string, patch: RoughInLinePatch) => void,
+): [string, (name: string) => void, () => void] {
+  const [name, setName] = useState(row.name);
+  useEffect(() => setName(row.name), [row.name]);
+  function commitName() {
+    const next = name.trim();
+    if (next && next !== row.name) onUpdate(row.id, { name: next });
+    else setName(row.name);
+  }
+  return [name, setName, commitName];
+}
+
+/** One line at 390 (a13): a 56px card, the name, then `×2 · each · ~$4,800 · PLACEHOLDER`. */
+function LineCard({
+  row,
+  index,
+  room,
+  rooms,
+  nameRef,
+  onKey,
+  onUpdate,
+  onRemove,
+  onMove,
+  onFill,
+  onAlsoPlace,
+}: Omit<LineRowProps, "dragProps">) {
+  const [name, setName, commitName] = useNameCell(row, onUpdate);
+  const label = row.name || `line ${index + 1}`;
+  const figures = [
+    `×${row.quantity}`,
+    unitLabel(row.unit),
+    formatRough(row.roughCents),
+  ].filter(Boolean);
+  return (
+    <li
+      data-line-id={row.id}
+      className="flex min-h-[56px] items-center gap-2 border-b border-[var(--sheet-rule)] focus-within:outline focus-within:outline-1 focus-within:outline-offset-[-1px] focus-within:outline-[var(--sheet-rule-strong)]"
+    >
+      <div className={cn("min-w-0 flex-1 py-1", row.labor && "pl-4")}>
+        <div className="flex items-center gap-1">
+          {row.labor ? (
+            <span aria-hidden="true" className="text-[var(--sheet-ink-faint)]">
+              ↳
+            </span>
+          ) : null}
+          <input
+            ref={nameRef}
+            aria-label={`Line ${index + 1}`}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={commitName}
+            onKeyDown={(e) => onKey(e, row, "name")}
+            className={cn(CELL_INPUT, "h-[28px] px-0 font-medium")}
+          />
+        </div>
+        <p className="flex flex-wrap items-center gap-x-2 font-mono text-[12px] tabular-nums leading-[1.4] text-[var(--sheet-ink-muted)]">
+          {row.labor ? (
+            <span className="stamp stamp--labor">{LABOR_STAMP_LABEL}</span>
+          ) : null}
+          <span>{figures.join(" · ")} ·</span>
+          <span className={`stamp stamp--${row.stage}`}>
+            {lineStampLabel(row.stage)}
+          </span>
+        </p>
+      </div>
+      <RowMenu
+        row={row}
+        label={label}
+        room={room}
+        rooms={rooms}
+        onFill={onFill}
+        onMove={onMove}
+        onAlsoPlace={onAlsoPlace}
+        onRemove={onRemove}
+      />
+    </li>
   );
 }
 

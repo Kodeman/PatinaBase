@@ -9,6 +9,13 @@ import type { FfeLineUnit } from "@patina/types";
 export const ROUGH_IN_KEY_HINT =
   "ENTER ADDS THE LINE · TAB MOVES ACROSS · ⌘↓ NEXT ROOM · PASTE A LIST TO ADD SEVERAL · / SEARCHES THE LIBRARY";
 
+/** The phone's hint (a13): no keyboard-only keys; `ADD` is on the screen. */
+export const ROUGH_IN_TOUCH_HINT =
+  "PASTE A LIST TO ADD SEVERAL · / SEARCHES THE LIBRARY";
+
+/** Below md the lines are 56px cards, not the table (a13). */
+export const ROUGH_IN_PHONE_QUERY = "(max-width: 767px)";
+
 export type RoughInKeyAction =
   /** Enter on the entry row: add the line and start the next one here. */
   | "add"

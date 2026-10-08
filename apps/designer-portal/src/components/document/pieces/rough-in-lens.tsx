@@ -13,6 +13,10 @@
  * or `/` through `place_product_in_project_v2`. Paste previews through T-25.
  * The room's elevation sits on the right (a2). Nothing here buys, bills or
  * releases: those cells and the roads live in their own lenses.
+ *
+ * A line prints its need (D2, a6): the thread's `need_label`, read as the
+ * Spec lens reads it, so a filled line keeps the words she typed. UNDO and
+ * `Put back` move focus to the line and say so in a polite live region.
  */
 import {
   useEffect,
@@ -24,7 +28,9 @@ import {
   type PointerEvent,
 } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
+  createBrowserClient,
   useArchiveProjectSelection,
   useBatchCreateNamedProjectNeeds,
   usePlaceProductInProjectV2,
@@ -103,7 +109,12 @@ interface RoughInLine extends PieceLineStageRow {
   design_disposition?: string | null;
   purchase_order_id?: string | null;
   removed_at?: string | null;
+  selection_thread_id?: string | null;
+  budget_min_cents?: number | null;
 }
+
+/** Thread id → its need label, where it has one. */
+type NeedLabels = Readonly<Record<string, string>>;
 
 /** A table on the sheet: a project room, `Not in a room yet`, or `Throughout`. */
 interface Place {
@@ -173,8 +184,83 @@ function lineUnit(line: RoughInLine): FfeLineUnit {
     : "each";
 }
 
-function lineName(line: RoughInLine): string {
-  return line.name?.trim() || "Unnamed line";
+/** The need the line answers (D2): its thread's need label, else its name. */
+function lineName(line: RoughInLine, needLabels: NeedLabels = {}): string {
+  return (
+    (line.selection_thread_id && needLabels[line.selection_thread_id]) ||
+    line.name?.trim() ||
+    "Unnamed line"
+  );
+}
+
+/**
+ * The need labels, from the same source the Spec lens reads
+ * (`project_ffe_selection_threads.need_label`, spec-lens.tsx). A fill names
+ * the line after the product; the need stays on the thread.
+ */
+function useNeedLabels(
+  projectId: string,
+  lines: readonly RoughInLine[],
+): NeedLabels {
+  const threadIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          lines
+            .map((line) => line.selection_thread_id)
+            .filter((id): id is string => !!id),
+        ),
+      ].sort(),
+    [lines],
+  );
+  const { data } = useQuery({
+    queryKey: [
+      "project-ffe-items",
+      projectId,
+      "need-labels",
+      threadIds.join(","),
+    ],
+    enabled: threadIds.length > 0,
+    queryFn: async (): Promise<NeedLabels> => {
+      const { data: threads, error } = await (createBrowserClient() as any)
+        .from("project_ffe_selection_threads")
+        .select("id, need_label")
+        .in("id", threadIds);
+      if (error) throw error;
+      const labels: Record<string, string> = {};
+      for (const thread of (threads ?? []) as {
+        id: string;
+        need_label: string | null;
+      }[]) {
+        if (thread.need_label?.trim())
+          labels[thread.id] = thread.need_label.trim();
+      }
+      return labels;
+    },
+  });
+  return data ?? {};
+}
+
+/** Focus a line's first field or act, wherever it sits on the sheet. */
+function focusLine(root: HTMLElement | null, lineId: string): boolean {
+  const row = Array.from(
+    root?.querySelectorAll<HTMLElement>("[data-line-id]") ?? [],
+  ).find((el) => el.getAttribute("data-line-id") === lineId);
+  const target = row?.querySelector<HTMLElement>("input, button");
+  if (!target) return false;
+  target.focus();
+  return true;
+}
+
+/** A line's own item type for a fill (Q12): an allowance keeps its ceiling. */
+function fillItemType(line: RoughInLine) {
+  return line.item_type === "allowance"
+    ? {
+        itemType: "allowance" as const,
+        budgetMinCents: line.budget_min_cents ?? null,
+        budgetMaxCents: line.budget_max_cents ?? null,
+      }
+    : { itemType: "fixed" as const };
 }
 
 /** Released, on an order, past `ordered`, or a Trade Scope line. */
@@ -264,6 +350,9 @@ export function RoughInLens({
   const [notice, setNotice] = useState<string | null>(null);
   const [paneRoomId, setPaneRoomId] = useState<string | null>(null);
   const [paneOpen, setPaneOpen] = useState(true);
+  const [announcement, setAnnouncement] = useState("");
+  /** A line put back by UNDO: focus goes to it once it is on the sheet. */
+  const [focusLineId, setFocusLineId] = useState<string | null>(null);
 
   const lines = useMemo(
     () =>
@@ -274,6 +363,14 @@ export function RoughInLens({
   );
   const lineIds = useMemo(() => new Set(lines.map((l) => l.id)), [lines]);
   const byId = useMemo(() => new Map(lines.map((l) => [l.id, l])), [lines]);
+  const needLabels = useNeedLabels(projectId, lines);
+  const needOf = (line: RoughInLine) => lineName(line, needLabels);
+
+  // The restored line lands once the server returns it; focus waits for it.
+  useEffect(() => {
+    if (focusLineId && focusLine(sheetRef.current, focusLineId))
+      setFocusLineId(null);
+  }, [focusLineId, lines]);
 
   const stages = useMemo(
     () =>
@@ -378,11 +475,11 @@ export function RoughInLens({
     () =>
       lines.map((line) => ({
         id: line.id,
-        name: lineName(line),
+        name: lineName(line, needLabels),
         roomId: line.project_room_id ?? null,
         released: isLocked(line, stages.get(line.id)),
       })),
-    [lines, stages],
+    [lines, stages, needLabels],
   );
   const dragById = useMemo(
     () => new Map(dragLines.map((l) => [l.id, l])),
@@ -443,7 +540,7 @@ export function RoughInLens({
       }
       return {
         id: line.id,
-        name: line.name ?? "",
+        name: needOf(line),
         quantity: line.quantity ?? 0,
         unit: lineUnit(line),
         roughCents: line.rough_cents ?? null,
@@ -506,10 +603,22 @@ export function RoughInLens({
   }
 
   function updateLine(rowId: string, patch: RoughInLinePatch) {
-    if (!byId.has(rowId)) return;
+    const line = byId.get(rowId);
+    if (!line) return;
     setNotice(null);
+    const { name, ...rest } = patch;
+    // The name cell prints the need (D2), so a rename names the need. A filled
+    // line keeps its product's name; an open one keeps name and need as one.
+    const naming =
+      name === undefined
+        ? {}
+        : !line.selection_thread_id
+          ? { name }
+          : line.product_id
+            ? { needLabel: name }
+            : { name, needLabel: name };
     buildFields.mutate(
-      { projectId, itemId: rowId, ...patch },
+      { projectId, itemId: rowId, ...rest, ...naming },
       {
         onError: (cause) =>
           setNotice(
@@ -557,10 +666,17 @@ export function RoughInLens({
   async function undoRemoval(target: Removal) {
     setRemoval(null);
     // Never removed: the row is already back.
-    if (!(await target.archived)) return;
+    if (!(await target.archived)) {
+      setFocusLineId(target.selectionId);
+      return;
+    }
     try {
       await restore.mutateAsync({ projectId, selectionId: target.selectionId });
       setHidden((set) => without(set, target.selectionId));
+      setFocusLineId(target.selectionId);
+      setAnnouncement(
+        `Put back ${target.name} ×${target.quantity} in ${target.placeName}.`,
+      );
     } catch (cause) {
       setNotice(
         errorText(cause) ??
@@ -617,6 +733,7 @@ export function RoughInLens({
             placeItem.scope) as FfeAssignmentScope,
           roomId: line.project_room_id ?? null,
           quantity: line.quantity ?? 1,
+          ...fillItemType(line),
           ...(KEPT_DISPOSITIONS.has(disposition)
             ? {
                 disposition: disposition as
@@ -672,10 +789,10 @@ export function RoughInLens({
     }
     const heading =
       tool.kind === "fill"
-        ? `Fill ${lineName(tool.line)} with a product`
+        ? `Fill ${needOf(tool.line)} with a product`
         : tool.kind === "add"
           ? `Add a Library piece to ${placeItem.name}`
-          : `Place ${lineName(tool.line)} in more rooms`;
+          : `Place ${needOf(tool.line)} in more rooms`;
     return (
       <div
         data-rough-in-tool={tool.kind}
@@ -749,7 +866,8 @@ export function RoughInLens({
 
   return (
     <div ref={sheetRef} data-rough-in-lens="" className="flex gap-6 py-6">
-      <div className="min-w-0 flex-1 overflow-x-auto">
+      {/* The phone's cards fit; only the md–lg table may scroll sideways. */}
+      <div className="min-w-0 flex-1 md:overflow-x-auto">
         {places.map((placeItem) => {
           const target = dropRoom(placeItem);
           const dropLabel = target ? drag.roomDropLabel(target) : null;
@@ -827,6 +945,15 @@ export function RoughInLens({
           />
         ) : null}
         <p {...drag.liveRegionProps} />
+        <p
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          data-rough-in-announce=""
+          className="sr-only"
+        >
+          {announcement}
+        </p>
       </div>
 
       {paneOpen && shownRoom ? (
@@ -852,15 +979,63 @@ function RemovedLines({
   const { data } = useRemovedProjectLines(projectId);
   const restore = useRestoreProjectSelection();
   const [notice, setNotice] = useState<string | null>(null);
-  const removed = (data ?? []) as RoughInLine[];
+  const [announcement, setAnnouncement] = useState("");
+  /** Lines put back here, gone from the list before the server's list catches up. */
+  const [putBack, setPutBack] = useState<ReadonlySet<string>>(new Set());
+  /** Where focus goes once a put-back line leaves the list: its neighbour, else the heading. */
+  const [focusAfter, setFocusAfter] = useState<{ id: string | null } | null>(
+    null,
+  );
+  const listRef = useRef<HTMLElement>(null);
+  const allRemoved = (data ?? []) as RoughInLine[];
+  const needLabels = useNeedLabels(projectId, allRemoved);
+  const removed = allRemoved.filter((line) => !putBack.has(line.id));
   const roomName = (id: string | null | undefined) =>
     rooms.find((r) => r.id === id)?.name ?? null;
 
+  useEffect(() => {
+    if (!focusAfter) return;
+    setFocusAfter(null);
+    const root = listRef.current;
+    const target =
+      (focusAfter.id &&
+        Array.from(
+          root?.querySelectorAll<HTMLElement>("[data-removed-id]") ?? [],
+        )
+          .find((el) => el.getAttribute("data-removed-id") === focusAfter.id)
+          ?.querySelector<HTMLElement>("button")) ||
+      root?.querySelector<HTMLElement>("h2");
+    target?.focus();
+  }, [focusAfter]);
+
+  async function putLineBack(line: RoughInLine, index: number) {
+    const name = lineName(line, needLabels);
+    const from = roomName(line.project_room_id);
+    try {
+      await restore.mutateAsync({ projectId, selectionId: line.id });
+    } catch (cause) {
+      setNotice(errorText(cause) ?? `${name} was not put back. Try again.`);
+      return;
+    }
+    setNotice(null);
+    const neighbour = removed[index + 1] ?? removed[index - 1] ?? null;
+    setPutBack((set) => new Set(set).add(line.id));
+    setFocusAfter({ id: neighbour?.id ?? null });
+    setAnnouncement(
+      `Put back ${name} ×${line.quantity ?? 0}${from ? ` in ${from}` : ""}.`,
+    );
+  }
+
   return (
-    <section aria-labelledby="rough-in-removed" className="max-w-[720px] py-6">
+    <section
+      ref={listRef}
+      aria-labelledby="rough-in-removed"
+      className="max-w-[720px] py-6"
+    >
       <h2
         id="rough-in-removed"
-        className="font-heading text-[18px] italic leading-[1.2] text-[var(--sheet-ink)]"
+        tabIndex={-1}
+        className="font-heading text-[18px] italic leading-[1.2] text-[var(--sheet-ink)] focus:outline-none"
       >
         Removed
       </h2>
@@ -870,12 +1045,13 @@ function RemovedLines({
         </p>
       ) : (
         <ul className="mt-3 border-t border-[var(--sheet-rule-strong)]">
-          {removed.map((line) => {
+          {removed.map((line, index) => {
             const from = roomName(line.project_room_id);
-            const name = lineName(line);
+            const name = lineName(line, needLabels);
             return (
               <li
                 key={line.id}
+                data-removed-id={line.id}
                 className="flex min-h-[40px] items-center gap-3 border-b border-[var(--sheet-rule)] text-[14px]"
               >
                 <span className="min-w-0 flex-1 text-[var(--sheet-ink)]">
@@ -890,18 +1066,7 @@ function RemovedLines({
                 <button
                   type="button"
                   aria-label={`Put back ${name}`}
-                  onClick={() =>
-                    restore.mutate(
-                      { projectId, selectionId: line.id },
-                      {
-                        onError: (cause) =>
-                          setNotice(
-                            errorText(cause) ??
-                              `${name} was not put back. Try again.`,
-                          ),
-                      },
-                    )
-                  }
+                  onClick={() => void putLineBack(line, index)}
                   className={cn(ACT, "text-[var(--sheet-ink)]")}
                 >
                   Put back
@@ -919,6 +1084,14 @@ function RemovedLines({
           {notice}
         </p>
       ) : null}
+      <p
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {announcement}
+      </p>
     </section>
   );
 }

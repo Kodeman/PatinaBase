@@ -384,6 +384,38 @@ describe("BuildRoomShell — at 390 (a13)", () => {
     expect(props.onReturn).not.toHaveBeenCalled();
   });
 
+  it("adds a room from the phone's room list, where the rail is not (T-33a, F12)", async () => {
+    const onAddRoom = jest.fn().mockResolvedValue(undefined);
+    renderShell({ onAddRoom });
+    // The rail is md and up only; its + ROOM is not on a phone.
+    expect(screen.getByRole("navigation", { name: "Rooms" })).toHaveClass(
+      "hidden",
+      "md:flex",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Living Room ▾" }));
+    const list = screen.getByRole("navigation", { name: "Choose a room" });
+    expect(list.className).toContain("md:hidden");
+    fireEvent.click(within(list).getByRole("button", { name: "+ Room" }));
+    const name = within(list).getByLabelText("Room name");
+    // Esc closes the form, not the room list.
+    fireEvent.keyDown(name, { key: "Escape" });
+    expect(within(list).queryByLabelText("Room name")).toBeNull();
+    expect(
+      screen.getByRole("navigation", { name: "Choose a room" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(list).getByRole("button", { name: "+ Room" }));
+    fireEvent.change(within(list).getByLabelText("Room name"), {
+      target: { value: "Mudroom" },
+    });
+    await act(async () => {
+      fireEvent.click(
+        within(list).getByRole("button", { name: "Add the room" }),
+      );
+    });
+    expect(onAddRoom).toHaveBeenCalledWith("Mudroom");
+  });
+
   it("lays the lens words out as a full-width segmented row with 44px targets", () => {
     renderShell();
     const group = screen.getByRole("group", { name: "Lens" });

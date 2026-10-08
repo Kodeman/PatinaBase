@@ -393,6 +393,8 @@ export function BuildRoomShell({
               {places.map((row) => placeLink(row, "picker"))}
               {others.map((row) => placeLink(row, "picker"))}
             </ul>
+            {/* The phone has no rail, so + ROOM lives in the room list too (a13). */}
+            <AddRoom onAddRoom={onAddRoom} />
           </nav>
         ) : null}
       </header>
@@ -498,7 +500,9 @@ function AddRoom({
         onChange={(event) => setName(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
+            // Closes the form only; the phone's room list stays open.
             event.preventDefault();
+            event.stopPropagation();
             close();
           }
         }}

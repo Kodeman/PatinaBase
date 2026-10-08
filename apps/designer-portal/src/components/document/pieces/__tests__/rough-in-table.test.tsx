@@ -6,6 +6,8 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   ROUGH_IN_KEY_HINT,
+  ROUGH_IN_PHONE_QUERY,
+  ROUGH_IN_TOUCH_HINT,
   formatRough,
   parseRough,
   roughInKeyAction,
@@ -81,7 +83,31 @@ describe("RoughInTable columns and rows", () => {
     const widths = Array.from(view.container.querySelectorAll("col")).map(
       (c) => c.style.width,
     );
-    expect(widths).toEqual(["480px", "72px", "96px", "120px", "140px", "48px"]);
+    // LINE takes what is left: 480 at the full 956, less beside the pane (F2).
+    expect(widths).toEqual(["", "72px", "96px", "120px", "140px", "48px"]);
+  });
+
+  it("fits beside the elevation pane at 1440 with no column cut (T-33a, F2)", () => {
+    const { view } = setup();
+    const table = view.container.querySelector("table") as HTMLTableElement;
+    const classes = table.className.split(" ");
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        "w-full",
+        "min-w-[640px]",
+        "max-w-[956px]",
+        "table-fixed",
+      ]),
+    );
+    const fixed = Array.from(view.container.querySelectorAll("col"))
+      .map((c) => parseInt(c.style.width || "0", 10))
+      .reduce((a, b) => a + b, 0);
+    expect(fixed).toBe(476);
+    // 1440 − rail 201 − main padding 48 − gap 24 − pane 360 − a scrollbar 16.
+    const besideThePane = 1440 - 201 - 48 - 24 - 360 - 16;
+    expect(640).toBeLessThanOrEqual(besideThePane);
+    // LINE keeps a usable width there.
+    expect(besideThePane - fixed).toBeGreaterThanOrEqual(300);
   });
 
   it("prints the rough figure as ~$4,800 and an empty cell when there is none", () => {
@@ -456,5 +482,117 @@ describe("UndoToast", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       /^Removed Rattan lounge chair ×2\.Undo10 S$/,
     );
+  });
+});
+
+describe("RoughInTable — Enter-add is announced (T-33a, F5)", () => {
+  it("says the line was added, in the table's polite status", async () => {
+    const { user } = setup();
+    await user.type(entryName(), "Floor lamp{Enter}");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Added Floor lamp to Living Room.",
+    );
+    expect(entryName()).toHaveFocus();
+  });
+});
+
+describe("RoughInTable — at 390 (a13, T-33a F1/F12)", () => {
+  function phone(matches: boolean) {
+    window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      matches: query === ROUGH_IN_PHONE_QUERY ? matches : false,
+      media: query,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    })) as unknown as typeof window.matchMedia;
+  }
+  beforeEach(() => phone(true));
+  afterEach(() => phone(false));
+
+  it("prints 56px cards, no table, name then ×2 · each · ~$4,800 · stage", () => {
+    setup();
+    expect(screen.queryByRole("table")).toBeNull();
+    const cards = within(screen.getByRole("list")).getAllByRole("listitem");
+    expect(cards).toHaveLength(3);
+    expect(cards[0]).toHaveClass("min-h-[56px]");
+    expect(
+      within(cards[0]).getByRole("textbox", { name: "Line 1" }),
+    ).toHaveValue("Custom cabinet");
+    expect(cards[0]).toHaveTextContent("×2 · each · ~$4,800 ·Placeholder");
+    expect(cards[2]).toHaveTextContent("×2 · each ·Placeholder");
+    expect(within(cards[0]).getByText("Placeholder")).toHaveClass(
+      "stamp--placeholder",
+    );
+  });
+
+  it("ADD adds what is typed, and keeps the entry for the next line (R3-7)", async () => {
+    const { props, user } = setup();
+    const add = screen.getByRole("button", { name: "Add to Living Room" });
+    expect(add).toHaveTextContent("Add");
+    await user.type(entryName(), "Floor lamp");
+    await user.click(add);
+    expect(props.onAdd).toHaveBeenCalledWith({
+      name: "Floor lamp",
+      quantity: 1,
+      unit: "each",
+      roughCents: null,
+    });
+    expect(entryName()).toHaveValue("");
+    expect(entryName()).toHaveFocus();
+    // ADD on an empty entry adds nothing.
+    await user.click(add);
+    expect(props.onAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it("DONE ADDING sits above the entry and lets go of it without adding", async () => {
+    const { props, user } = setup();
+    const done = screen.getByRole("button", {
+      name: "Done adding, Living Room",
+    });
+    expect(done).toHaveTextContent("Done adding");
+    expect(
+      done.compareDocumentPosition(entryName()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    await user.type(entryName(), "Sofa");
+    await user.click(done);
+    expect(props.onAdd).not.toHaveBeenCalled();
+    expect(entryName()).not.toHaveFocus();
+    expect(done).toHaveFocus();
+    expect(entryName()).toHaveValue("Sofa");
+  });
+
+  it("reaches Fill, Move to room…, Also place in… and Remove from each card's ⋯", async () => {
+    const { props, user } = setup();
+    const card = screen.getAllByRole("listitem")[0];
+    await user.click(
+      within(card).getByRole("button", { name: "Acts for Custom cabinet" }),
+    );
+    expect(
+      screen.getAllByRole("menuitem").map((item) => item.textContent),
+    ).toEqual([
+      "Fill with a product",
+      "Move to room…",
+      "Also place in…",
+      "Remove",
+    ]);
+    await user.click(screen.getByRole("menuitem", { name: "Move to room…" }));
+    await user.click(screen.getByRole("menuitem", { name: "Kitchen" }));
+    expect(props.onMove).toHaveBeenCalledWith(LIVING[0], "kitchen");
+
+    await user.click(
+      within(card).getByRole("button", { name: "Acts for Custom cabinet" }),
+    );
+    await user.click(
+      screen.getByRole("menuitem", { name: "Fill with a product" }),
+    );
+    expect(props.onFill).toHaveBeenCalledWith(LIVING[0]);
+  });
+
+  it("names no keyboard-only key in the phone's hint (F12)", () => {
+    setup();
+    expect(screen.queryByText(ROUGH_IN_KEY_HINT)).toBeNull();
+    expect(screen.getByText(ROUGH_IN_TOUCH_HINT)).toBeInTheDocument();
+    expect(ROUGH_IN_TOUCH_HINT).not.toMatch(/⌘|TAB|ENTER/);
+    expect(entryName()).toHaveAccessibleDescription(ROUGH_IN_TOUCH_HINT);
   });
 });

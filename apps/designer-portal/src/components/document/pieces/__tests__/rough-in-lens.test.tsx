@@ -6,8 +6,12 @@
  */
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const mockBatch = jest.fn();
+/** Thread id → need_label, as `project_ffe_selection_threads` returns it. */
+const mockThreads: Record<string, string | null> = {};
+const mockMatches = { phone: false };
 const mockBuild = jest.fn();
 const mockArchive = jest.fn();
 const mockRestore = jest.fn();
@@ -42,6 +46,21 @@ const EMTEK = {
 };
 
 jest.mock("@patina/supabase", () => ({
+  createBrowserClient: () => ({
+    from: (table: string) => ({
+      select: () => ({
+        in: async (_col: string, ids: string[]) =>
+          table === "project_ffe_selection_threads"
+            ? {
+                data: ids
+                  .filter((id) => id in mockThreads)
+                  .map((id) => ({ id, need_label: mockThreads[id] })),
+                error: null,
+              }
+            : { data: [], error: null },
+      }),
+    }),
+  }),
   useProjectFFEItems: () => ({ data: mockState.lines }),
   useProjectRoomPlacements: () => ({ data: [] }),
   useRemovedProjectLines: () => ({ data: mockState.removed }),
@@ -116,8 +135,18 @@ const L3 = line("l3", "Hardware, 2 knobs for custom cabinet");
 
 function setup(room: string | null = LIVING) {
   const user = userEvent.setup();
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
-    <RoughInLens docId="doc-1" projectId={PROJECT} rooms={ROOMS} room={room} />,
+    <QueryClientProvider client={client}>
+      <RoughInLens
+        docId="doc-1"
+        projectId={PROJECT}
+        rooms={ROOMS}
+        room={room}
+      />
+    </QueryClientProvider>,
   );
   return { user };
 }
@@ -130,6 +159,14 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockState.lines = [];
   mockState.removed = [];
+  for (const id of Object.keys(mockThreads)) delete mockThreads[id];
+  mockMatches.phone = false;
+  window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+    matches: query === "(max-width: 767px)" ? mockMatches.phone : false,
+    media: query,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+  })) as unknown as typeof window.matchMedia;
   let n = 0;
   mockBatch.mockImplementation(async () => ({ selectionIds: [`new-${++n}`] }));
   mockArchive.mockResolvedValue({});
@@ -231,6 +268,7 @@ describe("RoughInLens — the hooks", () => {
       assignmentScope: "room",
       roomId: LIVING,
       quantity: 2,
+      itemType: "fixed",
       disposition: "candidate",
       duplicateMode: "reuse",
       roleConfigurationIdentity: "default",
@@ -434,5 +472,253 @@ describe("RoughInLens — the elevation pane and what is absent (a2)", () => {
         /^(Line|Qty|Unit|Rough \$|Stage|Acts)$/,
       );
     }
+  });
+});
+
+// T-33a (SQ-679): the T-33 review's F1, F2, F4/F5, F6 and F8 in Rough in.
+describe("RoughInLens — at 390 (a13, F1)", () => {
+  it("prints cards, not the table, with a visible ADD and every act on screen", async () => {
+    mockMatches.phone = true;
+    mockState.lines = [L1, L3];
+    const { user } = setup();
+    const living = livingTable();
+
+    expect(within(living).queryByRole("table")).toBeNull();
+    const cards = within(living).getByRole("list");
+    expect(within(cards).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(cards).getAllByRole("listitem")[0]).toHaveTextContent(
+      "×2 · each · ~$4,800 ·Placeholder",
+    );
+    // No sideways scroller on the phone: only md and up may scroll.
+    const scroller = living.closest("[data-rough-in-lens]")
+      ?.firstElementChild as HTMLElement;
+    expect(scroller.className.split(" ")).not.toContain("overflow-x-auto");
+    expect(scroller.className).toContain("md:overflow-x-auto");
+
+    // ADD is a visible act, not only Enter (R3-7).
+    await user.type(
+      within(living).getByRole("textbox", { name: "New line in Living Room" }),
+      "Floor lamp",
+    );
+    await user.click(
+      within(living).getByRole("button", { name: "Add to Living Room" }),
+    );
+    expect(mockBatch).toHaveBeenCalledTimes(1);
+    expect(mockBatch.mock.calls[0][0]).toMatchObject({
+      roomId: LIVING,
+      lines: [{ name: "Floor lamp", quantity: 1, unit: "each" }],
+    });
+    expect(
+      within(living).getByRole("button", { name: "Done adding, Living Room" }),
+    ).toBeInTheDocument();
+
+    // Every act is one tap on the card's ⋯.
+    await user.click(
+      within(living).getByRole("button", {
+        name: "Acts for Hardware, 2 knobs for custom cabinet",
+      }),
+    );
+    for (const act of [
+      "Fill with a product",
+      "Move to room…",
+      "Also place in…",
+      "Remove",
+    ])
+      expect(screen.getByRole("menuitem", { name: act })).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Remove" }));
+    expect(mockArchive).toHaveBeenCalledWith({
+      projectId: PROJECT,
+      selectionId: "l3",
+      reason: "",
+    });
+
+    // The hint names no keyboard-only key.
+    const text = living.textContent ?? "";
+    expect(text).not.toMatch(/⌘↓|TAB MOVES|ENTER ADDS/);
+  });
+});
+
+describe("RoughInLens — at 1440 with the elevation pane open (F2)", () => {
+  it("keeps the pane beside a fluid table, so no column is clipped", () => {
+    mockState.lines = [L1];
+    setup();
+    const pane = screen.getByRole("complementary", {
+      name: /living room · elevation/i,
+    });
+    const lens = pane.closest("[data-rough-in-lens]") as HTMLElement;
+    const table = within(livingTable()).getByRole("table");
+    // The table fills its scroller and never asks for the a2 956px.
+    expect(table.className).toContain("w-full");
+    expect(table.className).toContain("min-w-[640px]");
+    expect(table.className).not.toMatch(/(^| )w-\[956px\]/);
+    expect(lens.contains(table)).toBe(true);
+    // STAGE and the ⋯ column are in the table, not past a cut.
+    expect(
+      within(table).getByRole("columnheader", { name: "Stage" }),
+    ).toBeInTheDocument();
+    expect(
+      within(table).getByRole("button", { name: "Acts for Custom cabinet" }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("RoughInLens — focus and announcements (F4, F5)", () => {
+  it("UNDO puts focus on the restored line and says so", async () => {
+    mockState.lines = [L1, L3];
+    const { user } = setup();
+    await user.click(
+      screen.getByRole("button", {
+        name: "Acts for Hardware, 2 knobs for custom cabinet",
+      }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Remove" }));
+    const toast = screen.getByText(
+      "Removed Hardware, 2 knobs for custom cabinet ×2 from Living Room.",
+    );
+    await user.click(
+      within(toast.closest("[data-undo-toast]") as HTMLElement).getByRole(
+        "button",
+        { name: "Undo" },
+      ),
+    );
+    const restored = await screen.findByRole("textbox", { name: "Line 2" });
+    await waitFor(() => expect(restored).toHaveFocus());
+    expect(restored).toHaveValue("Hardware, 2 knobs for custom cabinet");
+    const region = document.querySelector(
+      "[data-rough-in-announce]",
+    ) as HTMLElement;
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region).toHaveTextContent(
+      "Put back Hardware, 2 knobs for custom cabinet ×2 in Living Room.",
+    );
+  });
+
+  it("Put back under Removed says where the line went and keeps focus on the list", async () => {
+    mockState.removed = [
+      line("r1", "Rattan lounge chair", { removed_at: "2026-10-08T12:00:00Z" }),
+      line("r2", "Side table", { removed_at: "2026-10-08T11:00:00Z" }),
+    ];
+    const { user } = setup(REMOVED_PLACE);
+    await user.click(
+      screen.getByRole("button", { name: "Put back Rattan lounge chair" }),
+    );
+    expect(mockRestore).toHaveBeenCalledWith({
+      projectId: PROJECT,
+      selectionId: "r1",
+    });
+    expect(
+      await screen.findByText(
+        "Put back Rattan lounge chair ×2 in Living Room.",
+      ),
+    ).toHaveAttribute("aria-live", "polite");
+    expect(
+      screen.queryByRole("button", { name: "Put back Rattan lounge chair" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Put back Side table" }),
+    ).toHaveFocus();
+
+    // The last one: focus rests on the Removed heading, never on BODY.
+    await user.click(
+      screen.getByRole("button", { name: "Put back Side table" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Removed" })).toHaveFocus(),
+    );
+  });
+
+  it("Enter-add is announced", async () => {
+    const { user } = setup();
+    await user.type(
+      within(livingTable()).getByRole("textbox", {
+        name: "New line in Living Room",
+      }),
+      "Floor lamp{Enter}",
+    );
+    expect(within(livingTable()).getByRole("status")).toHaveTextContent(
+      "Added Floor lamp to Living Room.",
+    );
+  });
+});
+
+describe("RoughInLens — the need survives a fill (F6, D2, a6)", () => {
+  const FILLED = line("l3", "Emtek Ribbon & Reed knob", {
+    product_id: "p-emtek",
+    item_type: "fixed",
+    selection_thread_id: "t3",
+  });
+
+  it("prints the thread's need label, not the product's name, in the row, menu and toast", async () => {
+    mockThreads.t3 = "Hardware, 2 knobs for custom cabinet";
+    mockState.lines = [L1, FILLED];
+    const { user } = setup();
+    const row = await screen.findByDisplayValue(
+      "Hardware, 2 knobs for custom cabinet",
+    );
+    expect(row).toHaveAccessibleName("Line 2");
+    expect(screen.queryByDisplayValue("Emtek Ribbon & Reed knob")).toBeNull();
+    await user.click(
+      screen.getByRole("button", {
+        name: "Acts for Hardware, 2 knobs for custom cabinet",
+      }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Remove" }));
+    expect(
+      screen.getByText(
+        "Removed Hardware, 2 knobs for custom cabinet ×2 from Living Room.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("a rename of a filled line names the need, never the product", async () => {
+    mockThreads.t3 = "Hardware, 2 knobs for custom cabinet";
+    mockState.lines = [FILLED];
+    const { user } = setup();
+    const cell = await screen.findByDisplayValue(
+      "Hardware, 2 knobs for custom cabinet",
+    );
+    await user.clear(cell);
+    await user.type(cell, "Hardware, 4 knobs");
+    await user.tab();
+    expect(mockBuild).toHaveBeenCalledWith(
+      { projectId: PROJECT, itemId: "l3", needLabel: "Hardware, 4 knobs" },
+      expect.anything(),
+    );
+  });
+});
+
+describe("RoughInLens — a filled allowance keeps its ceiling (F8, Q12)", () => {
+  it("sends the line's own item type and budget", async () => {
+    mockState.lines = [
+      line("a1", "Pendant allowance", {
+        item_type: "allowance",
+        budget_min_cents: 20000,
+        budget_max_cents: 60000,
+      }),
+    ];
+    const { user } = setup();
+    await user.click(
+      screen.getByRole("button", { name: "Acts for Pendant allowance" }),
+    );
+    await user.click(
+      screen.getByRole("menuitem", { name: "Fill with a product" }),
+    );
+    await user.type(
+      screen.getByRole("combobox", {
+        name: "Fill Pendant allowance with a product",
+      }),
+      "knob",
+    );
+    await user.click(
+      await screen.findByRole("option", { name: /Emtek Ribbon & Reed knob/ }),
+    );
+    await waitFor(() => expect(mockPlace).toHaveBeenCalledTimes(1));
+    expect(mockPlace.mock.calls[0][0]).toMatchObject({
+      placeholderSelectionId: "a1",
+      itemType: "allowance",
+      budgetMinCents: 20000,
+      budgetMaxCents: 60000,
+      duplicateMode: "reuse",
+    });
   });
 });
