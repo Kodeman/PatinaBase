@@ -250,7 +250,7 @@ describe('The Pieces head reads its spec act from the own-act table (F2-19, 499-
       releaseEligible: false,
       install: null,
     })!.label;
-    expect(own).toBe('Spec the 3 unspecified');
+    expect(own).toBe('Fill the 3 placeholders');
     expect(document.querySelector('[data-action-key="open-spec-book"]')).toHaveTextContent(own);
   });
 });

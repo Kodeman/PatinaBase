@@ -59,7 +59,7 @@ const promisePastDue = (standingSince: string | null = null): TicketException =>
 
 const pieceStuck = (standingSince: string | null = null): TicketException => ({
   rank: 'piece-stuck',
-  phrase: '2 unspecified',
+  phrase: '2 placeholders',
   standingSince,
 });
 
@@ -205,7 +205,7 @@ describe('deriveTicketLeader — direction-b §3.2, the tie-break', () => {
       'project',
     );
 
-    expect(leader.headline).toBe('Spec · 2 unspecified');
+    expect(leader.headline).toBe('Spec · 2 placeholders');
   });
 
   it('falls back to ticket order when rank and standing day both tie', () => {
@@ -214,7 +214,7 @@ describe('deriveTicketLeader — direction-b §3.2, the tie-break', () => {
       'project',
     );
 
-    expect(leader.headline).toBe('Pieces · 2 unspecified');
+    expect(leader.headline).toBe('Pieces · 2 placeholders');
   });
 });
 
@@ -236,7 +236,7 @@ describe('leadTicketException', () => {
 
     expect(printed).not.toContainEqual(unprintedMoney);
     expect(leadTicketException(printed)?.key).toBe('spec');
-    expect(deriveTicketLeader(printed, 'project').headline).toBe('Spec · 2 unspecified');
+    expect(deriveTicketLeader(printed, 'project').headline).toBe('Spec · 2 placeholders');
   });
 
   it('never elects a row whose source has not answered', () => {

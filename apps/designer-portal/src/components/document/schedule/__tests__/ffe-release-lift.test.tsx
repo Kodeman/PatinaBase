@@ -182,7 +182,7 @@ describe('the release lift — the schedule’s half', () => {
     // exception standing on the spread — here, the one unspecified line.
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Spec the 1 unspecified');
+    expect(inked[0]).toHaveTextContent('Fill the 1 placeholder');
     expect(
       screen.queryByRole('button', { name: 'Release for authorization' }),
     ).toBeNull();

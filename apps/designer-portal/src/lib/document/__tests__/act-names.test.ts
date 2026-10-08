@@ -119,7 +119,7 @@ describe('ownAct (D1 own-act table)', () => {
     ['Proposal, accepted', 'proposal', { proposalState: 'accepted' },
       { label: 'Open the project', targetId: ACT_TARGET_IDS.projectPaper, tier: 'scored' }],
     ['Project, unspecified lines', 'project', { unspecifiedCount: 3, releaseEligible: true },
-      { label: 'Spec the 3 unspecified', targetId: ACT_TARGET_IDS.piecesHead, tier: 'scored' }],
+      { label: 'Fill the 3 placeholders', targetId: ACT_TARGET_IDS.piecesHead, tier: 'scored' }],
     ['Project, eligible to release', 'project', { releaseEligible: true },
       { label: 'Release for authorization', targetId: ACT_TARGET_IDS.piecesHead, tier: 'filled' }],
     ['Project, otherwise', 'project', {},
@@ -428,7 +428,7 @@ describe('ffeActLandingOf (FR4 522-3, FR5 F5-1)', () => {
   it('keeps the other Pieces landings and leaves unowned acts null', () => {
     expect(ffeActLandingOf(NAMED_ACTS.fileClaim)).toBe('claim');
     expect(ffeActLandingOf('Open the pieces')).toBe('open');
-    expect(ffeActLandingOf('Spec the 3 unspecified')).toBe('spec');
+    expect(ffeActLandingOf('Fill the 3 placeholders')).toBe('spec');
     expect(ffeActLandingOf('Hold a window')).toBeNull();
   });
 });

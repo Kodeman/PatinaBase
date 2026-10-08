@@ -26,6 +26,7 @@
  * that cannot move, then everything else.
  */
 
+import { placeholderCount } from './act-names';
 import type { SectionKey } from './desk-derivation';
 import { DAY_MONTH_FORMAT, WEEKDAY_FORMAT } from './dates';
 import { paperRegionsForSection, type DocumentIndexKey } from './document-index';
@@ -485,7 +486,7 @@ function piecesRow(input: TicketInput): TicketRow {
     parts.push(`${counts.awaiting} awaiting a decision`);
   }
   if (counts.notOrdered > 0) parts.push(`${counts.notOrdered} not ordered yet`);
-  if (counts.unspecified > 0) parts.push(`${counts.unspecified} unspecified`);
+  if (counts.unspecified > 0) parts.push(placeholderCount(counts.unspecified));
   // §3.3's project specimen puts the unanswered PO on this row, so the row
   // prints it: a guide sentence quoting a clause the map does not carry is the
   // exact failure `deriveTicketLeader` exists to make impossible.
@@ -561,7 +562,7 @@ function specRow(input: TicketInput): TicketRow {
     input.pieces.settled && counts.unspecified > 0
       ? {
           rank: 'piece-stuck',
-          phrase: `${counts.unspecified} unspecified`,
+          phrase: placeholderCount(counts.unspecified),
           standingSince: null,
         }
       : null;

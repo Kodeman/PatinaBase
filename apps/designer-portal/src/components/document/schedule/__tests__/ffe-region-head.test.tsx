@@ -205,7 +205,7 @@ describe('FF&E project-mode region head', () => {
     renderProject();
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Spec the 1 unspecified');
+    expect(inked[0]).toHaveTextContent('Fill the 1 placeholder');
     expect(
       screen.getByRole('button', { name: /Bill 1 uninvoiced line/ }),
     ).toHaveAttribute('data-action-variant', 'secondary');
@@ -245,7 +245,7 @@ describe('FF&E project-mode region head', () => {
     mockItems = [line({ id: 'ffe-1' }), line({ id: 'ffe-2' })];
     renderProject();
     const head = document.querySelector('[data-region-head="ffe"]');
-    expect(head).toHaveTextContent('2 unspecified · 2 uninvoiced');
+    expect(head).toHaveTextContent('2 placeholders · 2 uninvoiced');
   });
 
   it('inks Release for authorization instead, once canRelease holds', () => {
@@ -457,7 +457,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     // One unspecified line, no claim and no PO: the election returns `spec`,
     // so entry 0 is the spec-book act and `add-line` / `bill` are overflow.
     expect(head).toContainElement(
-      screen.getByRole('link', { name: /Spec the 1 unspecified/ }),
+      screen.getByRole('link', { name: /Fill the 1 placeholder/ }),
     );
     // Not rendered, not hidden: `DocumentActionGroup`'s one-leader guard and
     // `action-visibility.spec.ts` both COUNT `[data-action-key]` nodes, so an

@@ -279,7 +279,7 @@ describe('deriveTicket — the four spreads before the work starts', () => {
       boards: { settled: true, count: 2 },
     });
     expect(valueOf(rows, 'rooms')).toBe('1 room · 3 lines');
-    expect(valueOf(rows, 'pieces')).toBe('2 not ordered yet · 1 unspecified');
+    expect(valueOf(rows, 'pieces')).toBe('2 not ordered yet · 1 placeholder');
     expect(valueOf(rows, 'boards')).toBe('2 boards');
   });
 
@@ -512,7 +512,7 @@ describe('deriveTicket — the specimen reads as drawn', () => {
 
   it('indexes the pieces, exception included', () => {
     expect(valueOf(rows, 'pieces')).toBe(
-      '25 ordered · 6 delivered · 2 in transit · 1 damaged · 2 unspecified',
+      '25 ordered · 6 delivered · 2 in transit · 1 damaged · 2 placeholders',
     );
   });
 
@@ -630,7 +630,7 @@ describe('deriveTicket — a row only opens what the spread prints', () => {
 });
 
 describe('deriveTicket — what is wrong is counted once, and named first', () => {
-  it('counts a damaged line with no product as damaged, not unspecified', () => {
+  it('counts a damaged line with no product as damaged, not a placeholder', () => {
     const rows = deriveTicket({
       ...emptyInput(),
       pieces: {
@@ -641,7 +641,7 @@ describe('deriveTicket — what is wrong is counted once, and named first', () =
         ],
       },
     });
-    expect(valueOf(rows, 'pieces')).toBe('1 damaged · 2 unspecified');
+    expect(valueOf(rows, 'pieces')).toBe('1 damaged · 2 placeholders');
     // direction-b §3.2 rank three: "a piece that cannot move — an unanswered
     // PO, a missing COM, a damaged line."
     expect(rows.find((row) => row.key === 'pieces')!.exception).toEqual({
@@ -745,7 +745,7 @@ describe('deriveTicketSeam', () => {
     const standing = rows.filter((row) => row.exception != null);
     expect(standing.map((row) => row.key)).toEqual(['pieces', 'spec', 'money']);
     const seam = deriveTicketSeam(rows, 'The job · Project');
-    expect(seam.exceptions).not.toContain('unspecified');
+    expect(seam.exceptions).not.toContain('placeholder');
     expect(seam.exceptions.split(' · ')).toHaveLength(2);
   });
 
@@ -774,7 +774,7 @@ describe('deriveTicketSeam', () => {
           door: { kind: 'leaf', shelf: 'specbook' },
           exception: {
             rank: 'piece-stuck',
-            phrase: '2 unspecified',
+            phrase: '2 placeholders',
             standingSince: '2026-01-01',
           },
         },
