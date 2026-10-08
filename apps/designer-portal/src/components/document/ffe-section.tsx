@@ -67,6 +67,7 @@ import {
 import {
   deriveLineStamp,
   lineStampLabel,
+  priceWord,
   type LineStamp,
   type TradeLineProgress,
 } from '@/lib/document/stamp-derivation';
@@ -1407,9 +1408,12 @@ function FFESectionBody({
 
   // R76 — what the section-level Bill act would carry: priced lines not yet
   // on a live invoice (the composer re-partitions; this is the offer).
+  // US-21 fix-now #5: the column defaults to 0 (00066), so a line that prints
+  // `Not priced` is not priced, and there is nothing on it to bill.
   const billableUninvoiced = (items ?? []).filter((it) => {
     if (it.unit_price_cents === null || it.unit_price_cents === undefined)
       return false;
+    if (priceWord(it) === 'Not priced') return false;
     const cov = coverage?.[it.id];
     return !cov || cov.coverage === 'uninvoiced';
   });
@@ -1627,6 +1631,35 @@ function FFESectionBody({
     ffeSetFolded(false);
     onRequestedLineConsumed();
   }, [ffeSetFolded, items, mode, onRequestedLineConsumed, requestedLineId]);
+  // US-21 fix-now #8 — the spec book's way back (`#line-<id>`) lands on its
+  // line once the schedule has settled: Pieces and the line unfold, and the
+  // row (`ffe-selection-<id>`) comes into view. The hash is read, never
+  // cleared; the arrival gate reads it too, and a hash means no arrival plays.
+  // Honoured once per hash, for the same reason as the request above.
+  const honouredHashRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (mode !== 'project' || !ffeItemsSettled) return;
+    const hashLineId = /^#line-(.+)$/.exec(window.location.hash)?.[1];
+    if (!hashLineId || honouredHashRef.current === hashLineId) return;
+    if (!(items ?? []).some((item) => String(item.id) === hashLineId)) return;
+    honouredHashRef.current = hashLineId;
+    setOpenLineId(hashLineId);
+    ffeSetFolded(false);
+    // The unfold above is a state change, so a folded or quiet region mounts
+    // the row on a later paint: wait for it, up to a second, as the ⌘K
+    // landing below does.
+    let waited = 0;
+    const land = () => {
+      const row = document.getElementById(`ffe-selection-${hashLineId}`);
+      if (!row) {
+        if (waited++ < 60) requestAnimationFrame(land);
+        return;
+      }
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      row.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+    };
+    requestAnimationFrame(() => requestAnimationFrame(land));
+  }, [ffeItemsSettled, ffeSetFolded, items, mode]);
   const openFfeRegion = useCallback(() => {
     if (mode !== 'project') return;
     ffeSetFolded(false);
@@ -1862,22 +1895,25 @@ function FFESectionBody({
         ? `${ffeCounts} · ${ffeAwaiting}`
         : ffeCounts;
 
-  // A line with no piece behind it is a line nobody has specified — the same
-  // set the Add-to-project sheet already offers as placeholders.
-  const unspecifiedLineIds = (items ?? [])
+  // A line with no piece behind it is a placeholder — the same set the
+  // Add-to-project sheet already offers to fill. The head counts and names
+  // them through the act table (`N placeholders`, `Fill the N placeholders`).
+  const placeholderLineIds = (items ?? [])
     .filter((it) => !it.product_id && it.removed_at == null)
     .map((it) => String(it.id));
   const uninvoicedLineIds = billableUninvoiced.map((it) => String(it.id));
   const ffeLeader = electFfeLeader({
     releaseLift: releaseInHead,
     needs,
-    unspecifiedLineIds,
+    unspecifiedLineIds: placeholderLineIds,
     uninvoicedLineIds,
   });
 
+  // US-21 fix-now #3: the head adds to the job (the Add-to-project sheet);
+  // each room's own act stays `Add a line`.
   const ffeAddToProjectEntry: RegionLedgerEntry = {
     key: 'open-add-to-project',
-    label: 'Add a line',
+    label: 'Add to the job',
     onClick: () => openAddToProject('section'),
   };
   // 0a-8 / D3 Gated — held, not natively disabled: the act stays in tab order
@@ -2110,10 +2146,10 @@ function FFESectionBody({
     // F48's sibling: one spec-book door, naming its scope when it has one.
     // FR2 499-10 — the name is the own-act table's, never a hand template.
     label:
-      unspecifiedLineIds.length > 0
+      placeholderLineIds.length > 0
         ? ownAct('project', {
             ...OWN_ACT_NO_FACTS,
-            unspecifiedCount: unspecifiedLineIds.length,
+            unspecifiedCount: placeholderLineIds.length,
           })!.label
         : 'Spec book',
     href: `/doc/${projectId}/spec-book`,

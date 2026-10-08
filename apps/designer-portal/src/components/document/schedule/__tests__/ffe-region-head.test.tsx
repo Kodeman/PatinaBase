@@ -33,6 +33,15 @@ jest.mock('@/lib/analytics/document-events', () => ({
 
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 
+// US-21 CONTRACT §3.8 rule 4 — `one-voice` and `ask-the-paper` ship on for
+// everyone, so the region renders here in its shipped state.
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (flag: string) => ({
+    value: flag === 'one-voice' || flag === 'ask-the-paper',
+    isLoading: false,
+  }),
+}));
+
 jest.mock('@tanstack/react-query', () => ({
   ...jest.requireActual('@tanstack/react-query'),
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
@@ -43,6 +52,8 @@ jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManif
 
 jest.mock('@patina/supabase', () => ({
   useProcurementDrafts: () => ({ data: [] }),
+  // Install mode's one leader (`one-voice`) reads the install window.
+  useInstallWindow: () => ({ data: null, isSuccess: true }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
   useUnresolvedProcurementExceptions: () => ({ data: [] }),
@@ -190,13 +201,88 @@ describe('FF&E project-mode region head', () => {
   const settled = (over: Record<string, unknown> = {}) =>
     line({ product_id: 'product-1', ...over });
 
-  it('inks exactly one ledger entry — Add a line, when nothing on the spread is an exception', () => {
+  it('inks exactly one ledger entry — Add to the job, when nothing on the spread is an exception', () => {
     mockItems = [settled()];
     mockCoverage = { 'line-1': { coverage: 'invoiced' } };
     renderProject();
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Add a line');
+    expect(inked[0]).toHaveTextContent('Add to the job');
+    expect(inked[0]).toHaveAttribute('data-action-key', 'open-add-to-project');
+  });
+
+  it('US-21 fix-now #3 — the head adds to the job; the room act stays Add a line', () => {
+    mockItems = [settled()];
+    mockCoverage = { 'line-1': { coverage: 'invoiced' } };
+    renderProject();
+    const head = document.querySelector('[data-action-key="open-add-to-project"]');
+    expect(head).toHaveTextContent('Add to the job');
+    expect(head).not.toHaveTextContent('Add a line');
+    const roomAct = document.querySelector('[data-action-key="open-add-schedule-line"]');
+    expect(roomAct).toHaveTextContent('Add a line');
+    fireEvent.click(head as HTMLElement);
+    expect(openAddToProject).toHaveBeenCalledWith('section');
+  });
+
+  it('US-21 fix-now #4 — counts and names the placeholders: lines with no piece behind them', () => {
+    mockItems = [
+      line({ id: 'ffe-1' }),
+      line({ id: 'ffe-2' }),
+      settled({ id: 'ffe-3' }),
+      line({ id: 'ffe-4', removed_at: '2026-10-01T00:00:00Z' }),
+    ];
+    mockCoverage = {
+      'ffe-1': { coverage: 'invoiced' },
+      'ffe-2': { coverage: 'invoiced' },
+      'ffe-3': { coverage: 'invoiced' },
+      'ffe-4': { coverage: 'invoiced' },
+    };
+    renderProject();
+    const inked = document.querySelectorAll('[data-action-variant="inked"]');
+    expect(inked).toHaveLength(1);
+    expect(inked[0]).toHaveTextContent('Fill the 2 placeholders');
+    const head = document.querySelector('[data-region-head="ffe"]');
+    expect(head).toHaveTextContent('2 placeholders');
+    expect(head).not.toHaveTextContent(/unspecified/i);
+  });
+
+  it('US-21 fix-now #5 — Bill leaves out a $0 line with no product that is not an allowance', () => {
+    // `unit_price_cents` defaults to 0 (00066): that line prints Not priced,
+    // so nothing on it is billable. A $0 line WITH a product is a stated price,
+    // and a $0 allowance is priced by its ceiling; both stay on the offer.
+    mockItems = [
+      line({ id: 'rough', unit_price_cents: 0, line_total_cents: 0 }),
+      settled({ id: 'stated', unit_price_cents: 0, line_total_cents: 0 }),
+      line({ id: 'allow', item_type: 'allowance', unit_price_cents: 0, line_total_cents: 0 }),
+    ];
+    renderProject();
+    expect(
+      screen.getByRole('button', { name: /Bill 2 uninvoiced lines/ }),
+    ).toBeInTheDocument();
+    expect(document.querySelector('[data-region-head="ffe"]')).toHaveTextContent(
+      '2 uninvoiced',
+    );
+  });
+
+  it('US-21 fix-now #5 — offers no Bill act when the only uninvoiced line is not priced', () => {
+    mockItems = [line({ unit_price_cents: 0, line_total_cents: 0 })];
+    renderProject();
+    expect(
+      screen.queryByRole('button', { name: /uninvoiced/ }),
+    ).not.toBeInTheDocument();
+    expect(document.querySelector('[data-region-head="ffe"]')).not.toHaveTextContent(
+      'uninvoiced',
+    );
+  });
+
+  it('US-21 fix-now #2 — the unassigned group reads Not in a room yet', () => {
+    mockItems = [
+      settled(),
+      line({ id: 'ffe-2', project_room_id: null, room: null, assignment_scope: 'unassigned' }),
+    ];
+    renderProject();
+    expect(screen.getByText('Not in a room yet')).toBeInTheDocument();
+    expect(screen.queryByText('Unsorted')).not.toBeInTheDocument();
   });
 
   it('elects the sharpest exception instead — F34, one inked leader still', () => {
@@ -233,14 +319,6 @@ describe('FF&E project-mode region head', () => {
     expect(inked[0]).toHaveTextContent('File the claim');
   });
 
-  it('reads Pieces, with the FF&E schedule named in its sub-line (C20)', () => {
-    renderProject();
-    expect(screen.getByRole('heading', { name: 'Pieces' })).toBeInTheDocument();
-    expect(
-      screen.getByText(/the FF&E schedule, by room/),
-    ).toBeInTheDocument();
-  });
-
   it('prints the worst two exceptions on line two, sharpest first', () => {
     mockItems = [line({ id: 'ffe-1' }), line({ id: 'ffe-2' })];
     renderProject();
@@ -254,8 +332,8 @@ describe('FF&E project-mode region head', () => {
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
     expect(inked[0]).toHaveTextContent('Release for authorization');
-    // Add a line survives, demoted rather than dropped. Scoped by action key,
-    // not text — SP-09 gave the per-room add-line act the same words.
+    // Add to the job survives, demoted rather than dropped. Scoped by action
+    // key, not text.
     expect(
       document.querySelector('[data-action-key="open-add-to-project"]'),
     ).toHaveAttribute('data-action-variant', 'secondary');
@@ -295,7 +373,7 @@ describe('FF&E project-mode region head', () => {
     ];
     renderProject();
     expect(
-      screen.getByText('the FF&E schedule, by room · 1 group · 2 lines'),
+      screen.getByText('by room · 1 group · 2 lines'),
     ).toBeInTheDocument();
   });
 
@@ -304,7 +382,7 @@ describe('FF&E project-mode region head', () => {
     mockItems = [line({ id: 'ffe-1', project_room_id: null, room: null })];
     renderProject();
     expect(
-      screen.getByText('the FF&E schedule, by room · 1 group · 1 line'),
+      screen.getByText('by room · 1 group · 1 line'),
     ).toBeInTheDocument();
   });
 
@@ -472,12 +550,14 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
         document.querySelectorAll(`[data-action-key="${key}"]`),
       ).toHaveLength(0);
     }
-    // The ledger prints ONE act beside the head's own Fold control.
+    // The ledger prints its leader beside the head's own Fold control, with
+    // the named act Record a change (F2-18, `one-voice` shipped on).
     const acts = Array.from(
       head.querySelectorAll('[data-action-key]'),
     ).map((el) => el.getAttribute('data-action-key'));
     expect(acts.filter((key) => key !== 'ffe-fold')).toEqual([
       'open-spec-book',
+      'record-a-change-pieces-head',
     ]);
   });
 
