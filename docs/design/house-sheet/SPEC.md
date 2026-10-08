@@ -763,6 +763,62 @@ needs no redeclaration: every colour is a token.
 }
 ```
 
+## A15. The drafting stock (US-21, V15 Q2)
+
+The Build room is the studio's first **working** surface: beige is reading,
+white is working. A second stock, parallel to A1's three paper tokens, prints
+only under `[data-drafting-stock]` (set on the Build room root); the Document
+paper never reads it — `src/lib/document/__tests__/contrast.test.ts` holds
+that boundary. The light values below are pasted into `globals.css` byte for
+byte (SPEC §2.1, `artifacts/pieces-building-room-2026-10-08/specimens/SPEC.md`):
+
+```css
+--sheet:              #FFFFFF;
+--sheet-head:          #F3F0EA;
+--sheet-ink:           #1A1816;
+--sheet-ink-muted:     #4A4540;
+--sheet-ink-faint:     #6B655E;
+--sheet-rule:          #D9D4CC;
+--sheet-rule-strong:   #1A1816;
+--sheet-row-hover:     #F6F3EE;
+--sheet-toast:         #1A1816;
+--sheet-toast-ink:     #FFFFFF;
+--row:                 40px;
+--head:                48px;
+```
+
+**Dark companions — documented only, not written into `globals.css`.** This
+portal paints no dark paper set yet (A1's own note above), so these are
+recorded here the same way `--color-card-edge`'s dark value is recorded in
+A1, for the day dark mode ships:
+
+```css
+--sheet:              #1C1A17;
+--sheet-head:          #211E1A;
+--sheet-ink:           #F4F0EA;
+--sheet-ink-muted:     #CFC8BF;
+--sheet-ink-faint:     #A9A198;
+--sheet-rule:          #3A3631;
+--sheet-rule-strong:   #F4F0EA;
+--sheet-row-hover:     #24211D;
+--sheet-toast:         #F4F0EA;
+--sheet-toast-ink:     #1C1A17;
+```
+
+**Stamp classes.** `.stamp` is DM Mono 11px caps, tracking `.06em`, `4px 8px`
+padding, `--radius-hair` radius, 1px border, no fill except `--released`:
+
+| Class | Border | Ink |
+|---|---|---|
+| `.stamp--placeholder` | 1px dashed `--sheet-ink-faint` | `--sheet-ink-faint` |
+| `.stamp--specced` | 1px solid `--sheet-rule-strong` | `--sheet-ink` |
+| `.stamp--ready` | 1px solid `--sheet-rule-strong` | `--sheet-ink` |
+| `.stamp--released` | filled `--sheet-ink`, text `--sheet` | — |
+| `.stamp--labor` | 1px solid `--sheet-rule` | `--sheet-ink-muted` |
+
+On the reading paper the same words spend `--ink`, `--ink-faint` and
+`--hairline-strong` instead — never the sheet tokens.
+
 ---
 
 # §B Fixture data — identical in all three specimens

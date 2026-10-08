@@ -2033,6 +2033,29 @@ html:has([data-document-shell]) {
   /* — rhythm — */
   --module: 24px;
   --radius-hair: 2px;
+
+  /* — the drafting stock (US-21, V15 Q2): working sheets only —
+     SPEC §2.1 (artifacts/pieces-building-room-2026-10-08/specimens/SPEC.md),
+     byte for byte. Consumed only under [data-drafting-stock], set on the
+     Build room root. The Document paper never reads these — a test in
+     src/lib/document/__tests__/contrast.test.ts holds that boundary. No dark
+     twin is written here, for the same reason as the house sheet's own
+     tokens above: this portal paints no dark paper set. The dark companions
+     are recorded in docs/design/house-sheet/SPEC.md, the same way
+     --color-card-edge's is. --row and --head are new; --module above already
+     carries the drafting stock's module value. */
+  --sheet: #FFFFFF;
+  --sheet-head: #F3F0EA;
+  --sheet-ink: #1A1816;
+  --sheet-ink-muted: #4A4540;
+  --sheet-ink-faint: #6B655E;
+  --sheet-rule: #D9D4CC;
+  --sheet-rule-strong: #1A1816;
+  --sheet-row-hover: #F6F3EE;
+  --sheet-toast: #1A1816;
+  --sheet-toast-ink: #FFFFFF;
+  --row: 40px;
+  --head: 48px;
 }
 
 /* ——— §A3 · the type scale ——— */
@@ -2212,4 +2235,38 @@ html:has([data-document-shell]) {
 .studio-note { background: var(--rail); border-left: 2px solid var(--clay-ink);
                padding: 12px; margin: 0 0 var(--module); color: var(--ink); }
 .studio-note > .head { display: block; margin: 0 0 12px; color: var(--ink-subtle); }
+
+/* — the drafting stock's stamp (US-21 T-22; SPEC §2.4) — DM Mono 11 caps,
+   tracking .06em, 1px border, no fill except --released. On the reading
+   paper the same words spend --ink, --ink-faint and --hairline-strong
+   instead, never these tokens (a later ticket owns that face). */
+.stamp {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: var(--radius-hair);
+  font-family: var(--font-meta);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.stamp--placeholder {
+  border: 1px dashed var(--sheet-ink-faint);
+  color: var(--sheet-ink-faint);
+}
+.stamp--specced,
+.stamp--ready {
+  border: 1px solid var(--sheet-rule-strong);
+  color: var(--sheet-ink);
+}
+.stamp--released {
+  border: 1px solid var(--sheet-ink);
+  background: var(--sheet-ink);
+  color: var(--sheet);
+}
+.stamp--labor {
+  border: 1px solid var(--sheet-rule);
+  color: var(--sheet-ink-muted);
+}
 .studio-note > p { max-width: 56ch; }
