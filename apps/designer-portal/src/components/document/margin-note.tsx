@@ -28,11 +28,14 @@
  * store — no version-suffix parsing — so a re-cut surface can re-arm its note
  * exactly once by shipping a new key (`doc-first-touch` → `doc-first-touch@2`):
  * the suffixed key has never been seen, the old key stays retired, and no
- * calendar or counter is involved. localStorage remains the fallback before
- * the Supabase backend hydrates and for signed-out sessions.
+ * calendar or counter is involved. localStorage is the store for signed-out
+ * sessions. While a signed-in backend is installed but not yet hydrated the
+ * note stays down, and re-decides when hydration lands (FR7 F7-9, D26): a
+ * fresh browser's empty localStorage must not re-show a note the person
+ * already retired on another device.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import { documentEvents } from '@/lib/analytics/document-events';
@@ -50,6 +53,20 @@ function storageKeyFor(noteKey: string): string {
 // there is exactly one margin-note backend per signed-in session.
 let backend: MarginNoteStateBackend | null = null;
 let backendHydrated = false;
+// Bumped on every install / hydrate / clear so a mounted note re-decides.
+let backendRevision = 0;
+const backendListeners = new Set<() => void>();
+
+function subscribeBackend(listener: () => void): () => void {
+  backendListeners.add(listener);
+  return () => {
+    backendListeners.delete(listener);
+  };
+}
+
+function getBackendRevision(): number {
+  return backendRevision;
+}
 
 /**
  * Install (or clear) the Supabase-backed margin-note backend. Called by
@@ -63,6 +80,8 @@ export function setMarginNoteStateBackend(
 ): void {
   backend = next;
   backendHydrated = next ? hydrated : false;
+  backendRevision += 1;
+  backendListeners.forEach((listener) => listener());
 }
 
 function localHasSeen(noteKey: string): boolean {
@@ -74,12 +93,11 @@ function localHasSeen(noteKey: string): boolean {
   }
 }
 
-/** True when this note has already been seen (dismissed or acted). Reads
- *  through the installed Supabase backend once it has hydrated; otherwise —
- *  before hydration, or for a signed-out session with no backend installed —
- *  falls back to localStorage. Treats a disabled/blocked store as "seen" so
+/** The recorded marker: the installed Supabase backend once it has hydrated;
+ *  otherwise — before hydration, or for a signed-out session with no backend
+ *  installed — localStorage. Treats a disabled/blocked store as "seen" so
  *  nothing renders where we cannot honor the once-only contract. */
-function hasSeen(noteKey: string): boolean {
+function recordedSeen(noteKey: string): boolean {
   if (backend && backendHydrated) {
     try {
       return backend.hasSeen(noteKey);
@@ -91,15 +109,26 @@ function hasSeen(noteKey: string): boolean {
   return localHasSeen(noteKey);
 }
 
+/** The note's own visibility decision (F7-9, D26): while a signed-in backend
+ *  is installed but not hydrated the record is unknown, so the note stays
+ *  down; `MarginNote` re-decides when `setMarginNoteStateBackend` reports the
+ *  hydrated backend. */
+function hasSeen(noteKey: string): boolean {
+  if (backend && !backendHydrated) return true;
+  return recordedSeen(noteKey);
+}
+
 /**
  * Public reader for the once-only marker — same store, same key format as the
  * note itself. Exported so a band that follows the note's dismissal contract
  * without BEING a MarginNote (the Call Sheet's kickoff band, `kickoff:{id}`)
  * shares the mechanism instead of inventing a second localStorage convention.
- * SSR-safe in the same way `hasSeen` is: "seen" off the client.
+ * SSR-safe in the same way `hasSeen` is: "seen" off the client. Its callers
+ * read once and do not re-decide on hydration, so it keeps the localStorage
+ * fallback before hydration rather than `hasSeen`'s stay-down rule.
  */
 export function hasMarginNoteBeenSeen(noteKey: string): boolean {
-  return hasSeen(noteKey);
+  return recordedSeen(noteKey);
 }
 
 /** Retire a note permanently — writes the once-only marker so it never renders
@@ -210,10 +239,13 @@ export function MarginNote({
   const [expanded, setExpanded] = useState(false);
   // 'shown' fires at most once per mount even as `suppressed` toggles.
   const shownRef = useRef(false);
+  // Changes when the cross-device backend is installed, hydrates, or clears.
+  const backendState = useSyncExternalStore(subscribeBackend, getBackendRevision, getBackendRevision);
 
   // Authoritative visibility: while suppressed OR already seen the note stays
   // down (and marks nothing); otherwise it reveals. Re-runs when `suppressed`
-  // flips so a lifted hold re-reveals an unseen note. SSR and the first client
+  // flips so a lifted hold re-reveals an unseen note, and when the backend
+  // hydrates so a note held for the record re-decides. SSR and the first client
   // paint agree (nothing → nothing) because the effect runs after mount.
   useEffect(() => {
     if (suppressed || (seen ?? hasSeen(noteKey))) {
@@ -225,7 +257,7 @@ export function MarginNote({
       shownRef.current = true;
       if (captureEvents) documentEvents.wayfinding.marginNote({ key: noteKey, action: 'shown' });
     }
-  }, [noteKey, suppressed, seen, captureEvents]);
+  }, [noteKey, suppressed, seen, captureEvents, backendState]);
 
   // Once shown, the first named action recedes the note forever. Listeners are
   // only bound while the note is on screen (and not suppressed), so a note that

@@ -7,7 +7,7 @@
  * assert the 'shown' beacon precisely. Visibility is checked via the `note`
  * role (the primitive renders `<aside role="note">` only when it shows).
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import {
   MarginNote,
   hasMarginNoteBeenSeen,
@@ -189,18 +189,75 @@ describe('MarginNote — cross-device Supabase backend (decision 5, amending R94
     expect(window.localStorage.getItem(storageKey('doc-first-touch'))).toBeNull();
   });
 
-  it('falls back to localStorage before the installed backend has hydrated', () => {
-    const backend = {
-      hasSeen: jest.fn(() => true),
-      markSeen: jest.fn(),
-    };
-    // Installed but NOT hydrated — hasSeen must not consult it, and the note
-    // must still reveal from the (empty) localStorage fallback.
-    setMarginNoteStateBackend(backend, false);
+  describe('waits for the record before deciding (FR7 F7-9, D26)', () => {
+    function backendWith(seenKeys: string[]) {
+      const store = new Set(seenKeys);
+      return {
+        hasSeen: jest.fn((key: string) => store.has(key)),
+        markSeen: jest.fn((key: string) => {
+          store.add(key);
+        }),
+      };
+    }
 
-    render(<MarginNote noteKey="doc-first-touch">One client, one paper.</MarginNote>);
-    expect(screen.getByRole('note')).toBeInTheDocument();
-    expect(backend.hasSeen).not.toHaveBeenCalled();
+    it('installed, unhydrated: nothing renders, even with empty localStorage', () => {
+      const backend = backendWith([]);
+      setMarginNoteStateBackend(backend, false);
+
+      render(<MarginNote noteKey="band-tour-v1">The band says what&rsquo;s next.</MarginNote>);
+      expect(screen.queryByRole('note')).toBeNull();
+      expect(marginNoteEvent).not.toHaveBeenCalled();
+      expect(backend.hasSeen).not.toHaveBeenCalled();
+    });
+
+    it('hydrated with the key seen: the note stays down', () => {
+      const backend = backendWith(['band-tour-v1']);
+      setMarginNoteStateBackend(backend, false);
+      render(<MarginNote noteKey="band-tour-v1">The band says what&rsquo;s next.</MarginNote>);
+
+      act(() => setMarginNoteStateBackend(backend, true));
+      expect(screen.queryByRole('note')).toBeNull();
+      expect(marginNoteEvent).not.toHaveBeenCalled();
+      expect(backend.hasSeen).toHaveBeenCalledWith('band-tour-v1');
+    });
+
+    it('hydrated with the key unseen: the note reveals and fires shown once', () => {
+      const backend = backendWith([]);
+      setMarginNoteStateBackend(backend, false);
+      render(<MarginNote noteKey="band-tour-v1">The band says what&rsquo;s next.</MarginNote>);
+      expect(screen.queryByRole('note')).toBeNull();
+
+      act(() => setMarginNoteStateBackend(backend, true));
+      expect(screen.getByRole('note')).toBeInTheDocument();
+      expect(marginNoteEvent).toHaveBeenCalledTimes(1);
+      expect(marginNoteEvent).toHaveBeenCalledWith({ key: 'band-tour-v1', action: 'shown' });
+
+      // A later re-install of the same hydrated backend does not re-fire it.
+      act(() => setMarginNoteStateBackend(backend, true));
+      expect(marginNoteEvent).toHaveBeenCalledTimes(1);
+    });
+
+    it('no backend: localStorage decides, as today', () => {
+      window.localStorage.setItem(storageKey('k-local-seen'), String(Date.now()));
+      render(
+        <>
+          <MarginNote noteKey="k-local-unseen">never pressed</MarginNote>
+          <MarginNote noteKey="k-local-seen">already pressed</MarginNote>
+        </>,
+      );
+      const notes = screen.getAllByRole('note');
+      expect(notes).toHaveLength(1);
+      expect(notes[0]).toHaveTextContent('never pressed');
+      expect(marginNoteEvent).toHaveBeenCalledTimes(1);
+      expect(marginNoteEvent).toHaveBeenCalledWith({ key: 'k-local-unseen', action: 'shown' });
+    });
+
+    it('hasMarginNoteBeenSeen keeps the localStorage fallback before hydration for its one-shot readers', () => {
+      setMarginNoteStateBackend(backendWith(['k-reader']), false);
+      expect(hasMarginNoteBeenSeen('k-reader')).toBe(false);
+      window.localStorage.setItem(storageKey('k-reader'), String(Date.now()));
+      expect(hasMarginNoteBeenSeen('k-reader')).toBe(true);
+    });
   });
 
   it('falls back to localStorage once the backend is cleared (sign-out)', () => {
