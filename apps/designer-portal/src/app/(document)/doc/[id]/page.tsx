@@ -2564,8 +2564,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           section: bandSection,
           focusId: act.targetId,
           // F3-23 — `Hold a window` lands with focus on the ceremony's door;
-          // pressing it is hers to do.
-          activate: act.targetId !== ACT_TARGET_IDS.installWindow,
+          // pressing it is hers to do. FR4 524-f — the inquiry reply target is
+          // the Brief's `Accept · begin`, which writes to the client: land,
+          // never click.
+          activate:
+            act.targetId !== ACT_TARGET_IDS.installWindow &&
+            act.targetId !== ACT_TARGET_IDS.inquiryReply,
         });
       },
     };
@@ -3104,6 +3108,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // Keys, and `Standing · N` when the fallback is in force. No Preview: there
   // is no client copy to preview yet.
   const relationshipPaper = oneVoice && row.engagement_kind === 'relationship';
+  // US-19 FR4 524-d (`one-voice`) — a Brief (lead) paper mounts the letterhead
+  // with Keys and Standing only; no Message, no Preview.
+  const briefPaper = oneVoice && row.engagement_kind === 'lead';
   const letterheadInstruments =
     row.engagement_kind === 'project' && row.project_id ? (
       <LetterheadInstruments
@@ -3115,7 +3122,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       />
     ) : (row.engagement_kind !== 'project' && row.client_profile_id) ||
       proposalPaper ||
-      relationshipPaper ? (
+      relationshipPaper ||
+      briefPaper ? (
       <LetterheadInstruments
         voice={bandModel?.voice ?? null}
         {...(proposalPaper && {
@@ -3124,6 +3132,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           proposalStatus: liveProposal?.status ?? null,
         })}
         {...(relationshipPaper && { designerClientId })}
+        {...(briefPaper && { brief: true })}
         clientProfileId={row.client_profile_id}
         clientName={householdName}
         engagementId={row.engagement_id}
