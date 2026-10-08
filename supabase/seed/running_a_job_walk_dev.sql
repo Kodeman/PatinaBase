@@ -30,7 +30,9 @@
 --        · "Quill Lane Porch" (install) — every piece installed.
 --   5. A named client (499-1) — "Tanaka Garden Flat — Living Room", a
 --      proposal sent to a new login, Mei Tanaka, never opened, two decisions
---      overdue. See the block at the foot of the file.
+--      overdue. See the block near the foot of the file.
+--   6. Release lands on the lift (F6-2) — "Ashby Mews"; and
+--   7. Answer the maker — "Fenwick Lodge" (both F7-12). See the last block.
 --
 -- Chen Residence is read, never written: its sectional on WS-188, its overdue
 -- balance and its lines stay exactly as procurement_workspace_dev.sql lays
@@ -522,4 +524,257 @@ BEGIN
      ts - INTERVAL '2 days', 'Concept', 'layout', 'non_blocking', 'pending',
      ts - INTERVAL '4 days')
   ON CONFLICT (id) DO NOTHING;
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 6 + 7. Two walk fixtures (F7-12, design-review-7.md §1 F6-2 row, §2).
+--
+-- The FR6 re-walk could not reach either step: no seeded paper rendered
+-- `[data-release-lift]` (release-scan.json: 0 of 25), and no paper carried
+-- an acknowledgment that differs. These are the walk steps they serve:
+--
+--   6. "Release lands on the lift" (F6-2) — "Ashby Mews", a Project paper.
+--      Under the `worktable` flag a project-section paper composes the
+--      Delivery table in its procurement setting (deriveTableComposition), so
+--      page.tsx passes `releaseLeaderElsewhere`; FFESection reports
+--      `releaseOffered` when get_project_authority_summary's state is active,
+--      retainer_pending or exhausted (canRelease) and one line is eligible
+--      (authorization-derivation `eligibility`: selected, not blocked,
+--      get_project_ffe_readiness ready, on no authorization, priced). Then the
+--      Pieces head prints no Release and the lift renders above the table.
+--      The fixture: an executed design-services agreement (the origin), an
+--      active billing authority on it (immediate, uncapped), and one priced
+--      line with a vendor and a product on no authorization and no PO.
+--        Doc: f1900000-0000-4000-8000-000000000061 (/doc/<id>)
+--
+--   7. "Answer the maker" — "Fenwick Lodge", a Project paper with no
+--      agreement behind it. PO WS-231 sent, and the maker's acknowledgment
+--      (the 00705 v2 record) lists a different unit price for the table: one
+--      `mismatch` ack line, so the PO's ack_state syncs to `discrepancy`; the
+--      PO's open `ack_discrepancy` exception; and its `ack_discrepancy_reply`
+--      draft in `awaiting_review`. The rows are the ones
+--      log_po_acknowledgment_v2 and compose_ack_discrepancy_draft write, laid
+--      with fixed ids. The Desk read (use-desk-engagements → needDraftReview)
+--      raises the `ack_discrepancy` need from the draft, and one-voice labels
+--      its act `Answer the maker`.
+--        Doc: f1900000-0000-4000-8000-000000000071 (/doc/<id>)
+--
+-- Nothing sends: the draft waits for a member's review. Local dev only; fixed
+-- UUIDs with ON CONFLICT DO NOTHING or NOT EXISTS; the agreement is executed
+-- only when first laid (an executed instrument cannot be signed twice).
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  uid_designer   UUID := 'a0000000-0000-0000-0000-000000000004';  -- Leah Hartwell
+  v_studio       UUID := 'b0000000-0000-0000-0000-000000000001';  -- Local Dev Studio
+
+  v_ashby        UUID := 'f1900000-0000-4000-8000-000000000061';
+  v_ash_proposal UUID := 'f1900000-0000-4000-8000-000000000062';
+  v_ash_document UUID := 'f1900000-0000-4000-8000-000000000063';
+  v_ash_authority UUID := 'f1900000-0000-4000-8000-000000000064';
+  v_line_ashby   UUID := 'f1900000-0000-4000-8000-000000000065';
+
+  v_fenwick      UUID := 'f1900000-0000-4000-8000-000000000071';
+  v_po_fenwick   UUID := 'f1900000-0000-4000-8000-000000000072';
+  v_line_fenwick UUID := 'f1900000-0000-4000-8000-000000000073';
+  v_ack_fenwick  UUID := 'f1900000-0000-4000-8000-000000000074';
+  v_ack_line     UUID := 'f1900000-0000-4000-8000-000000000075';
+  v_exc_fenwick  UUID := 'f1900000-0000-4000-8000-000000000076';
+  v_draft_fenwick UUID := 'f1900000-0000-4000-8000-000000000077';
+
+  v_nordic       UUID;
+  v_woodward     UUID;
+  v_product_a    UUID;
+  v_product_b    UUID;
+  v_org          UUID;
+  v_po           public.purchase_orders%ROWTYPE;
+  v_received     DATE;
+  ts             TIMESTAMPTZ := NOW();
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = uid_designer) THEN
+    RAISE NOTICE 'running_a_job_walk_dev.sql: dev accounts are not seeded yet, skipping the F7-12 fixtures';
+    RETURN;
+  END IF;
+
+  SELECT id INTO v_nordic   FROM public.vendors WHERE name ILIKE 'Nordic Atelier' ORDER BY id LIMIT 1;
+  SELECT id INTO v_woodward FROM public.vendors WHERE name ILIKE 'Woodward%Sons'  ORDER BY id LIMIT 1;
+  IF v_nordic IS NULL OR v_woodward IS NULL THEN
+    RAISE NOTICE 'running_a_job_walk_dev.sql: demo vendors are not seeded yet, skipping the F7-12 fixtures';
+    RETURN;
+  END IF;
+
+  SELECT id INTO v_product_a FROM public.products
+   WHERE images IS NOT NULL AND array_length(images, 1) > 0 ORDER BY id LIMIT 1 OFFSET 4;
+  SELECT id INTO v_product_b FROM public.products
+   WHERE images IS NOT NULL AND array_length(images, 1) > 0 ORDER BY id LIMIT 1 OFFSET 5;
+
+  INSERT INTO public.projects (
+    id, name, designer_id, created_by, studio_id, status, current_phase,
+    budget_cents, start_date, notes, created_at, updated_at
+  ) VALUES
+    (v_ashby, 'Ashby Mews', uid_designer, uid_designer, v_studio,
+     'active', NULL, 1800000, (ts - INTERVAL '40 days')::date,
+     'Walk fixture (US-19, F7-12): signed agreement, active authority, one line ready to release.',
+     ts - INTERVAL '45 days', ts),
+    (v_fenwick, 'Fenwick Lodge', uid_designer, uid_designer, v_studio,
+     'active', NULL, 1200000, (ts - INTERVAL '35 days')::date,
+     'Walk fixture (US-19, F7-12): PO acknowledged with a different unit price; reply drafted.',
+     ts - INTERVAL '40 days', ts)
+  ON CONFLICT (id) DO NOTHING;
+
+  -- ── 6. Ashby Mews: the authority to release against ────────────────────
+  -- The agreement is built as a draft and executed under the row-exact
+  -- capability GUCs, exactly as Halloran House's is above.
+  IF NOT EXISTS (SELECT 1 FROM public.proposals WHERE id = v_ash_proposal) THEN
+    INSERT INTO public.proposals (
+      id, project_id, designer_id, title, description,
+      status, document_kind, commercial_state, total_amount, subtotal,
+      sent_at, created_at, updated_at
+    ) VALUES (
+      v_ash_proposal, v_ashby, uid_designer,
+      'Ashby Mews — Design Services',
+      'The studio''s engagement for the dining room.',
+      'draft', 'design_services', 'draft', 360000, 360000,
+      ts - INTERVAL '38 days', ts - INTERVAL '40 days', ts - INTERVAL '38 days'
+    );
+
+    PERFORM set_config('app.proposal_accept_id', v_ash_proposal::text, true);
+    PERFORM set_config('app.commercial_document_id', v_ash_proposal::text, true);
+    UPDATE public.proposals
+       SET status = 'accepted',
+           commercial_state = 'executed',
+           accepted_at = ts - INTERVAL '34 days',
+           signed_at = ts - INTERVAL '34 days',
+           signed_by_name = 'Clare Ashby',
+           updated_at = ts - INTERVAL '34 days'
+     WHERE id = v_ash_proposal;
+    PERFORM set_config('app.proposal_accept_id', '', true);
+    PERFORM set_config('app.commercial_document_id', '', true);
+
+    INSERT INTO public.project_commercial_documents (
+      id, project_id, proposal_id, document_kind, wave_name,
+      is_origin, bound_at, executed_at, created_by
+    ) VALUES (
+      v_ash_document, v_ashby, v_ash_proposal, 'design_services', NULL,
+      TRUE, ts - INTERVAL '34 days', ts - INTERVAL '34 days', uid_designer
+    );
+  END IF;
+
+  -- Active from signature: immediate activation, no ceiling, so
+  -- get_project_authority_summary reads `active`.
+  INSERT INTO public.project_billing_authorities (
+    id, project_id, commercial_document_id, source_proposal_id,
+    billing_ceiling_cents, retainer_amount_cents, retainer_activation_policy,
+    billing_cadence, effective_at, status, created_at
+  ) VALUES (
+    v_ash_authority, v_ashby, v_ash_document, v_ash_proposal,
+    NULL, 0, 'immediate',
+    'monthly', ts - INTERVAL '34 days', 'active', ts - INTERVAL '34 days'
+  ) ON CONFLICT (id) DO NOTHING;
+
+  -- One line that can join a release: selected, a vendor, quantity 1, priced
+  -- (line total = quantity × unit price, so readiness is clean), and on no
+  -- authorization and no PO. NOT EXISTS for the selection-thread reason above.
+  INSERT INTO public.project_ffe_items (
+    id, project_id, product_id, name, ffe_category,
+    item_type, status, quantity, unit_price_cents, trade_price_cents,
+    markup_percent, line_total_cents, vendor_name, vendor_id, sort_order,
+    design_disposition, created_at, updated_at
+  )
+  SELECT
+    v_line_ashby, v_ashby, v_product_a,
+    'Walnut extending dining table — 96 in', 'furniture',
+    'fixed', 'approved', 1, 720000, 576000,
+    25.00, 720000, 'Nordic Atelier', v_nordic, 0,
+    'selected', ts - INTERVAL '20 days', ts - INTERVAL '10 days'
+  WHERE NOT EXISTS (SELECT 1 FROM public.project_ffe_items WHERE id = v_line_ashby);
+
+  -- ── 7. Fenwick Lodge: an acknowledgment that differs ───────────────────
+  -- Sent nine days ago; the acknowledgment came back two days ago, so the PO
+  -- is confirmed and stamped acknowledged (log_po_acknowledgment_v2's v1
+  -- stamps) and raises no `po_unacknowledged`. ack_state is left to
+  -- po_ack_state_sync, which sets it from the ack line below.
+  INSERT INTO public.purchase_orders (
+    id, designer_id, project_id, vendor_id, vendor_po_number,
+    payment_pattern, total_cents, status, ack_state, sent_at, acknowledged_at,
+    created_by, created_at
+  ) VALUES (
+    v_po_fenwick, uid_designer, v_fenwick, v_woodward, 'WS-231',
+    'net_30', 380000, 'confirmed', 'none', ts - INTERVAL '9 days', ts - INTERVAL '2 days',
+    uid_designer, ts - INTERVAL '10 days'
+  ) ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO public.po_payments (id, purchase_order_id, kind, amount_cents, due_date, state, sort_order)
+  VALUES ('f1900000-0000-4000-8000-000000000078', v_po_fenwick, 'balance', 380000, NULL, 'pending', 0)
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO public.project_ffe_items (
+    id, project_id, product_id, purchase_order_id, name, ffe_category,
+    item_type, status, quantity, unit_price_cents, trade_price_cents,
+    markup_percent, line_total_cents, vendor_name, vendor_id, sort_order,
+    design_disposition, created_at, updated_at
+  )
+  SELECT
+    v_line_fenwick, v_fenwick, v_product_b, v_po_fenwick,
+    'Oak trestle table — 84 in', 'furniture',
+    'fixed', 'ordered', 1, 475000, 380000,
+    25.00, 475000, 'Woodward & Sons', v_woodward, 0,
+    'selected', ts - INTERVAL '25 days', ts - INTERVAL '9 days'
+  WHERE NOT EXISTS (SELECT 1 FROM public.project_ffe_items WHERE id = v_line_fenwick);
+
+  -- The acknowledgment, its one differing line, the exception and the draft
+  -- are laid together, once: a walker who answers the maker resolves them,
+  -- and a re-run leaves that answer standing.
+  IF NOT EXISTS (SELECT 1 FROM public.po_acknowledgments WHERE id = v_ack_fenwick) THEN
+    SELECT * INTO v_po FROM public.purchase_orders WHERE id = v_po_fenwick;
+    v_org := public.purchase_order_studio_id(v_po_fenwick);
+    v_received := (ts - INTERVAL '2 days')::date;
+
+    INSERT INTO public.po_acknowledgments (
+      id, organization_id, purchase_order_id, received_on, received_via,
+      vendor_order_ref, recorded_by, created_at
+    ) VALUES (
+      v_ack_fenwick, v_org, v_po_fenwick, v_received, 'email',
+      'WS-231', uid_designer, ts - INTERVAL '2 days'
+    );
+
+    -- The PO's trade unit price is 380000; the maker's acknowledgment says
+    -- 412000.
+    INSERT INTO public.po_ack_lines (
+      id, ack_id, ffe_item_id, field, po_value, ack_value, verdict, created_at
+    ) VALUES (
+      v_ack_line, v_ack_fenwick, v_line_fenwick, 'unit_price', '380000', '412000',
+      'mismatch', ts - INTERVAL '2 days'
+    );
+
+    -- d2 §M7's clock, as log_po_acknowledgment_v2 sets it.
+    INSERT INTO public.procurement_exceptions (
+      id, organization_id, project_id, type, purchase_order_id, acknowledgment_id,
+      status, opened_at, opened_by, clock_due_on, clock_basis, created_at
+    ) VALUES (
+      v_exc_fenwick, v_org, v_fenwick, 'ack_discrepancy', v_po_fenwick, v_ack_fenwick,
+      'open', ts - INTERVAL '2 days', uid_designer,
+      v_received + CASE extract(isodow FROM v_received)::integer
+                     WHEN 4 THEN 4 WHEN 5 THEN 4 WHEN 6 THEN 3 ELSE 2 END,
+      'Answer the vendor within 2 business days of the acknowledgment, before production starts.',
+      ts - INTERVAL '2 days'
+    );
+
+    -- The letter compose_ack_discrepancy_draft writes for one difference.
+    INSERT INTO public.procurement_drafts (
+      id, organization_id, project_id, kind, purchase_order_id, exception_id, ack_id,
+      to_email, subject, body, status, created_at, updated_at
+    ) VALUES (
+      v_draft_fenwick, v_org, v_fenwick, 'ack_discrepancy_reply', v_po_fenwick,
+      v_exc_fenwick, v_ack_fenwick,
+      public._procurement_vendor_email(v_org, v_woodward),
+      format('PO %s: your acknowledgment differs from our order', public._procurement_po_label(v_po)),
+      format(E'Hello %s,\n\nThank you for acknowledging PO %s (your order %s). It differs from our purchase order in one place:\n\n- %s: your acknowledgment lists a unit price of "%s"; our PO specifies "%s".\n\nPlease confirm our PO values before production, or tell us what cannot be met.\n\nThank you,\n%s',
+        'Woodward & Sons', public._procurement_po_label(v_po), 'WS-231',
+        'Oak trestle table — 84 in',
+        to_char(4120.00, 'FM$999,999,990.00'), to_char(3800.00, 'FM$999,999,990.00'),
+        public._procurement_signoff(v_org, v_fenwick)),
+      'awaiting_review', ts - INTERVAL '2 days', ts - INTERVAL '2 days'
+    );
+  END IF;
 END $$;
