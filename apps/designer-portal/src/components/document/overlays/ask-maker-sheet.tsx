@@ -33,7 +33,7 @@ import {
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { Input, Textarea } from '@/components/ui/controls';
-import { ACT_LANDING_EVENTS, ACT_TARGET_IDS } from '@/lib/document/act-names';
+import { ACT_LANDING_EVENTS, ACT_TARGET_IDS, NEED_ACT_LABELS } from '@/lib/document/act-names';
 import { dayMonth, parseSourceDate } from '@/lib/document/dates';
 import {
   LIVE_MAKER_ASK_STATUSES,
@@ -97,6 +97,23 @@ export function askMakerDraft(
   };
 }
 
+/**
+ * US-19 FR4 520-2 — `Follow up with the maker`: the same held note, addressed
+ * by the PO number the paper prints. The body is the designer's to write.
+ */
+export function followUpDraft(piece: AskMakerPiece): {
+  to: string | null;
+  subject: string;
+  body: string;
+} {
+  const po = piece.purchase_order?.po_number ?? piece.purchase_order?.vendor_po_number ?? null;
+  return {
+    to: lineMaker(piece),
+    subject: `${po ?? pieceName(piece.name)} — following up`,
+    body: '',
+  };
+}
+
 /** A refused hold, with the draft that stands against it on a 409 (506-3). */
 class HoldRefused extends Error {
   constructor(
@@ -148,6 +165,7 @@ export function AskMakerSheet({
   projectId,
   piece,
   held,
+  followUp = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -157,8 +175,15 @@ export function AskMakerSheet({
   piece: AskMakerPiece;
   /** The note already held for this piece: the sheet opens its DraftReview. */
   held: ProcurementDraftRow | null;
+  /** FR4 520-2 — the sheet is `Follow up with the maker`'s composer. */
+  followUp?: boolean;
 }) {
-  const draft = useMemo(() => askMakerDraft(piece, new Date()), [piece]);
+  const draft = useMemo(
+    () => (followUp ? followUpDraft(piece) : askMakerDraft(piece, new Date())),
+    [piece, followUp],
+  );
+  const hasMaker = draft.to !== null;
+  const title = followUp ? NEED_ACT_LABELS.po_unacknowledged : 'Ask the maker for a date';
   const [subject, setSubject] = useState(draft.subject);
   const [body, setBody] = useState(draft.body);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
@@ -171,7 +196,8 @@ export function AskMakerSheet({
   const review = held ?? opened;
   const standing = hold.error instanceof HoldRefused ? hold.error.draft : null;
   // US-19 F3-22 (517-1): Add an address lands on the vendor's terms.
-  // US-19 F3-2 (one-voice): the sheet opens on its first field, the Subject.
+  // US-19 FR4 520-1 (one-voice): the sheet opens on the body when the line
+  // has a maker, since the subject is already written; with none, on Subject.
   const oneVoice = useFeatureFlag('one-voice').value === true;
 
   // DocSheet focuses its panel in a frame on open; its effect runs before this
@@ -179,10 +205,10 @@ export function AskMakerSheet({
   useEffect(() => {
     if (!open || held) return;
     const frame = window.requestAnimationFrame(() =>
-      (oneVoice ? subjectRef.current : bodyRef.current)?.focus(),
+      (oneVoice && !hasMaker ? subjectRef.current : bodyRef.current)?.focus(),
     );
     return () => window.cancelAnimationFrame(frame);
-  }, [open, held, oneVoice]);
+  }, [open, held, oneVoice, hasMaker]);
 
   // L-10: `Open the held draft` lands on the review it opened, in a frame as
   // the body's focus does, so it lands after DocSheet's own.
@@ -198,9 +224,9 @@ export function AskMakerSheet({
     <DocSheet
       open={open}
       onClose={onClose}
-      title="Ask the maker for a date"
+      title={title}
       icon={CalendarClock}
-      kind="ask-maker-date"
+      kind={followUp ? 'maker-follow-up' : 'ask-maker-date'}
     >
       <div data-overlay-ask-maker className="mx-auto w-full max-w-[34rem] space-y-5">
         {review ? (
@@ -280,7 +306,7 @@ export function AskMakerSheet({
             <DocumentActionGroup
               surfaceKey="open-document"
               regionKey="ask-maker-sheet"
-              aria-label="Ask the maker for a date"
+              aria-label={title}
             >
               <DocumentAction
                 actionKey="hold-maker-date-request"

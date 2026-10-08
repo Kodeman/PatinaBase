@@ -232,7 +232,7 @@ export function householdDisplayName(name: string): string {
  * act lands it on its own control. Each is cancelable: the owner cancels it
  * when it took the act, and the press keeps its old landing when nobody did.
  * - `askTheMaker` — the Install row opens its sheet on the first field.
- * - `ffeAct` (detail `'claim' | 'follow-up'`) — Pieces lands on the line.
+ * - `ffeAct` (detail `FfeActLanding`) — Pieces lands on its own control.
  * - `composeMessage` (detail `{ named: string[] }`) — the letterhead's Message
  *   composer opens, naming what is overdue.
  */
@@ -241,6 +241,30 @@ export const ACT_LANDING_EVENTS = {
   ffeAct: 'document:land-ffe-act',
   composeMessage: 'document:compose-message',
 } as const;
+
+/**
+ * `ACT_LANDING_EVENTS.ffeAct`'s detail — the Pieces control an act lands on
+ * (F3-2, FR4 Fixes 3, 4, 6, 8). `claim`: the damaged line's claim act, or the
+ * Receiving claim card's at PO grain. `follow-up`: the maker composer for the
+ * oldest unanswered PO. `send`: the drafted PO's send act. `spec`: the first
+ * unspecified line's spec act. `open`: the first line's unfold control.
+ */
+export type FfeActLanding = 'claim' | 'follow-up' | 'send' | 'spec' | 'open';
+
+const SPEC_THE_UNSPECIFIED = /^Spec the \d+ unspecified$/;
+
+/**
+ * FR4 522-3 — the Pieces landing an act's printed name asks for, so a
+ * Standing-sheet row lands where its name says. Null where Pieces owns no
+ * control for the act.
+ */
+export function ffeActLandingOf(label: string): FfeActLanding | null {
+  if (label === NAMED_ACTS.fileClaim) return 'claim';
+  if (label === NEED_ACT_LABELS.po_unacknowledged) return 'follow-up';
+  if (label === NEED_ACT_LABELS.po_unsent) return 'send';
+  if (label === 'Open the pieces') return 'open';
+  return SPEC_THE_UNSPECIFIED.test(label) ? 'spec' : null;
+}
 
 // ── The stage's own act (D1) ─────────────────────────────────────────────────
 

@@ -1,18 +1,33 @@
 /**
- * US-19 FR3 F3-2 (P-2) — a need's Next act lands with focus on its line's own
- * control: `File the claim` on the damaged line's claim control, `Follow up
- * with the maker` on the unacknowledged PO line's control. The press is taken
- * (the event cancelled) only when a line carries the act; otherwise it keeps
- * its old landing.
+ * US-19 FR3 F3-2 / FR4 (P-2) — a Pieces act lands with focus on Pieces' own
+ * control: `File the claim` on the damaged line's claim control (or, at PO
+ * grain, Receiving's claim card), `Follow up with the maker` in the maker
+ * composer with the body focused, `Send the purchase order` on the drafted
+ * PO's send act, `Spec the N unspecified` on the first unspecified line's spec
+ * act, and the held head's `Open the pieces` on the first line's unfold
+ * control. The press is taken (the event cancelled) only when Pieces carries
+ * the act; otherwise it keeps its old landing.
  */
-import { act, render, screen, waitFor } from '@testing-library/react';
-import { ACT_LANDING_EVENTS } from '@/lib/document/act-names';
+import type { ReactElement } from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ACT_LANDING_EVENTS, type FfeActLanding } from '@/lib/document/act-names';
+import type { NeedLine } from '@/lib/document/desk-derivation';
 
 let mockItems: Record<string, unknown>[] = [];
-// Stands in for the unfold: the Order cell's PO control (order-cell.tsx) and,
-// on a line with an open claim, the claim's act (claim-acts.tsx).
+let mockOneVoice = false;
+// Stands in for the unfold: the Order cell's PO control (order-cell.tsx), the
+// drafted PO's send act (line-unfold.tsx) and, on a line with an open claim,
+// the claim's act (claim-acts.tsx).
 const mockLineUnfold = jest.fn((props: Record<string, unknown>) => {
-  const item = props.item as { id: string; item_claims?: unknown[] } | undefined;
+  const item = props.item as
+    | {
+        id: string;
+        item_claims?: unknown[];
+        purchase_order?: { status?: string; sent_at?: string | null } | null;
+      }
+    | undefined;
+  const po = item?.purchase_order;
   return (
     <>
       <div role="group" aria-label="Order" data-testid="line-po-cell">
@@ -20,6 +35,11 @@ const mockLineUnfold = jest.fn((props: Record<string, unknown>) => {
           PO
         </button>
       </div>
+      {po?.status === 'draft' && !po.sent_at && (
+        <button type="button" data-action-key="send-ffe-line-to-vendor">
+          Send to vendor
+        </button>
+      )}
       {(item?.item_claims ?? []).length > 0 && (
         <button type="button" data-action-key="notify-vendor-of-ffe-claim">
           Notify the maker
@@ -28,6 +48,15 @@ const mockLineUnfold = jest.fn((props: Record<string, unknown>) => {
     </>
   );
 });
+const mockOpenLedger = jest.fn();
+
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (name: string) => ({ value: name === 'one-voice' && mockOneVoice, isLoading: false }),
+}));
+jest.mock('../command-bar', () => ({
+  openLedger: (...args: unknown[]) => mockOpenLedger(...args),
+}));
+jest.mock('../orders-book-receiving', () => ({ receivingClaimLanding: { pending: false } }));
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn(), regionFolded: jest.fn() },
@@ -104,7 +133,17 @@ jest.mock('@/hooks/use-section-work', () => {
 });
 
 import { FFESection, ffeActLine } from '../ffe-section';
+import { receivingClaimLanding } from '../orders-book-receiving';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
+
+/** The follow-up composer holds a draft through react-query's mutation. */
+function renderWithQuery(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
+const need = (kind: NeedLine['kind']) =>
+  ({ kind, text: kind, actionLabel: '', urgent: false }) as unknown as NeedLine;
 
 const line = (id: string, over: Record<string, unknown> = {}) => ({
   id,
@@ -135,14 +174,32 @@ const damaged = line('line-damaged', {
   received_quantity: 1,
   item_claims: [{ id: 'claim-1', state: 'drafted' }],
 });
+const halloran = line('line-halloran', {
+  name: 'Halloran dining table',
+  product_id: 'product-1',
+  vendor_name: 'Nordic Atelier',
+  purchase_order: {
+    id: 'po-4',
+    po_number: 'NA-2026-077',
+    status: 'sent',
+    sent_at: '2026-10-01',
+    acknowledged_at: null,
+  },
+});
+const specified = (id: string, over: Record<string, unknown> = {}) =>
+  line(id, { product_id: `product-${id}`, ...over });
 
-/** What page.tsx's band press does under one-voice; true when taken. */
-const press = (detail: 'claim' | 'follow-up') =>
+/** What page.tsx's band press, and the Standing sheet's rows, do under
+ *  one-voice; true when taken. */
+const press = (detail: FfeActLanding) =>
   !window.dispatchEvent(new CustomEvent(ACT_LANDING_EVENTS.ffeAct, { detail, cancelable: true }));
 
 beforeEach(() => {
   __setDensityForTest('full');
   mockLineUnfold.mockClear();
+  mockOpenLedger.mockClear();
+  mockOneVoice = false;
+  receivingClaimLanding.pending = false;
   window.localStorage.clear();
 });
 afterEach(() => {
@@ -153,6 +210,19 @@ describe('ffeActLine', () => {
   it('picks the damaged line with an open claim, and the oldest unanswered PO', () => {
     expect(ffeActLine([answered, newer, older, damaged], 'claim')?.id).toBe('line-damaged');
     expect(ffeActLine([answered, newer, older, damaged], 'follow-up')?.id).toBe('line-older');
+  });
+
+  it('picks the first unspecified line, and the first line whose PO is drafted and unsent', () => {
+    const drafted = specified('line-drafted', {
+      purchase_order: { status: 'draft', sent_at: null, acknowledged_at: null },
+    });
+    const sentDraft = specified('line-sent', {
+      purchase_order: { status: 'draft', sent_at: '2026-09-01', acknowledged_at: null },
+    });
+    expect(ffeActLine([specified('a'), line('b'), line('c')], 'spec')?.id).toBe('b');
+    expect(ffeActLine([specified('a'), { ...line('b'), removed_at: '2026-10-01' }], 'spec')).toBeNull();
+    expect(ffeActLine([answered, sentDraft, drafted], 'send')?.id).toBe('line-drafted');
+    expect(ffeActLine([answered, sentDraft], 'send')).toBeNull();
   });
 
   it('skips a removed line, a settled claim, and a delivered or cancelled PO', () => {
@@ -198,32 +268,143 @@ describe('a need’s act lands on its line’s control (F3-2)', () => {
     );
   });
 
-  it('Follow up with the maker: focuses the oldest unacknowledged PO line’s control', async () => {
-    mockItems = [answered, newer, older];
-    render(<FFESection projectId="project-1" projectName="Chen" mode="project" />);
+  it('Follow up with the maker (520-2): opens the maker composer on the oldest unanswered PO, body focused', async () => {
+    mockItems = [answered, newer, halloran, older];
+    renderWithQuery(<FFESection projectId="project-1" projectName="Halloran" mode="project" />);
 
     let taken = false;
     act(() => {
       taken = press('follow-up');
     });
     expect(taken).toBe(true);
+    const sheet = await screen.findByRole('dialog', { name: 'Follow up with the maker' });
+    expect(within(sheet).getByLabelText('Subject')).toHaveValue('WS-103 — following up');
+    await waitFor(() => expect(document.activeElement).toBe(within(sheet).getByLabelText('Note')));
+    // Never the order ledger, never the PO button.
+    expect(mockOpenLedger).not.toHaveBeenCalled();
+    expect(within(sheet).getByRole('button', { name: 'Hold for review' })).toBeInTheDocument();
+  });
+
+  it('the Pieces head’s Follow up with the maker opens the composer named for its PO', async () => {
+    mockOneVoice = true;
+    mockItems = [halloran];
+    renderWithQuery(
+      <FFESection
+        projectId="project-1"
+        projectName="Halloran"
+        mode="project"
+        needs={[need('po_unacknowledged')]}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Follow up with the maker' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Follow up with the maker' });
+    expect(within(sheet).getByLabelText('Subject')).toHaveValue('NA-2026-077 — following up');
+    expect(within(sheet).getByText('Nordic Atelier')).toBeInTheDocument();
+    await waitFor(() => expect(document.activeElement).toBe(within(sheet).getByLabelText('Note')));
+    expect(mockOpenLedger).not.toHaveBeenCalled();
+  });
+
+  it('File the claim at PO grain (520-4): opens Receiving with its claim landing armed', async () => {
+    mockItems = [answered];
+    render(
+      <FFESection
+        projectId="project-1"
+        projectName="Olsen"
+        mode="project"
+        needs={[need('damage_claim')]}
+      />,
+    );
+
+    let taken = false;
+    act(() => {
+      taken = press('claim');
+    });
+    expect(taken).toBe(true);
     await waitFor(() =>
-      expect(document.activeElement).toBe(
-        screen.getByRole('button', { name: 'Open the order for line-older' }),
-      ),
+      expect(mockOpenLedger).toHaveBeenCalledWith('orders', {
+        page: 'receiving',
+        projectId: 'project-1',
+      }),
+    );
+    expect(receivingClaimLanding.pending).toBe(true);
+  });
+
+  it('Send the purchase order (522-3): focuses the drafted PO’s send act', async () => {
+    mockItems = [
+      answered,
+      line('line-drafted', {
+        purchase_order: { id: 'po-5', po_number: 'WS-105', status: 'draft', sent_at: null },
+      }),
+    ];
+    render(<FFESection projectId="project-1" projectName="Olsen" mode="project" />);
+
+    let taken = false;
+    act(() => {
+      taken = press('send');
+    });
+    expect(taken).toBe(true);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Send to vendor' })),
+    );
+    expect(document.getElementById('ffe-selection-line-drafted')).toContainElement(
+      document.activeElement as HTMLElement,
+    );
+  });
+
+  it('Spec the N unspecified (522-3): focuses the first unspecified line’s spec act', async () => {
+    mockItems = [specified('line-a'), line('line-unspecified'), line('line-later')];
+    render(<FFESection projectId="project-1" projectName="Chen" mode="project" />);
+
+    let taken = false;
+    act(() => {
+      taken = press('spec');
+    });
+    expect(taken).toBe(true);
+    await waitFor(() =>
+      expect(document.activeElement).toHaveAttribute('data-action-key', 'edit-ffe-line-spec-details'),
+    );
+    expect(document.getElementById('ffe-selection-line-unspecified')).toContainElement(
+      document.activeElement as HTMLElement,
     );
   });
 
   it('leaves the press untaken when no line carries the act', () => {
-    mockItems = [answered];
+    mockItems = [specified('line-answered', { purchase_order: answered.purchase_order })];
     render(<FFESection projectId="project-1" projectName="Chen" mode="project" />);
-    let claimTaken = true;
-    let followTaken = true;
+    let taken: boolean[] = [];
     act(() => {
-      claimTaken = press('claim');
-      followTaken = press('follow-up');
+      taken = (['claim', 'follow-up', 'send', 'spec'] as const).map(press);
     });
-    expect(claimTaken).toBe(false);
-    expect(followTaken).toBe(false);
+    expect(taken).toEqual([false, false, false, false]);
+    expect(mockOpenLedger).not.toHaveBeenCalled();
+  });
+});
+
+describe('the held head’s Open the pieces (523-1)', () => {
+  it('lands on the first line’s unfold control', async () => {
+    mockOneVoice = true;
+    mockItems = [specified('line-first'), specified('line-second')];
+    render(
+      <FFESection projectId="project-1" projectName="Harrow" mode="project" projectStatus="on_hold" />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open the pieces' }));
+    const first = document.querySelector('#ffe-selection-line-first button[aria-expanded]');
+    expect(first).not.toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(first));
+  });
+
+  it('with no lines, lands on the Pieces heading', async () => {
+    mockOneVoice = true;
+    mockItems = [];
+    render(
+      <FFESection projectId="project-1" projectName="Harrow" mode="project" projectStatus="on_hold" />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open the pieces' }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(document.getElementById('ffe-region-heading-project-1')),
+    );
   });
 });

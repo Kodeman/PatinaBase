@@ -101,6 +101,7 @@ import { LineUnfold } from './line-unfold';
 import { ChangeOrderSheet } from './line-unfold/change-order';
 import { makerLandingPending } from './line-unfold/the-buy-cell';
 import { recordPaymentOpener } from './line-unfold/record-payment';
+import { canSend } from './line-unfold/next-act';
 import {
   openRecordAChange,
   RECORD_A_CHANGE_ON_PIECE_EVENT,
@@ -112,6 +113,7 @@ import {
   NAMED_ACTS,
   needActLabel,
   ownAct,
+  type FfeActLanding,
   type OwnActFacts,
 } from '@/lib/document/act-names';
 import { StrataMark } from './strata-mark';
@@ -163,7 +165,7 @@ import { useRoomLens } from './room-lens-context';
 import { MakerReading, ReadingLens } from './buying/maker-reading';
 import { NextActReading } from './buying/next-act-reading';
 import { InstallManifest } from './buying/install-manifest';
-import { InstallReadingLine } from './overlays/ask-maker-sheet';
+import { AskMakerSheet, InstallReadingLine } from './overlays/ask-maker-sheet';
 import { CareClosedLine } from './quiet-sections';
 import type { BuyingReading } from '@/lib/document/buying-readings';
 import {
@@ -1070,15 +1072,11 @@ interface FFESectionProps {
 
 // ── A need's act lands on its line (US-19 F3-2, P-2) ─────────────────────────
 
-/** `ACT_LANDING_EVENTS.ffeAct`'s detail. `claim`: the damaged line's claim
- *  control. `follow-up`: the oldest unacknowledged PO's line, on its PO
- *  control. */
-export type FfeActLanding = 'claim' | 'follow-up';
-
 /** The line an act lands on, in the schedule's own order. */
 export function ffeActLine<
   T extends {
     removed_at?: string | null;
+    product_id?: string | null;
     item_claims?: readonly { state: string }[] | null;
     purchase_order?: {
       sent_at?: string | null;
@@ -1086,7 +1084,7 @@ export function ffeActLine<
       status?: string | null;
     } | null;
   },
->(items: readonly T[], act: FfeActLanding): T | null {
+>(items: readonly T[], act: Exclude<FfeActLanding, 'open'>): T | null {
   const live = items.filter((item) => item.removed_at == null);
   if (act === 'claim') {
     return (
@@ -1097,6 +1095,10 @@ export function ffeActLine<
       ) ?? null
     );
   }
+  // A line with no piece behind it is the one nobody has specified.
+  if (act === 'spec') return live.find((item) => !item.product_id) ?? null;
+  // R18: a drafted PO never sent is the one Send is offered on.
+  if (act === 'send') return live.find((item) => canSend(item.purchase_order ?? null)) ?? null;
   // The rule the Desk's `po_unacknowledged` counts by (00590): sent, never
   // acknowledged, neither delivered nor cancelled — the oldest first.
   const unanswered = live.filter((item) => {
@@ -1115,11 +1117,32 @@ export function ffeActLine<
   );
 }
 
-const FFE_ACT_CONTROL: Record<FfeActLanding, string> = {
+/** The line's own control each landing focuses, inside its unfold. */
+const FFE_ACT_CONTROL = {
   claim:
     '[data-action-key="notify-vendor-of-ffe-claim"], [data-action-key="open-resolve-ffe-claim"]',
-  'follow-up': '[data-testid="line-po-cell"] [data-po-control]',
-};
+  send: '[data-action-key="send-ffe-line-to-vendor"]',
+  spec: '[data-action-key="edit-ffe-line-spec-details"]',
+} as const;
+
+/**
+ * Land focus on a control once it is on the page (L-10). The region and the
+ * line mount a frame or two after the press, so it waits up to a second.
+ */
+function landOnControl(find: () => HTMLElement | null | undefined): void {
+  let waited = 0;
+  const land = () => {
+    const control = find();
+    if (!control) {
+      if (waited++ < 60) requestAnimationFrame(land);
+      return;
+    }
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    control.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+    control.focus({ preventScroll: true });
+  };
+  requestAnimationFrame(() => requestAnimationFrame(land));
+}
 
 /**
  * The schedule, wrapped in its own ceremony. The provider is section-local by
@@ -1158,6 +1181,9 @@ function FFESectionBody({
 }: FFESectionProps & { instruments: InstrumentLike[] }) {
   const { heldRoomId, toggleRoom } = useRoomLens();
   const [openLineId, setOpenLineId] = useState<string | null>(null);
+  // US-19 FR4 Fix 6 (520-2): the line `Follow up with the maker` opened the
+  // maker composer on.
+  const [followUpLineId, setFollowUpLineId] = useState<string | null>(null);
   // D5 (US-19): the Record a change router's `On a piece` destination — the
   // `Choose the piece` prompt, and the line whose change order it opened.
   const [askThePaper, setAskThePaper] = useState(false);
@@ -1729,38 +1755,6 @@ function FFESectionBody({
     unfoldFor(recordPaymentPending.request);
     return () => window.removeEventListener(LAND_RECORD_PAYMENT_EVENT, onLand);
   }, [items, mode, ffeSetFolded]);
-  // US-19 F3-2 (P-2) — `File the claim` and `Follow up with the maker` land on
-  // the line's own control, never the Orders ledger or the Pieces heading.
-  // Taken (the event cancelled) only when a line carries the act; otherwise
-  // the press keeps its old landing.
-  useEffect(() => {
-    const onLand = (event: Event) => {
-      const act = (event as CustomEvent<FfeActLanding>).detail;
-      const line = items && FFE_ACT_CONTROL[act] ? ffeActLine(items, act) : null;
-      if (!line) return;
-      event.preventDefault();
-      const itemId = String(line.id);
-      setOpenLineId(itemId);
-      if (mode === 'project') ffeSetFolded(false);
-      let waited = 0;
-      const land = () => {
-        const control = document
-          .getElementById(`ffe-selection-${itemId}`)
-          ?.querySelector<HTMLElement>(FFE_ACT_CONTROL[act]);
-        // Up to a second: the region and the line mount before the cell does.
-        if (!control) {
-          if (waited++ < 60) requestAnimationFrame(land);
-          return;
-        }
-        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        control.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
-        control.focus({ preventScroll: true });
-      };
-      requestAnimationFrame(() => requestAnimationFrame(land));
-    };
-    window.addEventListener(ACT_LANDING_EVENTS.ffeAct, onLand);
-    return () => window.removeEventListener(ACT_LANDING_EVENTS.ffeAct, onLand);
-  }, [items, mode, ffeSetFolded]);
   const ffeHeadingId = `ffe-region-heading-${projectId}`;
   const ffeMovementId = `ffe-movement-${projectId}`;
   const ffeBodyId = `ffe-region-body-${projectId}`;
@@ -1851,16 +1845,93 @@ function FFESectionBody({
       openLedger('orders', { page, projectId }),
     );
   };
+  // US-19 F3-2 / FR4 (P-2) — every Pieces act lands with focus on Pieces' own
+  // control: the claim, the send and the spec on their line, `Follow up with
+  // the maker` in the maker composer, `Open the pieces` on the first line.
+  // True (the press taken) only when Pieces carries the act; otherwise the
+  // press keeps its old landing.
+  const landFfeAct = (act: FfeActLanding): boolean => {
+    const openRegion = () => {
+      if (mode === 'project') ffeSetFolded(false);
+    };
+    if (act === 'open') {
+      // 523-1 — the first line's unfold control, or the heading with none.
+      const hasLine = (items ?? []).some((item) => item.removed_at == null);
+      openRegion();
+      landOnControl(() =>
+        hasLine
+          ? document
+              .getElementById(ffeBodyId)
+              ?.querySelector<HTMLElement>('[id^="ffe-selection-"] button[aria-expanded]')
+          : document.getElementById(ffeHeadingId),
+      );
+      return true;
+    }
+    const line = items ? ffeActLine(items, act) : null;
+    if (act === 'follow-up') {
+      // 520-2 — the maker composer, never the order ledger or the PO button.
+      if (!line) return false;
+      setFollowUpLineId(String(line.id));
+      return true;
+    }
+    if (!line) {
+      // 520-4 — a claim at PO grain stands on no line: Receiving lands on the
+      // claim card's own act. The flag is the Receiving page's to spend.
+      if (act !== 'claim' || !needs.some((need) => need.kind === 'damage_claim')) return false;
+      void Promise.all([import('./orders-book-receiving'), import('./command-bar')]).then(
+        ([receiving, { openLedger }]) => {
+          receiving.receivingClaimLanding.pending = true;
+          openLedger('orders', { page: 'receiving', projectId });
+        },
+      );
+      return true;
+    }
+    const itemId = String(line.id);
+    setOpenLineId(itemId);
+    openRegion();
+    landOnControl(() => {
+      const row = document.getElementById(`ffe-selection-${itemId}`);
+      const control = row?.querySelector<HTMLElement>(FFE_ACT_CONTROL[act]);
+      if (control || act !== 'spec') return control;
+      // The maker and next-act readings print no spec door on the unfolded
+      // line; there its own unfold control is the landing.
+      return row?.querySelector<HTMLElement>('button[aria-expanded="true"]');
+    });
+    return true;
+  };
+  const landFfeActRef = useRef(landFfeAct);
+  useEffect(() => {
+    landFfeActRef.current = landFfeAct;
+  });
+  useEffect(() => {
+    const onLand = (event: Event) => {
+      if (landFfeActRef.current((event as CustomEvent<FfeActLanding>).detail)) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener(ACT_LANDING_EVENTS.ffeAct, onLand);
+    return () => window.removeEventListener(ACT_LANDING_EVENTS.ffeAct, onLand);
+  }, []);
+  const followUpLine =
+    followUpLineId !== null
+      ? ((items ?? []).find((item) => String(item.id) === followUpLineId) ?? null)
+      : null;
   const ffeClaimEntry: RegionLedgerEntry = {
     key: 'file-ffe-claim',
     label: 'File the claim',
-    onClick: () => openOrdersLedger('receiving'),
+    onClick: () => {
+      if (oneVoice && landFfeAct('claim')) return;
+      openOrdersLedger('receiving');
+    },
   };
   const ffePoEntry: RegionLedgerEntry = {
     key: 'chase-ffe-po',
     // US-19 D1 — never "Chase …"; an unanswered PO's act has one name.
     label: oneVoice ? needActLabel('po_unacknowledged') : 'Chase the PO',
-    onClick: () => openOrdersLedger('ledger'),
+    onClick: () => {
+      if (oneVoice && landFfeAct('follow-up')) return;
+      openOrdersLedger('ledger');
+    },
   };
   const ffeBillEntry: RegionLedgerEntry | null =
     billableUninvoiced.length > 0
@@ -1982,8 +2053,8 @@ function FFESectionBody({
         {
           key: 'open-the-pieces',
           label: ownAct('project', OWN_ACT_NO_FACTS)!.label,
-          onClick: () =>
-            document.getElementById(ffeBodyId)?.scrollIntoView({ block: 'start' }),
+          // 523-1 — lands on the first line's unfold control, in view.
+          onClick: () => landFfeAct('open'),
         },
         ...ffeLedgerDoors,
       ]
@@ -2575,6 +2646,19 @@ function FFESectionBody({
           auth={changeOrderLine.auth}
           vendorName={changeOrderLine.item.vendor_name ?? 'the maker'}
           poLabel={changeOrderLine.item.purchase_order.po_number ?? 'this order'}
+        />
+      )}
+
+      {/* FR4 Fix 6 (520-2) — `Follow up with the maker`'s composer: a held
+          draft for review, never a send. */}
+      {followUpLine && (
+        <AskMakerSheet
+          open
+          followUp
+          onClose={() => setFollowUpLineId(null)}
+          projectId={projectId}
+          piece={followUpLine}
+          held={null}
         />
       )}
 

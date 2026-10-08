@@ -12,7 +12,7 @@
  * shipped POs listed apart as receivable on arrival (C-19).
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useDamageClaims,
@@ -343,6 +343,17 @@ function QueueRow({
   );
 }
 
+/**
+ * US-19 FR4 Fix 3 (520-4) — `File the claim` at PO grain sets this before it
+ * opens the ledger on Receiving; the page spends it once its claims have read,
+ * landing on the first open claim's own act (`Notify vendor`, or `Mark
+ * resolved` once the vendor is told). The ledger is never the landing.
+ */
+export const receivingClaimLanding = { pending: false };
+
+const CLAIM_ACT =
+  '[data-action-key="review-claim-notification"], [data-action-key="review-claim-resolution"]';
+
 export function ReceivingBookPage({
   projectId,
   onClearProject,
@@ -362,13 +373,17 @@ export function ReceivingBookPage({
       sinceDate: since30,
     },
   ) as { data: AnyRecord[] | undefined; isLoading: boolean };
-  const { data: draftedClaims } = useDamageClaims({ state: 'drafted' }) as {
+  const { data: draftedClaims, isLoading: draftedLoading } = useDamageClaims({
+    state: 'drafted',
+  }) as {
     data: AnyRecord[] | undefined;
+    isLoading: boolean;
   };
-  const { data: notifiedClaims } = useDamageClaims({
+  const { data: notifiedClaims, isLoading: notifiedLoading } = useDamageClaims({
     state: 'vendor_notified',
   }) as {
     data: AnyRecord[] | undefined;
+    isLoading: boolean;
   };
 
   const [target, setTarget] = useState<AnyRecord | null>(null);
@@ -450,8 +465,24 @@ export function ReceivingBookPage({
 
   const isLoading = ordersLoading || inspLoading;
 
+  // FR4 Fix 3 — two frames, so the landing follows the sheet's own focus.
+  // Never cancelled: StrictMode's second pass finds the flag already spent.
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  const claimsRead = !isLoading && !draftedLoading && !notifiedLoading;
+  useEffect(() => {
+    if (!receivingClaimLanding.pending || !claimsRead) return;
+    receivingClaimLanding.pending = false;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const control = pageRef.current?.querySelector<HTMLElement>(CLAIM_ACT);
+        control?.scrollIntoView?.({ block: 'center' });
+        control?.focus({ preventScroll: true });
+      }),
+    );
+  }, [claimsRead]);
+
   return (
-    <div className="mx-auto w-full min-w-0 max-w-3xl">
+    <div ref={pageRef} className="mx-auto w-full min-w-0 max-w-3xl">
       {/* US-16 (C-08): the lens followed the designer in from the Document —
           quiet, same LensLink grammar as the Ledger (:365-376), not a pill. */}
       {projectId && (

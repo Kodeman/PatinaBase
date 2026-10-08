@@ -15,7 +15,13 @@
 
 import { AlertCircle } from 'lucide-react';
 import { useId, type ReactNode, type RefObject } from 'react';
-import { NAMED_ACTS } from '@/lib/document/act-names';
+import {
+  ACT_LANDING_EVENTS,
+  NAMED_ACTS,
+  STANDING_ROW_ACTS,
+  ffeActLandingOf,
+  type StandingRowKind,
+} from '@/lib/document/act-names';
 import type {
   LensAct,
   LensInputItem,
@@ -55,6 +61,27 @@ const SETUP_SENTENCE = 'min-w-0 font-heading text-[14px] text-[var(--color-clay-
  *  so the declaration was invalid and the rule fell back to `currentColor` — a
  *  terracotta hairline inherited from the eyebrow class on the same element. */
 const RULED = 'mt-4 border-t border-[var(--doc-ink-border)] pt-3';
+
+/** Hand an act to the region that owns its control; true when it took it. */
+function landAct(type: string, detail?: unknown): boolean {
+  return !window.dispatchEvent(new CustomEvent(type, { detail, cancelable: true }));
+}
+
+/**
+ * FR4 522-3 — a row's act lands on a control, as the band's does. A Pieces
+ * act by its name goes to Pieces; a `Nudge` row the table names no control
+ * for opens the Message composer. True when the owner took it.
+ */
+function landInRegion(act: LensAct): boolean {
+  const pieces = ffeActLandingOf(act.label);
+  if (pieces) return landAct(ACT_LANDING_EVENTS.ffeAct, pieces);
+  const kind = act.key.startsWith('row:') ? act.key.slice('row:'.length) : null;
+  const composes =
+    kind !== null &&
+    kind in STANDING_ROW_ACTS &&
+    STANDING_ROW_ACTS[kind as StandingRowKind].targetId === null;
+  return composes && landAct(ACT_LANDING_EVENTS.composeMessage, { named: [] });
+}
 
 /**
  * A row's own act. D3's gated form: the act stays in the tab order,
@@ -159,6 +186,22 @@ export function StandingSheet({
     onClose();
     window.requestAnimationFrame(() => window.requestAnimationFrame(run));
   };
+  // FR4 522-3 (`one-voice`) — a row's act lands on its control as the band's
+  // does: the sheet goes back first, as a setup act's does, then the region
+  // that owns the control takes the act; where none does, the act keeps its
+  // own landing. Off, the act runs as the 0b sheet ran it.
+  const pressRow = (act: LensAct) => {
+    if (!grouped) {
+      act.onAct();
+      return;
+    }
+    onClose();
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() => {
+        if (!landInRegion(act)) act.onAct();
+      }),
+    );
+  };
 
   // 498-k — under `one-voice` the four named acts are scored; off, every
   // sheet act is the 0b sheet's plain act.
@@ -189,7 +232,7 @@ export function StandingSheet({
         <SheetAct
           actionKey={`standing-${item.key}`}
           act={item.act}
-          onPress={item.act.onAct}
+          onPress={() => pressRow(item.act!)}
           variant={variantOf(item.act)}
         />
       )}
@@ -205,7 +248,7 @@ export function StandingSheet({
         <SheetAct
           actionKey={`standing-input-${item.key}`}
           act={item.act}
-          onPress={item.act.onAct}
+          onPress={() => pressRow(item.act!)}
           variant={variantOf(item.act)}
         />
       )}

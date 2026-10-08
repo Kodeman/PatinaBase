@@ -1,8 +1,9 @@
 /**
  * US-19 FR3 F3-2 (P-2, `one-voice`) — the band's `Ask the maker for a date`
- * takes the Install row's own act: the ask-maker sheet opens with focus on its
- * first field. A line with no maker lands on `Add the maker`. With the flag
- * off the band's press is never taken here.
+ * takes the Install row's own act. FR4 520-1 (Fix 16): the sheet opens with
+ * focus on the body when the line has a maker, since the subject is already
+ * written. A line with no maker lands on `Add the maker`. With the flag off
+ * the band's press is never taken here.
  */
 import type { ReactElement } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
@@ -42,6 +43,7 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 }));
 
 import { AskMakerSheet, InstallReadingLine, type AskMakerPiece } from '../overlays/ask-maker-sheet';
+import { pieceName } from '@/lib/document/install-reading';
 
 const PROJECT = '33333333-3333-4333-8333-333333333333';
 const CHAIR: AskMakerPiece = {
@@ -79,14 +81,14 @@ beforeEach(() => {
   mockOneVoice = true;
 });
 
-describe('Ask the maker for a date lands on the sheet’s first field (F3-2)', () => {
-  it('opens the sheet with focus on Subject', async () => {
+describe('Ask the maker for a date lands on the sheet’s body (F3-2, 520-1)', () => {
+  it('opens the sheet with focus on the body', async () => {
     renderWithQuery(<InstallReadingLine projectId={PROJECT} items={[CHAIR, SHELVING]} />);
     await screen.findByRole('button', { name: 'Ask the maker for a date' });
 
     expect(pressFromBand()).toBe(true);
     expect(await screen.findByRole('button', { name: 'Hold for review' })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByLabelText('Subject')).toHaveFocus());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Note')));
   });
 
   it('a line with no maker lands on Add the maker, and opens no sheet', async () => {
@@ -99,18 +101,55 @@ describe('Ask the maker for a date lands on the sheet’s first field (F3-2)', (
     expect(screen.queryByRole('button', { name: 'Hold for review' })).toBeNull();
   });
 
-  it('the sheet itself opens on Subject under one-voice, on the note with it off', async () => {
+  it('the sheet itself opens on the body when the line has a maker, flag on or off', async () => {
     const { unmount } = renderWithQuery(
       <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} />,
     );
-    await waitFor(() => expect(screen.getByLabelText('Subject')).toHaveFocus());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Note')));
     unmount();
 
     mockOneVoice = false;
     renderWithQuery(
       <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} />,
     );
-    await waitFor(() => expect(screen.getByLabelText('Note')).toHaveFocus());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Note')));
+  });
+
+  it('with no maker recorded, the sheet opens on Subject under one-voice', async () => {
+    renderWithQuery(
+      <AskMakerSheet open onClose={jest.fn()} projectId={PROJECT} piece={CHAIR_NO_MAKER} held={null} />,
+    );
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Subject')));
+  });
+
+  it('520-2: as Follow up with the maker, the subject names the PO and the body takes focus', async () => {
+    const halloran: AskMakerPiece = {
+      ...CHAIR,
+      name: 'Halloran dining table',
+      purchase_order: { po_number: 'NA-2026-077', vendor_po_number: 'V-88' },
+    };
+    renderWithQuery(
+      <AskMakerSheet open followUp onClose={jest.fn()} projectId={PROJECT} piece={halloran} held={null} />,
+    );
+    const sheet = screen.getByRole('dialog', { name: 'Follow up with the maker' });
+    expect(screen.getByLabelText('Subject')).toHaveValue('NA-2026-077 — following up');
+    expect(screen.getByLabelText('Note')).toHaveValue('');
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Note')));
+    // A held draft for review, never a send.
+    expect(sheet).toHaveTextContent('Nothing reaches the maker until a person sends it.');
+    expect(screen.getByRole('button', { name: 'Hold for review' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('520-2: with no PO number, the subject names the piece', () => {
+    renderWithQuery(
+      <AskMakerSheet open followUp onClose={jest.fn()} projectId={PROJECT} piece={CHAIR} held={null} />,
+    );
+    expect(screen.getByLabelText('Subject')).toHaveValue(
+      `${pieceName(CHAIR.name)} — following up`,
+    );
   });
 
   it('leaves the band’s press untaken with one-voice off', async () => {
