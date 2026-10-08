@@ -1350,6 +1350,19 @@ describe('DocumentPage guide activation', () => {
     isError: false,
   });
 
+  it('US-21 D14 — the page holds no time itself; the /doc/[id] layout does', () => {
+    asProjectDocument();
+    const { useHoldDocument } = jest.requireMock('@/hooks/document-time-provider') as {
+      useHoldDocument: jest.Mock;
+    };
+    useHoldDocument.mockClear();
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(document.querySelector('[data-active-section]')).not.toBeNull();
+    expect(useHoldDocument).not.toHaveBeenCalled();
+  });
+
   it('states a target from the resolver, in the register its source supports', () => {
     asProjectDocument();
     mockProjectQuery = {

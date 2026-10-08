@@ -50,7 +50,6 @@ import {
   type PhaseStatus,
 } from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
-import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { useMarginSheet } from '@/hooks/use-margin-sheet';
 import {
@@ -1172,18 +1171,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     );
   }, [proposalFeedback, liveProposal?.items?.length]);
 
-  // D11 (ratified R19): picking up the document starts the timer (chaining out any running
-  // one); putting down releases it through the log strip. Projects only —
-  // time attaches to project rows (00177 FK).
-  useHoldDocument(
-    row?.project_id
-      ? {
-          projectId: row.project_id,
-          projectName: row.title,
-          phaseKey: row.current_phase ?? null,
-        }
-      : null,
-  );
+  // The time hold (D11) lives in ./layout.tsx (US-21 D14), so the spec book,
+  // boards, plans and pieces under this document keep it held.
 
   // Which settled phase is unfolded (R66 review) — generalizes the old
   // proposal-only unfold so ANY completed phase can be clicked open.
