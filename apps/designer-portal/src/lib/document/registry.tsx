@@ -648,10 +648,15 @@ export function matchPaperSynonyms(query: string): PaperSynonymGroup[] {
 export const FOCUS_FFE_LINE_EVENT = 'document:focus-ffe-line';
 
 export interface FocusFfeLineRequest {
-  itemId: string;
+  /** The line, by id; or, with `purchaseOrderId` (FR8 F8-2), the PO's first
+   *  line in the schedule's order. */
+  itemId?: string;
+  purchaseOrderId?: string;
   /** `draft` (FR5 F5-2): the held maker note's DraftReview in the line's
-   *  Movement cell, where the band's `Open the held draft` lands. */
-  cell: 'order' | 'maker' | 'draft';
+   *  Movement cell, where the band's `Open the held draft` lands.
+   *  `order-draft` (FR8 F8-2): the PO's held reply on the Order cell's
+   *  DraftReview, where `Answer the maker` lands. */
+  cell: 'order' | 'maker' | 'draft' | 'order-draft';
 }
 
 /**

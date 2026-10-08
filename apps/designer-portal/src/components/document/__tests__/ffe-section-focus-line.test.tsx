@@ -12,17 +12,29 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 let mockWithMoneyOut = false;
+let mockDrafts: Record<string, unknown>[] = [];
 // Stands in for the unfold: the Order cell and its PO control, as order-cell.tsx
 // prints them — and, for the payment landing, the line's real money out.
 const mockLineUnfold = jest.fn((props: Record<string, unknown>) => {
   const { PoMoneyOut } = jest.requireActual('../line-unfold/record-payment');
-  const item = props.item as { id: string; purchase_order?: { id: string } } | undefined;
+  const item = props.item as
+    | { id: string; purchase_order_id?: string; purchase_order?: { id: string } }
+    | undefined;
+  // FR8 F8-2: the Order cell's PurchaseOrderDrafts, a DraftReview per held letter on the PO.
+  const poDrafts = mockDrafts.filter(
+    (draft) => item?.purchase_order_id && draft.purchase_order_id === item.purchase_order_id,
+  );
   return (
     <>
       <div role="group" aria-label="Order" data-testid="line-po-cell">
         <button type="button" data-po-control aria-label="Open the order, PO WS-188">
           WS-188
         </button>
+        {poDrafts.map((draft) => (
+          <section key={String(draft.id)} data-testid="draft-review">
+            <input aria-label={`Reply subject, ${item?.id}`} defaultValue={String(draft.subject)} />
+          </section>
+        ))}
       </div>
       {/* FR5 F5-2: the Movement cell's held maker note, as movement-cell.tsx prints it. */}
       <div data-testid="line-held-maker-note">
@@ -58,7 +70,7 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManifest: () => null }));
 
 jest.mock('@patina/supabase', () => ({
-  useProcurementDrafts: () => ({ data: [] }),
+  useProcurementDrafts: () => ({ data: mockDrafts }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
   useUnresolvedProcurementExceptions: () => ({ data: [] }),
@@ -196,6 +208,7 @@ beforeEach(() => {
   mockItems = [sectional];
   mockLineUnfold.mockClear();
   mockWithMoneyOut = false;
+  mockDrafts = [];
   focusFfeLinePending.request = null;
   recordPaymentPending.request = null;
   window.localStorage.clear();
@@ -241,6 +254,80 @@ describe('⌘K lands on the line (F1, R28)', () => {
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByLabelText('Held note subject')),
     );
+  });
+});
+
+describe('Answer the maker lands on the PO’s held reply (FR8 F8-2)', () => {
+  const chair = (id: string, name: string) => ({
+    ...sectional,
+    id,
+    name,
+    status: 'ordered',
+    received_quantity: 0,
+    purchase_order_id: 'po-1',
+    purchase_order: { id: 'po-1', po_number: 'FL-301', status: 'acknowledged' },
+  });
+
+  beforeEach(() => {
+    mockItems = [sectional, chair('line-chair-a', 'Fenwick Side Chair A'), chair('line-chair-b', 'Fenwick Side Chair B')];
+    mockDrafts = [
+      {
+        id: 'draft-reply',
+        kind: 'ack_discrepancy_reply',
+        status: 'awaiting_review',
+        purchase_order_id: 'po-1',
+        ffe_item_id: null,
+        subject: 'FL-301 — the acknowledgment differs',
+      },
+    ];
+  });
+
+  /** What the page's need row does on the press (PAGE-WIRING, F8-2). */
+  function answerTheMaker(purchaseOrderId: string): boolean {
+    const request = { purchaseOrderId, cell: 'order-draft' as const };
+    return !window.dispatchEvent(
+      new CustomEvent(FOCUS_FFE_LINE_EVENT, { detail: request, cancelable: true }),
+    );
+  }
+
+  it("FR8 F8-2: a request by PO lands on the reply's DraftReview in the first line's Order cell", async () => {
+    render(<FFESection projectId="project-1" projectName="Fenwick" mode="project" />);
+    let landed = false;
+    act(() => {
+      landed = answerTheMaker('po-1');
+    });
+    expect(landed).toBe(true);
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText('Reply subject, line-chair-a')),
+    );
+    // The PO's first line in the schedule's order is the open one; the second stays folded.
+    expect(screen.getByRole('button', { name: /Fenwick Side Chair A/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: /Fenwick Side Chair B/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.queryByLabelText('Reply subject, line-chair-b')).toBeNull();
+    expect(document.activeElement?.closest('[data-testid="line-po-cell"]')).not.toBeNull();
+  });
+
+  it('a PO with no line on the paper is not taken, and focus stays where it was', async () => {
+    render(<FFESection projectId="project-1" projectName="Fenwick" mode="project" />);
+    const before = document.activeElement;
+    let landed = true;
+    act(() => {
+      landed = answerTheMaker('po-elsewhere');
+    });
+    expect(landed).toBe(false);
+    // Give a landing the frames it would have used.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(document.activeElement).toBe(before);
+    expect(mockLineUnfold).not.toHaveBeenCalled();
   });
 });
 

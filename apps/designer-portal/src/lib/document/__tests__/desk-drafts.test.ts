@@ -215,4 +215,26 @@ describe('FR2 — the Desk speaks a held draft by its landing control', () => {
     const [need] = needsWith([first, second]);
     expect(need.draft).toMatchObject({ id: 'd1', ffeItemId: 'ffe-1', poNumber: 'NA-2026-077' });
   });
+
+  // US-19 FR8 F8-2 — a PO-level reply carries its PO (no line), so the
+  // band's `Answer the maker` can land on that PO's first line.
+  it('stamps purchaseOrderId on an ack_discrepancy_reply draft', () => {
+    const base = {
+      project_id: 'p1',
+      status: 'awaiting_review',
+      to_email: null,
+      subject: 's',
+      body: 'b',
+      created_at: '2026-10-06T09:00:00Z',
+    };
+    const map = buildDeskDrafts([
+      { ...base, id: 'd1', kind: 'ack_discrepancy_reply', purchase_order_id: 'po-1', ffe_item: null },
+      { ...base, id: 'd2', kind: 'receiver_inbound_notice', purchase_order_id: null, ffe_item: null },
+    ])!;
+    const [reply, notice] = map.get('p1')!;
+    expect(reply.purchaseOrderId).toBe('po-1');
+    expect(notice).not.toHaveProperty('purchaseOrderId');
+    const [need] = needsWith([reply]);
+    expect(need.draft).toMatchObject({ id: 'd1', kind: 'ack_discrepancy_reply', purchaseOrderId: 'po-1' });
+  });
 });

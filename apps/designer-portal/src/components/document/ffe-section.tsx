@@ -1715,17 +1715,29 @@ function FFESectionBody({
   // for it. A request made before this listener existed (F1: Pieces not yet
   // mounted) waits in `focusFfeLinePending` and is landed here on mount.
   useEffect(() => {
+    // FR8 F8-2 — a request names its line by id, or by PO: the PO's first
+    // line in the schedule's order.
+    const resolveLineId = (
+      request: Partial<FocusFfeLineRequest> | null | undefined,
+    ): string | undefined => {
+      const byPo = request?.purchaseOrderId
+        ? (items ?? []).find((item) => String(item.purchase_order_id) === request.purchaseOrderId)
+            ?.id
+        : undefined;
+      const id = request?.itemId ?? byPo;
+      return id == null ? undefined : String(id);
+    };
     const landOnLine = (request: Partial<FocusFfeLineRequest> | undefined): boolean => {
-      const itemId = request?.itemId;
+      const itemId = resolveLineId(request);
       if (!itemId || !(items ?? []).some((item) => String(item.id) === itemId)) return false;
-      if (focusFfeLinePending.request?.itemId === itemId) focusFfeLinePending.request = null;
+      if (resolveLineId(focusFfeLinePending.request) === itemId) focusFfeLinePending.request = null;
       // 511-R1: the buy cell offers its maker field to this landing in any mode.
       if (request?.cell === 'maker') makerLandingPending.itemId = itemId;
       setOpenLineId(itemId);
       if (mode === 'project') ffeSetFolded(false);
       let waited = 0;
       const cellSelector =
-        request?.cell === 'order'
+        request?.cell === 'order' || request?.cell === 'order-draft'
           ? '[data-testid="line-po-cell"]'
           : request?.cell === 'maker'
             ? '[data-testid="line-buy-cell"] [aria-label="Maker"]'
@@ -1742,9 +1754,15 @@ function FFESectionBody({
             ? (cell?.querySelector<HTMLElement>('[data-po-control]') ?? null)
             : request?.cell === 'draft'
               ? (cell?.querySelector<HTMLElement>('input, textarea, button') ?? null)
-              : null;
+              : request?.cell === 'order-draft'
+                ? // FR8 F8-2: the PO's held reply, on the Order cell's DraftReview.
+                  (cell?.querySelector<HTMLElement>(
+                    '[data-testid="draft-review"] input, [data-testid="draft-review"] textarea, [data-testid="draft-review"] button',
+                  ) ?? null)
+                : null;
         // Up to a second: the region and the line mount before the cell does.
-        const needsControl = request?.cell === 'order' || request?.cell === 'draft';
+        const needsControl =
+          request?.cell === 'order' || request?.cell === 'draft' || request?.cell === 'order-draft';
         if (!(needsControl ? control : cell) && waited++ < 60) {
           requestAnimationFrame(land);
           return;
@@ -1763,7 +1781,11 @@ function FFESectionBody({
       return true;
     };
     const onFocusLine = (event: Event) => {
-      landOnLine((event as CustomEvent<Partial<FocusFfeLineRequest> | undefined>).detail);
+      // FR8 F8-2: a cancelable request learns it was taken, so a PO with no
+      // line on the paper can fall to the guide's destination.
+      if (landOnLine((event as CustomEvent<Partial<FocusFfeLineRequest> | undefined>).detail)) {
+        event.preventDefault();
+      }
     };
     window.addEventListener(FOCUS_FFE_LINE_EVENT, onFocusLine);
     landOnLine(focusFfeLinePending.request ?? undefined);
