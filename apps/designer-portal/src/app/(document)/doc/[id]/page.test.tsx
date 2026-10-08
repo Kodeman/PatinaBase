@@ -1372,6 +1372,33 @@ describe('DocumentPage guide activation', () => {
     expect(vitals).not.toMatch(/Target November/);
   });
 
+  it('one-voice: a band project reads `Target · November 2026` (FR2 F2-25)', () => {
+    asProjectDocument();
+    mockEnabledFlags = ['one-voice'];
+    mockProjectQuery = {
+      data: { total_amount_cents: null, target_end_date: null, start_date: null },
+      isLoading: false,
+      isError: false,
+    };
+    mockResolvedSchedule = resolvedWith({
+      id: 'ph1',
+      start: '2026-01-05',
+      end: '2026-11-15',
+      lane: 'main',
+      anchored: false,
+      source: 'legacy-dates',
+      slackDays: null,
+      governingAnchorId: null,
+      origin: 'legacy',
+    });
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    const vitals = screen.getByTestId('doc-vitals').textContent ?? '';
+    expect(vitals).toContain('Target · November 2026');
+    expect(vitals).not.toContain('Target band');
+  });
+
   it('a phantom target_completion produces no target at all (dead-field regression)', () => {
     asProjectDocument();
     mockProjectQuery = {

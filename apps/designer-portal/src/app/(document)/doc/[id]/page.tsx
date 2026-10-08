@@ -309,6 +309,7 @@ interface ScheduleVitals {
 function targetVitalFor(
   target: ScheduleVitals['target'],
   projectTargetEndDate: string | null | undefined,
+  oneVoice = false,
 ): string | null {
   if (!target.date) {
     return projectTargetEndDate ? `Target ~${fmtMonthYear(projectTargetEndDate)}` : null;
@@ -321,7 +322,8 @@ function targetVitalFor(
     case 'frame':
       return `Target ~${month}`;
     case 'band':
-      return `Target band · ${month}`;
+      // FR2 F2-25 / 510-1 — under one-voice the band reads `Target · {month}`.
+      return oneVoice ? `Target · ${month}` : `Target band · ${month}`;
   }
 }
 
@@ -353,6 +355,7 @@ function vitalsFor(
   project: ProjectVitalsRecord,
   proposal: AnyRecord,
   schedule: ScheduleVitals | null,
+  oneVoice = false,
 ): string {
   // Project + proposal carry the client as a first-class subtitle (the
   // HouseholdChip in the title block), so the vitals drop the client name to
@@ -362,7 +365,7 @@ function vitalsFor(
       (schedule ? schedule.activePhaseName : null) ?? prettyPhase(row.current_phase),
       // While the schedule loads the header states no target at all — a firmer
       // claim that later softens would be the same lie, briefly.
-      schedule ? targetVitalFor(schedule.target, project?.target_end_date) : null,
+      schedule ? targetVitalFor(schedule.target, project?.target_end_date, oneVoice) : null,
       // R18 — nothing agreed is silence: no `$0`, and not the Direction
       // draft's `Not priced yet` either.
       project?.total_amount_cents != null && project.total_amount_cents > 0
@@ -3095,7 +3098,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // The cast is the narrowing: `project` is still the page-wide
           // AnyRecord, but the letterhead may only reach the three columns it
           // actually reads.
-          vitals={vitalsFor(row, project as ProjectVitalsRecord, liveProposal, scheduleVitals)}
+          vitals={vitalsFor(row, project as ProjectVitalsRecord, liveProposal, scheduleVitals, oneVoice)}
           // R4 — the stored line, or the one assembled from discovery. The
           // assembled words are printed, never written.
           subject={
