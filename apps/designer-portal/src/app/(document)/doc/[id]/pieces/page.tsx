@@ -16,6 +16,7 @@ import {
 } from "@patina/supabase";
 import { BuildRoomShell } from "@/components/document/pieces/build-room-shell";
 import { RoughInLens } from "@/components/document/pieces/rough-in-lens";
+import { SpecLens } from "@/components/document/pieces/spec-lens";
 import { useCanSeeMargin } from "@/hooks/use-can-see-margin";
 import {
   useAddDocumentRoom,
@@ -136,6 +137,14 @@ function BuildRoom({ docId }: { docId: string }) {
           room={room}
         />
       ) : null}
+      {lens === "spec" && (
+        <SpecLens
+          docId={docId}
+          projectId={projectId}
+          room={room}
+          canSeeMoney={canSeeMoney}
+        />
+      )}
     </BuildRoomShell>
   );
 }
