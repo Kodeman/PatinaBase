@@ -1,0 +1,659 @@
+{
+  "T-1": {
+    "ref": "SQ-607",
+    "deps": [],
+    "cat": "coding.normal"
+  },
+  "T-2": {
+    "ref": "SQ-608",
+    "deps": [],
+    "cat": "coding.normal"
+  },
+  "T-3": {
+    "ref": "SQ-609",
+    "deps": [],
+    "cat": "coding.normal"
+  },
+  "T-4": {
+    "ref": "SQ-610",
+    "deps": [
+      "T-3"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-3"
+    ]
+  },
+  "T-5": {
+    "ref": "SQ-611",
+    "deps": [],
+    "cat": "coding.normal"
+  },
+  "T-6": {
+    "ref": "SQ-612",
+    "deps": [],
+    "cat": "coding.normal"
+  },
+  "T-7": {
+    "ref": "SQ-613",
+    "deps": [
+      "T-4",
+      "T-5"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-4",
+      "T-5"
+    ]
+  },
+  "T-8": {
+    "ref": "SQ-614",
+    "deps": [
+      "T-1",
+      "T-7"
+    ],
+    "cat": "review-audit",
+    "linked": [
+      "T-1",
+      "T-7",
+      "T-2",
+      "T-3",
+      "T-4",
+      "T-5",
+      "T-6"
+    ]
+  },
+  "T-9": {
+    "ref": "SQ-615",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-8"
+    ]
+  },
+  "T-10": {
+    "ref": "SQ-616",
+    "deps": [
+      "T-9"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-9"
+    ]
+  },
+  "T-11": {
+    "ref": "SQ-617",
+    "deps": [
+      "T-9"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-9"
+    ]
+  },
+  "T-12": {
+    "ref": "SQ-618",
+    "deps": [
+      "T-9"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-9"
+    ]
+  },
+  "T-13": {
+    "ref": "SQ-619",
+    "deps": [
+      "T-9",
+      "T-12"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-9",
+      "T-12"
+    ]
+  },
+  "T-14": {
+    "ref": "SQ-620",
+    "deps": [
+      "T-9"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-9"
+    ]
+  },
+  "T-15": {
+    "ref": "SQ-621",
+    "deps": [
+      "T-9",
+      "T-14"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-9",
+      "T-14"
+    ]
+  },
+  "T-16": {
+    "ref": "SQ-622",
+    "deps": [
+      "T-9"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-9"
+    ]
+  },
+  "T-17": {
+    "ref": "SQ-623",
+    "deps": [
+      "T-9",
+      "T-16"
+    ],
+    "cat": "coding.easy",
+    "linked": [
+      "T-9",
+      "T-16"
+    ]
+  },
+  "T-18": {
+    "ref": "SQ-624",
+    "deps": [
+      "T-17"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-17"
+    ]
+  },
+  "T-19": {
+    "ref": "SQ-625",
+    "deps": [
+      "T-17",
+      "T-18"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-17",
+      "T-18"
+    ]
+  },
+  "T-20": {
+    "ref": "SQ-626",
+    "deps": [
+      "T-17"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-17"
+    ]
+  },
+  "T-21": {
+    "ref": "SQ-627",
+    "deps": [
+      "T-9",
+      "T-20"
+    ],
+    "cat": "review-audit",
+    "linked": [
+      "T-9",
+      "T-20",
+      "T-10",
+      "T-11",
+      "T-12",
+      "T-13",
+      "T-14",
+      "T-15",
+      "T-16",
+      "T-17",
+      "T-18",
+      "T-19"
+    ]
+  },
+  "T-22": {
+    "ref": "SQ-628",
+    "deps": [],
+    "cat": "coding.easy",
+    "linked": [
+      "T-21"
+    ]
+  },
+  "T-23": {
+    "ref": "SQ-629",
+    "deps": [
+      "T-22"
+    ],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-22"
+    ]
+  },
+  "T-24": {
+    "ref": "SQ-630",
+    "deps": [
+      "T-27"
+    ],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-27"
+    ]
+  },
+  "T-25": {
+    "ref": "SQ-631",
+    "deps": [],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-21"
+    ]
+  },
+  "T-26": {
+    "ref": "SQ-632",
+    "deps": [],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-21"
+    ]
+  },
+  "T-27": {
+    "ref": "SQ-633",
+    "deps": [
+      "T-23",
+      "T-24",
+      "T-25",
+      "T-26"
+    ],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-23",
+      "T-24",
+      "T-25",
+      "T-26"
+    ]
+  },
+  "T-28": {
+    "ref": "SQ-634",
+    "deps": [],
+    "cat": "coding.easy",
+    "linked": [
+      "T-21"
+    ]
+  },
+  "T-29": {
+    "ref": "SQ-635",
+    "deps": [
+      "T-25",
+      "T-30"
+    ],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-25",
+      "T-30"
+    ]
+  },
+  "T-30": {
+    "ref": "SQ-636",
+    "deps": [],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-21"
+    ]
+  },
+  "T-31": {
+    "ref": "SQ-637",
+    "deps": [
+      "T-23"
+    ],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-23"
+    ]
+  },
+  "T-32": {
+    "ref": "SQ-638",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-21"
+    ]
+  },
+  "T-33": {
+    "ref": "SQ-639",
+    "deps": [
+      "T-22",
+      "T-32"
+    ],
+    "cat": "review-audit",
+    "linked": [
+      "T-22",
+      "T-32",
+      "T-23",
+      "T-24",
+      "T-25",
+      "T-26",
+      "T-27",
+      "T-28",
+      "T-29",
+      "T-30",
+      "T-31"
+    ]
+  },
+  "T-34": {
+    "ref": "SQ-640",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-33"
+    ]
+  },
+  "T-35": {
+    "ref": "SQ-641",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-33"
+    ]
+  },
+  "T-36": {
+    "ref": "SQ-642",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-33"
+    ]
+  },
+  "T-37": {
+    "ref": "SQ-643",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-33"
+    ]
+  },
+  "T-38": {
+    "ref": "SQ-644",
+    "deps": [
+      "T-34",
+      "T-37"
+    ],
+    "cat": "coding.easy",
+    "linked": [
+      "T-34",
+      "T-37"
+    ]
+  },
+  "T-39": {
+    "ref": "SQ-645",
+    "deps": [
+      "T-38"
+    ],
+    "cat": "coding.easy",
+    "linked": [
+      "T-38"
+    ]
+  },
+  "T-40": {
+    "ref": "SQ-646",
+    "deps": [
+      "T-39"
+    ],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-39"
+    ]
+  },
+  "T-41": {
+    "ref": "SQ-647",
+    "deps": [
+      "T-39"
+    ],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-39"
+    ]
+  },
+  "T-42": {
+    "ref": "SQ-648",
+    "deps": [
+      "T-39"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-39"
+    ]
+  },
+  "T-43": {
+    "ref": "SQ-649",
+    "deps": [
+      "T-34",
+      "T-42"
+    ],
+    "cat": "review-audit",
+    "linked": [
+      "T-34",
+      "T-42",
+      "T-35",
+      "T-36",
+      "T-37",
+      "T-38",
+      "T-39",
+      "T-40",
+      "T-41"
+    ]
+  },
+  "T-44": {
+    "ref": "SQ-650",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-43"
+    ]
+  },
+  "T-45": {
+    "ref": "SQ-651",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-43"
+    ]
+  },
+  "T-46": {
+    "ref": "SQ-652",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-43"
+    ]
+  },
+  "T-47": {
+    "ref": "SQ-653",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-43"
+    ]
+  },
+  "T-48": {
+    "ref": "SQ-654",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-43"
+    ]
+  },
+  "T-49": {
+    "ref": "SQ-655",
+    "deps": [
+      "T-44",
+      "T-48"
+    ],
+    "cat": "coding.easy",
+    "linked": [
+      "T-44",
+      "T-48"
+    ]
+  },
+  "T-50": {
+    "ref": "SQ-656",
+    "deps": [
+      "T-49"
+    ],
+    "cat": "coding.easy",
+    "linked": [
+      "T-49"
+    ]
+  },
+  "T-51": {
+    "ref": "SQ-657",
+    "deps": [
+      "T-50"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-50"
+    ]
+  },
+  "T-52": {
+    "ref": "SQ-658",
+    "deps": [
+      "T-50"
+    ],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-50"
+    ]
+  },
+  "T-53": {
+    "ref": "SQ-659",
+    "deps": [
+      "T-50"
+    ],
+    "cat": "coding.normal",
+    "linked": [
+      "T-50"
+    ]
+  },
+  "T-54": {
+    "ref": "SQ-660",
+    "deps": [
+      "T-50"
+    ],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-50"
+    ]
+  },
+  "T-55": {
+    "ref": "SQ-661",
+    "deps": [
+      "T-44",
+      "T-54"
+    ],
+    "cat": "review-audit",
+    "linked": [
+      "T-44",
+      "T-54",
+      "T-45",
+      "T-46",
+      "T-47",
+      "T-48",
+      "T-49",
+      "T-50",
+      "T-51",
+      "T-52",
+      "T-53"
+    ]
+  },
+  "T-56": {
+    "ref": "SQ-662",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-55"
+    ]
+  },
+  "T-57": {
+    "ref": "SQ-663",
+    "deps": [
+      "T-56"
+    ],
+    "cat": "interaction-design-implementation",
+    "linked": [
+      "T-56"
+    ]
+  },
+  "T-58": {
+    "ref": "SQ-664",
+    "deps": [
+      "T-56",
+      "T-57"
+    ],
+    "cat": "review-audit",
+    "linked": [
+      "T-56",
+      "T-57"
+    ]
+  },
+  "T-59": {
+    "ref": "SQ-665",
+    "deps": [],
+    "cat": "coding.normal",
+    "linked": [
+      "T-58"
+    ]
+  },
+  "T-60": {
+    "ref": "SQ-666",
+    "deps": [
+      "T-59"
+    ],
+    "cat": "behavior-verification",
+    "linked": [
+      "T-59"
+    ]
+  },
+  "T-61": {
+    "ref": "SQ-667",
+    "deps": [
+      "T-59",
+      "T-60"
+    ],
+    "cat": "review-audit",
+    "linked": [
+      "T-59",
+      "T-60"
+    ]
+  },
+  "T-62": {
+    "ref": "SQ-668",
+    "deps": [
+      "T-61"
+    ],
+    "cat": "coding.easy",
+    "linked": [
+      "T-61",
+      "T-61"
+    ]
+  },
+  "T-63": {
+    "ref": "SQ-669",
+    "deps": [
+      "T-62"
+    ],
+    "cat": "behavior-verification",
+    "linked": [
+      "T-62"
+    ]
+  },
+  "T-64": {
+    "ref": "SQ-670",
+    "deps": [
+      "T-63"
+    ],
+    "cat": "review-audit",
+    "linked": [
+      "T-63",
+      "T-62"
+    ]
+  }
+}
