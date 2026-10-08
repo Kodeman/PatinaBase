@@ -26,6 +26,12 @@ jest.mock('@patina/supabase', () => ({
   useCaptureMediaUrls: (...args: unknown[]) => mockCaptureMediaUrlsHook(...args),
 }));
 
+// Stubbed so the real hook's post-mount `setIsLoading` effect (FR4 Fix 12)
+// does not add a second render and double the call counts below.
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
+}));
+
 jest.mock('@/hooks/use-section-work', () => ({
   gateState: () => 'requested',
   useCreateSectionTask: () => ({ mutate: jest.fn() }),

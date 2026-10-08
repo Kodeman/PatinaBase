@@ -74,6 +74,16 @@ async function addAndSendOneRecipient() {
 }
 
 describe('PlanIssueCeremony ratios (FR4 Fix 12)', () => {
+  beforeAll(() => {
+    // jsdom has no crypto.randomUUID; the ceremony mints its idempotency key with it.
+    if (typeof globalThis.crypto?.randomUUID !== 'function') {
+      Object.defineProperty(globalThis.crypto, 'randomUUID', {
+        configurable: true,
+        value: () => '00000000-0000-4000-8000-000000000001',
+      });
+    }
+  });
+
   beforeEach(() => {
     mockOneVoice = false;
     createIssue.mockReset().mockResolvedValue({ issue: { id: 'issue-1' } });
