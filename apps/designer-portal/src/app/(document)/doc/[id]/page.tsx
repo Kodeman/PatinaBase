@@ -2579,8 +2579,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       proposalHesitating: bandProposalVoice?.proposalHesitating,
       reminderAvailable: bandProposalVoice?.reminderAvailable,
       unspecifiedCount: unspecified,
-      // DESIGN-Q (SQ-500): release eligibility is not read on this page.
-      releaseEligible: false,
+      // F8-5 (N2): under one-voice the band reads the release the Pieces
+      // head is offering, so it names the head's own act.
+      releaseEligible: oneVoice && releaseOffered,
       install: bandInstallReading
         ? { state: bandInstallReading.state, windowHeld, makerRecorded: bandInstallReading.makerRecorded }
         : null,
@@ -2653,6 +2654,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     row,
     nudgeNamed,
     bandProposalVoice,
+    releaseOffered,
   ]);
 
   const bandModel = useMemo<LensBandModel | null>(() => {
@@ -3666,7 +3668,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     sectionDragOver={sectionDrag}
                     releaseLeaderElsewhere={deliveryProcurement}
                     onReleaseOffered={
-                      deliveryProcurement ? setReleaseOffered : undefined
+                      deliveryProcurement || oneVoice ? setReleaseOffered : undefined
                     }
                   />
                   {/* W2 — one money region: authority → plan → committed →
