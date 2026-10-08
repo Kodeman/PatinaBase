@@ -1,39 +1,116 @@
 {
   "version": 1,
-  "_note": "Machine source for marketing/tools/voice-lint.mjs. The rules mirror the US-22 contract's lint section and marketing/canon/voice.md. Every pattern is a JavaScript RegExp source; flags are applied as given plus 'g'.",
+  "_note": "Machine source for marketing/tools/voice-lint.mjs. The rules mirror the US-22 contract's lint section and marketing/canon/voice.md. Every pattern is a JavaScript RegExp source; flags are applied as given plus 'g'. Text is normalized first (see normalize). A rule with homoglyphs:true also matches against text whose Cyrillic/Greek look-alikes are mapped to Latin. Multi-word phrases join words with any space, hyphen, nbsp or non-breaking hyphen.",
+  "normalize": {
+    "form": "NFKC",
+    "strip": "[\\u200B-\\u200D\\u2060\\uFEFF]",
+    "homoglyphs": {
+      "А": "A",
+      "а": "a",
+      "Α": "A",
+      "α": "a",
+      "І": "I",
+      "і": "i",
+      "Ӏ": "I",
+      "Ι": "I",
+      "ι": "i"
+    }
+  },
   "errors": [
-    { "rule": "ai", "pattern": "\\bAI\\b", "flags": "" },
-    { "rule": "ai-powered", "pattern": "\\bAI-powered\\b", "flags": "i" },
+    {
+      "rule": "ai",
+      "pattern": "(?<![A-Za-z])A\\.?\\s?I(?![A-Za-z])",
+      "flags": "i",
+      "homoglyphs": true
+    },
+    {
+      "rule": "ai",
+      "pattern": "\\bgen\\s?ai\\b",
+      "flags": "i",
+      "homoglyphs": true
+    },
+    {
+      "rule": "ai-powered",
+      "pattern": "(?<![A-Za-z])A\\.?\\s?I[\\s\\u00A0\\u2010\\u2011-]*powered\\b",
+      "flags": "i",
+      "homoglyphs": true
+    },
     {
       "rule": "artificial-intelligence",
-      "pattern": "\\bartificial intelligence\\b",
+      "pattern": "\\bartificial[\\s\\u00A0\\u2010\\u2011-]+intelligence\\b",
       "flags": "i"
     },
     {
       "rule": "machine-learning",
-      "pattern": "\\bmachine learning\\b",
+      "pattern": "\\bmachine[\\s\\u00A0\\u2010\\u2011-]+learning\\b",
       "flags": "i"
     },
-    { "rule": "powered-by", "pattern": "\\bpowered by\\b", "flags": "i" },
+    {
+      "rule": "powered-by",
+      "pattern": "\\bpowered[\\s\\u00A0\\u2010\\u2011-]+by\\b",
+      "flags": "i"
+    },
     { "rule": "algorithm", "pattern": "\\balgorithm\\w*", "flags": "i" },
     { "rule": "pledge", "pattern": "\\bpledge\\w*", "flags": "i" },
+    { "rule": "royalty", "pattern": "\\broyalt\\w*", "flags": "i" },
+    {
+      "rule": "giving-back",
+      "pattern": "\\bgiv(?:e|ing)[\\s\\u00A0\\u2010\\u2011-]+back\\b",
+      "flags": "i"
+    },
+    {
+      "rule": "pay-it-forward",
+      "pattern": "\\bpay(?:s|ing)?[\\s\\u00A0\\u2010\\u2011-]+it[\\s\\u00A0\\u2010\\u2011-]+forward\\b",
+      "flags": "i"
+    },
     {
       "rule": "held-tagline",
-      "pattern": "Where Time Adds Value",
+      "pattern": "(?:where\\s+)?time\\s+adds\\s+value",
       "flags": "i"
     },
     { "rule": "disrupt", "pattern": "\\bdisrupt\\w*", "flags": "i" },
     { "rule": "revolutionize", "pattern": "\\brevolutioni\\w*", "flags": "i" },
-    { "rule": "curated", "pattern": "\\bcurated\\b", "flags": "i" },
-    { "rule": "luxury", "pattern": "\\bluxury\\b", "flags": "i" },
+    { "rule": "curated", "pattern": "\\bcurat\\w*", "flags": "i" },
+    { "rule": "luxury", "pattern": "\\bluxur\\w*", "flags": "i" },
     { "rule": "gig", "pattern": "\\bgigs?\\b", "flags": "i" },
-    { "rule": "game-changer", "pattern": "\\bgame[- ]chang\\w*", "flags": "i" },
+    {
+      "rule": "game-changer",
+      "pattern": "\\bgame[\\s\\u00A0\\u2010\\u2011-]+chang\\w*",
+      "flags": "i"
+    },
     { "rule": "seamless", "pattern": "\\bseamless\\w*", "flags": "i" },
     { "rule": "unlock", "pattern": "\\bunlock\\w*", "flags": "i" }
   ],
   "warnings": [
     { "rule": "elevated", "pattern": "\\belevated\\b", "flags": "i" },
     { "rule": "bespoke", "pattern": "\\bbespoke\\b", "flags": "i" },
+    { "rule": "promise", "pattern": "\\bpromise\\b", "flags": "i" },
+    {
+      "rule": "audience",
+      "_note": "Homeowners and makers are the studio's clients and vendors, never Patina's customers.",
+      "pattern": "\\b(?:for|to) (?:homeowners|makers)\\b",
+      "flags": "i"
+    },
+    {
+      "rule": "audience",
+      "pattern": "\\bhomeowners? (?:love|choose|sign up|trust)\\b",
+      "flags": "i"
+    },
+    { "rule": "ml", "pattern": "\\bML\\b", "flags": "" },
+    { "rule": "llm", "pattern": "\\bLLMs?\\b", "flags": "" },
+    { "rule": "chatbot", "pattern": "\\bchat[\\s\\u00A0\\u2010\\u2011-]?bots?\\b", "flags": "i" },
+    { "rule": "automation", "pattern": "\\bautomat\\w*", "flags": "i" },
+    {
+      "rule": "driven-by",
+      "pattern": "\\bdriven[\\s\\u00A0\\u2010\\u2011-]+by\\b",
+      "flags": "i"
+    },
+    {
+      "rule": "spelled-quantity",
+      "_note": "A spelled-out count with a unit (\"forty hours\") is still a figure: cite it or drop it.",
+      "pattern": "\\b(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[\\s-](?:one|two|three|four|five|six|seven|eight|nine))?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)[\\s-]+(?:hours?|days?|minutes?|weeks?|percent)\\b",
+      "flags": "i"
+    },
     { "rule": "emoji", "pattern": "\\p{Extended_Pictographic}", "flags": "u" },
     {
       "rule": "exclamations",
@@ -43,29 +120,51 @@
     }
   ],
   "places": [
-    { "name": "NYC", "flags": "" },
+    { "name": "NYC", "flags": "i" },
     { "name": "New York", "flags": "i" },
     { "name": "Manhattan", "flags": "i" },
     { "name": "Brooklyn", "flags": "i" },
     { "name": "Hamptons", "flags": "i" },
-    { "name": "LA", "flags": "" },
+    {
+      "name": "L.A.",
+      "_note": "Case-sensitive so French 'la' passes.",
+      "pattern": "\\bL\\.?A\\.?\\b",
+      "flags": ""
+    },
     { "name": "Los Angeles", "flags": "i" },
     { "name": "San Francisco", "flags": "i" },
+    { "name": "SF", "flags": "" },
+    { "name": "Bay Area", "flags": "i" },
     { "name": "Miami", "flags": "i" },
+    { "name": "Aspen", "_note": "Case-sensitive so the tree and the wood pass.", "flags": "" },
+    { "name": "Boston", "flags": "i" },
+    { "name": "Seattle", "flags": "i" },
+    { "name": "Austin", "flags": "i" },
+    { "name": "SoHo", "flags": "i" },
+    { "name": "Tribeca", "flags": "i" },
+    { "name": "Malibu", "flags": "i" },
+    { "name": "Palm Beach", "flags": "i" },
     { "name": "penthouse", "flags": "i" }
   ],
   "numbers": {
     "rule": "uncited-number",
-    "_note": "Group 1 = currency sign, group 2 = the number, group 3 = percent sign. A hit needs a [Cnn] marker in the same sentence. Bare integers in yearMin..yearMax are exempt; any other number with minDigits or more digits, any $ amount and any % need a citation.",
-    "pattern": "(?<![A-Za-z0-9_.,:])(\\$\\s?)?(\\d(?:[\\d,]*\\d)?(?:\\.\\d+)?)(\\s?%)?",
-    "flags": "",
+    "_note": "Group 1 = currency sign, group 2 = the number, group 3 = a unit suffix (%, percent, k, x, hours, days, minutes, weeks). A hit needs a [Cnn] marker in the same sentence (a line break ends a sentence). Bare integers in yearMin..yearMax are exempt; any other number with minDigits or more digits, any $ amount and any number with a unit suffix need a citation. When the sentence is cited, a cited claim's text must contain the number (rule mismatchRule).",
+    "pattern": "(?<![A-Za-z0-9_,:])(?<!\\d\\.)(\\$\\s?)?(\\d(?:[\\d,]*\\d)?(?:\\.\\d+)?)(\\s?(?:%|percent\\b|(?:hours?|days?|minutes?|weeks?)\\b)|[kx]\\b)?",
+    "flags": "i",
     "minDigits": 2,
     "yearMin": 1900,
-    "yearMax": 2099
+    "yearMax": 2099,
+    "mismatchRule": "claim-number-mismatch",
+    "structuralKeys": ["seconds"],
+    "_structuralKeysNote": "Numeric frontmatter values under these keys are layout data (video scene length), not copy."
   },
   "claims": {
     "rule": "unverified-claim",
     "marker": "\\[(C\\d{2,})\\]"
+  },
+  "hashtags": {
+    "nullRule": "hashtag-unquoted",
+    "nullMessage": "a hashtags item parsed as empty: YAML reads an unquoted #tag as a comment. Quote it (- \"#tag\") or drop the #."
   },
   "formats": {
     "social": { "maxHashtags": 4 },

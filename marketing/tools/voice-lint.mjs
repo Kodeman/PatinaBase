@@ -16,17 +16,32 @@ export const LEXICON = JSON.parse(
 );
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
+// Leading HTML comments (sol.mjs writes a provenance header) are not copy.
+const LEADING_COMMENTS = /^(?:\s*<!--[\s\S]*?-->)+\s*/;
 const HASHTAG = /(?<![\w&#])#[A-Za-z]\w*/g;
 
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+const NORMALIZE = LEXICON.normalize;
+const STRIP_RE = new RegExp(NORMALIZE.strip, "g");
+const HOMOGLYPH_RE = new RegExp(
+  `[${Object.keys(NORMALIZE.homoglyphs).join("")}]`,
+  "g",
+);
+
+// Strip zero-width characters, then compatibility-normalize (fullwidth letters, nbsp, ...).
+// Neither step adds or removes a newline, so line numbers counted on the result stay true.
+function normalize(text) {
+  return text.replace(STRIP_RE, "").normalize(NORMALIZE.form);
+}
+
 const ERROR_RULES = [
   ...LEXICON.errors,
   ...LEXICON.places.map((p) => ({
     rule: "place",
-    pattern: `\\b${escapeRe(p.name)}\\b`,
+    pattern: p.pattern || `\\b${escapeRe(p.name)}\\b`,
     flags: p.flags,
   })),
 ].map((r) => ({ ...r, re: new RegExp(r.pattern, `${r.flags}g`) }));
@@ -39,8 +54,9 @@ const NUMBER_RE = new RegExp(NUMBER.pattern, `${NUMBER.flags}g`);
 const MARKER_RE = new RegExp(LEXICON.claims.marker, "g");
 
 // Sentence ends at terminal punctuation followed by whitespace or end; [Cnn] markers that trail the
-// punctuation ("...ran itself. [C01]") belong to the sentence they follow. Blank lines also end one.
-const SENTENCE_END = /[.!?]+["'”’)]*(?:[ \t]*\[C\d{2,}\])*(?=\s|$)|\n[ \t]*\n/g;
+// punctuation ("...ran itself. [C01]") belong to the sentence they follow. A line break also ends
+// one, so every bullet or headline line carries its own marker.
+const SENTENCE_END = /[.!?]+["'”’)]*(?:[ \t]*\[C\d{2,}\])*(?=\s|$)|\n/g;
 
 function sentenceSpans(text) {
   const spans = [];
@@ -54,42 +70,73 @@ function sentenceSpans(text) {
   return spans;
 }
 
-// Segments: {text, line(index) -> file line}. One per frontmatter string value, one for the body.
-function segmentsOf(raw) {
+// Segments: {text, start} where start is the file line of text's first character. One per
+// frontmatter string or number value, one for the body. Also returns frontmatter parse errors, the
+// raw frontmatter source and the hashtags-list line for the format checks.
+function segmentsOf(file) {
   const segments = [];
+  const fmErrors = [];
+  const lead = file.match(LEADING_COMMENTS);
+  const lineOffset = lead ? countNewlines(lead[0], lead[0].length) : 0;
+  const raw = lead ? file.slice(lead[0].length) : file;
   const fm = raw.match(FRONTMATTER);
   let data = {};
+  let fmSource = "";
+  let hashtagsLine = 1;
   let bodyOffset = 0;
   if (fm) {
-    const fmStartLine = 2; // frontmatter source begins on the line after the opening ---
+    fmSource = fm[1];
+    const fmStartLine = 2 + lineOffset; // source begins on the line after the opening ---
     const lineCounter = new YAML.LineCounter();
+    const fileLine = (offset) =>
+      lineCounter.linePos(offset).line + fmStartLine - 1;
     const doc = YAML.parseDocument(fm[1], { lineCounter });
-    data = doc.toJS() || {};
+    for (const err of doc.errors) {
+      fmErrors.push({
+        rule: "frontmatter",
+        match: err.message
+          .split("\n")[0]
+          .replace(/ at line \d+, column \d+:?$/, ""),
+        line: fileLine(err.pos[0]),
+      });
+    }
+    try {
+      data = doc.toJS() || {};
+    } catch {
+      data = {};
+    }
+    const tagsPair = YAML.isMap(doc.contents)
+      ? doc.contents.items.find((p) => p.key && p.key.value === "hashtags")
+      : null;
+    if (tagsPair && tagsPair.key.range)
+      hashtagsLine = fileLine(tagsPair.key.range[0]);
     YAML.visit(doc, {
-      Scalar(key, node) {
-        if (key === "key" || typeof node.value !== "string" || !node.range)
-          return;
-        const startLine =
-          lineCounter.linePos(node.range[0]).line + fmStartLine - 1;
+      Scalar(key, node, path) {
+        if (key === "key" || !node.range) return;
+        let text;
+        if (typeof node.value === "string") text = node.value;
+        else if (typeof node.value === "number") {
+          const pair = path[path.length - 1];
+          const name = YAML.isPair(pair) && pair.key && pair.key.value;
+          if (NUMBER.structuralKeys.includes(name)) return;
+          text = String(node.value);
+        } else return;
         const block =
           node.type === "BLOCK_LITERAL" || node.type === "BLOCK_FOLDED";
-        const text = node.value;
         segments.push({
           text,
-          line: (i) => startLine + (block ? 1 : 0) + countNewlines(text, i),
+          start: fileLine(node.range[0]) + (block ? 1 : 0),
         });
       },
     });
     bodyOffset = fm[0].length;
   }
   const body = raw.slice(bodyOffset);
-  const bodyStartLine = countNewlines(raw, bodyOffset) + 1;
   segments.push({
     text: body,
-    line: (i) => bodyStartLine + countNewlines(body, i),
-    body: true,
+    start: countNewlines(raw, bodyOffset) + 1 + lineOffset,
   });
-  return { data, body, segments };
+  return { data, body, segments, fmErrors, fmSource, hashtagsLine };
 }
 
 function countNewlines(s, end) {
@@ -101,19 +148,20 @@ function countNewlines(s, end) {
 function numberHits(masked) {
   const hits = [];
   for (const m of masked.matchAll(NUMBER_RE)) {
-    const [whole, currency, num, percent] = m;
+    const [whole, currency, num, unit] = m;
     const digits = num.replace(/\D/g, "").length;
     const isYear =
       !currency &&
-      !percent &&
+      !unit &&
       /^\d{4}$/.test(num) &&
       +num >= NUMBER.yearMin &&
       +num <= NUMBER.yearMax;
-    if (currency || percent || (digits >= NUMBER.minDigits && !isYear)) {
+    if (currency || unit || (digits >= NUMBER.minDigits && !isYear)) {
       hits.push({
         index: m.index,
         end: m.index + whole.length,
         match: whole.trim(),
+        number: num.replace(/,/g, ""),
       });
     }
   }
@@ -126,21 +174,33 @@ function numberHits(masked) {
   return hits;
 }
 
+// A cited claim backs a number only when its own text states that number.
+function claimHasNumber(claim, number) {
+  const text = normalize(claim).replace(/(\d),(?=\d)/g, "$1");
+  return new RegExp(`(?<!\\d)${escapeRe(number)}(?!\\d)`).test(text);
+}
+
 export function lintText(raw, { kind = null, claims = parseClaims() } = {}) {
-  const errors = [];
+  const { data, body, segments, fmErrors, fmSource, hashtagsLine } =
+    segmentsOf(raw);
+  const errors = [...fmErrors];
   const warnings = [];
-  const { data, body, segments } = segmentsOf(raw);
   let exclamations = [];
 
   for (const seg of segments) {
-    const { text } = seg;
+    const text = normalize(seg.text);
+    const glyphText = text.replace(
+      HOMOGLYPH_RE,
+      (c) => NORMALIZE.homoglyphs[c],
+    );
+    const line = (i) => seg.start + countNewlines(text, i);
     for (const r of ERROR_RULES) {
-      for (const m of text.matchAll(r.re))
-        errors.push({ rule: r.rule, match: m[0], line: seg.line(m.index) });
+      for (const m of (r.homoglyphs ? glyphText : text).matchAll(r.re))
+        errors.push({ rule: r.rule, match: m[0], line: line(m.index) });
     }
     for (const r of WARN_RULES) {
       for (const m of text.matchAll(r.re)) {
-        const hit = { rule: r.rule, match: m[0], line: seg.line(m.index) };
+        const hit = { rule: r.rule, match: m[0], line: line(m.index) };
         if (r.maxPerPiece !== undefined)
           exclamations.push({ ...hit, max: r.maxPerPiece });
         else warnings.push(hit);
@@ -153,21 +213,37 @@ export function lintText(raw, { kind = null, claims = parseClaims() } = {}) {
         errors.push({
           rule: LEXICON.claims.rule,
           match: m[0],
-          line: seg.line(m.index),
+          line: line(m.index),
         });
       }
     }
 
     const masked = text.replace(MARKER_RE, (s) => " ".repeat(s.length));
     for (const [start, end] of sentenceSpans(text)) {
-      const sentence = text.slice(start, end);
-      if (new RegExp(LEXICON.claims.marker).test(sentence)) continue;
+      const cited = [...text.slice(start, end).matchAll(MARKER_RE)]
+        .map((m) => claims.get(m[1])?.claim)
+        .filter((c) => c !== undefined);
+      const markers = new RegExp(LEXICON.claims.marker).test(
+        text.slice(start, end),
+      );
       for (const hit of numberHits(masked.slice(start, end))) {
-        errors.push({
-          rule: NUMBER.rule,
-          match: hit.match,
-          line: seg.line(start + hit.index),
-        });
+        if (!markers) {
+          errors.push({
+            rule: NUMBER.rule,
+            match: hit.match,
+            line: line(start + hit.index),
+          });
+        } else if (
+          hit.number &&
+          cited.length &&
+          !cited.some((c) => claimHasNumber(c, hit.number))
+        ) {
+          errors.push({
+            rule: NUMBER.mismatchRule,
+            match: hit.match,
+            line: line(start + hit.index),
+          });
+        }
       }
     }
   }
@@ -179,11 +255,21 @@ export function lintText(raw, { kind = null, claims = parseClaims() } = {}) {
   const format = (kind && LEXICON.formats[kind]) || {};
   if (format.maxHashtags !== undefined) {
     const tags = new Set();
-    for (const t of Array.isArray(data.hashtags) ? data.hashtags : []) {
+    const items = Array.isArray(data.hashtags) ? data.hashtags : [];
+    if (items.some((t) => t === null || t === undefined)) {
+      errors.push({
+        rule: LEXICON.hashtags.nullRule,
+        match: LEXICON.hashtags.nullMessage,
+        line: hashtagsLine,
+      });
+    }
+    for (const t of items) {
+      if (t === null || t === undefined) continue;
       tags.add(String(t).replace(/^#/, "").toLowerCase());
     }
-    for (const seg of segments) {
-      for (const m of seg.text.matchAll(HASHTAG))
+    // The raw frontmatter catches tags YAML swallowed as comments (- #one parses as null).
+    for (const text of [fmSource, ...segments.map((s) => s.text)]) {
+      for (const m of text.matchAll(HASHTAG))
         tags.add(m[0].slice(1).toLowerCase());
     }
     if (tags.size > format.maxHashtags) {
@@ -267,6 +353,33 @@ function main() {
     );
     process.exit(2);
   }
+  try {
+    run(target, values);
+  } catch (err) {
+    // A crash must never pass for "not linted yet": --json always leaves a readable verdict.
+    const fatal = String((err && err.message) || err).split("\n")[0];
+    if (values.json) {
+      console.log(
+        JSON.stringify(
+          {
+            file: path.resolve(target),
+            kind: values.kind || null,
+            fatal,
+            errors: [{ rule: "lint-crashed", match: fatal, line: 1 }],
+            warnings: [],
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      console.error(`voice-lint crashed: ${fatal}`);
+    }
+    process.exit(2);
+  }
+}
+
+function run(target, values) {
   const claims = values.claims
     ? parseClaims(path.resolve(values.claims))
     : parseClaims();
