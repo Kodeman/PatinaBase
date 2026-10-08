@@ -483,6 +483,10 @@ export interface LensBandInput {
    *  states the stage has none. Left out, it is not known yet (500-5): the
    *  guide line never stands in for it (498-c). */
   ownAct?: LensOwnAct | null;
+  /** FR7 F7-2 / F7-3 — the paper's standing fact where the stage has no own
+   *  act (`Sent 8 October.`, `Reminder sent 8 October.`): line 2 with no Next
+   *  prints it, lead none, in place of the guide line. */
+  ownSentence?: string | null;
   /** D6 — the install reading; line 2 quotes it when its act is Next. */
   installReading?: InstallReading | null;
   /** FR3 F3-8 — the press of a standing row's table act (498-e): it lands on
@@ -1644,7 +1648,9 @@ function deriveVoice(
       ? [{ form: 'long', lead: null, sentence: HELD_SENTENCE }]
       : loading
         ? [{ form: 'long', lead: 'Next', sentence: '' }]
-        : [{ form: line2.form, lead: null, sentence: line2.sentence }];
+        : input.ownSentence
+          ? [{ form: 'long', lead: null, sentence: input.ownSentence }]
+          : [{ form: line2.form, lead: null, sentence: line2.sentence }];
   const doorInDock =
     standingCount > 0 && input.tier === 'mobile' && !fits(forms[0], true);
   const withDoor = standingCount > 0 && !doorInDock;

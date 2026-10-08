@@ -13,7 +13,11 @@ import {
   type LensSpreadKind,
   type LensStandingItem,
 } from '../lens-band-derivation';
+import { ACT_TARGET_IDS, ownAct } from '../act-names';
+import type { DocumentStateRow } from '../desk-derivation';
+import { sentProposalReasonLine } from '../desk-roster-derivation';
 import { installReading, type InstallReading } from '../install-reading';
+import { sentProposalVoice, type SentProposalRecord } from '../sent-proposal-voice';
 import {
   LENS_LINE2_GAP_PX,
   LENS_LINE2_MEASURE_PX,
@@ -2430,5 +2434,143 @@ describe('deriveLensBand · FR6 F6-6: at 390 the sentence before the act', () =>
   it('the sentence rung is the phone’s alone', () => {
     expect(olsen('full').rungs.map((rung) => rung.form)).not.toContain('sentence');
     expect(olsen('narrow').rungs.map((rung) => rung.form)).not.toContain('sentence');
+  });
+});
+
+// US-19 FR7 F7-2 / F7-3 — Tanaka's proposal paper, the band as page.tsx builds
+// it under `one-voice`: `sentProposalVoice` reads the two facts and the no-act
+// sentence, `ownAct` takes the facts, the reason line stands beside an act.
+describe('deriveLensBand · FR7 F7-2 / F7-3: a sent proposal with no act prints its standing fact', () => {
+  const now = new Date('2026-10-08T15:00:00Z');
+  const tanakaRow = (over: Partial<DocumentStateRow> = {}) =>
+    ({
+      engagement_id: 'tanaka',
+      engagement_kind: 'proposal',
+      active_section: 'proposal',
+      client_name: 'Mei Tanaka',
+      title: 'Tanaka Garden Flat',
+      client_profile_id: 'client-mei',
+      proposal_status: 'sent',
+      proposal_sent_at: '2026-10-08T12:00:00Z',
+      proposal_viewed_at: null,
+      proposal_last_opened_at: null,
+      ...over,
+    }) as unknown as DocumentStateRow;
+  const tanakaProposal = (over: Partial<SentProposalRecord> = {}): SentProposalRecord => ({
+    status: 'sent',
+    sent_at: '2026-10-08T12:00:00Z',
+    viewed_at: null,
+    last_nudged_at: null,
+    commercial_state: null,
+    issued_on_paper: false,
+    ...over,
+  });
+  const band = (row: DocumentStateRow, proposal: SentProposalRecord) => {
+    const clientMessageable = Boolean(row.client_profile_id);
+    const read = sentProposalVoice({ row, proposal, clientMessageable, now });
+    const own = ownAct('proposal', {
+      inquiryOpen: false,
+      firstMissingEssential: null,
+      proposalState: 'sent',
+      clientFirstName: 'Mei',
+      clientMessageable,
+      proposalHesitating: read.proposalHesitating,
+      reminderAvailable: read.reminderAvailable,
+      unspecifiedCount: 0,
+      releaseEligible: false,
+      install: null,
+    });
+    return deriveLensBand(
+      input({
+        spreadKind: 'proposal',
+        household: 'Mei Tanaka',
+        jobName: 'Tanaka Garden Flat',
+        clientFirstName: 'Mei',
+        stageWord: 'Proposal',
+        stageIndex: null,
+        installDate: null,
+        moneyFigure: null,
+        now,
+        guide: { text: 'Sent today — waiting on Mei', act: null },
+        ownAct: own
+          ? {
+              key: `own:${own.targetId}`,
+              ...own,
+              sentence: sentProposalReasonLine(row, now),
+              onAct: jest.fn(),
+            }
+          : null,
+        ownSentence: read.ownSentence,
+      }),
+    ).voice;
+  };
+
+  it('sent today, unopened: line 2 is `Sent 8 October.`, lead none, no Next', () => {
+    const voice = band(tanakaRow(), tanakaProposal());
+    expect(voice.next).toBeNull();
+    expect(voice.lead).toBeNull();
+    expect(voice.sentence).toBe('Sent 8 October.');
+    expect(voice.rungs).toEqual([{ form: 'long', lead: null, sentence: 'Sent 8 October.' }]);
+    // F3-16 — no act to press: page.tsx mounts `BandTourNote` on `voice.next !== null`.
+    expect(voice.eyebrow).toBe('Proposal · Tanaka Garden Flat');
+  });
+
+  it('opened yesterday, unsigned: `Opened 7 October.`, no Next', () => {
+    const opened = { proposal_status: 'viewed', proposal_viewed_at: '2026-10-07T12:00:00Z' };
+    const voice = band(
+      tanakaRow({ ...opened, proposal_sent_at: '2026-10-06T12:00:00Z' }),
+      tanakaProposal({ status: 'viewed', sent_at: '2026-10-06T12:00:00Z', viewed_at: '2026-10-07T12:00:00Z' }),
+    );
+    expect(voice.next).toBeNull();
+    expect(voice.sentence).toBe('Opened 7 October.');
+  });
+
+  it('sent five days ago: unchanged, `Sent 3 October — not yet opened · NUDGE MEI`', () => {
+    const fiveDays = '2026-10-03T12:00:00Z';
+    const voice = band(
+      tanakaRow({ proposal_sent_at: fiveDays }),
+      tanakaProposal({ sent_at: fiveDays }),
+    );
+    expect(voice.lead).toBe('Next ─');
+    expect(voice.sentence).toBe('Sent 3 October — not yet opened');
+    expect(voice.next?.act.label).toBe('Nudge Mei');
+    expect(voice.next?.act.targetId).toBe(ACT_TARGET_IDS.proposalNudge);
+  });
+
+  it('no login, a reminder sent yesterday: line 2 is `Reminder sent 7 October.`, no act', () => {
+    const fiveDays = '2026-10-03T12:00:00Z';
+    const voice = band(
+      tanakaRow({ proposal_sent_at: fiveDays, client_profile_id: null }),
+      tanakaProposal({ sent_at: fiveDays, last_nudged_at: '2026-10-07T12:00:00Z' }),
+    );
+    expect(voice.next).toBeNull();
+    expect(voice.lead).toBeNull();
+    expect(voice.sentence).toBe('Reminder sent 7 October.');
+  });
+
+  it('no login, the cooldown lapsed: `Send a reminder` on #document-act-proposal-reminder', () => {
+    const fiveDays = '2026-10-03T12:00:00Z';
+    const voice = band(
+      tanakaRow({ proposal_sent_at: fiveDays, client_profile_id: null }),
+      tanakaProposal({ sent_at: fiveDays, last_nudged_at: '2026-10-04T12:00:00Z' }),
+    );
+    expect(voice.next?.act.label).toBe('Send a reminder');
+    expect(voice.next?.act.targetId).toBe('document-act-proposal-reminder');
+    expect(voice.sentence).toBe('Sent 3 October — not yet opened');
+  });
+
+  it('no login, sent today, never reminded: the threshold holds, `Sent 8 October.`', () => {
+    const voice = band(tanakaRow({ client_profile_id: null }), tanakaProposal());
+    expect(voice.next).toBeNull();
+    expect(voice.sentence).toBe('Sent 8 October.');
+  });
+
+  it('no ownSentence: line 2 keeps today’s fallback', () => {
+    const voice = deriveLensBand(
+      input({ spreadKind: 'proposal', now, ownAct: null, guide: { text: 'Sent today — waiting on Mei', act: null } }),
+    ).voice;
+    expect(voice.next).toBeNull();
+    expect(voice.lead).toBeNull();
+    expect(voice.sentence).toBe('Sent today — waiting on Mei');
   });
 });

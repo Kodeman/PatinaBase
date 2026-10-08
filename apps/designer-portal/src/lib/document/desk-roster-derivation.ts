@@ -376,6 +376,9 @@ const NO_OWN_ACT_FACTS: OwnActFacts = {
  * to `sent`) — prints `Nudge {first}` / `Nudge the client`. Every other need
  * keeps `deskActionLabel`. The Desk reads only the row it already has (ruling
  * 521 (b)); feeding the band's facts to the card is the deferred end state.
+ * FR7 F7-3 — the row does carry whether Message can reach her: with no client
+ * login the card prints `Send a reminder`, as the band does. The reminder's
+ * cooldown it cannot see (521 (b)), so the card keeps that act through it.
  */
 function voicedActLabel(need: NeedLine, row: DocumentStateRow): string | null {
   const clientFirstName = voiceFirstName(row.client_name);
@@ -387,8 +390,12 @@ function voicedActLabel(need: NeedLine, row: DocumentStateRow): string | null {
     (row.proposal_status === 'sent' || row.proposal_status === 'viewed')
   ) {
     return (
-      ownAct('proposal', { ...NO_OWN_ACT_FACTS, proposalState: 'sent', clientFirstName })
-        ?.label ?? null
+      ownAct('proposal', {
+        ...NO_OWN_ACT_FACTS,
+        proposalState: 'sent',
+        clientFirstName,
+        clientMessageable: Boolean(row.client_profile_id),
+      })?.label ?? null
     );
   }
   return deskActionLabel(need, true, clientFirstName);
@@ -407,6 +414,26 @@ export function sentProposalReasonLine(
   if (row.proposal_status !== 'sent' && row.proposal_status !== 'viewed') return null;
   const need = deriveNeeds(row, now).find((n) => n.kind === 'hesitating_proposal');
   return need ? deskNeedText(need, true) : null;
+}
+
+/**
+ * US-19 FR7 F7-2 — a sent proposal's standing fact, printed on line 2 with no
+ * act inside the hesitation threshold: the reason line's first clause with
+ * its judgment left off (`Sent 3 October.`, `Opened 7 October.`), in V9's one
+ * date style, never a day counter. `Opened` reads the last open, as the
+ * reason line does. Null where the paper is not out with her, or the day
+ * cannot be read.
+ */
+export function sentProposalStandingLine(row: DocumentStateRow): string | null {
+  if (row.proposal_status === 'sent') {
+    const day = dayMonth(row.proposal_sent_at);
+    return day ? `Sent ${day}.` : null;
+  }
+  if (row.proposal_status === 'viewed') {
+    const day = dayMonth(row.proposal_last_opened_at ?? row.proposal_viewed_at);
+    return day ? `Opened ${day}.` : null;
+  }
+  return null;
 }
 
 export function deriveDeskRoster(

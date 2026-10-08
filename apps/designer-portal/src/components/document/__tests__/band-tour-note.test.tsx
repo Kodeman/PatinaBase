@@ -196,3 +196,30 @@ describe('Cedar: the repair is Next, so the tour note mounts (F6-10, D26)', () =
     expect(screen.getByRole('note')).toHaveTextContent(SENTENCE);
   });
 });
+
+// FR7 F7-2 — Tanaka sent today: inside the hesitation threshold the proposal
+// has no act, so line 2 is its standing fact and the note has nothing to press.
+describe('Tanaka sent today: no act, so no tour note (F7-2)', () => {
+  it('is absent', () => {
+    const { voice } = deriveLensBand({
+      spreadKind: 'proposal',
+      ticket: [],
+      needs: [],
+      guide: null,
+      tier: 'full',
+      household: 'Mei Tanaka',
+      jobName: 'Tanaka Garden Flat',
+      stageWord: 'Proposal',
+      stageIndex: null,
+      installDate: null,
+      moneyFigure: null,
+      proposalInvestment: null,
+      sentDate: null,
+      ownAct: null,
+      ownSentence: 'Sent 8 October.',
+    });
+    expect(voice.sentence).toBe('Sent 8 October.');
+    render(<BandTourNote hasAct={voice.next !== null} />);
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+});

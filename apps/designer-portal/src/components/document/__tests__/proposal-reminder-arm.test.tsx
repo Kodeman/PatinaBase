@@ -10,7 +10,9 @@ import type { ReactNode } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ACT_TARGET_IDS, ownAct } from '@/lib/document/act-names';
+import type { DocumentStateRow } from '@/lib/document/desk-derivation';
 import { fmtDay } from '@/lib/document/format';
+import { sentProposalVoice, type SentProposalRecord } from '@/lib/document/sent-proposal-voice';
 import { ProposalInstruments } from '../proposal-instruments';
 import { FinalizeHead } from '../worktable/finalize-head';
 
@@ -200,6 +202,62 @@ describe('held Message (F6-1 D1-a) — the band act follows the reminder', () =>
     act(() => document.getElementById(own.targetId)?.focus());
     expect(document.activeElement).toBe(control());
     expect(document.activeElement).toHaveAccessibleName('Send a reminder');
+    expect(mockNudge).not.toHaveBeenCalled();
+  });
+});
+
+// FR7 F7-3 (D2, P-2) — the band names the reminder only while the wall mounts
+// it: the facts are read off the same proposal the wall reads.
+describe('held Message: the band names the reminder only where the wall has it (F7-3)', () => {
+  const tanakaRow = {
+    engagement_kind: 'proposal',
+    client_profile_id: null,
+    proposal_status: 'sent',
+    proposal_viewed_at: null,
+    proposal_last_opened_at: null,
+  } as unknown as DocumentStateRow;
+  const band = () => {
+    const row = { ...tanakaRow, proposal_sent_at: mockProposal.sent_at as string };
+    const read = sentProposalVoice({
+      row,
+      proposal: mockProposal as unknown as SentProposalRecord,
+      clientMessageable: false,
+      now: new Date(),
+    });
+    const own = ownAct('proposal', {
+      inquiryOpen: false,
+      firstMissingEssential: null,
+      proposalState: 'sent',
+      clientFirstName: 'Mei',
+      clientMessageable: false,
+      proposalHesitating: read.proposalHesitating,
+      reminderAvailable: read.reminderAvailable,
+      unspecifiedCount: 0,
+      releaseEligible: false,
+      install: null,
+    });
+    return { own, ownSentence: read.ownSentence };
+  };
+
+  it('inside the cooldown: no control, no act; the band prints the wall’s own words', () => {
+    const nudgedAt = daysAgo(1);
+    mockProposal = { ...mockProposal, last_nudged_at: nudgedAt };
+    renderWall();
+    expect(document.getElementById(ACT_TARGET_IDS.proposalReminder)).toBeNull();
+    const { own, ownSentence } = band();
+    expect(own).toBeNull();
+    expect(ownSentence).toBe(`Reminder sent ${fmtDay(nudgedAt)}.`);
+    expect(screen.getByLabelText('Proposal state')).toHaveTextContent(ownSentence!);
+  });
+
+  it('the cooldown lapsed: `Send a reminder` lands on the mounted control', () => {
+    mockProposal = { ...mockProposal, last_nudged_at: daysAgo(4) };
+    renderWall();
+    const { own, ownSentence } = band();
+    expect(own).toMatchObject({ label: 'Send a reminder', targetId: ACT_TARGET_IDS.proposalReminder });
+    expect(ownSentence).toBeNull();
+    act(() => document.getElementById(own!.targetId)?.focus());
+    expect(document.activeElement).toBe(control());
     expect(mockNudge).not.toHaveBeenCalled();
   });
 });

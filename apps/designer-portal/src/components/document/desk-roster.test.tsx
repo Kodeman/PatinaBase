@@ -1043,9 +1043,11 @@ describe('DeskRoster — the card act agrees with the paper (FR4 Fix 5)', () => 
     engagement_kind: 'lead',
     lead_status: 'new',
   });
+  // FR7 F7-3 — the Nudge is the Message composer: Aspen's client has a login.
   const aspen = docRow('aspen', 'Aspen residence', {
     active_section: 'proposal',
     client_name: 'Client User',
+    client_profile_id: 'client-aspen',
     proposal_status: 'sent',
     proposal_sent_at: '2026-08-20T00:00:00Z',
     proposal_viewed_at: null,

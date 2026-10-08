@@ -22,6 +22,8 @@ import {
   OPEN_THE_JOB,
   ROSTER_STAGE_ORDER,
   rosterLineNeedsAHand,
+  sentProposalReasonLine,
+  sentProposalStandingLine,
   type AnsweredClientNote,
   type DeskRosterInput,
   type RosterMember,
@@ -1712,9 +1714,12 @@ describe('deriveDeskRoster — the card act agrees with the paper (FR4 Fix 5)', 
     actionLabel: 'Follow up',
     owner: 'client',
   });
+  // FR7 F7-3 — the Nudge is the Message composer, so its rows carry the
+  // client's login (`client_profile_id`).
   const sent = (id: string, client_name: string, over: Partial<DocumentStateRow> = {}) =>
     row(id, 'proposal', {
       client_name,
+      client_profile_id: `client-${id}`,
       proposal_status: 'sent',
       proposal_sent_at: '2026-08-20T00:00:00Z',
       proposal_viewed_at: null,
@@ -1758,5 +1763,61 @@ describe('deriveDeskRoster — the card act agrees with the paper (FR4 Fix 5)', 
     expect(line(opened('Client User'), hesitating, true).act.label).toBe('Nudge the client');
     // Flag off, today's Follow up.
     expect(line(opened('Mei Lin'), hesitating, false).act.label).toBe('Follow up');
+  });
+
+  // FR7 F7-3 (D1) — the card reads the fact it has: with no client login the
+  // Message is held, so the card prints the reminder the band prints.
+  it('a proposal whose client has no login prints Send a reminder (FR7 F7-3)', () => {
+    const noLogin = sent('aspen', 'Mei Lin', { client_profile_id: null });
+    const on = line(noLogin, unopened, true);
+    expect(on.act.label).toBe('Send a reminder');
+    expect(on.act.href).toBe('/doc/aspen');
+    expect(on.needText).toBe('Sent 5 October — not yet opened');
+    expect(line(noLogin, unopened, false).act.label).toBe('Follow up');
+  });
+});
+
+// US-19 FR7 F7-2 — inside the hesitation threshold line 2 prints the paper's
+// standing fact: the reason line's first clause, its judgment left off.
+describe('sentProposalStandingLine (FR7 F7-2)', () => {
+  const now = new Date('2026-10-08T12:00:00Z');
+  const tanaka = (over: Partial<DocumentStateRow> = {}) =>
+    row('tanaka', 'proposal', {
+      engagement_kind: 'proposal',
+      client_name: 'Mei Tanaka',
+      proposal_status: 'sent',
+      proposal_sent_at: '2026-10-08T09:00:00Z',
+      proposal_viewed_at: null,
+      proposal_last_opened_at: null,
+      ...over,
+    });
+
+  it('sent and unopened: Sent {day}.', () => {
+    expect(sentProposalStandingLine(tanaka())).toBe('Sent 8 October.');
+    // Inside the threshold the card prints no reason line; the standing fact remains.
+    expect(sentProposalReasonLine(tanaka(), now)).toBeNull();
+    // Past it, the reason line is the same clause with its judgment.
+    const fiveDays = tanaka({ proposal_sent_at: '2026-10-03T12:00:00Z' });
+    expect(sentProposalReasonLine(fiveDays, now)).toBe('Sent 3 October — not yet opened');
+    expect(sentProposalStandingLine(fiveDays)).toBe('Sent 3 October.');
+  });
+
+  it('opened: Opened {day}., from the last open the reason line reads', () => {
+    const opened = tanaka({
+      proposal_status: 'viewed',
+      proposal_viewed_at: '2026-10-07T10:00:00Z',
+    });
+    expect(sentProposalStandingLine(opened)).toBe('Opened 7 October.');
+    expect(
+      sentProposalStandingLine({ ...opened, proposal_last_opened_at: '2026-10-08T08:00:00Z' }),
+    ).toBe('Opened 8 October.');
+  });
+
+  it('is null when the paper is not out with her', () => {
+    expect(sentProposalStandingLine(tanaka({ proposal_status: 'draft' }))).toBeNull();
+    expect(sentProposalStandingLine(tanaka({ proposal_status: 'accepted' }))).toBeNull();
+    expect(sentProposalStandingLine(tanaka({ proposal_status: null }))).toBeNull();
+    // A day that cannot be read is silence, never `Sent .`.
+    expect(sentProposalStandingLine(tanaka({ proposal_sent_at: null }))).toBeNull();
   });
 });

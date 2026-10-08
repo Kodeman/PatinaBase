@@ -158,6 +158,33 @@ describe('ownAct (D1 own-act table)', () => {
       ownAct('install', facts({ install: { state: 'not_here_ahead', windowHeld: true } })),
     ).toBeNull();
   });
+
+  // FR7 F7-2 (R22) — inside the hesitation threshold her only act is waiting.
+  it('a sent proposal inside the hesitation threshold has no act', () => {
+    const sent = { proposalState: 'sent' as const, clientFirstName: 'Mei' };
+    expect(ownAct('proposal', facts({ ...sent, proposalHesitating: false }))).toBeNull();
+    expect(
+      ownAct('proposal', facts({ ...sent, clientMessageable: false, proposalHesitating: false })),
+    ).toBeNull();
+    expect(ownAct('proposal', facts({ ...sent, proposalHesitating: true }))?.label).toBe('Nudge Mei');
+    // Unset reads as hesitating: every caller that never states it is unchanged.
+    expect(ownAct('proposal', facts(sent))?.label).toBe('Nudge Mei');
+  });
+
+  // FR7 F7-3 (D2, P-2) — a reminder that cannot be sent is not an act.
+  it('held Message with the reminder unavailable has no act', () => {
+    const held = { proposalState: 'sent' as const, clientFirstName: 'Mei', clientMessageable: false };
+    expect(ownAct('proposal', facts({ ...held, reminderAvailable: false }))).toBeNull();
+    expect(ownAct('proposal', facts({ ...held, reminderAvailable: true }))?.label).toBe(
+      'Send a reminder',
+    );
+    expect(ownAct('proposal', facts(held))?.label).toBe('Send a reminder');
+    // Message reachable: the reminder is not her act, so its state is not read.
+    expect(
+      ownAct('proposal', facts({ ...held, clientMessageable: true, reminderAvailable: false }))
+        ?.label,
+    ).toBe('Nudge Mei');
+  });
 });
 
 describe('Message (D1, D3, D7)', () => {

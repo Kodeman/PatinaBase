@@ -356,6 +356,15 @@ export interface OwnActFacts {
    *  False reroutes a sent proposal's act to the reminder (FR6 F6-1); unset
    *  reads as reachable. */
   clientMessageable?: boolean;
+  /** Proposal, sent: past the hesitation threshold (the Desk prints its
+   *  reason line, `sentProposalReasonLine`). False is inside it, where a sent
+   *  proposal has no act (FR7 F7-2, R22); unset reads as hesitating. */
+  proposalHesitating?: boolean;
+  /** Proposal, sent, Message held: the send wall offers the reminder
+   *  (`deriveSendWallLine(...).verb === 'nudge'`). False — inside its cooldown,
+   *  countersign pending, issued on paper — is no act (FR7 F7-3, D2); unset
+   *  reads as available. */
+  reminderAvailable?: boolean;
   /** Project: FF&E lines not yet specified. */
   unspecifiedCount: number;
   /** Project: lines are eligible to release for authorization. */
@@ -385,8 +394,9 @@ const act = (label: string, targetId: ActTargetId, tierKey = label): OwnAct => (
  * where the table gives no act: an install piece arriving with a window
  * already held (D6: silence), and FR1 R8's silences — Brief with no open
  * inquiry, Discovery with every essential set, Proposal declined or expired
- * (or none), and Install with no reading. The band's Next then falls to the
- * top standing row by D2's order.
+ * (or none), and Install with no reading — and FR7's: a sent proposal inside
+ * the hesitation threshold, or held to a reminder that cannot be sent. The
+ * band's Next then falls to the top standing row by D2's order.
  */
 export function ownAct(stage: SectionKey, facts: OwnActFacts): OwnAct | null {
   switch (stage) {
@@ -407,8 +417,12 @@ export function ownAct(stage: SectionKey, facts: OwnActFacts): OwnAct | null {
         case 'draft':
           return act('Send the proposal', ACT_TARGET_IDS.proposalSend);
         case 'sent': {
+          // FR7 F7-2 — inside the hesitation threshold her only act is waiting.
+          if (facts.proposalHesitating === false) return null;
           // D1-a — held Message: the act follows the control that can reach her.
           if (facts.clientMessageable === false) {
+            // FR7 F7-3 — a reminder that cannot be sent is not an act.
+            if (facts.reminderAvailable === false) return null;
             return act(SEND_A_REMINDER, ACT_TARGET_IDS.proposalReminder);
           }
           const first = facts.clientFirstName?.trim();
