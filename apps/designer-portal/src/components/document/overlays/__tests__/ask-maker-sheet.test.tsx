@@ -490,6 +490,51 @@ describe('InstallReadingLine', () => {
     expect(await screen.findByRole('button', { name: 'Hold for review' })).toBeInTheDocument();
   });
 
+  // FR4 517-4 (b) — the ask is a fact about the line until the maker answers.
+  it('517-4 one-voice: a send on an earlier studio day still reads Asked {day} · sent, and the ask stays open', async () => {
+    mockOneVoice = true;
+    try {
+      const earlier = new Date(Date.now() - 3 * 86_400_000).toISOString();
+      mockDraftsRead = async () => [
+        { ...(HELD as object), id: 'sent-before', status: 'sent', created_at: earlier, sent_at: earlier },
+      ];
+      renderWithQuery(<InstallReadingLine projectId={PROJECT} items={CEDAR_LANE} />);
+      expect(await screen.findByText(`Asked ${dayMonth(earlier)} · sent`)).toBeInTheDocument();
+      // Only a send this studio day holds the act (511-R3).
+      const ask = screen.getByRole('button', { name: 'Ask the maker for a date' });
+      expect(ask).not.toHaveAttribute('aria-disabled');
+    } finally {
+      mockOneVoice = false;
+    }
+  });
+
+  it('517-4 one-voice: once a date ahead is recorded the sent ask is no longer printed', async () => {
+    mockOneVoice = true;
+    try {
+      const earlier = new Date(Date.now() - 3 * 86_400_000).toISOString();
+      const ahead = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+      let read = false;
+      mockDraftsRead = async () => {
+        read = true;
+        return [
+          { ...(HELD as object), id: 'sent-before', status: 'sent', created_at: earlier, sent_at: earlier },
+        ];
+      };
+      renderWithQuery(
+        <InstallReadingLine
+          projectId={PROJECT}
+          items={[{ ...CHAIR, purchase_order: { confirmed_eta: ahead, delivered_date: null } }]}
+        />,
+      );
+      expect(await screen.findByRole('button', { name: 'Hold a window' })).toBeInTheDocument();
+      await waitFor(() => expect(read).toBe(true));
+      await act(async () => {});
+      expect(screen.queryByText(/· sent/)).toBeNull();
+    } finally {
+      mockOneVoice = false;
+    }
+  });
+
   it('a held note for another piece does not stand for this one', async () => {
     mockDraftsRead = async () => [{ ...(HELD as object), ffe_item_id: LIGHT.id }];
     renderWithQuery(<InstallReadingLine projectId={PROJECT} items={CEDAR_LANE} />);

@@ -1,10 +1,14 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
+  awaitsArrivalDate,
   installReading,
   lineMaker,
   lineMakerRecord,
+  makerAskSentWords,
   pieceName,
+  sentThisStudioDay,
+  shownMakerAsk,
   standingMakerAsk,
   type InstallReading,
   type InstallReadingPiece,
@@ -94,6 +98,49 @@ describe('installReading — D6 copy by state', () => {
 
   it('prints nothing for a job with no pieces', () => {
     expect(installReading([], TODAY, false)).toBeNull();
+  });
+});
+
+// FR4 522-2 — the band's short forms. No `N more` trailer: the short form
+// exists to fit, and the sheet already carries the count.
+describe('installReading — short forms (522-2)', () => {
+  it('past due: {name} isn\'t here — due {day}.', () => {
+    expect(read([piece('Reading chair', due('2026-10-02'))]).shortSentence).toBe(
+      "Reading chair isn't here — due 2 October.",
+    );
+  });
+
+  it('ahead: {name} arrives {day}. — the day only, no weekday', () => {
+    const short = read([piece('Reading chair', due('2026-10-08'))]).shortSentence;
+    expect(short).toBe('Reading chair arrives 8 October.');
+    expect(short).not.toMatch(/day\b/);
+  });
+
+  it('undated keeps its short form', () => {
+    expect(read([piece('Reading chair')]).shortSentence).toBe(
+      "Reading chair isn't here — no date recorded.",
+    );
+  });
+
+  it('Everything is here. is unchanged and has no short form', () => {
+    const reading = read([piece('Reading chair', { status: 'delivered' })]);
+    expect(reading.sentence).toBe('Everything is here.');
+    expect(reading.shortSentence ?? null).toBeNull();
+  });
+
+  it.each([
+    ['past', due('2026-10-02'), "Reading chair isn't here — due 2 October."],
+    ['ahead', due('2026-10-08'), 'Reading chair arrives 8 October.'],
+    ['undated', {}, "Reading chair isn't here — no date recorded."],
+  ])('%s: the short form carries no N more trailer; the long form keeps it', (_, over, short) => {
+    const reading = read([
+      piece('Reading chair', over),
+      piece('Brass picture light', due('2026-10-20')),
+      piece('Rug', due('2026-10-21')),
+    ]);
+    expect(reading.shortSentence).toBe(short);
+    expect(reading.shortSentence).not.toMatch(/more/);
+    expect(reading.sentence).toMatch(/ 2 more aren't here\.$/);
   });
 });
 
@@ -230,6 +277,50 @@ describe('standingMakerAsk — 506-3, keyed on the studio day', () => {
 
   it('a discarded draft releases the day', () => {
     expect(standingMakerAsk([draft('discarded')], NOW)).toBeNull();
+  });
+});
+
+// FR4 517-4 (b) — the ask is a fact about the line until the maker answers.
+describe('shownMakerAsk — 517-4, the asked-for date persists until a date is recorded', () => {
+  const NOW = new Date('2026-10-08T02:00:00Z'); // 7 October in Chicago
+  const sent = (sentAt: string, id = sentAt) => ({
+    id,
+    status: 'sent',
+    created_at: sentAt,
+    sent_at: sentAt,
+  });
+
+  it('a send on an earlier studio day still prints while the line waits on a date', () => {
+    const ask = sent('2026-10-03T16:00:00Z');
+    expect(standingMakerAsk([ask], NOW)).toBeNull(); // the route's day rule is unchanged
+    expect(shownMakerAsk([ask], NOW, true)).toBe(ask);
+    expect(makerAskSentWords(ask)).toBe('Asked 3 October · sent');
+  });
+
+  it('is gone once a date is recorded', () => {
+    expect(shownMakerAsk([sent('2026-10-03T16:00:00Z')], NOW, false)).toBeNull();
+  });
+
+  it('names the latest send, and a held note still stands first', () => {
+    const older = sent('2026-09-28T16:00:00Z');
+    const latest = sent('2026-10-04T16:00:00Z');
+    expect(shownMakerAsk([latest, older], NOW, true)).toBe(latest);
+    expect(shownMakerAsk([older, latest], NOW, true)).toBe(latest);
+    const held = { id: 'held', status: 'awaiting_review', created_at: '2026-10-05T16:00:00Z' };
+    expect(shownMakerAsk([latest, held], NOW, true)).toBe(held);
+  });
+
+  it('only a send this studio day holds the act', () => {
+    expect(sentThisStudioDay(sent('2026-10-07T20:00:00Z'), NOW)).toBe(true);
+    expect(sentThisStudioDay(sent('2026-10-03T16:00:00Z'), NOW)).toBe(false);
+  });
+
+  it('awaitsArrivalDate: not here and no date ahead recorded', () => {
+    expect(awaitsArrivalDate(piece('Chair'), TODAY)).toBe(true);
+    expect(awaitsArrivalDate(piece('Chair', due('2026-10-02')), TODAY)).toBe(true);
+    expect(awaitsArrivalDate(piece('Chair', due('2026-10-07')), TODAY)).toBe(false);
+    expect(awaitsArrivalDate(piece('Chair', due('2026-10-20')), TODAY)).toBe(false);
+    expect(awaitsArrivalDate(piece('Chair', { status: 'delivered' }), TODAY)).toBe(false);
   });
 });
 

@@ -9,12 +9,13 @@ import {
   useUpdatePurchaseOrderStatus,
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { dayMonth } from '@/lib/document/dates';
 import { fmtDay } from '@/lib/document/format';
 import {
   LIVE_MAKER_ASK_STATUSES,
+  awaitsArrivalDate,
   lineMaker,
-  standingMakerAsk,
+  makerAskSentWords,
+  shownMakerAsk,
 } from '@/lib/document/install-reading';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction } from '../document-action';
@@ -49,16 +50,15 @@ function LineDateRequests({ item, projectId }: { item: FFERow; projectId: string
     // US-19 F3-22 (517-4): one status line in every state, the Desk's words,
     // for the request that stands on this line (506-3's rule, as the install
     // row reads it). The no-address reason stays beneath the held Send.
-    const standing = standingMakerAsk(drafts, new Date());
+    // FR4 517-4 (b): a sent request stays printed until a date is recorded.
+    const now = new Date();
+    const standing = shownMakerAsk(drafts, now, awaitsArrivalDate(item, now));
     if (!standing) return null;
-    const askedDay = dayMonth(standing.sent_at ?? standing.created_at);
     const status =
       standing.status === 'sending'
         ? 'Sending…'
         : standing.status === 'sent'
-          ? askedDay
-            ? `Asked ${askedDay} · sent`
-            : 'Sent.'
+          ? makerAskSentWords(standing)
           : `Date request to ${lineMaker(item) ?? 'the maker'} drafted — not sent.`;
     return (
       <div>

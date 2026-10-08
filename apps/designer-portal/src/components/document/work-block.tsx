@@ -139,6 +139,7 @@ export function WorkBlock({
   workLoading,
   workError,
   onRetryWork,
+  emptyActVariant = 'primary',
 }: {
   projectId: string;
   sectionKey: SectionKey;
@@ -160,6 +161,10 @@ export function WorkBlock({
   workLoading: boolean;
   workError: boolean;
   onRetryWork: () => void;
+  /** FR4 Fix 10 (`one-voice`) — the empty state's `Add the first task` steps
+   *  down to `secondary` where the region already has its one leader (the
+   *  Install reading's act). */
+  emptyActVariant?: 'primary' | 'secondary';
 }) {
   const createTask = useCreateSectionTask(projectId);
   const toggleTask = useToggleSectionTask(projectId);
@@ -265,6 +270,7 @@ export function WorkBlock({
         description="List the concrete work here so the next action and due date stay visible in the document."
         inputs={['Task', 'Optional due date', 'Optional estimate']}
         action={{ key: 'add-task', label: 'Add the first task', onClick: () => setCapturing(true) }}
+        actionVariant={emptyActVariant}
       />
     );
   }

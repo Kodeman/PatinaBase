@@ -35,8 +35,13 @@ jest.mock('@/hooks/use-folio', () => ({
 jest.mock('../../date-text-input', () => ({
   DateTextInput: ({ ariaLabel }: { ariaLabel?: string }) => <input aria-label={ariaLabel} />,
 }));
+let mockOneVoice = false;
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (name: string) => ({ value: name === 'one-voice' && mockOneVoice, isLoading: false }),
+}));
 
 import { MovementCell } from '../movement-cell';
+import { dayMonth } from '@/lib/document/dates';
 
 const ASK = {
   id: 'ask-1',
@@ -63,6 +68,7 @@ const renderCell = (item: Record<string, unknown>, po: Record<string, unknown> |
 
 beforeEach(() => {
   mockDrafts.data = [];
+  mockOneVoice = false;
 });
 
 describe('MovementCell date requests', () => {
@@ -109,5 +115,58 @@ describe('MovementCell date requests', () => {
     mockDrafts.data = [{ ...ASK, kind: 'ack_discrepancy_reply', purchase_order_id: null }];
     renderCell({ id: 'line-1' }, null);
     expect(screen.queryByTestId('draft-review')).toBeNull();
+  });
+});
+
+// FR4 517-4 (b) — `Asked {day} · sent` stays on the line until a date is
+// recorded, not only on the studio day it was sent.
+describe('MovementCell asked-for date (one-voice)', () => {
+  const DAY_MS = 86_400_000;
+  const sentOn = (daysAgo: number) => new Date(Date.now() - daysAgo * DAY_MS).toISOString();
+  const SENT = (at: string, id = 'ask-sent') => ({ ...ASK, id, status: 'sent', created_at: at, sent_at: at });
+
+  beforeEach(() => {
+    mockOneVoice = true;
+  });
+
+  it('persists across days while no date is recorded', () => {
+    const at = sentOn(4);
+    mockDrafts.data = [SENT(at)];
+    renderCell({ id: 'line-1', purchase_order: null }, null);
+    expect(screen.getByTestId('line-date-request-status')).toHaveTextContent(`Asked ${dayMonth(at)} · sent`);
+    expect(screen.queryByTestId('draft-review')).toBeNull();
+  });
+
+  it('persists while the recorded date has passed, and names the latest send', () => {
+    const older = sentOn(9);
+    const latest = sentOn(2);
+    mockDrafts.data = [SENT(older, 'ask-older'), SENT(latest, 'ask-latest')];
+    const past = new Date(Date.now() - 6 * DAY_MS).toISOString().slice(0, 10);
+    const po = { id: 'po-1', status: 'ordered', confirmed_eta: past, delivered_date: null };
+    renderCell({ id: 'line-1', purchase_order: po }, po);
+    expect(screen.getByTestId('line-date-request-status')).toHaveTextContent(
+      `Asked ${dayMonth(latest)} · sent`,
+    );
+  });
+
+  it('stops once a date ahead is recorded', () => {
+    mockDrafts.data = [SENT(sentOn(4))];
+    const ahead = new Date(Date.now() + 5 * DAY_MS).toISOString().slice(0, 10);
+    const po = { id: 'po-1', status: 'ordered', confirmed_eta: ahead, delivered_date: null };
+    renderCell({ id: 'line-1', purchase_order: po }, po);
+    expect(screen.queryByTestId('line-date-request-status')).toBeNull();
+  });
+
+  it('stops once the piece is here', () => {
+    mockDrafts.data = [SENT(sentOn(4))];
+    renderCell({ id: 'line-1', status: 'delivered', purchase_order: null }, null);
+    expect(screen.queryByTestId('line-date-request-status')).toBeNull();
+  });
+
+  it('flag off: a send on an earlier studio day is not printed', () => {
+    mockOneVoice = false;
+    mockDrafts.data = [SENT(sentOn(4))];
+    renderCell({ id: 'line-1', purchase_order: null }, null);
+    expect(screen.queryByText(/· sent/)).toBeNull();
   });
 });

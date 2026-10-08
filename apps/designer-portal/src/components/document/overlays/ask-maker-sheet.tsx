@@ -37,10 +37,14 @@ import { ACT_LANDING_EVENTS, ACT_TARGET_IDS } from '@/lib/document/act-names';
 import { dayMonth, parseSourceDate } from '@/lib/document/dates';
 import {
   LIVE_MAKER_ASK_STATUSES,
+  awaitsArrivalDate,
   installReading,
   lineMaker,
+  makerAskSentWords,
   pieceName,
   readingDay,
+  sentThisStudioDay,
+  shownMakerAsk,
   standingMakerAsk,
   type InstallReadingPiece,
   type LineMakerSource,
@@ -382,22 +386,24 @@ function InstallReadingLive({
   const piece = items.find((item) => String(item.id) === reading.firstItemId) ?? null;
   const asks = reading.act?.targetId === ACT_TARGET_IDS.installReading;
   // The route's own rule (506-3): the line's held or sending note, else one
-  // sent this studio day.
-  const standing = asks
-    ? standingMakerAsk(
-        (draftsQuery.data ?? []).filter(
-          (draft) => draft.kind === KIND && draft.ffe_item_id === reading.firstItemId,
-        ),
-        new Date(),
+  // sent this studio day. FR4 517-4 (b, one-voice): a sent note stays printed
+  // until a date is recorded, in the cell's words; only one sent this studio
+  // day holds the act.
+  const now = new Date();
+  const lineDrafts = asks
+    ? (draftsQuery.data ?? []).filter(
+        (draft) => draft.kind === KIND && draft.ffe_item_id === reading.firstItemId,
       )
-    : null;
+    : [];
+  const standing = !asks
+    ? null
+    : oneVoice
+      ? shownMakerAsk(lineDrafts, now, piece ? awaitsArrivalDate(piece, now) : false)
+      : standingMakerAsk(lineDrafts, now);
   const held = standing?.status === 'sent' ? null : standing;
-  const sentToday = standing?.status === 'sent' ? standing : null;
-  const askedDay = held
-    ? dayMonth(held.created_at)
-    : sentToday
-      ? dayMonth(sentToday.sent_at ?? sentToday.created_at)
-      : null;
+  const sent = standing?.status === 'sent' ? standing : null;
+  const sentToday = sent && sentThisStudioDay(sent, now) ? sent : null;
+  const askedDay = held ? dayMonth(held.created_at) : null;
   // Until the held read settles the act could be either; offer neither.
   const unsettled = asks && draftsQuery.isPending;
   const maker = piece ? lineMaker(piece) : null;
@@ -463,13 +469,15 @@ function InstallReadingLive({
     >
       <p className="text-[12.5px] text-[var(--color-mocha)]">
         {reading.sentence}
-        {(held || sentToday) && (
+        {(held || sent) && (
           <span className="block">
             {held?.status === 'sending'
               ? 'Sending…'
-              : askedDay
-                ? `Asked ${askedDay} · ${sentToday ? 'sent' : 'draft held for review'}`
-                : 'Draft held for review'}
+              : sent
+                ? makerAskSentWords(sent)
+                : askedDay
+                  ? `Asked ${askedDay} · draft held for review`
+                  : 'Draft held for review'}
           </span>
         )}
       </p>

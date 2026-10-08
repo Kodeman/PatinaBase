@@ -123,6 +123,48 @@ export function standingMakerAsk<T extends MakerAskDraft>(
   );
 }
 
+/**
+ * FR4 517-4 (b) — whether a line still waits on an arrival date: it is not
+ * here and no date ahead is recorded (none, or one already passed). The
+ * reading's act for such a line is `Ask the maker for a date`.
+ */
+export function awaitsArrivalDate(piece: InstallReadingPiece, today: Date): boolean {
+  if (isPieceHere(piece)) return false;
+  const eta = parseSourceDate(piece.purchase_order?.confirmed_eta ?? null);
+  return !eta || startOfDay(eta).getTime() < startOfDay(today).getTime();
+}
+
+/**
+ * FR4 517-4 (b) — the date request a line prints: the one that stands (506-3),
+ * else, while the line still waits on a date, its latest sent request. The ask
+ * is a fact about the line until the maker answers; the route's one-a-day rule
+ * (`standingMakerAsk`) is unchanged. The cell and the install row both read
+ * this, so they print the same words (`makerAskSentWords`).
+ */
+export function shownMakerAsk<T extends MakerAskDraft>(
+  drafts: readonly T[],
+  now: Date,
+  awaitingDate: boolean,
+): T | null {
+  const standing = standingMakerAsk(drafts, now);
+  if (standing || !awaitingDate) return standing;
+  const sentAt = (draft: T) => new Date(draft.sent_at ?? draft.created_at).getTime();
+  return drafts
+    .filter((draft) => draft.status === 'sent')
+    .reduce<T | null>((latest, draft) => (!latest || sentAt(draft) > sentAt(latest) ? draft : latest), null);
+}
+
+/** Whether a sent request went this studio day (511-R3's held reason). */
+export function sentThisStudioDay(draft: MakerAskDraft, now: Date): boolean {
+  return draft.status === 'sent' && studioDay(draft.sent_at ?? draft.created_at) === studioDay(now);
+}
+
+/** 517-4 — a sent request's words, the same in the cell and the install row. */
+export function makerAskSentWords(draft: MakerAskDraft): string {
+  const day = dayMonth(draft.sent_at ?? draft.created_at);
+  return day ? `Asked ${day} · sent` : 'Sent.';
+}
+
 /** A line's name as the reading speaks it: the piece, without the spec after
  *  its first comma (`Reading chair, oiled oak and shearling` → `Reading chair`). */
 export function pieceName(name: string): string {
@@ -219,18 +261,24 @@ export function installReading(
       `${name} isn't here — no date recorded.`,
     );
   }
+  // FR4 522-2 — the short forms carry no `N more` trailer: the short form
+  // exists to fit, and the sheet already carries the count. Ahead: the day
+  // alone, no weekday.
+  const etaDay = readingDay(first.eta, day);
   if (first.sense === 'past') {
     return reading(
       'not_here_past',
-      `${name} was due ${readingDay(first.eta, day)} and isn't here.${more}`,
+      `${name} was due ${etaDay} and isn't here.${more}`,
       first.piece.id,
       windowHeld,
+      `${name} isn't here — due ${etaDay}.`,
     );
   }
   return reading(
     'not_here_ahead',
-    `${name} arrives ${WEEKDAY_FORMAT.format(first.eta)} ${readingDay(first.eta, day)}.${more}`,
+    `${name} arrives ${WEEKDAY_FORMAT.format(first.eta)} ${etaDay}.${more}`,
     first.piece.id,
     windowHeld,
+    `${name} arrives ${etaDay}.`,
   );
 }

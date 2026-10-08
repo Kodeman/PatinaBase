@@ -17,6 +17,7 @@ export function GuidedEmptyState({
   inputs,
   action,
   secondary,
+  actionVariant = 'primary',
   className = '',
 }: {
   title: string;
@@ -24,13 +25,15 @@ export function GuidedEmptyState({
   inputs: string[];
   action: EmptyAction;
   secondary?: EmptyAction;
+  /** FR4 Fix 10 — `secondary` where the region already has its one leader. */
+  actionVariant?: 'primary' | 'secondary';
   className?: string;
 }) {
   const actionProps = {
     actionKey: action.key,
     surfaceKey: EMPTY_STATE_SURFACE_KEY,
     regionKey: EMPTY_STATE_REGION_KEY,
-    variant: 'primary' as const,
+    variant: actionVariant,
   };
 
   // Onboarding Wave 1 (L6) — the taxonomy existed but no call site fired it

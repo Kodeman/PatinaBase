@@ -1167,6 +1167,10 @@ function FFESectionBody({
   // FR2 508-1/508-2 (`one-voice`): the heads print `Record a change` on every
   // spread whatever ask-the-paper says, so the router's `On a piece` lands too.
   const recordChangeAtHead = askThePaper || oneVoice;
+  // FR4 Fix 10 (`one-voice`): the Install region has one leader, the reading
+  // line's act. The title row's bill act prints tertiary and the empty
+  // states' `Add the first task` and `+ File` print secondary beside it.
+  const installOneLeader = oneVoice && mode === 'install' && sectionKey !== 'care';
   const [choosingPiece, setChoosingPiece] = useState(false);
   const [changeOrderLineId, setChangeOrderLineId] = useState<string | null>(null);
   const choosePieceRef = useRef<HTMLParagraphElement | null>(null);
@@ -2093,7 +2097,7 @@ function FFESectionBody({
                     actionKey="bill-project-ffe"
                     surfaceKey="project"
                     regionKey="ffe-head"
-                    variant="secondary"
+                    variant={installOneLeader ? 'tertiary' : 'secondary'}
                     onClick={() =>
                       openInvoiceComposer({
                         projectId,
@@ -2319,6 +2323,7 @@ function FFESectionBody({
               : {})}
           clientUserId={clientUserId}
           clientName={clientName}
+          emptyActVariant={installOneLeader ? 'secondary' : 'primary'}
         />
       )}
 
@@ -2330,6 +2335,7 @@ function FFESectionBody({
           droppedFiles={folioDrop}
           onDropConsumed={onFolioDropConsumed}
           sectionDragOver={sectionDragOver}
+          fileActVariant={installOneLeader ? 'secondary' : 'primary'}
         />
       )}
 

@@ -70,6 +70,26 @@ describe('FolioStrip — a scan chip navigates to the Room View', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  // FR4 Fix 10 — `+ File` steps down where the region already has its leader.
+  it('+ File prints primary by default and secondary when the region asks', () => {
+    mockUseFolioFiles.mockReturnValue({ data: [] });
+    const { unmount } = render(
+      <FolioStrip projectId="project-1" anchor={{ kind: 'section', sectionKey: 'install' }} />,
+    );
+    expect(screen.getByRole('button', { name: '+ File' })).toHaveClass('da-primary');
+    unmount();
+    render(
+      <FolioStrip
+        projectId="project-1"
+        anchor={{ kind: 'section', sectionKey: 'install' }}
+        fileActVariant="secondary"
+      />,
+    );
+    const file = screen.getByRole('button', { name: '+ File' });
+    expect(file).toHaveClass('da-secondary');
+    expect(file).not.toHaveClass('da-primary');
+  });
+
   it('a real (non-scan) file never navigates to the Room View', () => {
     mockUseFolioFiles.mockReturnValue({
       data: [scanFile({ id: 'file-pdf-1', title: 'Floor plan.pdf', doc_type: 'pdf', storage_path: null })],

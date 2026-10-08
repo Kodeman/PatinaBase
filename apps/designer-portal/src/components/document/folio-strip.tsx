@@ -136,12 +136,15 @@ export function FolioStrip({
   droppedFiles = null,
   onDropConsumed = () => {},
   sectionDragOver = false,
+  fileActVariant = 'primary',
 }: {
   projectId: string;
   anchor: FolioAnchor;
   droppedFiles?: File[] | null;
   onDropConsumed?: () => void;
   sectionDragOver?: boolean;
+  /** FR4 Fix 10 — `secondary` where the region already has its one leader. */
+  fileActVariant?: 'primary' | 'secondary';
 }) {
   const router = useRouter();
   const { data: files } = useFolioFiles(projectId);
@@ -223,7 +226,7 @@ export function FolioStrip({
           actionKey="upload-folio-file"
           surfaceKey="open-document"
           regionKey={actionRegion}
-          variant="primary"
+          variant={fileActVariant}
           onClick={() => inputRef.current?.click()}
           loading={upload.isPending}
           loadingLabel="Clipping…"
