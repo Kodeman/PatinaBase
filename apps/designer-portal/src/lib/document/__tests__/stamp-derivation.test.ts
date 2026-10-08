@@ -423,6 +423,7 @@ describe('D1 — the stage before an order (CONTRACT §3.3)', () => {
     { name: 'R7c product, fixed 0, rough 480000', line: row({ status: 'specified', product_id: PRODUCT, rough_cents: 480_000 }), stage: 'specced' },
     { name: 'R8a product, no price', line: row({ status: 'specified', product_id: PRODUCT }), stage: 'specced' },
     { name: 'R8b no product, vendor_name Hollis Millwork', line: row({ status: 'specified', vendor_name: 'Hollis Millwork' }), stage: 'specced' },
+    { name: 'F10 no product, vendor_name tab-only (not blank, matches SQL btrim)', line: row({ status: 'specified', vendor_name: '\t' }), stage: 'specced' },
     { name: 'R9a no product, no maker, rough 480000', line: row({ status: 'specified', rough_cents: 480_000 }), stage: 'placeholder' },
     { name: 'R9b no product, no maker, fixed 5000', line: row({ status: 'specified', unit_price_cents: 5_000 }), stage: 'placeholder' },
     { name: 'L1 labor 9 × 8500, piece ready', line: labor({}), parent: PIECE_READY, stage: 'ready' },

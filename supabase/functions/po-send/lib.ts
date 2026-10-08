@@ -924,11 +924,18 @@ export interface SupplyingLine {
  * The "COM arriving separately" line for each of this PO's items, keyed by
  * item id. Only a COM link (link_kind 'com') names a piece: a labor or
  * accessory child is never COM. A supplying PO whose lines name no item here
- * attaches to the first item, so the vendor still reads it once, unless its
- * lines are all labor or accessory children: that PO supplies no COM.
+ * attaches to the first non-labor item (by `link_kind`/`line_kind`), so the
+ * vendor still reads it once without it landing on a labor line; if every
+ * item is labor, the note goes on no item. Its lines being all labor or
+ * accessory children also means that PO supplies no COM.
  */
 export function comArrivingSeparately(
-  items: readonly { id: string; spec?: unknown }[],
+  items: readonly {
+    id: string;
+    spec?: unknown;
+    link_kind?: string | null;
+    line_kind?: string | null;
+  }[],
   supplyingOrders: readonly SupplyingPurchaseOrder[],
   supplyingLines: readonly SupplyingLine[],
 ): Map<string, string[]> {
@@ -936,6 +943,9 @@ export function comArrivingSeparately(
   if (items.length === 0) return notes;
   const itemIds = new Set(items.map((item) => item.id));
   const specOf = new Map(items.map((item) => [item.id, item.spec]));
+  const fallbackItem = items.find(
+    (item) => item.link_kind !== 'labor' && item.line_kind !== 'labor',
+  );
 
   for (const order of supplyingOrders) {
     const linked = supplyingLines.filter(
@@ -950,7 +960,7 @@ export function comArrivingSeparately(
           .filter((id) => itemIds.has(id)),
       ),
     );
-    const targets = pieces.length > 0 ? pieces : [items[0].id];
+    const targets = pieces.length > 0 ? pieces : fallbackItem ? [fallbackItem.id] : [];
     for (const itemId of targets) {
       const rawSpec = specOf.get(itemId);
       const spec = readRecord(Array.isArray(rawSpec) ? rawSpec[0] : rawSpec);

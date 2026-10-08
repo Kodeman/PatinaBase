@@ -43,6 +43,20 @@ Deno.test("a COM link beside a labor link still prints, on its own piece only", 
   assertEquals(notes.get("line-wallpaper"), undefined);
 });
 
+Deno.test("F12: the first-item fallback skips a labor line and attaches to the next item", () => {
+  const LABOR_ITEM = { id: "line-labor", link_kind: "labor", line_kind: "labor" };
+  const SOFA = { id: "line-sofa", spec: { com_spec: { yardage: "19" } } };
+  const notes = comArrivingSeparately([LABOR_ITEM, SOFA], [KESSLER_PO], []);
+  assertEquals(notes.get("line-labor"), undefined);
+  assertEquals(notes.get("line-sofa"), ["COM arriving separately — Kessler PO-1043, 19 yd"]);
+});
+
+Deno.test("F12: when every item is labor, the fallback attaches to no item", () => {
+  const LABOR_ITEM = { id: "line-labor", link_kind: "labor", line_kind: "labor" };
+  const notes = comArrivingSeparately([LABOR_ITEM], [KESSLER_PO], []);
+  assertEquals(notes.size, 0);
+});
+
 Deno.test("the maker's PO line prints the unit: 9 roll", () => {
   assertEquals(poQuantityLabel(9, "roll"), "9 roll");
   assertEquals(poQuantityLabel(320, "sq_ft"), "320 sq ft");

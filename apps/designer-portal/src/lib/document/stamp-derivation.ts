@@ -141,7 +141,7 @@ export function deriveLineStage(input: LineStageInput): LineStage {
   const hasMaker =
     input.productId != null ||
     input.vendorId != null ||
-    (input.vendorName ?? '').trim() !== '';
+    (input.vendorName ?? '').replace(/^ +| +$/g, '') !== '';
   if (!hasMaker) return 'placeholder';
   const priced =
     (input.itemType === 'fixed' && (input.unitPriceCents ?? 0) > 0) ||
