@@ -175,7 +175,7 @@ export function LibraryRoom() {
         <LibrarianBar
           onPlaced={(pieceName, whereName) =>
             setToast(
-              `Placed “${pieceName}” into ${whereName} — via the Engine.`,
+              `Placed “${pieceName}” into ${whereName}.`,
             )
           }
         />

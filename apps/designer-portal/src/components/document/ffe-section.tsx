@@ -612,7 +612,7 @@ function FFELine({
           {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
           {item.added_via === 'engine' && (
             <p className="mt-px font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] opacity-70">
-              via the Engine
+              — matched by eye
             </p>
           )}
         </div>
