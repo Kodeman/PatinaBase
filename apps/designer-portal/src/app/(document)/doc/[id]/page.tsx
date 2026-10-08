@@ -158,6 +158,7 @@ import {
   ACT_LANDING_EVENTS,
   ACT_TARGET_IDS,
   STAGE_WORD,
+  ffeActLandingOf,
   householdDisplayName,
   ownAct,
 } from '@/lib/document/act-names';
@@ -1912,6 +1913,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'claim')
           : need.kind === 'po_unacknowledged'
             ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'follow-up')
+            : need.kind === 'po_unsent'
+              ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'send')
             : need.kind === 'overdue_decision'
               ? () =>
                   landAct(ACT_LANDING_EVENTS.composeMessage, {
@@ -2559,6 +2562,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         // own act: the row takes it and opens its sheet on the first field,
         // rather than the band pointing at the row's copy of the act.
         if (act.targetId === ACT_TARGET_IDS.installReading && landAct(ACT_LANDING_EVENTS.askTheMaker)) return;
+        // FR4 522-3 — a Pieces own act (`Spec the N unspecified`, `Open the
+        // pieces`) lands on Pieces' own control.
+        const pieces = ffeActLandingOf(act.label);
+        if (pieces && landAct(ACT_LANDING_EVENTS.ffeAct, pieces)) return;
         activateDestination({
           kind: 'anchor',
           section: bandSection,
