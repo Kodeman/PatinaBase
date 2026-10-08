@@ -84,6 +84,22 @@ test("preflight --json passes with a live gateway stub and only warns on optiona
   }
 });
 
+test("preflight refuses a non-loopback GATEWAY_URL without sending to it", async () => {
+  // TEST-NET-1 (documentation-only); the check must fail before any request is made.
+  const r = await run({
+    GATEWAY_URL: "http://192.0.2.1:18764/v1/messages",
+    SOL_ALLOW_REMOTE: "",
+  });
+  assert.equal(r.code, 1);
+  const report = JSON.parse(r.stdout);
+  assert.equal(report.ok, false);
+  const gateway = check(report, "gateway");
+  assert.equal(gateway.ok, false);
+  assert.equal(gateway.required, true);
+  assert.match(gateway.detail, /not a loopback address/);
+  assert.match(gateway.fix, /SOL_ALLOW_REMOTE=1/);
+});
+
 test("preflight exits 1 when the gateway fails and names the fix", async () => {
   const gw = await stub(502);
   try {

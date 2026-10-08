@@ -50,7 +50,12 @@ async function stub(handler) {
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   const url = `http://127.0.0.1:${server.address().port}/v1/messages`;
-  return { url, requests, close: () => new Promise((r) => server.close(r)) };
+  return {
+    url,
+    requests,
+    close: () => new Promise((r) => server.close(r)),
+    closeAll: () => server.closeAllConnections(),
+  };
 }
 
 function tmp() {
@@ -133,6 +138,8 @@ test("sol.mjs sends model, system and image block, writes provenance, and append
     assert.deepEqual(entry, {
       seat: "rival-copy",
       piece: "P01",
+      step: "rival-copy",
+      status: "ok",
       model: "claude-gpt-6-sol[1m]",
       usage: { input_tokens: 12, output_tokens: 4 },
       stop_reason: "end_turn",
@@ -172,7 +179,7 @@ test("sol.mjs honors SOL_MODEL and writes no ledger without --run", async () => 
   }
 });
 
-test("sol.mjs exits 1 on a non-2xx and echoes the body", async () => {
+test("sol.mjs exits 1 on a non-2xx, echoes the body, and records a failed ledger entry", async () => {
   const gw = await stub((req, res) => {
     res.writeHead(503, { "content-type": "text/plain" });
     res.end("upstream asleep");
@@ -181,13 +188,84 @@ test("sol.mjs exits 1 on a non-2xx and echoes the body", async () => {
   const prompt = path.join(dir, "prompt.md");
   fs.writeFileSync(prompt, "p");
   try {
-    const r = await run([prompt, path.join(dir, "out.md"), "--run", dir], {
-      GATEWAY_URL: gw.url,
-    });
+    const r = await run(
+      [prompt, path.join(dir, "out.md"), "--run", dir, "--seat", "sol-cold-read"],
+      { GATEWAY_URL: gw.url },
+    );
     assert.equal(r.code, 1);
     assert.match(r.stderr, /gateway 503: upstream asleep/);
     assert.equal(fs.existsSync(path.join(dir, "out.md")), false);
-    assert.equal(fs.existsSync(path.join(dir, "ledger.json")), false);
+    const ledger = JSON.parse(
+      fs.readFileSync(path.join(dir, "ledger.json"), "utf8"),
+    );
+    assert.equal(ledger.length, 1);
+    assert.equal(ledger[0].step, "sol-cold-read");
+    assert.equal(ledger[0].status, "failed");
+    assert.match(ledger[0].reason, /gateway 503: upstream asleep/);
+  } finally {
+    await gw.close();
+  }
+});
+
+test("sol.mjs gives up on a gateway that never answers (SOL_TIMEOUT_MS) and records it", async () => {
+  const gw = await stub(() => {}); // reads the request, never responds
+  const dir = tmp();
+  const prompt = path.join(dir, "prompt.md");
+  fs.writeFileSync(prompt, "p");
+  try {
+    const started = Date.now();
+    const r = await run(
+      [prompt, path.join(dir, "out.md"), "--run", dir, "--seat", "sol-draft", "--piece", "P01"],
+      { GATEWAY_URL: gw.url, SOL_TIMEOUT_MS: "300" },
+    );
+    assert.equal(r.code, 1);
+    assert.ok(Date.now() - started < 20_000, "exited on the timeout, not a hang");
+    assert.match(r.stderr, /gateway timed out after 0\.3 s/);
+    assert.equal(gw.requests.length, 1);
+    assert.equal(fs.existsSync(path.join(dir, "out.md")), false);
+    const [entry] = JSON.parse(
+      fs.readFileSync(path.join(dir, "ledger.json"), "utf8"),
+    );
+    assert.equal(entry.status, "failed");
+    assert.equal(entry.step, "sol-draft");
+    assert.equal(entry.piece, "P01");
+    assert.match(entry.reason, /timed out/);
+  } finally {
+    gw.closeAll();
+    await gw.close();
+  }
+});
+
+test("sol.mjs refuses a non-loopback GATEWAY_URL unless SOL_ALLOW_REMOTE=1", async () => {
+  const dir = tmp();
+  const prompt = path.join(dir, "prompt.md");
+  fs.writeFileSync(prompt, "p");
+  // 192.0.2.1 is TEST-NET-1 (documentation-only); the refusal comes before any request is made.
+  const r = await run([prompt, path.join(dir, "out.md"), "--run", dir], {
+    GATEWAY_URL: "http://192.0.2.1:18764/v1/messages",
+    SOL_ALLOW_REMOTE: "",
+  });
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /refusing GATEWAY_URL http:\/\/192\.0\.2\.1:18764.*not a loopback address/);
+  assert.equal(fs.existsSync(path.join(dir, "out.md")), false);
+  assert.equal(fs.existsSync(path.join(dir, "ledger.json")), false);
+});
+
+test("sol.mjs accepts every loopback spelling", async () => {
+  const gw = await stub((req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ model: "x", content: [{ type: "text", text: "ok" }], stop_reason: "end_turn", usage: {} }));
+  });
+  const dir = tmp();
+  const prompt = path.join(dir, "prompt.md");
+  fs.writeFileSync(prompt, "p");
+  try {
+    const port = new URL(gw.url).port;
+    const r = await run([prompt, path.join(dir, "out.md")], {
+      GATEWAY_URL: `http://localhost:${port}/v1/messages`,
+      SOL_ALLOW_REMOTE: "",
+    });
+    assert.equal(r.code, 0, r.stderr);
   } finally {
     await gw.close();
   }

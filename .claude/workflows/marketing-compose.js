@@ -52,7 +52,11 @@ const RULES = `RULES FOR THIS AGENT
 
 const VOICE_RULES = `VOICE RULES THAT FAIL A PIECE: never "AI", "artificial intelligence", "machine learning", "algorithm" or "powered by" (say Designer-Taught Intelligence, outcome first); no Pledge language and never the held tagline; every number, percentage or dollar amount cites a verified claim from ${CANON}/claims.md as [Cnn] in the same sentence; the reader is a growing design studio at the moment it adds its first hire while the work doubles; Midwest places only.`
 
-const lintCmd = (id) => `node ${TOOLS}/voice-lint.mjs ${COPY}/${id}.final.md --json > ${CRIT}/lint-${id}.json`
+// The pinned HyperFrames CLI, never installed mid-run (render.mjs uses the same one).
+const HF_LINT = 'npx --no-install hyperframes@0.8.142 lint'
+const HF_ABSENT = 'If npx says the hyperframes package is missing, do not install it by any route: skip the lint and say "hyperframes CLI not installed" in detail; the render step records the video as skipped.'
+
+const lintCmd = (id) =>`node ${TOOLS}/voice-lint.mjs ${COPY}/${id}.final.md --json > ${CRIT}/lint-${id}.json`
 // Run-wide tools take --piece per target on a revise run so other pieces stay untouched.
 const toolCmds = (tool, ids) => (ids ? ids.map(id => `node ${TOOLS}/${tool}.mjs ${RUN} --piece ${id}`) : [`node ${TOOLS}/${tool}.mjs ${RUN}`])
 const scopeLine = (ids) => (ids ? `Work on these pieces only: ${ids.join(', ')}. Leave every other piece's files untouched.` : 'Work on every piece in the plan.')
@@ -89,7 +93,7 @@ YOUR TASK (Press B1: ingest). Mechanical steps only.
 1. Run \`node ${TOOLS}/ingest.mjs ${RUN}\`. It writes ${RUN}/mj/assets.json and fills empty jobs with local FLUX placeholders when mflux is installed. Report each job whose source is "flux-placeholder" or "missing".
 2. Read ${RUN}/plan.json and list every piece as {id, kind, channel, visuals}.
 3. Run \`node ${TOOLS}/voice-lint.mjs ${COPY} --json\` (it lints the .final.md files; exit 1 just means errors were found) and give each piece's error count as lintErrors.
-ok=false only if ingest.mjs exited non-zero or plan.json is unreadable; put the error in detail.`, {
+ok=false only if ingest.mjs exited non-zero (an invalid plan, or a plan whose content test did not pass) or plan.json is unreadable; put the error in detail.`, {
   label: 'B1:ingest', phase: 'Ingest', model: 'haiku',
   schema: {
     type: 'object',
@@ -143,10 +147,26 @@ const composeTool = templ.length ? await agent(`${RULES}
 
 YOUR TASK (Press B3: compose template pieces). Mechanical steps only. Run each command and report its output:
 ${toolCmds('compose', IDS && templ.map(p => p.id)).join('\n')}
-It fills the HTML templates in ${TEMPLATES} for social, pin, poster, one-pager and email pieces, writes a plain pitch.md for pr-pitch, and skips deck and video. ok=false if any command exited non-zero.`, {
+It fills the HTML templates in ${TEMPLATES} for social, pin, poster, one-pager and email pieces, writes a plain pitch.md for pr-pitch, and skips deck and video. It prints one line per piece: "<id> (<kind>): ok ..." or "image-missing ... (<reason>)" or "skipped; ..." or "failed (<reason>)", and exits 1 when any piece failed (the other pieces are still composed).
+Report every printed piece line in pieces as {id, status, reason}: status ok, image-missing, skipped or failed exactly as printed. ok=false if any command exited non-zero.`, {
   label: 'B3:compose', phase: 'Compose', model: 'haiku',
-  schema: { type: 'object', properties: { ok: { type: 'boolean' }, detail: { type: 'string' } }, required: ['ok', 'detail'] },
-}) : { ok: true, detail: 'no template pieces' }
+  schema: {
+    type: 'object',
+    properties: {
+      ok: { type: 'boolean' },
+      detail: { type: 'string' },
+      pieces: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { id: { type: 'string' }, status: { type: 'string', enum: ['ok', 'image-missing', 'skipped', 'failed'] }, reason: { type: 'string' } },
+          required: ['id', 'status'],
+        },
+      },
+    },
+    required: ['ok', 'detail', 'pieces'],
+  },
+}) : { ok: true, detail: 'no template pieces', pieces: [] }
 
 const handBuilt = PIECES.filter(p => p.kind === 'deck' || p.kind === 'video')
 const handResults = await parallel(handBuilt.map(p => () => agent(p.kind === 'deck'
@@ -157,12 +177,26 @@ Copy the folder ${TEMPLATES}/deck to ${RUN}/compose/${p.id} (so ${RUN}/compose/$
   : `${RULES}
 
 YOUR TASK (Press B3: compose video ${p.id} for ${p.channel}). First load the hyperframes skills with the Skill tool: "hyperframes-core" (the composition contract), then "hyperframes" if you need more. Read ${TEMPLATES}/video/README.md and follow it exactly: copy the folder for this channel (${TEMPLATES}/video/9x16 for video-9x16, ${TEMPLATES}/video/16x9 for video-16x9) to ${RUN}/compose/${p.id}, put the picked stills from ${RUN}/mj/picks.json and any clips from ${RUN}/mj/inbox into ${RUN}/compose/${p.id}/assets, and build the scenes from ${COPY}/${p.id}.final.md (title, scenes). Replace both placeholder assets. Stay within the channel's max length.
-Then run \`npx -y hyperframes@0.8.142 lint ${RUN}/compose/${p.id}\` and fix until it reports 0 errors. Edit only files under ${RUN}/compose/${p.id}.`, {
+Then run \`${HF_LINT} ${RUN}/compose/${p.id}\` and fix until it reports 0 errors. ${HF_ABSENT} Edit only files under ${RUN}/compose/${p.id}.
+ok=true when the composition is complete (a lint skipped for a missing CLI included); ok=false only if you could not build it.`, {
   label: `B3:${p.kind}:${p.id}`, phase: 'Compose', model: 'opus',
   schema: { type: 'object', properties: { ok: { type: 'boolean' }, detail: { type: 'string' } }, required: ['ok', 'detail'] },
 })))
 const composeFailed = new Set(handBuilt.filter((p, i) => !(handResults[i] && handResults[i].ok)).map(p => p.id))
+// A template piece counts as composed only when compose.mjs reported it ok or image-missing.
+const composedLines = {}
+for (const r of (composeTool && composeTool.pieces) || []) composedLines[r.id] = r
+for (const p of templ) {
+  const line = composedLines[p.id]
+  if (!line || line.status === 'failed') {
+    composeFailed.add(p.id)
+    log(`${p.id}: compose failed: ${line ? line.reason || 'no reason given' : composeTool ? 'compose.mjs did not report it' : 'compose agent did not return'}`)
+  }
+}
 if (composeTool && !composeTool.ok) log(`compose.mjs reported a failure: ${composeTool.detail}`)
+// A piece whose image never arrived is not final, however cleanly it rendered.
+const missingJobs = new Set(ingest.missing || [])
+const imageMissing = new Set(PIECES.filter(p => (composedLines[p.id] && composedLines[p.id].status === 'image-missing') || (p.visuals || []).some(j => missingJobs.has(j))).map(p => p.id))
 
 // ---------------------------------------------------------------- B4 render
 const RENDER_SCHEMA = {
@@ -249,7 +283,7 @@ Read ${sources}. Apply the findings you agree with; skip the ones that contradic
 - Copy fixes: edit ${COPY}/<piece id>.final.md, keep its frontmatter fields, then run \`node ${TOOLS}/voice-lint.mjs ${COPY}/<piece id>.final.md --json > ${CRIT}/lint-<piece id>.json\` and fix until it has zero errors.
 ${VOICE_RULES}
 - Template pieces (social, pin, poster, one-pager, email, pr-pitch): never hand-edit ${RUN}/compose; re-run \`node ${TOOLS}/compose.mjs ${RUN} --piece <piece id>\` after the copy change.
-- Deck and video pieces: edit ${RUN}/compose/<piece id> directly (for video, run \`npx -y hyperframes@0.8.142 lint ${RUN}/compose/<piece id>\` to 0 errors).
+- Deck and video pieces: edit ${RUN}/compose/<piece id> directly (for video, run \`${HF_LINT} ${RUN}/compose/<piece id>\` to 0 errors). ${HF_ABSENT}
 - Then re-render each changed piece: \`node ${TOOLS}/render.mjs ${RUN} --piece <piece id>\`.
 This is a single pass: do not loop on the review. Report every changed piece with its final lint error count and its render result (status, absolute output paths, reason).`, {
     label: 'B6:fix', phase: 'Fix', model: 'sonnet',
@@ -292,6 +326,7 @@ const pieces = PIECES.map(p => {
   const lintErrors = fixed[p.id] ? fixed[p.id].lintErrors : p.lintErrors
   let status = r.status === 'ok' ? 'rendered' : r.status === 'skipped' ? 'render-skipped' : 'render-failed'
   if (composeFailed.has(p.id) && r.status !== 'ok') status = 'compose-failed'
+  if (status === 'rendered' && imageMissing.has(p.id)) status = 'image-missing'
   if (revised[p.id] && revised[p.id] !== 'ok') status = revised[p.id]
   else if (lintErrors > 0) status = 'lint-failed'
   return { id: p.id, kind: p.kind, status, outputs: r.outputs || [], reason: r.reason || undefined }
@@ -300,8 +335,13 @@ const pieces = PIECES.map(p => {
 if (!board || !board.ok) {
   return { status: 'blocked', reason: `board.mjs failed: ${board ? board.detail : 'agent did not return'}`, runDir: RUN, pieces }
 }
+// Only a rendered piece is ready; anything else is visible per piece and rolls up here too.
+const ready = pieces.filter(p => p.status === 'rendered').length
+if (!ready) {
+  return { status: 'blocked', reason: 'no piece rendered cleanly; see each piece status and the board', board: `${RUN}/board.html`, runDir: RUN, pieces }
+}
 return {
-  status: 'ready-for-review',
+  status: ready === pieces.length ? 'ready-for-review' : 'ready-with-failures',
   board: `${RUN}/board.html`,
   runDir: RUN,
   reviewFindings: findings.length,

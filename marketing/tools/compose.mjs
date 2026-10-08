@@ -9,11 +9,15 @@
  *
  * Image choice per piece: mj/picks.json {J01:"<abs path>"}, else the first file for the job in
  * mj/assets.json, else a neutral IMAGE PENDING block. The image is copied into compose/<P>/.
+ *
+ * Prints one line per piece: "<id> (<kind>): ok <file>", "image-missing <file> (<reason>)",
+ * "skipped; ..." or "failed (<reason>)". image-missing and failed pieces get a ledger entry
+ * (step compose). Exits 1 after the last piece when any piece failed.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { REPO_ROOT, CHANNELS, runPaths, readPlan, readFinal } from './lib/run.mjs';
+import { REPO_ROOT, CHANNELS, runPaths, readPlan, readFinal, appendLedger } from './lib/run.mjs';
 
 export const TEMPLATES_DIR = path.join(REPO_ROOT, 'marketing', 'templates');
 const WORDMARK_FILE = path.join(REPO_ROOT, 'marketing', 'canon', 'wordmark.svg');
@@ -218,6 +222,10 @@ export function composePiece(runDir, plan, piece, log = console.log) {
     return { piece: piece.id, status: 'skipped' };
   }
 
+  // Remove the previous composition first, so a recompose that fails can never leave stale copy
+  // behind for render.mjs to pick up.
+  for (const name of ['index.html', 'pitch.md']) fs.rmSync(path.join(outDir, name), { force: true });
+
   const { data: rawData, body: rawBody } = readFinal(runDir, piece.id);
   const data = stripClaims(rawData);
   const body = stripClaims(rawBody);
@@ -227,7 +235,7 @@ export function composePiece(runDir, plan, piece, log = console.log) {
     const file = path.join(outDir, 'pitch.md');
     const text = `${data.subject ? `Subject: ${data.subject}\n\n` : ''}${body.trim()}\n`;
     fs.writeFileSync(file, text);
-    log(`${piece.id} (pr-pitch): ${path.relative(runDir, file)}`);
+    log(`${piece.id} (pr-pitch): ok ${path.relative(runDir, file)}`);
     return { piece: piece.id, status: 'ok', out: file };
   }
 
@@ -242,7 +250,12 @@ export function composePiece(runDir, plan, piece, log = console.log) {
   const html = fill(template, varsFor(piece, plan, data, body, image));
   const file = path.join(outDir, 'index.html');
   fs.writeFileSync(file, html);
-  log(`${piece.id} (${piece.kind}): ${path.relative(runDir, file)}${wantsImage && !image ? ' [IMAGE PENDING]' : ''}`);
+  if (wantsImage && !image) {
+    const reason = `no image for ${job || 'the piece'}; composed with IMAGE PENDING`;
+    log(`${piece.id} (${piece.kind}): image-missing ${path.relative(runDir, file)} (${reason})`);
+    return { piece: piece.id, status: 'image-missing', out: file, image, reason };
+  }
+  log(`${piece.id} (${piece.kind}): ok ${path.relative(runDir, file)}`);
   return { piece: piece.id, status: 'ok', out: file, image };
 }
 
@@ -271,7 +284,24 @@ function main() {
   }
   const root = path.resolve(runDir);
   const plan = readPlan(root);
-  for (const p of selectPieces(plan, piece)) composePiece(root, plan, p);
+  const failed = [];
+  // One bad piece never stops the rest; the exit code still reports it.
+  for (const p of selectPieces(plan, piece)) {
+    try {
+      const result = composePiece(root, plan, p);
+      if (result.status === 'image-missing') {
+        appendLedger(root, { piece: p.id, step: 'compose', kind: p.kind, status: 'image-missing', reason: result.reason });
+      }
+    } catch (err) {
+      failed.push(p.id);
+      console.log(`${p.id} (${p.kind}): failed (${err.message})`);
+      appendLedger(root, { piece: p.id, step: 'compose', kind: p.kind, status: 'failed', reason: err.message });
+    }
+  }
+  if (failed.length) {
+    console.error(`compose.mjs: ${failed.length} piece(s) failed: ${failed.join(', ')}`);
+    process.exit(1);
+  }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {

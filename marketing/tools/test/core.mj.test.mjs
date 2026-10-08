@@ -151,6 +151,32 @@ test("ingest --no-flux records empty stills as missing", () => {
   assert.deepEqual(assets.J03, { source: "missing", files: [] });
 });
 
+test("ingest exits 1 and writes nothing unless contentTest.pass is true", () => {
+  for (const pass of [false, undefined, "true"]) {
+    const runDir = copyRun();
+    const planFile = path.join(runDir, "plan.json");
+    const plan = JSON.parse(fs.readFileSync(planFile, "utf8"));
+    if (pass === undefined) delete plan.contentTest.pass;
+    else plan.contentTest.pass = pass;
+    plan.contentTest.reason = "the reader is a homeowner";
+    fs.writeFileSync(planFile, JSON.stringify(plan));
+    const r = tool("ingest.mjs", [runDir, "--no-flux"]);
+    assert.equal(r.status, 1, `pass=${pass}: ${r.stderr}`);
+    // A non-boolean is already a plan-check error; a valid plan with pass=false hits the new gate.
+    assert.match(
+      r.stderr,
+      pass === false
+        ? /contentTest\.pass is not true; .*: the reader is a homeowner/
+        : /contentTest\.pass must be a boolean/,
+    );
+    assert.equal(
+      fs.existsSync(path.join(runDir, "mj", "assets.json")),
+      false,
+      `pass=${pass}`,
+    );
+  }
+});
+
 test("ingest records missing when mflux is not installed (flux exit 3)", () => {
   const runDir = copyRun();
   const emptyBin = fs.mkdtempSync(path.join(os.tmpdir(), "press-nobin-"));

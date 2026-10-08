@@ -2,7 +2,8 @@
 // Press host check. REQUIRED: model gateway answers a 1-token request; Playwright chromium launches.
 // OPTIONAL (warn): mflux-generate, ffmpeg, hyperframes, >= 20 GiB free disk.
 // Usage: node marketing/tools/preflight.mjs [--json]   Exit 1 only when a required check fails.
-// PRESS_SKIP_BROWSER=1 skips the chromium launch (tests only).
+// PRESS_SKIP_BROWSER=1 skips the chromium launch (tests only). A non-loopback GATEWAY_URL fails
+// the gateway check unless SOL_ALLOW_REMOTE=1.
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -13,6 +14,7 @@ const GATEWAY_URL =
   process.env.GATEWAY_URL ?? "http://127.0.0.1:18764/v1/messages";
 const MODEL = process.env.SOL_MODEL || "claude-gpt-6-sol[1m]";
 const MIN_FREE_GIB = 20;
+const HYPERFRAMES = "hyperframes@0.8.142"; // the CLI render.mjs and the compose workflow use
 const json = process.argv.includes("--json");
 
 function onPath(bin) {
@@ -26,7 +28,22 @@ function onPath(bin) {
   return null;
 }
 
+// Drafts, canon and images must not leave this machine by accident (same rule as sol.mjs).
+function isLoopback(url) {
+  try {
+    return ["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function gateway() {
+  if (!isLoopback(GATEWAY_URL) && process.env.SOL_ALLOW_REMOTE !== "1")
+    return {
+      ok: false,
+      detail: `${GATEWAY_URL} is not a loopback address (127.0.0.1, localhost, ::1); refusing to send drafts off this machine`,
+      fix: "point GATEWAY_URL at the local gateway, or set SOL_ALLOW_REMOTE=1 to allow a remote one on purpose",
+    };
   try {
     const res = await fetch(GATEWAY_URL, {
       method: "POST",
@@ -76,13 +93,13 @@ function binary(bin) {
 }
 
 function hyperframes() {
-  const r = spawnSync("npx", ["--no-install", "hyperframes", "--version"], {
+  const r = spawnSync("npx", ["--no-install", HYPERFRAMES, "--version"], {
     encoding: "utf8",
     timeout: 60_000,
   });
   return r.status === 0
     ? { ok: true, detail: `hyperframes ${r.stdout.trim()}` }
-    : { ok: false, detail: "npx --no-install hyperframes --version failed" };
+    : { ok: false, detail: `npx --no-install ${HYPERFRAMES} --version failed` };
 }
 
 function disk() {
@@ -122,7 +139,7 @@ const checks = [
   {
     name: "hyperframes",
     required: false,
-    fix: "video renders are skipped until `npx --no-install hyperframes --version` works (adding it is a scope request)",
+    fix: `video renders are skipped until \`npx --no-install ${HYPERFRAMES} --version\` works (adding it is a scope request)`,
     ...hyperframes(),
   },
   {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { fill, stripClaims } from '../compose.mjs';
@@ -91,6 +91,46 @@ test('compose strips claim markers, copies the picked image, and marks a missing
   // J02 has no pick and no assets.json entry.
   const p02 = fs.readFileSync(path.join(runDir, 'compose', 'P02', 'index.html'), 'utf8');
   assert.match(p02, /IMAGE PENDING/);
+});
+
+test('a missing lead image is reported image-missing (output line and ledger), not ok', () => {
+  assert.match(composeLog, /^P02 \(pin\): image-missing compose\/P02\/index\.html \(no image for J02; composed with IMAGE PENDING\)$/m);
+  assert.match(composeLog, /^P01 \(social\): ok compose\/P01\/index\.html$/m);
+  const missing = ledger.filter((e) => e.step === 'compose' && e.status === 'image-missing');
+  assert.deepEqual(missing.map((e) => e.piece), ['P02']);
+  assert.match(missing[0].reason, /J02/);
+});
+
+test('a failing piece does not stop the others; its stale composition is removed and compose exits 1', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'press-compose-fail-'));
+  try {
+    fs.cpSync(FIXTURE, dir, { recursive: true });
+    tool('compose.mjs', [dir]);
+    const p01 = path.join(dir, 'compose', 'P01', 'index.html');
+    const p03 = path.join(dir, 'compose', 'P03', 'index.html');
+    assert.ok(fs.existsSync(p01));
+    // P01's copy goes missing (a broken revise), and P03's composition is cleared to prove the
+    // pieces after P01 still compose.
+    fs.rmSync(path.join(dir, 'copy', 'P01.final.md'));
+    fs.rmSync(p03);
+    const r = spawnSync(process.execPath, [path.join(TOOLS, 'compose.mjs'), dir], { encoding: 'utf8' });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /^P01 \(social\): failed \(.*P01\.final\.md.*\)$/m);
+    assert.match(r.stderr, /compose\.mjs: 1 piece\(s\) failed: P01/);
+    assert.equal(fs.existsSync(p01), false, 'stale P01 composition must not survive a failed recompose');
+    assert.ok(fs.existsSync(p03), 'P03 composed after P01 failed');
+    // This copy has no picks.json or assets.json, so the last template piece composes without its image.
+    assert.match(r.stdout, /^P07 \(poster\): image-missing compose\/P07\/index\.html/m);
+    const ledgerRows = JSON.parse(fs.readFileSync(path.join(dir, 'ledger.json'), 'utf8'));
+    const failed = ledgerRows.filter((e) => e.step === 'compose' && e.status === 'failed');
+    assert.deepEqual(failed.map((e) => e.piece), ['P01']);
+
+    // render then skips P01 instead of rendering the old copy.
+    const render = spawnSync(process.execPath, [path.join(TOOLS, 'render.mjs'), dir, '--piece', 'P01'], { encoding: 'utf8' });
+    assert.match(render.stdout, /P01 \(social\): skipped \(compose\/P01\/index\.html is missing/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('render writes PNGs at the exact channel pixel size', () => {

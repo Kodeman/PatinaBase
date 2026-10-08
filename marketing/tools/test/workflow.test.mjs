@@ -87,13 +87,18 @@ const COMPOSE_PIECES = [
   { id: 'P02', kind: 'poster', channel: 'poster-18x24', visuals: ['J02'], lintErrors: 0 },
   { id: 'P03', kind: 'video', channel: 'video-9x16', visuals: ['J03'], lintErrors: 0 },
 ];
-function composeResponder(only) {
+function composeResponder(only, overrides = {}) {
   const ids = only || COMPOSE_PIECES.map((p) => p.id);
+  const templateIds = ids.filter((id) => COMPOSE_PIECES.find((p) => p.id === id).kind !== 'video');
   return (label) => {
+    for (const [prefix, value] of Object.entries(overrides)) {
+      if (label === prefix || label.startsWith(prefix)) return typeof value === 'function' ? value(label) : value;
+    }
     if (label.startsWith('B0:revise:')) return { status: 'ok', errors: [] };
     if (label === 'B1:ingest') return { ok: true, detail: '', placeholders: [], missing: [], pieces: COMPOSE_PIECES };
     if (label === 'B2:picks') return 'picked';
-    if (label === 'B3:compose' || label.startsWith('B3:')) return { ok: true, detail: '' };
+    if (label === 'B3:compose') return { ok: true, detail: '', pieces: templateIds.map((id) => ({ id, status: 'ok' })) };
+    if (label.startsWith('B3:')) return { ok: true, detail: '' };
     if (label === 'B4:render') {
       return {
         pieces: ids.map((id) =>
@@ -181,9 +186,9 @@ test('(d) a Sol failure marks the piece sol unavailable, records it, and does no
   assert.ok(byLabel(calls, 'A5:art-direction').length === 1, 'pipeline reached art direction');
 });
 
-test('compose full run returns ready-for-review and surfaces a skipped video render', async () => {
+test('compose full run surfaces a skipped video render and rolls up to ready-with-failures', async () => {
   const { result, calls } = await runWorkflow('compose', { run: 'marketing/runs/2026-10-08-first-hire', root: ROOT }, composeResponder());
-  assert.equal(result.status, 'ready-for-review');
+  assert.equal(result.status, 'ready-with-failures');
   assert.equal(result.board, `${RUN}/board.html`);
   const byId = Object.fromEntries(result.pieces.map((p) => [p.id, p]));
   assert.equal(byId.P01.status, 'rendered');
@@ -223,6 +228,85 @@ test('(e) compose with pieces + feedback only touches those pieces', async () =>
     assert.ok(uses && uses.length, `${label} runs ${tool}.mjs`);
     for (const u of uses) assert.match(u, /--piece P02$/, `${label}: ${u}`);
   }
+});
+
+const renderAll = (status) => ({
+  pieces: COMPOSE_PIECES.map((p) => ({ id: p.id, status, outputs: status === 'ok' ? [`${RUN}/out/${p.id}/${p.id}.png`] : [], reason: status === 'ok' ? undefined : 'x' })),
+});
+
+test('compose top-level status: every piece rendered → ready-for-review; none → blocked', async () => {
+  const all = await runWorkflow('compose', { run: RUN, root: ROOT }, composeResponder(null, { 'B4:render': renderAll('ok') }));
+  assert.equal(all.result.status, 'ready-for-review');
+  assert.ok(all.result.pieces.every((p) => p.status === 'rendered'));
+
+  const none = await runWorkflow('compose', { run: RUN, root: ROOT }, composeResponder(null, { 'B4:render': renderAll('failed') }));
+  assert.equal(none.result.status, 'blocked');
+  assert.match(none.result.reason, /no piece rendered/);
+  assert.equal(none.result.board, `${RUN}/board.html`);
+  assert.ok(none.result.pieces.every((p) => p.status === 'render-failed'));
+});
+
+test('compose: a missing lead image is image-missing, never rendered (compose line or ingest missing)', async () => {
+  const { result } = await runWorkflow('compose', { run: RUN, root: ROOT }, composeResponder(null, {
+    'B1:ingest': { ok: true, detail: '', placeholders: [], missing: ['J02'], pieces: COMPOSE_PIECES },
+    'B3:compose': { ok: true, detail: '', pieces: [{ id: 'P01', status: 'image-missing', reason: 'no image for J01' }, { id: 'P02', status: 'ok' }] },
+    'B4:render': renderAll('ok'),
+  }));
+  const byId = Object.fromEntries(result.pieces.map((p) => [p.id, p.status]));
+  assert.deepEqual(byId, { P01: 'image-missing', P02: 'image-missing', P03: 'rendered' });
+  assert.equal(result.status, 'ready-with-failures');
+});
+
+test('compose: a template piece compose.mjs reports failed (or never reports) is compose-failed', async () => {
+  const { result } = await runWorkflow('compose', { run: RUN, root: ROOT }, composeResponder(null, {
+    'B3:compose': { ok: false, detail: 'compose.mjs: 1 piece(s) failed: P02', pieces: [{ id: 'P02', status: 'failed', reason: 'ENOENT P02.final.md' }] },
+    'B4:render': {
+      pieces: [
+        { id: 'P01', status: 'skipped', outputs: [], reason: 'index.html is missing' },
+        { id: 'P02', status: 'skipped', outputs: [], reason: 'index.html is missing' },
+        { id: 'P03', status: 'ok', outputs: [`${RUN}/out/P03/P03.mp4`] },
+      ],
+    },
+  }));
+  const byId = Object.fromEntries(result.pieces.map((p) => [p.id, p.status]));
+  // P01 has no compose line at all: fail closed.
+  assert.deepEqual(byId, { P01: 'compose-failed', P02: 'compose-failed', P03: 'rendered' });
+  assert.equal(result.status, 'ready-with-failures');
+});
+
+test('compose lints video with the pinned CLI and never installs it mid-run', async () => {
+  const { calls } = await runWorkflow('compose', { run: RUN, root: ROOT }, composeResponder());
+  for (const label of ['B3:video:P03', 'B6:fix']) {
+    const prompt = byLabel(calls, label)[0].prompt;
+    assert.ok(prompt.includes('npx --no-install hyperframes@0.8.142 lint '), `${label} uses --no-install`);
+    assert.match(prompt, /do not install it/);
+  }
+  assert.doesNotMatch(source('compose'), /npx -y|npx --yes/);
+});
+
+test('draft: planValid is required; anything but true blocks before drafting', async () => {
+  for (const planValid of [undefined, false, 'true']) {
+    const direction = { pass: true, reason: 'ok', planErrors: [], pieces: DRAFT_PIECES };
+    if (planValid !== undefined) direction.planValid = planValid;
+    const { result, calls } = await runWorkflow('draft', draftArgs, draftResponder({ 'A1:direction': direction }));
+    assert.equal(result.status, 'blocked', `planValid=${planValid}`);
+    assert.match(result.reason, /plan-check/);
+    assert.deepEqual(calls.map((c) => c.label), ['A0:setup', 'A1:direction']);
+  }
+});
+
+test('draft top-level status: some pieces not ok → with-failures; none ok → blocked', async () => {
+  const some = await runWorkflow('draft', draftArgs, draftResponder({
+    'A4:cold-read:apply': { pieces: [{ id: 'P01', errors: 0 }, { id: 'P02', errors: 2 }] },
+  }));
+  assert.equal(some.result.status, 'awaiting-midjourney-with-failures');
+  assert.deepEqual(some.result.pieces.map((p) => [p.id, p.status]), [['P01', 'ok'], ['P02', 'lint-failed']]);
+
+  const none = await runWorkflow('draft', draftArgs, draftResponder({
+    'A4:cold-read:apply': { pieces: [{ id: 'P01', errors: 1 }, { id: 'P02', errors: 2 }] },
+  }));
+  assert.equal(none.result.status, 'blocked');
+  assert.match(none.result.reason, /no piece/);
 });
 
 test('compose: feedback without pieces is refused before any agent runs', async () => {

@@ -121,12 +121,13 @@ Return pass, reason, planValid (plan-check exit 0), planErrors, and the pieces a
         },
       },
     },
-    required: ['pass', 'reason', 'pieces'],
+    required: ['pass', 'reason', 'planValid', 'pieces'],
   },
 })
 if (!direction) return { status: 'blocked', reason: 'direction agent did not return', runDir: RUN }
 if (!direction.pass) return { status: 'refused', reason: direction.reason, runDir: RUN }
-if (direction.planValid === false) return { status: 'blocked', reason: `plan.json failed plan-check: ${(direction.planErrors || []).join('; ')}`, runDir: RUN }
+// Fail closed: only an explicit plan-check pass goes on.
+if (direction.planValid !== true) return { status: 'blocked', reason: `plan.json did not pass plan-check: ${(direction.planErrors || []).join('; ') || 'planValid was not reported true'}`, runDir: RUN }
 const PIECES = (direction.pieces || []).filter(p => /^P\d{2}$/.test(p.id) && FRONTMATTER[p.kind])
 if (PIECES.length < (direction.pieces || []).length) log(`dropped ${(direction.pieces || []).length - PIECES.length} piece(s) with a bad id or unknown kind`)
 if (!PIECES.length) return { status: 'blocked', reason: 'plan.json has no pieces', runDir: RUN }
@@ -278,8 +279,11 @@ if (!art || !art.ok) {
 }
 for (const w of art.warnings || []) log(`mj-pack: ${w}`)
 
+// Only an ok piece is ready; the rest stay visible per piece and roll up here too.
+const ready = pieces.filter(p => p.status === 'ok').length
+if (!ready) return { status: 'blocked', reason: 'no piece has a final draft that passes lint; see each piece status', runDir: RUN, pieces }
 return {
-  status: 'awaiting-midjourney',
+  status: ready === pieces.length ? 'awaiting-midjourney' : 'awaiting-midjourney-with-failures',
   runDir: RUN,
   promptsPath: `${RUN}/mj/prompts.md`,
   coldRead,

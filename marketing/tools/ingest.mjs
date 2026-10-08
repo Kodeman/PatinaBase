@@ -33,6 +33,13 @@ if (errors.length) {
   console.error(`ingest: plan.json is invalid:\n- ${errors.join("\n- ")}`);
   process.exit(1);
 }
+// Only a batch that passed the content test is composed, whatever pieces plan.json still lists.
+if (plan.contentTest?.pass !== true) {
+  console.error(
+    `ingest: plan.json contentTest.pass is not true; this batch did not pass the content test${plan.contentTest?.reason ? `: ${plan.contentTest.reason}` : ""}`,
+  );
+  process.exit(1);
+}
 
 // Channel size scaled to <= 1536 px on the long edge (physical sizes go through their dpi first).
 function fluxSize(channelId) {

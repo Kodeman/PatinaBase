@@ -4,10 +4,12 @@
  *
  * Writes <runDir>/board.html: one self-contained review page (< 16 MB). A header with the concept
  * and content test, then one card per piece: the rendered preview (downscaled to <= 1200 px JPEG
- * with sips on macOS and inlined; the raw file is inlined when sips is absent), the final copy, the
- * rival draft, lint results, the review findings that name the piece, and a PLACEHOLDER badge when
- * any image on the piece is a FLUX placeholder. Videos show a poster frame plus the local mp4 path.
- * A ledger table closes the page. The only external requests are Google Fonts.
+ * with sips on macOS, else with Playwright chromium, and inlined), the final copy, the rival draft,
+ * lint results ("Not linted yet" vs "Lint crashed"), the review findings that name the piece, a
+ * PLACEHOLDER badge when any image on the piece is a FLUX placeholder and a MISSING badge when a
+ * job has no image at all. Videos show a poster frame plus the local mp4 path. A ledger table
+ * closes the page. The only external requests are Google Fonts. A board of 16 MB or more is not
+ * written (exit 1).
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -15,7 +17,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { runPaths, readPlan, readFinal } from './lib/run.mjs';
-import { escapeHtml as esc, leadJob } from './compose.mjs';
+import { escapeHtml as esc, leadJob, pickImage } from './compose.mjs';
 
 const MAX_BYTES = 16 * 1024 * 1024;
 const IMAGE_EXT = /\.(png|jpe?g|webp)$/i;
@@ -62,7 +64,35 @@ function previewFile(paths, piece) {
 }
 
 let tmpDir = null;
-function inlineImage(file) {
+let browser = null;
+
+/** Without sips: draw the image at <= 1200 px on its long edge in chromium and screenshot a JPEG. */
+async function downscaleWithBrowser(file, mime) {
+  if (!browser) {
+    const { chromium } = await import('playwright');
+    browser = await chromium.launch();
+  }
+  const page = await browser.newPage({ deviceScaleFactor: 1 });
+  try {
+    await page.setContent(`<body style="margin:0"><img id="i" style="display:block" src="data:${mime};base64,${fs.readFileSync(file).toString('base64')}"></body>`);
+    const size = await page.$eval('#i', async (img, max) => {
+      await img.decode();
+      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const width = Math.max(1, Math.round(img.naturalWidth * k));
+      const height = Math.max(1, Math.round(img.naturalHeight * k));
+      img.style.width = `${width}px`;
+      img.style.height = `${height}px`;
+      return { width, height };
+    }, 1200);
+    await page.setViewportSize(size);
+    const jpg = await page.screenshot({ type: 'jpeg', quality: 85, clip: { x: 0, y: 0, ...size } });
+    return `data:image/jpeg;base64,${jpg.toString('base64')}`;
+  } finally {
+    await page.close();
+  }
+}
+
+async function inlineImage(file) {
   if (!tmpDir) tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'press-board-'));
   const jpg = path.join(tmpDir, `${path.basename(file).replace(/\W+/g, '-')}-${Math.random().toString(36).slice(2, 8)}.jpg`);
   const sips = spawnSync('sips', ['-Z', '1200', '-s', 'format', 'jpeg', file, '--out', jpg], { encoding: 'utf8' });
@@ -70,7 +100,13 @@ function inlineImage(file) {
     return `data:image/jpeg;base64,${fs.readFileSync(jpg).toString('base64')}`;
   }
   const mime = MIME[path.extname(file).toLowerCase()] || 'image/png';
-  return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
+  try {
+    return await downscaleWithBrowser(file, mime);
+  } catch (err) {
+    // Last resort: the raw file. main() still refuses a board of 16 MB or more.
+    console.error(`board.mjs: could not downscale ${file} (${err.message.split('\n')[0]}); inlining it as is`);
+    return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
+  }
 }
 
 /** Every job id a piece's copy or plan points at. */
@@ -97,6 +133,11 @@ function usesPlaceholder(runDir, jobIds, assets, picks) {
   });
 }
 
+/** Jobs with no usable image: no existing picked file and no existing assets.json file. */
+function missingJobs(runDir, jobIds) {
+  return jobIds.filter((j) => !pickImage(runDir, j));
+}
+
 function finalData(runDir, pieceId) {
   try {
     return readFinal(runDir, pieceId).data;
@@ -115,8 +156,34 @@ function reviewFor(review, pieceId) {
     .filter((b) => re.test(b));
 }
 
-function lintBlock(lint) {
-  if (!lint) return '<p class="muted">Not linted yet.</p>';
+/**
+ * critique/lint-<P>.json as {state}: 'missing' (never linted), 'crashed' (empty, not JSON, or
+ * voice-lint's fatal shape {fatal, errors:[{rule:'lint-crashed'}]}), or 'ok' with the result.
+ */
+function readLint(file) {
+  const text = readText(file);
+  if (text == null) return { state: 'missing' };
+  let lint;
+  try {
+    lint = JSON.parse(text);
+  } catch {
+    return { state: 'crashed', detail: text.trim() ? 'the lint file is not valid JSON' : 'the lint file is empty' };
+  }
+  if (!lint || typeof lint !== 'object') return { state: 'crashed', detail: 'the lint file holds no result' };
+  const crashed = (Array.isArray(lint.errors) ? lint.errors : []).find((e) => e?.rule === 'lint-crashed');
+  if (lint.fatal || crashed) {
+    const detail = typeof lint.fatal === 'string' ? lint.fatal : crashed?.match || 'voice-lint stopped before it finished';
+    return { state: 'crashed', detail };
+  }
+  return { state: 'ok', lint };
+}
+
+function lintBlock(result) {
+  if (result.state === 'missing') return '<p class="muted">Not linted yet.</p>';
+  if (result.state === 'crashed') {
+    return `<p class="lint-sum">Lint crashed</p><p class="muted">${esc(result.detail)}. Treat this piece as not linted and rerun voice-lint.</p>`;
+  }
+  const { lint } = result;
   const errors = Array.isArray(lint.errors) ? lint.errors : [];
   const warnings = Array.isArray(lint.warnings) ? lint.warnings : [];
   const row = (kind, f) => `<li><span class="lint-kind">${kind}</span> <code>${esc(f.rule)}</code> ${f.match ? `“${esc(f.match)}”` : ''}${f.line ? ` <span class="muted">line ${esc(f.line)}</span>` : ''}</li>`;
@@ -129,19 +196,21 @@ function tokensOf(entry) {
   if (typeof entry.tokens === 'number') return entry.tokens;
   const t = entry.tokens || entry.usage;
   if (t && typeof t === 'object') {
-    const sum = ['input', 'output', 'input_tokens', 'output_tokens'].reduce((n, k) => n + (Number(t[k]) || 0), 0);
+    const keys = ['input', 'output', 'input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'];
+    const sum = keys.reduce((n, k) => n + (Number(t[k]) || 0), 0);
     return sum || null;
   }
   return null;
 }
 
-function pieceCard(runDir, plan, piece, ctx) {
+async function pieceCard(runDir, plan, piece, ctx) {
   const paths = runPaths(runDir);
   const finalText = readText(path.join(paths.copy, `${piece.id}.final.md`));
   const rival = readText(path.join(paths.copy, `${piece.id}.sol.md`));
-  const lint = readJson(path.join(paths.critique, `lint-${piece.id}.json`), null);
+  const lint = readLint(path.join(paths.critique, `lint-${piece.id}.json`));
   const jobs = jobsFor(piece, finalData(runDir, piece.id));
   const placeholder = usesPlaceholder(runDir, jobs, ctx.assets, ctx.picks);
+  const missing = missingJobs(runDir, jobs);
   const preview = previewFile(paths, piece);
   const findings = reviewFor(ctx.review, piece.id);
 
@@ -150,7 +219,7 @@ function pieceCard(runDir, plan, piece, ctx) {
     const pitch = readText(path.join(paths.out, piece.id, 'pitch.md')) || readText(path.join(paths.compose, piece.id, 'pitch.md'));
     media = pitch ? `<pre class="preview pitch">${esc(pitch)}</pre>` : media;
   } else if (preview) {
-    media = `<img class="preview" src="${inlineImage(preview)}" alt="Rendered preview of ${esc(piece.id)}">`;
+    media = `<img class="preview" src="${await inlineImage(preview)}" alt="Rendered preview of ${esc(piece.id)}">`;
   }
   const mp4 = path.join(paths.out, piece.id, `${piece.id}.mp4`);
   const videoNote = piece.kind === 'video'
@@ -165,6 +234,7 @@ function pieceCard(runDir, plan, piece, ctx) {
     <p class="eyebrow">${esc(piece.id)} · ${esc(piece.kind)} · ${esc(piece.channel)}</p>
     <h2>${esc(piece.angle || piece.id)}</h2>
     ${placeholder ? '<p class="tag" title="A FLUX placeholder image: never final, never approved">PLACEHOLDER</p>' : ''}
+    ${missing.length ? `<p class="tag" title="No image for ${esc(missing.join(', '))}: never final, never approved">MISSING</p>` : ''}
   </header>
   <div class="card-body">
     <figure class="media">${media}${videoNote}${assetSources ? `<figcaption>${esc(assetSources)}</figcaption>` : ''}</figure>
@@ -264,7 +334,7 @@ table.ledger{ border-collapse:collapse; width:100%; font-size:0.88rem; }
 :focus-visible{ outline:2px solid var(--ink-soft); outline-offset:2px; }
 `;
 
-export function buildBoard(runDir) {
+export async function buildBoard(runDir) {
   const paths = runPaths(runDir);
   const plan = readPlan(runDir);
   const ctx = {
@@ -283,7 +353,17 @@ export function buildBoard(runDir) {
     ['Art direction', concept.artDirection],
   ].filter(([, v]) => v);
 
-  const html = `<!doctype html>
+  const cards = [];
+  try {
+    for (const p of pieces) cards.push(await pieceCard(runDir, plan, p, ctx));
+  } finally {
+    if (browser) await browser.close();
+    browser = null;
+    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+    tmpDir = null;
+  }
+
+  return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -304,41 +384,38 @@ export function buildBoard(runDir) {
   ${ctx.review ? `<details><summary>Full review (critique/review.md)</summary><pre class="final">${esc(ctx.review)}</pre></details>` : ''}
   <nav class="toc" aria-label="Pieces">${pieces.map((p) => `<a href="#${esc(p.id)}">${esc(p.id)} ${esc(p.kind)}</a>`).join('')}</nav>
 </header>
-${pieces.map((p) => pieceCard(runDir, plan, p, ctx)).join('\n')}
+${cards.join('\n')}
 <h2 class="section-title">Ledger</h2>
 ${ledgerTable(Array.isArray(ledger) ? ledger : [])}
 </main>
 </body>
 </html>
 `;
-  if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
-  tmpDir = null;
-  return html;
 }
 
-function main() {
+async function main() {
   const runDir = process.argv[2];
   if (!runDir) {
     console.error('usage: node marketing/tools/board.mjs <runDir>');
     process.exit(2);
   }
   const root = path.resolve(runDir);
-  const html = buildBoard(root);
+  const html = await buildBoard(root);
   const file = runPaths(root).board;
-  fs.writeFileSync(file, html);
   const bytes = Buffer.byteLength(html);
-  console.log(`wrote ${file} (${(bytes / 1024 / 1024).toFixed(2)} MB)`);
   if (bytes >= MAX_BYTES) {
-    console.error('board.mjs: board.html is 16 MB or larger; it will not publish as an artifact.');
+    // Never leave an oversize board (or the previous run's board) on disk to be published.
+    fs.rmSync(file, { force: true });
+    console.error(`board.mjs: the board would be ${(bytes / 1024 / 1024).toFixed(2)} MB (16 MB or more); not written, it would not publish as an artifact.`);
     process.exit(1);
   }
+  fs.writeFileSync(file, html);
+  console.log(`wrote ${file} (${(bytes / 1024 / 1024).toFixed(2)} MB)`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
-  try {
-    main();
-  } catch (err) {
+  main().catch((err) => {
     console.error(`board.mjs: ${err.message}`);
     process.exit(1);
-  }
+  });
 }

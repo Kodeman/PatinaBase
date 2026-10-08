@@ -15,13 +15,17 @@ Canon lives in `canon/` (`voice.md`, `claims.md`, `art-direction.md`, `channels.
 
 1. **Model gateway** (the Sol seat): `node ~/.claude/model-gateway/model-gateway.js setup`, then
    log in. `tools/sol.mjs` posts to `$GATEWAY_URL` (default `http://127.0.0.1:18764/v1/messages`).
+   `sol.mjs` and `preflight.mjs` refuse a `GATEWAY_URL` whose host is not 127.0.0.1, localhost
+   or ::1 unless `SOL_ALLOW_REMOTE=1`, so drafts never leave the machine by accident. A Sol call
+   gives up after `SOL_TIMEOUT_MS` (default 600000, ten minutes) and exits 1.
 2. **Playwright chromium** (renders): `npx playwright install chromium`. In a fresh worktree,
    install the package first: `pnpm install --filter @patina/marketing --offline`.
 3. **mflux** (local FLUX placeholders for jobs Kody has not filled): install the
    `mflux` Python package so `mflux-generate` is on `PATH` (for example `uv tool install mflux`).
 4. **ffmpeg** (video): `brew install ffmpeg`.
 5. **HyperFrames CLI** (video): `npm install -g hyperframes@0.8.142`. `render.mjs` calls
-   `npx --no-install hyperframes render`; without the CLI or ffmpeg, video renders are recorded
+   `npx --no-install hyperframes@0.8.142 render` and the compose workflow lints with the same
+   pinned CLI; nothing installs it mid-run. Without the CLI or ffmpeg, video renders are recorded
    `skipped` and show up that way in the compose result and on the board.
 6. **Midjourney style reference**: put Kody's `--sref` code on the `SREF:` line of
    `canon/art-direction.md` (it reads `SREF: {{SREF}}` until then; `mj-pack` warns).
@@ -40,15 +44,30 @@ From a Claude Code session in the repo, ask to "run the press" with a brief (the
 2. Preflight.
 3. Workflow `marketing-draft` with `{brief: "marketing/briefs/<file>.md"}` → content test,
    plan, rival drafts, judged finals, cold read, Midjourney prompt pack. Returns
-   `awaiting-midjourney` with `promptsPath`, or `refused` / `blocked` with a reason.
+   `awaiting-midjourney` with `promptsPath` (`awaiting-midjourney-with-failures` when some pieces
+   are not `ok`), or `refused` / `blocked` with a reason (`blocked` too when no piece is `ok`).
 4. Kody pastes each block of `mj/prompts.md` into Midjourney by hand and drops the results in
    `mj/inbox/<J>/`.
 5. Workflow `marketing-compose` with `{run: "<runDir>"}` → ingest, picks, compose, render,
-   review, one fix pass, board. Returns `ready-for-review` with the board path.
+   review, one fix pass, board. Returns `ready-for-review` with the board path when every piece
+   is `rendered`, `ready-with-failures` when some are not, and `blocked` when none are. Only
+   `rendered` is final: `image-missing` (no image for the piece; MISSING badge on the board),
+   `render-skipped`, `render-failed`, `compose-failed`, `lint-failed` and `revise-failed` are not.
 6. The main session publishes `board.html` as a **private** Artifact for review.
 7. "approve P01, P03" copies `out/<P>/` to `approved/<P>/` (PNGs compressed with `sips -Z`).
    "revise P02: …" reruns `marketing-compose` with `{run, pieces: ["P02"], feedback}`, which
    rewrites only those pieces' copy and re-composes and re-renders only them.
+
+## Residual risk
+
+Send-prevention for Workflow seats is **prompt-only**. Workflow `agent()` accepts a model,
+effort, schema and agent type but no tool allowlist, so every seat can reach every tool the
+session has, including connected mail, CMS and chat tools that can send or publish. What keeps
+them from sending is the "nothing leaves this machine" rule in every seat's prompt (asserted by
+`workflow.test.mjs`) and the main session watching the run. The tools themselves only write to
+the run folder, and `sol.mjs` / `preflight.mjs` refuse a non-loopback gateway. Closing this gap
+needs a dedicated agent type whose definition lists only file, Bash and Skill tools, passed as
+`agentType` to each seat; that is a separate change.
 
 ## Folder layout
 

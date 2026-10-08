@@ -11,7 +11,7 @@
  *   pr-pitch         pitch.md copy
  *   deck             <P>.html single file (relative images inlined) + <P>.pdf, one 1920x1080 page
  *                    per slide + <P>.png of the first slide; skipped until an agent composes it
- *   video            npx --no-install hyperframes render -> <P>.mp4, else skipped with the reason
+ *   video            npx --no-install hyperframes@0.8.142 render -> <P>.mp4, else skipped with the reason
  *
  * Network: only file:, data: and Google Fonts requests are allowed; everything else is aborted.
  * Fonts that fail to load (offline) fall back to the system serif/sans.
@@ -52,8 +52,11 @@ function inlineRelativeMedia(html, baseDir) {
   });
 }
 
+// The same pinned CLI the compose workflow lints with; --no-install never fetches it mid-run.
+const HYPERFRAMES = 'hyperframes@0.8.142';
+
 function hyperframesAvailable() {
-  const probe = spawnSync('npx', ['--no-install', 'hyperframes', '--version'], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 60000 });
+  const probe = spawnSync('npx', ['--no-install', HYPERFRAMES, '--version'], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 60000 });
   return probe.status === 0;
 }
 
@@ -69,10 +72,10 @@ async function renderPiece(browser, runDir, piece, record) {
 
   if (piece.kind === 'video') {
     if (!fs.existsSync(index)) return skip(`compose/${piece.id}/index.html is missing; video is composed by an agent from marketing/templates/video/`);
-    if (!hyperframesAvailable()) return skip('hyperframes CLI is not installed (npx --no-install hyperframes failed)');
+    if (!hyperframesAvailable()) return skip(`hyperframes CLI is not installed (npx --no-install ${HYPERFRAMES} failed)`);
     fs.mkdirSync(outDir, { recursive: true });
     const file = out(`${piece.id}.mp4`);
-    const run = spawnSync('npx', ['--no-install', 'hyperframes', 'render', composeDir, '--output', file], {
+    const run = spawnSync('npx', ['--no-install', HYPERFRAMES, 'render', composeDir, '--output', file], {
       cwd: REPO_ROOT, encoding: 'utf8', timeout: 15 * 60 * 1000,
     });
     if (run.status === 0 && fs.existsSync(file)) return ok(file, { format: 'mp4' });
