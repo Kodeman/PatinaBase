@@ -93,7 +93,8 @@ export function ClaimActs({
                 loadingLabel="Notifying…"
                 onClick={() => void run(c.id, 'vendor_notified')}
               >
-                Notify vendor
+                {/* US-19 F6-8 (D16) — the paper's word is maker. */}
+                {oneVoice ? 'Notify the maker' : 'Notify vendor'}
               </DocumentAction>
             )}
             {c.state === 'vendor_notified' && (

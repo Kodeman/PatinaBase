@@ -5,7 +5,7 @@
  * is told. The ledger with nothing focused is never the landing. Without the
  * landing armed, opening Receiving moves no focus.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReceivingBookPage, receivingClaimLanding } from '../orders-book-receiving';
 
@@ -29,6 +29,10 @@ jest.mock('@/components/portal/procurement/log-inspection-drawer', () => ({
   LogInspectionDrawer: () => null,
 }));
 jest.mock('@/lib/document/ledger-summary', () => ({ receivingFrontMatter: () => [] }));
+let mockOneVoice = false;
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (name: string) => ({ value: name === 'one-voice' && mockOneVoice, isLoading: false }),
+}));
 
 function claim(id: string, state: string) {
   return {
@@ -66,6 +70,29 @@ beforeEach(() => {
   notifiedClaims = [];
   claimsLoading = false;
   receivingClaimLanding.pending = false;
+  mockOneVoice = false;
+});
+
+describe('US-19 F6-8 (D16, one-voice) — the claim landing names the maker', () => {
+  it('File the claim lands on Notify the maker, the same control by its action key', async () => {
+    mockOneVoice = true;
+    draftedClaims = [claim('claim-1', 'drafted')];
+    receivingClaimLanding.pending = true;
+    renderPage();
+
+    const notify = screen.getByRole('button', { name: 'Notify the maker' });
+    expect(notify).toHaveAttribute('data-action-key', 'review-claim-notification');
+    await waitFor(() => expect(document.activeElement).toBe(notify));
+    expect(screen.queryByRole('button', { name: 'Notify vendor' })).toBeNull();
+
+    // The claim's own act inside the opened card reads the same.
+    fireEvent.click(notify);
+    expect(
+      screen
+        .getAllByRole('button', { name: 'Notify the maker' })
+        .map((el) => el.getAttribute('data-action-key')),
+    ).toEqual(['review-claim-notification', 'notify-vendor-of-claim']);
+  });
 });
 
 describe('File the claim lands on the Receiving claim card’s act (520-4)', () => {

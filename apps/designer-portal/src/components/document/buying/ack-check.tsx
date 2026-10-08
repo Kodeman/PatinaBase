@@ -15,7 +15,7 @@
  * held (R9): nothing here gates the PO's status.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   isChangeOrderRequired,
@@ -28,7 +28,9 @@ import {
   useVendorQuotes,
   type PoAckLineRow,
 } from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
+import { fmtDay } from '@/lib/document/format';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction } from '../document-action';
 import { LABEL_CLS } from '../line-unfold/cell';
@@ -101,13 +103,22 @@ export function AckDifferenceStamp({ purchaseOrderId }: { purchaseOrderId: strin
   );
 }
 
-function AgreementWord({ differs, delta }: { differs: boolean; delta: number | null }) {
+function AgreementWord({
+  differs,
+  delta,
+  oneVoice,
+}: {
+  differs: boolean;
+  delta: number | null;
+  oneVoice: boolean;
+}) {
   return differs ? (
     <span className={`font-medium ${DIFFERS_CLS}`}>
       differs{delta != null ? ` · ${fmtSignedCents(delta)}` : ''}
     </span>
   ) : (
-    <span className="text-[var(--text-muted)]">agrees</span>
+    // US-19 F6-9 (D17) — nobody has agreed yet; the row reads as ordered.
+    <span className="text-[var(--text-muted)]">{oneVoice ? 'as ordered' : 'agrees'}</span>
   );
 }
 
@@ -139,6 +150,33 @@ export function AckCheckForm({
   const [eta, setEta] = useState(confirmedEta ? confirmedEta.slice(0, 10) : '');
   const [done, setDone] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  // US-19 F6-9 (D17, `one-voice`) — on a PO nobody has acknowledged, the form
+  // stays behind a door until she opens it; a corrected ack opens straight in.
+  const { latest } = usePoAckSummary(oneVoice ? purchaseOrderId : null);
+  const behindDoor = oneVoice && !latest;
+  const [doorOpen, setDoorOpen] = useState(false);
+  const doorRef = useRef<HTMLDivElement | null>(null);
+  const poNoRef = useRef<HTMLInputElement | null>(null);
+  const landOn = useRef<'form' | 'door' | null>(null);
+  useEffect(() => {
+    const land = landOn.current;
+    landOn.current = null;
+    if (land === 'form') poNoRef.current?.focus();
+    if (land === 'door') doorRef.current?.querySelector<HTMLElement>('button')?.focus();
+  }, [doorOpen]);
+
+  // Esc on the opened form is Cancel: it closes, focus goes back to the door.
+  // The key is taken so the paper's put-down does not fire; mid-log it closes
+  // nothing.
+  const onFormKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!behindDoor || event.key !== 'Escape' || event.defaultPrevented) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (logAck.isPending) return;
+    landOn.current = 'door';
+    setDoorOpen(false);
+  };
 
   const showQuoted = rows.some((r) => r.quoted != null);
   const differences = rows.filter((r) => rowAgreement(r, current[r.key] ?? '') === 'differs').length;
@@ -184,8 +222,36 @@ export function AckCheckForm({
     );
   }
 
+  if (behindDoor && !doorOpen) {
+    return (
+      <div
+        ref={doorRef}
+        data-testid="ack-check-door"
+        className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1"
+      >
+        <p className="text-[11px] text-[var(--text-muted)]">
+          {[sentAt ? `sent to the maker ${fmtDay(sentAt)}` : null, 'awaiting acknowledgment']
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+        <DocumentAction
+          actionKey="open-po-acknowledgment"
+          surfaceKey="orders"
+          regionKey="po-acknowledgment"
+          variant="secondary"
+          onClick={() => {
+            landOn.current = 'form';
+            setDoorOpen(true);
+          }}
+        >
+          Log what they confirmed
+        </DocumentAction>
+      </div>
+    );
+  }
+
   return (
-    <div data-testid="ack-check" className="min-w-0">
+    <div data-testid="ack-check" className="min-w-0" onKeyDown={onFormKeyDown}>
       <p className="mb-1.5 text-[11px] text-[var(--text-muted)]">
         What they confirmed. Every value starts as the PO&rsquo;s — change only what differs.
       </p>
@@ -193,6 +259,7 @@ export function AckCheckForm({
         <label className="flex flex-col gap-0.5">
           <span className={LABEL_CLS}>Their order №</span>
           <input
+            ref={poNoRef}
             type="text"
             value={poNo}
             onChange={(e) => setPoNo(e.target.value)}
@@ -240,6 +307,7 @@ export function AckCheckForm({
                   value={current[row.key] ?? ''}
                   showQuoted={showQuoted}
                   disabled={logAck.isPending}
+                  oneVoice={oneVoice}
                   onChange={(v) => setValue(row.key, v)}
                 />
               ))}
@@ -251,7 +319,9 @@ export function AckCheckForm({
       {rows.length > 0 && (
         <p data-testid="ack-check-summary" className="mt-1.5 text-[11px] text-[var(--color-charcoal)]">
           {differences === 0
-            ? 'Everything agrees.'
+            ? oneVoice
+              ? 'Nothing differs from the order.'
+              : 'Everything agrees.'
             : `${differences} difference${differences === 1 ? '' : 's'}. Silence on a wrong acknowledgment counts as accepting it.`}
         </p>
       )}
@@ -275,7 +345,9 @@ export function AckCheckForm({
           onClick={() => void confirm()}
         >
           {differences === 0
-            ? 'Everything agrees — log it'
+            ? oneVoice
+              ? 'Log it — confirmed as ordered'
+              : 'Everything agrees — log it'
             : `Log it with ${differences} difference${differences === 1 ? '' : 's'}`}
         </DocumentAction>
       </div>
@@ -304,12 +376,14 @@ function FormRow({
   value,
   showQuoted,
   disabled,
+  oneVoice,
   onChange,
 }: {
   row: AckRow;
   value: string;
   showQuoted: boolean;
   disabled: boolean;
+  oneVoice: boolean;
   onChange: (value: string) => void;
 }) {
   const label = rowLabel(row.piece, row.field);
@@ -343,7 +417,11 @@ function FormRow({
         )}
       </td>
       <td data-testid="ack-row-word" className={`${CELL_CLS} whitespace-nowrap`}>
-        <AgreementWord differs={differs} delta={differs ? rowDelta(row, value) : null} />
+        <AgreementWord
+          differs={differs}
+          delta={differs ? rowDelta(row, value) : null}
+          oneVoice={oneVoice}
+        />
       </td>
     </tr>
   );

@@ -24,6 +24,7 @@ import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspect
 import { Stamp } from './stamp';
 import { receivingFrontMatter } from '@/lib/document/ledger-summary';
 import { fmtDay } from '@/lib/document/format';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import {
   InspectionPhotoStrip,
@@ -97,6 +98,9 @@ function OpenClaimRow({
 }) {
   const qc = useQueryClient();
   const updateClaim = useUpdateDamageClaim({ errorSurface: 'inline' });
+  // US-19 F6-8 (D16, `one-voice`) — the paper's word is maker.
+  const notifyLabel =
+    useFeatureFlag('one-voice').value === true ? 'Notify the maker' : 'Notify vendor';
   const [act, setAct] = useState<'notify' | 'resolve' | null>(null);
   const [description, setDescription] = useState<string>(
     claim.description ?? '',
@@ -193,7 +197,7 @@ function OpenClaimRow({
             }
             aria-expanded={act != null}
           >
-            {drafted ? 'Notify vendor' : 'Mark resolved'}
+            {drafted ? notifyLabel : 'Mark resolved'}
           </DocumentAction>
           <button
             type="button"
@@ -227,7 +231,7 @@ function OpenClaimRow({
             loadingLabel="Notifying…"
             onClick={() => void run('vendor_notified')}
           >
-            Notify vendor
+            {notifyLabel}
           </DocumentAction>
         </div>
       )}

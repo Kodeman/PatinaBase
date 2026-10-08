@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { StudioPurchaseRow } from '@patina/supabase';
 import { AckRecord, usePoAckSummary } from '../buying/ack-check';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { fmtDay } from '@/lib/document/format';
 import { NAMED_ACTS } from '@/lib/document/act-names';
 import { PurchaseFact } from '../purchases/purchase-fact';
@@ -45,9 +46,11 @@ export function OrderCell({
   const [changeOpen, setChangeOpen] = useState(false);
   // C-27: the acknowledgment's own stamp once a v2 ack is on file.
   const ack = usePoAckSummary(po?.acknowledged_at ? po.id : null);
+  // US-19 F6-8 (D16, `one-voice`) — the paper's word is maker.
+  const sentTo = useFeatureFlag('one-voice').value === true ? 'sent to the maker' : 'sent to vendor';
   const sub = po
     ? [
-        po.sent_at ? `sent to vendor ${fmtDay(po.sent_at)}` : 'not yet sent',
+        po.sent_at ? `${sentTo} ${fmtDay(po.sent_at)}` : 'not yet sent',
         po.sent_at
           ? po.acknowledged_at
             ? ack.copy

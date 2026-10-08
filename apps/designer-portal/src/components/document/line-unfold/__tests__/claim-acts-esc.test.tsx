@@ -80,3 +80,23 @@ describe('ClaimActs resolve form — Esc is Cancel (FR4 Fix 11)', () => {
     expect(screen.getByRole('textbox', { name: 'Resolution notes' })).toBeInTheDocument();
   });
 });
+
+// US-19 F6-8 (D16) — the line's claim landing (ffe-section's FFE_ACT_CONTROL
+// keys on the action key) names the maker under one-voice; off, vendor.
+describe('ClaimActs — the drafted claim’s act names the maker', () => {
+  const DRAFTED = [{ id: 'claim-1', state: 'drafted' }];
+
+  it('one-voice: Notify the maker, on the control the claim landing keys on', () => {
+    render(<ClaimActs claims={DRAFTED} />);
+    expect(screen.getByRole('button', { name: 'Notify the maker' })).toHaveAttribute(
+      'data-action-key',
+      'notify-vendor-of-ffe-claim',
+    );
+  });
+
+  it('flag off: Notify vendor, as today', () => {
+    mockOneVoice = false;
+    render(<ClaimActs claims={DRAFTED} />);
+    expect(screen.getByRole('button', { name: 'Notify vendor' })).toBeInTheDocument();
+  });
+});

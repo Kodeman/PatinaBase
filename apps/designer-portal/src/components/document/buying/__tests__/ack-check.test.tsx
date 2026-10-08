@@ -30,6 +30,10 @@ jest.mock('@patina/supabase', () => ({
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
+let mockOneVoice = false;
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (name: string) => ({ value: name === 'one-voice' && mockOneVoice, isLoading: false }),
+}));
 jest.mock('@/lib/analytics/procurement-events', () => ({
   procurementEvents: { poAcknowledgmentLogged: jest.fn() },
 }));
@@ -56,6 +60,7 @@ import {
 } from '../ack-check-model';
 import { AckCheckForm, AckRecord } from '../ack-check';
 import { OrderCell } from '../../line-unfold/order-cell';
+import { fmtDay } from '@/lib/document/format';
 
 const BASIS: AckBasis = {
   vendorId: 'vendor-hale',
@@ -110,6 +115,7 @@ beforeEach(() => {
   mockState.acks = [];
   mockState.costLines = [{ kind: 'freight', estimate_cents: 42000 }];
   mockState.quotes = [];
+  mockOneVoice = false;
 });
 
 describe('prefill', () => {
@@ -321,5 +327,113 @@ describe('resolving a difference', () => {
     fireEvent.click(within(screen.getByTestId('ack-line-line-price')).getByRole('button', { name: 'Accept theirs' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Start a change →' }));
     expect(screen.getByTestId('po-change-sheet')).toBeInTheDocument();
+  });
+});
+
+describe('US-19 F6-9 (D17, one-voice) — the acknowledgment form behind a door', () => {
+  beforeEach(() => {
+    mockOneVoice = true;
+  });
+
+  const SENT = '2026-10-01T12:00:00Z';
+  const openDoor = () => {
+    render(<AckCheckForm purchaseOrderId="po-1" sentAt={SENT} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Log what they confirmed' }));
+  };
+
+  it('an unacknowledged PO prints the fact and one door, and no input until it is pressed', async () => {
+    render(<AckCheckForm purchaseOrderId="po-1" sentAt={SENT} />);
+    expect(screen.getByTestId('ack-check-door')).toHaveTextContent(
+      `sent to the maker ${fmtDay(SENT)} · awaiting acknowledgment`,
+    );
+    expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+    expect(screen.queryByTestId('ack-check')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log what they confirmed' }));
+    const theirOrder = screen.getByRole('textbox', { name: 'Their order №' });
+    await waitFor(() => expect(document.activeElement).toBe(theirOrder));
+    expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
+  });
+
+  it('marks read "as ordered" until a value differs, with the order’s own summary and act', () => {
+    openDoor();
+    const word = () =>
+      within(screen.getByTestId('ack-row-ottoman:unit_price')).getByTestId('ack-row-word');
+    expect(word()).toHaveTextContent('as ordered');
+    expect(screen.getAllByTestId('ack-row-word').map((el) => el.textContent)).toEqual(
+      screen.getAllByTestId('ack-row-word').map(() => 'as ordered'),
+    );
+    expect(screen.getByTestId('ack-check-summary')).toHaveTextContent('Nothing differs from the order.');
+    expect(screen.getByRole('button', { name: 'Log it — confirmed as ordered' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Ottoman · price, they confirmed' }), {
+      target: { value: '1980.00' },
+    });
+    expect(word()).toHaveTextContent('differs · +$120.00');
+    expect(screen.getByRole('button', { name: 'Log it with 1 difference' })).toBeInTheDocument();
+  });
+
+  it('Esc on the form is Cancel: it closes, takes the key, and focus goes back to the door', async () => {
+    openDoor();
+    const theirOrder = screen.getByRole('textbox', { name: 'Their order №' });
+    const notTaken = fireEvent.keyDown(theirOrder, { key: 'Escape' });
+    expect(notTaken).toBe(false);
+    expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Log what they confirmed' }),
+      ),
+    );
+  });
+
+  it('keeps the after-log note', async () => {
+    openDoor();
+    fireEvent.click(screen.getByRole('button', { name: 'Log it — confirmed as ordered' }));
+    await waitFor(() => expect(mockLog).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('status')).toHaveTextContent('Acknowledged — everything agreed.');
+  });
+
+  it('a corrected acknowledgment (one already on file) opens straight into the form', () => {
+    mockState.acks = [DIFFERING_ACK];
+    render(<AckCheckForm purchaseOrderId="po-1" sentAt={SENT} />);
+    expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Their order №' })).toBeInTheDocument();
+  });
+
+  it('the Order cell says the order went to the maker (F6-8)', () => {
+    render(
+      <OrderCell
+        item={{ id: 'ottoman', vendor_name: 'Hale', vendor_id: 'vendor-hale' }}
+        po={{ id: 'po-1', po_number: 'PO-1042', status: 'sent', sent_at: SENT, acknowledged_at: null }}
+        reasons={[]}
+      />,
+    );
+    expect(screen.getByTestId('line-po-cell')).toHaveTextContent(
+      `sent to the maker ${fmtDay(SENT)} · awaiting acknowledgment`,
+    );
+  });
+});
+
+describe('flag off — the form stands open as today', () => {
+  const SENT = '2026-10-01T12:00:00Z';
+
+  it('prints no door and the form’s own words', () => {
+    render(<AckCheckForm purchaseOrderId="po-1" sentAt={SENT} />);
+    expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Everything agrees — log it' })).toBeInTheDocument();
+    expect(screen.getByTestId('ack-check-summary')).toHaveTextContent('Everything agrees.');
+  });
+
+  it('the Order cell keeps vendor', () => {
+    render(
+      <OrderCell
+        item={{ id: 'ottoman', vendor_name: 'Hale', vendor_id: 'vendor-hale' }}
+        po={{ id: 'po-1', po_number: 'PO-1042', status: 'sent', sent_at: SENT, acknowledged_at: null }}
+        reasons={[]}
+      />,
+    );
+    expect(screen.getByTestId('line-po-cell')).toHaveTextContent(
+      `sent to vendor ${fmtDay(SENT)} · awaiting acknowledgment`,
+    );
   });
 });

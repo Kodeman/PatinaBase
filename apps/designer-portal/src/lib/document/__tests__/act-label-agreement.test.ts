@@ -24,6 +24,7 @@ import {
   NAMED_ACTS,
   NEED_ACT_LABELS,
   STAGE_WORD,
+  ffeActLandingOf,
   needActLabel,
   ownAct,
   stageEyebrow,
@@ -492,6 +493,29 @@ describe('the Desk card speaks the band’s act (FR2 F2-2, 2-2)', () => {
     const claim = needOf('damage_claim');
     expect(deskCard(olsen, claim)).toBe(NAMED_ACTS.fileClaim);
     expect(deskCard(olsen, claim, false)).toBe('Review the claim');
+  });
+
+  // US-19 F6-8 (D16) — the band's File the claim lands by its name, not the
+  // control's string; the claim control it lands on (ClaimActs, the Receiving
+  // card: their suites render it) and the claim-window act name the maker.
+  it('Olsen: the claim landing and the claim window say Notify the maker', () => {
+    const olsen = row('install', { client_name: 'Per Olsen', title: 'Olsen Residence' });
+    const claim = needOf('damage_claim');
+    const next = deriveNext({
+      standing: [standingOf(claim, needGuideAction(claim, 'install', 'project-1', null, chenVoice).label)],
+      ownAct: null,
+      clientFirstName: null,
+      closed: false,
+    });
+    expect(next?.act.label).toBe(NAMED_ACTS.fileClaim);
+    expect(ffeActLandingOf(next!.act.label)).toBe('claim');
+
+    const claimWindow = needOf('claim_window');
+    const guide = needGuideAction(claimWindow, 'install', 'project-1', null, chenVoice).label;
+    expect(guide).toBe('Notify the maker');
+    expect(deskCard(olsen, claimWindow)).toBe('Notify the maker');
+    expect(deskCard(olsen, claimWindow, false)).toBe('Notify the vendor');
+    expect(needActLabel('ack_discrepancy')).toBe('Answer the maker');
   });
 });
 
