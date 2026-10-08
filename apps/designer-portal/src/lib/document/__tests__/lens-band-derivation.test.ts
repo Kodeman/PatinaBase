@@ -2288,6 +2288,35 @@ describe('deriveLensBand · FR7 F7-1: the relabel follows the PO number', () => 
   });
 });
 
+// US-19 F8-6 (SQ-556 risk) — document_state.unacked_po_label prefers po_number
+// while linePoNumber prefers vendor_po_number, so a PO with both set and
+// different misses the relabel unless the match takes either number.
+describe('deriveLensBand · F8-6: the relabel matches either PO number', () => {
+  it('a held note whose line PO has both numbers relabels the silence printed under the studio number', () => {
+    const note: LensNeedRow = {
+      ...need('draft-0', 'po_unacknowledged', 'Follow-up to the maker drafted', 'Review and send'),
+      owner: 'designer',
+      // `vendor_po_number WS-77` wins linePoNumber's `poNumber`, while the
+      // PO's own `po_number NA-2026-077` is the `studioPoNumber`.
+      draft: {
+        kind: 'maker_follow_up',
+        status: 'awaiting_review',
+        poNumber: 'WS-77',
+        studioPoNumber: 'NA-2026-077',
+      },
+    };
+    const silence: LensNeedRow = {
+      ...need('po-077', 'po_unacknowledged', 'NA-2026-077 sent — no acknowledgment', 'Follow up with the maker'),
+      owner: 'maker',
+    };
+    const { voice } = deriveLensBand(input({ now: NOW, ownAct: null, needs: [silence, note] }));
+    const rowOf = (standing: readonly LensStandingItem[], key: string) =>
+      standing.find((item) => item.key === key);
+    expect(rowOf(voice.standing, 'need:po-077')?.act?.label).toBe('Open the held draft');
+    expect(rowOf(voice.standing, 'need:draft-0')?.act?.label).toBe('Open the held draft');
+  });
+});
+
 /** FR6's Wren (walk D4/D13): the library ladder, due 3 October, not here. */
 const OCT_8 = new Date('2026-10-08T12:00:00');
 const WREN_ASK: LensOwnAct = {

@@ -255,6 +255,11 @@ export function buildDeskDrafts(rows: any): Map<string, DeskDraftSignal[]> | und
         ...(row.ffe_item?.id ? { makerLine: row.ffe_item } : {}),
         // FR7 F7-1: and that line's PO number, so the band relabels only its PO's silence.
         ...(row.ffe_item ? { poNumber: linePoNumber(row.ffe_item) } : {}),
+        // F8-6 (SQ-556 risk): and the studio's own PO number, since the silence
+        // row's label can carry either number when the two disagree.
+        ...(row.ffe_item
+          ? { studioPoNumber: row.ffe_item.purchase_order?.po_number ?? null }
+          : {}),
         // FR8 F8-2: and the PO a draft answers, so Answer the maker finds its line.
         ...(row.purchase_order_id ? { purchaseOrderId: String(row.purchase_order_id) } : {}),
       },

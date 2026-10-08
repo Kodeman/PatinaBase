@@ -216,6 +216,40 @@ describe('FR2 — the Desk speaks a held draft by its landing control', () => {
     expect(need.draft).toMatchObject({ id: 'd1', ffeItemId: 'ffe-1', poNumber: 'NA-2026-077' });
   });
 
+  // US-19 F8-6 (SQ-556 risk) — the PO's own po_number rides beside poNumber,
+  // so the band's relabel can match either number when the two disagree.
+  it('stamps the studio PO number (studioPoNumber) beside the maker number', () => {
+    const base = {
+      project_id: 'p1',
+      kind: 'maker_follow_up',
+      status: 'awaiting_review',
+      to_email: null,
+      subject: 's',
+      body: 'b',
+      created_at: '2026-10-06T09:00:00Z',
+    };
+    const map = buildDeskDrafts([
+      {
+        ...base,
+        id: 'd1',
+        ffe_item: { id: 'ffe-1', purchase_order: { po_number: 'NA-2026-077', vendor_po_number: 'WS-77' } },
+      },
+      {
+        ...base,
+        id: 'd2',
+        created_at: '2026-10-06T10:00:00Z',
+        ffe_item: { id: 'ffe-2', purchase_order: { po_number: 'NA-2026-079', vendor_po_number: null } },
+      },
+      { ...base, id: 'd3', kind: 'ack_chase', ffe_item: null },
+    ])!;
+    const [first, second, chase] = map.get('p1')!;
+    expect(first.poNumber).toBe('WS-77');
+    expect(first.studioPoNumber).toBe('NA-2026-077');
+    expect(second.poNumber).toBe('NA-2026-079');
+    expect(second.studioPoNumber).toBe('NA-2026-079');
+    expect(chase).not.toHaveProperty('studioPoNumber');
+  });
+
   // US-19 FR8 F8-2 — a PO-level reply carries its PO (no line), so the
   // band's `Answer the maker` can land on that PO's first line.
   it('stamps purchaseOrderId on an ack_discrepancy_reply draft', () => {

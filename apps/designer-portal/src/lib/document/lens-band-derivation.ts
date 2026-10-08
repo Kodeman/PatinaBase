@@ -94,8 +94,12 @@ export interface LensNeedRow extends RedLetterRow {
   /** FR5 F5-2 — the procurement draft the need carries (`NeedLine.draft`, the
    *  same drafts the Desk reads), where the caller hands it over. A held maker
    *  note renames the line's act `Open the held draft`; FR7 F7-1 — and the
-   *  silence row for its PO (`poNumber`). */
-  draft?: Pick<NonNullable<NeedLine['draft']>, 'kind' | 'status' | 'ffeItemId' | 'poNumber'> | null;
+   *  silence row for its PO (`poNumber`); F8-6 — matching either PO number
+   *  (`studioPoNumber`) when the two disagree (SQ-556 risk). */
+  draft?: Pick<
+    NonNullable<NeedLine['draft']>,
+    'kind' | 'status' | 'ffeItemId' | 'poNumber' | 'studioPoNumber'
+  > | null;
 }
 
 /** FR5 530-3 — a note to the maker held for review: a date request or a
@@ -196,6 +200,9 @@ export interface LensStandingItem {
   heldMakerNoteLine?: string;
   /** FR7 F7-1 — that held note's line PO number (`linePoNumber`). */
   heldMakerNotePo?: string;
+  /** F8-6 (SQ-556 risk) — that same line's studio PO number, so the silence
+   *  match takes either number when a PO's two numbers disagree. */
+  heldMakerNoteStudioPo?: string;
   /** D-B24 — the item's short form, for the 390 measure. */
   short: LensShortForm;
 }
@@ -840,6 +847,9 @@ export function rankStanding(
         ...(isHeldMakerNote(need.draft) && need.draft?.poNumber
           ? { heldMakerNotePo: need.draft.poNumber }
           : {}),
+        ...(isHeldMakerNote(need.draft) && need.draft?.studioPoNumber
+          ? { heldMakerNoteStudioPo: need.draft.studioPoNumber }
+          : {}),
       }),
     });
   });
@@ -1008,7 +1018,9 @@ function voiceItem(item: LensStandingItem, clientFirstName: string | null): Lens
  * FR7 F7-1 (538 Q1) — the relabel follows the PO number: the draft row itself,
  * and a silence row whose PO code (`short.subject`) is the held note's line PO
  * number. Any other silence keeps `Follow up with the maker` and its own
- * landing. Every other row is `voiceItem`'s.
+ * landing. Every other row is `voiceItem`'s. F8-6 (SQ-556 risk) — the match
+ * takes either of the held note's line's two PO numbers, since a PO's own
+ * number and the maker's can disagree.
  */
 function voiceStanding(
   standing: readonly LensStandingItem[],
@@ -1017,11 +1029,14 @@ function voiceStanding(
   const heldRow = standing.find((item) => item.heldMakerNote && item.act) ?? null;
   const held = heldRow?.act ?? null;
   const heldPo = heldRow?.heldMakerNotePo;
+  const heldStudioPo = heldRow?.heldMakerNoteStudioPo;
   return standing.map((item) =>
     held &&
     item.act &&
     item.needKind === 'po_unacknowledged' &&
-    (item.heldMakerNote || (heldPo !== undefined && item.short.subject === heldPo))
+    (item.heldMakerNote ||
+      (heldPo !== undefined && item.short.subject === heldPo) ||
+      (heldStudioPo !== undefined && item.short.subject === heldStudioPo))
       ? { ...item, act: { ...item.act, label: OPEN_THE_HELD_DRAFT, onAct: held.onAct } }
       : voiceItem(item, clientFirstName),
   );
@@ -1136,13 +1151,17 @@ function rowAct(
   const label = standingRowActLabel(row.kind, { firstName: clientFirstName, count: row.count });
   const lending = LENDING_NEED[row.kind];
   // FR7 F7-1: a held note's act is lent only to the silence for its PO; any
-  // other silence borrows a need's own act, never the held note's.
+  // other silence borrows a need's own act, never the held note's. F8-6
+  // (SQ-556 risk): the match takes either of the held note's line's two PO
+  // numbers, since a PO's own number and the maker's can disagree.
   const heldRow = voiced.find((item) => item.heldMakerNote && item.act);
   const lent = !lending
     ? null
     : lending === 'po_unacknowledged' &&
-        heldRow?.heldMakerNotePo !== undefined &&
-        shortSubject(sentence, undefined) === heldRow.heldMakerNotePo
+        ((heldRow?.heldMakerNotePo !== undefined &&
+          shortSubject(sentence, undefined) === heldRow.heldMakerNotePo) ||
+          (heldRow?.heldMakerNoteStudioPo !== undefined &&
+            shortSubject(sentence, undefined) === heldRow.heldMakerNoteStudioPo))
       ? (heldRow.act ?? null)
       : (voiced.find(
           (item) => item.needKind === lending && item.act && item.act.label !== OPEN_THE_HELD_DRAFT,

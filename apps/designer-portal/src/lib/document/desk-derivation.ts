@@ -396,6 +396,11 @@ export interface DeskDraftSignal {
    *  (stamped by the read, as `maker` is), so the band relabels only the
    *  silence row for the same PO. Absent otherwise. */
   poNumber?: string | null;
+  /** US-19 F8-6 (SQ-556 risk) — the same PO's own `po_number`, since
+   *  `document_state.unacked_po_label` can disagree with `linePoNumber`'s
+   *  `vendor_po_number ?? po_number` when both are set and differ. The
+   *  relabel matches either number. Absent otherwise. */
+  studioPoNumber?: string | null;
   /** US-19 FR8 F8-2 — the PO a PO-level draft (`ack_discrepancy_reply`)
    *  answers, so `Answer the maker` lands on that PO's first line. */
   purchaseOrderId?: string;
