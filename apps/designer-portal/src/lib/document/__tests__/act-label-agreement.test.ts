@@ -41,9 +41,11 @@ import { deriveDeskRoster } from '../desk-roster-derivation';
 import { deriveDocumentGuide, needGuideAction, voiceFirstName } from '../document-guide';
 import {
   deriveNext,
+  rankStanding,
   type LensOwnAct,
   type LensStandingItem,
 } from '../lens-band-derivation';
+import { classOfStandingRow } from '../need-class';
 import { deriveGate } from '../workflow-gate';
 
 const noop = () => {};
@@ -490,5 +492,65 @@ describe('the Desk card speaks the band’s act (FR2 F2-2, 2-2)', () => {
     const claim = needOf('damage_claim');
     expect(deskCard(olsen, claim)).toBe(NAMED_ACTS.fileClaim);
     expect(deskCard(olsen, claim, false)).toBe('Review the claim');
+  });
+});
+
+// US-19 FR3 F3-4 (2-2 a) — the Desk's lead need is the band's Next. Both are
+// derived here from the same chain of needs: the band the way
+// `deriveLensBand` builds line 2 (`rankStanding`, class 3 to `SETUP`, then
+// `deriveNext`), the Desk the way the Desk page builds its roster.
+describe('the Desk leads with the band’s Next (FR3 F3-4)', () => {
+  const now = new Date('2026-08-10T12:00:00Z');
+  const setupNeed = needOf('schedule_unconfigured', { text: 'Name the phases for this project' });
+
+  const bandNext = (needs: NeedLine[], own: LensOwnAct | null, first: string | null) => {
+    const ranked = rankStanding(
+      [],
+      needs.map((need, index) => ({ ...need, key: `n${index}`, onAct: noop })),
+      now,
+    );
+    return deriveNext({
+      standing: ranked.filter((item) => classOfStandingRow(item) !== 3),
+      setup: ranked
+        .filter((item) => classOfStandingRow(item) === 3)
+        .map((item) => ({
+          key: item.key,
+          setup: 'schedule_unconfigured' as const,
+          sentence: item.sentence,
+          act: item.act,
+          opensSheet: false,
+        })),
+      ownAct: own,
+      clientFirstName: first,
+      closed: false,
+    });
+  };
+  const deskLead = (r: DocumentStateRow, needs: NeedLine[]) =>
+    deriveDeskRoster(
+      { folders: [{ row: r, need: needs[0], needs }], chips: [], live: [r], oneVoice: true },
+      now,
+    ).groups[0].lines[0];
+
+  it('Halloran: Follow up with the maker on the Desk and the band, never the setup row', () => {
+    const halloran = row('project', { client_name: 'Ruth Halloran', title: 'Halloran House' });
+    const po = needOf('po_unacknowledged', {
+      text: 'NA-2026-077 sent 6 days ago — no acknowledgment',
+      owner: 'maker',
+    });
+    const needs = [setupNeed, po];
+    const band = bandNext(needs, lensOwnAct('project', {}), 'Ruth');
+    const desk = deskLead(halloran, needs);
+    expect(band?.act.label).toBe('Follow up with the maker');
+    expect(desk.act.label).toBe(band?.act.label);
+    expect(desk.needText).toBe(po.text);
+  });
+
+  it('a payment due (class 1) leads an overdue decision on both', () => {
+    const aspen = row('project', { client_name: 'Mei Lin', title: 'Aspen Loft Refresh' });
+    const decision = needOf('overdue_decision', { owner: 'client' });
+    const needs = [decision, setupNeed, chenPayment];
+    const band = bandNext(needs, lensOwnAct('project', {}), 'Mei');
+    expect(band?.act.label).toBe('Record the payment');
+    expect(deskLead(aspen, needs).act.label).toBe(band?.act.label);
   });
 });

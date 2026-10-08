@@ -105,6 +105,9 @@ export type MobilePrimaryAction = {
   disabled?: boolean;
   loading?: boolean;
   onSelected?: () => void;
+  /** US-19 FR3 F3-5 — the band's Next carries its sentence, so ⌘K prints the
+   *  paper's Next act with the band's own words beneath it. */
+  sentence?: string;
 };
 
 /** A surface-owned quiet act that belongs inside MobileBar's More disclosure. */
@@ -153,6 +156,12 @@ export function useMobileShell(): MobileShellValue {
   const v = useContext(Ctx);
   if (!v) throw new Error('useMobileShell requires MobileShellProvider');
   return v;
+}
+
+/** The registered primary act, or null outside a MobileShellProvider — for a
+ *  reader that may mount without one (⌘K, US-19 FR3 F3-5). */
+export function useMobilePrimaryActionValue(): MobilePrimaryAction | null {
+  return useContext(Ctx)?.primaryAction ?? null;
 }
 
 export function MobileShellProvider({
@@ -286,6 +295,7 @@ export function useMobilePrimaryAction(
   const surfaceKey = action?.surfaceKey ?? null;
   const regionKey = action?.regionKey ?? null;
   const label = action?.label ?? null;
+  const sentence = action?.sentence ?? null;
   const disabled = action?.disabled ?? false;
   const loading = action?.loading ?? false;
   const targetKind = action?.target.kind ?? null;
@@ -317,6 +327,7 @@ export function useMobilePrimaryAction(
     priority,
     regionKey,
     registerPrimaryAction,
+    sentence,
     surfaceKey,
     targetKind,
   ]);

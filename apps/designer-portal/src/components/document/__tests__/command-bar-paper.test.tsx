@@ -76,6 +76,7 @@ jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 
 import { CommandBar, openCommandBar } from '../command-bar';
 import { KeysShortcut } from '../keys-shortcut';
+import { MobileShellProvider, useMobilePrimaryAction } from '../mobile/mobile-shell';
 import { KEYS_SHEET_EVENT } from '../overlays/keys-sheet';
 import {
   LAND_RECORD_PAYMENT_EVENT,
@@ -508,9 +509,9 @@ describe('one-voice ⌘K (FR2)', () => {
     expect(screen.queryByRole('option', { name: /Open the pieces/ })).not.toBeInTheDocument();
   });
 
-  it('F2-23 / 507-4 — the ask row reads Ask the paper: "{query}", with no AI or Engine word', () => {
+  it('F2-23 / 507-4 / F3-14 — the ask row reads Ask the paper: “{query}”, with no AI or Engine word', () => {
     openAndType('c');
-    expect(groupOptions('Results')).toEqual(['Ask the paper: "c"ASK & PLACE']);
+    expect(groupOptions('Results')).toEqual(['Ask the paper: “c”ASK & PLACE']);
     const dialog = screen.getByRole('dialog', { name: 'Command bar' });
     expect(dialog.textContent).not.toMatch(/\b(AI|Engine)\b/);
   });
@@ -536,5 +537,219 @@ describe('one-voice ⌘K (FR2)', () => {
     mockPathname.mockReturnValue('/desk');
     openAndType('keys');
     expect(screen.getByText('The keys')).toBeInTheDocument();
+  });
+});
+
+// US-19 FR3 — the band's Next is a ⌘K row (F3-5), the ask strings (F3-14), and
+// the first Esc's focus (F3-17), all under `one-voice`.
+describe('one-voice ⌘K (FR3)', () => {
+  beforeEach(() => {
+    mockOneVoice = true;
+  });
+
+  type Next = { label: string; sentence: string; onPress: () => void };
+  /** The letterhead's D7 registration: the band's Next, for the dock's centre. */
+  function BandNext({ label, sentence, onPress }: Next) {
+    useMobilePrimaryAction(
+      {
+        actionKey: `next:${label}`,
+        surfaceKey: 'open-document',
+        regionKey: 'lens-band',
+        label,
+        sentence,
+        target: { kind: 'press', onPress },
+      },
+      { priority: 20 },
+    );
+    return null;
+  }
+  function openWithNext(next: Next, query: string) {
+    render(
+      <MobileShellProvider>
+        <BandNext {...next} />
+        <CommandBar />
+      </MobileShellProvider>,
+    );
+    act(() => openCommandBar());
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+      target: { value: query },
+    });
+  }
+  const actRow = (name: RegExp) =>
+    within(screen.getByRole('group', { name: 'Acts on this paper' })).getByRole('option', { name });
+
+  it.each([
+    ['Aspen', 'nudge', 'Nudge the client', 'Waiting on the client: Design Development sign-off — drawing set B'],
+    ['Olsen', 'claim', 'File the claim', 'AP-012 has an open damage claim'],
+    ['Halloran', 'maker', 'Follow up with the maker', 'With the maker: NA-2026-077 sent 6 days ago, unanswered'],
+  ])('F3-5 %s — %s finds the band’s Next: its act over its sentence, landing as its press', (_job, query, label, sentence) => {
+    const onPress = jest.fn();
+    openWithNext({ label, sentence, onPress }, query);
+    expect(screen.queryByText(`Nothing on this paper matches "${query}".`)).not.toBeInTheDocument();
+    const row = actRow(new RegExp(`^${label}`));
+    expect(row.querySelector('.font-medium')?.textContent).toBe(label);
+    expect(row).toHaveTextContent(sentence);
+    expect(screen.getAllByRole('option', { name: new RegExp(label) })).toHaveLength(1);
+    fireEvent.click(row);
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('F3-5 — the Next row is found by its sentence’s words, too', () => {
+    openWithNext(
+      { label: 'Follow up with the maker', sentence: 'With the maker: NA-2026-077 sent 6 days ago', onPress: jest.fn() },
+      'na-2026',
+    );
+    expect(actRow(/^Follow up with the maker/)).toBeInTheDocument();
+  });
+
+  it('F3-5 — Cedar: the Install reading row ends in Ask the maker for a date, once, landing as the band’s press', () => {
+    mockRow = chenRow({ active_section: 'install' });
+    const onPress = jest.fn();
+    const section = jest.fn();
+    window.addEventListener('document:open-section', section);
+    openWithNext(
+      {
+        label: 'Ask the maker for a date',
+        sentence: "Møbler Lounge Chair — Bouclé isn't here, and no arrival date is recorded. 1 more isn't here.",
+        onPress,
+      },
+      'date',
+    );
+    const paper = screen.getByRole('group', { name: 'On this paper · Chen Residence' });
+    const reading = within(paper).getAllByRole('option')[0];
+    expect(reading).toHaveTextContent('↵ Ask the maker for a date');
+    expect(reading).not.toHaveTextContent('Open Install');
+    expect(screen.getAllByRole('option', { name: /Ask the maker for a date/ })).toHaveLength(1);
+    fireEvent.click(reading);
+    window.removeEventListener('document:open-section', section);
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(section).not.toHaveBeenCalled();
+  });
+
+  it('F3-5 / 514-1 — Next is a payment: R27’s row is the Next row, printed once, with the band’s sentence', () => {
+    mockFolders = [
+      {
+        row: mockRow,
+        need: { kind: 'payment_due', text: 'Balance to Woodward & Sons · $3,400 due 12 May — WS-188' },
+        needs: [
+          {
+            kind: 'payment_due',
+            text: 'Balance to Woodward & Sons · $3,400 due 12 May — WS-188',
+            ledger: { name: 'orders', context: { page: 'payments', purchaseOrderId: 'po-188' } },
+          },
+        ],
+      },
+    ];
+    const onPress = jest.fn();
+    const sentence = 'Pay Woodward & Sons the WS-188 balance, $3,400 — 148 days overdue.';
+    openWithNext({ label: 'Record the payment', sentence, onPress }, 'pay');
+    const rows = screen.getAllByRole('option', { name: /Record the payment/ });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent(sentence);
+    const landed = jest.fn();
+    window.addEventListener(LAND_RECORD_PAYMENT_EVENT, landed);
+    fireEvent.click(rows[0]);
+    window.removeEventListener(LAND_RECORD_PAYMENT_EVENT, landed);
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(landed).not.toHaveBeenCalled();
+  });
+
+  it('flag off — the registered Next prints no row', () => {
+    mockOneVoice = false;
+    openWithNext({ label: 'Nudge the client', sentence: 'Waiting on the client', onPress: jest.fn() }, 'nudge');
+    expect(screen.queryByRole('option', { name: /Nudge the client/ })).not.toBeInTheDocument();
+  });
+
+  it('F3-14 — the Desk’s ask row keeps Ask about “{q}”, in typographic quotes', () => {
+    mockPathname.mockReturnValue('/desk');
+    openAndType('zzz');
+    expect(screen.getByRole('option', { name: /^Ask about “zzz”/ })).toBeInTheDocument();
+  });
+
+  it('F3-14 — the Direction paper’s ask row reads Ask the paper: “prop”', () => {
+    mockRow = chenRow({
+      engagement_kind: 'proposal',
+      engagement_id: 'eng-dir',
+      project_id: null,
+      proposal_id: 'prop-dir',
+      proposal_status: 'draft',
+      active_section: 'direction',
+      title: 'Living Room Direction',
+    });
+    mockPathname.mockReturnValue('/doc/eng-dir');
+    openAndType('prop');
+    expect(screen.getByRole('option', { name: /^Ask the paper: “prop”/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Ask about/)).not.toBeInTheDocument();
+  });
+
+  it('F3-14 / 513-5 — zero lines prints Open the pieces with no count', () => {
+    mockUseProjectFFEItems.mockReturnValue({ data: [] });
+    openAndType('zzz');
+    expect(optionNames()[0]).toBe('Open the pieces');
+  });
+
+  it('F3-14 / 513-5 — flag off, an open paper with no lines still prints · 0 lines', () => {
+    mockOneVoice = false;
+    mockUseProjectFFEItems.mockReturnValue({ data: [] });
+    openAndType('zzz');
+    expect(optionNames()[0]).toBe('Open the pieces · 0 lines');
+  });
+
+  describe('F3-17 — the first Esc returns focus', () => {
+    const flushFrames = () =>
+      act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+      });
+    function mountBand() {
+      const line = document.createElement('p');
+      line.setAttribute('data-lens-line', '2');
+      const bandAct = document.createElement('button');
+      bandAct.setAttribute('data-part', 'act');
+      bandAct.textContent = 'Nudge the client';
+      line.appendChild(bandAct);
+      document.body.appendChild(line);
+      return { bandAct, remove: () => line.remove() };
+    }
+
+    it('to the band’s act when nothing had it', async () => {
+      const { bandAct, remove } = mountBand();
+      (document.activeElement as HTMLElement | null)?.blur();
+      render(<CommandBar />);
+      act(() => openCommandBar());
+      await flushFrames();
+      fireEvent.keyDown(window, { key: 'Escape' });
+      await flushFrames();
+      expect(bandAct).toHaveFocus();
+      remove();
+    });
+
+    it('to the element that had it', async () => {
+      const { remove } = mountBand();
+      const opener = document.createElement('button');
+      opener.textContent = 'Find anything';
+      document.body.appendChild(opener);
+      opener.focus();
+      render(<CommandBar />);
+      act(() => openCommandBar());
+      await flushFrames();
+      fireEvent.keyDown(window, { key: 'Escape' });
+      await flushFrames();
+      expect(opener).toHaveFocus();
+      opener.remove();
+      remove();
+    });
+
+    it('flag off, nothing focused stays nothing focused', async () => {
+      mockOneVoice = false;
+      const { bandAct, remove } = mountBand();
+      (document.activeElement as HTMLElement | null)?.blur();
+      render(<CommandBar />);
+      act(() => openCommandBar());
+      await flushFrames();
+      fireEvent.keyDown(window, { key: 'Escape' });
+      await flushFrames();
+      expect(bandAct).not.toHaveFocus();
+      remove();
+    });
   });
 });

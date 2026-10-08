@@ -370,6 +370,8 @@ export function LetterheadInstruments({
           label: next.act.label,
           target: { kind: 'press', onPress: () => next.act.onAct() },
           disabled: next.act.disabled,
+          // FR3 F3-5 — ⌘K prints this act with the band's sentence.
+          sentence: next.sentence,
         }
       : null,
     { priority: MOBILE_ACTION_PRIORITY.next },

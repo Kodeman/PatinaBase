@@ -26,6 +26,7 @@ import {
 } from './desk-derivation';
 import { dayMonth, legalDate, parseSourceDate } from './dates';
 import { voiceFirstName } from './document-guide';
+import { deskLeadNeed } from './need-class';
 import {
   deriveOverdue,
   overdueElapsedPhrase,
@@ -367,7 +368,13 @@ export function deriveDeskRoster(
   const entries: RosterEntry[] = input.live.map((row) => {
     const folder = folderByEngagement.get(row.engagement_id) ?? null;
     const chip = deskMotion(chipByEngagement.get(row.engagement_id) ?? null, voice);
-    const need = folder?.need ?? null;
+    // FR3 F3-4 (`one-voice`) — the line leads with the band's Next, so a setup
+    // row never outranks a need that blocks money or needs her.
+    const need = folder
+      ? voice
+        ? deskLeadNeed(folder.needs ?? [folder.need], now)
+        : folder.need
+      : null;
     const needText = need ? deskNeedText(need, voice) : null;
     const actionLabel = need
       ? deskActionLabel(need, voice, voice ? voiceFirstName(row.client_name) : null)

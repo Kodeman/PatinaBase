@@ -1538,3 +1538,89 @@ describe('deriveDeskRoster — one voice (FR2 F2-2)', () => {
     for (const line of on.groups[0].lines) expect(line.state).not.toMatch(/\bBand\b/);
   });
 });
+
+// US-19 FR3 F3-4 — under `one-voice` the line leads with the band's Next
+// (`selectNext`: class 1 → 2 → own act → 3), so the setup row `Name the phases
+// for this project · Open the schedule` never outranks a class-2 need. The
+// chain's head is `deriveNeeds`' rule order, where setup stands above a PO.
+describe('deriveDeskRoster — the lead need is the band’s Next (FR3 F3-4)', () => {
+  const setup = need({
+    kind: 'schedule_unconfigured',
+    text: 'Name the phases for this project',
+    actionLabel: 'Open the schedule',
+    stamp: { label: 'SETUP', color: 'var(--color-clay)' },
+  });
+  const chained = (r: DocumentStateRow, needs: NeedLine[], oneVoice: boolean) =>
+    deriveDeskRoster(
+      input({ live: [r], folders: [{ row: r, need: needs[0], needs } as DeskFolder], oneVoice }),
+      NOW,
+    ).groups[0].lines[0];
+
+  it('Halloran — the unanswered PO leads: Follow up with the maker', () => {
+    const halloran = row('halloran', 'project', { client_name: 'Ruth Halloran' });
+    const po = need({
+      kind: 'po_unacknowledged',
+      text: 'NA-2026-077 sent 6 days ago — no acknowledgment',
+      actionLabel: 'Follow up with the maker',
+      dueOn: '2026-08-19',
+      owner: 'maker',
+    });
+    const on = chained(halloran, [setup, po], true);
+    expect(on.needKind).toBe('po_unacknowledged');
+    expect(on.act.label).toBe('Follow up with the maker');
+    expect(on.needText).toBe('NA-2026-077 sent 6 days ago — no acknowledgment');
+    expect(on.custody).toBe('With the maker');
+    // Flag off, today's head of the chain.
+    const off = chained(halloran, [setup, po], false);
+    expect(off.needKind).toBe('schedule_unconfigured');
+    expect(off.act.label).toBe('Open the schedule');
+  });
+
+  it('Cedar — the held date request (class 2) leads the setup row', () => {
+    const cedar = row('cedar', 'install');
+    const draft = need({
+      kind: 'po_unacknowledged',
+      text: 'Arrival date request to the maker drafted',
+      actionLabel: 'Review and send',
+      draft: {
+        id: 'd1',
+        kind: 'maker_eta_request',
+        status: 'awaiting_review',
+        to_email: null,
+        subject: 'Arrival date: Side table',
+        body: 'When?',
+        created_at: '2026-08-20T00:00:00Z',
+        maker: null,
+      },
+    });
+    const on = chained(cedar, [setup, draft], true);
+    expect(on.needKind).toBe('po_unacknowledged');
+    expect(on.act.label).toBe('Open the held draft');
+    expect(on.needText).toBe('Date request to the maker drafted — not sent.');
+    expect(chained(cedar, [setup, draft], false).act.label).toBe('Open the schedule');
+  });
+
+  it('class 1 leads class 2, as on the band', () => {
+    const r = row('chen', 'project');
+    const decision = need({ kind: 'overdue_decision', actionLabel: 'Review decisions' });
+    const payment = need({
+      kind: 'payment_due',
+      text: 'Balance to Woodward & Sons · $3,400 due 12 May — WS-188',
+      actionLabel: 'Record payment',
+      dueOn: '2026-05-12',
+    });
+    expect(chained(r, [decision, payment], true).act.label).toBe('Record the payment');
+  });
+
+  it('a need with no act is never the lead while one with an act stands', () => {
+    const r = row('lead', 'project');
+    const silent = need({ kind: 'reconnect_due', text: 'Reconnect by 1 Sept', actionLabel: null });
+    const task = need({ kind: 'task_due', actionLabel: 'Open the task' });
+    expect(chained(r, [silent, task], true).needKind).toBe('task_due');
+  });
+
+  it('setup alone still leads: the Desk holds no stage facts, so no own act', () => {
+    const r = row('quiet', 'install');
+    expect(chained(r, [setup], true).act.label).toBe('Open the schedule');
+  });
+});

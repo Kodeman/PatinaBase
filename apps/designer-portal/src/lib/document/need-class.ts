@@ -6,10 +6,11 @@
  * order is W3-R1's deadline order, the same comparator `rankStanding` uses.
  */
 
-import type { NeedKind } from './desk-derivation';
+import type { NeedKind, NeedLine } from './desk-derivation';
 import type { OwnAct } from './act-names';
 import {
   compareDeadline,
+  rankStanding,
   type LensStandingItem,
   type LensStandingTier,
 } from './lens-band-derivation';
@@ -127,4 +128,40 @@ export function selectNext<T extends StandingRow>({
     for (const row of ranked) order.push({ kind: 'need', row });
   }
   return order.find(canTake) ?? null;
+}
+
+const NEED_KEY = 'need:';
+
+/**
+ * FR3 F3-4 — the Desk's lead need is the band's Next. The folder's needs are
+ * ranked as the band ranks them (`rankStanding`, then `selectNext`), so a
+ * class-3 setup row never outranks a class-1 or class-2 need. A need with no
+ * act cannot be taken, as on the band. The Desk holds no stage facts, so it
+ * has no own act; where nothing can be taken the head of the chain leads, as
+ * before.
+ */
+export function deskLeadNeed<N extends NeedLine>(needs: readonly N[], now: Date): N | null {
+  if (needs.length <= 1) return needs[0] ?? null;
+  const ranked = rankStanding(
+    [],
+    needs.map((need, index) => ({
+      key: String(index),
+      kind: need.kind,
+      text: need.text,
+      actionLabel: need.actionLabel,
+      onAct: () => {},
+      urgent: need.urgent,
+      dueOn: need.dueOn ?? null,
+      owner: need.owner,
+    })),
+    now,
+  );
+  const choice = selectNext({
+    needs: ranked,
+    ownAct: null,
+    canTake: (option) => option.kind === 'need' && option.row.act !== null,
+    closed: false,
+  });
+  if (choice?.kind !== 'need') return needs[0];
+  return needs[Number(choice.row.key.slice(NEED_KEY.length))] ?? needs[0];
 }

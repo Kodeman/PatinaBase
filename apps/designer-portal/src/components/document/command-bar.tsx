@@ -48,6 +48,7 @@ import {
   topActiveModalDialog,
 } from './overlays/active-dialog';
 import { openFeedbackSheet } from './feedback/open-feedback';
+import { useMobilePrimaryActionValue, type MobilePrimaryAction } from './mobile/mobile-shell';
 import { openHelp } from '@/lib/help-system/open-help';
 import { openLogTime } from './log-time-sheet';
 import { openKeys } from './overlays/keys-sheet';
@@ -170,6 +171,15 @@ interface PaletteSection {
   rows: PaletteRow[];
   /** US-19 D4 — a printed line above the rows (the dry query's sentence). */
   note?: string;
+}
+
+/** The band's act on line 2 (`lens-band.tsx`), FR3 F3-17's Esc landing. */
+const BAND_ACT_SELECTOR = '[data-lens-line="2"] [data-part="act"]';
+
+/** FR3 F3-5 — a ⌘K row for the band's Next lands as the band's press does:
+ *  the press the letterhead registered for the dock's centre (D7). */
+function pressBandNext(next: MobilePrimaryAction) {
+  if (next.target.kind === 'press') next.target.onPress();
 }
 
 /** US-19 slice 1 — ⌘K searches the open paper, fail-closed. */
@@ -405,6 +415,16 @@ export function CommandBar() {
   // US-19 D1/Q4 (`one-voice`) — `Where the work stands` names each stage by
   // one of the seven words. Fail-closed.
   const oneVoice = useFeatureFlag('one-voice').value === true;
+  // US-19 FR3 F3-5 — the band's Next, as the letterhead registers it for the
+  // dock's centre (D7): its act, its sentence, and the band's own press.
+  const primaryAction = useMobilePrimaryActionValue();
+  const bandNext =
+    oneVoice &&
+    primaryAction?.regionKey === 'lens-band' &&
+    primaryAction.target.kind === 'press' &&
+    !primaryAction.disabled
+      ? primaryAction
+      : null;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -446,7 +466,14 @@ export function CommandBar() {
           setSearchAll(false);
           setActive(0);
           inputRef.current?.focus();
-        } else setOpen(false);
+        } else {
+          // FR3 F3-17 (`one-voice`) — with nothing focused when ⌘K opened,
+          // the first Esc lands on the band's act rather than on <body>.
+          if (oneVoice && !restoreFocusRef.current) {
+            restoreFocusRef.current = document.querySelector<HTMLElement>(BAND_ACT_SELECTOR);
+          }
+          setOpen(false);
+        }
       }
     };
     // The Desk header's "Find anything" button dispatches this — an affordance,
@@ -465,7 +492,7 @@ export function CommandBar() {
       window.removeEventListener('keydown', onKey, { capture: true });
       window.removeEventListener('document:open-command-bar', onAffordance);
     };
-  }, [open, asking, searchAll]);
+  }, [open, asking, searchAll, oneVoice]);
 
   // F21 — restore focus to whatever opened ⌘K when it closes. Captured here
   // (not read fresh on close) because by close time the palette's own last
@@ -1165,11 +1192,16 @@ export function CommandBar() {
       // to `No match`.
       const typedStageRows = stageRows.filter((r) => r.match.includes(q));
       matches = list.length + typedStageRows.length;
-      // The Engine's ask (R38), offered for every non-empty query.
+      // The Engine's ask (R38), offered for every non-empty query. FR2 507-4 /
+      // FR3 F3-14 (`one-voice`) — with any paper in hand it reads `Ask the
+      // paper: “{q}”`; the Desk, holding no paper, keeps `Ask about “{q}”`.
       const engineRow: PaletteRow = {
         kind: 'engine',
         key: 'engine',
-        label: `Ask about “${query.trim()}”`,
+        label:
+          oneVoice && inHandRow
+            ? `Ask the paper: “${query.trim()}”`
+            : `Ask about “${query.trim()}”`,
         sub: 'ASK & PLACE',
         match: '',
       };
@@ -1236,20 +1268,31 @@ export function CommandBar() {
                 true,
               )
             : null;
+        // FR3 F3-5 (`one-voice`) — when the band's Next is the reading's own act
+        // (`Ask the maker for a date`), this row IS the Next row: it ends in
+        // that act, is found by its words too, and lands as the band's press.
+        const readingNext =
+          bandNext && reading?.act?.label === bandNext.label ? bandNext : null;
+        const readingMatch = [reading?.sentence, readingNext?.label]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
         const readingRows: PaletteRow[] =
-          reading && (resolves.has('install-reading') || hits(reading.sentence.toLowerCase()))
+          reading && (resolves.has('install-reading') || hits(readingMatch))
             ? [
                 {
                   kind: 'paper',
                   key: 'paper-install-reading',
                   label: reading.sentence,
                   sub: '',
-                  act: 'Open Install',
+                  act: readingNext?.label ?? 'Open Install',
                   run: () =>
-                    window.dispatchEvent(
-                      new CustomEvent('document:open-section', { detail: 'install' }),
-                    ),
-                  match: reading.sentence.toLowerCase(),
+                    readingNext
+                      ? pressBandNext(readingNext)
+                      : window.dispatchEvent(
+                          new CustomEvent('document:open-section', { detail: 'install' }),
+                        ),
+                  match: readingMatch,
                 },
               ]
             : [];
@@ -1340,6 +1383,26 @@ export function CommandBar() {
           'record-a-change-here',
         ]);
         const acts: PaletteRow[] = [];
+        // FR3 F3-5 (`one-voice`) — the paper's Next act, first: the band's act
+        // over the band's sentence, found by either's words, landing as the
+        // band's press. Where Next is a payment it is R27's row below (514-1),
+        // and where it is the Install reading's act it is that row above.
+        const recordPayment = NEED_ACT_LABELS.payment_due;
+        const moneyAsked = resolves.has('money-acts');
+        const nextIsPayment = bandNext?.label === recordPayment;
+        const nextMatch = bandNext
+          ? `${bandNext.label} ${bandNext.sentence ?? ''}`.toLowerCase()
+          : '';
+        if (bandNext && !readingNext && !nextIsPayment && hits(nextMatch)) {
+          acts.push({
+            kind: 'action',
+            key: 'paper-next',
+            label: bandNext.label,
+            sub: bandNext.sentence ?? '',
+            run: () => pressBandNext(bandNext),
+            match: nextMatch,
+          });
+        }
         if (addChangeRow && (addChangeRow.match.includes(q) || resolves.has('record-a-change'))) {
           acts.push(addChangeRow);
         }
@@ -1349,19 +1412,30 @@ export function CommandBar() {
         // R27 — each Money head act as printed is its own row: `Record the
         // payment` first when a payment is due on this job, then `Draw an
         // invoice`. The due payment is the Desk's own `payment_due` need.
-        const moneyAsked = resolves.has('money-acts');
         const paymentDue =
           (data?.folders ?? [])
             .filter((folder) => folder.row.engagement_id === paperProject.engagement_id)
             .flatMap((folder) => folder.needs ?? [folder.need])
             .find((need) => need.kind === 'payment_due') ?? null;
-        const recordPayment = NEED_ACT_LABELS.payment_due;
         // US-19 F2-3 (P-1) — the row points at the PO line's record-payment
         // control, as the band does; the Orders ledger is not a landing.
         const landingPoId = oneVoice
           ? paymentDue?.ledger?.context?.purchaseOrderId
           : undefined;
-        if (paymentDue && (moneyAsked || recordPayment.toLowerCase().includes(q))) {
+        if (bandNext && nextIsPayment) {
+          // FR3 F3-5 / 514-1 — Next is a payment: this one row follows
+          // whichever payment the band's Next names, and lands as its press.
+          if (moneyAsked || hits(nextMatch)) {
+            acts.push({
+              kind: 'action',
+              key: 'record-payment-here',
+              label: recordPayment,
+              sub: bandNext.sentence ?? '',
+              run: () => pressBandNext(bandNext),
+              match: nextMatch,
+            });
+          }
+        } else if (paymentDue && (moneyAsked || recordPayment.toLowerCase().includes(q))) {
           acts.push({
             kind: 'action',
             key: 'record-payment-here',
@@ -1402,16 +1476,20 @@ export function CommandBar() {
           });
         }
 
+        // FR3 F3-5 — the Next act prints once: a Money or surface row that
+        // carries the same act gives way to the Next row.
+        if (bandNext) {
+          const first = acts.findIndex((r) => r.label === bandNext.label);
+          for (let i = acts.length - 1; i > first; i--) {
+            if (acts[i].label === bandNext.label) acts.splice(i, 1);
+          }
+        }
         const onPaper = new Set(paperRows.map((r) => r.key));
         const actLabels = new Set(acts.map((r) => r.label));
         const isHelp = (r: PaletteRow) => r.kind === 'help' || r.key === 'help-panel';
         // FR2 507-5 — the one `Keys` door prints once: an act this paper
         // already prints is not repeated under Help.
         const helpRows = list.filter((r) => isHelp(r) && !actLabels.has(r.label));
-        // FR2 507-4 — the ask row on a paper: no "AI", no "Engine", no model word.
-        const askRow: PaletteRow = oneVoice
-          ? { ...engineRow, label: `Ask the paper: "${typed}"` }
-          : engineRow;
         // FR2 F2-11 — a closed job's dry query is one sentence: no pieces row.
         const closed = oneVoice && paperProject.project_status === 'completed';
         // R25 — today's cross-paper hits; an act this paper already prints is
@@ -1441,7 +1519,11 @@ export function CommandBar() {
                   {
                     kind: 'paper',
                     key: 'paper-open-pieces',
-                    label: `${OPEN_THE_PIECES} · ${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`,
+                    // FR3 F3-14 / 513-5 (`one-voice`) — zero prints no count.
+                    label:
+                      oneVoice && lines.length === 0
+                        ? OPEN_THE_PIECES
+                        : `${OPEN_THE_PIECES} · ${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`,
                     sub: '',
                     run: () => jumpToRegion('ffe'),
                     match: '',
@@ -1460,7 +1542,7 @@ export function CommandBar() {
           rows: [searchAllRow, ...typedStageRows, ...elsewhere],
         });
         // R24 — the Engine's ask stands after Elsewhere, before Help.
-        sections.push({ eyebrow: null, rows: [askRow] });
+        sections.push({ eyebrow: null, rows: [engineRow] });
         const help = helpRows.length ? helpRows : dry ? [openHelpRow] : [];
         if (help.length) sections.push({ eyebrow: 'Help', rows: help });
         matches =
@@ -1535,6 +1617,7 @@ export function CommandBar() {
     oneVoice,
     paperLines,
     searchAll,
+    bandNext,
   ]);
 
   // F1 — queried (debounced ~300ms, not per-keystroke) + zeroResult.

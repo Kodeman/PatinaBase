@@ -302,7 +302,8 @@ export const STUDIO_VERBS: StudioSurface[] = [
     scope: 'global',
     help: {
       surfaceKey: 'designer-portal/document/desk',
-      blurb: 'Open the Contract Room for an existing household — the services agreement, not a proposal.',
+      // FR3 F3-14 / 513-6 — D1 retires `Contract Room` as a printed name.
+      blurb: 'Draft a design agreement for an existing household — the services agreement, not a proposal.',
     },
   },
   {
