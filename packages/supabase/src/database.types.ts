@@ -20227,6 +20227,66 @@ export type Database = {
           },
         ]
       }
+      project_room_handbacks: {
+        Row: {
+          handed_back_at: string
+          handed_back_by: string
+          id: string
+          project_id: string
+          project_room_id: string
+        }
+        Insert: {
+          handed_back_at?: string
+          handed_back_by: string
+          id?: string
+          project_id: string
+          project_room_id: string
+        }
+        Update: {
+          handed_back_at?: string
+          handed_back_by?: string
+          id?: string
+          project_id?: string
+          project_room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_room_handbacks_handed_back_by_fkey"
+            columns: ["handed_back_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_room_handbacks_handed_back_by_fkey"
+            columns: ["handed_back_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_room_handbacks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_room_handbacks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_room_handbacks_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_rooms: {
         Row: {
           actual_cents: number | null
@@ -35598,6 +35658,17 @@ export type Database = {
         }
         Returns: boolean
       }
+      _client_line_rooms: {
+        Args: {
+          p_ffe_item_id: string
+          p_frozen: boolean
+          p_quantity: number
+          p_room_name: string
+          p_snapshot: Json
+          p_unit: string
+        }
+        Returns: Json
+      }
       _clone_proposal_legacy_00399: {
         Args: {
           p_mode?: string
@@ -36231,6 +36302,12 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _furnishing_authorization_item_snapshot: {
+        Args: {
+          p_line: Database["public"]["Tables"]["project_ffe_items"]["Row"]
+        }
+        Returns: Json
       }
       _install_window_phase: { Args: { p_project_id: string }; Returns: string }
       _instantiate_product_configuration_template_impl: {
@@ -40823,6 +40900,10 @@ export type Database = {
         }
         Returns: Json
       }
+      hand_back_project_room: {
+        Args: { p_project_room_id: string }
+        Returns: Json
+      }
       has_designer_domain_role: {
         Args: { p_user_id: string }
         Returns: boolean
@@ -41397,6 +41478,70 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "project_time_entries"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      make_ffe_line_allowance: {
+        Args: { p_budget_max_cents: number; p_item_id: string }
+        Returns: {
+          added_via: string | null
+          assignment_scope: string
+          blocked: boolean | null
+          blocked_by_decision_id: string | null
+          blocked_reason: string | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          created_at: string
+          currency: string
+          custom_fields: Json
+          design_disposition: string
+          doc_code: string | null
+          eta: string | null
+          ffe_category: string | null
+          id: string
+          installed_on: string | null
+          item_type: string
+          last_status_change_at: string | null
+          line_kind: string
+          line_total_cents: number | null
+          link_kind: string | null
+          markup_percent: number | null
+          name: string
+          notes: string | null
+          parent_ffe_item_id: string | null
+          po_number: string | null
+          product_id: string | null
+          project_id: string
+          project_room_id: string | null
+          purchase_order_id: string | null
+          quantity: number
+          received_quantity: number | null
+          removal_reason: string | null
+          removed_at: string | null
+          removed_by: string | null
+          removed_disposition: string | null
+          role_identity: string
+          rough_cents: number | null
+          selection_thread_id: string
+          sort_order: number
+          source_authorization_item_id: string | null
+          source_commercial_document_id: string | null
+          source_decision_id: string | null
+          source_proposal_item_id: string | null
+          status: string
+          supersedes_ffe_item_id: string | null
+          trade_price_cents: number | null
+          trade_scope_document_id: string | null
+          unit: string
+          unit_price_cents: number | null
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_items"
           isOneToOne: true
           isSetofReturn: false
         }
