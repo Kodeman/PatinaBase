@@ -142,10 +142,13 @@ export function RegionHead({
   onFold,
   allowNoActs = false,
   actsAtQuiet = 'all',
-  leader = true,
+  leader: leaderProp = true,
   silent = false,
   leaderless = false,
 }: RegionHeadProps) {
+  // SQ-514 `leader` (no receivable due) and SQ-518 `leaderless` (a create act
+  // at index 0) both leave entry 0 its declared variant.
+  const leader = leaderProp && !leaderless;
   const showFold = Boolean(bodyId && onFold);
   const printedActions =
     actsAtQuiet === 'leader' ? actions.slice(0, leader ? 1 : 0) : actions;
@@ -257,7 +260,7 @@ export function RegionHead({
         >
           {printedActions.map((entry, index) => {
             const variant: DocumentActionVariant =
-              index === 0 && leader && !leaderless ? 'inked' : (entry.variant ?? 'secondary');
+              index === 0 && leader ? 'inked' : (entry.variant ?? 'secondary');
             const shared = {
               actionKey: entry.key,
               variant,
