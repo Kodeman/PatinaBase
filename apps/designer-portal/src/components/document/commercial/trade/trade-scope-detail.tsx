@@ -19,6 +19,7 @@
 
 import { useState } from 'react';
 import { Hammer } from 'lucide-react';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
   useCommercialDocument,
   useEngageTradeScope,
@@ -302,6 +303,8 @@ export function TradeScopeDetail({
     (signature) => signature.party === 'client' && signature.executedOnPaper,
   );
   const executedOnPaper = Boolean(paperSignature);
+  // FR4 Fix 12 (`one-voice`) — a ratio reads as a fraction; split it.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   const [error, setError] = useState<string | null>(null);
   const [workOrderOpen, setWorkOrderOpen] = useState(false);
   const [paperAct, setPaperAct] = useState<'execution' | 'acceptance' | null>(
@@ -395,10 +398,20 @@ export function TradeScopeDetail({
                   : 'Not raised'
             }
           />
-          <Figure
-            label="draws issued"
-            value={`${scope.drawsIssued} of ${scope.drawCount}`}
-          />
+          {oneVoice ? (
+            <>
+              <Figure label="draws issued" value={String(scope.drawsIssued)} />
+              <Figure
+                label="draws left"
+                value={String(scope.drawCount - scope.drawsIssued)}
+              />
+            </>
+          ) : (
+            <Figure
+              label="draws issued"
+              value={`${scope.drawsIssued} of ${scope.drawCount}`}
+            />
+          )}
           <Figure label="draws paid" value={String(scope.drawsPaid)} />
         </div>
 

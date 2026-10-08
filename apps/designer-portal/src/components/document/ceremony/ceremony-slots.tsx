@@ -13,6 +13,7 @@
  */
 
 import type { CeremonySlot } from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocumentAction } from '../document-action';
 
 export const SLOT_DURATION_MINUTES = 45;
@@ -76,6 +77,8 @@ export function CeremonySlots({
   };
 
   const n = slots.length;
+  // FR4 Fix 12 (`one-voice`) — a ratio reads as a fraction; convert it.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   return (
     <div>
@@ -120,7 +123,7 @@ export function CeremonySlots({
       )}
 
       <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        {n} of {MAX_SLOTS} offered ·{' '}
+        {oneVoice ? `${n} offered` : `${n} of ${MAX_SLOTS} offered`} ·{' '}
         {n < 2 ? 'offer at least two' : 'offer two or three'}
       </p>
     </div>

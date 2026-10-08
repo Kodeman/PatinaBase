@@ -13,9 +13,14 @@ import { ProposalInstruments } from '../proposal-instruments';
 
 let mockProposal: Record<string, unknown> = {};
 let mockFeedback: Array<Record<string, unknown>> = [];
+let mockOneVoice = false;
 
 jest.mock('@patina/supabase', () => ({
   useProposalFeedback: () => ({ data: mockFeedback }),
+}));
+
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (key: string) => ({ value: key === 'one-voice' ? mockOneVoice : false }),
 }));
 
 jest.mock('@/hooks/use-proposals', () => ({
@@ -72,6 +77,7 @@ const approvals = (n: number) =>
 describe('the wall stands down what the table’s head has taken', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOneVoice = false;
     mockProposal = {
       id: 'proposal-1',
       status: 'sent',
@@ -123,5 +129,20 @@ describe('the wall stands down what the table’s head has taken', () => {
     expect(
       screen.getByRole('button', { name: /Nudge Avery Stone/ }),
     ).toBeInTheDocument();
+  });
+
+  it('FR4 Fix 13 (524-g): one-voice never hoists Preview — the watch keeps its own', () => {
+    mockOneVoice = true;
+    mockFeedback = [];
+    renderWall({ onFinalizeTable: true });
+    // No verdicts would otherwise hoist the Preview act; under one-voice the
+    // table's head leaves it be, since Preview is the letterhead's alone.
+    expect(mockWatchProps).toHaveBeenCalledWith(null);
+  });
+
+  it('flag off: Finalize keeps hoisting Preview exactly as before', () => {
+    mockFeedback = [];
+    renderWall({ onFinalizeTable: true });
+    expect(mockWatchProps).toHaveBeenCalledWith('preview');
   });
 });

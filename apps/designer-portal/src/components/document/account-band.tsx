@@ -36,6 +36,7 @@ import { DocumentAction, DocumentActionGroup } from './document-action';
 import { AccountsQueryFailure } from './accounts/accounts-query-failure';
 import { SectionLoadingLine } from './section-loading-line';
 import { useCanSeeMargin } from '@/hooks/use-can-see-margin';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 const SAGE_INK = 'var(--color-sage-ink)';
 const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
@@ -199,6 +200,8 @@ export function AccountBand({
   // R1 — margin % · the trade → client line · est. commissions (client −
   // trade) show only to a viewer who may see margin.
   const canSeeMargin = useCanSeeMargin();
+  // FR4 Fix 12 (`one-voice`) — a ratio reads as a fraction; convert it.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
   // Standalone, the band is an organ standing BETWEEN two stops on the paper
   // (care → record), so its top edge is the one region gap. Headless it is a
   // sub-seam inside the money region and keeps that region's own rhythm.
@@ -369,8 +372,11 @@ export function AccountBand({
                 'No trade pricing on committed lines yet.'
               )}
               <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                trade cost on {data.tradeCoverage.withTrade} of {data.tradeCoverage.total} committed
-                lines
+                {oneVoice
+                  ? data.tradeCoverage.withTrade === data.tradeCoverage.total
+                    ? 'trade cost on every committed line'
+                    : `${data.tradeCoverage.total - data.tradeCoverage.withTrade} committed without trade cost`
+                  : `trade cost on ${data.tradeCoverage.withTrade} of ${data.tradeCoverage.total} committed lines`}
               </span>
             </p>
           )}

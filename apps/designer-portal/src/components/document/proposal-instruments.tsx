@@ -72,9 +72,14 @@ export function ProposalInstruments({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const { leader } = useFinalizeLeader(proposalId, clientName);
-  const hoistedLeader = onFinalizeTable ? (leader?.kind ?? null) : null;
   // FR3 F3-25 / 518-3 (`one-voice`) — Preview is the letterhead's alone.
   const oneVoice = useFeatureFlag('one-voice').value === true;
+  // FR4 Fix 13 (524-g) — under one-voice, Finalize never hoists Preview: that
+  // doorway is the letterhead's alone, so the table's head leaves it be.
+  const hoistedLeader =
+    onFinalizeTable && !(oneVoice && leader?.kind === 'preview')
+      ? (leader?.kind ?? null)
+      : null;
   const experience = commercialDocumentExperience(proposal?.document_kind);
   if (experience === 'commercial_readonly') {
     return (

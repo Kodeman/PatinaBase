@@ -33,6 +33,7 @@ import {
   type PlanRoomBundle,
 } from '@patina/supabase';
 import { Input } from '@/components/ui/controls';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { fmtDay } from '@/lib/document/format';
 import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
 import { deriveCurrentSet, deriveHolders, holderSentence } from '@/lib/plans/model';
@@ -109,6 +110,8 @@ export function PlanIssueCeremony({
   const roster = useProjectRoster(projectId);
   const createIssue = useCreatePlanIssue(projectId);
   const createTransmittal = useCreatePlanTransmittal(projectId);
+  // FR4 Fix 12 (`one-voice`) — a ratio reads as a fraction; convert it.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   const selectedIds = useMemo(
     () =>
@@ -306,9 +309,18 @@ export function PlanIssueCeremony({
             <SectionEyebrow count={selectedIds.length}>Contents</SectionEyebrow>
             {priorIssue && (
               <p className="mb-3 max-w-xl text-[0.82rem] text-[var(--text-muted)]">
-                {changedCount} of {selectedIds.length} changed since{' '}
-                {priorIssue.name}. The rest go along so the recipient holds a
-                whole set, not a diff.
+                {oneVoice ? (
+                  <>
+                    {changedCount} changed since {priorIssue.name}. The rest
+                    go along unchanged.
+                  </>
+                ) : (
+                  <>
+                    {changedCount} of {selectedIds.length} changed since{' '}
+                    {priorIssue.name}. The rest go along so the recipient
+                    holds a whole set, not a diff.
+                  </>
+                )}
               </p>
             )}
             <div className="grid">
@@ -509,7 +521,11 @@ export function PlanIssueCeremony({
               <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
                 {selectedIds.length}{' '}
                 {selectedIds.length === 1 ? 'sheet' : 'sheets'} · for {purpose} ·{' '}
-                {minted.length} of {recipients.length} sent
+                {oneVoice
+                  ? minted.length === recipients.length
+                    ? `All ${recipients.length} sent`
+                    : `${minted.length} sent · ${recipients.length - minted.length} to go`
+                  : `${minted.length} of ${recipients.length} sent`}
               </p>
               {preview.data && (
                 <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">

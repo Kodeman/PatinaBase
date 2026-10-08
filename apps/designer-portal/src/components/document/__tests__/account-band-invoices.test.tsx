@@ -71,6 +71,11 @@ jest.mock('@/hooks/use-can-see-margin', () => ({
   useCanSeeMargin: () => mockCanSeeMargin,
 }));
 
+let mockOneVoice = false;
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (key: string) => ({ value: key === 'one-voice' ? mockOneVoice : false }),
+}));
+
 describe('AccountBand margin gate (C-36, R1)', () => {
   beforeEach(() => {
     mockInvoiceId = null;
@@ -88,6 +93,7 @@ describe('AccountBand margin gate (C-36, R1)', () => {
   afterEach(() => {
     mockCanSeeMargin = true;
     mockAccountOverride = {};
+    mockOneVoice = false;
   });
 
   it('shows margin, the trade → client line and est. commissions to a viewer who may see margin', () => {
@@ -96,6 +102,29 @@ describe('AccountBand margin gate (C-36, R1)', () => {
     fireEvent.click(screen.getByRole('button', { name: /The accounts · this project/ }));
     expect(screen.getByText(/est\. commissions/)).toBeInTheDocument();
     expect(screen.getByText(/trade cost on 1 of 1 committed/)).toBeInTheDocument();
+  });
+
+  it('FR4 Fix 12: one-voice prints "trade cost on every committed line" when all lines carry it', () => {
+    mockOneVoice = true;
+    render(<AccountBand projectId="project-1" />);
+    fireEvent.click(screen.getByRole('button', { name: /The accounts · this project/ }));
+    expect(screen.getByText(/trade cost on every committed line/)).toBeInTheDocument();
+    expect(screen.queryByText(/trade cost on 1 of 1/)).not.toBeInTheDocument();
+  });
+
+  it('FR4 Fix 12: one-voice prints the uncommitted count when some lines lack trade cost', () => {
+    mockOneVoice = true;
+    mockAccountOverride = {
+      margin: { currency: 'USD', cents: 4_000 },
+      clientValueCents: 14_000,
+      tradeCostCents: 10_000,
+      tradeCoverage: { withTrade: 1, total: 3 },
+      marginPct: 29,
+      estCommissionCents: 4_000,
+    };
+    render(<AccountBand projectId="project-1" />);
+    fireEvent.click(screen.getByRole('button', { name: /The accounts · this project/ }));
+    expect(screen.getByText(/2 committed without trade cost/)).toBeInTheDocument();
   });
 
   it('hides every margin figure from a viewer the studio restricts', () => {

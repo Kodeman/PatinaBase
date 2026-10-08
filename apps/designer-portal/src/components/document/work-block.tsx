@@ -17,6 +17,7 @@ import {
   type SectionTask,
 } from '@/hooks/use-section-work';
 import { useFieldCapturePhotoPaths } from '@/hooks/use-field-capture-photos';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay, todayYmd } from '@/lib/document/format';
 import { useToggleSectionTask } from '@/hooks/use-section-work';
@@ -168,6 +169,8 @@ export function WorkBlock({
 }) {
   const createTask = useCreateSectionTask(projectId);
   const toggleTask = useToggleSectionTask(projectId);
+  // FR4 Fix 12 (`one-voice`) — a ratio reads as a fraction; convert it.
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   const [capturing, setCapturing] = useState(false);
   const [title, setTitle] = useState('');
@@ -290,7 +293,9 @@ export function WorkBlock({
         </span>
         {estTotal > 0 && (
           <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-            {fmtHours(loggedMinutes ?? 0)} of {fmtHours(estTotal)} est.
+            {oneVoice
+              ? `${fmtHours(loggedMinutes ?? 0)} logged · ${fmtHours(estTotal)} est.`
+              : `${fmtHours(loggedMinutes ?? 0)} of ${fmtHours(estTotal)} est.`}
           </span>
         )}
       </div>

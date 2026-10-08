@@ -13,6 +13,11 @@ const executeTradeScopeOnPaper = jest.fn();
 const recordTradeAcceptanceOnPaper = jest.fn();
 let mockWorkspace: Record<string, unknown> = { data: null };
 let mockCommercialDocument: Record<string, unknown> = { data: undefined, isLoading: false };
+let mockOneVoice = false;
+
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (key: string) => ({ value: key === 'one-voice' ? mockOneVoice : false }),
+}));
 
 const mutation = (fn: jest.Mock) => ({ mutateAsync: fn, isPending: false });
 
@@ -157,6 +162,7 @@ describe('TradeScopeDetail', () => {
     scheduleStub.isError = false;
     mockWorkspace = { data: workspaceData };
     mockCommercialDocument = { data: undefined, isLoading: false };
+    mockOneVoice = false;
   });
 
   it('walks the journey band and states the figures', () => {
@@ -171,6 +177,16 @@ describe('TradeScopeDetail', () => {
     // The deposit figure reads Paid, and so does the draw it came from.
     expect(screen.getAllByText('Paid')).toHaveLength(2);
     expect(screen.getByText('1 of 2')).toBeVisible();
+  });
+
+  it('FR4 Fix 12: one-voice splits the draws ratio into two figures', () => {
+    mockOneVoice = true;
+    renderDetail(scope({ progressState: 'in_progress' }));
+
+    expect(screen.queryByText('1 of 2')).not.toBeInTheDocument();
+    // drawsIssued 1, drawCount 2 - drawsIssued 1 = 1 left.
+    expect(screen.getByText('draws issued').nextSibling).toHaveTextContent('1');
+    expect(screen.getByText('draws left').nextSibling).toHaveTextContent('1');
   });
 
   it('engages the trade by name once the deposit has landed', async () => {
