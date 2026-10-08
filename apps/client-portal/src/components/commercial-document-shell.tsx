@@ -17,10 +17,11 @@ import { DesignBuildBody } from '@/components/commercial/design-build-body';
 import { Stamp } from '@/components/threshold/instruments/stamp';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import { formatCalendarDate } from '@/lib/utils/format';
-import type {
-  CommercialDocumentBundle,
-  CommercialDocumentKind,
-  FurnishingsAuthorizationItem,
+import {
+  clientRoomsLine,
+  type CommercialDocumentBundle,
+  type CommercialDocumentKind,
+  type FurnishingsAuthorizationItem,
 } from '@/lib/commercial-documents';
 
 const SIGNED_ON_PAPER_NOTE = 'Signed on paper · recorded by the studio.';
@@ -376,20 +377,27 @@ function FurnishingsBody({ bundle }: { bundle: CommercialDocumentBundle }) {
                 {roomName}
               </p>
               <div className="divide-y divide-[var(--border-subtle)]">
-                {items.map((item, index) => (
-                  <div
-                    key={`${roomName}-${item.description}-${index}`}
-                    className="grid grid-cols-[1fr_auto] gap-x-4 py-3"
-                  >
-                    <div>
-                      <p className="type-body-small text-[var(--text-primary)]">{item.description}</p>
-                      <p className="type-meta-small mt-0.5">Quantity {item.quantity}</p>
+                {items.map((item, index) => {
+                  // A line in several rooms files under its primary room and
+                  // names every room it is in; a one-room line reads as before.
+                  const roomsLine = clientRoomsLine(item.description, item);
+                  return (
+                    <div
+                      key={`${roomName}-${item.description}-${index}`}
+                      className="grid grid-cols-[1fr_auto] gap-x-4 py-3"
+                    >
+                      <div>
+                        <p className="type-body-small text-[var(--text-primary)]">{roomsLine ?? item.description}</p>
+                        {roomsLine === null && (
+                          <p className="type-meta-small mt-0.5">Quantity {item.quantity}</p>
+                        )}
+                      </div>
+                      <p className="type-label text-right">
+                        {money(item.clientLineTotalCents, item.currency)}
+                      </p>
                     </div>
-                    <p className="type-label text-right">
-                      {money(item.clientLineTotalCents, item.currency)}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
