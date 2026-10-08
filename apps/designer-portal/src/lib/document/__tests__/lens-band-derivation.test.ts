@@ -2384,11 +2384,12 @@ describe('deriveLensBand · F9-1: two silences are two rows', () => {
 
   it('031 opens the held draft, 032 follows up with its own act; Next is 031’s; STUCK lends 032’s act', () => {
     (NOTE.onAct as jest.Mock).mockClear();
-    const [s031, s032] = silences();
-    expect([s031.text, s032.text]).toEqual([
+    const rows = silences();
+    expect(rows.map((row) => row.text)).toEqual([
       'BR-2026-031 sent — no acknowledgment',
       'BR-2026-032 sent — no acknowledgment',
     ]);
+    const [s031, s032] = rows;
     const { voice } = deriveLensBand(
       input({
         now: BIRCHWOOD_NOW,
