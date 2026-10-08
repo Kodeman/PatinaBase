@@ -51,6 +51,8 @@ source. Keep `|` out of cells.
 | C20 | Patina's furniture margin and client project fee (v4 working figures). | docs/vision/VISION.md §3 and §7 V1 (working figures, never quote) | todo |
 | C21 | Studio Designer charges for desktop-to-cloud migration as a paid line item. | artifacts/studio-hook-2026-09-22/research/05-competitor-activation.md line 13 (competitor price; money) | todo |
 | C22 | Mydoma charges a one-time onboarding fee on its annual plan. | https://mydomastudio.com/pricing/ via 05-competitor-activation.md line 52 (competitor price; pricing has changed over time) | todo |
+| C23 | The Founding 50 is a circle of 50 working designers shaping Patina; Kody and Leah read every application at patina.cloud/designers. | https://patina.cloud/designers (hero and application sections, read 2026-10-08) | verified |
+| C24 | Patina's app and marketplace are pre-launch. | https://patina.cloud (status line, read 2026-10-08) | verified |
 
 ## Never claim (not ledger rows; lint cannot catch all of these)
 
