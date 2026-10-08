@@ -3041,6 +3041,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     spreadSection === 'project' ||
     spreadSection === 'install' ||
     spreadSection === 'care';
+  // R24 — a file dropped on the section lands in its folio strip, which only
+  // the install and care spreads print. Anywhere else the drop is refused
+  // rather than held for a strip that is not there (T-33d).
+  const sectionTakesFiles =
+    !!row.project_id && (spreadSection === 'install' || spreadSection === 'care');
   // W4a — the Finalize table: the LEGACY proposal in the client's hands. Its
   // head, its leader, its Offer facets and its one shelf stand only here.
   //
@@ -3529,13 +3534,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             tabIndex={-1}
             className="scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             onDragOver={(e) => {
-              if (!row.project_id || !e.dataTransfer?.types?.includes('Files')) return;
+              if (!sectionTakesFiles || !e.dataTransfer?.types?.includes('Files')) return;
               e.preventDefault();
               setSectionDrag(true);
             }}
             onDragLeave={() => setSectionDrag(false)}
             onDrop={(e) => {
-              if (!row.project_id) return;
+              if (!sectionTakesFiles) return;
               e.preventDefault();
               setSectionDrag(false);
               const files = Array.from(e.dataTransfer.files ?? []);
@@ -3717,6 +3722,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   <VisitsBlock projectId={row.project_id} />
                   <FFESection
                     projectId={row.project_id}
+                    docId={id}
                     projectName={row.title}
                     mode="project"
                     projectStatus={row.project_status}
@@ -3728,9 +3734,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     sectionKey="project"
                     clientUserId={row.client_profile_id}
                     clientName={row.client_name}
-                    folioDrop={folioDrop}
-                    onFolioDropConsumed={() => setFolioDrop(null)}
-                    sectionDragOver={sectionDrag}
                     releaseLeaderElsewhere={deliveryProcurement}
                     onReleaseOffered={
                       deliveryProcurement || oneVoice ? setReleaseOffered : undefined

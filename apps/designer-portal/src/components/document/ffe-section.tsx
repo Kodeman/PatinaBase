@@ -1059,6 +1059,9 @@ function InstallSelectionBar({
 
 interface FFESectionProps {
   projectId: string;
+  /** The id the Document was opened with (`/doc/<id>`), so a Build room door
+   *  holds and returns to the same Document. Falls back to `projectId`. */
+  docId?: string;
   projectName?: string;
   mode: 'project' | 'install';
   /** Line hovered in the margin (§13 Slice 3 anchored highlight). */
@@ -1183,6 +1186,7 @@ export function FFESection(props: FFESectionProps) {
 
 function FFESectionBody({
   projectId,
+  docId = projectId,
   projectName = '',
   mode,
   highlightId = null,
@@ -2115,7 +2119,7 @@ function FFESectionBody({
     {
       key: 'work-the-pieces',
       label: 'Work the pieces',
-      href: buildRoomHref(projectId, { lens: 'rough', room: null }),
+      href: buildRoomHref(docId, { lens: 'rough', room: null }),
       trailing: '→',
     },
     ffeAddToProjectEntry,
@@ -2532,6 +2536,7 @@ function FFESectionBody({
         // instrument).
         <PiecesOverview
           projectId={projectId}
+          docId={docId}
           lines={overviewLines}
           rooms={overviewRooms}
           job={overviewJob}

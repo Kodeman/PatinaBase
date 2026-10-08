@@ -26,6 +26,8 @@ import { PiecesOverviewRow } from './pieces-overview-row';
 
 export interface PiecesOverviewProps {
   projectId: string;
+  /** The id the Document was opened with (`/doc/<id>`), for the room doors. */
+  docId: string;
   lines: readonly OverviewLine[];
   rooms: readonly OverviewRoom[];
   job: OverviewTally;
@@ -49,6 +51,7 @@ export interface PiecesOverviewProps {
 
 export function PiecesOverview({
   projectId,
+  docId,
   lines,
   rooms,
   job,
@@ -106,7 +109,7 @@ export function PiecesOverview({
           return (
             <PiecesOverviewRow
               key={row.key}
-              projectId={projectId}
+              docId={docId}
               row={row}
               open={open}
               returned={row.roomId != null && row.roomId === returnedRoomId}

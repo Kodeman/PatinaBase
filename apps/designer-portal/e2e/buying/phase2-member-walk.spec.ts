@@ -29,7 +29,8 @@ import { hideDevOverlays } from "../helpers/hide-dev-overlays";
  *   7. the flea-market find is recorded as a purchase; its line is ordered;
  *   8. "Bill 1 unbilled purchase" and "Bill 1 unbilled rider" each draft an
  *      invoice line at cost;
- *   9. read by next act groups the lines by what each waits on.
+ *   9. the Pieces overview's head carries its acts (US-21 T-31 retired the
+ *      next-act reading).
  *
  * Mail: procurement-draft-send goes through _shared/send-email.ts (Resend
  * HTTPS); with EMAIL_DEV_MODE=dry_run it logs the letter and reports it
@@ -340,7 +341,7 @@ test.describe("Studio buying Phase 2 — the member walk past the send", () => {
     ).toBe("500000");
   });
 
-  test("hold → owner releases → ack with a difference → reply sent → partial shipment + rider → damage → substitution → purchase → billed at cost → read by next act", async ({
+  test("hold → owner releases → ack with a difference → reply sent → partial shipment + rider → damage → substitution → purchase → billed at cost → pieces overview", async ({
     page,
     browser,
   }, testInfo) => {
@@ -746,41 +747,27 @@ WHERE c.purchase_order_id = ${q(poId)}`),
       )
       .toBe("38000|38000");
 
-    // ── 9. Read by next act: each line under what it waits on. ─────────────
+    // ── 9. The Pieces overview's head (US-21 T-31). ────────────────────────
+    // The next-act reading this step once read was retired with the T-31
+    // overview. Its head carries the acts: Work the pieces (this Document's
+    // Build room), Add to the job, Release, Record a change.
     await openDocument(page);
-    await page.getByRole("button", { name: "Read by next act" }).click();
-    const reading = page.locator('[data-ffe-reading-body="next"]');
-    await expect(reading).toBeVisible({ timeout: 30_000 });
-    const heads = await reading
-      .locator("[data-next-act-group] th")
-      .allTextContents();
-    testInfo.annotations.push({
-      type: "next-act groups",
-      description: heads.join(" / "),
+    const head = page.locator('[data-region-head="ffe"]').first();
+    await head.scrollIntoViewIfNeeded({ timeout: 30_000 });
+    await expect(
+      head.locator('[data-action-key="work-the-pieces"]'),
+    ).toHaveAttribute("href", `/doc/${PROJECT_ID}/pieces?lens=rough`, {
+      timeout: 30_000,
     });
-    await shot(page, testInfo, "16-read-by-next-act");
-    // Each line's cell names its group head (td[headers] → th#id).
-    const groupOf = async (lineId: string): Promise<string> => {
-      const headId = await reading
-        .locator(`#ffe-selection-${lineId} td`)
-        .first()
-        .getAttribute("headers");
-      return (await reading.locator(`th#${headId}`).textContent()) ?? "";
-    };
-    expect(heads).toEqual([
-      "Not selected yet · 1",
-      "Ready to order · 2",
-      "Ordered · 1",
-      "Claim open · 1",
-    ]);
-    // The alternate is not selected; the COM pair waits to be ordered; the
-    // find, bought outright, is ordered; line A shipped (1 of 2) with its
-    // damage exception open, so it reads "Claim open" (US-17 G6).
-    expect(await groupOf(ALT_ID)).toBe("Not selected yet · 1");
-    expect(await groupOf(FRAME_ID)).toBe("Ready to order · 2");
-    expect(await groupOf(FABRIC_ID)).toBe("Ready to order · 2");
-    expect(await groupOf(FIND_ID)).toBe("Ordered · 1");
-    expect(await groupOf(LINE_A_ID)).toBe("Claim open · 1");
+    await expect(
+      head.locator('[data-action-key="open-add-to-project"]'),
+    ).toContainText("Add to the job");
+    // Release is not asserted: with `delivery-procurement` on and a release
+    // offered, it moves to the Delivery table head (`releaseInHead`).
+    await expect(
+      head.locator('[data-action-key="record-a-change-pieces-head"]'),
+    ).toContainText("Record a change");
+    await shot(page, testInfo, "16-pieces-overview-head");
 
     expect(failures, "edge-function / RPC failures seen by the pages").toEqual(
       [],

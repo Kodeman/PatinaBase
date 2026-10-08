@@ -164,6 +164,7 @@ describe('<PiecesOverview>', () => {
     const view = render(
       <PiecesOverview
         projectId="project-1"
+        docId="doc-1"
         lines={LINES}
         rooms={ROOMS}
         job={job}
@@ -204,7 +205,7 @@ describe('<PiecesOverview>', () => {
       'open-add-schedule-line',
     );
     const work = within(living).getByRole('link', { name: /Work this room/ });
-    expect(work).toHaveAttribute('href', '/doc/project-1/pieces?lens=rough&room=living');
+    expect(work).toHaveAttribute('href', '/doc/doc-1/pieces?lens=rough&room=living');
     expect(work).toHaveTextContent('→');
   });
 
@@ -246,6 +247,7 @@ describe('<PiecesOverview>', () => {
     rerender(
       <PiecesOverview
         projectId="project-1"
+        docId="doc-1"
         lines={LINES}
         rooms={ROOMS}
         job={job}

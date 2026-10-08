@@ -23,7 +23,7 @@ export function piecesOverviewRowId(row: Pick<OverviewRow, 'key'>): string {
 }
 
 export function PiecesOverviewRow({
-  projectId,
+  docId,
   row,
   open,
   returned = false,
@@ -32,7 +32,8 @@ export function PiecesOverviewRow({
   onAddLine,
   children,
 }: {
-  projectId: string;
+  /** The id the Document was opened with (`/doc/<id>`). */
+  docId: string;
   row: OverviewRow;
   open: boolean;
   /** a10 — the room the reader came back from the Build room to. */
@@ -99,7 +100,7 @@ export function PiecesOverviewRow({
             surfaceKey="project"
             regionKey="pieces-overview-row"
             variant="secondary"
-            href={buildRoomHref(projectId, { lens: 'rough', room: row.key })}
+            href={buildRoomHref(docId, { lens: 'rough', room: row.key })}
             trailing="→"
           >
             Work this room
