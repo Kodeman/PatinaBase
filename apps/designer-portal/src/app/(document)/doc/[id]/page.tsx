@@ -2600,7 +2600,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           ? `${unspecified} ${unspecified === 1 ? 'line' : 'lines'} unspecified.`
           : (repair?.sentence ??
             (bandSection === 'proposal' && row ? sentProposalReasonLine(row, new Date()) : null)),
-      ...(repair ? { shortSentence: repair.shortSentence ?? '' } : {}),
+      ...(repair
+        ? {
+            shortSentence: repair.shortSentence ?? '',
+            ...(repair.phoneSentence ? { phoneSentence: repair.phoneSentence } : {}),
+          }
+        : {}),
       onAct: () => {
         // FR6 F6-1 (D1) — `Nudge {first}` is the composer, naming what waits.
         if (
