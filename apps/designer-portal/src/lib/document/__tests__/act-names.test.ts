@@ -185,6 +185,40 @@ describe('ownAct (D1 own-act table)', () => {
         ?.label,
     ).toBe('Nudge Mei');
   });
+
+  // FR8 F8-4 (D2, §3-15) — the client has signed: the countersign is the act,
+  // whatever Message, the reminder or the hesitation say.
+  it.each([
+    [{}],
+    [{ clientMessageable: true }],
+    [{ clientMessageable: false }],
+    [{ clientMessageable: false, reminderAvailable: false }],
+    [{ proposalHesitating: false }],
+    [{ proposalHesitating: true }],
+    [{ clientMessageable: false, proposalHesitating: false, reminderAvailable: false }],
+  ] as [Partial<OwnActFacts>][])(
+    'a sent proposal with the countersign pending is Countersign agreement (%o)',
+    (over) => {
+      expect(
+        ownAct(
+          'proposal',
+          facts({ proposalState: 'sent', clientFirstName: 'Mei', countersignPending: true, ...over }),
+        ),
+      ).toEqual({
+        label: 'Countersign agreement',
+        targetId: ACT_TARGET_IDS.countersign,
+        tier: 'plain',
+      });
+    },
+  );
+
+  it('countersignPending false or unset leaves the sent proposal unchanged', () => {
+    const sent = { proposalState: 'sent' as const, clientFirstName: 'Mei' };
+    expect(ownAct('proposal', facts({ ...sent, countersignPending: false }))?.label).toBe('Nudge Mei');
+    expect(ownAct('proposal', facts(sent))?.label).toBe('Nudge Mei');
+    expect(NAMED_ACTS.countersign).toBe('Countersign agreement');
+    expect(ACT_TARGET_IDS.countersign).toBe('document-act-countersign');
+  });
 });
 
 describe('Message (D1, D3, D7)', () => {
@@ -310,6 +344,7 @@ describe('every act string', () => {
       ['proposal', { proposalState: 'draft' }],
       ['proposal', { proposalState: 'sent', clientFirstName: null }],
       ['proposal', { proposalState: 'sent', clientMessageable: false }],
+      ['proposal', { proposalState: 'sent', countersignPending: true }],
       ['proposal', { proposalState: 'accepted' }],
       ['project', { unspecifiedCount: 2 }],
       ['project', { releaseEligible: true }],

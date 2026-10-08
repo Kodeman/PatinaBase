@@ -145,6 +145,9 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   'Mark returned': 'plain',
   'Choose a path': 'plain',
   'Return it or keep it': 'plain',
+  // FR8 F8-4 (§3-15) — the studio's countersign, D2 applied to a control the
+  // paper already mounts; its button prints this name verbatim.
+  'Countersign agreement': 'plain',
 };
 
 // ── Named acts (D1) ──────────────────────────────────────────────────────────
@@ -160,6 +163,7 @@ export const NAMED_ACTS = {
   recordPayment: 'Record the payment',
   punch: 'Open the punch list',
   preview: "Preview the client's copy",
+  countersign: 'Countersign agreement',
 } as const;
 
 /**
@@ -311,6 +315,7 @@ export const ACT_TARGET_IDS = {
   proposalSend: 'document-act-proposal-send',
   proposalNudge: 'document-act-proposal-nudge',
   proposalReminder: 'document-act-proposal-reminder',
+  countersign: 'document-act-countersign',
   projectPaper: 'document-act-project-paper',
   piecesHead: 'document-act-pieces-head',
   installReading: 'document-act-install-reading',
@@ -365,6 +370,11 @@ export interface OwnActFacts {
    *  countersign pending, issued on paper — is no act (FR7 F7-3, D2); unset
    *  reads as available. */
   reminderAvailable?: boolean;
+  /** Proposal, sent: the client has signed and the studio's countersign form
+   *  is on the paper (`SentProposalVoice.countersignPending`). True makes
+   *  `Countersign agreement` the act, ahead of hesitation and Message (FR8
+   *  F8-4, D2); unset reads as not pending. */
+  countersignPending?: boolean;
   /** Project: FF&E lines not yet specified. */
   unspecifiedCount: number;
   /** Project: lines are eligible to release for authorization. */
@@ -417,6 +427,11 @@ export function ownAct(stage: SectionKey, facts: OwnActFacts): OwnAct | null {
         case 'draft':
           return act('Send the proposal', ACT_TARGET_IDS.proposalSend);
         case 'sent': {
+          // FR8 F8-4 — the client has signed: the countersign waits on the
+          // studio, not on her, whatever the hesitation or Message say.
+          if (facts.countersignPending) {
+            return act(NAMED_ACTS.countersign, ACT_TARGET_IDS.countersign);
+          }
           // FR7 F7-2 — inside the hesitation threshold her only act is waiting.
           if (facts.proposalHesitating === false) return null;
           // D1-a — held Message: the act follows the control that can reach her.

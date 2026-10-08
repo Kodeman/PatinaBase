@@ -436,6 +436,14 @@ export function sentProposalStandingLine(row: DocumentStateRow): string | null {
   return null;
 }
 
+/**
+ * US-19 FR8 F8-4 — line 2 beside `Countersign agreement` while the client has
+ * signed: `Signed by Mei.`, or `Signed by the client.` with no usable name.
+ */
+export function sentProposalSignedLine(clientFirstName: string | null): string {
+  return `Signed by ${clientFirstName?.trim() || 'the client'}.`;
+}
+
 export function deriveDeskRoster(
   input: DeskRosterInput,
   now: Date,

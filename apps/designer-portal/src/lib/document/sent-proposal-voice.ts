@@ -8,6 +8,7 @@
  * a `Send a reminder` the wall has not mounted (P-2).
  */
 
+import { commercialDocumentExperience } from './commercial-documents';
 import type { DocumentStateRow } from './desk-derivation';
 import { sentProposalReasonLine, sentProposalStandingLine } from './desk-roster-derivation';
 import {
@@ -26,6 +27,7 @@ export interface SentProposalRecord {
   version?: number | null;
   commercial_state?: string | null;
   issued_on_paper?: boolean | null;
+  document_kind?: string | null;
 }
 
 export interface SentProposalVoice {
@@ -35,21 +37,32 @@ export interface SentProposalVoice {
   reminderAvailable: boolean;
   /** Line 2 where the paper has no own act: the reminder's voiced state
    *  (`Reminder sent 8 October.`) where Message is held and the reminder
-   *  cannot be sent, the paper's standing fact (`Sent 8 October.`) inside the
-   *  hesitation threshold. Null where an act stands, or the paper is not out. */
+   *  cannot be sent (`Issued on paper — awaiting Mei’s signature.` for a
+   *  paper issue never reminded), the paper's standing fact (`Sent 8
+   *  October.`) inside the hesitation threshold. Null where an act stands,
+   *  the client has signed, or the paper is not out. */
   ownSentence: string | null;
+  /** `OwnActFacts.countersignPending` (FR8 F8-4): the client has signed and
+   *  the studio's countersign form is mounted — `ProposalInstruments` mounts
+   *  `ServiceAgreementInstruments` only for the design-services experience,
+   *  and that prints `CountersignAct` only on `client_signed`. */
+  countersignPending: boolean;
 }
 
 export function sentProposalVoice({
   row,
   proposal,
   clientMessageable,
+  clientFirstName = null,
   now,
 }: {
   row: DocumentStateRow;
   proposal: SentProposalRecord;
   /** `OwnActFacts.clientMessageable` — the letterhead's Message can open. */
   clientMessageable: boolean;
+  /** `OwnActFacts.clientFirstName` — through the placeholder guard; null
+   *  prints `the client` (FR8 F8-3). */
+  clientFirstName?: string | null;
   now: Date;
 }): SentProposalVoice {
   const watch = deriveProposalWatch(
@@ -74,12 +87,23 @@ export function sentProposalVoice({
   const reminderAvailable = line?.verb === 'nudge';
   const sent = proposal.status === 'sent' || proposal.status === 'viewed';
   const reminderHeld = !clientMessageable && !reminderAvailable;
-  const ownSentence = !sent
-    ? null
-    : reminderHeld
-      ? sendWallStateWord(watch, commercialState, true)
-      : !proposalHesitating
-        ? sentProposalStandingLine(row)
-        : null;
-  return { proposalHesitating, reminderAvailable, ownSentence };
+  const clientSigned = commercialState === 'client_signed';
+  const countersignPending =
+    clientSigned && commercialDocumentExperience(proposal.document_kind) === 'design_services';
+  // FR8 F8-3 — a paper issue has no `sent_at` and was never reminded: the
+  // wall's `Issued on paper` in sentence form, with no date.
+  const heldSentence =
+    !watch.lastNudgedAt && proposal.issued_on_paper
+      ? `Issued on paper — awaiting ${clientFirstName?.trim() || 'the client'}’s signature.`
+      : sendWallStateWord(watch, commercialState, true);
+  // FR8 F8-4 — once the client has signed, the act carries the sentence.
+  const ownSentence =
+    !sent || clientSigned
+      ? null
+      : reminderHeld
+        ? heldSentence
+        : !proposalHesitating
+          ? sentProposalStandingLine(row)
+          : null;
+  return { proposalHesitating, reminderAvailable, ownSentence, countersignPending };
 }

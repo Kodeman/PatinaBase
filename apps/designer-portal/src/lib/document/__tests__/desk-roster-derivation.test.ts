@@ -23,6 +23,7 @@ import {
   ROSTER_STAGE_ORDER,
   rosterLineNeedsAHand,
   sentProposalReasonLine,
+  sentProposalSignedLine,
   sentProposalStandingLine,
   type AnsweredClientNote,
   type DeskRosterInput,
@@ -1819,5 +1820,17 @@ describe('sentProposalStandingLine (FR7 F7-2)', () => {
     expect(sentProposalStandingLine(tanaka({ proposal_status: null }))).toBeNull();
     // A day that cannot be read is silence, never `Sent .`.
     expect(sentProposalStandingLine(tanaka({ proposal_sent_at: null }))).toBeNull();
+  });
+});
+
+// US-19 FR8 F8-4 — line 2 beside `Countersign agreement`.
+describe('sentProposalSignedLine (FR8 F8-4)', () => {
+  it('names the client who signed: Signed by Mei.', () => {
+    expect(sentProposalSignedLine('Mei')).toBe('Signed by Mei.');
+  });
+
+  it('falls back to the client with no usable name', () => {
+    expect(sentProposalSignedLine(null)).toBe('Signed by the client.');
+    expect(sentProposalSignedLine('  ')).toBe('Signed by the client.');
   });
 });

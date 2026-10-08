@@ -15,7 +15,7 @@ import {
 } from '../lens-band-derivation';
 import { ACT_TARGET_IDS, ownAct } from '../act-names';
 import type { DocumentStateRow } from '../desk-derivation';
-import { sentProposalReasonLine } from '../desk-roster-derivation';
+import { sentProposalReasonLine, sentProposalSignedLine } from '../desk-roster-derivation';
 import { installReading, type InstallReading } from '../install-reading';
 import { sentProposalVoice, type SentProposalRecord } from '../sent-proposal-voice';
 import {
@@ -2566,7 +2566,7 @@ describe('deriveLensBand · FR7 F7-2 / F7-3: a sent proposal with no act prints 
   });
   const band = (row: DocumentStateRow, proposal: SentProposalRecord) => {
     const clientMessageable = Boolean(row.client_profile_id);
-    const read = sentProposalVoice({ row, proposal, clientMessageable, now });
+    const read = sentProposalVoice({ row, proposal, clientMessageable, clientFirstName: 'Mei', now });
     const own = ownAct('proposal', {
       inquiryOpen: false,
       firstMissingEssential: null,
@@ -2575,6 +2575,7 @@ describe('deriveLensBand · FR7 F7-2 / F7-3: a sent proposal with no act prints 
       clientMessageable,
       proposalHesitating: read.proposalHesitating,
       reminderAvailable: read.reminderAvailable,
+      countersignPending: read.countersignPending,
       unspecifiedCount: 0,
       releaseEligible: false,
       install: null,
@@ -2595,7 +2596,11 @@ describe('deriveLensBand · FR7 F7-2 / F7-3: a sent proposal with no act prints 
           ? {
               key: `own:${own.targetId}`,
               ...own,
-              sentence: sentProposalReasonLine(row, now),
+              // FR8 F8-4 — the countersign's line 2 is who signed.
+              sentence:
+                own.targetId === ACT_TARGET_IDS.countersign
+                  ? sentProposalSignedLine('Mei')
+                  : sentProposalReasonLine(row, now),
               onAct: jest.fn(),
             }
           : null,
@@ -2662,6 +2667,32 @@ describe('deriveLensBand · FR7 F7-2 / F7-3: a sent proposal with no act prints 
     const voice = band(tanakaRow({ client_profile_id: null }), tanakaProposal());
     expect(voice.next).toBeNull();
     expect(voice.sentence).toBe('Sent 8 October.');
+  });
+
+  // FR8 F8-3 — a paper issue, no login, never reminded: the wall's own words
+  // as a sentence, no date, no act.
+  it('issued on paper, no login, never reminded: `Issued on paper — awaiting Mei’s signature.`', () => {
+    const voice = band(
+      tanakaRow({ proposal_sent_at: null, client_profile_id: null }),
+      tanakaProposal({ sent_at: null, issued_on_paper: true }),
+    );
+    expect(voice.next).toBeNull();
+    expect(voice.lead).toBeNull();
+    expect(voice.sentence).toBe('Issued on paper — awaiting Mei’s signature.');
+  });
+
+  // FR8 F8-4 (D2) — the client has signed: the studio's countersign is Next.
+  it('client signed: `Signed by Mei.` · COUNTERSIGN AGREEMENT on #document-act-countersign', () => {
+    for (const row of [tanakaRow(), tanakaRow({ client_profile_id: null })]) {
+      const voice = band(
+        row,
+        tanakaProposal({ commercial_state: 'client_signed', document_kind: 'design_services' }),
+      );
+      expect(voice.lead).toBe('Next ─');
+      expect(voice.sentence).toBe('Signed by Mei.');
+      expect(voice.next?.act.label).toBe('Countersign agreement');
+      expect(voice.next?.act.targetId).toBe(ACT_TARGET_IDS.countersign);
+    }
   });
 
   it('no ownSentence: line 2 keeps today’s fallback', () => {

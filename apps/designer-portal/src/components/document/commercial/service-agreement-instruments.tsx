@@ -8,6 +8,7 @@ import {
   useCountersignDesignServicesAgreement,
   useReplayCommercialNotification,
 } from "@/hooks/use-commercial-documents";
+import { ACT_TARGET_IDS } from "@/lib/document/act-names";
 import { commercialStatusView } from "@/lib/document/commercial-documents";
 import { draftingEditability } from "@/lib/document/drafting-editability";
 import { assessAgreementReadiness } from "../rooms/drafting/agreement/readiness";
@@ -71,6 +72,8 @@ function CountersignAct({
     <>
       <div className="mt-3 flex max-w-xl flex-col gap-2 sm:flex-row">
         <Input
+          // FR8 F8-4 — `Countersign agreement` lands on the form's first field.
+          id={ACT_TARGET_IDS.countersign}
           aria-label="Studio signer name"
           value={signerName}
           onChange={(event) => onSignerNameChange(event.target.value)}

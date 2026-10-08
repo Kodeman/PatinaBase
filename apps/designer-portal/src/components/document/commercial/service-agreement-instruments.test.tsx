@@ -110,6 +110,7 @@ jest.mock("@/lib/analytics/document-events", () => ({
 }));
 
 import { consumeSuppressed } from "@/lib/arrival/nav";
+import { ACT_TARGET_IDS } from "@/lib/document/act-names";
 import { ServiceAgreementInstruments } from "./service-agreement-instruments";
 
 describe("ServiceAgreementInstruments notification recovery", () => {
@@ -172,6 +173,36 @@ describe("ServiceAgreementInstruments notification recovery", () => {
     expect(
       await screen.findByText(/agreement executed.*execution notice is pending/i),
     ).toBeVisible();
+  });
+
+  // US-19 FR8 F8-4 — the band's `Countersign agreement` lands on the form's
+  // first field, and the button keeps the act's name.
+  it("carries the countersign act's landing id on the signer-name field while the act is mounted", () => {
+    mockDocumentState = "client_signed";
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", client: {} }}
+        clientName="Avery Client"
+      />,
+    );
+
+    const field = screen.getByLabelText("Studio signer name");
+    expect(field).toHaveAttribute("id", ACT_TARGET_IDS.countersign);
+    expect(document.getElementById(ACT_TARGET_IDS.countersign)).toBe(field);
+    expect(
+      screen.getByRole("button", { name: "Countersign agreement" }),
+    ).toBeInTheDocument();
+  });
+
+  it("prints no countersign landing once the agreement is executed", () => {
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", client: {} }}
+        clientName="Avery Client"
+      />,
+    );
+
+    expect(document.getElementById(ACT_TARGET_IDS.countersign)).toBeNull();
   });
 
   it("US-14 — Open the project after the countersign is the same engagement: announced, so no arrival plays", async () => {
