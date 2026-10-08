@@ -180,14 +180,13 @@ Contrast, measured: `--sheet-ink` on `--sheet` 17:1 light, 15:1 dark; `--sheet-i
 
 | Word | Border | Ink | Derived when |
 |---|---|---|---|
-| `PLACEHOLDER` | 1px **dashed** `--sheet-ink-faint` | `--sheet-ink-faint` | no product, no maker, no rough price |
-| `ROUGHED` | 1px dashed `--sheet-ink-muted` | `--sheet-ink-muted` | placeholder with a rough `~` price |
+| `PLACEHOLDER` | 1px **dashed** `--sheet-ink-faint` | `--sheet-ink-faint` | no product and no maker, whatever rough `~` figure or price it carries (the Rough $ column carries the figure) |
 | `SPECCED` | 1px solid `--sheet-rule-strong` | `--sheet-ink` | a product, or a custom line with a maker |
 | `READY` | 1px solid `--sheet-rule-strong` | `--sheet-ink` | release eligibility passes (maker, qty, price or allowance ceiling) |
 | `RELEASED` | filled `--sheet-ink`, text `--sheet` | — | on an authorization |
 | `LABOR` | 1px solid `--sheet-rule` | `--sheet-ink-muted` | a labor line (printed beside the name, not instead of the stage) |
 
-On the reading paper the same words use `--ink`, `--ink-faint` and `--hairline-strong`. `SPECIFIED` never prints anywhere in these specimens.
+On the reading paper the same words use `--ink`, `--ink-faint` and `--hairline-strong`. `SPECIFIED` never prints anywhere in these specimens. There is no `ROUGHED` stage (ruled in the SQ-599 fix pass, ADV-4): a rough price never changes the stage word. Precedence for blocked, received, labor and signed-allowance rows: `synthesis/direction.md` §3.4, D1.
 
 ### 2.5 Acts
 
@@ -372,7 +371,7 @@ Leah's real job, as seeded in the local walk and extended for these frames. **Do
 | Bedroom | `4 lines · 2 placeholders · ~$8,935` | same |
 | **Job** | `26 lines · 21 placeholders · 4 specced · ~$69,328 · nothing released` | `25 lines · 18 placeholders · 6 specced · $30,760 priced · ~$36,368 roughed · nothing released` |
 
-Priced = client prices of specced lines (L1 $9,600 + L3 $76 + F1 $9,545 + D1 $6,800 + T1 $1,904 + R1 $2,070 + R1a $765 = $30,760). Roughed = the `~` figures of the rest. Per-room Price-lens subtotals: Bedroom `$2,835 priced · ~$6,100 roughed`; Living Room `$13,356 priced · ~$10,208 roughed`.
+Priced = client prices of specced lines (L1 $9,600 + L3 $76 + F1 $9,545 + D1 $6,800 + T1 $1,904 + R1 $2,070 + R1a $765 = $30,760). These seven are the release set: 6 specced pieces and R1a, the labor line that is ready with its piece, hence "7 ready" beside "6 specced". Roughed = the `~` figures of the rest. Per-room Price-lens subtotals: Bedroom `$2,835 priced · ~$6,100 roughed`; Living Room `$13,356 priced · ~$10,208 roughed`.
 
 ### 4.5 Voice (from `BRIEF.md`)
 
@@ -436,13 +435,13 @@ The sheet; lens **Rough in**; rail active Living Room (`Living Room 4` at this m
 - The **empty entry row** with the caret, active outline.
 - Under the table, the key hint (DM Mono 11 `--sheet-ink-faint`): `ENTER ADDS THE LINE · TAB MOVES ACROSS · ⌘↓ NEXT ROOM · PASTE A LIST TO ADD SEVERAL · / SEARCHES THE LIBRARY`.
 - Right: the elevation pane (§2.6), 360px.
-- Pins: the empty row (no sheet, Enter adds: R1-F11, R2-F6, R3-7); the key hint; the menu (fill, move, remove on the line itself: R3-6, R3-3); the `ROUGH $` column (an allowance, printed ~: R1-F23, Q7); the absence (no buying cells, no Bill, no roads: R1-F6, R2-F3); the pane (R2 §5).
+- Pins: the empty row (no sheet, Enter adds: R1-F11, R2-F6, R3-7); the key hint; the menu (fill, move, remove on the line itself: R3-6, R3-3); the `ROUGH $` column (an internal planning figure, printed ~, never client-visible: R1-F23, Q7); the absence (no buying cells, no Bill, no roads: R1-F6, R2-F3); the pane (R2 §5).
 
 ### `a3`: where am I — the Release lens (1440)
 
-Lens **Release**; the one-line reading under the head. Rail active: none (the whole job); head right `Whole job · 25 lines · 6 ready`. Body: a table across rooms, grouped by room heading rows, columns `LINE · ROOM · STAGE · READINESS · FOR THE CLIENT · `. Visible rows (worked state): Hall H1 `PLACEHOLDER | Needs a product or a maker | —`, H2 same; Living Room L1 `READY | Ready | Selected`, L2 `PLACEHOLDER | Needs a product or a maker`, L3 `READY | Ready | Selected`, L4, L5 placeholders, F1 `READY | Ready | Selected`; Dining D1 `READY | Ready | Selected` … clip at the frame edge. `FOR THE CLIENT` is a select-looking `.act` per ready line (`Selected ▾`); placeholders print `—`.
-- Each room heading row carries `.act` `READY FOR LEAH` (pin: the first hire's hand-back; writes disposition, sends nothing; R2 §5, Q13).
-- Foot of the body, right-aligned: `.consequence` `Releasing sends 6 lines to the client for authorization. Their prices lock when the client signs.` above `.act--terminal` `Release 6 lines for authorization`. Pin: the ceremony lives in the room, filled only here.
+Lens **Release**; the one-line reading under the head. Rail active: none (the whole job); head right `Whole job · 25 lines · 7 ready`. Body: a table across rooms, grouped by room heading rows, columns `LINE · ROOM · STAGE · READINESS · FOR THE CLIENT · `. Visible rows (worked state): Hall H1 `PLACEHOLDER | Needs a product or a maker | —`, H2 same; Living Room L1 `READY | Ready | Selected`, L2 `PLACEHOLDER | Needs a product or a maker`, L3 `READY | Ready | Selected`, L4, L5 placeholders, F1 `READY | Ready | Selected`; Dining D1 `READY | Ready | Selected` … clip at the frame edge. `FOR THE CLIENT` is a select-looking `.act` per ready line (`Selected ▾`); placeholders print `—`.
+- Each room heading row carries `.act` `READY FOR LEAH` (pin: the first hire's hand-back; records an internal review fact, D18, never `design_disposition`; it cannot select or release; R2 §5, Q13). Counter stools sit under Kitchen (moved in `a9`).
+- Foot of the body, right-aligned: the authorization set as a `.consequence` (`This release · 7 lines · $30,760:` each line and amount, ending with `↳ Install, wallpaper hanger (labor) $765`), then `.consequence` `Releasing sends these 7 lines to the client for authorization: 6 pieces and the one labor line that goes with its piece. Their prices lock when the client signs.` above `.act--terminal` `Release 7 lines · $30,760 for authorization`. Pin: the ceremony lives in the room, filled only here.
 - Pin the head's lens words (R2-F10, Q1), the reading sentence (R2 §4), the readiness column (R3 §5 "plain next-work queues"; the Order cell's sentence moved to the right stage: R2 §2).
 
 ### `a4`: spec pass, Custom cabinet (1440)
@@ -481,7 +480,7 @@ Lens **Price**; rail Bedroom. Front matter under the reading line, Inter 16: `Jo
 - `Nightstands` `PLACEHOLDER` | 2 | each | — | — | — | ~$950
 - Subtotal row, 1px `--sheet-rule-strong` above: `Bedroom · $2,835 priced · ~$6,100 roughed`.
 - The wallpaper row's `⋯` menu is open: `Add labor`, `Make it an allowance`, `Move to room…`, `Remove`.
-- Pins: a labor line under its piece (R1-F27, D4, D5, Q5); unit `roll` (D3); released with its piece, never on the maker's PO (R1 §5); trade cost and client price typed here (R1-F26, 00692 allow-list); the `~` column (D12).
+- Pins: a labor line under its piece (R1-F27, D4, D5, Q5); unit `roll` (D3); released with its piece, never on the maker's PO (R1 §5); trade cost typed here; markup and client price read-only on this active job, with the sentence `This job is active. Markup and client price are read-only here; they change through Record a change. Trade cost can still be typed.` (R1-F26, 00692 allow-list, D19, Q16); the `~` column (D12).
 
 ### `a8`: delete with undo (1440)
 
@@ -542,7 +541,7 @@ Lens `ROUGH IN`. Body: rooms stacked as tables inside the 900px paper column (`L
 
 ### `b3`: where am I — the Release lens (1440)
 
-Lens `RELEASE`. Body as `a3` inside the column (`LINE · STAGE · READINESS · FOR THE CLIENT`), room headings with `READY FOR LEAH`, the consequence sentence and `Release 6 lines for authorization` at the foot of the region. The region head's `RELEASE FOR AUTHORIZATION` is now live and points at the same act. Pins as `a3`; add one on the letterhead band above, noting that the band and five other regions still compete with the strip for "where am I" (R2-F9, R2-F12).
+Lens `RELEASE`. Body as `a3` inside the column (`LINE · STAGE · READINESS · FOR THE CLIENT`), room headings with `READY FOR LEAH` (the D18 hand-back, as `a3`), the authorization set and consequence sentences as `a3`, and `Release 7 lines · $30,760 for authorization` at the foot of the region. The region head's `RELEASE FOR AUTHORIZATION` is now live and points at the same act. Pins as `a3`; add one on the letterhead band above, noting that the band and five other regions still compete with the strip for "where am I" (R2-F9, R2-F12).
 
 ### `b4`: spec pass, unfolded in place (1440)
 

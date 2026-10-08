@@ -44,7 +44,7 @@ const LIMIT = 16 * 1024 * 1024;
 const specimen = (token, uses, name) => ({ token, uses, name, file: join(ROOT, 'specimens', name) });
 const SPECIMENS = [
   specimen('{{SPECIMEN_A_1440}}', 11, 'proposed-a-1440.html'),
-  specimen('{{SPECIMEN_A_390}}', 4, 'proposed-a-390.html'),
+  specimen('{{SPECIMEN_A_390}}', 8, 'proposed-a-390.html'),
   specimen('{{SPECIMEN_B_1440}}', 3, 'proposed-b-1440.html'),
   specimen('{{SPECIMEN_B_390}}', 1, 'proposed-b-390.html'),
   specimen('{{SPECIMEN_C_1440}}', 3, 'proposed-c-1440.html'),

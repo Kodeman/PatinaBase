@@ -31,7 +31,7 @@ The founder deck for US-20. This file is the sheet-by-sheet contract that `src/i
   | Token | Uses | Frames |
   |---|---|---|
   | `SPECIMEN_A_1440` | 11 | a1–a11 |
-  | `SPECIMEN_A_390` | 4 | a12–a15 |
+  | `SPECIMEN_A_390` | 8 | a12–a15 on sheet 16, and again as the narrow-only twins of a1, a2, a4 and a8 (sheets 10, 11, 13, 15) |
   | `SPECIMEN_B_1440` | 3 | b2, b3, b7 |
   | `SPECIMEN_B_390` | 1 | b13 |
   | `SPECIMEN_C_1440` | 3 | c2, c3, c9 |
@@ -54,8 +54,9 @@ The founder deck for US-20. This file is the sheet-by-sheet contract that `src/i
   - → and j go to the next sheet; ← and k to the previous one.
   - Home and End go to the first and last sheet.
   - Keys stay with any focused control, iframe or scrolling box.
-- **Pager:** a fixed pager (↑ ↓ and "NN / 26 · label") on desktop, hidden at 760px and below.
-- **Deep links:** `#s-<id>` deep-links are held while frames above them settle.
+- **Pager:** a fixed pager (↑ ↓ and "NN / 26 · label") on desktop, in its own 50px strip under the deck (`--pager-h`), so it never covers a sheet; hidden at 760px and below, where the strip collapses to 0.
+- **Deep links:** `#s-<id>` deep-links are held while frames above them settle, until the reader scrolls, taps or presses a key. After that, any frame height change or resize keeps the reader at the same point of the same sheet.
+- **Narrow frames:** at 760px and below, a1, a2, a4, a8, b2 and c2 give way to their 390 twins (`wide-only` / `narrow-only`); every other desktop frame carries a "desktop frame" note.
 - **Snapping:** `scroll-snap-type: y proximity`. Sheets taller than the viewport get `.tall` and stop snapping.
 - **Phone layout:** no horizontal scroll at 390.
   - Tables marked `.stackable` stack into labelled rows.
