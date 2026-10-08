@@ -500,9 +500,9 @@ export function LineCard({
                 type="button"
                 aria-pressed={assignment === scope}
                 onClick={() => chooseAssignment(scope)}
-                className={`min-h-11 rounded-[3px] border px-2 text-[11px] capitalize ${assignment === scope ? 'border-[var(--color-clay)] text-[var(--color-charcoal)]' : 'border-[var(--color-pearl)] text-[var(--text-muted)]'}`}
+                className={`min-h-11 rounded-[3px] border px-2 text-[11px] ${scope === 'unassigned' ? '' : 'capitalize'} ${assignment === scope ? 'border-[var(--color-clay)] text-[var(--color-charcoal)]' : 'border-[var(--color-pearl)] text-[var(--text-muted)]'}`}
               >
-                {scope === 'unassigned' ? 'Unsorted' : scope}
+                {scope === 'unassigned' ? 'Not in a room yet' : scope}
               </button>
             ))}
           </div>

@@ -71,6 +71,15 @@ import {
 type AnyRow = any;
 
 const NO_AUTH: LineAuthorization = { track: 'none' };
+/** The line statuses from the order on (00066's CHECK, plus `received`). */
+const ORDERED_OR_LATER: ReadonlySet<string> = new Set([
+  'ordered',
+  'production',
+  'shipped',
+  'delivered',
+  'received',
+  'installed',
+]);
 const AREA_CLS = `mt-1 block w-full resize-y rounded-[3px] border border-[var(--color-pearl)] px-2 py-1.5 ${FIELD_CLS}`;
 
 /** A refusal said plainly; R8's change_order_required reads as a change order. */
@@ -747,7 +756,8 @@ export function SubstitutionFlow({
 
 /**
  * The line unfold's exceptions: each open one with its clock and act, any
- * open claim not yet tracked as an exception, and "Something's wrong".
+ * open claim not yet tracked as an exception, and — once the line is ordered —
+ * "Something's wrong".
  */
 export function LineExceptions({
   item,
@@ -774,6 +784,9 @@ export function LineExceptions({
   // SQ-448: a claim on a catalog line is Patina's to carry, so "Track it" never
   // shows there — the line's PO carries the lane before any exception does.
   const trackable = !makerLane && !item.purchase_order?.is_patina_catalog ? untracked : [];
+  // R1-F7: before an order there are no goods to go wrong — a mistake on the
+  // line is removed, not filed as a procurement exception.
+  const ordered = ORDERED_OR_LATER.has(item.status);
 
   return (
     <div data-testid="line-exceptions" className="mb-2.5">
@@ -792,7 +805,7 @@ export function LineExceptions({
           ))}
         </div>
       )}
-      {!makerLane && (
+      {!makerLane && ordered && (
         <DocumentAction
           actionKey="open-something-wrong"
           surfaceKey="project"
