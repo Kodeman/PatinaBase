@@ -6,7 +6,8 @@
  * PO's send act, `Spec the N unspecified` on the first unspecified line's spec
  * act, the held head's `Open the pieces` on the first line's unfold control,
  * and `Release for authorization` on the Pieces head's own entry (FR5 F5-1),
- * held form included. The press is taken (the event cancelled) only when Pieces carries
+ * held form included, or on the lift's entry when the head prints none (FR6
+ * F6-2). `Choose the piece` heads the lines list (F6-5). The press is taken (the event cancelled) only when Pieces carries
  * the act; otherwise it keeps its old landing.
  */
 import type { ReactElement } from 'react';
@@ -137,6 +138,9 @@ jest.mock('@/hooks/use-section-work', () => {
 });
 
 import { FFESection, ffeActLine } from '../ffe-section';
+import { ReleaseLift } from '../worktable/release-lift';
+import { START_RELEASE_EVENT } from '../commercial/void-supersede-act';
+import { RECORD_A_CHANGE_ON_PIECE_EVENT } from '../overlays/record-a-change-sheet';
 import { receivingClaimLanding } from '../orders-book-receiving';
 import { ordersSendLanding } from '../orders-ledger';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
@@ -519,5 +523,71 @@ describe('the band’s Release for authorization lands on the head’s own entry
       taken = pressRelease();
     });
     expect(taken).toBe(false);
+  });
+
+  it('lands on the lift’s entry when the release is lifted to the Delivery table (F6-2)', async () => {
+    mockOneVoice = true;
+    mockAuthority = { state: 'active', agreementId: 'agreement-1' };
+    mockItems = [specified('line-ready')];
+    const started = jest.fn();
+    window.addEventListener(START_RELEASE_EVENT, started);
+    // page.tsx prints the lift outside Pieces, at the Delivery table's head.
+    render(
+      <>
+        <ReleaseLift />
+        <FFESection
+          projectId="project-1"
+          projectName="Chen"
+          mode="project"
+          releaseLeaderElsewhere
+        />
+      </>,
+    );
+    // The head prints none: the lift's is the one entry on the page.
+    const entries = screen.getAllByRole('button', { name: 'Release for authorization' });
+    expect(entries).toHaveLength(1);
+    const liftEntry = entries[0];
+    expect(liftEntry.closest('[data-release-lift]')).not.toBeNull();
+
+    let taken = false;
+    act(() => {
+      taken = pressRelease();
+    });
+    expect(taken).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(liftEntry));
+    // Landed, never clicked: no ceremony was started.
+    expect(started).not.toHaveBeenCalled();
+    window.removeEventListener(START_RELEASE_EVENT, started);
+  });
+});
+
+describe('Choose the piece sits with the lines (F6-5)', () => {
+  it('heads the lines list, directly before the first line row, and lands focus on itself', async () => {
+    mockOneVoice = true;
+    mockItems = [specified('line-first'), specified('line-second')];
+    const scrolled: Element[] = [];
+    const originalScroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      render(<FFESection projectId="project-1" projectName="Chen" mode="project" />);
+      act(() => {
+        window.dispatchEvent(new CustomEvent(RECORD_A_CHANGE_ON_PIECE_EVENT, { detail: {} }));
+      });
+
+      const prompt = await screen.findByTestId('ffe-choose-the-piece');
+      const firstRow = document.getElementById('ffe-selection-line-first');
+      expect(firstRow).not.toBeNull();
+      // Inside the lines list, the item just before the first line row.
+      const promptItem = prompt.closest('li');
+      expect(promptItem).not.toBeNull();
+      expect(promptItem?.parentElement).toBe(firstRow?.parentElement);
+      expect(promptItem?.nextElementSibling).toBe(firstRow);
+      await waitFor(() => expect(document.activeElement).toBe(prompt));
+      expect(scrolled).toContain(firstRow);
+    } finally {
+      Element.prototype.scrollIntoView = originalScroll;
+    }
   });
 });

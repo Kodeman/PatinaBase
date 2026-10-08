@@ -1118,7 +1118,7 @@ export function ffeActLine<
 }
 
 /** The control each landing focuses: a line's, inside its unfold, or (for
- *  `release`) the Pieces head's own entry. */
+ *  `release`) the Pieces head's own entry or, lifted, the lift's (F6-2). */
 const FFE_ACT_CONTROL = {
   claim:
     '[data-action-key="notify-vendor-of-ffe-claim"], [data-action-key="open-resolve-ffe-claim"]',
@@ -1202,6 +1202,7 @@ function FFESectionBody({
   const [choosingPiece, setChoosingPiece] = useState(false);
   const [changeOrderLineId, setChangeOrderLineId] = useState<string | null>(null);
   const choosePieceRef = useRef<HTMLParagraphElement | null>(null);
+  const ffeBodyRef = useRef<HTMLDivElement | null>(null);
   const [addLineRoom, setAddLineRoom] = useState<{
     id: string | null;
     name: string;
@@ -1561,6 +1562,21 @@ function FFESectionBody({
   const unassigned = groupByRoom
     ? rows.filter((r) => r.item.assignment_scope === 'unassigned')
     : [];
+  // FR6 F6-5 (D12): `Choose the piece` heads the list that holds the first
+  // line row. The maker and next-act readings print their lines in a table of
+  // their own, so there (and with no line) it stands just above the reading.
+  const firstRoomWithLines = roomGroups.find((group) => group.rows.length > 0);
+  const chooseListKey: string | null = !choosingPiece || byMaker || byNextAct
+    ? null
+    : !groupByRoom
+      ? rows.length > 0 ? 'movement' : null
+      : firstRoomWithLines
+        ? `room:${firstRoomWithLines.room.id}`
+        : throughout.length > 0
+          ? 'throughout'
+          : unassigned.length > 0
+            ? 'unassigned'
+            : null;
 
   const composition = releaseSummary(releaseLines);
 
@@ -1667,13 +1683,16 @@ function FFESectionBody({
     return () => document.removeEventListener('keydown', onKey, true);
   }, [choosingPiece, putBackChoosing]);
   // The prompt takes focus a frame after the router's own sheet hands focus
-  // back to its opener, so the prompt is where she lands.
+  // back to its opener, so the prompt is where she lands. FR6 F6-5 (D12): the
+  // first line comes into view with the prompt standing just above it.
   useEffect(() => {
     if (!choosingPiece) return;
     const frame = window.requestAnimationFrame(() => {
       const prompt = choosePieceRef.current;
+      const firstLine =
+        ffeBodyRef.current?.querySelector<HTMLElement>('[id^="ffe-selection-"]') ?? prompt;
+      firstLine?.scrollIntoView?.({ block: 'center' });
       prompt?.focus({ preventScroll: true });
-      prompt?.scrollIntoView?.({ block: 'center' });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [choosingPiece]);
@@ -1879,16 +1898,24 @@ function FFESectionBody({
     }
     if (act === 'release') {
       // FR5 F5-1 (530-7) — the head's own entry, held form included: its
-      // reason prints beneath and the press is hers. Never clicked. A head
-      // not printing it (the release lifted to another head) leaves the press.
-      if (!releaseInHead) return false;
-      openRegion();
-      landOnControl(() =>
-        document
-          .getElementById(ffeHeadingId)
-          ?.closest('[data-index-region="ffe"]')
-          ?.querySelector<HTMLElement>(FFE_ACT_CONTROL.release),
-      );
+      // reason prints beneath and the press is hers. Never clicked.
+      if (releaseInHead) {
+        openRegion();
+        landOnControl(() =>
+          document
+            .getElementById(ffeHeadingId)
+            ?.closest('[data-index-region="ffe"]')
+            ?.querySelector<HTMLElement>(FFE_ACT_CONTROL.release),
+        );
+        return true;
+      }
+      // FR6 F6-2 — a head printing none has lifted the release to the Delivery
+      // table's head (`ReleaseLift`, outside Pieces): the press lands on the
+      // lift's entry, never clicked. With no lift on the page it stays untaken.
+      const liftEntry = () =>
+        document.querySelector<HTMLElement>(`[data-release-lift] ${FFE_ACT_CONTROL.release}`);
+      if (!liftEntry()) return false;
+      landOnControl(liftEntry);
       return true;
     }
     const line = items ? ffeActLine(items, act) : null;
@@ -2126,6 +2153,35 @@ function FFESectionBody({
     rooms: roomGroups.length,
     damaged: ffeDamagedCount,
   });
+  // R34: `Choose the piece · Put back · Esc` — the way out stands on the
+  // prompt's own line. F6-5 places it with the lines (`chooseListKey`).
+  const choosePiecePrompt = choosingPiece ? (
+    <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+      <p
+        ref={choosePieceRef}
+        tabIndex={-1}
+        role="status"
+        data-testid="ffe-choose-the-piece"
+        className="font-heading text-[15px] italic text-[var(--color-charcoal)]"
+      >
+        Choose the piece
+      </p>
+      <span aria-hidden className="text-[var(--text-muted)]">
+        ·
+      </span>
+      <DocumentAction
+        actionKey="put-back-choose-the-piece"
+        surfaceKey="project"
+        regionKey="ffe-choose-the-piece"
+        variant="secondary"
+        onClick={putBackChoosing}
+      >
+        Put back · Esc
+      </DocumentAction>
+    </div>
+  ) : null;
+  const choosePieceItem = (listKey: string) =>
+    chooseListKey === listKey ? <li>{choosePiecePrompt}</li> : null;
 
   return (
     <section
@@ -2339,34 +2395,7 @@ function FFESectionBody({
       )}
 
       {!ffeFolded && !ffeQuiet && (
-      <div id={ffeBodyId}>
-      {choosingPiece && (
-        // R34: `Choose the piece · Put back · Esc` — the way out stands on
-        // the prompt's own line.
-        <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
-          <p
-            ref={choosePieceRef}
-            tabIndex={-1}
-            role="status"
-            data-testid="ffe-choose-the-piece"
-            className="font-heading text-[15px] italic text-[var(--color-charcoal)]"
-          >
-            Choose the piece
-          </p>
-          <span aria-hidden className="text-[var(--text-muted)]">
-            ·
-          </span>
-          <DocumentAction
-            actionKey="put-back-choose-the-piece"
-            surfaceKey="project"
-            regionKey="ffe-choose-the-piece"
-            variant="secondary"
-            onClick={putBackChoosing}
-          >
-            Put back · Esc
-          </DocumentAction>
-        </div>
-      )}
+      <div id={ffeBodyId} ref={ffeBodyRef}>
       {/* The release gate reads authoritative readiness and stays closed
           without it — so a pending or failed read has to say so, or the act
           would simply be missing with no reason given. */}
@@ -2519,6 +2548,7 @@ function FFESectionBody({
         />
       )}
 
+      {chooseListKey === null && choosePiecePrompt}
       {byMaker ? (
         <MakerReading
           projectId={projectId}
@@ -2567,6 +2597,7 @@ function FFESectionBody({
                 />
               )}
               <ul>
+                {choosePieceItem(`room:${room.id}`)}
                 {roomRows.map((row) => (
                   <FFELine key={row.item.id} {...lineProps(row)} />
                 ))}
@@ -2585,6 +2616,7 @@ function FFESectionBody({
                 {...roomHeadingProps(throughout)}
               />
               <ul>
+                {choosePieceItem('throughout')}
                 {throughout.map((row) => (
                   <FFELine key={row.item.id} {...lineProps(row)} />
                 ))}
@@ -2603,6 +2635,7 @@ function FFESectionBody({
                 {...roomHeadingProps(unassigned)}
               />
               <ul>
+                {choosePieceItem('unassigned')}
                 {unassigned.map((row) => (
                   <FFELine key={row.item.id} {...lineProps(row)} />
                 ))}
@@ -2616,6 +2649,7 @@ function FFESectionBody({
           {/* The movement column — the lines as they arrive. The install
               stage's act lands here rather than on the section's first inch. */}
           <ul id={ffeMovementId} tabIndex={-1} className="scroll-mt-16">
+            {choosePieceItem('movement')}
             {rows.map((row) => (
               <FFELine key={row.item.id} {...lineProps(row)} />
             ))}
