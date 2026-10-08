@@ -50,8 +50,10 @@ export const LENS_LINE2_MEASURE_PX = {
 export type LensTier = keyof typeof LENS_LINE2_MEASURE_PX;
 
 /** Measured on the seed: Inter 16px, the line-2 sentence register (R6 raised
- *  it from 15, and the per-character width rises with it). */
-export const LENS_LINE2_PX_PER_CHAR = 8.2;
+ *  it from 15, and the per-character width rises with it). The final walk
+ *  (F7-4/Y1) measured 6.5–7.9 px/char on the 15px band face (Wren, Cedar,
+ *  Olsen; DOM Range ink width, headless Playwright). */
+export const LENS_LINE2_PX_PER_CHAR = 7.6;
 
 /** Measured on the seed: DM Mono 11px, the act and the `+N MORE` door. */
 export const LENS_MONO_PX_PER_CHAR = 7.5;
