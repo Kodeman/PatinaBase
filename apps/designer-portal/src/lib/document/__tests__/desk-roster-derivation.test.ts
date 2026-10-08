@@ -1737,17 +1737,26 @@ describe('deriveDeskRoster — the card act agrees with the paper (FR4 Fix 5)', 
     expect(line(aspen, unopened, false).act.label).toBe('Follow up');
   });
 
-  it('a proposal opened and unsigned keeps Follow up (not ruled by Fix 5)', () => {
-    const opened = sent('opened', 'Mei Lin', {
-      proposal_status: 'viewed',
-      proposal_viewed_at: '2026-08-21T00:00:00Z',
-    });
+  // FR5 531-1 (Fix F5-4) — the paper maps `viewed` to `sent`, so an opened,
+  // unsigned proposal's card prints the same Nudge; the reason line stays.
+  it('a proposal opened and unsigned prints Nudge {first} / Nudge the client (FR5 F5-4)', () => {
+    const opened = (client_name: string) =>
+      sent('opened', client_name, {
+        proposal_status: 'viewed',
+        proposal_viewed_at: '2026-08-21T00:00:00Z',
+      });
     const hesitating = need({
       kind: 'hesitating_proposal',
       text: 'Opened Aug 21 — no signature yet',
       actionLabel: 'Follow up',
       owner: 'client',
     });
-    expect(line(opened, hesitating, true).act.label).toBe('Follow up');
+    const on = line(opened('Mei Lin'), hesitating, true);
+    expect(on.act.label).toBe('Nudge Mei');
+    expect(on.act.href).toBe('/doc/opened');
+    expect(on.needText).toBe('Opened Aug 21 — no signature yet');
+    expect(line(opened('Client User'), hesitating, true).act.label).toBe('Nudge the client');
+    // Flag off, today's Follow up.
+    expect(line(opened('Mei Lin'), hesitating, false).act.label).toBe('Follow up');
   });
 });

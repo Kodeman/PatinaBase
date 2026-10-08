@@ -370,10 +370,11 @@ const NO_OWN_ACT_FACTS: OwnActFacts = {
 /**
  * US-19 FR4 Fix 5 (`one-voice`) — the card's act is the paper's own act where
  * the need and the paper name the same moment: a Brief card with an open
- * inquiry prints `Respond to the inquiry`, a proposal sent and not yet opened
- * prints `Nudge {first}` / `Nudge the client`. Every other need keeps
- * `deskActionLabel`. The Desk reads only the row it already has (ruling 521
- * (b)); feeding the band's facts to the card is the deferred end state.
+ * inquiry prints `Respond to the inquiry`, a hesitating proposal — sent and
+ * not yet opened, or opened and unsigned (FR5 531-1: the paper maps `viewed`
+ * to `sent`) — prints `Nudge {first}` / `Nudge the client`. Every other need
+ * keeps `deskActionLabel`. The Desk reads only the row it already has (ruling
+ * 521 (b)); feeding the band's facts to the card is the deferred end state.
  */
 function voicedActLabel(need: NeedLine, row: DocumentStateRow): string | null {
   const clientFirstName = voiceFirstName(row.client_name);
@@ -382,8 +383,7 @@ function voicedActLabel(need: NeedLine, row: DocumentStateRow): string | null {
   }
   if (
     need.kind === 'hesitating_proposal' &&
-    row.proposal_status === 'sent' &&
-    !row.proposal_viewed_at
+    (row.proposal_status === 'sent' || row.proposal_status === 'viewed')
   ) {
     return (
       ownAct('proposal', { ...NO_OWN_ACT_FACTS, proposalState: 'sent', clientFirstName })

@@ -217,7 +217,9 @@ export function TriageBar({
       surfaceKey={variant === 'desk' ? 'desk' : 'open-document'}
       regionKey="lead-triage"
       className={`${wrapClass} gap-2`}
-      aria-label="Lead triage"
+      // FR5 F5-9 (529-1, `one-voice`) — the group the band's press lands in
+      // carries the act's name on the Brief.
+      aria-label={variant === 'brief' && oneVoice ? 'Respond to the inquiry' : 'Lead triage'}
     >
       <DocumentAction
         actionKey="accept-lead"

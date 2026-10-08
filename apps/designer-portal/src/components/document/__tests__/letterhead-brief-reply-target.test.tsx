@@ -62,3 +62,28 @@ describe('the Brief reply target (FR4 524-f)', () => {
     expect(document.getElementById(ACT_TARGET_IDS.inquiryReply)).toBeNull();
   });
 });
+
+// US-19 FR5 F5-9 (529-1) — the group the band's press lands in carries the
+// act's name: on the Brief under one-voice it is `Respond to the inquiry`;
+// otherwise today's `Lead triage`.
+describe('the triage group is named for the act (FR5 F5-9)', () => {
+  it('the Brief under one-voice: the group is Respond to the inquiry and holds the reply control', () => {
+    render(<TriageBar leadId="lead-1" variant="brief" />);
+    const group = screen.getByRole('group', { name: 'Respond to the inquiry' });
+    expect(group).toContainElement(document.getElementById(ACT_TARGET_IDS.inquiryReply));
+    expect(screen.queryByRole('group', { name: 'Lead triage' })).toBeNull();
+  });
+
+  it('the Desk’s card keeps Lead triage', () => {
+    render(<TriageBar leadId="lead-1" variant="desk" />);
+    expect(screen.getByRole('group', { name: 'Lead triage' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Respond to the inquiry' })).toBeNull();
+  });
+
+  it('flag off: the Brief keeps Lead triage', () => {
+    mockOneVoice = false;
+    render(<TriageBar leadId="lead-1" variant="brief" />);
+    expect(screen.getByRole('group', { name: 'Lead triage' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Respond to the inquiry' })).toBeNull();
+  });
+});

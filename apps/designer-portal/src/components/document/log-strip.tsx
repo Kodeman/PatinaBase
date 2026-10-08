@@ -6,13 +6,14 @@
  * mobile bar; at desktop widths it rides above the Studio Drawer. The offer
  * survives navigation because its state lives in the provider.
  * Esc = discard, FIRST in the §3 priority order (before sheets and
- * put-down) — handled here on capture so nothing beneath sees the key.
+ * put-down) — handled here on capture so nothing beneath sees the key,
+ * unless a newer open thing outside the strip holds focus (FR5 F5-8).
  *
  * The entry is already written when the strip appears (crash-safe): "Log"
  * persists the adjustment + activity, "Discard" deletes the entry.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import {
   ACTIVITIES,
@@ -45,6 +46,7 @@ export function LogStrip() {
   const [activity, setActivity] = useState('');
   const [billable, setBillable] = useState(false);
   const [busy, setBusy] = useState(false);
+  const stripRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!offer) return;
@@ -59,6 +61,19 @@ export function LogStrip() {
     if (!offer) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      // FR5 F5-8 (529-6) — Esc closes the innermost open thing. A composer,
+      // sheet or form opened above the offer owns the key: yield it untouched
+      // (no preventDefault, no stopPropagation) when focus sits outside the
+      // strip inside a dialog, textarea or input. Focus in the strip or on
+      // <body> still discards the offer.
+      const target = e.target instanceof Element ? e.target : null;
+      if (
+        target &&
+        !stripRef.current?.contains(target) &&
+        target.closest('[role="dialog"], textarea, input')
+      ) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       void discardOffer();
@@ -98,6 +113,7 @@ export function LogStrip() {
 
   return (
     <section
+      ref={stripRef}
       role="region"
       aria-label="Log time offer"
       data-mobile-edge-owner="log-offer"
