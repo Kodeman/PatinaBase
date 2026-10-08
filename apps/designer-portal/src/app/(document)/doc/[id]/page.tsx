@@ -163,7 +163,7 @@ import {
   householdDisplayName,
   ownAct,
 } from '@/lib/document/act-names';
-import { landRecordPayment } from '@/lib/document/registry';
+import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending, landRecordPayment } from '@/lib/document/registry';
 import { familyLabel } from '@/lib/document/family-label';
 import {
   installReading,
@@ -1907,8 +1907,22 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // a claim or an unanswered PO on its line, a nudge in the Message
       // composer with the overdue decisions named. Where no owner takes it,
       // the press keeps the guide's landing.
+      // US-19 FR5 F5-2 — a held maker note lands on its line's DraftReview.
+      const heldNoteLineId =
+        oneVoice &&
+        need.draft?.status === 'awaiting_review' &&
+        (need.draft.kind === 'maker_eta_request' || need.draft.kind === 'maker_follow_up')
+          ? (need.draft.makerLine?.id ?? null)
+          : null;
       const landing: (() => boolean) | null = !oneVoice
         ? null
+        : heldNoteLineId
+          ? () => {
+              const request = { itemId: String(heldNoteLineId), cell: 'draft' as const };
+              focusFfeLinePending.request = request;
+              window.dispatchEvent(new CustomEvent(FOCUS_FFE_LINE_EVENT, { detail: request }));
+              return true;
+            }
         : need.kind === 'damage_claim'
           ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'claim')
           : need.kind === 'po_unacknowledged'
@@ -1946,6 +1960,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         dueOn: need.dueOn ?? null,
         // D8 — custody: whose hand the next move is in, as the need recorded it.
         owner: need.owner,
+        ...(oneVoice && need.draft ? { draft: need.draft } : {}),
       };
     });
   }, [row, rankedOperationalNeeds, activateDestination, oneVoice, approvalsQuery.data]);
