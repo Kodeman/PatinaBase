@@ -14,7 +14,6 @@ import { useRegionFold } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
 import {
@@ -234,7 +233,6 @@ export function ProjectApprovalDocument({
   const approvals = approvalsQuery.data ?? [];
   const candidates = candidatesQuery.data ?? [];
   const authority = authorityQuery.data;
-  const oneVoice = useFeatureFlag('one-voice').value === true;
   const authorityMatches =
     Boolean(clientProfileId) &&
     authority?.decisionLeadId === clientProfileId &&

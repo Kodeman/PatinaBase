@@ -897,7 +897,9 @@ export function CommandBar() {
       !oneVoice
         ? liveLine(entry)
         : 'need' in entry
-          ? deskNeedText(entry.need, true)
+          ? entry.need
+            ? deskNeedText(entry.need, true)
+            : liveLine(entry)
           : (deskMotion(entry, true)?.text ?? null);
     const lineByEngagement = new Map(
       liveDocs.map((entry) => [entry.row.engagement_id, lineOf(entry)]),
