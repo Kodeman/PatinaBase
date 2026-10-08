@@ -166,6 +166,7 @@ export function OrderCell({
           vendorPoNumber={po.vendor_po_number}
           confirmedEta={po.confirmed_eta}
           drafts={false}
+          inCell
           onStartChange={
             projectId && canChange && po.status !== 'cancelled'
               ? () => setChangeOpen(true)

@@ -534,3 +534,29 @@ describe('held', () => {
     expect(action).not.toHaveAttribute('data-held');
   });
 });
+
+describe('wrap (F9-2)', () => {
+  it('swaps whitespace-nowrap for whitespace-normal text-left, and changes nothing else', () => {
+    render(
+      <>
+        <DocumentAction actionKey="log" variant="tertiary" className="mt-1">
+          Plain
+        </DocumentAction>
+        <DocumentAction actionKey="log" variant="tertiary" className="mt-1" wrap>
+          Wrapped
+        </DocumentAction>
+      </>,
+    );
+    const plain = screen.getByRole('button', { name: 'Plain' });
+    const wrapped = screen.getByRole('button', { name: 'Wrapped' });
+    expect(plain).toHaveClass('whitespace-nowrap');
+    expect(plain).not.toHaveClass('whitespace-normal');
+    expect(plain).not.toHaveClass('text-left');
+    expect(wrapped).toHaveClass('whitespace-normal', 'text-left');
+    expect(wrapped).not.toHaveClass('whitespace-nowrap');
+    expect(wrapped.className).toBe(
+      plain.className.replace('whitespace-nowrap', 'whitespace-normal text-left'),
+    );
+    expect(wrapped).not.toHaveAttribute('wrap');
+  });
+});

@@ -330,6 +330,71 @@ describe('resolving a difference', () => {
   });
 });
 
+describe('F9-2 — the acknowledgment inside the Order cell wraps at 390', () => {
+  beforeEach(() => {
+    mockState.acks = [DIFFERING_ACK];
+  });
+
+  const parts = () => {
+    const record = screen.getByTestId('ack-record');
+    const finish = screen.getByTestId('ack-line-line-finish');
+    return {
+      table: within(record).getByRole('table'),
+      rowLabel: within(finish).getByRole('rowheader'),
+      verdict: within(finish).getByText(/^differs/),
+      decisions: within(finish).getByRole('button', { name: 'Dispute' }).parentElement as HTMLElement,
+      door: screen.getByRole('button', { name: 'They corrected it — log the new acknowledgment' }),
+    };
+  };
+
+  it('inCell drops the 22rem floor and wraps the verdict, row label and door', () => {
+    render(<AckRecord purchaseOrderId="po-1" projectId="project-1" inCell />);
+    const { table, rowLabel, verdict, decisions, door } = parts();
+    expect(table).toHaveClass('w-full', 'min-w-0');
+    expect(table.className).not.toContain('22rem');
+    expect(rowLabel).toHaveClass('min-w-0', 'break-words');
+    expect(verdict).not.toHaveClass('whitespace-nowrap');
+    expect(decisions).toHaveClass('flex', 'flex-wrap');
+    expect(door).toHaveClass('whitespace-normal', 'text-left');
+    expect(door).not.toHaveClass('whitespace-nowrap');
+  });
+
+  it('the default (the ledger, the resend paper) renders as today', () => {
+    render(<AckRecord purchaseOrderId="po-1" projectId="project-1" />);
+    const { table, rowLabel, verdict, decisions, door } = parts();
+    expect(table).toHaveClass('w-full', 'min-w-[22rem]');
+    expect(table).not.toHaveClass('min-w-0');
+    expect(rowLabel.className).toBe('py-1 pr-2 align-top font-normal');
+    expect(verdict).toHaveClass('whitespace-nowrap');
+    expect(decisions).toHaveClass('flex', 'flex-wrap');
+    expect(door).toHaveClass('whitespace-nowrap');
+    expect(door).not.toHaveClass('whitespace-normal');
+    expect(door).not.toHaveClass('text-left');
+  });
+
+  it('the Order cell hosts it inCell', () => {
+    render(
+      <OrderCell
+        item={{ id: 'ottoman', vendor_name: 'Hale', vendor_id: 'vendor-hale' }}
+        po={{
+          id: 'po-1',
+          po_number: 'PO-1042',
+          status: 'confirmed',
+          sent_at: '2026-10-07T12:00:00Z',
+          acknowledged_at: '2026-10-09T12:00:00Z',
+          is_patina_catalog: false,
+        }}
+        reasons={[]}
+        projectId="project-1"
+        canChange
+      />,
+    );
+    const { table, door } = parts();
+    expect(table.className).not.toContain('22rem');
+    expect(door).toHaveClass('whitespace-normal', 'text-left');
+  });
+});
+
 describe('US-19 F6-9 (D17, one-voice) — the acknowledgment form behind a door', () => {
   beforeEach(() => {
     mockOneVoice = true;

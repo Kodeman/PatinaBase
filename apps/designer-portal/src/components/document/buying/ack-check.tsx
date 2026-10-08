@@ -448,6 +448,7 @@ export function AckRecord({
   confirmedEta,
   onStartChange,
   drafts = true,
+  inCell = false,
 }: {
   purchaseOrderId: string;
   projectId?: string | null;
@@ -457,6 +458,12 @@ export function AckRecord({
   onStartChange?: () => void;
   /** Render the drafted reply's review here (the Order cell already lists it). */
   drafts?: boolean;
+  /**
+   * F9-2: hosted in the unfold Order cell, which is narrower than the ledger
+   * at 390. The table drops its 22rem floor and the verdict, row label and
+   * door wrap instead of running past the viewport.
+   */
+  inCell?: boolean;
 }) {
   const qc = useQueryClient();
   const resolve = useResolveAckLine({ errorSurface: 'inline' });
@@ -505,7 +512,9 @@ export function AckRecord({
   return (
     <div data-testid="ack-record" className="min-w-0">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[22rem] border-collapse text-left text-[11px] text-[var(--color-charcoal)]">
+        <table
+          className={`w-full ${inCell ? 'min-w-0' : 'min-w-[22rem]'} border-collapse text-left text-[11px] text-[var(--color-charcoal)]`}
+        >
           <thead>
             <tr className={LABEL_CLS}>
               <th scope="col" className={`${CELL_CLS} font-normal`}>What</th>
@@ -534,7 +543,7 @@ export function AckRecord({
               const word = VERDICT_WORD[line.verdict] ?? line.verdict;
               return (
                 <tr key={line.id} data-testid={`ack-line-${line.id}`} className="border-t border-[var(--color-pearl)]">
-                  <th scope="row" className={`${CELL_CLS} font-normal`}>
+                  <th scope="row" className={`${CELL_CLS} font-normal${inCell ? ' min-w-0 break-words' : ''}`}>
                     {rowLabel(item ? item.name?.trim() || 'Line' : null, line.field)}
                   </th>
                   <td className={`${CELL_CLS} font-mono`}>{storedDisplay(line.field, line.po_value)}</td>
@@ -542,7 +551,7 @@ export function AckRecord({
                     {storedDisplay(line.field, line.ack_value)}
                   </td>
                   <td className={CELL_CLS}>
-                    <p className={`whitespace-nowrap ${open ? `font-medium ${DIFFERS_CLS}` : 'text-[var(--text-muted)]'}`}>
+                    <p className={`${inCell ? '' : 'whitespace-nowrap '}${open ? `font-medium ${DIFFERS_CLS}` : 'text-[var(--text-muted)]'}`}>
                       {word}
                       {delta != null && line.verdict !== 'match' ? ` · ${fmtSignedCents(delta)}` : ''}
                     </p>
@@ -628,6 +637,7 @@ export function AckRecord({
           regionKey="po-ack-record"
           variant="tertiary"
           className="mt-1"
+          wrap={inCell}
           onClick={() => setNewAck(true)}
         >
           They corrected it — log the new acknowledgment

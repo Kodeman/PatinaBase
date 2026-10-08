@@ -52,6 +52,10 @@ const ActionRegionContext = createContext<ActionRegion | null>(null);
    — never a shadow (D4). ─────────────────────────────────────────────────── */
 const BASE_CLASS =
   'da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed aria-disabled:cursor-not-allowed';
+const WRAP_BASE_CLASS = BASE_CLASS.replace(
+  'whitespace-nowrap',
+  'whitespace-normal text-left',
+);
 
 const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
   primary: 'da-primary font-medium tracking-[0.12em]',
@@ -91,6 +95,12 @@ interface DocumentActionBaseProps {
   leading?: ReactNode;
   trailing?: ReactNode;
   restoreFocusRef?: RefObject<HTMLElement | null>;
+  /**
+   * Let a long label wrap to left-aligned lines inside a narrow host (F9-2).
+   * Swaps the base `whitespace-nowrap` rather than overriding it; every caller
+   * that leaves it unset renders exactly as before.
+   */
+  wrap?: boolean;
   children: ReactNode;
   className?: string;
 }
@@ -151,6 +161,7 @@ export const DocumentAction = forwardRef<
     leading,
     trailing,
     restoreFocusRef,
+    wrap = false,
     children,
     className,
     disabled = false,
@@ -232,7 +243,11 @@ export const DocumentAction = forwardRef<
     // classes appended here lost that cascade (0,1,0 against 0,2,0) and were
     // inert (T1R-06); a held-specific treatment belongs in a
     // `.da-act[data-held='true']` rule after :1086, not here.
-    className: [BASE_CLASS, VARIANT_CLASS[variant], className ?? ''].join(' '),
+    className: [
+      wrap ? WRAP_BASE_CLASS : BASE_CLASS,
+      VARIANT_CLASS[variant],
+      className ?? '',
+    ].join(' '),
   };
 
   if (href) {
