@@ -79,6 +79,7 @@ import {
   useDocumentRunningIndex,
 } from '@/hooks/use-document-running-index';
 import { approvalsQuietLeader } from '@/lib/document/lens-quiet-status';
+import { landSection } from '@/lib/document/land-section';
 import { useLensDensity, useLensResolved } from '@/hooks/use-lens-density';
 import { isEditableTarget, useLensState } from '@/hooks/use-lens-state';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
@@ -1239,10 +1240,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       requestAnimationFrame(() => {
         const section = document.getElementById(sectionAnchorId(key));
         const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        section?.scrollIntoView({
-          block: 'start',
-          behavior: reduceMotion ? 'auto' : 'smooth',
-        });
         const responsiveFocusId =
           focusId === 'document-pulse-control'
             ? `${focusId}-${window.matchMedia?.('(min-width: 1180px)').matches ? 'desktop' : 'mobile'}`
@@ -1250,6 +1247,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         const focusTarget =
           (responsiveFocusId ? document.getElementById(responsiveFocusId) : null) ??
           section?.querySelector<HTMLElement>('[data-settled-heading]') ?? section;
+        // SQ-544 (walk D6, P-2) — the section lands at its start unless that
+        // would rest the focused control under the dock.
+        if (section) landSection(section, focusTarget, reduceMotion ? 'auto' : 'smooth');
         focusTarget?.focus({ preventScroll: true });
         // Idempotence rests on the target declaring its own state: an expandable
         // focus target must publish aria-expanded, or a second activation would
