@@ -36,10 +36,12 @@
  * promised the form, e.g. the People room's "Edit details".
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import {
   useClient,
+  useClientInvitationStatus,
   useDesignerClientForClientUser,
+  useInviteAndLinkClient,
   useUpdateClientContact,
 } from '@patina/supabase';
 import { ClientPicker } from '@/components/portal/client-picker';
@@ -47,8 +49,148 @@ import {
   useAttachDocumentClient,
   type AttachEngagementKind,
 } from '@/hooks/use-attach-client';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { messageNoLogin, type NoLoginRepair } from '@/lib/document/act-names';
+import { clientShortName } from '@/lib/document/document-guide';
+import { familyLabel } from '@/lib/document/family-label';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { ClientLetterLine } from '../people/directory/client-letter-line';
 import { DocSheet } from './doc-sheet';
+
+/**
+ * FR4 524-a — the control a relationship paper's no-login household can
+ * mount in this sheet, so held Message offers a repair only where one lands:
+ * the First Letter's `Write to …` while no letter has gone (flag
+ * `client-invite-letter`), otherwise the plain invite. Either needs an email
+ * on file (the route resolves it from the roster row). null while anything is
+ * still resolving, and whenever nothing can mount: held with no repair.
+ * Shared by the letterhead and this sheet so the two cannot disagree.
+ */
+export function useNoLoginRepair(designerClientId: string): NoLoginRepair {
+  const { value: letterOn, isLoading: flagLoading } = useFeatureFlag('client-invite-letter');
+  const { data: client } = useClient(designerClientId);
+  const letter = useClientInvitationStatus(
+    letterOn && !flagLoading ? designerClientId : undefined,
+  );
+  if (flagLoading || !client) return null;
+  if (client.client_id || client.client) return null;
+  if (!(client.client_email ?? '').trim()) return null;
+  if (!letterOn) return 'invite';
+  if (letter.isLoading || letter.isError) return null;
+  // `rowCopy`'s `write-to` state: no letter has ever been written.
+  return letter.data ? null : 'write';
+}
+
+/** The household's name as held Message speaks it (the letterhead's own
+ *  guard): `Elena`, `the Ashfords`, or null for a placeholder. */
+function spokenHousehold(clientName: string): string | null {
+  const family = familyLabel(clientName);
+  return family === 'the client' ? null : clientShortName(family);
+}
+
+/**
+ * FR4 524-a — the relationship sheet's invite row, the control held Message's
+ * repair lands on. The letter path mounts the People room's client-letter row;
+ * the plain path arms before it sends (J2: the row's own act never fires the
+ * outbound email), in the ClientPicker's own words.
+ */
+function NoLoginInviteRow({
+  control,
+  designerClientId,
+  clientName,
+  email,
+  controlRef,
+}: {
+  control: Exclude<NoLoginRepair, null>;
+  designerClientId: string;
+  clientName: string;
+  email: string;
+  controlRef: RefObject<HTMLDivElement | null>;
+}) {
+  const invite = useInviteAndLinkClient();
+  const [armed, setArmed] = useState(false);
+  const label = messageNoLogin(spokenHousehold(clientName), control).repair;
+
+  if (control === 'write') {
+    return (
+      <div ref={controlRef} data-household-invite="write" className="mt-5">
+        <ClientLetterLine
+          designerClientId={designerClientId}
+          clientName={clientName}
+          clientEmail={email}
+        />
+      </div>
+    );
+  }
+  return (
+    <div ref={controlRef} data-household-invite="invite" className="mt-5">
+      <DocumentAction
+        actionKey="invite-household"
+        surfaceKey="household"
+        regionKey="invite"
+        variant="primary"
+        aria-expanded={armed}
+        onClick={() => setArmed((v) => !v)}
+      >
+        {label}
+      </DocumentAction>
+      {armed && (
+        <div role="group" aria-label={`Invite ${email}`} className="mt-2">
+          <p className="mb-2 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
+            {email} has no Patina account yet. Sending an invite emails them a
+            signup link and links this record once they accept.
+          </p>
+          <DocumentActionGroup surfaceKey="household" regionKey="invite-confirm">
+            <DocumentAction
+              actionKey="send-household-invite"
+              variant="primary"
+              disabled={invite.isPending}
+              loading={invite.isPending}
+              onClick={() =>
+                invite.mutate({ designerClientId }, { onSuccess: () => setArmed(false) })
+              }
+            >
+              Send invite
+            </DocumentAction>
+            <DocumentAction
+              actionKey="cancel-household-invite"
+              variant="tertiary"
+              onClick={() => setArmed(false)}
+            >
+              Cancel
+            </DocumentAction>
+          </DocumentActionGroup>
+          {invite.isError && (
+            <p role="alert" className="mt-2 text-[12px] text-[var(--color-clay-ink)]">
+              {invite.error instanceof Error ? invite.error.message : 'Could not send it just now.'}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Mounted only on the relationship path, so no other sheet reads the
+ *  invitation status. */
+function RelationshipInvite(props: {
+  designerClientId: string;
+  clientName: string;
+  email: string;
+  controlRef: RefObject<HTMLDivElement | null>;
+}) {
+  const { designerClientId, clientName, email, controlRef } = props;
+  const control = useNoLoginRepair(designerClientId);
+  return control ? (
+    <NoLoginInviteRow
+      control={control}
+      designerClientId={designerClientId}
+      clientName={clientName}
+      email={email}
+      controlRef={controlRef}
+    />
+  ) : null;
+}
 
 const labelCls =
   'font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
@@ -76,6 +218,10 @@ export interface HouseholdSheetProps {
    *  "Edit details" action — which already promised the form — passes true
    *  so it doesn't ask the designer to click "Edit details" twice. */
   startEditing?: boolean;
+  /** US-19 FR4 Fix 7 (`one-voice`) — opened by held Message's repair act: the
+   *  sheet lands with focus on that repair's control (the relationship's
+   *  invite row, else the picker), not on the dialog. */
+  landOnRepair?: boolean;
 }
 
 export function HouseholdSheet({
@@ -89,7 +235,39 @@ export function HouseholdSheet({
   clientName,
   proposalStatus,
   startEditing = false,
+  landOnRepair = false,
 }: HouseholdSheetProps) {
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const contentRef = useRef<HTMLDivElement>(null);
+  const inviteRef = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  // FR4 Fix 7 — the repair lands on its control. The control can arrive a
+  // render or two after the sheet (the household and the letter state are
+  // reads), so watch the sheet until it does; DocSheet's own focus frame,
+  // queued first, has already run by then.
+  useEffect(() => {
+    const root = contentRef.current;
+    if (!open || !oneVoice || !landOnRepair || !root) return;
+    let landed = false;
+    const tryLand = () => {
+      if (landed) return;
+      const target =
+        inviteRef.current?.querySelector<HTMLElement>('button') ??
+        pickerRef.current?.querySelector<HTMLElement>('button, input') ??
+        null;
+      if (!target) return;
+      landed = true;
+      observer.disconnect();
+      window.requestAnimationFrame(() => target.focus({ preventScroll: true }));
+    };
+    const observer = new MutationObserver(tryLand);
+    observer.observe(root, { childList: true, subtree: true });
+    tryLand();
+    return () => {
+      landed = true;
+      observer.disconnect();
+    };
+  }, [open, oneVoice, landOnRepair]);
   const { data: rel } = useDesignerClientForClientUser(
     clientProfileId ?? undefined,
   );
@@ -175,7 +353,7 @@ export function HouseholdSheet({
 
   return (
     <DocSheet open={open} onClose={onClose} title="The household">
-      <div className="mx-auto max-w-xl">
+      <div ref={contentRef} className="mx-auto max-w-xl">
         <p className={labelCls}>The household</p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
           {hasHousehold ? name : 'No client linked'}
@@ -225,7 +403,7 @@ export function HouseholdSheet({
                   : 'Link a household'}
             </p>
             {canChange ? (
-              <div className="max-w-[340px]">
+              <div ref={pickerRef} className="max-w-[340px]">
                 <ClientPicker
                   value={clientProfileId}
                   onChange={onPick}
@@ -254,6 +432,17 @@ export function HouseholdSheet({
               </p>
             )}
           </div>
+        )}
+
+        {/* FR4 Fix 7 (`one-voice`) — a relationship paper carries no client_id
+            to attach, so its no-login household is invited from here. */}
+        {oneVoice && engagementKind === 'relationship' && designerClientId && !clientProfileId && (
+          <RelationshipInvite
+            designerClientId={designerClientId}
+            clientName={clientName}
+            email={email ?? ''}
+            controlRef={inviteRef}
+          />
         )}
 
         {/* EDIT — the relationship's working details (always notes;

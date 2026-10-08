@@ -51,10 +51,10 @@ jest.mock('../client-mirror', () => ({ ClientMirror: () => null }));
 jest.mock('../proposal-preview', () => ({ ProposalPreview: () => null }));
 jest.mock('../overlays/household-sheet', () => ({ HouseholdSheet: () => null }));
 
-function renderFor(clientProfileId: string | null = 'client-1') {
+function renderFor(clientProfileId: string | null = 'client-1', clientName = 'Nora Chen') {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <LetterheadInstruments projectId="proj-1" clientProfileId={clientProfileId} clientName="Nora Chen" />
+      <LetterheadInstruments projectId="proj-1" clientProfileId={clientProfileId} clientName={clientName} />
     </QueryClientProvider>,
   );
 }
@@ -70,7 +70,7 @@ function nudge(named: string[]): boolean {
   return taken;
 }
 
-const note = () => screen.getByPlaceholderText('A quick note to Nora Chen…');
+const note = () => screen.getByPlaceholderText('A quick note to Nora…');
 
 beforeEach(() => {
   mockOneVoice = true;
@@ -79,7 +79,7 @@ beforeEach(() => {
 describe('Nudge {first} lands on the Message composer (F3-2)', () => {
   it('opens the composer with focus in its note, the overdue decisions named', async () => {
     renderFor();
-    expect(screen.queryByPlaceholderText('A quick note to Nora Chen…')).toBeNull();
+    expect(screen.queryByPlaceholderText('A quick note to Nora…')).toBeNull();
 
     expect(nudge(['Living room rug', 'Dining chairs'])).toBe(true);
     await waitFor(() => expect(note()).toHaveFocus());
@@ -94,7 +94,7 @@ describe('Nudge {first} lands on the Message composer (F3-2)', () => {
     await waitFor(() => expect(note()).toHaveFocus());
     const send = screen.getByRole('button', { name: /^Send/ });
     expect(fireEvent.keyDown(send, { key: 'Escape' })).toBe(false);
-    expect(screen.queryByPlaceholderText('A quick note to Nora Chen…')).toBeNull();
+    expect(screen.queryByPlaceholderText('A quick note to Nora…')).toBeNull();
     expect(screen.queryByText(/^Waiting on Nora/)).toBeNull();
   });
 
@@ -107,6 +107,124 @@ describe('Nudge {first} lands on the Message composer (F3-2)', () => {
     mockOneVoice = false;
     renderFor();
     expect(nudge(['Living room rug'])).toBe(false);
-    expect(screen.queryByPlaceholderText('A quick note to Nora Chen…')).toBeNull();
+    expect(screen.queryByPlaceholderText(/^A quick note to/)).toBeNull();
+  });
+});
+
+/** The pressed act, outside the letterhead: the band's act at 1440 or the
+ *  dock centre at 390, each a real button that holds focus when pressed. */
+const pressed: HTMLElement[] = [];
+function pressedAct(attrs: Record<string, string>): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.textContent = 'Nudge Nora';
+  for (const [k, v] of Object.entries(attrs)) button.setAttribute(k, v);
+  document.body.appendChild(button);
+  pressed.push(button);
+  return button;
+}
+
+describe('FR4 Fix 2 — Esc is Cancel: focus returns to the pressed act', () => {
+  afterEach(() => {
+    pressed.splice(0).forEach((el) => el.remove());
+  });
+
+  it('the band act at 1440: Esc closes the composer, is taken, and focus is back on the act', async () => {
+    renderFor();
+    const band = pressedAct({ 'data-part': 'act' });
+    band.focus();
+    nudge(['Living room rug']);
+    await waitFor(() => expect(note()).toHaveFocus());
+
+    expect(fireEvent.keyDown(note(), { key: 'Escape' })).toBe(false);
+    expect(screen.queryByPlaceholderText('A quick note to Nora…')).toBeNull();
+    expect(band).toHaveFocus();
+  });
+
+  it('the dock centre at 390: focus goes back to the centre', async () => {
+    renderFor();
+    const centre = pressedAct({
+      'data-action-region': 'lens-band',
+      'data-action-key': 'next:own:document-act-proposal-nudge',
+    });
+    centre.focus();
+    nudge([]);
+    await waitFor(() => expect(note()).toHaveFocus());
+
+    fireEvent.keyDown(note(), { key: 'Escape' });
+    expect(centre).toHaveFocus();
+  });
+
+  it('a press that left focus on <body> (Safari): focus goes to the rendered band act', async () => {
+    renderFor();
+    const line = document.createElement('div');
+    line.setAttribute('data-lens-line', '2');
+    document.body.appendChild(line);
+    pressed.push(line);
+    const band = document.createElement('button');
+    band.setAttribute('data-part', 'act');
+    band.getClientRects = () => [{}] as unknown as DOMRectList;
+    line.appendChild(band);
+    (document.activeElement as HTMLElement | null)?.blur();
+    nudge([]);
+    await waitFor(() => expect(note()).toHaveFocus());
+    fireEvent.keyDown(note(), { key: 'Escape' });
+    expect(band).toHaveFocus();
+  });
+
+  it('Cancel returns focus the same way', async () => {
+    renderFor();
+    const band = pressedAct({ 'data-part': 'act' });
+    band.focus();
+    nudge([]);
+    await waitFor(() => expect(note()).toHaveFocus());
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(band).toHaveFocus();
+  });
+
+  it('the letterhead’s own Message: Esc returns focus to it', async () => {
+    renderFor();
+    const message = screen.getByRole('button', { name: 'Message Nora' });
+    message.focus();
+    fireEvent.click(message);
+    await waitFor(() => expect(note()).toBeInTheDocument());
+    note().focus();
+    fireEvent.keyDown(note(), { key: 'Escape' });
+    expect(message).toHaveFocus();
+  });
+});
+
+describe('FR4 Fix 2 — the name guard on the composer', () => {
+  it('a real first name: `A quick note to Nora…` and `It lands in Nora’s portal messages.`', async () => {
+    renderFor();
+    nudge([]);
+    await waitFor(() => expect(note()).toBeInTheDocument());
+    expect(screen.getByText(/It lands in Nora’s portal messages\.$/)).toBeInTheDocument();
+  });
+
+  it('the seed’s `Client User`: `the client` everywhere, never the record', async () => {
+    renderFor('client-1', 'Client User');
+    nudge(['Living room rug']);
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('A quick note to the client…')).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/It lands in the client’s portal messages\.$/)).toBeInTheDocument();
+    expect(screen.getByText('Waiting on the client: Living room rug')).toBeInTheDocument();
+    expect(screen.queryByText(/Client User/)).toBeNull();
+  });
+
+  it('an article-led household: `the Ashfords’` possessive', async () => {
+    renderFor('client-1', 'The Ashfords');
+    nudge([]);
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('A quick note to the Ashfords…')).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/It lands in the Ashfords’ portal messages\.$/)).toBeInTheDocument();
+  });
+
+  it('flag off: the composer prints the household record as today', () => {
+    mockOneVoice = false;
+    renderFor('client-1', 'Client User');
+    fireEvent.click(screen.getByRole('button', { name: 'Message the client' }));
+    expect(screen.getByPlaceholderText('A quick note to Client User…')).toBeInTheDocument();
   });
 });

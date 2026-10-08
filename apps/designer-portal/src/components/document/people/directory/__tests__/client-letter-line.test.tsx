@@ -196,6 +196,12 @@ describe('ClientLetterLine', () => {
     expect(line).toHaveTextContent('On your roster · no letter sent · Write to Dave');
   });
 
+  it('FR4 524-b: an article-led household keeps its article — `Write to the Ashfords`', () => {
+    status = null;
+    renderLine({ designerClientId: 'dc1', clientName: 'The Ashfords' });
+    expect(screen.getByRole('button', { name: 'Write to the Ashfords' })).toBeInTheDocument();
+  });
+
   it('still offers a way in when the client has no name on file', () => {
     status = null;
     renderLine({ designerClientId: 'dc1', clientName: null });

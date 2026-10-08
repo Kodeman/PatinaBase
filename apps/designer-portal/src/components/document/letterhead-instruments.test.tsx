@@ -113,7 +113,10 @@ jest.mock('./overlays/household-sheet', () => ({
         data-status={proposalStatus ?? ''}
       />
     ) : null,
+  // FR4 524-a — which invite control the relationship sheet can mount.
+  useNoLoginRepair: () => mockNoLoginRepair,
 }));
+let mockNoLoginRepair: 'invite' | 'write' | null = 'invite';
 
 /** jsdom evaluates no media queries: this is how the tier is driven, the same
  *  shape as responsive-document-shell.test.tsx's `installMatchMedia`. */
@@ -746,18 +749,52 @@ describe('a relationship paper’s letterhead under one-voice (FR3 F3-25, F3-6)'
     return [...latest.values()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }
 
-  function renderRelationship(doorInDock = false) {
+  beforeEach(() => {
+    mockNoLoginRepair = 'invite';
+  });
+
+  function renderRelationship(doorInDock = false, clientName = 'Elena Marlowe') {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <LetterheadInstruments
           designerClientId="dc-ashford"
           clientProfileId={null}
-          clientName="Elena Marlowe"
+          clientName={clientName}
           voice={{ next: null, standingCount: 2, doorInDock }}
         />
       </QueryClientProvider>,
     );
   }
+
+  it('FR4 524-b: an article-led household keeps its article and takes the plural verb', () => {
+    renderRelationship(true, 'The Ashfords');
+    expect(screen.getByRole('button', { name: 'Message the Ashfords' })).toBeInTheDocument();
+    expect(screen.getByText('The Ashfords have no login yet.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Invite the Ashfords' })).toBeInTheDocument();
+    expect(more().find((act) => act.actionKey === 'message-family')?.held).toMatchObject({
+      reason: 'The Ashfords have no login yet.',
+      repair: { label: 'Invite the Ashfords' },
+    });
+  });
+
+  it('FR4 524-a: the label follows the control — `Write to …` where the letter is the control', () => {
+    mockNoLoginRepair = 'write';
+    renderRelationship(true, 'The Ashfords');
+    expect(screen.getByRole('button', { name: 'Write to the Ashfords' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Invite/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Write to the Ashfords' }));
+    expect(screen.getByTestId('household-sheet')).toHaveAttribute('data-kind', 'relationship');
+  });
+
+  it('FR4 524-a: no control the sheet can mount — held with no repair act, at both widths', () => {
+    mockNoLoginRepair = null;
+    renderRelationship(true, 'The Ashfords');
+    expect(screen.getByText('The Ashfords have no login yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Invite|Write to/ })).not.toBeInTheDocument();
+    const held = more().find((act) => act.actionKey === 'message-family')?.held;
+    expect(held?.reason).toBe('The Ashfords have no login yet.');
+    expect(held?.repair).toBeUndefined();
+  });
 
   it('no login: held Message {first} with its real reason, Keys, and no Preview', () => {
     renderRelationship(true);
@@ -779,5 +816,61 @@ describe('a relationship paper’s letterhead under one-voice (FR3 F3-25, F3-6)'
       'data-designer-client',
       'dc-ashford',
     );
+  });
+});
+
+describe('a Brief paper’s letterhead under one-voice (FR4 524-d)', () => {
+  const primary = useMobilePrimaryAction as jest.Mock;
+  const secondary = useMobileSecondaryAction as jest.Mock;
+
+  beforeEach(() => {
+    installTier(true);
+    primary.mockClear();
+    secondary.mockClear();
+    mockProject = {};
+  });
+  afterAll(() => {
+    mockOneVoice = false;
+  });
+
+  function more(): string[] {
+    const latest = new Map<string, MobileSecondaryAction>();
+    for (const [action] of secondary.mock.calls) {
+      if (action) latest.set(action.actionKey, action);
+    }
+    return [...latest.values()]
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((act) => act.label);
+  }
+
+  function renderBrief(clientProfileId: string | null) {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <LetterheadInstruments
+          brief
+          clientProfileId={clientProfileId}
+          clientName="Nora Chen"
+          voice={{ next: null, standingCount: 3, doorInDock: true }}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  it('Keys and Standing only: no Message, no Preview — even with an in-app profile', () => {
+    mockOneVoice = true;
+    renderBrief('profile-1');
+    expect(more()).toEqual(['Standing · 3', 'Keys']);
+    expect(screen.queryByRole('button', { name: /Message/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Preview/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Document letterhead actions' })).toBeNull();
+    // Message never registers as the dock centre.
+    expect(primary.mock.calls.every(([action]) => action === null)).toBe(true);
+  });
+
+  it('flag off: a profiled lead keeps today’s Message', () => {
+    mockOneVoice = false;
+    renderBrief('profile-1');
+    expect(more()).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Message Nora Chen' })).toBeInTheDocument();
   });
 });

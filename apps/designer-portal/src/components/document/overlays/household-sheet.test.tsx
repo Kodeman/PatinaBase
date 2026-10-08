@@ -6,16 +6,43 @@
  * that null is the whole reason 00583 hydrates client_phone on INSERT only, so
  * the payload shape is worth pinning here rather than inferring it from SQL.
  */
-import { fireEvent, render, screen, act } from '@testing-library/react';
+import { fireEvent, render, screen, act, waitFor } from '@testing-library/react';
 import { HouseholdSheet } from './household-sheet';
 
 const mutate = jest.fn();
+const mockInvite = jest.fn();
 let mockClient: Record<string, unknown> | undefined;
+let mockLetterStatus: { data: unknown; isLoading: boolean; isError: boolean } = {
+  data: null,
+  isLoading: false,
+  isError: false,
+};
+let mockFlags: Record<string, boolean> = {};
 
 jest.mock('@patina/supabase', () => ({
   useClient: () => ({ data: mockClient }),
   useDesignerClientForClientUser: () => ({ data: undefined }),
   useUpdateClientContact: () => ({ mutate, isPending: false }),
+  useClientInvitationStatus: () => mockLetterStatus,
+  useInviteAndLinkClient: () => ({
+    mutate: mockInvite,
+    isPending: false,
+    isError: false,
+    error: null,
+  }),
+}));
+
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (key: string) => ({ value: mockFlags[key] === true, isLoading: false }),
+}));
+
+// The People room's row, as the sheet mounts it: its own act is a button.
+jest.mock('../people/directory/client-letter-line', () => ({
+  ClientLetterLine: ({ clientName }: { clientName: string }) => (
+    <p data-testid="client-letter-line">
+      On your roster · no letter sent · <button type="button">{`Write to ${clientName}`}</button>
+    </p>
+  ),
 }));
 
 jest.mock('@/hooks/use-attach-client', () => ({
@@ -28,7 +55,11 @@ jest.mock('@/hooks/use-attach-client', () => ({
 }));
 
 jest.mock('@/components/portal/client-picker', () => ({
-  ClientPicker: () => null,
+  ClientPicker: ({ placeholder }: { placeholder?: string }) => (
+    <button type="button" data-testid="client-picker-trigger">
+      {placeholder}
+    </button>
+  ),
 }));
 
 const CAPTURED_CLIENT = {
@@ -56,10 +87,110 @@ const renderSheet = () =>
     />,
   );
 
+describe('HouseholdSheet — FR4 Fix 7: the relationship sheet’s invite control (one-voice)', () => {
+  const ASHFORDS = {
+    ...CAPTURED_CLIENT,
+    client_name: 'The Ashfords',
+    client_email: 'ashfords@example.com',
+  };
+  const renderRelationship = (landOnRepair = true) =>
+    render(
+      <HouseholdSheet
+        open
+        onClose={jest.fn()}
+        engagementKind="relationship"
+        projectId={null}
+        proposalId={null}
+        clientProfileId={null}
+        designerClientId="dc-ashford"
+        clientName="The Ashfords"
+        landOnRepair={landOnRepair}
+      />,
+    );
+
+  beforeEach(() => {
+    mockInvite.mockReset();
+    mockClient = { ...ASHFORDS };
+    mockLetterStatus = { data: null, isLoading: false, isError: false };
+    mockFlags = { 'one-voice': true };
+  });
+
+  it('mounts `Invite the Ashfords` and the repair lands with focus on it, not the dialog', async () => {
+    renderRelationship();
+    const invite = screen.getByRole('button', { name: 'Invite the Ashfords' });
+    await waitFor(() => expect(invite).toHaveFocus());
+  });
+
+  it('the invite arms before it sends (J2): Send invite fires useInviteAndLinkClient', () => {
+    renderRelationship();
+    fireEvent.click(screen.getByRole('button', { name: 'Invite the Ashfords' }));
+    expect(mockInvite).not.toHaveBeenCalled();
+    expect(screen.getByRole('group', { name: 'Invite ashfords@example.com' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+    expect(mockInvite).toHaveBeenCalledWith(
+      { designerClientId: 'dc-ashford' },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it('with the letter on: the People room’s client-letter row, its `Write to …` taking focus', async () => {
+    mockFlags = { 'one-voice': true, 'client-invite-letter': true };
+    renderRelationship();
+    expect(screen.getByTestId('client-letter-line')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Invite/ })).toBeNull();
+    const write = screen.getByRole('button', { name: 'Write to The Ashfords' });
+    await waitFor(() => expect(write).toHaveFocus());
+  });
+
+  it('a letter already sent, no email on file, or a login: nothing mounts', () => {
+    mockFlags = { 'one-voice': true, 'client-invite-letter': true };
+    mockLetterStatus = { data: { state: 'sent' }, isLoading: false, isError: false };
+    const { unmount } = renderRelationship();
+    expect(screen.queryByTestId('client-letter-line')).toBeNull();
+    unmount();
+
+    mockFlags = { 'one-voice': true };
+    mockClient = { ...ASHFORDS, client_email: null };
+    const second = renderRelationship();
+    expect(screen.queryByRole('button', { name: /^Invite/ })).toBeNull();
+    second.unmount();
+
+    mockClient = { ...ASHFORDS, client_id: 'profile-1' };
+    renderRelationship();
+    expect(screen.queryByRole('button', { name: /^Invite/ })).toBeNull();
+  });
+
+  it('flag off: no invite row (the sheet is today’s)', () => {
+    mockFlags = {};
+    renderRelationship();
+    expect(screen.queryByRole('button', { name: /^Invite/ })).toBeNull();
+  });
+
+  it('proposal kind: the repair lands on the picker `Invite or choose a client…`', async () => {
+    render(
+      <HouseholdSheet
+        open
+        onClose={jest.fn()}
+        engagementKind="proposal"
+        projectId={null}
+        proposalId="prop-1"
+        clientProfileId={null}
+        designerClientId="dc-elena"
+        clientName="Elena Marlowe"
+        proposalStatus="draft"
+        landOnRepair
+      />,
+    );
+    const picker = screen.getByRole('button', { name: 'Invite or choose a client…' });
+    await waitFor(() => expect(picker).toHaveFocus());
+  });
+});
+
 describe('HouseholdSheet — the phone on file', () => {
   beforeEach(() => {
     mutate.mockReset();
     mockClient = { ...CAPTURED_CLIENT };
+    mockFlags = {};
   });
 
   it('shows the captured phone in the read view', () => {

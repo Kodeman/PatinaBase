@@ -1049,6 +1049,19 @@ describe('the phone at 390 under one-voice (FR2 F2-5, F2-8, F2-15)', () => {
     expect(doorway.textContent).not.toMatch(/no-login/);
   });
 
+  it('FR4 Fix 2: the seed’s `Client User` record prints `the client`, never the record', () => {
+    mountPhone({ ...heldDocument, clientName: 'Client User' });
+    const doorway = screen.getByRole('button', { name: 'Open sections' });
+    expect(within(doorway).getByText('the client')).toBeInTheDocument();
+    expect(doorway.textContent).not.toMatch(/Client User/);
+  });
+
+  it('FR4 Fix 2: a real household prints whole', () => {
+    mountPhone({ ...heldDocument, clientName: 'The Ashfords (no-login household)' });
+    const doorway = screen.getByRole('button', { name: 'Open sections' });
+    expect(within(doorway).getByText('The Ashfords')).toBeInTheDocument();
+  });
+
   it('F2-15: the approvals stop reads `At approvals`; the door keeps its full name', () => {
     mountPhone({ ...heldDocument, readingIndex: 'approvals' });
     expect(screen.getByText('At approvals')).toBeInTheDocument();

@@ -193,18 +193,29 @@ export const MESSAGE_WITHHELD = {
   repair: 'Link a client',
 } as const;
 
+/** The control a no-login household's repair lands on (FR4 524-a): an invite,
+ *  the First Letter (`client-invite-letter`), or none the paper can mount. */
+export type NoLoginRepair = 'invite' | 'write' | null;
+
 /** FR3 F3-6 (516-3 / 518-2) — Message held for a LINKED household with no
  *  login: the blocking condition is the login, not the link. `Invite Elena`,
- *  or the family fallback `Invite the client`. */
-export function messageNoLogin(firstName: string | null): {
+ *  or the family fallback `Invite the client`. FR4 524-b — an article-led
+ *  household keeps its article and takes the plural verb: `The Ashfords have
+ *  no login yet.` 524-a — the repair's label follows its control (`Write to
+ *  …` for the letter), and with no control there is no repair. */
+export function messageNoLogin(
+  firstName: string | null,
+  control: NoLoginRepair = 'invite',
+): {
   reason: string;
-  repair: string;
+  repair: string | null;
 } {
-  const first = firstName?.trim();
-  if (!first) return { reason: 'The client has no login yet.', repair: 'Invite the client' };
+  const first = firstName?.trim() || null;
+  const who = first ?? 'the client';
+  const verb = first && /^the\s/i.test(first) ? 'have' : 'has';
   return {
-    reason: `${first.charAt(0).toUpperCase()}${first.slice(1)} has no login yet.`,
-    repair: `Invite ${first}`,
+    reason: `${who.charAt(0).toUpperCase()}${who.slice(1)} ${verb} no login yet.`,
+    repair: control === 'invite' ? `Invite ${who}` : control === 'write' ? `Write to ${who}` : null,
   };
 }
 

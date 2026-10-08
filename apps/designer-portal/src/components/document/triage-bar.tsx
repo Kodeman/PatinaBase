@@ -42,6 +42,7 @@ import {
   useAcceptDesignRequest,
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { ACT_TARGET_IDS } from '@/lib/document/act-names';
 import { suppressNextArrival } from '@/lib/arrival/nav';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { offerReturnToLeadUndo } from './return-to-lead-undo';
@@ -88,6 +89,7 @@ export function TriageBar({
   const { value: arrivalArc, isLoading: arcLoading } =
     useFeatureFlag('arrival-arc');
   const acceptRequest = useAcceptDesignRequest();
+  const oneVoice = useFeatureFlag('one-voice').value === true;
 
   // When true the bar shows the reconnect-date presets instead of the verbs.
   const [pickingDate, setPickingDate] = useState(false);
@@ -219,6 +221,9 @@ export function TriageBar({
     >
       <DocumentAction
         actionKey="accept-lead"
+        // FR4 524-f (`one-voice`) — the Brief's reply door: the band's
+        // `Respond to the inquiry` lands with focus here.
+        id={variant === 'brief' && oneVoice ? ACT_TARGET_IDS.inquiryReply : undefined}
         variant="primary"
         disabled={busy && !beginDiscovery.isPending && !acceptRequest.isPending}
         loading={(arcLoading && arrivalEligible) || beginDiscovery.isPending || acceptRequest.isPending}

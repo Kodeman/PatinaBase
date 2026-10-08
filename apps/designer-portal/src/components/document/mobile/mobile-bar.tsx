@@ -21,6 +21,8 @@ import {
 } from '@/lib/document/document-index';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { householdDisplayName } from '@/lib/document/act-names';
+import { familyLabel } from '@/lib/document/family-label';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
 import { DocumentAction } from '../document-action';
 import { openPost } from '../overlays/post-sheet';
@@ -130,8 +132,13 @@ export function MobileBar() {
   // case); the third line names the current reading stop.
   // US-19 F2-15 (`one-voice`) — a parenthetical is bookkeeping, never printed
   // in the dock: `Elena Marlowe (no-login household)` reads `Elena Marlowe`.
+  // FR4 Fix 2 — through `householdDisplayName` and the letterhead's
+  // placeholder guard: the seed's `Client User` record reads `the client`.
+  const printedName = oneVoice
+    ? householdDisplayName(activeDoc?.clientName ?? '').replace(/\s*\([^)]*\)/g, '').trim()
+    : '';
   const clientName = oneVoice
-    ? (activeDoc?.clientName ?? '').replace(/\s*\([^)]*\)/g, '').trim()
+    ? printedName && familyLabel(printedName)
     : activeDoc?.clientName;
   const household = clientName || activeDoc?.title || 'Document';
   const readingIndex = activeDoc?.readingIndex ?? null;

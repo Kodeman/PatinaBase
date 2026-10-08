@@ -162,6 +162,29 @@ describe('Message (D1, D3, D7)', () => {
     expect(ACT_TIER['Invite {first name}']).toBe('plain');
   });
 
+  it('FR4 524-b — an article-led household keeps its article and takes the plural verb', () => {
+    expect(messageNoLogin('the Ashfords')).toEqual({
+      reason: 'The Ashfords have no login yet.',
+      repair: 'Invite the Ashfords',
+    });
+    expect(messageLabel('the Ashfords')).toBe('Message the Ashfords');
+    // A first name that merely starts with "The…" is one person.
+    expect(messageNoLogin('Theo').reason).toBe('Theo has no login yet.');
+  });
+
+  it('FR4 524-a — the repair follows its control, and with none there is no repair', () => {
+    expect(messageNoLogin('the Ashfords', 'write')).toEqual({
+      reason: 'The Ashfords have no login yet.',
+      repair: 'Write to the Ashfords',
+    });
+    expect(messageNoLogin('Elena', 'write').repair).toBe('Write to Elena');
+    expect(messageNoLogin('the Ashfords', null)).toEqual({
+      reason: 'The Ashfords have no login yet.',
+      repair: null,
+    });
+    expect(messageNoLogin(null, null).repair).toBeNull();
+  });
+
   it('FR3 F3-13 — the household display name drops the no-login suffix, and only that', () => {
     expect(householdDisplayName('Elena Marlowe (no-login household)')).toBe('Elena Marlowe');
     expect(householdDisplayName('The Ashfords (no-login household)')).toBe('The Ashfords');

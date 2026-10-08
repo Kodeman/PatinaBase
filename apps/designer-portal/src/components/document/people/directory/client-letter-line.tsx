@@ -167,7 +167,12 @@ export function ClientLetterLine({
   if (flagLoading || !letterOn || isLoading || isError) return null;
 
   const { text, action } = rowCopy(status ?? null);
-  const given = (clientName ?? '').trim().split(/\s+/)[0] || null;
+  // FR4 524-b — an article-led household keeps its article: `Write to the
+  // Ashfords`, never `Write to The`.
+  const trimmed = (clientName ?? '').trim();
+  const given = /^the\s/i.test(trimmed)
+    ? `the ${trimmed.replace(/^the\s+/i, '')}`
+    : trimmed.split(/\s+/)[0] || null;
   const letterDelivery = status ? (emailDelivery.byRef[status.invitationId] ?? null) : null;
   const letterNeedsAttention = Boolean(
     letterDelivery && isAttentionState(letterDelivery.state),

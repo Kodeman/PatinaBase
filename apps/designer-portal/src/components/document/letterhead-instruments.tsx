@@ -38,6 +38,7 @@ import {
   NAMED_ACTS,
   messageLabel,
   messageNoLogin,
+  type NoLoginRepair,
 } from '@/lib/document/act-names';
 import {
   standingDoorLabel,
@@ -59,7 +60,53 @@ import {
   DocumentActionRow,
 } from './document-action';
 import { ProposalPreview } from './proposal-preview';
-import { HouseholdSheet } from './overlays/household-sheet';
+import { HouseholdSheet, useNoLoginRepair } from './overlays/household-sheet';
+
+/** FR3 F3-17's selector for the band's act (command-bar.tsx), and the dock
+ *  centre the band's Next publishes (`next:` keys, D7). */
+const BAND_ACT_SELECTOR = '[data-lens-line="2"] [data-part="act"]';
+const DOCK_NEXT_SELECTOR = '[data-action-region="lens-band"][data-action-key^="next:"]';
+
+/** FR4 Fix 2 — the Next act a `Nudge` press came from when the browser left
+ *  focus on <body> (Safari does not focus a pressed button): the band's act
+ *  at desk width, the dock centre on the phone. */
+function pressedNextAct(): HTMLElement | null {
+  const rendered = (el: HTMLElement | null) =>
+    el && el.getClientRects().length > 0 ? el : null;
+  const band = rendered(document.querySelector<HTMLElement>(BAND_ACT_SELECTOR));
+  const dock = rendered(document.querySelector<HTMLElement>(DOCK_NEXT_SELECTOR));
+  return window.matchMedia?.('(min-width: 1180px)').matches ? (band ?? dock) : (dock ?? band);
+}
+
+/** The control focus returns to when the composer is cancelled: whatever was
+ *  pressed to open it, or (a Next landing) the act it was pressed from. */
+function composerOpener(composer: HTMLElement | null, landing: boolean): HTMLElement | null {
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active !== document.body && !composer?.contains(active)) {
+    return active;
+  }
+  return landing ? pressedNextAct() : null;
+}
+
+/** `Elena’s`, `the client’s`; an article-led plural household takes the
+ *  bare apostrophe (`the Ashfords’`, FR4 524-b). */
+function possessive(name: string): string {
+  return /^the\s.*s$/i.test(name) ? `${name}’` : `${name}’s`;
+}
+
+/** FR4 524-a — reads which invite control the relationship sheet can mount;
+ *  mounted only while a relationship paper's Message is held for the login. */
+function NoLoginRepairProbe({
+  designerClientId,
+  onRepair,
+}: {
+  designerClientId: string;
+  onRepair: (control: NoLoginRepair) => void;
+}) {
+  const control = useNoLoginRepair(designerClientId);
+  useEffect(() => onRepair(control), [control, onRepair]);
+  return null;
+}
 
 /** The three tiers the mirror honors (00084 client_visibility_tier). Copy
  *  ported from the portal's ClientViewToggle. */
@@ -280,7 +327,12 @@ export function LetterheadInstruments({
   voice = null,
   designerClientId = null,
   proposalStatus = null,
+  brief = false,
 }: {
+  /** US-19 FR4 524-d (`one-voice`) — a Brief paper: Keys and Standing only.
+   *  Nothing has been written to the inquirer yet, so no Message (it would
+   *  front-run the reply) and no client's copy to preview. */
+  brief?: boolean;
   /** US-19 D7 (`one-voice`) — the band's Next and its door, which the phone
    *  dock repeats: the centre is Next's act in the band's words, and More
    *  carries `Standing · N` when the band's measure moved it there. */
@@ -325,7 +377,9 @@ export function LetterheadInstruments({
   // "View as the client" needs a mirror to open: the full project mirror when
   // there's a project, else the proposal-grain mirror when there's a live
   // proposal. A pure relationship with neither has nothing to mirror — hide it.
-  const canMirror = Boolean(projectId || proposalId);
+  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const briefPaper = oneVoice && brief;
+  const canMirror = !briefPaper && Boolean(projectId || proposalId);
   // F52 (0a-3) — a linked client is the household chip's own truth: a client
   // profile, or the canonical relationship a captured / no-login household
   // carries. On a project document that relationship rides the project's
@@ -339,25 +393,34 @@ export function LetterheadInstruments({
   );
   // "Send a note" needs a linked client AND a thread route: a project group
   // thread, or (pre-project) a direct thread to the client's profile.
-  const canSendNote = hasClient && Boolean(projectId || clientProfileId);
-  const oneVoice = useFeatureFlag('one-voice').value === true;
+  const canSendNote = !briefPaper && hasClient && Boolean(projectId || clientProfileId);
   // A project with nobody linked still offers Message, held with its reason and
   // the repair beside it (D3 Gated, D7) — never as the dock's centre. FR2
   // F2-17 (`one-voice`): so does a proposal paper with no client to message —
   // none linked, or a household with no login (no thread route). FR3 F3-25:
   // and a relationship paper, which now mounts these with or without a login.
+  // FR4 524-d: a Brief paper offers no Message at all, held or live.
   const messageHeld =
-    (Boolean(projectId) && !hasClient) ||
-    (oneVoice && !projectId && !canSendNote);
+    !briefPaper &&
+    ((Boolean(projectId) && !hasClient) || (oneVoice && !projectId && !canSendNote));
   const [linking, setLinking] = useState(false);
   const messageReasonId = useId();
 
   const firstName = family === 'the client' ? null : clientShortName(family);
+  const spokenName = firstName ?? 'the client';
   // FR3 F3-6 — a linked household with no login is held for the login, not
   // the link: `Elena has no login yet.` / `Invite Elena`. `Link a client
   // first.` stays for a paper with no household linked at all.
   const noLogin = oneVoice && messageHeld && Boolean(designerClientId);
-  const withheld = noLogin ? messageNoLogin(firstName) : MESSAGE_WITHHELD;
+  // FR4 524-a — on a relationship paper the repair lands in the household
+  // sheet's invite row, so it is offered only when that row can mount, in
+  // that row's words (`Write to …` for the letter); otherwise Message is held
+  // with no repair. Proposal papers keep the picker's `Invite …`.
+  const relationshipNoLogin = noLogin && !projectId && !proposalId;
+  const [noLoginRepair, setNoLoginRepair] = useState<NoLoginRepair>(null);
+  const withheld = noLogin
+    ? messageNoLogin(firstName, relationshipNoLogin ? noLoginRepair : 'invite')
+    : MESSAGE_WITHHELD;
   const heldLabel = messageLabel(noLogin ? firstName : null);
 
   // US-19 F3-2 (one-voice, P-2) — `Nudge {first}` lands here: the composer
@@ -369,12 +432,36 @@ export function LetterheadInstruments({
   useEffect(() => {
     if (!composing) setNamed([]);
   }, [composing]);
+  // FR4 Fix 2 (`one-voice`, design-review-3 §4) — the act that opened the
+  // composer, so Esc (Cancel) puts focus back on it.
+  const openerRef = useRef<HTMLElement | null>(null);
+  const rememberOpener = (landing: boolean) => {
+    openerRef.current = oneVoice ? composerOpener(composerRef.current, landing) : null;
+  };
+  // Read through a ref: the dock may hold an earlier render's press.
+  const composingRef = useRef(composing);
+  composingRef.current = composing;
+  const toggleComposer = () => {
+    if (!composingRef.current) rememberOpener(false);
+    setComposing((v) => !v);
+  };
+  const openComposer = () => {
+    rememberOpener(false);
+    setComposing(true);
+  };
+  const cancelComposer = () => {
+    setComposing(false);
+    const opener = openerRef.current;
+    openerRef.current = null;
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+  };
   useEffect(() => {
     if (!oneVoice || !canSendNote) return;
     const onCompose = (event: Event) => {
       event.preventDefault();
       const detail = (event as CustomEvent<{ named?: readonly string[] } | undefined>).detail;
       setNamed(detail?.named ?? []);
+      openerRef.current = composerOpener(composerRef.current, true);
       setComposing(true);
       requestAnimationFrame(() => {
         composerRef.current?.scrollIntoView?.({ block: 'center' });
@@ -392,7 +479,7 @@ export function LetterheadInstruments({
           surfaceKey: 'open-document',
           regionKey: 'letterhead-actions',
           label: oneVoice ? messageLabel(firstName) : `Message ${family}`,
-          target: { kind: 'press', onPress: () => setComposing((v) => !v) },
+          target: { kind: 'press', onPress: toggleComposer },
         }
       : null,
   );
@@ -437,7 +524,7 @@ export function LetterheadInstruments({
               {
                 actionKey: 'message-family',
                 label: messageLabel(firstName),
-                onPress: () => setComposing(true),
+                onPress: openComposer,
               },
             ]
           : messageHeld
@@ -448,10 +535,12 @@ export function LetterheadInstruments({
                   onPress: () => {},
                   held: {
                     reason: withheld.reason,
-                    repair: {
-                      label: withheld.repair,
-                      onPress: () => setLinking(true),
-                    },
+                    ...(withheld.repair && {
+                      repair: {
+                        label: withheld.repair,
+                        onPress: () => setLinking(true),
+                      },
+                    }),
                   },
                 },
               ]
@@ -503,6 +592,9 @@ export function LetterheadInstruments({
       {dockActs.map((act) => (
         <DockAct key={act.actionKey} action={act} />
       ))}
+      {/* FR4 524-d — a Brief's ledger has nothing to print: Standing is the
+          band's door and Keys the paper's own `?`; the dock carries both. */}
+      {!briefPaper && (
       <DocumentActionGroup
         surfaceKey="open-document"
         regionKey="letterhead-actions"
@@ -555,7 +647,7 @@ export function LetterheadInstruments({
               disabled={messageHeld}
               held={messageHeld}
               aria-describedby={messageHeld ? messageReasonId : undefined}
-              onClick={() => setComposing((v) => !v)}
+              onClick={toggleComposer}
             >
               {messageHeld
                 ? heldLabel
@@ -575,7 +667,7 @@ export function LetterheadInstruments({
             {oneVoice ? NAMED_ACTS.preview : 'Preview'}
           </DocumentAction>
         )}
-        {scan && (
+        {scan && !briefPaper && (
           <DocumentAction
             actionKey="open-client-scan"
             variant="tertiary"
@@ -593,6 +685,7 @@ export function LetterheadInstruments({
         )}
         {projectId && <CallSheetInstrument projectId={projectId} />}
       </DocumentActionGroup>
+      )}
 
       {/* The repair opens the same sheet the household chip opens — mounted
           only while open, so a client-less page issues none of its reads. */}
@@ -607,7 +700,11 @@ export function LetterheadInstruments({
           designerClientId={designerClientId}
           clientName={clientName}
           proposalStatus={proposalStatus}
+          landOnRepair
         />
+      )}
+      {relationshipNoLogin && designerClientId && (
+        <NoLoginRepairProbe designerClientId={designerClientId} onRepair={setNoLoginRepair} />
       )}
 
       {composing && (
@@ -620,17 +717,27 @@ export function LetterheadInstruments({
               // document with React, so stopPropagation alone cannot keep it.
               e.preventDefault();
               e.stopPropagation();
-              setComposing(false);
+              // FR4 Fix 2 — Esc is Cancel: focus goes back to the act pressed.
+              cancelComposer();
             }
           }}
         >
-          <p className="mb-1.5 text-[11px] italic text-[var(--text-muted)]">
-            The Pulse handles Fridays; this is for now. It lands in {clientName}
-            &rsquo;s portal messages.
-          </p>
+          {/* FR4 Fix 2 (`one-voice`) — the helper line and the placeholder go
+              through the `Waiting on` line's name guard: a seeded `Client
+              User` reads `the client`. */}
+          {oneVoice ? (
+            <p className="mb-1.5 text-[11px] italic text-[var(--text-muted)]">
+              {`The Pulse handles Fridays; this is for now. It lands in ${possessive(spokenName)} portal messages.`}
+            </p>
+          ) : (
+            <p className="mb-1.5 text-[11px] italic text-[var(--text-muted)]">
+              The Pulse handles Fridays; this is for now. It lands in {clientName}
+              &rsquo;s portal messages.
+            </p>
+          )}
           {named.length > 0 && (
             <p data-message-named className="mb-1.5 text-[12px] text-[var(--color-charcoal)]">
-              {`Waiting on ${firstName ?? 'the client'}: ${named.join(' · ')}`}
+              {`Waiting on ${spokenName}: ${named.join(' · ')}`}
             </p>
           )}
           <textarea
@@ -639,7 +746,7 @@ export function LetterheadInstruments({
             value={noteBody}
             onChange={(e) => setNoteBody(e.target.value)}
             rows={3}
-            placeholder={`A quick note to ${clientName}…`}
+            placeholder={`A quick note to ${oneVoice ? spokenName : clientName}…`}
             className="w-full resize-y bg-transparent text-[12px] text-[var(--color-charcoal)] outline-none placeholder:italic placeholder:text-[var(--text-muted)]"
           />
           <DocumentActionRow
@@ -665,7 +772,7 @@ export function LetterheadInstruments({
             <DocumentAction
               actionKey="cancel-message"
               variant="tertiary"
-              onClick={() => setComposing(false)}
+              onClick={cancelComposer}
             >
               Cancel
             </DocumentAction>
@@ -713,7 +820,8 @@ function MessageCluster({
   held: boolean;
   /** The real blocking condition (F3-6): no household linked, or no login. */
   reason: string;
-  repair: string;
+  /** null — held with no repair (FR4 524-a): never a door into an empty room. */
+  repair: string | null;
   reasonId: string;
   onRepair: () => void;
   children: ReactNode;
@@ -727,9 +835,11 @@ function MessageCluster({
           {reason}
         </span>
       </span>
-      <DocumentAction actionKey="link-client" variant="secondary" onClick={onRepair}>
-        {repair}
-      </DocumentAction>
+      {repair && (
+        <DocumentAction actionKey="link-client" variant="secondary" onClick={onRepair}>
+          {repair}
+        </DocumentAction>
+      )}
     </span>
   );
 }
