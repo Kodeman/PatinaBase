@@ -259,6 +259,7 @@ import {
 import { deriveSectionStageLine } from '@/lib/document/section-stage-line';
 import { deriveSectionWorkflowStageDocument } from '@/lib/document/workflow-stage-derivation';
 import { ROSTER_STAGE_ORDER, sentProposalReasonLine } from '@/lib/document/desk-roster-derivation';
+import { sentProposalVoice } from '@/lib/document/sent-proposal-voice';
 import { overdueApprovalTitles, overdueMarginDecisionTitles, waitingOnNamed } from '@/lib/document/nudge-named';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { afterArrival, useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
@@ -2525,6 +2526,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     [bandSection, ownActPieces, windowHeld],
   );
   const bandLeadStatus = row?.lead_status ?? null;
+  // US-19 FR7 F7-2 / F7-3 — a sent proposal's two own-act facts and its no-act
+  // line 2, read off the proposal the send wall reads (`deriveSendWallLine`).
+  const bandProposalVoice = useMemo(
+    () =>
+      oneVoice && bandSection === 'proposal' && row && liveProposal
+        ? sentProposalVoice({
+            row,
+            proposal: liveProposal,
+            clientMessageable: Boolean(row.client_profile_id),
+            now: new Date(),
+          })
+        : null,
+    [oneVoice, bandSection, row, liveProposal],
+  );
   const bandOwnAct = useMemo<LensOwnAct | null | undefined>(() => {
     if (!oneVoice || !bandSection) return undefined;
     // R5 — a failed seed is stated on line 2 with its Retry, as before the
@@ -2559,6 +2574,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               : null,
       clientFirstName: family === 'the client' ? null : clientShortName(family),
       clientMessageable: Boolean(row?.client_profile_id),
+      // FR7 F7-2 / F7-3 — inside the hesitation threshold, or held to a
+      // reminder the wall cannot send, a sent proposal has no act.
+      proposalHesitating: bandProposalVoice?.proposalHesitating,
+      reminderAvailable: bandProposalVoice?.reminderAvailable,
       unspecifiedCount: unspecified,
       // DESIGN-Q (SQ-500): release eligibility is not read on this page.
       releaseEligible: false,
@@ -2628,6 +2647,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     bandLeadStatus,
     row,
     nudgeNamed,
+    bandProposalVoice,
   ]);
 
   const bandModel = useMemo<LensBandModel | null>(() => {
@@ -2703,6 +2723,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       setup: bandSetup,
       projectStatus: bandProjectStatus,
       ownAct: bandOwnAct,
+      // FR7 F7-2 / F7-3 — the paper's standing fact where it has no act.
+      ownSentence: bandOwnAct === null ? (bandProposalVoice?.ownSentence ?? null) : null,
       installReading: bandInstallReading,
       // FR3 F3-8 — a standing row's table act lands as the own act does.
       landOn: bandSection
@@ -2749,6 +2771,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     bandProjectStatus,
     bandOwnAct,
     bandInstallReading,
+    bandProposalVoice,
   ]);
 
   // D-B22 — the lens line's telemetry fires from the page, which owns the
