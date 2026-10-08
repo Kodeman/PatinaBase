@@ -609,6 +609,13 @@ export function shortSubject(sentence: string, kind?: NeedKind): string {
   // break, so the split only takes one that starts a new word.
   const lead = sentence.split(/\s+[·—]\s+|,\s+(?=[A-Za-z])/)[0] ?? sentence;
   const code = CODE_TOKEN.exec(sentence)?.[0];
+  // F9-3 (N4 i) — a count of POs/purchase orders on the lead prints the
+  // paper's word for a PO, never the raw "POs"/"PURCHASE" head noun. A PO
+  // code in the sentence still wins, so this only applies when none exists.
+  if (!code) {
+    const count = /^(\d+) (?:POs|purchase orders)\b/i.exec(lead);
+    if (count) return `${count[1]} ORDERS`;
+  }
   const money = MONEY_TOKEN.exec(lead)?.[0];
   const word = lead
     .split(/\s+/)

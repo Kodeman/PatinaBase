@@ -609,6 +609,19 @@ describe('the short form and the act’s verb (D-B24, C-07)', () => {
     expect(shortSubject('$17,500 owed you')).toBe('$17,500');
   });
 
+  // F9-3 (N4 i) — a count of orders prints the paper's word for a PO, never
+  // the raw head noun ("POS"/"PURCHASE"). A PO code in the sentence still
+  // wins.
+  it('a count of POs/purchase orders prints N ORDERS (F9-3)', () => {
+    expect(shortSubject('2 POs sent — no acknowledgment')).toBe('2 ORDERS');
+    expect(
+      shortSubject('2 purchase orders unanswered, 7 days'),
+    ).toBe('2 ORDERS');
+    expect(shortSubject('NA-2026-077 sent — no acknowledgment')).toBe(
+      'NA-2026-077',
+    );
+  });
+
   /**
    * W6-R1 · F1 — the design lead's final walk found `…d7` at 390 printing
    * `CONFLICT · TWO` `RESOLVE`. "Two milestones land on Sep 21" starts with a
