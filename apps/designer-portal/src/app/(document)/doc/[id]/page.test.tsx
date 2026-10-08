@@ -423,8 +423,21 @@ jest.mock('@/components/document/overlays/household-sheet', () => ({
       <div role="dialog" aria-label="The household" data-engagement-kind={engagementKind} />
     ) : null,
 }));
+// US-19 FR4 524-f — when a test sets it, the Brief stands in the TriageBar's
+// `Accept · begin` under its one-voice id, wired to this spy: a page that
+// clicked the band's landing would accept the lead, and the spy would hear it.
+let mockTriageAccept: jest.Mock | null = null;
 jest.mock('@/components/document/brief-section', () => ({
-  BriefSection: () => <div>Brief work</div>,
+  BriefSection: () => (
+    <>
+      <div>Brief work</div>
+      {mockTriageAccept && (
+        <button type="button" id="document-act-inquiry-reply" onClick={mockTriageAccept}>
+          Accept · begin
+        </button>
+      )}
+    </>
+  ),
 }));
 jest.mock('@/components/document/brief-recap', () => ({ BriefRecap: () => <div>Brief recap</div> }));
 jest.mock('@/components/document/discovery/discovery-section', () => ({
@@ -2134,6 +2147,59 @@ describe('DocumentPage guide activation', () => {
         expect(rows()).toHaveLength(0);
       });
     });
+
+    // US-19 FR4 524-d (`one-voice`) — a Brief (lead) paper mounts the
+    // letterhead with Keys and Standing only: handed `brief`, and neither a
+    // proposal nor a project (no Preview) nor a household to message (no
+    // Message). The default row is a lead with no login.
+    describe('a Brief paper (FR4 524-d)', () => {
+      function asBrief(clientProfileId: string | null) {
+        const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+        mockDocumentQuery = {
+          ...mockDocumentQuery,
+          data: { kind: 'engagement', row: { ...current, client_profile_id: clientProfileId } },
+        };
+      }
+      const rows = () => document.querySelectorAll('[data-testid="instruments-row"]');
+
+      it('one-voice, no login: mounts once as a Brief, with Keys and Standing only', () => {
+        mockEnabledFlags = ['one-voice'];
+        asBrief(null);
+        render(<DocumentPage params={fulfilledParams} />);
+
+        expect(rows()).toHaveLength(1);
+        expect(mockLetterheadProps).toMatchObject({ brief: true, clientProfileId: null });
+        // No Preview: no client copy, neither a proposal nor a project.
+        expect(mockLetterheadProps?.proposalId).toBeUndefined();
+        expect(mockLetterheadProps?.projectId).toBeUndefined();
+        // No Message: no household handed over to message.
+        expect(mockLetterheadProps?.designerClientId).toBeUndefined();
+      });
+
+      it('one-voice, with a login: still a Brief, with no Preview and no Message', () => {
+        mockEnabledFlags = ['one-voice'];
+        asBrief('client-1');
+        render(<DocumentPage params={fulfilledParams} />);
+
+        expect(rows()).toHaveLength(1);
+        expect(mockLetterheadProps).toMatchObject({ brief: true, clientProfileId: 'client-1' });
+        expect(mockLetterheadProps?.proposalId).toBeUndefined();
+        expect(mockLetterheadProps?.projectId).toBeUndefined();
+        expect(mockLetterheadProps?.designerClientId).toBeUndefined();
+      });
+
+      it('flag off: no login mounts nothing, and a login’s mount is not a Brief, as today', () => {
+        asBrief(null);
+        const { unmount } = render(<DocumentPage params={fulfilledParams} />);
+        expect(rows()).toHaveLength(0);
+        unmount();
+
+        asBrief('client-1');
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(rows()).toHaveLength(1);
+        expect(mockLetterheadProps?.brief).toBeUndefined();
+      });
+    });
   });
 
   // ── A1-L1/L2 — the tie-break: the guide's headline and the red-letter
@@ -2680,6 +2746,34 @@ describe('DocumentPage guide activation', () => {
       expect(
         within(bandLine2()!).getByRole('button', { name: 'Respond to the inquiry' }),
       ).toBeInTheDocument();
+    });
+
+    // US-19 FR4 524-f — the band's `Respond to the inquiry` lands with focus on
+    // the Brief's `Accept · begin` and never presses it: accepting the lead
+    // writes to the client, and that press is hers to make.
+    it('one-voice, Brief: `Respond to the inquiry` lands on `Accept · begin` without clicking it', () => {
+      mockEnabledFlags = ['one-voice'];
+      const accept = jest.fn();
+      mockTriageAccept = accept;
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, lead_status: 'new' } },
+      };
+      try {
+        render(<DocumentPage params={fulfilledParams} />);
+
+        fireEvent.click(
+          within(bandLine2()!).getByRole('button', { name: 'Respond to the inquiry' }),
+        );
+
+        const target = document.getElementById('document-act-inquiry-reply');
+        expect(target).toHaveTextContent('Accept · begin');
+        expect(target).toHaveFocus();
+        expect(accept).not.toHaveBeenCalled();
+      } finally {
+        mockTriageAccept = null;
+      }
     });
 
     it('one-voice, Brief: an accepted inquiry has no own act to print', () => {
