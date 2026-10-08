@@ -3610,7 +3610,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   <ScheduleSpine
                     projectId={row.project_id}
                     clientUserId={row.client_profile_id}
-                    clientName={row.client_name}
+                    clientName={oneVoice ? householdDisplayName(row.client_name) || null : row.client_name}
                     projectStatus={project?.status}
                   />
                   {/* Wave 1P (spec §11.2) — the Room-files zone the component's
