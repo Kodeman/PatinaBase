@@ -18,6 +18,7 @@ const mockPlacements: OverviewPlacement[] = [
 
 jest.mock("@patina/supabase", () => ({
   useProjectRoomPlacements: () => ({ data: mockPlacements }),
+  useProjectPalettes: () => ({ data: [] }),
 }));
 jest.mock("@/lib/analytics/document-events", () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },

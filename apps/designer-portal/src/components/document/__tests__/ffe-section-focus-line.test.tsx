@@ -71,6 +71,7 @@ jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManif
 
 jest.mock('@patina/supabase', () => ({
   useProjectRoomPlacements: () => ({ data: [] }),
+  useProjectPalettes: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: mockDrafts }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),

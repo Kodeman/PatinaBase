@@ -5,8 +5,17 @@
  * `/doc/[id]#pieces-room-<roomId>` (a10, R1-F10).
  */
 
-/** The lens words, in head order. Price is dropped for a seat without money (R1, Q7). */
-export const BUILD_ROOM_LENSES = ["rough", "spec", "price", "release"] as const;
+/**
+ * The lens words, in head order; Finishes is the fifth (a11, Q10). Price is
+ * dropped for a seat without money (R1, Q7).
+ */
+export const BUILD_ROOM_LENSES = [
+  "rough",
+  "spec",
+  "price",
+  "release",
+  "finishes",
+] as const;
 export type BuildRoomLens = (typeof BUILD_ROOM_LENSES)[number];
 
 /** Rail places that are not a project room. Room ids are uuids, so these never collide. */

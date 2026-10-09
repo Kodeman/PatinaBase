@@ -89,9 +89,11 @@ describe("BuildRoomShell — the head (SPEC §6 shell)", () => {
       "Spec",
       "Price",
       "Release",
+      "Finishes",
     ]);
     expect(lensButtons().map((b) => b.getAttribute("aria-pressed"))).toEqual([
       "true",
+      "false",
       "false",
       "false",
       "false",
@@ -120,6 +122,10 @@ describe("BuildRoomShell — the head (SPEC §6 shell)", () => {
       "release",
       "Release · Check what the client will see, then release rooms for authorization. Nothing here edits a spec or a price.",
     ],
+    [
+      "finishes",
+      "Finishes · Note each room’s surfaces, products and sheens for the painter. Nothing here edits a line.",
+    ],
   ] as const)("reads the %s lens in one sentence", (lens, sentence) => {
     renderShell({ lens });
     expect(screen.getByText(sentence)).toBeInTheDocument();
@@ -141,6 +147,17 @@ describe("BuildRoomShell — the head (SPEC §6 shell)", () => {
     );
   });
 
+  it("counts the room's surfaces in the Finishes lens (a11)", () => {
+    renderShell({ lens: "finishes", room: "bedroom", surfaceCount: 3 });
+    expect(screen.getByRole("button", { name: "Finishes" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("build-room-place")).toHaveTextContent(
+      "Bedroom · 3 surfaces",
+    );
+  });
+
   it("singles one line and one placeholder", () => {
     renderShell({
       room: "sunroom",
@@ -159,6 +176,7 @@ describe("BuildRoomShell — Price for a seat without money (R1, Q7)", () => {
       "Rough in",
       "Spec",
       "Release",
+      "Finishes",
     ]);
     expect(
       screen.queryByRole("button", { name: "Price" }),
@@ -420,7 +438,7 @@ describe("BuildRoomShell — at 390 (a13)", () => {
     renderShell();
     const group = screen.getByRole("group", { name: "Lens" });
     expect(group.className).toContain("grid");
-    expect(group.style.gridTemplateColumns).toBe("repeat(4, minmax(0, 1fr))");
+    expect(group.style.gridTemplateColumns).toBe("repeat(5, minmax(0, 1fr))");
     for (const button of lensButtons())
       expect(button.className).toContain("min-h-11");
   });

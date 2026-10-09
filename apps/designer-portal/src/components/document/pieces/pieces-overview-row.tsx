@@ -9,8 +9,10 @@
  */
 
 import type { ReactNode } from 'react';
+import type { RoomFinish } from '@patina/types';
 import { DocumentAction } from '../document-action';
 import { StrataMark } from '../strata-mark';
+import { FinishSwatch } from './finishes-lens';
 import { buildRoomHref } from '@/lib/document/pieces/build-room-url';
 import {
   overviewRowCounts,
@@ -28,6 +30,7 @@ export function PiecesOverviewRow({
   open,
   returned = false,
   lifted = false,
+  wallSwatch = null,
   onToggle,
   onAddLine,
   children,
@@ -40,6 +43,8 @@ export function PiecesOverviewRow({
   returned?: boolean;
   /** The room lens holds this room. */
   lifted?: boolean;
+  /** S8 — the room's wall finish, from the Finishes lens. */
+  wallSwatch?: RoomFinish | null;
   onToggle: () => void;
   onAddLine: () => void;
   /** The room's lines, rendered while it is open. */
@@ -73,6 +78,14 @@ export function PiecesOverviewRow({
               {row.name}
             </button>
           </h3>
+          {wallSwatch?.hex && (
+            <span className="text-[var(--ink-faint)]">
+              <FinishSwatch
+                hex={wallSwatch.hex}
+                label={`Walls, ${wallSwatch.product ?? wallSwatch.hex}`}
+              />
+            </span>
+          )}
         </div>
         <div className="flex items-baseline gap-4">
           <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--ink-faint)]">

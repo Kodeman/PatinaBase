@@ -52,6 +52,7 @@ jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManif
 
 jest.mock('@patina/supabase', () => ({
   useProjectRoomPlacements: () => ({ data: [] }),
+  useProjectPalettes: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   // Install mode's one leader (`one-voice`) reads the install window.
   useInstallWindow: () => ({ data: null, isSuccess: true }),

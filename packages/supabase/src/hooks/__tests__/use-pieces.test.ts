@@ -32,10 +32,12 @@ vi.mock('@supabase/ssr', () => ({
 }));
 
 const invalidateQueries = vi.fn();
+const cancelQueries = vi.fn(async () => undefined);
+const setQueryData = vi.fn();
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
-  useQueryClient: () => ({ invalidateQueries }),
+  useQueryClient: () => ({ invalidateQueries, cancelQueries, setQueryData }),
 }));
 
 // Import AFTER mocks.
@@ -55,6 +57,7 @@ import {
   useSetLaborLinePrice,
   useSetLineGroup,
   useSetLinePlacements,
+  useSetRoomFinishes,
 } from '../use-pieces';
 import { useProjectFFEItems } from '../use-project-v2';
 
@@ -421,6 +424,139 @@ describe('useMakeFfeLineAllowance', () => {
     const mutation = useMakeFfeLineAllowance() as unknown as MutationConfig<unknown, unknown>;
 
     await expect(mutation.mutationFn({ projectId: 'p1', itemId: 'i1', budgetMaxCents: 0 })).rejects.toBe(error);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Room finishes (00760, D16, Q10, W6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useSetRoomFinishes', () => {
+  function upsertChain(result: { data: unknown; error: unknown }) {
+    const calls: Array<[string, unknown[]]> = [];
+    const chain: Record<string, unknown> = {};
+    for (const method of ['upsert', 'select']) {
+      chain[method] = (...args: unknown[]) => {
+        calls.push([method, args]);
+        return chain;
+      };
+    }
+    chain.single = () => {
+      calls.push(['single', []]);
+      return Promise.resolve(result);
+    };
+    return { chain, calls };
+  }
+
+  const WALLS = {
+    surface: 'Walls',
+    product: 'Farrow & Ball Setting Plaster No. 231',
+    brand: null,
+    brandCode: null,
+    sheen: 'Eggshell',
+    hex: '#F2DCD2',
+    sortOrder: 4,
+  };
+
+  it("upserts the room's one project_palettes row by (project_id, scope_room_id) and refreshes only the palettes key", async () => {
+    const { chain, calls } = upsertChain({ data: { id: 'pal1' }, error: null });
+    from.mockReturnValue(chain);
+    const mutation = useSetRoomFinishes() as unknown as MutationConfig<unknown, unknown> & {
+      onSuccess: (result: unknown, vars: unknown) => Promise<void>;
+    };
+    const vars = { projectId: 'p1', roomId: 'r1', finishes: [WALLS] };
+    const result = await mutation.mutationFn(vars);
+    await mutation.onSuccess(result, vars);
+
+    expect(from).toHaveBeenCalledWith('project_palettes');
+    expect(calls[0]).toEqual([
+      'upsert',
+      [
+        {
+          project_id: 'p1',
+          scope_room_id: 'r1',
+          name: 'Finishes',
+          swatches: [
+            {
+              surface: 'Walls',
+              product: 'Farrow & Ball Setting Plaster No. 231',
+              brand: null,
+              brand_code: null,
+              sheen: 'Eggshell',
+              hex: '#F2DCD2',
+              sort_order: 0,
+            },
+          ],
+        },
+        { onConflict: 'project_id,scope_room_id' },
+      ],
+    ]);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'pal1' });
+    expect(invalidatedKeys()).toEqual([['project-palettes', 'p1']]);
+  });
+
+  it('starts a write only after the one before it has landed, so the last list wins', async () => {
+    const order: string[] = [];
+    let landFirst!: () => void;
+    const slow = upsertChain({ data: { id: 'pal1' }, error: null });
+    slow.chain.single = () =>
+      new Promise((resolve) => {
+        landFirst = () => {
+          order.push('first landed');
+          resolve({ data: { id: 'pal1' }, error: null });
+        };
+      });
+    const fast = upsertChain({ data: { id: 'pal1' }, error: null });
+    const fastUpsert = fast.chain.upsert as (...args: unknown[]) => unknown;
+    fast.chain.upsert = (...args: unknown[]) => {
+      order.push('second sent');
+      return fastUpsert(...args);
+    };
+    from.mockReturnValueOnce(slow.chain).mockReturnValueOnce(fast.chain);
+    const mutation = useSetRoomFinishes() as unknown as MutationConfig<unknown, unknown>;
+
+    const first = mutation.mutationFn({ projectId: 'p1', roomId: 'r1', finishes: [WALLS] });
+    const second = mutation.mutationFn({ projectId: 'p1', roomId: 'r1', finishes: [] });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(order).toEqual([]);
+    landFirst();
+    await Promise.all([first, second]);
+    expect(order).toEqual(['first landed', 'second sent']);
+  });
+
+  it('puts the saved row in the cache before the write settles', async () => {
+    from.mockReturnValue(upsertChain({ data: { id: 'pal1', swatches: ['new'] }, error: null }).chain);
+    const mutation = useSetRoomFinishes() as unknown as MutationConfig<unknown, unknown> & {
+      onSuccess: (result: unknown, vars: unknown) => Promise<void>;
+    };
+
+    const vars = { projectId: 'p1', roomId: 'r1', finishes: [WALLS] };
+    await mutation.onSuccess(await mutation.mutationFn(vars), vars);
+    expect(cancelQueries).toHaveBeenCalledWith({ queryKey: ['project-palettes', 'p1'] });
+    expect(setQueryData.mock.calls[0][0]).toEqual(['project-palettes', 'p1']);
+    const update = setQueryData.mock.calls[0][1] as (old: unknown) => unknown;
+    expect(
+      update([
+        { id: 'pal0', swatches: [] },
+        { id: 'pal1', swatches: ['old'] },
+      ]),
+    ).toEqual([
+      { id: 'pal0', swatches: [] },
+      { id: 'pal1', swatches: ['new'] },
+    ]);
+    expect(update([{ id: 'pal0' }])).toEqual([{ id: 'pal0' }, { id: 'pal1', swatches: ['new'] }]);
+    expect(update(undefined)).toBeUndefined();
+  });
+
+  it('throws the write error and invalidates nothing', async () => {
+    const error = { message: 'new row violates row-level security policy' };
+    from.mockReturnValue(upsertChain({ data: null, error }).chain);
+    const mutation = useSetRoomFinishes() as unknown as MutationConfig<unknown, unknown>;
+
+    await expect(mutation.mutationFn({ projectId: 'p1', roomId: 'r1', finishes: [] })).rejects.toBe(error);
     expect(invalidateQueries).not.toHaveBeenCalled();
   });
 });

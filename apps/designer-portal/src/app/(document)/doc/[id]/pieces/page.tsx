@@ -11,10 +11,15 @@ import { Suspense, use, useCallback, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   useProjectFFEItems,
+  useProjectPalettes,
   useProjectRoomPlacements,
   useRemovedProjectLines,
 } from "@patina/supabase";
 import { BuildRoomShell } from "@/components/document/pieces/build-room-shell";
+import {
+  FinishesLens,
+  roomFinishesByRoom,
+} from "@/components/document/pieces/finishes-lens";
 import { PriceLens } from "@/components/document/pieces/price-lens";
 import { ReleaseLens } from "@/components/document/pieces/release-lens";
 import { RoughInLens } from "@/components/document/pieces/rough-in-lens";
@@ -63,6 +68,7 @@ function BuildRoom({ docId }: { docId: string }) {
   const { data: lines } = useProjectFFEItems(projectId ?? "");
   const { data: placements } = useProjectRoomPlacements(projectId);
   const { data: removed } = useRemovedProjectLines(projectId ?? "");
+  const { data: palettes } = useProjectPalettes(projectId ?? "");
   const addRoom = useAddDocumentRoom(projectId);
 
   // An activated proposal's or accepted lead's id answers at its project (R6, F1).
@@ -84,6 +90,12 @@ function BuildRoom({ docId }: { docId: string }) {
       ),
     [lines, placements, roomList],
   );
+  // The Finishes head counts surfaces: the room's, or every room's (a11).
+  const surfaceCount = useMemo(() => {
+    const byRoom = roomFinishesByRoom(palettes);
+    if (room != null) return byRoom.get(room)?.length ?? 0;
+    return roomList.reduce((n, r) => n + (byRoom.get(r.id)?.length ?? 0), 0);
+  }, [palettes, room, roomList]);
 
   const navigate = useCallback(
     (next: BuildRoomState) => router.push(buildRoomHref(docId, next)),
@@ -127,6 +139,7 @@ function BuildRoom({ docId }: { docId: string }) {
       lens={lens}
       room={room}
       canSeeMoney={canSeeMoney}
+      surfaceCount={surfaceCount}
       onNavigate={navigate}
       onReturn={leave}
       onAddRoom={onAddRoom}
@@ -157,6 +170,14 @@ function BuildRoom({ docId }: { docId: string }) {
       )}
       {lens === "release" && (
         <ReleaseLens
+          docId={docId}
+          projectId={projectId}
+          room={room}
+          canSeeMoney={canSeeMoney}
+        />
+      )}
+      {lens === "finishes" && (
+        <FinishesLens
           docId={docId}
           projectId={projectId}
           room={room}

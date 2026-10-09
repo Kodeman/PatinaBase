@@ -57,6 +57,8 @@ export interface BuildRoomShellProps {
   room: BuildRoomPlace;
   /** R1 (`useCanSeeMargin`): without it the Price lens is absent, not gated (Q7). */
   canSeeMoney: boolean;
+  /** The place's finish rows, for the Finishes lens head (a11). */
+  surfaceCount?: number;
   /** Push a lens or room change; the URL holds both. */
   onNavigate: (state: BuildRoomState) => void;
   /** Leave for the overview at `buildRoomReturnHref(docId, room)`. */
@@ -71,6 +73,7 @@ const LENS_WORD: Record<BuildRoomLens, string> = {
   spec: "Spec",
   price: "Price",
   release: "Release",
+  finishes: "Finishes",
 };
 
 const LENS_READING: Record<BuildRoomLens, string> = {
@@ -81,6 +84,8 @@ const LENS_READING: Record<BuildRoomLens, string> = {
     "Price · Line up trade cost, markup and client price. Rough figures stay as ~ until you set them.",
   release:
     "Release · Check what the client will see, then release rooms for authorization. Nothing here edits a spec or a price.",
+  finishes:
+    "Finishes · Note each room’s surfaces, products and sheens for the painter. Nothing here edits a line.",
 };
 
 function plural(n: number, one: string, many: string): string {
@@ -114,15 +119,21 @@ function placeCounts(
   return counts.job;
 }
 
-/** The head's right side: `Living Room · 6 lines · 4 placeholders`; Release counts what is ready (a3). */
+/**
+ * The head's right side: `Living Room · 6 lines · 4 placeholders`; Release
+ * counts what is ready (a3); Finishes counts surfaces, `Bedroom · 3 surfaces` (a11).
+ */
 export function placeSummary(
   room: BuildRoomPlace,
   lens: BuildRoomLens,
   rooms: readonly BuildRoomRoom[],
   counts: BuildRoomCounts,
   removedCount: number,
+  surfaceCount = 0,
 ): string {
   const name = placeName(room, rooms);
+  if (lens === "finishes")
+    return `${name} · ${plural(surfaceCount, "surface", "surfaces")}`;
   if (room === REMOVED_PLACE)
     return `${name} · ${plural(removedCount, "line", "lines")}`;
   const place = placeCounts(room, counts);
@@ -192,6 +203,7 @@ export function BuildRoomShell({
   lens,
   room,
   canSeeMoney,
+  surfaceCount = 0,
   onNavigate,
   onReturn,
   onAddRoom,
@@ -200,7 +212,14 @@ export function BuildRoomShell({
   const lenses = availableLenses(canSeeMoney);
   const activeLens = lenses.includes(lens) ? lens : "rough";
   const returnHref = buildRoomReturnHref(docId, room);
-  const summary = placeSummary(room, activeLens, rooms, counts, removedCount);
+  const summary = placeSummary(
+    room,
+    activeLens,
+    rooms,
+    counts,
+    removedCount,
+    surfaceCount,
+  );
   const pickerId = useId();
   const [pickerOpen, setPickerOpen] = useState(false);
 

@@ -34,6 +34,7 @@ jest.mock('@tanstack/react-query', () => ({
 
 jest.mock('@patina/supabase', () => ({
   useProjectRoomPlacements: () => ({ data: [] }),
+  useProjectPalettes: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),

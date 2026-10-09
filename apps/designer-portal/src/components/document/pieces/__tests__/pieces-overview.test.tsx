@@ -17,9 +17,11 @@ import {
 } from '@/lib/document/pieces/overview-derivation';
 
 let mockPlacements: OverviewPlacement[] = [];
+let mockPalettes: Array<{ scope_room_id: string | null; swatches: unknown }> = [];
 
 jest.mock('@patina/supabase', () => ({
   useProjectRoomPlacements: () => ({ data: mockPlacements }),
+  useProjectPalettes: () => ({ data: mockPalettes }),
 }));
 // The overview never reads a flag: `one-voice` and `ask-the-paper` are not
 // branched on here. A read would throw.
@@ -188,6 +190,29 @@ describe('<PiecesOverview>', () => {
 
   beforeEach(() => {
     mockPlacements = PLACEMENTS;
+    mockPalettes = [];
+  });
+
+  it('shows the wall swatch on the room row, and none where no wall has a colour (S8)', () => {
+    mockPalettes = [
+      {
+        scope_room_id: 'bedroom',
+        swatches: [
+          { surface: 'Ceiling', product: 'Chantilly Lace OC-65', sheen: 'Flat', hex: '#F7F6F1', sort_order: 0 },
+          { surface: 'Walls', product: 'Farrow & Ball Setting Plaster No. 231', sheen: 'Eggshell', hex: '#F2DCD2', sort_order: 1 },
+        ],
+      },
+      { scope_room_id: 'hall', swatches: [{ surface: 'Walls', product: 'Not chosen yet', hex: null, sort_order: 0 }] },
+      { scope_room_id: null, swatches: [{ surface: 'Walls', hex: '#000000', sort_order: 0 }] },
+    ];
+    renderOverview();
+    const swatch = within(row('bedroom')).getByRole('img', {
+      name: 'Walls, Farrow & Ball Setting Plaster No. 231',
+    });
+    expect(swatch).toHaveAttribute('width', '24');
+    expect(swatch.querySelector('rect')).toHaveAttribute('fill', '#F2DCD2');
+    expect(within(row('hall')).queryByRole('img')).not.toBeInTheDocument();
+    expect(within(row('living')).queryByRole('img')).not.toBeInTheDocument();
   });
 
   it('prints the front matter and one row per room: mark, name, counts, figure and two acts', () => {

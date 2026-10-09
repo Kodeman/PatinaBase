@@ -356,3 +356,18 @@ export interface MergeStudioProductResult {
   projectProducts: number;
   earlierMerges: number;
 }
+
+/**
+ * One finish on a room's paint and finish schedule (00760, D16, Q10, W6): a
+ * swatch element `{surface, product, brand, brand_code, sheen, hex,
+ * sort_order}` on the room's `project_palettes` row. `hex` is the swatch.
+ */
+export interface RoomFinish {
+  surface: string;
+  product: string | null;
+  brand: string | null;
+  brandCode: string | null;
+  sheen: string | null;
+  hex: string | null;
+  sortOrder: number;
+}

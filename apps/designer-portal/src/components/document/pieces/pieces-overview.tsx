@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useProjectRoomPlacements } from '@patina/supabase';
+import { useProjectPalettes, useProjectRoomPlacements } from '@patina/supabase';
 import {
   deriveOverviewRows,
   overviewFrontMatter,
@@ -22,6 +22,7 @@ import {
   type OverviewRow,
   type OverviewTally,
 } from '@/lib/document/pieces/overview-derivation';
+import { roomFinishesByRoom, roomWallFinish } from './finishes-lens';
 import { PiecesOverviewRow } from './pieces-overview-row';
 
 export interface PiecesOverviewProps {
@@ -66,6 +67,8 @@ export function PiecesOverview({
   children,
 }: PiecesOverviewProps) {
   const { data: placements } = useProjectRoomPlacements(projectId);
+  const { data: palettes } = useProjectPalettes(projectId);
+  const finishes = useMemo(() => roomFinishesByRoom(palettes), [palettes]);
   const rows = useMemo(() => {
     const derived = deriveOverviewRows(lines, placements, rooms);
     const held = derived.findIndex((row) => row.roomId != null && row.roomId === heldRoomId);
@@ -114,6 +117,7 @@ export function PiecesOverview({
               open={open}
               returned={row.roomId != null && row.roomId === returnedRoomId}
               lifted={row.roomId != null && row.roomId === heldRoomId}
+              wallSwatch={row.roomId ? roomWallFinish(finishes.get(row.roomId)) : null}
               onToggle={() => toggle(row.key)}
               onAddLine={() => onAddLine(row)}
             >

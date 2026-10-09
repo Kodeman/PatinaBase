@@ -12,6 +12,7 @@ import type {
   FfeRoomPlacement,
   MergeStudioProductResult,
   ProjectLineGroup,
+  RoomFinish,
   RoomHandback,
   SetFfeLineBuildFieldsRequest,
   SetLineGroupResult,
@@ -20,6 +21,7 @@ import type {
 import { createBrowserClient } from '../client';
 import type { Database } from '../database.types';
 import { invalidateFfeCaches } from './use-procurement';
+import type { ProjectPalette } from './use-project-v2';
 
 const getSupabase = () => createBrowserClient();
 
@@ -466,5 +468,82 @@ export function useMakeFfeLineAllowance() {
       return data as ProjectFfeItemRow;
     },
     onSuccess: (_result, { projectId }) => invalidateFfeCaches(queryClient, projectId),
+  });
+}
+
+// ─── Room finishes (00760, D16, Q10, W6) ─────────────────────────────────────
+
+// Each write carries a room's whole list, so two in flight could land out of
+// order and the older list would win. Writes go one after another instead.
+// (A mutation `scope` would queue them too, but TanStack holds a queued
+// mutation while the tab is hidden, so a write could wait unseen.)
+let finishesWrite: Promise<unknown> = Promise.resolve();
+
+async function writeRoomFinishes({
+  projectId,
+  roomId,
+  finishes,
+}: {
+  projectId: string;
+  roomId: string;
+  finishes: RoomFinish[];
+}): Promise<ProjectPalette> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (getSupabase() as any)
+    .from('project_palettes')
+    .upsert(
+      {
+        project_id: projectId,
+        scope_room_id: roomId,
+        name: 'Finishes',
+        swatches: finishes.map((f, index) => ({
+          surface: f.surface,
+          product: f.product,
+          brand: f.brand,
+          brand_code: f.brandCode,
+          sheen: f.sheen,
+          hex: f.hex,
+          sort_order: index,
+        })),
+      },
+      { onConflict: 'project_id,scope_room_id' },
+    )
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as ProjectPalette;
+}
+
+/**
+ * Writes a room's whole finish list: an upsert of the room's one
+ * `project_palettes` row (00760 `project_palettes_one_per_room`) under the
+ * studio's RLS. There is no RPC. Each finish is stored as a swatch element
+ * `{surface, product, brand, brand_code, sheen, hex, sort_order}`; the
+ * upsert names the row `Finishes`. Writes run one at a time, and the saved
+ * row goes into the `useProjectPalettes` cache before it is refreshed.
+ */
+export function useSetRoomFinishes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { projectId: string; roomId: string; finishes: RoomFinish[] }) => {
+      const write = () => writeRoomFinishes(vars);
+      const run = finishesWrite.then(write, write);
+      finishesWrite = run.catch(() => undefined);
+      return run;
+    },
+    onSuccess: async (palette, { projectId }) => {
+      const queryKey = ['project-palettes', projectId];
+      // The saved row goes into the cache before the write settles, so the
+      // lens never re-reads a list from before it (nor an older refetch).
+      await queryClient.cancelQueries({ queryKey });
+      queryClient.setQueryData<ProjectPalette[]>(queryKey, (old) =>
+        old
+          ? old.some((p) => p.id === palette.id)
+            ? old.map((p) => (p.id === palette.id ? palette : p))
+            : [...old, palette]
+          : old,
+      );
+      queryClient.invalidateQueries({ queryKey });
+    },
   });
 }
