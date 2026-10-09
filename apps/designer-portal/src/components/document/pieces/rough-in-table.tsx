@@ -62,7 +62,12 @@ import {
   unitLabel,
   type RoughInKeyAction,
 } from "@/lib/document/pieces/rough-in-keys";
+import {
+  QUIET_FOCUS,
+  ROOM_HEADING_ATTR,
+} from "@/lib/document/pieces/sheet-focus";
 import { MoveToRoomMenu, type MoveRoom } from "./move-to-room-menu";
+import { unitWordFor } from "./placement-chips";
 import {
   GROUP_MEMBER_MARK,
   LineGroupDraftRow,
@@ -275,12 +280,12 @@ export function RoughInTable({
     onRemove(row);
   }
 
+  /**
+   * The menu hands focus back to the row's `⋯` and the lens says what the
+   * server answered once it has (T-60a F4, F7): nothing is said before.
+   */
   function moveRow(row: RoughInRow, roomId: string) {
-    const to = rooms.find((r) => r.id === roomId);
-    // The row leaves this room; keep the hand on this room's entry row.
-    focusEntry();
     onMove(row, roomId);
-    if (to) setAnnouncement(`Moved ${row.name} to ${to.name}.`);
   }
 
   /**
@@ -396,7 +401,12 @@ export function RoughInTable({
       >
         <h2
           id={headingId}
-          className="font-heading text-[18px] italic leading-[1.2] text-[var(--sheet-ink)]"
+          tabIndex={-1}
+          {...{ [ROOM_HEADING_ATTR]: room.id }}
+          className={cn(
+            "font-heading text-[18px] italic leading-[1.2] text-[var(--sheet-ink)]",
+            QUIET_FOCUS,
+          )}
         >
           {room.name}
         </h2>
@@ -821,7 +831,7 @@ function LineCard({
   const label = row.name || `line ${index + 1}`;
   const figures = [
     `×${row.quantity}`,
-    unitLabel(row.unit),
+    unitWordFor(row.unit, row.quantity),
     formatRough(row.roughCents),
   ].filter(Boolean);
   return (
@@ -985,6 +995,10 @@ function RowMenu({
           role="menu"
           aria-label={`Acts for ${label}`}
           onKeyDown={onMenuKey}
+          // WebKit never focuses a tapped or clicked button: without this the
+          // press blurs the focused item to nothing, the blur closes the menu,
+          // and the item is gone before its click (T-60a F3).
+          onMouseDown={(event) => event.preventDefault()}
           className="absolute right-0 top-full z-20 w-[280px] border border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-1 text-left"
         >
           {MENU_ITEMS.map(({ act, label: word }, i) => {
@@ -1025,7 +1039,7 @@ function RowMenu({
                     rooms={rooms}
                     currentRoomId={room.id}
                     onChoose={(roomId) => {
-                      close(false);
+                      close(true);
                       onMove(row, roomId);
                     }}
                     onClose={() => setMoving(false)}

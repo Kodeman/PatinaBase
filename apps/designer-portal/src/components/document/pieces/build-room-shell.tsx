@@ -36,10 +36,18 @@ import {
   type BuildRoomPlace,
   type BuildRoomState,
 } from "@/lib/document/pieces/build-room-url";
+import {
+  BUILD_ROOM_TITLE_ATTR,
+  QUIET_FOCUS,
+  roomHeading,
+} from "@/lib/document/pieces/sheet-focus";
 import type {
   BuildRoomCounts,
   RoomCounts,
 } from "@/lib/document/pieces/room-counts";
+
+/** How long a landing waits for its room's section to render. */
+const LANDING_WAIT_MS = 15_000;
 
 export interface BuildRoomRoom {
   id: string;
@@ -228,6 +236,40 @@ export function BuildRoomShell({
   roomRef.current = room;
   const onReturnRef = useRef(onReturn);
   onReturnRef.current = onReturn;
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+
+  // Landing, and every lens or room change (T-60a F1, F2): focus goes to the
+  // title, then to the room's heading once its section is on the sheet, and
+  // that section's top is scrolled into view. A refetch never runs this.
+  useEffect(() => {
+    titleRef.current?.focus({ preventScroll: true });
+    const main = mainRef.current;
+    if (room == null || !main) return;
+    const land = () => {
+      const heading = roomHeading(main, room);
+      if (!heading) return false;
+      (heading.closest("section, tbody") ?? heading).scrollIntoView?.({
+        block: "start",
+      });
+      const active = document.activeElement;
+      // Focus she has moved on her own stays where she put it.
+      if (!active || active === document.body || active === titleRef.current)
+        heading.focus({ preventScroll: true });
+      return true;
+    };
+    if (land()) return;
+    const observer = new MutationObserver(() => {
+      if (land()) stop();
+    });
+    const timer = window.setTimeout(() => stop(), LANDING_WAIT_MS);
+    function stop() {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    }
+    observer.observe(main, { childList: true, subtree: true });
+    return stop;
+  }, [activeLens, room]);
 
   // Esc leaves for the overview at this room.
   useEffect(() => {
@@ -332,7 +374,12 @@ export function BuildRoomShell({
           <span className="md:hidden">{shortJobName(jobName)}</span>
           <span className="hidden md:inline">{jobName}</span>
         </a>
-        <h1 className="sr-only font-mono text-[12px] font-medium uppercase leading-none tracking-[0.08em] md:not-sr-only md:shrink-0">
+        <h1
+          ref={titleRef}
+          tabIndex={-1}
+          {...{ [BUILD_ROOM_TITLE_ATTR]: "" }}
+          className={`sr-only font-mono text-[12px] font-medium uppercase leading-none tracking-[0.08em] md:not-sr-only md:shrink-0 ${QUIET_FOCUS}`}
+        >
           Build the pieces
         </h1>
 
@@ -445,7 +492,10 @@ export function BuildRoomShell({
           <AddRoom onAddRoom={onAddRoom} />
         </nav>
 
-        <main className="min-h-0 flex-1 overflow-y-auto px-4 md:px-6">
+        <main
+          ref={mainRef}
+          className="min-h-0 flex-1 overflow-y-auto px-4 md:px-6"
+        >
           {children}
         </main>
       </div>

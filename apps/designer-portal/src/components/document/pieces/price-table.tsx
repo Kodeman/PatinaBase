@@ -29,8 +29,12 @@ import {
 import { cn } from "@/lib/utils";
 import { menuKeyIndex, parseRough } from "@/lib/document/pieces/rough-in-keys";
 import { LABOR_STAMP_LABEL } from "@/lib/document/stamp-derivation";
+import {
+  QUIET_FOCUS,
+  ROOM_HEADING_ATTR,
+} from "@/lib/document/pieces/sheet-focus";
 import { MoveToRoomMenu, type MoveRoom } from "./move-to-room-menu";
-import { money, unitWord } from "./placement-chips";
+import { money, unitWordFor } from "./placement-chips";
 
 export type PriceRowAct = "labor" | "allowance" | "move" | "remove";
 
@@ -148,7 +152,12 @@ export function PriceTable({
       <div className="flex h-[48px] items-center">
         <h2
           id={headingId}
-          className="font-heading text-[18px] italic leading-[1.2] text-[var(--sheet-ink)]"
+          tabIndex={-1}
+          {...{ [ROOM_HEADING_ATTR]: room.id }}
+          className={cn(
+            "font-heading text-[18px] italic leading-[1.2] text-[var(--sheet-ink)]",
+            QUIET_FOCUS,
+          )}
         >
           {room.name}
         </h2>
@@ -190,11 +199,8 @@ export function PriceTable({
               onClientPrice={onClientPrice}
               onAddLabor={onAddLabor}
               onAllowance={onAllowance}
-              onMove={(r, roomId) => {
-                const to = rooms.find((x) => x.id === roomId);
-                onMove(r, roomId);
-                if (to) setAnnouncement(`Moved ${r.name} to ${to.name}.`);
-              }}
+              // The lens says the move once the server answers (T-60a F4).
+              onMove={onMove}
               onRemove={onRemove}
               onGated={setAnnouncement}
             />
@@ -263,7 +269,14 @@ function LineRow({
                 ↳
               </span>
             ) : null}
-            <span className="font-medium">{row.name}</span>
+            {/* Focus lands here once ADD LABOR adds this line (T-60a F6). */}
+            <span
+              data-line-name=""
+              tabIndex={-1}
+              className={cn("font-medium", QUIET_FOCUS)}
+            >
+              {row.name}
+            </span>
             {row.labor ? (
               <span className="stamp stamp--labor shrink-0">
                 {LABOR_STAMP_LABEL}
@@ -287,7 +300,7 @@ function LineRow({
         {row.quantity}
       </td>
       <td data-label="Unit" className={cn(CELL, CARD_CELL)}>
-        {unitWord(row.unit)}
+        {unitWordFor(row.unit, row.quantity)}
       </td>
       <td data-label="Trade cost" className={cn("p-0", CARD_CELL)}>
         {row.tradeEditable ? (
@@ -314,7 +327,11 @@ function LineRow({
             onCommit={(cents) => onClientPrice(row, cents)}
           />
         ) : (
-          <span className={cn(NUM_CELL, "block")}>
+          <span
+            data-allowance-cell=""
+            tabIndex={-1}
+            className={cn(NUM_CELL, "block", QUIET_FOCUS)}
+          >
             {ceiling ? (
               <AllowancePrice ceiling={ceiling} quantity={row.quantity} />
             ) : notPriced ? (
@@ -534,6 +551,10 @@ function RowMenu({
           role="menu"
           aria-label={`Acts for ${row.name}`}
           onKeyDown={onMenuKey}
+          // WebKit never focuses a tapped or clicked button: without this the
+          // press blurs the focused item to nothing, the blur closes the menu,
+          // and the item is gone before its click (T-60a F3).
+          onMouseDown={(event) => event.preventDefault()}
           className="absolute right-0 top-full z-20 w-[280px] border border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-1 text-left max-md:left-0 max-md:right-auto"
         >
           {MENU_ITEMS.map(({ act, label }, i) => {

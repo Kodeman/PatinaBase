@@ -22,6 +22,7 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type KeyboardEvent,
@@ -66,7 +67,14 @@ import {
 import {
   moveFailureText,
   RELEASED_DRAG_REASON,
+  settleMove,
 } from "@/lib/document/pieces/use-row-drag";
+import {
+  focusPlace,
+  holdsFocus,
+  inPlace,
+  neighborLineId,
+} from "@/lib/document/pieces/sheet-focus";
 import {
   deriveLineStamp,
   isLaborLine,
@@ -131,8 +139,39 @@ interface Removal {
   name: string;
   quantity: number;
   placeName: string;
+  placeId: string;
+  /** The line now in its place, for focus once the toast runs out. */
+  neighborId: string | null;
   /** Resolves true once archived, false when the server refused. */
   archived: Promise<boolean>;
+}
+
+/** Where focus goes once the sheet holds it (T-60a F5, F6, F7). */
+interface FocusRequest {
+  /** The line to focus; null for its place's heading alone. */
+  lineId: string | null;
+  /** The place the line should sit in; its heading holds focus meanwhile. */
+  placeId: string | null;
+  /** The line's `⋯`, its allowance cell, or its name (a new labor line). */
+  target?: "act" | "allowance" | "name";
+  /** Wait for a line the sheet does not hold yet (a new or restored line). */
+  expect?: boolean;
+  at: number;
+}
+
+/** How long a request waits for the server to return its line. */
+const FOCUS_WAIT_MS = 10_000;
+
+const FOCUS_TARGET = {
+  act: 'button[aria-haspopup="menu"]',
+  allowance: "[data-allowance-cell]",
+  name: "[data-line-name]",
+} as const;
+
+function priceSection(root: HTMLElement | null, placeId: string) {
+  return Array.from(root?.querySelectorAll("[data-price-room]") ?? []).find(
+    (el) => el.getAttribute("data-price-room") === placeId,
+  );
 }
 
 /** `Bedroom · $2,835 priced · ~$6,100 roughed`, as the overview counts it. */
@@ -206,6 +245,11 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
   const [removal, setRemoval] = useState<Removal | null>(null);
   const [tool, setTool] = useState<Tool | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
+  const requestFocus = (request: Omit<FocusRequest, "at">) =>
+    setFocusRequest({ ...request, at: Date.now() });
 
   const jobActive =
     resolution?.kind === "engagement" &&
@@ -249,6 +293,35 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     if ([...hidden].some((id) => !served.has(id)))
       setHidden((set) => new Set([...set].filter((id) => served.has(id))));
   }, [lineData, hidden]);
+
+  // A new, restored or moved line lands once the server returns it; its room
+  // heading holds focus meanwhile, so focus never drops to the page.
+  useEffect(() => {
+    if (!focusRequest) return;
+    const root = sheetRef.current;
+    const { lineId, placeId, target = "act", expect, at } = focusRequest;
+    const row = lineId
+      ? Array.from(
+          root?.querySelectorAll<HTMLElement>("[data-line-id]") ?? [],
+        ).find(
+          (el) =>
+            el.getAttribute("data-line-id") === lineId &&
+            inPlace(el, "data-price-room", placeId),
+        )
+      : undefined;
+    const goal = row?.querySelector<HTMLElement>(FOCUS_TARGET[target]);
+    if (goal) {
+      goal.focus();
+      setFocusRequest(null);
+      return;
+    }
+    if (!holdsFocus(root)) focusPlace(root, placeId);
+    const waiting =
+      lineId !== null &&
+      (byId.has(lineId) || expect) &&
+      Date.now() - at < FOCUS_WAIT_MS;
+    if (!waiting) setFocusRequest(null);
+  }, [focusRequest, lines, byId]);
 
   if (room === REMOVED_PLACE) {
     return (
@@ -359,12 +432,41 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     );
   }
 
-  function moveLine(row: PriceRow, roomId: string) {
+  /**
+   * `Move to room…`: said once the server answers, never before (T-60a F4).
+   * Focus stays on the line in its new room, or, when one room is in view
+   * and the line leaves it, goes to the row now in its place (F7).
+   */
+  function moveLine(row: PriceRow, roomId: string, fromPlaceId: string) {
     setNotice(null);
-    assign.mutate({ itemId: row.id, roomId, assignmentScope: "room" });
+    const leaves = room != null && room !== roomId;
+    const neighborId = leaves
+      ? neighborLineId(priceSection(sheetRef.current, fromPlaceId), row.id)
+      : null;
+    const to = {
+      id: roomId,
+      name: rooms.find((r) => r.id === roomId)?.name ?? "",
+    };
+    void settleMove(assign, projectId, [row], to).then(
+      ({ movedIds, refusal, text }) => {
+        if (refusal === null) setAnnouncement(text);
+        if (movedIds.length === 0) return;
+        requestFocus(
+          leaves
+            ? { lineId: neighborId, placeId: fromPlaceId }
+            : { lineId: row.id, placeId: roomId },
+        );
+      },
+    );
   }
 
-  function removeLine(row: PriceRow, placeName: string) {
+  /** A tool closes without acting: focus goes back to its line's `⋯` (F6). */
+  function closeTool(lineId: string, placeId: string) {
+    setTool(null);
+    requestFocus({ lineId, placeId });
+  }
+
+  function removeLine(row: PriceRow, placeName: string, placeId: string) {
     if (!byId.has(row.id)) return;
     setNotice(null);
     setHidden((set) => new Set(set).add(row.id));
@@ -380,6 +482,9 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
             next.delete(row.id);
             return next;
           });
+          // The row comes back; UNDO goes with the toast, so focus follows it.
+          if (holdsFocus(document.querySelector("[data-undo-toast]")))
+            requestFocus({ lineId: row.id, placeId });
           setRemoval((current) =>
             current?.selectionId === row.id ? null : current,
           );
@@ -398,12 +503,32 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
       name: row.name,
       quantity: row.quantity,
       placeName,
+      placeId,
+      // Read before the row goes: the line that takes its place (T-60a F5).
+      neighborId: neighborLineId(
+        priceSection(sheetRef.current, placeId),
+        row.id,
+      ),
       archived,
     });
   }
 
+  /** The toast ran out: focus moves from UNDO to the row now in its place (F5). */
+  function expireRemoval(target: Removal) {
+    if (holdsFocus(document.querySelector("[data-undo-toast]")))
+      requestFocus({ lineId: target.neighborId, placeId: target.placeId });
+    setRemoval((current) => (current?.key === target.key ? null : current));
+  }
+
   async function undoRemoval(target: Removal) {
     setRemoval(null);
+    // The room heading holds focus until the line is back (T-60a F5).
+    const back = {
+      lineId: target.selectionId,
+      placeId: target.placeId,
+      expect: true,
+    };
+    requestFocus(back);
     if (!(await target.archived)) return;
     try {
       await restore.mutateAsync({ projectId, selectionId: target.selectionId });
@@ -412,7 +537,9 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
         next.delete(target.selectionId);
         return next;
       });
+      requestFocus(back);
     } catch (cause) {
+      requestFocus({ lineId: null, placeId: target.placeId });
       setNotice(
         errorText(cause) ??
           `${target.name} was not put back. It is under Removed in the rail.`,
@@ -424,7 +551,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     notice ?? (assign.isError ? moveFailureText(assign.error) : null);
 
   return (
-    <div data-price-lens="" className="py-6">
+    <div ref={sheetRef} data-price-lens="" className="py-6">
       <p className="mb-3 font-sans text-[16px] leading-[1.5] tabular-nums text-[var(--sheet-ink)]">
         {priceSummary("Job", job)}
       </p>
@@ -466,8 +593,8 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
                   if (line)
                     setTool({ kind: "allowance", placeId: place.key, line });
                 }}
-                onMove={moveLine}
-                onRemove={(row) => removeLine(row, place.name)}
+                onMove={(row, roomId) => moveLine(row, roomId, place.key)}
+                onRemove={(row) => removeLine(row, place.name, place.key)}
               />
               {tool && tool.placeId === place.key ? (
                 tool.kind === "labor" ? (
@@ -475,14 +602,31 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
                     key={tool.line.id}
                     projectId={projectId}
                     piece={tool.line}
-                    onDone={() => setTool(null)}
+                    onAdded={(selectionId) => {
+                      setTool(null);
+                      requestFocus({
+                        lineId: selectionId,
+                        placeId: place.key,
+                        target: "name",
+                        expect: true,
+                      });
+                    }}
+                    onDone={() => closeTool(tool.line.id, place.key)}
                   />
                 ) : (
                   <AllowanceForm
                     key={tool.line.id}
                     projectId={projectId}
                     line={tool.line}
-                    onDone={() => setTool(null)}
+                    onAdded={() => {
+                      setTool(null);
+                      requestFocus({
+                        lineId: tool.line.id,
+                        placeId: place.key,
+                        target: "allowance",
+                      });
+                    }}
+                    onDone={() => closeTool(tool.line.id, place.key)}
                   />
                 )
               ) : null}
@@ -506,13 +650,18 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
           quantity={removal.quantity}
           roomName={removal.placeName}
           onUndo={() => void undoRemoval(removal)}
-          onExpire={() =>
-            setRemoval((current) =>
-              current?.key === removal.key ? null : current,
-            )
-          }
+          onExpire={() => expireRemoval(removal)}
         />
       ) : null}
+      <p
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        data-price-announce=""
+        className="sr-only"
+      >
+        {announcement}
+      </p>
     </div>
   );
 }
@@ -551,10 +700,13 @@ function ToolFrame({
 function LaborForm({
   projectId,
   piece,
+  onAdded,
   onDone,
 }: {
   projectId: string;
   piece: PriceLine;
+  /** The new labor line's id, for focus on its name (T-60a F6). */
+  onAdded: (selectionId: string | null) => void;
   onDone: () => void;
 }) {
   const addLabor = useAddLaborLine();
@@ -587,7 +739,7 @@ function LaborForm({
         unit,
         ...(cents != null && cents > 0 ? { unitPriceCents: cents } : {}),
       })
-      .then(onDone)
+      .then((added) => onAdded(added?.selectionId ?? null))
       .catch((cause: unknown) =>
         setError(errorText(cause) ?? "The labor line was not added."),
       );
@@ -653,7 +805,7 @@ function LaborForm({
         </button>
         <button
           type="button"
-          onClick={onDone}
+          onClick={() => onDone()}
           className={cn(ACT, "text-[var(--sheet-ink-muted)]")}
         >
           Put back
@@ -680,10 +832,13 @@ function LaborForm({
 function AllowanceForm({
   projectId,
   line,
+  onAdded,
   onDone,
 }: {
   projectId: string;
   line: PriceLine;
+  /** The allowance saved: focus goes to the line's allowance cell (F6). */
+  onAdded: () => void;
   onDone: () => void;
 }) {
   const makeAllowance = useMakeFfeLineAllowance();
@@ -709,7 +864,7 @@ function AllowanceForm({
     setError(null);
     makeAllowance
       .mutateAsync({ projectId, itemId: line.id, budgetMaxCents: lineCents })
-      .then(onDone)
+      .then(() => onAdded())
       .catch((cause: unknown) =>
         setError(errorText(cause) ?? "The allowance was not saved."),
       );
@@ -752,7 +907,7 @@ function AllowanceForm({
         </button>
         <button
           type="button"
-          onClick={onDone}
+          onClick={() => onDone()}
           className={cn(ACT, "text-[var(--sheet-ink-muted)]")}
         >
           Put back

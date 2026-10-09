@@ -8,7 +8,7 @@
  * row stacks, `WORK THIS ROOM →` above `ADD A LINE` (a12).
  */
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { RoomFinish } from '@patina/types';
 import { DocumentAction } from '../document-action';
 import { StrataMark } from '../strata-mark';
@@ -52,6 +52,13 @@ export function PiecesOverviewRow({
 }) {
   const bodyId = `pieces-room-lines-${row.key}`;
   const figure = overviewRowFigure(row);
+  const nameRef = useRef<HTMLButtonElement>(null);
+
+  // T-60a F2/F6: back from the Build room, focus lands on the room row she
+  // returned to; the Document has already brought it into view.
+  useEffect(() => {
+    if (returned) nameRef.current?.focus({ preventScroll: true });
+  }, [returned]);
   return (
     <li
       id={piecesOverviewRowId(row)}
@@ -69,6 +76,7 @@ export function PiecesOverviewRow({
           <StrataMark size="sm" state={row.mark} />
           <h3 className="font-heading text-[16px] italic text-[var(--ink)]">
             <button
+              ref={nameRef}
               type="button"
               aria-expanded={open}
               aria-controls={open ? bodyId : undefined}

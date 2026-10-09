@@ -345,10 +345,12 @@ describe("RoughInTable row menu", () => {
     expect(items[0]).toHaveFocus();
     await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Enter}");
     expect(props.onMove).toHaveBeenCalledWith(LIVING[0], "kitchen");
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Moved Custom cabinet to Kitchen.",
-    );
-    expect(entryName()).toHaveFocus();
+    // T-60a F4/F7: nothing is said before the server answers (the lens says
+    // it), and the hand stays on the acted line, never the entry row.
+    expect(screen.getByRole("status")).not.toHaveTextContent(/Moved/);
+    expect(
+      screen.getByRole("button", { name: "Acts for Custom cabinet" }),
+    ).toHaveFocus();
   });
 
   it("Move to room… works by touch, and Esc steps back out", async () => {
@@ -480,8 +482,22 @@ describe("UndoToast", () => {
       />,
     );
     expect(screen.getByRole("status")).toHaveTextContent(
-      /^Removed Rattan lounge chair ×2\.Undo10 S$/,
+      /^Removed Rattan lounge chair ×2\. Undo puts it back\.Undo10 S$/,
     );
+  });
+
+  it("takes focus on UNDO and names the undo (T-60a F5)", () => {
+    render(
+      <UndoToast
+        name="Rattan lounge chair"
+        quantity={2}
+        roomName="Sunroom"
+        onUndo={jest.fn()}
+        onExpire={jest.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Undo" })).toHaveFocus();
+    expect(screen.getByRole("status")).toHaveTextContent("Undo puts it back.");
   });
 });
 

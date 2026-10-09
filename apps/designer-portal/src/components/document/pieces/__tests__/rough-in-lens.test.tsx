@@ -92,7 +92,7 @@ jest.mock("@patina/supabase", () => ({
   }),
 }));
 jest.mock("@/hooks/use-document-rooms", () => ({
-  useAssignLineRoom: () => ({ mutate: mockAssign, ...mockAssignState }),
+  useAssignLineRoom: () => ({ mutateAsync: mockAssign, ...mockAssignState }),
 }));
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -163,6 +163,7 @@ function livingTable() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAssign.mockResolvedValue({});
   mockState.lines = [];
   mockState.removed = [];
   mockAssignState.isError = false;
@@ -243,10 +244,16 @@ describe("RoughInLens — the hooks", () => {
     await user.click(screen.getByRole("menuitem", { name: "Move to room…" }));
     await user.click(screen.getByRole("menuitem", { name: "Kitchen" }));
     expect(mockAssign).toHaveBeenCalledWith({
-      itemId: "l1",
+      projectId: PROJECT,
+      selectionIds: ["l1"],
       roomId: KITCHEN,
       assignmentScope: "room",
     });
+    // T-60a F4: said once the server has answered, not before.
+    const said = document.querySelector("[data-rough-in-announce]") as HTMLElement;
+    await waitFor(() =>
+      expect(said).toHaveTextContent("Moved Custom cabinet to Kitchen."),
+    );
   });
 
   it.each([

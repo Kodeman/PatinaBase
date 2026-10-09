@@ -4,13 +4,18 @@
  * US-21 T-24 — the undo toast (SPEC §2.6, a8, a15; D8).
  *
  * `Removed Rattan lounge chair ×2 from Sunroom.` · `UNDO` · `10 S`. It sits as
- * the body's last row, never fixed, and never takes focus: the next line is
- * still being typed. It counts down once a second and calls `onExpire` at 0.
+ * the body's last row, never fixed. It takes focus on UNDO and names it to a
+ * screen reader (T-60a F5), so a Remove never drops focus to the page; the
+ * lens moves focus on once it expires. It counts down once a second and calls
+ * `onExpire` at 0.
  * Remount it (a new `key`) for each removal to restart the count.
  */
 import { useEffect, useRef, useState } from "react";
 
 export const UNDO_SECONDS = 10;
+
+/** What the announcement adds for a screen reader: the undo, by name. */
+export const UNDO_HINT = "Undo puts it back.";
 
 export function removedSentence(
   name: string,
@@ -41,10 +46,12 @@ export function UndoToast({
   seconds = UNDO_SECONDS,
 }: UndoToastProps) {
   const [left, setLeft] = useState(seconds);
+  const undoRef = useRef<HTMLButtonElement>(null);
   const onExpireRef = useRef(onExpire);
   onExpireRef.current = onExpire;
 
   useEffect(() => {
+    undoRef.current?.focus({ preventScroll: true });
     const timer = window.setInterval(
       () => setLeft((s) => Math.max(0, s - 1)),
       1000,
@@ -64,8 +71,10 @@ export function UndoToast({
     >
       <span className="min-w-0 flex-1">
         {removedSentence(name, quantity, roomName)}
+        <span className="sr-only"> {UNDO_HINT}</span>
       </span>
       <button
+        ref={undoRef}
         type="button"
         onClick={onUndo}
         className="act inline-flex min-h-[44px] min-w-[44px] items-center justify-center font-mono text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--sheet-toast-ink)] underline decoration-1 underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]"

@@ -10,10 +10,10 @@ import {
 
 const mockMutate = jest.fn();
 const mockAssignState: {
-  mutate: jest.Mock;
+  mutateAsync: jest.Mock;
   isError: boolean;
   error: unknown;
-} = { mutate: mockMutate, isError: false, error: null };
+} = { mutateAsync: mockMutate, isError: false, error: null };
 const mockUseAssignLineRoom = jest.fn(
   (_projectId: string | null) => mockAssignState,
 );
@@ -78,7 +78,8 @@ function lift(result: ReturnType<typeof render>["result"], line: RowDragLine) {
 }
 
 beforeEach(() => {
-  mockMutate.mockClear();
+  mockMutate.mockReset();
+  mockMutate.mockResolvedValue({});
   mockUseAssignLineRoom.mockClear();
   mockAssignState.isError = false;
   mockAssignState.error = null;
@@ -143,7 +144,9 @@ describe("useRowDrag", () => {
     expect(result.current.roomDropLabel(dining)).toBeNull();
   });
 
-  it("drops through triage via useAssignLineRoom and announces the move", () => {
+  it("drops through triage via useAssignLineRoom and announces the move once it lands", async () => {
+    let land: (value: unknown) => void = () => {};
+    mockMutate.mockReturnValueOnce(new Promise((resolve) => (land = resolve)));
     const { result } = render();
     lift(result, D3);
     act(() => result.current.roomDropProps(kitchen).onDragOver(dragEvent()));
@@ -153,10 +156,14 @@ describe("useRowDrag", () => {
     expect(drop.preventDefault).toHaveBeenCalled();
     expect(mockMutate).toHaveBeenCalledTimes(1);
     expect(mockMutate).toHaveBeenCalledWith({
-      itemId: "d3",
+      projectId: "p1",
+      selectionIds: ["d3"],
       roomId: KITCHEN,
       assignmentScope: "room",
     });
+    // T-60a F4: nothing is said before the server answers.
+    expect(result.current.announcement).toBe("");
+    await act(async () => land({}));
     expect(result.current.announcement).toBe(
       "Moved Counter stools to Kitchen.",
     );
@@ -169,18 +176,19 @@ describe("useRowDrag", () => {
     expect(result.current.roomDropLabel(kitchen)).toBeNull();
   });
 
-  it("sends a line to Not in a room yet as unassigned", () => {
+  it("sends a line to Not in a room yet as unassigned", async () => {
     const { result } = render();
     lift(result, D1);
-    act(() => result.current.roomDropProps(unsorted).onDrop(dragEvent()));
+    await act(async () => result.current.roomDropProps(unsorted).onDrop(dragEvent()));
     expect(mockMutate).toHaveBeenCalledWith({
-      itemId: "d1",
+      projectId: "p1",
+      selectionIds: ["d1"],
       roomId: null,
       assignmentScope: "unassigned",
     });
   });
 
-  it("Shift-click selects several, and dragging one carries them all", () => {
+  it("Shift-click selects several, and dragging one carries them all", async () => {
     const { result } = render();
     act(() => result.current.rowDragProps(D2).onClick(click(true)));
     act(() => result.current.rowDragProps(D3).onClick(click(true)));
@@ -193,8 +201,8 @@ describe("useRowDrag", () => {
       "translateX(8px)",
     );
 
-    act(() => result.current.roomDropProps(kitchen).onDrop(dragEvent()));
-    expect(mockMutate.mock.calls.map(([arg]) => arg.itemId)).toEqual([
+    await act(async () => result.current.roomDropProps(kitchen).onDrop(dragEvent()));
+    expect(mockMutate.mock.calls.map(([arg]) => arg.selectionIds[0])).toEqual([
       "d2",
       "d3",
     ]);
@@ -251,37 +259,40 @@ describe("useRowDrag", () => {
     expect(result.current.selectedIds).toEqual([]);
   });
 
-  it("announces a failed move", () => {
-    const { result, rerender } = render();
-    mockAssignState.isError = true;
-    rerender();
+  async function dropRefused(error: unknown) {
+    mockMutate.mockRejectedValueOnce(error);
+    const hook = render();
+    lift(hook.result, D3);
+    await act(async () =>
+      hook.result.current.roomDropProps(kitchen).onDrop(dragEvent()),
+    );
+    return hook.result;
+  }
+
+  it("announces a failed move, and never a success first (T-60a F4)", async () => {
+    const result = await dropRefused(new Error("fetch failed"));
     expect(result.current.announcement).toBe(
       "The move did not save. Use Move to room… to try again.",
     );
+    expect(result.current.announcement).not.toMatch(/Moved/);
   });
 
   it.each([
     "This line sits in 4 rooms. Change its rooms instead.",
     "Labor moves with its piece.",
     "This line is on a drafted release. Send it or void the draft first.",
-  ])("announces the server's named refusal verbatim: %s", (sentence) => {
-    const { result, rerender } = render();
-    mockAssignState.isError = true;
-    mockAssignState.error = Object.assign(new Error(sentence), {
-      code: "23514",
-    });
-    rerender();
+  ])("announces the server's named refusal verbatim: %s", async (sentence) => {
+    const result = await dropRefused(
+      Object.assign(new Error(sentence), { code: "23514" }),
+    );
     expect(result.current.announcement).toBe(sentence);
   });
 
-  it("never announces raw Postgres text", () => {
-    const { result, rerender } = render();
-    mockAssignState.isError = true;
-    mockAssignState.error = {
+  it("never announces raw Postgres text", async () => {
+    const result = await dropRefused({
       message: 'new row violates row-level security policy for table "x"',
       code: "42501",
-    };
-    rerender();
+    });
     expect(result.current.announcement).toBe(MOVE_DID_NOT_SAVE);
   });
 

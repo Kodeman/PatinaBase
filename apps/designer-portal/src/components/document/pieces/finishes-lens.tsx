@@ -19,6 +19,10 @@ import {
 import type { RoomFinish } from "@patina/types";
 import { useDocumentRooms } from "@/hooks/use-document-rooms";
 import type { BuildRoomPlace } from "@/lib/document/pieces/build-room-url";
+import {
+  QUIET_FOCUS,
+  ROOM_HEADING_ATTR,
+} from "@/lib/document/pieces/sheet-focus";
 import { FinishSwatch, swatchLabel } from "./finish-swatch";
 
 /**
@@ -386,7 +390,9 @@ function RoomFinishesTable({
     <section aria-labelledby={headingId} className="flex flex-col gap-2">
       <h2
         id={headingId}
-        className="font-heading text-[18px] italic leading-[1.2] text-[var(--sheet-ink)]"
+        tabIndex={-1}
+        {...{ [ROOM_HEADING_ATTR]: roomId }}
+        className={`font-heading text-[18px] italic leading-[1.2] text-[var(--sheet-ink)] ${QUIET_FOCUS}`}
       >
         {roomName} · Finishes
       </h2>
@@ -469,6 +475,7 @@ function RoomFinishesTable({
                         mono
                         invalid={badHex === index}
                         describedBy={badHex === index ? hexAlertId : undefined}
+                        holds={(v) => v.trim() !== "" && normalizeHex(v) == null}
                         onCommit={(v) => commit(index, "hex", v)}
                       />
                     </span>
@@ -518,6 +525,9 @@ function RoomFinishesTable({
 /**
  * One editable cell. It holds her typing itself and saves when she leaves
  * it, so a save landing elsewhere never takes text out from under her.
+ * Enter saves and moves to the next cell (T-60a F6): Product to Sheen, Sheen
+ * to Swatch, Swatch to the next surface or the New surface field. A value
+ * `holds` refuses is saved where it is, so its correction stays in reach.
  */
 function Cell({
   label,
@@ -529,6 +539,7 @@ function Cell({
   mono = false,
   invalid = false,
   describedBy,
+  holds,
 }: {
   label: string;
   value: string | null;
@@ -539,6 +550,7 @@ function Cell({
   mono?: boolean;
   invalid?: boolean;
   describedBy?: string;
+  holds?: (value: string) => boolean;
 }) {
   return (
     <input
@@ -552,10 +564,17 @@ function Cell({
       placeholder={placeholder}
       onBlur={(event) => onCommit(event.currentTarget.value)}
       onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          event.currentTarget.blur();
-        }
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        const input = event.currentTarget;
+        if (holds?.(input.value)) return onCommit(input.value);
+        const inputs = Array.from(
+          input.closest("table")?.querySelectorAll("input") ?? [],
+        );
+        const next = inputs[inputs.indexOf(input) + 1];
+        // Moving focus on saves this cell through its blur.
+        if (next) next.focus();
+        else input.blur();
       }}
       className={`${INPUT_CLS} ${mono ? "font-mono text-[12px] uppercase" : ""}`}
     />

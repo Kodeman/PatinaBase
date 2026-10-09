@@ -24,10 +24,9 @@ import { test, expect } from '../fixtures/auth';
 import { psqlAsUser, psqlRun, psqlScalar } from '../helpers/psql';
 
 test.describe.configure({ mode: 'default' });
-test.skip(
-  ({ browserName }) => browserName !== 'chromium',
-  'One shared fixture project; the walk runs in Chromium (T-60 walks WebKit).',
-);
+
+/** The mouse-and-keyboard walk runs in the `chromium` project; `webkit-iphone` runs the taps. */
+const WALK_ONLY = 'The walk runs in Chromium; WebKit (iPhone 13) runs the taps.';
 
 const FIXTURE_SQL = readFileSync(path.join(__dirname, 'pieces-fixture.sql'), 'utf8');
 
@@ -134,6 +133,7 @@ async function openRowMenu(page: Page, id: string, name: string) {
 
 for (const vp of VIEWPORTS) {
   test.describe(`The Build room at ${vp.name}`, () => {
+    test.skip(({ browserName }) => browserName !== 'chromium', WALK_ONLY);
     test.use({ viewport: { width: vp.width, height: vp.height } });
     test.beforeEach(() => {
       psqlRun(FIXTURE_SQL);
@@ -485,12 +485,16 @@ for (const vp of VIEWPORTS) {
         }
         await product.fill('Farrow & Ball Setting Plaster No. 231');
         await product.press('Enter');
+        // T-60a F6: Enter saves a cell and moves to the next one in the row.
         const sheen = lens.getByRole('combobox', { name: 'Sheen for Walls' }).or(lens.getByRole('textbox', { name: 'Sheen for Walls' }));
+        await expect(sheen).toBeFocused();
         await sheen.fill('Eggshell');
         await sheen.press('Enter');
         const hex = lens.getByRole('textbox', { name: 'Swatch color for Walls' });
+        await expect(hex).toBeFocused();
         await hex.fill('#F2DCD2');
         await hex.press('Enter');
+        await expect(surface).toBeFocused();
         await expect
           .poll(() =>
             psqlScalar(`SELECT swatches::text FROM public.project_palettes WHERE project_id = '${JOB}' AND scope_room_id = '${ROOM.bedroom}'`),
@@ -528,11 +532,181 @@ for (const vp of VIEWPORTS) {
   });
 }
 
+/** The line whose row holds focus, or '' when focus sits outside every line. */
+function focusedLineId(page: Page): Promise<string> {
+  return page.evaluate(() => document.activeElement?.closest('[data-line-id]')?.getAttribute('data-line-id') ?? '');
+}
+
+/** The place whose section holds focus, by its section attribute. */
+function focusedPlace(page: Page, attr: string): Promise<string> {
+  return page.evaluate((a) => document.activeElement?.closest(`[${a}]`)?.getAttribute(a) ?? '', attr);
+}
+
+function roomHeading(page: Page, placeId: string) {
+  return page.locator(`[data-room-heading="${placeId}"]`);
+}
+
+/**
+ * T-60a F1/F2: landing at ?room= brings the room's section into view and puts
+ * focus on its heading; without a room, on the head's title. The same on a
+ * lens change and on the way back to the overview.
+ */
+for (const vp of VIEWPORTS) {
+  test.describe(`The Build room · landing and focus @${vp.name}`, () => {
+    test.skip(({ browserName }) => browserName !== 'chromium', WALK_ONLY);
+    test.use({ viewport: { width: vp.width, height: vp.height } });
+    test.beforeEach(() => {
+      psqlRun(FIXTURE_SQL);
+    });
+
+    for (const lens of ['rough', 'price', 'finishes', 'release'] as const) {
+      test(`F1/F2 ?room=Sunroom on ${lens}: the section top is in view and its heading has focus @${vp.name}`, async ({
+        authenticatedPage: page,
+      }) => {
+        await openSheet(page, lens, ROOM.sunroom);
+        const heading = roomHeading(page, ROOM.sunroom);
+        await expect(heading).toBeFocused({ timeout: 15_000 });
+        const top = await heading.evaluate((el) => (el.closest('section, tbody') ?? el).getBoundingClientRect().top);
+        // Sub-pixel layout can leave the top a fraction above 0.
+        expect(top, 'the section top is on screen').toBeGreaterThanOrEqual(-1);
+        expect(top, 'the section top is on screen').toBeLessThan(vp.height);
+        // And nothing (the head, the lens strip) sits over the heading.
+        const seen = await heading.evaluate((el) => {
+          const box = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(box.left + 4, box.top + box.height / 2);
+          return !!hit && el.contains(hit);
+        });
+        expect(seen, 'the heading is not covered').toBe(true);
+      });
+    }
+
+    test(`F2 a lens change keeps the room, no room lands on the title, and the overview row takes focus back @${vp.name}`, async ({
+      authenticatedPage: page,
+    }) => {
+      await openSheet(page, 'rough', ROOM.sunroom);
+      await expect(roomHeading(page, ROOM.sunroom)).toBeFocused({ timeout: 15_000 });
+      if (!vp.phone) {
+        await page.getByRole('group', { name: 'Lens' }).getByRole('button', { name: 'Price' }).click();
+        await expect(page).toHaveURL(/lens=price/);
+        await expect(roomHeading(page, ROOM.sunroom)).toBeFocused({ timeout: 15_000 });
+      }
+
+      await openSheet(page, 'spec');
+      await expect(page.getByRole('heading', { name: 'Build the pieces' })).toBeFocused();
+      await page.getByRole('group', { name: 'Lens' }).getByRole('button', { name: 'Rough in' }).click();
+      await expect(page).toHaveURL(/lens=rough/);
+      await expect(page.getByRole('heading', { name: 'Build the pieces' })).toBeFocused();
+
+      await openSheet(page, 'rough', ROOM.sunroom);
+      await expect(roomHeading(page, ROOM.sunroom)).toBeFocused({ timeout: 15_000 });
+      await page.keyboard.press('Escape');
+      await expectBackAtRoom(page, ROOM.sunroom);
+      await expect(
+        page.locator(`[data-pieces-room="${ROOM.sunroom}"]`).getByRole('button', { name: 'Sunroom', exact: true }),
+      ).toBeFocused();
+    });
+  });
+}
+
+/**
+ * T-60a F5–F7: after each act, focus lands on the acted line, the row now in
+ * its place, or the room's heading, never on the page body.
+ */
+test.describe('The Build room · focus after each act @1440', () => {
+  test.skip(({ browserName }) => browserName !== 'chromium', WALK_ONLY);
+  test.use({ viewport: { width: 1440, height: 900 } });
+  test.beforeEach(() => {
+    psqlRun(FIXTURE_SQL);
+  });
+
+  test('F5 Remove by keyboard puts focus on UNDO and names it; UNDO and its expiry hand focus to a row', async ({
+    authenticatedPage: page,
+  }) => {
+    test.setTimeout(90_000);
+    const chair = lineId('Rattan lounge chair');
+    await openSheet(page, 'rough', ROOM.sunroom);
+    const trigger = lineRow(page, chair).first().getByRole('button', { name: 'Acts for Rattan lounge chair' });
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    const menu = page.getByRole('menu', { name: 'Acts for Rattan lounge chair' });
+    await menu.getByRole('menuitem', { name: 'Remove' }).focus();
+    await page.keyboard.press('Enter');
+
+    const toast = page.locator('[data-undo-toast]');
+    await expect(toast).toContainText('Removed Rattan lounge chair ×2 from Sunroom.');
+    await expect(toast).toContainText('Undo puts it back.');
+    await expect(toast.getByRole('button', { name: 'Undo' })).toBeFocused();
+    await expect.poll(() => psqlScalar(`SELECT removed_at IS NOT NULL FROM public.project_ffe_items WHERE id = '${chair}'`)).toBe('t');
+
+    // UNDO: focus goes to the line put back.
+    await page.keyboard.press('Enter');
+    await expect.poll(() => focusedLineId(page), { timeout: 15_000 }).toBe(chair);
+
+    // Again, and let it run out: focus goes to the row now in its place.
+    await openRowMenu(page, chair, 'Rattan lounge chair').then((m) => m.getByRole('menuitem', { name: 'Remove' }).click());
+    await expect(toast.getByRole('button', { name: 'Undo' })).toBeFocused();
+    await expect(toast).toHaveCount(0, { timeout: 15_000 });
+    await expect.poll(() => focusedPlace(page, 'data-rough-in-room')).toBe(ROOM.sunroom);
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
+  });
+
+  test('F6 an allowance lands on its cell; ADD LABOR lands on the new line', async ({ authenticatedPage: page }) => {
+    const bed = lineId('Bed, king, upholstered');
+    await openSheet(page, 'price', ROOM.bedroom);
+    const menu = await openRowMenu(page, bed, 'Bed, king, upholstered');
+    await menu.getByRole('menuitem', { name: 'Make it an allowance' }).click();
+    const form = page.getByRole('form', { name: 'Make Bed, king, upholstered an allowance' });
+    await form.getByRole('textbox').first().fill('4500');
+    await form.getByRole('button', { name: 'Make it an allowance' }).click();
+    await expect(lineRow(page, bed).first().locator('[data-allowance-cell]')).toBeFocused();
+    await expect(lineRow(page, bed).first().locator('[data-allowance-cell]')).toContainText('Up to $4,500');
+
+    const labor = await openRowMenu(page, bed, 'Bed, king, upholstered');
+    await labor.getByRole('menuitem', { name: 'Add labor' }).click();
+    const laborForm = page.getByRole('form', { name: 'Add labor to Bed, king, upholstered' });
+    await laborForm.getByRole('textbox', { name: 'Labor' }).fill('Deliver and set up');
+    await laborForm.getByRole('button', { name: 'Add the labor line' }).click();
+    await expect(page.locator('[data-line-name]:focus')).toHaveText('Deliver and set up', { timeout: 15_000 });
+  });
+
+  test('F7 a move keeps focus on the line in its new room; a refusal keeps it on ⋯; a fill keeps it on the line', async ({
+    authenticatedPage: page,
+  }) => {
+    const stools = lineId('Counter stools');
+    const floor = lineId('White oak floor, satin Bona finish');
+    const knobs = lineId('Hardware, 2 knobs for custom cabinet');
+    await openSheet(page, 'rough', ROOM.dining);
+
+    const menu = await openRowMenu(page, stools, 'Counter stools');
+    await menu.getByRole('menuitem', { name: 'Move to room…' }).click();
+    await page.getByRole('menu', { name: 'Move to room' }).getByRole('menuitem', { name: /^Kitchen/ }).click();
+    await expect(page.locator('[data-rough-in-announce]')).toHaveText('Moved Counter stools to Kitchen.', { timeout: 15_000 });
+    await expect.poll(() => focusedPlace(page, 'data-rough-in-room'), { timeout: 15_000 }).toBe(ROOM.kitchen);
+    expect(await focusedLineId(page)).toBe(stools);
+
+    const floorMenu = await openRowMenu(page, floor, 'White oak floor, satin Bona finish');
+    await floorMenu.getByRole('menuitem', { name: 'Move to room…' }).click();
+    await page.getByRole('menu', { name: 'Move to room' }).getByRole('menuitem', { name: /^Kitchen/ }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'This line sits in 4 rooms. Change its rooms instead.' })).toBeVisible();
+    await expect(page.locator('[data-rough-in-announce]')).not.toContainText('Moved White oak floor');
+    await expect(page.locator('button[aria-haspopup="menu"]:focus')).toHaveAccessibleName('Acts for White oak floor, satin Bona finish');
+
+    const fill = await openRowMenu(page, knobs, 'Hardware, 2 knobs for custom cabinet');
+    await fill.getByRole('menuitem', { name: 'Fill with a product' }).click();
+    await page.getByRole('combobox', { name: 'Fill Hardware, 2 knobs for custom cabinet with a product' }).fill('knob');
+    const results = page.getByRole('listbox', { name: 'Library results' });
+    await results.getByRole('option', { name: /Emtek Ribbon & Reed knob/ }).click({ timeout: 15_000 });
+    await expect.poll(() => focusedLineId(page), { timeout: 15_000 }).toBe(knobs);
+    await expect(page.getByRole('textbox', { name: /^New line in/ }).and(page.locator(':focus'))).toHaveCount(0);
+  });
+});
+
 /**
  * Product defects the walk found (T-59), fixed in T-59a. Each case now holds
  * the fix.
  */
 test.describe('The Build room · findings @1440', () => {
+  test.skip(({ browserName }) => browserName !== 'chromium', WALK_ONLY);
   test.use({ viewport: { width: 1440, height: 900 } });
   test.beforeEach(() => {
     psqlRun(FIXTURE_SQL);
@@ -601,5 +775,65 @@ test.describe('The Build room · findings @1440', () => {
     // The duplicate leaves the panel; with nothing left, the panel goes.
     await expect(duplicates).toHaveCount(0);
     await expect(page.getByText('Phillip Jeffries Manila Hemp - Chalk')).toHaveCount(0);
+  });
+});
+
+/**
+ * T-60a F3: each row-menu act runs on a tap, in WebKit's iPhone profile and
+ * in Chromium with touch. T-60 found the menu closed under a WebKit tap and
+ * the act never ran: WebKit focuses nothing on a tap, so the tap blurred the
+ * menu, which closed before the click landed.
+ */
+test.describe('The Build room · row-menu taps', () => {
+  test.use({ hasTouch: true });
+  test.beforeEach(() => {
+    psqlRun(FIXTURE_SQL);
+  });
+
+  async function tapRowMenu(page: Page, id: string, name: string) {
+    await lineRow(page, id).first().getByRole('button', { name: `Acts for ${name}` }).tap();
+    const menu = page.getByRole('menu', { name: `Acts for ${name}` });
+    await expect(menu).toBeVisible();
+    return menu;
+  }
+
+  test('tap: Fill with a product opens the fill search', async ({ authenticatedPage: page }) => {
+    const knobs = lineId('Hardware, 2 knobs for custom cabinet');
+    await openSheet(page, 'rough', ROOM.living);
+    const menu = await tapRowMenu(page, knobs, 'Hardware, 2 knobs for custom cabinet');
+    await menu.getByRole('menuitem', { name: 'Fill with a product' }).tap();
+    await expect(page.getByRole('combobox', { name: 'Fill Hardware, 2 knobs for custom cabinet with a product' })).toBeVisible();
+  });
+
+  test('tap: Make it an allowance opens the form, and the allowance saves', async ({ authenticatedPage: page }) => {
+    const bed = lineId('Bed, king, upholstered');
+    await openSheet(page, 'price', ROOM.bedroom);
+    const menu = await tapRowMenu(page, bed, 'Bed, king, upholstered');
+    await menu.getByRole('menuitem', { name: 'Make it an allowance' }).tap();
+    const form = page.getByRole('form', { name: 'Make Bed, king, upholstered an allowance' });
+    await expect(form).toBeVisible();
+    await form.getByRole('textbox').first().fill('4500');
+    await form.getByRole('button', { name: 'Make it an allowance' }).tap();
+    await expect
+      .poll(() => psqlScalar(`SELECT item_type || ':' || budget_max_cents FROM public.project_ffe_items WHERE id = '${bed}'`))
+      .toBe('allowance:450000');
+  });
+
+  test('tap: Remove removes the line and offers UNDO', async ({ authenticatedPage: page }) => {
+    const chair = lineId('Rattan lounge chair');
+    await openSheet(page, 'rough', ROOM.sunroom);
+    const menu = await tapRowMenu(page, chair, 'Rattan lounge chair');
+    await menu.getByRole('menuitem', { name: 'Remove' }).tap();
+    await expect(page.getByRole('status').filter({ hasText: /Removed Rattan lounge chair ×2/ })).toBeVisible();
+    await expect.poll(() => psqlScalar(`SELECT removed_at IS NOT NULL FROM public.project_ffe_items WHERE id = '${chair}'`)).toBe('t');
+  });
+
+  test('tap: Move to room… moves the line', async ({ authenticatedPage: page }) => {
+    const stools = lineId('Counter stools');
+    await openSheet(page, 'rough', ROOM.dining);
+    const menu = await tapRowMenu(page, stools, 'Counter stools');
+    await menu.getByRole('menuitem', { name: 'Move to room…' }).tap();
+    await page.getByRole('menu', { name: 'Move to room' }).getByRole('menuitem', { name: /^Kitchen/ }).tap();
+    await expect.poll(() => psqlScalar(`SELECT project_room_id FROM public.project_ffe_items WHERE id = '${stools}'`)).toBe(ROOM.kitchen);
   });
 });

@@ -48,14 +48,46 @@ export function unitWord(unit: string | null | undefined): string {
   return UNIT_WORD[(unit ?? "each") as FfeLineUnit] ?? "each";
 }
 
+/**
+ * Units that are counted, so any quantity but 1 reads plural (T-60a F8).
+ * Measures (sq ft, lin ft, yard) stay as they are.
+ */
+const COUNTED_PLURAL: Partial<Record<FfeLineUnit, string>> = {
+  roll: "rolls",
+  box: "boxes",
+  hour: "hours",
+  lot: "lots",
+};
+
+/**
+ * A unit as a quantity of it reads: `1 roll`, `9 rolls`, `913 sq ft`. Measure
+ * units and `each` never change. The one formatter for Spec, Price, Rough in,
+ * the chips and print.
+ */
+export function unitWordFor(
+  unit: string | null | undefined,
+  quantity: number,
+): string {
+  const plural = COUNTED_PLURAL[(unit ?? "each") as FfeLineUnit];
+  return plural && quantity !== 1 ? plural : unitWord(unit);
+}
+
+/** `9 rolls`, `1 roll`, `913 sq ft`: a quantity and its unit. */
+export function quantityText(
+  quantity: number,
+  unit: string | null | undefined,
+): string {
+  return `${quantity} ${unitWordFor(unit, quantity)}`;
+}
+
 const isEach = (unit: string | null | undefined) => unitWord(unit) === "each";
 
-/** A quantity in its unit: `120 sq ft`, `9 roll`, and `×2` for pieces. */
+/** A quantity in its unit: `120 sq ft`, `9 rolls`, and `×2` for pieces. */
 export function shareText(
   quantity: number,
   unit: string | null | undefined,
 ): string {
-  return isEach(unit) ? `×${quantity}` : `${quantity} ${unitWord(unit)}`;
+  return isEach(unit) ? `×${quantity}` : quantityText(quantity, unit);
 }
 
 const moneyFormat = (fractionDigits: number) =>
@@ -105,7 +137,7 @@ export function totalsSentence(
   const waste = wasteQuantity(line.quantity, placements);
   const quantity = isEach(line.unit)
     ? `${line.quantity}`
-    : `${line.quantity} ${unitWord(line.unit)}`;
+    : quantityText(line.quantity, line.unit);
   const price = line.unitPriceCents ?? 0;
   const head =
     price > 0
@@ -113,7 +145,9 @@ export function totalsSentence(
       : isEach(line.unit)
         ? `×${line.quantity}`
         : quantity;
-  return waste > 0 ? `${head} · waste ${waste} ${unitWord(line.unit)}` : head;
+  return waste > 0
+    ? `${head} · waste ${quantityText(waste, line.unit)}`
+    : head;
 }
 
 /**

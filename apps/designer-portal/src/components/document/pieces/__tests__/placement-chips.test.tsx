@@ -23,7 +23,10 @@ jest.mock("@patina/supabase", () => ({
 import {
   PlacementChips,
   alsoInText,
+  quantityText,
+  shareText,
   totalsSentence,
+  unitWordFor,
   type PieceRoom,
   type PlacedLine,
 } from "../placement-chips";
@@ -173,6 +176,25 @@ describe("the totals sentence (a5, D7 case 1)", () => {
         F1_PLACEMENTS,
       ),
     ).toBe("913 sq ft · waste 83 sq ft");
+  });
+});
+
+describe("counted units read plural (T-60a F8)", () => {
+  it("prints 9 rolls, 1 roll and 913 sq ft", () => {
+    expect(quantityText(9, "roll")).toBe("9 rolls");
+    expect(quantityText(1, "roll")).toBe("1 roll");
+    expect(quantityText(913, "sq_ft")).toBe("913 sq ft");
+  });
+
+  it("pluralizes box, hour and lot, and leaves the measures and each alone", () => {
+    expect(quantityText(2, "box")).toBe("2 boxes");
+    expect(quantityText(3, "hour")).toBe("3 hours");
+    expect(quantityText(0, "lot")).toBe("0 lots");
+    expect(quantityText(12, "lin_ft")).toBe("12 lin ft");
+    expect(quantityText(4, "yard")).toBe("4 yard");
+    expect(unitWordFor("each", 5)).toBe("each");
+    expect(shareText(9, "roll")).toBe("9 rolls");
+    expect(shareText(2, "each")).toBe("×2");
   });
 });
 

@@ -65,8 +65,17 @@ import {
   type BuildRoomPlace,
 } from "@/lib/document/pieces/build-room-url";
 import {
+  ROOM_HEADING_ATTR,
+  focusLineAct,
+  focusPlace,
+  holdsFocus,
+  inPlace,
+  neighborLineId,
+} from "@/lib/document/pieces/sheet-focus";
+import {
   moveFailureText,
   RELEASED_DRAG_REASON,
+  settleMove,
   useRowDrag,
   type RowDragLine,
   type RowDragRoom,
@@ -150,6 +159,9 @@ interface Removal {
   name: string;
   quantity: number;
   placeName: string;
+  placeId: string;
+  /** The line now in its place, for focus once the toast runs out. */
+  neighborId: string | null;
   /** Resolves true once archived, false when the server refused. */
   archived: Promise<boolean>;
 }
@@ -251,16 +263,21 @@ function useNeedLabels(
   return data ?? {};
 }
 
-/** Focus a line's first field or act, wherever it sits on the sheet. */
-function focusLine(root: HTMLElement | null, lineId: string): boolean {
-  const row = Array.from(
-    root?.querySelectorAll<HTMLElement>("[data-line-id]") ?? [],
-  ).find((el) => el.getAttribute("data-line-id") === lineId);
-  const target = row?.querySelector<HTMLElement>("input, button");
-  if (!target) return false;
-  target.focus();
-  return true;
+/** Where focus goes once the sheet holds it (T-60a F5, F7). */
+interface FocusRequest {
+  /** The line to focus; null for its place's heading alone. */
+  lineId: string | null;
+  /** The place the line should sit in; its heading holds focus meanwhile. */
+  placeId: string | null;
+  /** The line's first field rather than its `⋯` (UNDO puts a line back). */
+  field?: boolean;
+  /** Wait for a line the sheet does not hold yet (restored or refilled). */
+  expect?: boolean;
+  at: number;
 }
+
+/** How long a request waits for the server to return its line. */
+const FOCUS_WAIT_MS = 10_000;
 
 /** A line's own item type for a fill (Q12): an allowance keeps its ceiling. */
 function fillItemType(line: RoughInLine) {
@@ -363,8 +380,10 @@ export function RoughInLens({
   const [paneRoomId, setPaneRoomId] = useState<string | null>(null);
   const [paneOpen, setPaneOpen] = useState(true);
   const [announcement, setAnnouncement] = useState("");
-  /** A line put back by UNDO: focus goes to it once it is on the sheet. */
-  const [focusLineId, setFocusLineId] = useState<string | null>(null);
+  /** Where focus goes once the sheet holds it (T-60a F5, F7). */
+  const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
+  const requestFocus = (request: Omit<FocusRequest, "at">) =>
+    setFocusRequest({ ...request, at: Date.now() });
 
   const lines = useMemo(
     () =>
@@ -378,11 +397,25 @@ export function RoughInLens({
   const needLabels = useNeedLabels(projectId, lines);
   const needOf = (line: RoughInLine) => lineName(line, needLabels);
 
-  // The restored line lands once the server returns it; focus waits for it.
+  // A restored, moved or filled line lands once the server returns it; its
+  // room heading holds focus meanwhile, so focus never drops to the page.
   useEffect(() => {
-    if (focusLineId && focusLine(sheetRef.current, focusLineId))
-      setFocusLineId(null);
-  }, [focusLineId, lines]);
+    if (!focusRequest) return;
+    const root = sheetRef.current;
+    const { lineId, placeId, field, expect, at } = focusRequest;
+    const within = (row: HTMLElement) =>
+      inPlace(row, "data-rough-in-room", placeId);
+    if (lineId && focusLineAct(root, lineId, { within, field })) {
+      setFocusRequest(null);
+      return;
+    }
+    if (!holdsFocus(root)) focusPlace(root, placeId);
+    const waiting =
+      lineId !== null &&
+      (lineIds.has(lineId) || expect) &&
+      Date.now() - at < FOCUS_WAIT_MS;
+    if (!waiting) setFocusRequest(null);
+  }, [focusRequest, lines, lineIds]);
 
   const stages = useMemo(
     () =>
@@ -476,12 +509,6 @@ export function RoughInLens({
     if ([...hidden].some((id) => !served.has(id)))
       setHidden((set) => new Set([...set].filter((id) => served.has(id))));
   }, [lineData, hidden]);
-
-  // The rail's room is the one in view.
-  useEffect(() => {
-    if (!room) return;
-    placeSection(sheetRef.current, room)?.scrollIntoView?.({ block: "start" });
-  }, [room]);
 
   const dragLines = useMemo<RowDragLine[]>(
     () =>
@@ -689,6 +716,9 @@ export function RoughInLens({
         () => true,
         (cause: unknown) => {
           setHidden((set) => without(set, row.id));
+          // The row comes back; UNDO goes with the toast, so focus follows it.
+          if (holdsFocus(document.querySelector("[data-undo-toast]")))
+            requestFocus({ lineId: row.id, placeId: placeItem.id });
           setRemoval((current) =>
             current?.selectionId === row.id ? null : current,
           );
@@ -707,25 +737,44 @@ export function RoughInLens({
       name: row.name,
       quantity: row.quantity,
       placeName: placeItem.name,
+      placeId: placeItem.id,
+      // Read before the row goes: the line that takes its place (T-60a F5).
+      neighborId: neighborLineId(
+        placeSection(sheetRef.current, placeItem.id),
+        row.id,
+      ),
       archived,
     });
   }
 
+  /** The toast ran out: focus moves from UNDO to the row now in its place (F5). */
+  function expireRemoval(target: Removal) {
+    if (holdsFocus(document.querySelector("[data-undo-toast]")))
+      requestFocus({ lineId: target.neighborId, placeId: target.placeId });
+    setRemoval((current) => (current?.key === target.key ? null : current));
+  }
+
   async function undoRemoval(target: Removal) {
     setRemoval(null);
+    // The room heading holds focus until the line is back (T-60a F5).
+    const back: Omit<FocusRequest, "at"> = {
+      lineId: target.selectionId,
+      placeId: target.placeId,
+      field: true,
+      expect: true,
+    };
+    requestFocus(back);
     // Never removed: the row is already back.
-    if (!(await target.archived)) {
-      setFocusLineId(target.selectionId);
-      return;
-    }
+    if (!(await target.archived)) return;
     try {
       await restore.mutateAsync({ projectId, selectionId: target.selectionId });
       setHidden((set) => without(set, target.selectionId));
-      setFocusLineId(target.selectionId);
+      requestFocus({ ...back });
       setAnnouncement(
         `Put back ${target.name} ×${target.quantity} in ${target.placeName}.`,
       );
     } catch (cause) {
+      requestFocus({ lineId: null, placeId: target.placeId });
       setNotice(
         errorText(cause) ??
           `${target.name} was not put back. It is under Removed in the rail.`,
@@ -733,10 +782,25 @@ export function RoughInLens({
     }
   }
 
+  /**
+   * `Move to room…`: said once the server answers, never before (T-60a F4).
+   * A move keeps focus on the line in its new room; a refusal leaves it on
+   * the line's `⋯` and prints the named refusal (F7).
+   */
   function moveLine(row: RoughInRow, roomId: string) {
     if (!byId.has(row.id)) return;
     setNotice(null);
-    assign.mutate({ itemId: row.id, roomId, assignmentScope: "room" });
+    const to = {
+      id: roomId,
+      name: rooms.find((r) => r.id === roomId)?.name ?? "",
+    };
+    void settleMove(assign, projectId, [row], to).then(
+      ({ movedIds, refusal, text }) => {
+        if (refusal === null) setAnnouncement(text);
+        if (movedIds.length > 0)
+          requestFocus({ lineId: row.id, placeId: roomId });
+      },
+    );
   }
 
   function openFill(row: RoughInRow | null, placeItem: Place) {
@@ -773,7 +837,7 @@ export function RoughInLens({
         const line = current.line;
         const disposition = line.design_disposition ?? "";
         // A fill keeps the line where it is and as it was decided (00730).
-        await place.mutateAsync({
+        const filled = await place.mutateAsync({
           projectId,
           productId: product.id,
           placeholderSelectionId: line.id,
@@ -794,6 +858,14 @@ export function RoughInLens({
           roleConfigurationIdentity: "default",
           idempotencyKey: newKey("fill"),
         });
+        // Focus stays on the filled line, never the New line field (T-60a F7).
+        setTool(null);
+        requestFocus({
+          lineId: filled?.selectionId ?? line.id,
+          placeId: placeItem.id,
+          expect: true,
+        });
+        return;
       } else {
         await place.mutateAsync({
           projectId,
@@ -984,11 +1056,7 @@ export function RoughInLens({
             quantity={removal.quantity}
             roomName={removal.placeName}
             onUndo={() => void undoRemoval(removal)}
-            onExpire={() =>
-              setRemoval((current) =>
-                current?.key === removal.key ? null : current,
-              )
-            }
+            onExpire={() => expireRemoval(removal)}
           />
         ) : null}
         <p {...drag.liveRegionProps} />
@@ -1082,6 +1150,7 @@ function RemovedLines({
       <h2
         id="rough-in-removed"
         tabIndex={-1}
+        {...{ [ROOM_HEADING_ATTR]: REMOVED_PLACE }}
         className="font-heading text-[18px] italic leading-[1.2] text-[var(--sheet-ink)] focus:outline-none"
       >
         Removed

@@ -10,7 +10,14 @@
  * lines that bring the job to $30,760 priced and ~$36,368 roughed.
  */
 
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -54,7 +61,7 @@ jest.mock("@/hooks/use-document-rooms", () => ({
       { id: "bedroom", name: "Bedroom" },
     ],
   }),
-  useAssignLineRoom: () => ({ mutate: mockAssign, ...mockAssignState }),
+  useAssignLineRoom: () => ({ mutateAsync: mockAssign, ...mockAssignState }),
 }));
 jest.mock("@/hooks/use-document-state", () => ({
   useDocumentEngagement: () => ({
@@ -178,6 +185,7 @@ function openMenu(name: string) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAssign.mockResolvedValue({});
   mockItems.data = fixture();
   mockStatus.value = "active";
   mockAssignState.isError = false;
@@ -227,7 +235,8 @@ describe("PriceLens: front matter and the table (a7)", () => {
     ).toHaveValue("$184");
     expect(within(r1).getByText("25%")).toBeInTheDocument();
     expect(within(r1).getByText("$230")).toBeInTheDocument();
-    expect(within(r1).getByText("roll")).toBeInTheDocument();
+    // T-60a F8: nine rolls read plural.
+    expect(within(r1).getByText("rolls")).toBeInTheDocument();
 
     const labor = rowOf("Install, wallpaper hanger");
     expect(within(labor).getByText("↳")).toBeInTheDocument();
@@ -521,7 +530,7 @@ describe("PriceLens: the row menu", () => {
     });
   });
 
-  it("moves a line to another room", () => {
+  it("moves a line to another room", async () => {
     renderLens();
     const menu = openMenu("Bed, king, upholstered");
     fireEvent.click(
@@ -536,10 +545,16 @@ describe("PriceLens: the row menu", () => {
       ),
     );
     expect(mockAssign).toHaveBeenCalledWith({
-      itemId: "r2",
+      projectId: "proj",
+      selectionIds: ["r2"],
       roomId: "living",
       assignmentScope: "room",
     });
+    // T-60a F4: said once the server has answered, not before.
+    const said = document.querySelector("[data-price-announce]") as HTMLElement;
+    await waitFor(() =>
+      expect(said).toHaveTextContent("Moved Bed, king, upholstered to Living Room."),
+    );
   });
 
   it.each([

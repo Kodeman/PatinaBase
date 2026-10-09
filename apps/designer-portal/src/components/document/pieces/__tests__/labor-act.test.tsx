@@ -87,6 +87,34 @@ beforeEach(() => {
 });
 
 describe("ADD LABOR", () => {
+  it("puts focus on the new labor line's name once it is here, and on ADD LABOR meanwhile (T-60a F6)", async () => {
+    mockAddLabor.mockResolvedValue({ selectionId: "r1a" });
+    const { rerender } = renderLabor();
+    fireEvent.click(screen.getByRole("button", { name: "ADD LABOR" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Labor" }), {
+      target: { value: "Install, wallpaper hanger" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "ADD THE LABOR LINE" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "ADD LABOR" })).toHaveFocus(),
+    );
+    rerender(
+      <LaborAct projectId="p1" piece={R1} laborLines={[R1A]} canEdit />,
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Install, wallpaper hanger")).toHaveFocus(),
+    );
+  });
+
+  it("Esc closes the form and gives focus back to ADD LABOR", () => {
+    renderLabor();
+    fireEvent.click(screen.getByRole("button", { name: "ADD LABOR" }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Labor" }), {
+      key: "Escape",
+    });
+    expect(screen.getByRole("button", { name: "ADD LABOR" })).toHaveFocus();
+  });
+
   it("adds the labor line under its piece with its own name, quantity, unit and rough price", async () => {
     renderLabor();
     fireEvent.click(screen.getByRole("button", { name: "ADD LABOR" }));
@@ -173,7 +201,7 @@ describe("ADD LABOR", () => {
     expect(row).toHaveTextContent("Install, wallpaper hanger");
     expect(row).toHaveTextContent("Labor");
     expect(row).toHaveTextContent("Placeholder");
-    expect(row).toHaveTextContent("9 roll");
+    expect(row).toHaveTextContent("9 rolls");
     expect(row).toHaveTextContent("~$85 / roll");
   });
 

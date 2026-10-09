@@ -1,6 +1,13 @@
 "use client";
 
-import { useId, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { useAddLaborLine } from "@patina/supabase";
 import type { FfeLineUnit } from "@patina/types";
 import {
@@ -13,7 +20,7 @@ import {
   pieceLineStage,
   type PieceLineStageRow,
 } from "@/lib/document/pieces/line-stage";
-import { perUnit, unitWord } from "./placement-chips";
+import { perUnit, quantityText, unitWord } from "./placement-chips";
 
 /**
  * T-30 (S4, D4/D5, Q5, a7): `ADD LABOR` on a piece. Labor is its own line,
@@ -101,6 +108,7 @@ function LaborLine({
   return (
     <li
       data-testid="labor-line"
+      data-labor-line={line.id}
       className="flex min-h-[var(--row,40px)] flex-wrap items-center gap-x-3 border-b border-[color:var(--sheet-rule,#D9D4CC)] pl-6"
     >
       <span
@@ -109,7 +117,11 @@ function LaborLine({
       >
         ↳
       </span>
-      <span className="font-sans text-[14px] font-medium text-[color:var(--sheet-ink,#1A1816)]">
+      <span
+        data-line-name=""
+        tabIndex={-1}
+        className="font-sans text-[14px] font-medium text-[color:var(--sheet-ink,#1A1816)] focus:outline-none"
+      >
         {line.name}
       </span>
       <span
@@ -121,7 +133,7 @@ function LaborLine({
         {lineStampLabel(kind)}
       </span>
       <span className="font-sans text-[14px] tabular-nums text-[color:var(--sheet-ink,#1A1816)]">
-        {quantity} {unitWord(line.unit)}
+        {quantityText(quantity, line.unit)}
       </span>
       {line.rough_cents != null && (
         <span className="font-sans text-[14px] tabular-nums text-[color:var(--sheet-ink-faint,#6B655E)]">
@@ -152,6 +164,37 @@ export function LaborAct({
   const [rough, setRough] = useState("");
   const [error, setError] = useState<string | null>(null);
   const gatedId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const addRef = useRef<HTMLButtonElement>(null);
+  /**
+   * After the form closes, focus never drops to the page (T-60a F6): ADD
+   * LABOR holds it, and a new labor line's name takes it once it is here.
+   */
+  const [focusAfter, setFocusAfter] = useState<{
+    lineId: string | null;
+    at: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!focusAfter || open) return;
+    const { lineId, at } = focusAfter;
+    const name = lineId
+      ? Array.from(
+          rootRef.current?.querySelectorAll<HTMLElement>("[data-labor-line]") ??
+            [],
+        )
+          .find((el) => el.getAttribute("data-labor-line") === lineId)
+          ?.querySelector<HTMLElement>("[data-line-name]")
+      : null;
+    if (name) {
+      name.focus();
+      setFocusAfter(null);
+      return;
+    }
+    const root = rootRef.current;
+    if (!root?.contains(document.activeElement)) addRef.current?.focus();
+    if (!lineId || Date.now() - at > 10_000) setFocusAfter(null);
+  }, [focusAfter, open, laborLines]);
 
   // A labor line is not a piece: it takes no labor of its own.
   if (isLaborLine(piece)) return null;
@@ -176,6 +219,7 @@ export function LaborAct({
   const close = () => {
     setOpen(false);
     setError(null);
+    setFocusAfter({ lineId: null, at: Date.now() });
   };
 
   const submit = (event: FormEvent) => {
@@ -206,7 +250,10 @@ export function LaborAct({
         unit,
         roughCents,
       })
-      .then(() => setOpen(false))
+      .then((added) => {
+        setOpen(false);
+        setFocusAfter({ lineId: added?.selectionId ?? null, at: Date.now() });
+      })
       .catch((e: Error) =>
         setError(e.message || "The labor line was not added."),
       );
@@ -220,7 +267,11 @@ export function LaborAct({
   };
 
   return (
-    <div data-testid="labor-act" className="flex flex-col gap-1">
+    <div
+      ref={rootRef}
+      data-testid="labor-act"
+      className="flex flex-col gap-1"
+    >
       {laborLines.length > 0 && (
         <ul aria-label={`Labor on ${piece.name}`}>
           {laborLines.map((line) => (
@@ -231,6 +282,7 @@ export function LaborAct({
       {canEdit && !open && (
         <div className="flex flex-wrap items-center gap-x-3">
           <button
+            ref={addRef}
             type="button"
             className={ACT_CLS}
             aria-disabled={gate ? true : undefined}

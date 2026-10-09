@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 import base from "./playwright.config";
 
 /**
@@ -15,12 +15,15 @@ import base from "./playwright.config";
  *     base's NEXT_PUBLIC_FLAG_OVERRIDES at runtime;
  *   - its own port (default 3410), so a run never reuses a dev server on
  *     :3000 that was started with those flags off;
- *   - chromium only, one worker: every scenario reseeds one shared job.
+ *   - one worker: every scenario reseeds one shared job;
+ *   - two projects: `chromium` walks S1–S8 by mouse and keyboard, and
+ *     `webkit-iphone` (WebKit, `iPhone 13`) taps the row-menu acts (T-60a F3).
+ *     Both use the same port and server.
  *
  * Run:
  *   cd apps/designer-portal && pnpm exec playwright test \
  *     e2e/document/pieces-build-room.spec.ts \
- *     --config playwright.pieces.config.ts --project=chromium
+ *     --config playwright.pieces.config.ts
  *
  *   PLAYWRIGHT_DESIGNER_PORT   default 3410
  */
@@ -45,6 +48,10 @@ export default defineConfig({
         ...(base.projects?.find((project) => project.name === "chromium")
           ?.use ?? base.projects?.[0]?.use),
       },
+    },
+    {
+      name: "webkit-iphone",
+      use: { ...devices["iPhone 13"] },
     },
   ],
   webServer: {

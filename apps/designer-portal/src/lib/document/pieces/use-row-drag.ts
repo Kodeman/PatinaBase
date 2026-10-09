@@ -12,7 +12,7 @@
  * selection.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent, MouseEvent, PointerEvent } from "react";
 import type { FfeAssignmentScope } from "@patina/types";
 import { useAssignLineRoom } from "@/hooks/use-document-rooms";
@@ -116,11 +116,59 @@ function scopeFor(room: RowDragRoom): FfeAssignmentScope {
 }
 
 export function moveAnnouncement(
-  moved: RowDragLine[],
+  moved: ReadonlyArray<Pick<RowDragLine, "name">>,
   room: RowDragRoom,
 ): string {
   if (moved.length === 1) return `Moved ${moved[0].name} to ${room.name}.`;
   return `Moved ${moved.length} lines to ${room.name}.`;
+}
+
+export type AssignLineRoom = ReturnType<typeof useAssignLineRoom>;
+
+export interface SettledMove {
+  /** The lines the server moved. */
+  movedIds: string[];
+  /** The server's refusal, as `moveFailureText` prints it; null when every line moved. */
+  refusal: string | null;
+  /** What to announce: the move, the refusal, or both. */
+  text: string;
+}
+
+/**
+ * Moves lines through triage and says so only once the server has answered:
+ * the move on success, the named refusal on a refusal. Drag, `Move to room…`
+ * and every lens call this; none announces before the answer (T-60a F4).
+ */
+export async function settleMove(
+  assign: AssignLineRoom,
+  projectId: string | null,
+  lines: ReadonlyArray<Pick<RowDragLine, "id" | "name">>,
+  room: RowDragRoom,
+): Promise<SettledMove> {
+  if (!projectId || lines.length === 0)
+    return { movedIds: [], refusal: null, text: "" };
+  const results = await Promise.allSettled(
+    lines.map((line) =>
+      assign.mutateAsync({
+        projectId,
+        selectionIds: [line.id],
+        assignmentScope: scopeFor(room),
+        roomId: room.id,
+      }),
+    ),
+  );
+  const moved = lines.filter((_, i) => results[i].status === "fulfilled");
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  const refusal = failure ? moveFailureText(failure.reason) : null;
+  return {
+    movedIds: moved.map((line) => line.id),
+    refusal,
+    text: [moved.length > 0 ? moveAnnouncement(moved, room) : null, refusal]
+      .filter(Boolean)
+      .join(" "),
+  };
 }
 
 export function useRowDrag({ projectId, lines }: UseRowDragOptions) {
@@ -137,10 +185,6 @@ export function useRowDrag({ projectId, lines }: UseRowDragOptions) {
     () => new Map(lines.map((line) => [line.id, line])),
     [lines],
   );
-
-  useEffect(() => {
-    if (assign.isError) setAnnouncement(moveFailureText(assign.error));
-  }, [assign.isError, assign.error]);
 
   const endDrag = useCallback(() => {
     liftedRef.current = [];
@@ -267,15 +311,10 @@ export function useRowDrag({ projectId, lines }: UseRowDragOptions) {
           endDrag();
           if (moved.length === 0) return;
           event.preventDefault();
-          for (const line of moved) {
-            assign.mutate({
-              itemId: line.id,
-              roomId: room.id,
-              assignmentScope: scopeFor(room),
-            });
-          }
           setSelectedIds([]);
-          setAnnouncement(moveAnnouncement(moved, room));
+          void settleMove(assign, projectId, moved, room).then(({ text }) =>
+            setAnnouncement(text),
+          );
         },
         style: {
           borderTop: target
@@ -286,7 +325,7 @@ export function useRowDrag({ projectId, lines }: UseRowDragOptions) {
         ...(target ? { "data-drop-target": "true" as const } : null),
       };
     },
-    [assign, endDrag, movableInto, overRoom, reducedMotion],
+    [assign, endDrag, movableInto, overRoom, projectId, reducedMotion],
   );
 
   /** `MOVE TO KITCHEN` while this heading is the drop target (a9), else null. */

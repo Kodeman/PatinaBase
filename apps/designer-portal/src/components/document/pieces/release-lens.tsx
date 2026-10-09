@@ -67,6 +67,10 @@ import {
 } from "@/lib/document/pieces/readiness";
 import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
 import {
+  QUIET_FOCUS,
+  ROOM_HEADING_ATTR,
+} from "@/lib/document/pieces/sheet-focus";
+import {
   LABOR_STAMP_LABEL,
   lineStampLabel,
 } from "@/lib/document/stamp-derivation";
@@ -246,7 +250,12 @@ function RoomGroup({
         <th
           scope="rowgroup"
           colSpan={4}
-          className="h-[48px] px-2 text-left font-heading text-[18px] font-normal italic leading-[1.2] text-[var(--sheet-ink)]"
+          tabIndex={group.roomId ? -1 : undefined}
+          {...(group.roomId ? { [ROOM_HEADING_ATTR]: group.roomId } : null)}
+          className={cn(
+            "h-[48px] px-2 text-left font-heading text-[18px] font-normal italic leading-[1.2] text-[var(--sheet-ink)]",
+            QUIET_FOCUS,
+          )}
         >
           {group.name}
         </th>
