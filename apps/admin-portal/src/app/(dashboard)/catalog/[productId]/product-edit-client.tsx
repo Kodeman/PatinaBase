@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { z } from 'zod';
 import {
   ProductEditProvider,
@@ -27,7 +28,6 @@ import {
   useUnpublishProduct,
 } from '@/hooks/use-admin-products';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/components/ui/use-toast';
 import { AdminEditBar } from '@/components/catalog/detail/admin-edit-bar';
 import { ValidationIssuesBar } from '@/components/catalog/detail/validation-issues-bar';
 import { SEOPanel } from '@/components/catalog/detail/seo-panel';
@@ -151,7 +151,6 @@ interface ProductEditPageClientProps {
 
 export function ProductEditPageClient({ productId }: ProductEditPageClientProps) {
   const router = useRouter();
-  const { toast } = useToast();
   const { product, isLoading, error } = useProduct(productId);
 
   const updateProduct = useUpdateProduct();
@@ -213,12 +212,12 @@ export function ProductEditPageClient({ productId }: ProductEditPageClientProps)
 
   const handleToast = useCallback(
     (message: string, variant: 'success' | 'error' | 'warning' | 'info') => {
-      toast({
-        title: message,
-        variant: variant === 'error' ? 'destructive' : 'default',
-      });
+      if (variant === 'error') toast.error(message);
+      else if (variant === 'warning') toast.warning(message);
+      else if (variant === 'success') toast.success(message);
+      else toast.info(message);
     },
-    [toast]
+    []
   );
 
   const memoizedSchema = useMemo(() => runValidation, []);
