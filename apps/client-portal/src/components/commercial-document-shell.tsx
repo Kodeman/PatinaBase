@@ -396,6 +396,8 @@ function FurnishingsBody({ bundle }: { bundle: CommercialDocumentBundle }) {
                         )}
                       </div>
                       <p className="type-label text-right">
+                        {/* An allowance prints Up to its ceiling, everywhere (F8). */}
+                        {item.allowance ? 'Up to ' : ''}
                         {money(item.clientLineTotalCents, item.currency)}
                       </p>
                     </div>

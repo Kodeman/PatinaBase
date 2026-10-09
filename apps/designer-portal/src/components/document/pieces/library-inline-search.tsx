@@ -5,8 +5,9 @@
  *
  * One field on the sheet: `/` in Rough in and `FILL WITH A PRODUCT` in Spec
  * both open it. Typing lists a few Library pieces as
- * `Emtek Ribbon & Reed knob · satin brass · $38 each`, then the door to the
- * whole Library, `Search the Library for "knob" →`. Arrow keys move the
+ * `Emtek Ribbon & Reed knob · satin brass`, then the door to the whole
+ * Library, `Search the Library for "knob" →`. No price prints: both lenses
+ * that mount it show no money (Q7/F10; T-55b, F18). Arrow keys move the
  * selection, Enter chooses. The host decides what a choice does (place the
  * product, or open T-29's fill preview), so this file writes nothing.
  *
@@ -20,7 +21,6 @@ import {
   type LayerProductLayer,
   type LayerProductRow,
 } from "@patina/supabase";
-import { formatDollars } from "@/lib/currency-ui";
 
 /** Characters typed before the results list opens (as the Library reach-in). */
 const MIN_QUERY = 2;
@@ -37,13 +37,11 @@ const LAYER_ORDER: LayerProductLayer[] = ["personal", "studio", "catalog"];
  */
 export type LibraryInlineResult = LayerProductRow & { finish?: string | null };
 
-/** `name · finish · $38 each`. A missing finish or price is left out. */
+/** `name · finish`, with no price. A missing finish is left out. */
 export function libraryResultLine(row: LibraryInlineResult): string {
   const parts = [row.name.trim()];
   const finish = row.finish?.trim();
   if (finish) parts.push(finish);
-  if (row.price_retail != null)
-    parts.push(`${formatDollars(row.price_retail)} each`);
   return parts.join(" · ");
 }
 

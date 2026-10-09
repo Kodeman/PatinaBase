@@ -14,6 +14,7 @@ import {
   pieceLineStage,
   type PieceLineStageRow,
 } from "@/lib/document/pieces/line-stage";
+import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
 
 export interface RoomCounts {
   lines: number;
@@ -29,6 +30,7 @@ export interface RoomCountsLine extends PieceLineStageRow {
   project_room_id?: string | null;
   assignment_scope?: string | null;
   removed_at?: string | null;
+  design_disposition?: string | null;
   rough_cents?: number | null;
 }
 
@@ -95,7 +97,7 @@ export function deriveRoomCounts(
     placementsByLine.set(placement.ffeItemId, list);
   }
 
-  const live = (lines ?? []).filter((line) => line.removed_at == null);
+  const live = liveBuildRoomLines(lines);
   for (const line of live) {
     const { stage } = pieceLineStage(line, laborPiece(line, live));
     const roughEach = line.rough_cents ?? 0;

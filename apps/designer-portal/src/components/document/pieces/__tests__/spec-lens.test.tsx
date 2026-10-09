@@ -94,23 +94,36 @@ jest.mock("../../line-unfold/the-buy-cell", () => ({
     isPending: false,
   }),
 }));
-jest.mock("../library-inline-search", () => ({
-  LibraryInlineSearch: ({ onChoose }: { onChoose: (row: unknown) => void }) => (
-    <button
-      type="button"
-      onClick={() =>
-        onChoose({
-          id: "prod-emtek",
-          name: "Emtek Ribbon & Reed knob",
-          finish: "satin brass",
-          price_retail: 3800,
-        })
-      }
-    >
-      Choose Emtek
-    </button>
-  ),
-}));
+jest.mock("../library-inline-search", () => {
+  const actual = jest.requireActual("../library-inline-search");
+  const emtek = {
+    id: "prod-emtek",
+    name: "Emtek Ribbon & Reed knob",
+    finish: "satin brass",
+    price_retail: 3800,
+  };
+  return {
+    ...actual,
+    // The result row prints through the real `libraryResultLine`.
+    LibraryInlineSearch: ({
+      onChoose,
+      onSearchLibrary,
+    }: {
+      onChoose: (row: unknown) => void;
+      onSearchLibrary: (query: string) => void;
+    }) => (
+      <>
+        <span data-testid="inline-result">{actual.libraryResultLine(emtek)}</span>
+        <button type="button" onClick={() => onChoose(emtek)}>
+          Choose Emtek
+        </button>
+        <button type="button" onClick={() => onSearchLibrary("knob")}>
+          Search the whole Library
+        </button>
+      </>
+    ),
+  };
+});
 jest.mock("../placement-chips", () => ({
   ...jest.requireActual("../placement-chips"),
   PlacementChips: ({ canEdit }: { canEdit: boolean }) => (
@@ -129,8 +142,22 @@ jest.mock("../com-toggle", () => ({
   ),
 }));
 jest.mock("@/components/portal/proposals/product-picker-modal", () => ({
-  ProductPickerModal: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="product-picker" /> : null,
+  ProductPickerModal: ({
+    open,
+    showPrice,
+    configureStep,
+  }: {
+    open: boolean;
+    showPrice?: boolean;
+    configureStep?: boolean;
+  }) =>
+    open ? (
+      <div
+        data-testid="product-picker"
+        data-show-price={String(showPrice)}
+        data-configure-step={String(configureStep)}
+      />
+    ) : null,
 }));
 
 import { SpecLens } from "../spec-lens";
@@ -620,6 +647,32 @@ describe("the stamp", () => {
       expect(within(section).getByTestId("fill-preview")).not.toHaveTextContent(
         "$",
       );
+    },
+  );
+
+  it.each([true, false])(
+    "the Spec-mounted search and picker print no money (canSeeMoney %s; T-55b, F18)",
+    async (canSeeMoney) => {
+      renderLens("living", canSeeMoney);
+      await pane();
+      fireEvent.click(rowFor("Hardware, 2 knobs for custom cabinet"));
+      const section = await pane();
+      fireEvent.click(
+        within(section).getByRole("button", { name: "FILL WITH A PRODUCT" }),
+      );
+      expect(within(section).getByTestId("inline-result")).toHaveTextContent(
+        "Emtek Ribbon & Reed knob · satin brass",
+      );
+      expect(within(section).getByTestId("inline-result")).not.toHaveTextContent(
+        "$",
+      );
+
+      fireEvent.click(
+        within(section).getByRole("button", { name: "Search the whole Library" }),
+      );
+      const picker = screen.getByTestId("product-picker");
+      expect(picker).toHaveAttribute("data-show-price", "false");
+      expect(picker).toHaveAttribute("data-configure-step", "false");
     },
   );
 

@@ -134,6 +134,11 @@ export type FurnishingsAuthorizationItem = Pick<
    * totalAmountCents; the product does not.
    */
   clientLineTotalCents: number;
+  /**
+   * An allowance line (the RPC's `itemType`): its line total is a ceiling, so
+   * it prints as `Up to $X` (US-21 T-55b, F8). Absent on a legacy payload.
+   */
+  allowance?: boolean;
 };
 
 export interface FurnishingsAuthorization {
@@ -982,6 +987,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
           clientLineTotalCents: lineTotal === undefined || lineTotal === null
             ? quantity * clientUnitPriceCents
             : number(lineTotal),
+          allowance: first(row, 'itemType', 'item_type') === 'allowance',
           currency: text(first(row, 'currency'), 'USD'),
         };
       }) : [],

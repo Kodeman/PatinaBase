@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Copy,
   Eye,
@@ -26,6 +26,7 @@ import {
   useDismissDuplicate,
   useMarkAsDuplicate,
   useMergeStudioProduct,
+  useProduct,
 } from '@patina/supabase/hooks';
 import type { DuplicateMatch } from '@patina/supabase/hooks';
 import { REFERENCED_PRODUCT_DELETE_REFUSAL } from '@/hooks/use-products';
@@ -72,12 +73,131 @@ function SimilarityBadge({ similarity }: { similarity: number }) {
 // DUPLICATE CARD
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** The products columns merge_studio_product (00753) reads to refuse a merge. */
+interface MergeFacts {
+  layer?: string | null;
+  studio_id?: string | null;
+  merged_into_id?: string | null;
+  deleted_at?: string | null;
+}
+
+/**
+ * Whether merge_studio_product would take this pair (00753:131-157): both
+ * studio-layer products of one studio, neither merged nor removed. Studio
+ * membership is the server's to check. Unknown facts offer nothing.
+ */
+function serverMergeAllows(
+  keep: MergeFacts | null | undefined,
+  from: MergeFacts | null | undefined,
+): boolean {
+  if (!keep || !from) return false;
+  return (
+    keep.layer === 'studio' &&
+    from.layer === 'studio' &&
+    keep.studio_id != null &&
+    keep.studio_id === from.studio_id &&
+    keep.merged_into_id == null &&
+    keep.deleted_at == null &&
+    from.merged_into_id == null &&
+    from.deleted_at == null
+  );
+}
+
+interface MergeActProps {
+  fromId: string;
+  fromName: string;
+  keep: MergeFacts | null | undefined;
+  keepName: string;
+  onConfirm: () => void;
+  isActioning: boolean;
+}
+
+/**
+ * MERGE INTO THIS ONE, offered only where the server allows the merge, and
+ * asked first in the page: the merge cannot be undone (US-21 T-55b, F10).
+ */
+function MergeAct({
+  fromId,
+  fromName,
+  keep,
+  keepName,
+  onConfirm,
+  isActioning,
+}: MergeActProps) {
+  const { data: from } = useProduct(fromId);
+  const [confirming, setConfirming] = useState(false);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const openRef = useRef<HTMLButtonElement>(null);
+  const wasConfirming = useRef(false);
+
+  // Focus goes to the safe act when the question opens, and back to
+  // MERGE INTO THIS ONE when it closes without merging.
+  useEffect(() => {
+    if (confirming) cancelRef.current?.focus();
+    else if (wasConfirming.current) openRef.current?.focus();
+    wasConfirming.current = confirming;
+  }, [confirming]);
+
+  if (!serverMergeAllows(keep, from as MergeFacts | null | undefined)) return null;
+
+  if (!confirming) {
+    return (
+      <Button
+        ref={openRef}
+        size="sm"
+        variant="secondary"
+        onClick={() => setConfirming(true)}
+        disabled={isActioning}
+        className="text-xs"
+      >
+        <GitMerge className="mr-1 h-3 w-3" />
+        MERGE INTO THIS ONE
+      </Button>
+    );
+  }
+
+  return (
+    <div
+      role="group"
+      aria-label="Confirm the merge"
+      className="w-full space-y-2 rounded-sm border border-[var(--border-default)] p-3"
+    >
+      <p className="text-sm">
+        {`Merge “${fromName}” into “${keepName}”? Its lines, boards and project lists move to “${keepName}”. The merge cannot be undone.`}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="primary"
+          onClick={() => {
+            setConfirming(false);
+            onConfirm();
+          }}
+          disabled={isActioning}
+          className="text-xs"
+        >
+          MERGE
+        </Button>
+        <Button
+          ref={cancelRef}
+          size="sm"
+          variant="ghost"
+          onClick={() => setConfirming(false)}
+          className="text-xs"
+        >
+          KEEP BOTH
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 interface DuplicateCardProps {
   match: DuplicateMatch;
   onDismiss: () => void;
   onMark: () => void;
   /** Absent when the match is not another catalog product (merge needs one). */
-  onMerge?: () => void;
+  merge?: Omit<MergeActProps, 'isActioning'>;
   isActioning: boolean;
 }
 
@@ -85,7 +205,7 @@ function DuplicateCard({
   match,
   onDismiss,
   onMark,
-  onMerge,
+  merge,
   isActioning,
 }: DuplicateCardProps) {
   const product = match.product;
@@ -145,18 +265,7 @@ function DuplicateCard({
                 <AlertTriangle className="mr-1 h-3 w-3" />
                 Mark Duplicate
               </Button>
-              {onMerge && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={onMerge}
-                  disabled={isActioning}
-                  className="text-xs"
-                >
-                  <GitMerge className="mr-1 h-3 w-3" />
-                  MERGE INTO THIS ONE
-                </Button>
-              )}
+              {merge && <MergeAct {...merge} isActioning={isActioning} />}
               <Button
                 size="sm"
                 variant="ghost"
@@ -197,6 +306,8 @@ export function DuplicateDetectionPanel({
   const dismissMutation = useDismissDuplicate();
   const markMutation = useMarkAsDuplicate();
   const mergeMutation = useMergeStudioProduct();
+  // The kept product's layer and studio decide which matches may merge.
+  const { data: keep } = useProduct(isExpanded ? productId : '');
 
   const isActioning =
     dismissMutation.isPending ||
@@ -253,31 +364,41 @@ export function DuplicateDetectionPanel({
 
   // D11 (00753): the duplicate merges into the product this panel is on. Its
   // lines, boards and project lists move here; it is never hard deleted.
-  const mergeHandler = (match: DuplicateMatch) => {
+  const mergeHandler = (
+    match: DuplicateMatch,
+  ): DuplicateCardProps['merge'] => {
     const fromProductId = match.product?.id;
     if (!fromProductId || fromProductId === productId) return undefined;
-    return async () => {
-      try {
-        await mergeMutation.mutateAsync({ fromProductId, intoProductId: productId });
-        toast({
-          title: 'Merged',
-          description: 'The duplicate now points here, and its lines use this product.',
-        });
-        refetch();
-        onActionComplete?.();
-      } catch (err) {
-        // merge_studio_product refuses in plain sentences; print them as-is.
-        const message =
-          err && typeof err === 'object' && 'message' in err
-            ? String((err as { message: unknown }).message)
-            : '';
-        toast({
-          title: "The merge didn't go through",
-          description: message || 'Try again.',
-          variant: 'error',
-        });
-      }
+    return {
+      fromId: fromProductId,
+      fromName: match.product?.name || 'the duplicate',
+      keep: keep as MergeFacts | null | undefined,
+      keepName: productName || keep?.name || 'this product',
+      onConfirm: () => void runMerge(fromProductId),
     };
+  };
+
+  const runMerge = async (fromProductId: string) => {
+    try {
+      await mergeMutation.mutateAsync({ fromProductId, intoProductId: productId });
+      toast({
+        title: 'Merged',
+        description: 'The duplicate now points here, and its lines use this product.',
+      });
+      refetch();
+      onActionComplete?.();
+    } catch (err) {
+      // merge_studio_product refuses in plain sentences; print them as-is.
+      const message =
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : '';
+      toast({
+        title: "The merge didn't go through",
+        description: message || 'Try again.',
+        variant: 'error',
+      });
+    }
   };
 
   // Collapsed state - just show a button
@@ -382,7 +503,7 @@ export function DuplicateDetectionPanel({
               match={match}
               onDismiss={() => handleDismiss(match)}
               onMark={() => handleMark(match)}
-              onMerge={mergeHandler(match)}
+              merge={mergeHandler(match)}
               isActioning={isActioning}
             />
           ))}
@@ -404,7 +525,7 @@ export function DuplicateDetectionPanel({
               match={match}
               onDismiss={() => handleDismiss(match)}
               onMark={() => handleMark(match)}
-              onMerge={mergeHandler(match)}
+              merge={mergeHandler(match)}
               isActioning={isActioning}
             />
           ))}

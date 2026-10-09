@@ -192,4 +192,23 @@ describe("deriveRoomCounts", () => {
       roughCents: 0,
     });
   });
+
+  it("never counts a superseded predecessor or a removed line (T-55b, F7)", () => {
+    const counts = deriveRoomCounts(
+      [
+        specced("new", "living", { rough_cents: 1000 }),
+        specced("old", "living", {
+          rough_cents: 1000,
+          design_disposition: "superseded",
+        }),
+        specced("gone", "living", { removed_at: "2026-10-01T00:00:00Z" }),
+      ],
+      [{ ffeItemId: "old", projectRoomId: "dining", quantity: 1 }],
+      ROOMS,
+    );
+    expect(counts.rooms.living.lines).toBe(1);
+    expect(counts.rooms.dining.lines).toBe(0);
+    expect(counts.job.lines).toBe(1);
+    expect(counts.job.roughCents).toBe(1000);
+  });
 });

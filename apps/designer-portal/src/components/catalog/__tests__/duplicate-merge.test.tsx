@@ -10,8 +10,11 @@ const mockLegacyMerge = jest.fn();
 const mockRefetch = jest.fn();
 const mockToast = jest.fn();
 let mockCheckResult: Record<string, unknown> | undefined;
+/** The products rows useProduct answers with, by id (layer, studio, merge facts). */
+let mockProducts: Record<string, Record<string, unknown>> = {};
 
 jest.mock('@patina/supabase/hooks', () => ({
+  useProduct: (id: string) => ({ data: id ? mockProducts[id] : undefined }),
   useDuplicateCheck: () => ({
     data: mockCheckResult,
     isLoading: false,
@@ -59,6 +62,18 @@ beforeEach(() => {
   mockLegacyMerge.mockReset();
   mockRefetch.mockReset();
   mockToast.mockReset();
+  const studioRow = (id: string, name: string) => ({
+    id,
+    name,
+    layer: 'studio',
+    studio_id: 'studio-1',
+    merged_into_id: null,
+    deleted_at: null,
+  });
+  mockProducts = {
+    [KEEP_ID]: studioRow(KEEP_ID, 'Ledge Bed'),
+    'prod-dup': studioRow('prod-dup', 'Ledge Bed (copy)'),
+  };
   mockCheckResult = {
     isDuplicate: true,
     phash: 'abc',
@@ -87,6 +102,9 @@ describe('duplicate merge (T-53)', () => {
     // asset with no product, and never the product into itself.
     expect(acts).toHaveLength(1);
     fireEvent.click(acts[0]);
+    // T-55b (F10): the merge asks first, in the page.
+    expect(mockMergeMutateAsync).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'MERGE' }));
 
     await waitFor(() =>
       expect(mockMergeMutateAsync).toHaveBeenCalledWith({
@@ -108,6 +126,7 @@ describe('duplicate merge (T-53)', () => {
     openPanel();
 
     fireEvent.click(screen.getByRole('button', { name: 'MERGE INTO THIS ONE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'MERGE' }));
 
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(
@@ -117,6 +136,41 @@ describe('duplicate merge (T-53)', () => {
         }),
       ),
     );
+  });
+
+  it('asks in the page, naming both products, and merges nothing until confirmed (T-55b, F10)', () => {
+    const confirmSpy = jest.spyOn(window, 'confirm');
+    openPanel();
+
+    fireEvent.click(screen.getByRole('button', { name: 'MERGE INTO THIS ONE' }));
+    const question = screen.getByRole('group', { name: 'Confirm the merge' });
+    expect(question).toHaveTextContent('Merge “Ledge Bed (copy)” into “Ledge Bed”?');
+    expect(question).toHaveTextContent('The merge cannot be undone.');
+    expect(screen.getByRole('button', { name: 'KEEP BOTH' })).toHaveFocus();
+    expect(confirmSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'KEEP BOTH' }));
+    expect(screen.queryByRole('group', { name: 'Confirm the merge' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'MERGE INTO THIS ONE' })).toHaveFocus();
+    expect(mockMergeMutateAsync).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it.each([
+    ['a catalog-layer duplicate', { layer: 'catalog', studio_id: null }],
+    ['a duplicate in another studio', { studio_id: 'studio-2' }],
+    ['a duplicate already merged', { merged_into_id: 'prod-other' }],
+    ['a removed duplicate', { deleted_at: '2026-10-01T00:00:00Z' }],
+  ])('does not offer the merge for %s, which the server refuses (00753)', (_label, facts) => {
+    mockProducts['prod-dup'] = { ...mockProducts['prod-dup'], ...facts };
+    openPanel();
+    expect(screen.queryByRole('button', { name: 'MERGE INTO THIS ONE' })).toBeNull();
+  });
+
+  it('does not offer the merge when the product kept is not a studio product', () => {
+    mockProducts[KEEP_ID] = { ...mockProducts[KEEP_ID], layer: 'catalog', studio_id: null };
+    openPanel();
+    expect(screen.queryByRole('button', { name: 'MERGE INTO THIS ONE' })).toBeNull();
   });
 
   it('a referenced product refuses deletion with the merge sentence', () => {

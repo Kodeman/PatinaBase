@@ -258,9 +258,11 @@ describe("RoughInLens — the hooks", () => {
       name: "Fill Hardware, 2 knobs for custom cabinet with a product",
     });
     await user.type(search, "knob");
+    // Rough in shows no money: the result prints no price (T-55b, F18).
     const option = await screen.findByRole("option", {
-      name: /Emtek Ribbon & Reed knob · satin brass · \$38 each/,
+      name: "Emtek Ribbon & Reed knob · satin brass",
     });
+    expect(option).not.toHaveTextContent("$");
     await user.click(option);
     await waitFor(() => expect(mockPlace).toHaveBeenCalledTimes(1));
     expect(mockPlace.mock.calls[0][0]).toEqual({

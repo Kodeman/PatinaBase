@@ -12,10 +12,13 @@
  * as its stamp never reads PLACEHOLDER.
  *
  * The money figure is the line's client price where it has one and its rough
- * figure where it has not, per unit, times the room's share (a placed line is
- * split, never multiplied). An allowance counts at its ceiling, the line
- * total, shared out the same way. Ready
- * lines are `priced`, released lines `released`, the rest `roughed`.
+ * figure where it has not, per unit, times its quantity; an allowance counts
+ * at its ceiling, the line total. A placed line's money is split across its
+ * rooms by placed quantity over the placed sum, so the waste is shared and
+ * the rooms sum to the job (T-55b, F13), in integer cents by largest
+ * remainder as the account page and 00757 split it. Ready lines are
+ * `priced`, released lines `released`, the rest `roughed`. A superseded
+ * predecessor never counts (`liveBuildRoomLines`).
  */
 import { fmtUsd } from "@/lib/document/format";
 import {
@@ -31,12 +34,14 @@ import {
   pieceLineStage,
   type PieceLineStageRow,
 } from "@/lib/document/pieces/line-stage";
+import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
 
 export interface OverviewLine extends PieceLineStageRow {
   id: string;
   project_room_id?: string | null;
   assignment_scope?: string | null;
   removed_at?: string | null;
+  design_disposition?: string | null;
   rough_cents?: number | null;
 }
 
@@ -95,12 +100,6 @@ function emptyTally(): OverviewTally {
   };
 }
 
-function liveLines<T extends OverviewLine>(
-  lines: readonly T[] | null | undefined,
-): T[] {
-  return (lines ?? []).filter((line) => line.removed_at == null);
-}
-
 /** The line's count stage; null on a Trade Scope line before an order. */
 export function overviewStage(
   line: OverviewLine,
@@ -110,21 +109,48 @@ export function overviewStage(
 }
 
 /**
- * The line's figure for `share` of its units. An allowance counts at its
- * ceiling, which is the line total (00744 step 10, the Release amount): split
- * by the share, never multiplied, and never its stale unit price. Any other
- * line counts its client price per unit, else its rough figure.
+ * The line's money, in whole cents. An allowance counts at its ceiling, which
+ * is the line total (00744 step 10, the Release amount): never multiplied, and
+ * never its stale unit price. Any other line counts its client price per unit,
+ * else its rough figure, times its quantity.
  */
-function shareCents(line: OverviewLine, share: number): number {
+function lineCents(line: OverviewLine): number {
   if (line.item_type === "allowance" && (line.budget_max_cents ?? 0) > 0) {
-    const ceiling = line.budget_max_cents ?? 0;
-    const quantity = line.quantity ?? 0;
-    if (share === quantity) return ceiling;
-    return quantity > 0 ? (ceiling * share) / quantity : 0;
+    return line.budget_max_cents ?? 0;
   }
-  if ((line.unit_price_cents ?? 0) > 0)
-    return (line.unit_price_cents ?? 0) * share;
-  return Math.max(0, line.rough_cents ?? 0) * share;
+  const each =
+    (line.unit_price_cents ?? 0) > 0
+      ? (line.unit_price_cents ?? 0)
+      : Math.max(0, line.rough_cents ?? 0);
+  return Math.round(each * (line.quantity ?? 0));
+}
+
+/**
+ * Split `totalCents` across rooms by placed quantity over the placed sum, so
+ * the rooms add up to the total exactly: integer cents by largest remainder,
+ * ties to placement order. Mirrors T-51's `splitByShare`
+ * (hooks/use-account-page.ts, not exported) and 00757. A zero placed sum puts
+ * the whole total in the first room.
+ */
+export function splitCentsByShare(
+  totalCents: number,
+  quantities: readonly number[],
+): number[] {
+  if (quantities.length === 0) return [];
+  const sum = quantities.reduce((s, q) => s + q, 0);
+  if (sum <= 0) return quantities.map((_, i) => (i === 0 ? totalCents : 0));
+  const raw = quantities.map((q) => (totalCents * q) / sum);
+  const cents = raw.map(Math.floor);
+  let left = totalCents - cents.reduce((s, c) => s + c, 0);
+  const byRemainder = raw
+    .map((r, i) => ({ i, rem: r - cents[i] }))
+    .sort((a, b) => b.rem - a.rem || a.i - b.i);
+  for (const { i } of byRemainder) {
+    if (left <= 0) break;
+    cents[i] += 1;
+    left -= 1;
+  }
+  return cents;
 }
 
 function add(
@@ -148,15 +174,10 @@ function add(
 export function deriveOverviewJob(
   lines: readonly OverviewLine[] | null | undefined,
 ): OverviewTally {
-  const live = liveLines(lines);
+  const live = liveBuildRoomLines(lines);
   const job = emptyTally();
   for (const line of live) {
-    add(
-      job,
-      line,
-      overviewStage(line, live),
-      shareCents(line, line.quantity ?? 0),
-    );
+    add(job, line, overviewStage(line, live), lineCents(line));
   }
   return job;
 }
@@ -170,7 +191,7 @@ export function deriveOverviewRows(
   placements: readonly OverviewPlacement[] | null | undefined,
   rooms: readonly OverviewRoom[] | null | undefined,
 ): OverviewRow[] {
-  const live = liveLines(lines);
+  const live = liveBuildRoomLines(lines);
   const knownRooms = rooms ?? [];
   const row = (key: string, roomId: string | null, name: string): OverviewRow => ({
     key,
@@ -195,10 +216,10 @@ export function deriveOverviewRows(
   }
 
   const settledByRow = new Map<OverviewRow, boolean>();
-  const place = (target: OverviewRow, line: OverviewLine, stage: LineStage | null, share: number, primary: boolean) => {
+  const place = (target: OverviewRow, line: OverviewLine, stage: LineStage | null, cents: number, primary: boolean) => {
     target.lineIds.push(line.id);
     if (primary) target.primaryLineIds.push(line.id);
-    add(target.tally, line, stage, shareCents(line, share));
+    add(target.tally, line, stage, cents);
     if (stage === "placeholder") target.placeholderLines += 1;
     settledByRow.set(target, (settledByRow.get(target) ?? true) && stage === "released");
   };
@@ -219,19 +240,25 @@ export function deriveOverviewRows(
         ? line.project_room_id
         : [...shares.keys()].find((id) => byKey.has(id)) ?? null;
 
-    let inKnownRoom = false;
-    for (const [roomId, share] of shares) {
-      const target = byKey.get(roomId);
-      if (!target) continue;
-      inKnownRoom = true;
-      place(target, line, stage, share, roomId === primaryRoom);
+    // The rooms the overview prints, in placement order, sharing the line's
+    // money by placed quantity (the waste past the placed sum included).
+    const known = [...shares].filter(([roomId]) => byKey.has(roomId));
+    const total = lineCents(line);
+    if (known.length > 0) {
+      const cents = splitCentsByShare(
+        total,
+        known.map(([, share]) => share),
+      );
+      known.forEach(([roomId], i) => {
+        place(byKey.get(roomId)!, line, stage, cents[i], roomId === primaryRoom);
+      });
+      continue;
     }
-    if (inKnownRoom) continue;
     place(
       line.assignment_scope === "unassigned" ? unassigned : throughout,
       line,
       stage,
-      quantity,
+      total,
       true,
     );
   }

@@ -142,6 +142,21 @@ export function releaseAmountCents(line: ReleaseLensLine): number {
   );
 }
 
+/** The line's amount as the ceremony prints it: an allowance is `Up to` its
+ *  ceiling, everywhere it prints (F4). */
+export function releaseAmountText(line: ReleaseLensLine): string {
+  const usd = fmtReleaseUsd(releaseAmountCents(line));
+  return line.item_type === "allowance" ? `Up to ${usd}` : usd;
+}
+
+/** The set's total: `Up to $X` when any line in the sum is an allowance. */
+function releaseTotalText(set: ReleaseSet): string {
+  const usd = fmtReleaseUsd(set.totalCents);
+  return set.rows.some((row) => row.line.item_type === "allowance")
+    ? `Up to ${usd}`
+    : usd;
+}
+
 function serverBlocker(
   line: ReleaseLensLine,
   readiness: ServerReadiness | undefined,
@@ -417,13 +432,13 @@ const lineWord = (n: number) => (n === 1 ? "line" : "lines");
 /** `Drafted, not sent · 7 lines · $30,760:` */
 export function draftReleaseHead(set: ReleaseSet): string {
   const n = set.rows.length;
-  return `Drafted, not sent · ${n} ${lineWord(n)} · ${fmtReleaseUsd(set.totalCents)}:`;
+  return `Drafted, not sent · ${n} ${lineWord(n)} · ${releaseTotalText(set)}:`;
 }
 
 /** `This release · 7 lines · $30,760:` */
 export function releaseSetHead(set: ReleaseSet): string {
   const n = set.rows.length;
-  return `This release · ${n} ${lineWord(n)} · ${fmtReleaseUsd(set.totalCents)}:`;
+  return `This release · ${n} ${lineWord(n)} · ${releaseTotalText(set)}:`;
 }
 
 /** The consequence sentence directly above the terminal act (a3). */
@@ -452,5 +467,5 @@ export function releaseConsequence(set: ReleaseSet): string {
 /** `Release 7 lines · $30,760 for authorization` */
 export function releaseActLabel(set: ReleaseSet): string {
   const n = set.rows.length;
-  return `Release ${n} ${lineWord(n)} · ${fmtReleaseUsd(set.totalCents)} for authorization`;
+  return `Release ${n} ${lineWord(n)} · ${releaseTotalText(set)} for authorization`;
 }

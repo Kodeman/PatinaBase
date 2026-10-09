@@ -15,6 +15,7 @@ import {
   readyLineIds,
   releaseActLabel,
   releaseAmountCents,
+  releaseAmountText,
   releaseConsequence,
   releaseSetHead,
   releaseStamp,
@@ -442,5 +443,45 @@ describe("W4 review fixes (T-43c)", () => {
     expect(releaseActLabel(model.set)).toBe(
       "Release 7 lines · $30,759.50 for authorization",
     );
+  });
+});
+
+describe("an allowance prints Up to its ceiling (T-55b, F4)", () => {
+  // The wallpaper made an allowance: its ceiling, $2,250, is what is released.
+  const withAllowance = () =>
+    fixture().map((l) =>
+      l.id === "R1"
+        ? { ...l, item_type: "allowance", budget_max_cents: 225000 }
+        : l,
+    );
+
+  it("prints the allowance row as Up to, and a fixed row bare", () => {
+    const lines = withAllowance();
+    const r1 = lines.find((l) => l.id === "R1")!;
+    const l1 = lines.find((l) => l.id === "L1")!;
+    expect(releaseAmountText(r1)).toBe("Up to $2,250");
+    expect(releaseAmountText(l1)).toBe("$9,600");
+  });
+
+  it("writes the head, the draft head and the act as Up to when the sum holds an allowance", () => {
+    const lines = withAllowance();
+    const model = deriveReleaseLens(lines, ROOMS, null, allReady(lines));
+    expect(model.set.rows.map((r) => r.line.id)).toContain("R1");
+    // $30,760 − 9 × $230 + $2,250.
+    expect(model.set.totalCents).toBe(3076000 - 207000 + 225000);
+    expect(releaseSetHead(model.set)).toBe("This release · 7 lines · Up to $30,940:");
+    expect(releaseActLabel(model.set)).toBe(
+      "Release 7 lines · Up to $30,940 for authorization",
+    );
+    const draft = draftReleaseSet(lines, ["R1", "R1a"]);
+    expect(draftReleaseHead(draft)).toBe(
+      "Drafted, not sent · 2 lines · Up to $3,015:",
+    );
+  });
+
+  it("leaves a sum with no allowance bare", () => {
+    const lines = fixture();
+    const model = deriveReleaseLens(lines, ROOMS, null, allReady(lines));
+    expect(releaseSetHead(model.set)).toBe("This release · 7 lines · $30,760:");
   });
 });

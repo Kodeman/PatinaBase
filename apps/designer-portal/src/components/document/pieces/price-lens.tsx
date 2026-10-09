@@ -49,6 +49,7 @@ import {
   REMOVED_PLACE,
   type BuildRoomPlace,
 } from "@/lib/document/pieces/build-room-url";
+import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
 import {
   deriveOverviewJob,
   deriveOverviewRows,
@@ -213,8 +214,8 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
   );
   const lines = useMemo(
     () =>
-      ((lineData ?? []) as unknown as PriceLine[]).filter(
-        (line) => line.removed_at == null && !hidden.has(line.id),
+      liveBuildRoomLines(lineData as unknown as PriceLine[] | undefined).filter(
+        (line) => !hidden.has(line.id),
       ),
     [lineData, hidden],
   );

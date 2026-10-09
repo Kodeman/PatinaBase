@@ -838,6 +838,11 @@ export function SpecFieldsPane({
         scope="library"
         initialTab="library"
         initialSearch={pickerSearch}
+        // No money in Spec, for any seat (Q7/F10; T-55b, F18). The configure
+        // step prints option prices, and this fill keeps only the product and
+        // its name, so it is skipped here.
+        showPrice={false}
+        configureStep={false}
       />
     </section>
   );

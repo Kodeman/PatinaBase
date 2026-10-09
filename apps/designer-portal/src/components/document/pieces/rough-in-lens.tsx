@@ -71,6 +71,7 @@ import {
   type RowDragRoom,
 } from "@/lib/document/pieces/use-row-drag";
 import { ENTRY_NAME_ATTR } from "@/lib/document/pieces/rough-in-keys";
+import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
 import {
   RoughInTable,
   type RoughInGroupTarget,
@@ -366,8 +367,8 @@ export function RoughInLens({
 
   const lines = useMemo(
     () =>
-      ((lineData ?? []) as RoughInLine[]).filter(
-        (line) => line.removed_at == null && !hidden.has(line.id),
+      liveBuildRoomLines(lineData as RoughInLine[] | undefined).filter(
+        (line) => !hidden.has(line.id),
       ),
     [lineData, hidden],
   );

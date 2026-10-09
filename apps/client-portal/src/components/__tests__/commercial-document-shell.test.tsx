@@ -386,6 +386,22 @@ describe('CommercialDocumentShell', () => {
     expect(screen.getByText('Authorized furnishings').parentElement).toHaveTextContent('$20,000');
   });
 
+  // US-21 T-55b (F8): an allowance line prints "Up to" its ceiling, everywhere.
+  it('prints an allowance line as Up to its ceiling, and a fixed line bare', () => {
+    const base = furnishingsBundle();
+    render(<CommercialDocumentShell bundle={{
+      ...base,
+      furnishings: {
+        ...base.furnishings!,
+        items: base.furnishings!.items.map((item) =>
+          item.description === 'Room rug' ? { ...item, allowance: true } : item),
+      },
+    }} />);
+    expect(screen.getByText('Up to $2,000')).toBeInTheDocument();
+    expect(screen.getByText('$14,800')).toBeInTheDocument();
+    expect(screen.queryByText('Up to $14,800')).not.toBeInTheDocument();
+  });
+
   it('files a line with no room under a General heading rather than dropping it', () => {
     const base = furnishingsBundle();
     render(<CommercialDocumentShell bundle={{

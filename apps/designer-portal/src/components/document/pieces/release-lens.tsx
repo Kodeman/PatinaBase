@@ -54,10 +54,9 @@ import {
   dispositionWord,
   draftReleaseHead,
   draftReleaseSet,
-  fmtReleaseUsd,
   readyLineIds,
   releaseActLabel,
-  releaseAmountCents,
+  releaseAmountText,
   releaseConsequence,
   releaseSetHead,
   type ReleaseGroup,
@@ -66,6 +65,7 @@ import {
   type ReleaseSet,
   type ServerReadiness,
 } from "@/lib/document/pieces/readiness";
+import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
 import {
   LABOR_STAMP_LABEL,
   lineStampLabel,
@@ -118,7 +118,8 @@ export function ReleaseLens({
   const { data: rawLines } = useProjectFFEItems(projectId);
   const { data: roomRows } = useDocumentRooms(projectId);
   const lines = useMemo(
-    () => (rawLines ?? []) as unknown as ReleaseLensLine[],
+    () =>
+      liveBuildRoomLines(rawLines as unknown as ReleaseLensLine[] | undefined),
     [rawLines],
   );
   const rooms = useMemo(
@@ -442,7 +443,7 @@ function CeremonyLines({ set }: { set: ReleaseSet }) {
         <li key={row.line.id} className={CONSEQUENCE_CLS}>
           {row.labor ? `↳ ${row.line.name} (labor)` : row.line.name}{" "}
           <span className="tabular-nums">
-            {fmtReleaseUsd(releaseAmountCents(row.line))}
+            {releaseAmountText(row.line)}
           </span>
         </li>
       ))}

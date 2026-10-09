@@ -1,7 +1,8 @@
 /**
  * US-21 T-25 — the inline Library search (a6): results print as
- * `name · finish · $N each`, then the door to the whole Library; arrow keys
- * move the selection, Enter chooses; the count is announced in a live region.
+ * `name · finish`, with no price (T-55b, F18: Spec and Rough in show no
+ * money), then the door to the whole Library; arrow keys move the
+ * selection, Enter chooses; the count is announced in a live region.
  */
 import {
   act,
@@ -96,13 +97,11 @@ beforeEach(() => {
 });
 
 describe("libraryResultLine", () => {
-  it("prints name · finish · price each, leaving out what the row lacks", () => {
+  it("prints name · finish and never the price, leaving out what the row lacks", () => {
     expect(libraryResultLine(emtek)).toBe(
-      "Emtek Ribbon & Reed knob · satin brass · $38 each",
+      "Emtek Ribbon & Reed knob · satin brass",
     );
-    expect(libraryResultLine(mission)).toBe(
-      "Rejuvenation Mission knob · $24 each",
-    );
+    expect(libraryResultLine(mission)).toBe("Rejuvenation Mission knob");
     expect(libraryResultLine(row("p-x", "Unpriced pull", null))).toBe(
       "Unpriced pull",
     );
@@ -119,10 +118,11 @@ describe("LibraryInlineSearch", () => {
     });
     const options = within(listbox).getAllByRole("option");
     expect(options.map((option) => option.textContent)).toEqual([
-      "Emtek Ribbon & Reed knob · satin brass · $38 each",
-      "Rejuvenation Mission knob · $24 each",
+      "Emtek Ribbon & Reed knob · satin brass",
+      "Rejuvenation Mission knob",
       'Search the Library for "knob" →',
     ]);
+    expect(listbox.textContent).not.toContain("$");
     expect(options[0]).toHaveAttribute("aria-selected", "true");
     expect(input).toHaveAttribute("aria-expanded", "true");
     expect(input).toHaveAttribute("aria-activedescendant", options[0].id);
@@ -207,9 +207,7 @@ describe("LibraryInlineSearch", () => {
     fireEvent.change(input, { target: { value: "knob" } });
     const listbox = await screen.findByRole("listbox");
     fireEvent.click(
-      within(listbox).getByText(
-        "Emtek Ribbon & Reed knob · satin brass · $38 each",
-      ),
+      within(listbox).getByText("Emtek Ribbon & Reed knob · satin brass"),
     );
     expect(onChoose).toHaveBeenCalledWith(emtek);
   });

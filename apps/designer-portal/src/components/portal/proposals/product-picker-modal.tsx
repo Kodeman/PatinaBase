@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   useProducts,
   useCreateDraftProduct,
@@ -155,6 +155,12 @@ export interface ProductPickerModalProps {
   configureStep?: boolean;
   /** Library-tab search text the picker opens with (e.g. a deck caption). */
   initialSearch?: string;
+  /**
+   * Print prices: the result tiles' retail price and the draft tab's price
+   * field. Default true. The Build room's Spec lens passes false, as it shows
+   * no money for any seat (US-21 Q7/F10; T-55b, F18).
+   */
+  showPrice?: boolean;
 }
 
 type Tab ='catalog' | 'library' | 'captures' | 'draft';
@@ -214,6 +220,9 @@ function LayerBadge({ layer }: { layer: LayerProductLayer }) {
   );
 }
 
+/** The modal's `showPrice`, read by every tab that would print a price. */
+const ShowPriceContext = createContext(true);
+
 function ProductResultGrid({
   rows,
   onPick,
@@ -221,6 +230,7 @@ function ProductResultGrid({
   rows: GridRow[];
   onPick: (pick: TabPick) => void;
 }) {
+  const showPrice = useContext(ShowPriceContext);
   return (
     <div className="grid max-h-[380px] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3">
       {rows.map((p) => (
@@ -289,7 +299,7 @@ function ProductResultGrid({
                 {p.brand ?? p.vendorName}
               </div>
             )}
-            {typeof p.price_retail === 'number' && (
+            {showPrice && typeof p.price_retail === 'number' && (
               <div
                 style={{
                   fontFamily: 'var(--font-display)',
@@ -630,6 +640,7 @@ function LibraryTab({
  * creating the draft.
  */
 function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
+  const showPrice = useContext(ShowPriceContext);
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
@@ -772,7 +783,10 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
         />
       </label>
 
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: showPrice ? '1fr 1fr' : '1fr' }}
+      >
         <label className="block">
           <span className="type-meta mb-1 block">Brand</span>
           <Input
@@ -782,6 +796,7 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
             placeholder="e.g. Holly Hunt"
           />
         </label>
+        {showPrice && (
         <label className="block">
           <span className="type-meta mb-1 block">Retail Price</span>
           <div className="relative">
@@ -803,6 +818,7 @@ function DraftTab({ onPick }: { onPick: (pick: TabPick) => void }) {
             />
           </div>
         </label>
+        )}
       </div>
 
       {errorMessage && (
@@ -1219,6 +1235,7 @@ export function ProductPickerModal({
   initialTab = scope,
   configureStep = true,
   initialSearch,
+  showPrice = true,
 }: ProductPickerModalProps) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [scopeRoomId, setScopeRoomId] = useState<string | null>(defaultScopeRoomId ?? null);
@@ -1355,12 +1372,14 @@ export function ProductPickerModal({
           </div>
 
           {/* Panels */}
-          {tab === 'catalog' && (
-            <CatalogTab defaultCategorySlug={defaultCategorySlug} onPick={handlePick} />
-          )}
-          {tab === 'library' && <LibraryTab onPick={handlePick} initialSearch={initialSearch} />}
-          {tab === 'captures' && <CapturesTab onPick={handlePick} />}
-          {tab === 'draft' && allowDraftCreate && <DraftTab onPick={handlePick} />}
+          <ShowPriceContext.Provider value={showPrice}>
+            {tab === 'catalog' && (
+              <CatalogTab defaultCategorySlug={defaultCategorySlug} onPick={handlePick} />
+            )}
+            {tab === 'library' && <LibraryTab onPick={handlePick} initialSearch={initialSearch} />}
+            {tab === 'captures' && <CapturesTab onPick={handlePick} />}
+            {tab === 'draft' && allowDraftCreate && <DraftTab onPick={handlePick} />}
+          </ShowPriceContext.Provider>
         </>
         )}
       </div>

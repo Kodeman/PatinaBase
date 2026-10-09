@@ -45,6 +45,7 @@ import {
   lineStampLabel,
 } from "@/lib/document/stamp-derivation";
 import { pieceLineStage } from "@/lib/document/pieces/line-stage";
+import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
 import { AlsoInLine } from "./placement-chips";
 import {
   GROUP_MEMBER_MARK,
@@ -157,7 +158,8 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
   };
 
   const allLines = useMemo(
-    () => (rawLines ?? []) as unknown as SpecLensLine[],
+    () =>
+      liveBuildRoomLines(rawLines as unknown as SpecLensLine[] | undefined),
     [rawLines],
   );
   const rooms = useMemo(
