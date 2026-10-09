@@ -103,11 +103,20 @@
   .cover-title{ font-size:clamp(3rem, 7vw, 6rem); line-height:1.04; max-width:16ch; }
   .cover-sub{ font-family:var(--font-display); font-style:italic; font-size:clamp(1.3rem, 2vw, 1.9rem); color:var(--ink-soft); max-width:36ch; }
 
-  .bleed{ position:absolute; top:0; right:0; bottom:0; width:46%; margin:0; overflow:hidden; background:var(--ink-faint); }
-  .has-bleed .slide-foot{ right:50%; }
+  /* Images full bleed or not at all (art-direction §4), never a side panel: the image fills the
+     whole slide and the headline and body sit on a paper band across its foot. */
+  .bleed{ position:absolute; inset:0; margin:0; overflow:hidden; background:var(--ink-faint); z-index:0; }
   .bleed img{ display:block; width:100%; height:100%; object-fit:cover; }
-  .has-bleed .slide-inner{ max-width:46%; }
-  @media (max-width:900px){ .bleed{ position:relative; width:100%; height:40vh; } .has-bleed .slide-inner{ max-width:none; } }
+  .has-bleed .slide-inner{
+    position:absolute; left:0; right:0; bottom:0; z-index:1; max-width:none;
+    background:var(--paper); padding:3.2vh 7vw 9vh;
+  }
+  .has-bleed .slide-head{ margin-bottom:0.8rem; }
+  .has-bleed .slide-foot{ z-index:2; }
+  @media (max-width:900px){
+    .bleed{ position:relative; inset:auto; order:-1; height:40vh; margin:-7vh -7vw 0; }
+    .has-bleed .slide-inner{ position:static; padding:0; }
+  }
 
   .close-line{ font-family:var(--font-display); font-style:italic; font-size:clamp(1.8rem, 3.2vw, 3rem); color:var(--ink); max-width:24ch; }
   .wordmark-type{ font-family:var(--font-display); font-size:1.6rem; color:var(--ink-soft); }
@@ -115,6 +124,7 @@
   /* read-as-page mode */
   body.read-mode .slide{ display:flex !important; min-height:auto; padding:6vh 7vw 10vh; border-bottom:1px solid var(--hairline); }
   body.read-mode .nav-ui{ display:none; }
+  body.read-mode .has-bleed{ min-height:100vh; }
 
   /* controls */
   .nav-ui{ position:fixed; z-index:40; font-family:var(--font-mono); }
@@ -148,6 +158,7 @@
     .slide{ display:flex !important; width:1920px; height:1080px; min-height:0; padding:96px 134px 120px; overflow:hidden; break-after:page; page-break-after:always; animation:none !important; }
     .slide:last-child{ break-after:auto; page-break-after:auto; }
     .slide-foot{ left:134px; right:134px; bottom:40px; }
+    .has-bleed .slide-inner{ padding:40px 134px 120px; }
     .slide-head h2{ font-size:64px; }
     .slide-body{ font-size:26px; }
     .cover-title{ font-size:104px; }
@@ -161,10 +172,11 @@
 <div id="deck-root">
 <div id="deck">
 
-<!-- SLOT: slide 1, cover. eyebrow = concept name; h1 = final.md title; sub = one line of angle -->
+<!-- SLOT: slide 1, cover. eyebrow = final.md eyebrow, else the run's place line, else delete it
+     (never the concept name unless the copy puts it there); h1 = final.md title; sub = one line of angle -->
 <section class="slide active" id="slide-1" data-title="Cover">
   <div class="slide-inner cover-slide">
-    <div class="eyebrow">Concept name</div>
+    <div class="eyebrow">Place line</div>
     <h1 class="cover-title">Deck title from final.md</h1>
     <p class="cover-sub">One line on what the studio gets from these next few minutes.</p>
   </div>
@@ -173,7 +185,8 @@
 <!-- /SLOT -->
 
 <!-- SLOT: content slide. Repeat once per slides[] entry: h2 = headline, .slide-body = body.
-     With a visual: keep class "has-bleed" and the .bleed figure; without one, delete both. -->
+     With a visual: keep class "has-bleed" and the .bleed figure, which fills the whole slide
+     behind a paper band holding the headline and body; without one, delete both. -->
 <section class="slide has-bleed" id="slide-2" data-title="Slide headline">
   <div class="slide-inner">
     <div class="slide-head">

@@ -9,6 +9,12 @@
  *
  * Image choice per piece: mj/picks.json {J01:"<abs path>"}, else the first file for the job in
  * mj/assets.json, else a neutral IMAGE PENDING block. The image is copied into compose/<P>/.
+ * Email is a letter first: it carries one image, under the first paragraph, only when its
+ * frontmatter names `visual: Jnn`.
+ *
+ * Eyebrow: the piece's own frontmatter `eyebrow`, else the run's place line (plan.json `place`,
+ * plan.json `concept.place`, or brief.md frontmatter `place`), else nothing. Never the concept
+ * name: that appears only where a piece's copy puts it.
  *
  * Prints one line per piece: "<id> (<kind>): ok <file>", "image-missing <file> (<reason>)",
  * "skipped; ..." or "failed (<reason>)". image-missing and failed pieces get a ledger entry
@@ -17,6 +23,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import YAML from 'yaml';
 import { REPO_ROOT, CHANNELS, runPaths, readPlan, readFinal, appendLedger } from './lib/run.mjs';
 
 export const TEMPLATES_DIR = path.join(REPO_ROOT, 'marketing', 'templates');
@@ -117,6 +124,26 @@ export function pickImage(runDir, jobId) {
   return null;
 }
 
+/** The run's place line: plan.json `place` or `concept.place`, else brief.md frontmatter `place`. */
+export function placeLine(runDir, plan) {
+  const fromPlan = plan?.place ?? plan?.concept?.place;
+  if (typeof fromPlan === 'string' && fromPlan.trim()) return stripClaims(fromPlan.trim());
+  try {
+    const brief = fs.readFileSync(runPaths(runDir).brief, 'utf8');
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(brief);
+    const place = fm ? YAML.parse(fm[1])?.place : null;
+    if (typeof place === 'string' && place.trim()) return stripClaims(place.trim());
+  } catch {
+    // No brief, or frontmatter that does not parse: no place line.
+  }
+  return '';
+}
+
+/** The email's one image: only a frontmatter `visual: Jnn` asks for it. */
+function emailJob(data) {
+  return typeof data?.visual === 'string' && /^J\d{2}$/.test(data.visual) ? data.visual : null;
+}
+
 function imageBlock(file, alt) {
   if (!file) {
     return '<div class="image image-pending" role="img" aria-label="Image pending"><span>IMAGE PENDING</span></div>';
@@ -148,16 +175,23 @@ const EMAIL_STYLES = {
   li: "margin:0 0 6px; font-family:'Inter', Helvetica, Arial, sans-serif; font-size:16px; line-height:1.6; color:#4A453F;",
 };
 
-/** Build the template variables for one piece. `image` is the copied file name or null. */
-function varsFor(piece, plan, data, body, image) {
+const EMAIL_IMAGE_STYLE = 'display:block; width:100%; max-width:520px; height:auto; border:0; margin:8px 0 24px;';
+const EMAIL_PENDING_STYLE = "margin:8px 0 24px; height:347px; line-height:347px; background:#A3927C; color:#F5F2ED; text-align:center; font-family:'DM Mono', ui-monospace, Menlo, 'Courier New', monospace; font-size:12px; letter-spacing:0.2em;";
+
+/**
+ * Build the template variables for one piece. `image` is the copied file name or null; `job` is
+ * the job the piece asked an image of (null: no image slot); `place` is the run's place line.
+ */
+function varsFor(piece, data, body, image, job, place) {
   const channel = CHANNELS[piece.channel] || {};
+  const eyebrow = typeof data.eyebrow === 'string' || typeof data.eyebrow === 'number' ? String(data.eyebrow).trim() : '';
   const base = {
     piece: piece.id,
     kind: piece.kind,
     channel: piece.channel,
     width: channel.width ?? '',
     height: channel.height ?? '',
-    eyebrow: plan.concept?.name || 'Patina',
+    eyebrow: eyebrow || place,
     wordmark: wordmarkBlock(),
   };
   switch (piece.kind) {
@@ -195,9 +229,12 @@ function varsFor(piece, plan, data, body, image) {
     }
     case 'email': {
       const blocks = markdownBlocks(body, EMAIL_STYLES);
-      const img = image
-        ? `<img src="${escapeHtml(image)}" width="520" alt="${escapeHtml(data.alt || '')}" style="display:block; width:100%; max-width:520px; height:auto; border:0; margin:8px 0 24px;">`
-        : '';
+      let img = '';
+      if (image) {
+        img = `<img src="${escapeHtml(image)}" width="520" alt="${escapeHtml(data.alt || '')}" style="${EMAIL_IMAGE_STYLE}">`;
+      } else if (job) {
+        img = `<div class="image-pending" role="img" aria-label="Image pending" style="${EMAIL_PENDING_STYLE}">IMAGE PENDING</div>`;
+      }
       return {
         ...base,
         title: data.subject || piece.id,
@@ -243,11 +280,11 @@ export function composePiece(runDir, plan, piece, log = console.log) {
     throw new Error(`${piece.id}: no template for kind "${piece.kind}"`);
   }
 
-  const job = leadJob(piece, rawData);
+  const job = piece.kind === 'email' ? emailJob(rawData) : leadJob(piece, rawData);
   const wantsImage = piece.kind !== 'email' || job;
   const image = wantsImage ? copyImage(pickImage(runDir, job), outDir) : null;
   const template = fs.readFileSync(path.join(TEMPLATES_DIR, `${piece.kind}.html`), 'utf8');
-  const html = fill(template, varsFor(piece, plan, data, body, image));
+  const html = fill(template, varsFor(piece, data, body, image, job, placeLine(runDir, plan)));
   const file = path.join(outDir, 'index.html');
   fs.writeFileSync(file, html);
   if (wantsImage && !image) {

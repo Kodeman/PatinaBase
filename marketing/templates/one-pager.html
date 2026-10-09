@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=816, initial-scale=1">
 <title>{{title}}</title>
 <!-- Patina one-pager (one-pager-letter, 8.5x11 in). Margins 0.75 in; eyebrow, Playfair title, one
-     image band, sections in a single column, CTA at the foot. Print-safe: paper ground, no dark
+     image band (2.4 in, fixed), sections in a single column (heading above body, full measure),
+     CTA at the foot. Print-safe: paper ground, no dark
      full bleed. Filled by marketing/tools/compose.mjs. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,13 +36,17 @@
     font-size:8pt; display:flex; align-items:center; gap:0.7em; margin:0 0 0.18in;
   }
   .eyebrow::before{ content:''; display:inline-block; width:1.4em; height:1px; background:var(--clay); }
+  .eyebrow:empty{ display:none; }
+  /* Nothing on the page shrinks to fit: copy that runs long overflows, and render.mjs fails the
+     piece with "one-pager overflows" instead of clipping it. */
+  .page > *{ flex-shrink:0; }
   h1{ font-family:var(--font-display); font-weight:400; font-size:30pt; line-height:1.12; color:var(--ink); margin:0 0 0.3in; text-wrap:balance; max-width:6in; }
-  .media{ height:3.1in; overflow:hidden; background:var(--clay); margin-bottom:0.34in; }
+  .media{ height:2.4in; overflow:hidden; background:var(--clay); margin-bottom:0.34in; }
   .image{ display:block; width:100%; height:100%; object-fit:cover; }
   .image-pending{ display:flex; align-items:center; justify-content:center; background:var(--clay); }
   .image-pending span{ font-family:var(--font-mono); letter-spacing:0.2em; color:var(--paper); font-size:9pt; }
-  .section{ border-top:1px solid var(--rule); padding:0.14in 0 0.16in; display:grid; grid-template-columns:1.9in 1fr; gap:0.3in; }
-  .section h2{ font-family:var(--font-display); font-weight:400; font-size:13pt; line-height:1.3; color:var(--ink); margin:0; }
+  .section{ border-top:1px solid var(--rule); padding:0.14in 0 0.16in; }
+  .section h2{ font-family:var(--font-display); font-weight:400; font-size:13pt; line-height:1.3; color:var(--ink); margin:0 0 0.06in; }
   .section p{ margin:0 0 0.6em; }
   .section p:last-child{ margin-bottom:0; }
   .section ul{ margin:0; padding-left:1.1em; }

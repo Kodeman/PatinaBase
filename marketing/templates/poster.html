@@ -2,17 +2,21 @@
 <html lang="en" data-channel="{{channel}}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=1728, initial-scale=1">
+<meta name="viewport" content="width=1752, initial-scale=1">
 <title>{{title}}</title>
-<!-- Patina poster (poster-18x24, 18x24 in). One full-bleed image, one Playfair line readable from
-     six feet, subhead and body in the bottom band, a small wordmark. Text stays 1 in inside the
-     trim, well clear of the 0.125 in bleed. Filled by marketing/tools/compose.mjs. -->
+<!-- Patina poster (poster-18x24: 18x24 in trim plus 0.125 in bleed on every side, so the sheet
+     is 18.25x24.25 in and the PDF MediaBox 1314x1746 pt). One full-bleed image, one Playfair line
+     readable from six feet, subhead and body in the bottom band, a small wordmark. The image and
+     the paper band run to the sheet edge, 0.125 in past trim; text stays 1 in inside trim.
+     Filled by marketing/tools/compose.mjs. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  @page { size: 18in 24in; margin: 0; }
+  @page { size: 18.25in 24.25in; margin: 0; }
   :root{
+    --bleed:0.125in;      /* channels.json poster-18x24 bleed */
+    --safe:1in;           /* text inset from trim (at least 0.5 in) */
     --paper:#EDE9E4;      /* patinaOffWhite */
     --clay:#A3927C;       /* clayBeige */
     --mocha:#655B52;      /* mochaBrown */
@@ -25,24 +29,25 @@
   *{ box-sizing:border-box; }
   html, body{ margin:0; padding:0; background:var(--paper); -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .sheet{
-    width:18in; height:24in; overflow:hidden; position:relative;
-    display:grid; grid-template-rows:16.5in 1fr;
+    width:calc(18in + 2 * var(--bleed)); height:calc(24in + 2 * var(--bleed)); overflow:hidden; position:relative;
+    display:grid; grid-template-rows:calc(16.5in + var(--bleed)) 1fr;
     background:var(--paper); color:var(--ink); font-family:var(--font-body);
   }
   .media{ position:relative; overflow:hidden; background:var(--clay); }
   .image{ display:block; width:100%; height:100%; object-fit:cover; }
   .image-pending{ display:flex; align-items:center; justify-content:center; background:var(--clay); }
   .image-pending span{ font-family:var(--font-mono); letter-spacing:0.2em; color:var(--paper); font-size:0.35in; }
-  .band{ position:relative; padding:0.8in 1in 1in; display:flex; flex-direction:column; gap:0.22in; }
+  .band{ position:relative; padding:0.8in calc(var(--safe) + var(--bleed)) calc(var(--safe) + var(--bleed)); display:flex; flex-direction:column; gap:0.22in; }
   .eyebrow{
     font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.2em; color:var(--clay);
     font-size:0.2in; display:flex; align-items:center; gap:0.7em; margin:0;
   }
   .eyebrow::before{ content:''; display:inline-block; width:1.4em; height:1px; background:var(--clay); }
+  .eyebrow:empty{ display:none; }
   h1{ font-family:var(--font-display); font-weight:400; font-size:1.15in; line-height:1.05; margin:0; text-wrap:balance; max-width:15in; color:var(--ink); }
   .subhead{ font-family:var(--font-display); font-style:italic; font-size:0.42in; line-height:1.25; color:var(--mocha); margin:0; }
   .body{ font-size:0.24in; line-height:1.5; color:var(--body); margin:0; max-width:11in; }
-  .wordmark{ position:absolute; right:1in; bottom:0.9in; }
+  .wordmark{ position:absolute; right:calc(var(--safe) + var(--bleed)); bottom:calc(0.9in + var(--bleed)); }
   .wordmark-type{ font-family:var(--font-display); font-size:0.42in; color:var(--mocha); }
   .wordmark-logo{ height:0.42in; display:block; }
 </style>

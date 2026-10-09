@@ -37,6 +37,7 @@
     display:flex; align-items:center; gap:0.7em; margin:0;
   }
   .eyebrow::before{ content:''; display:inline-block; width:1.4em; height:1px; background:var(--clay); }
+  .eyebrow:empty{ display:none; }
   h1{ font-family:var(--font-display); font-weight:400; color:var(--ink); margin:0; text-wrap:balance; letter-spacing:-0.005em; }
   .foot{ margin-top:auto; display:flex; justify-content:flex-end; align-items:baseline; }
   .wordmark-type{ font-family:var(--font-display); color:var(--mocha); letter-spacing:-0.01em; }
@@ -60,6 +61,7 @@
   html[data-channel="linkedin-landscape"] .frame{ grid-template-columns:720px 1fr; }
   html[data-channel="linkedin-landscape"] .words{ padding:56px 52px 44px 48px; gap:18px; }
   html[data-channel="linkedin-landscape"] .eyebrow{ font-size:14px; margin-top:auto; }
+  html[data-channel="linkedin-landscape"] .eyebrow:empty + h1{ margin-top:auto; }
   html[data-channel="linkedin-landscape"] h1{ font-size:40px; line-height:1.14; }
   html[data-channel="linkedin-landscape"] .foot{ margin-top:auto; }
   html[data-channel="linkedin-landscape"] .wordmark-type{ font-size:22px; }

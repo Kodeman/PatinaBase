@@ -5,8 +5,11 @@
  * Renders compose/<P>/ into out/<P>/ at the channels.json spec with Playwright chromium
  * (deviceScaleFactor 1). Every output, skip and failure gets a ledger.json entry.
  *
- *   social, pin      <P>.png at the exact pixel size
- *   one-pager, poster <P>.pdf at the inch size (poster 18x24 in) + <P>-preview.png at 96 dpi
+ *   social, pin      <P>.png at the exact pixel size + <P>.caption.txt (caption, blank line,
+ *                    hashtags one per line) + <P>.alt.txt, claim markers stripped
+ *   one-pager, poster <P>.pdf at the inch size plus the channel's bleed on every side (poster
+ *                    18.25x24.25 in) + <P>-preview.png at 96 dpi. A one-pager whose copy runs
+ *                    past the page fails ("one-pager overflows") instead of being clipped
  *   email            <P>.html copy (+ its image) + <P>.png, a 600 px wide full-page preview
  *   pr-pitch         pitch.md copy
  *   deck             <P>.html single file (relative images inlined) + <P>.pdf, one 1920x1080 page
@@ -21,8 +24,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
-import { REPO_ROOT, CHANNELS, runPaths, readPlan, appendLedger } from './lib/run.mjs';
-import { parseArgs, selectPieces } from './compose.mjs';
+import { REPO_ROOT, CHANNELS, runPaths, readPlan, readFinal, appendLedger } from './lib/run.mjs';
+import { parseArgs, selectPieces, stripClaims } from './compose.mjs';
 
 const CSS_PX_PER_IN = 96;
 const ALLOWED_HOSTS = new Set(['fonts.googleapis.com', 'fonts.gstatic.com']);
@@ -136,15 +139,31 @@ async function renderPiece(browser, runDir, piece, record) {
   }
 
   if (channel.unit === 'in') {
-    const viewport = { width: Math.round(channel.width * CSS_PX_PER_IN), height: Math.round(channel.height * CSS_PX_PER_IN) };
+    // The sheet is the trim plus the channel's bleed on every side.
+    const bleed = Number(channel.bleed) || 0;
+    const width = channel.width + 2 * bleed;
+    const height = channel.height + 2 * bleed;
+    const viewport = { width: Math.round(width * CSS_PX_PER_IN), height: Math.round(height * CSS_PX_PER_IN) };
     const { page, close } = await openPage(browser, viewport, index);
     try {
       const pdf = out(`${piece.id}.pdf`);
-      await page.pdf({ path: pdf, width: `${channel.width}in`, height: `${channel.height}in`, printBackground: true });
+      const preview = out(`${piece.id}-preview.png`);
+      if (piece.kind === 'one-pager') {
+        const fit = await page.evaluate(() => {
+          const sheet = document.querySelector('main');
+          return sheet ? { content: sheet.scrollHeight, page: sheet.clientHeight } : null;
+        });
+        if (fit && fit.content > fit.page + 1) {
+          // Never ship a clipped page, nor leave an earlier render standing in for this one.
+          fs.rmSync(pdf, { force: true });
+          fs.rmSync(preview, { force: true });
+          return record({ status: 'failed', reason: `one-pager overflows: content is ${fit.content} px on a ${fit.page} px page; cut copy` });
+        }
+      }
+      await page.pdf({ path: pdf, width: `${width}in`, height: `${height}in`, printBackground: true });
       ok(pdf, { format: 'pdf' });
-      const png = out(`${piece.id}-preview.png`);
-      await page.screenshot({ path: png });
-      ok(png, { format: 'png', preview: true });
+      await page.screenshot({ path: preview });
+      ok(preview, { format: 'png', preview: true });
     } finally {
       await close();
     }
@@ -159,6 +178,26 @@ async function renderPiece(browser, runDir, piece, record) {
   } finally {
     await close();
   }
+  if (piece.kind === 'social' || piece.kind === 'pin') writePostText(runDir, piece, out, ok);
+}
+
+/**
+ * The words that travel with a post, claim markers stripped: <P>.caption.txt (the caption, a
+ * blank line, then the hashtags one per line) and <P>.alt.txt.
+ */
+function writePostText(runDir, piece, out, ok) {
+  const data = stripClaims(readFinal(runDir, piece.id).data);
+  const text = (v) => (v === undefined || v === null ? '' : String(v).trim());
+  const tags = (Array.isArray(data.hashtags) ? data.hashtags : [])
+    .map(text)
+    .filter(Boolean)
+    .map((t) => `#${t.replace(/^#/, '')}`);
+  const caption = out(`${piece.id}.caption.txt`);
+  fs.writeFileSync(caption, `${[text(data.caption), tags.join('\n')].filter(Boolean).join('\n\n')}\n`);
+  ok(caption, { format: 'txt' });
+  const alt = out(`${piece.id}.alt.txt`);
+  fs.writeFileSync(alt, `${text(data.alt)}\n`);
+  ok(alt, { format: 'txt' });
 }
 
 async function main() {
