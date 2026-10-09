@@ -1,0 +1,12 @@
+-- US-21 T-59 · The Build room walk job, for a hand walk on the LOCAL stack.
+--
+-- LOCAL ONLY. Never wire this into supabase/config.toml [db.seed], and never
+-- run it against Strata. It applies the same fixture the Playwright suite
+-- reseeds before every scenario (SPEC §4, "Whole Home Renovation", owned by
+-- designer@patina.dev), so a hand walk and the suite see the same job.
+--
+--   psql -X -v ON_ERROR_STOP=1 postgresql://postgres:postgres@127.0.0.1:54322/postgres \
+--     -f supabase/seed/dev/pieces_build_room_walk_dev.sql
+--
+-- Idempotent: it deletes and recreates the e6590000-… rows each run.
+\ir ../../../apps/designer-portal/e2e/document/pieces-fixture.sql

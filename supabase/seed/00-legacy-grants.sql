@@ -21402,6 +21402,132 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00757_pieces_working_budget_shares.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._derive_working_budget_draft_00661_impl(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00757_pieces_working_budget_shares.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._publish_budget_checkpoint_00661_impl(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.supersede_project_selection(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.supersede_project_selection(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_ffe_line_build_fields(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_project_ffe_line_build_fields(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_products_referenced_delete() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_project_ffe_receipt_batch( uuid, jsonb, public.receiving_inspection_outcome, text, uuid[] ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_project_ffe_receipt_batch( uuid, jsonb, public.receiving_inspection_outcome, text, uuid[] ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_line_placements(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_line_placements(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.triage_project_ffe_items(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.triage_project_ffe_items(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_line_group(uuid[], jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_line_group(uuid[], jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._derive_working_budget_draft_00661_impl(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00758_pieces_w5_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._publish_budget_checkpoint_00661_impl(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00759_pieces_w5_residuals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_line_placements(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00759_pieces_w5_residuals.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_line_placements(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00759_pieces_w5_residuals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.triage_project_ffe_items(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00759_pieces_w5_residuals.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.triage_project_ffe_items(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
