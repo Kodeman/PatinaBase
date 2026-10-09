@@ -18,6 +18,7 @@ import {
   useUpdatePassword,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { AUTOSTART_ENABLED } from '@/hooks/document-time-provider';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { StrataMark } from '../strata-mark';
@@ -175,55 +176,60 @@ export function AccountProfilePage() {
       {/* HT-35 — the automatic timer is disclosed once and declinable here,
           per member, default on. Off is not "no timer": the document then
           carries a one-tap start, which the sentence below says out loud so
-          nobody turns this off expecting her hours to stop being countable. */}
-      <div>
-        <h3 className="mb-1 font-heading text-[15px] text-[var(--color-charcoal)]">
-          The clock
-        </h3>
-        <p className="mb-3 text-[11.5px] text-[var(--color-aged-oak)]">
-          While a document is open, Patina keeps the time for you. Turn that off
-          and the document carries a one-tap start instead — the clock is still
-          there, it just waits for you.
-        </p>
-        <label className="flex max-w-md items-start gap-2.5">
-          <input
-            type="checkbox"
-            aria-label="Keep the time automatically while a document is open"
-            className="mt-[3px] h-4 w-4 shrink-0"
-            checked={!autostart.optedOut}
-            disabled={!autostart.isSettled || setAutostartOptOut.isPending}
-            onChange={(e) => {
-              const optedOut = !e.target.checked;
-              setAutostartNote(null);
-              setAutostartOptOut.mutate(optedOut, {
-                onSuccess: () =>
-                  documentEvents.time.autostartOptedOut({ opted_out: optedOut }),
-                onError: (err) =>
-                  setAutostartNote(
-                    err instanceof Error
-                      ? err.message
-                      : 'That preference could not be saved.',
-                  ),
-              });
-            }}
-          />
-          <span className="text-[13px] leading-relaxed text-[var(--color-charcoal)]">
-            Keep the time automatically while a document is open
-          </span>
-        </label>
-        {autostartNote && (
-          <p
-            role="alert"
-            className="mt-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-terracotta-ink)]"
-          >
-            {autostartNote}
-          </p>
-        )}
-      </div>
+          nobody turns this off expecting her hours to stop being countable.
+          Hidden while AUTOSTART_ENABLED is off: the box would do nothing. */}
+      {AUTOSTART_ENABLED && (
+        <>
+          <div>
+            <h3 className="mb-1 font-heading text-[15px] text-[var(--color-charcoal)]">
+              The clock
+            </h3>
+            <p className="mb-3 text-[11.5px] text-[var(--color-aged-oak)]">
+              While a document is open, Patina keeps the time for you. Turn that off
+              and the document carries a one-tap start instead — the clock is still
+              there, it just waits for you.
+            </p>
+            <label className="flex max-w-md items-start gap-2.5">
+              <input
+                type="checkbox"
+                aria-label="Keep the time automatically while a document is open"
+                className="mt-[3px] h-4 w-4 shrink-0"
+                checked={!autostart.optedOut}
+                disabled={!autostart.isSettled || setAutostartOptOut.isPending}
+                onChange={(e) => {
+                  const optedOut = !e.target.checked;
+                  setAutostartNote(null);
+                  setAutostartOptOut.mutate(optedOut, {
+                    onSuccess: () =>
+                      documentEvents.time.autostartOptedOut({ opted_out: optedOut }),
+                    onError: (err) =>
+                      setAutostartNote(
+                        err instanceof Error
+                          ? err.message
+                          : 'That preference could not be saved.',
+                      ),
+                  });
+                }}
+              />
+              <span className="text-[13px] leading-relaxed text-[var(--color-charcoal)]">
+                Keep the time automatically while a document is open
+              </span>
+            </label>
+            {autostartNote && (
+              <p
+                role="alert"
+                className="mt-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-terracotta-ink)]"
+              >
+                {autostartNote}
+              </p>
+            )}
+          </div>
 
-      <div className="my-6">
-        <StrataMark size="sm" />
-      </div>
+          <div className="my-6">
+            <StrataMark size="sm" />
+          </div>
+        </>
+      )}
 
       {/* Password */}
       <div>
