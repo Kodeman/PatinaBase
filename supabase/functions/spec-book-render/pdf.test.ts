@@ -286,3 +286,21 @@ Deno.test("the item page prints the unit, the need label above the name, LABOR a
   assertEquals(chairPage.includes("ALSO IN"), false);
   assertEquals(chairPage.includes("LABOR"), false);
 });
+
+// ─── T-60g: primes (follow-up from T-60c F13) ────────────────────────────────
+
+Deno.test("T-60g: a prime in an item name reaches the PDF as feet and inches, not 2/3", async () => {
+  const source = frozenSnapshot();
+  const name = "Runner, 2′6″ × 10′";
+  const snapshot = frozenSnapshot({
+    items: [{ ...source.items[0], name }, source.items[1]],
+  });
+  const model = await buildAudienceRenderModel(snapshot, "client", context);
+  const pages = (await extractedText(await renderSpecBookPdf(model))).split(
+    "\n",
+  );
+  const page = pages.find((p) => p.includes("PB-201"))!;
+  assert(page, "the runner has its page");
+  assert(page.includes(`Runner, 2'6" × 10'`), page);
+  assertEquals(page.includes("Runner, 2263"), false);
+});

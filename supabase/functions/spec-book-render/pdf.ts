@@ -10,9 +10,10 @@ import {
   Page,
   renderToBuffer,
   StyleSheet,
-  Text,
   View,
 } from "npm:@react-pdf/renderer@4.3.0";
+// Every printed string passes through pdfText (base-14 WinAnsi; T-60c F13).
+import { Text } from "../_shared/pdf-text.ts";
 import type {
   AudienceConfigurationSummary,
   AudienceItem,
