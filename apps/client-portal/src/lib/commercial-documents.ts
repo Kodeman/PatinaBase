@@ -987,7 +987,8 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
           clientLineTotalCents: lineTotal === undefined || lineTotal === null
             ? quantity * clientUnitPriceCents
             : number(lineTotal),
-          allowance: first(row, 'itemType', 'item_type') === 'allowance',
+          // Only an allowance carries the flag; a fixed line keeps its shape.
+          ...(first(row, 'itemType', 'item_type') === 'allowance' ? { allowance: true } : {}),
           currency: text(first(row, 'currency'), 'USD'),
         };
       }) : [],
