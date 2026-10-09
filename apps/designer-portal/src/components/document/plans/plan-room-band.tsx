@@ -46,8 +46,8 @@ export function PlanRoomBand({
 
   const lead =
     bundle.sheets.length === 0
-      ? 'Plan room — no drawings filed yet.'
-      : `Plan room — ${bundle.sheets.length} ${bundle.sheets.length === 1 ? 'sheet' : 'sheets'}${lastFiledAt ? ` · last filed ${fmtDay(lastFiledAt)}` : ''}`;
+      ? 'Drawing sets — no drawings filed yet.'
+      : `Drawing sets — ${bundle.sheets.length} ${bundle.sheets.length === 1 ? 'sheet' : 'sheets'}${lastFiledAt ? ` · last filed ${fmtDay(lastFiledAt)}` : ''}`;
 
   return (
     <div
@@ -85,7 +85,7 @@ export function PlanRoomBand({
             })
           }
         >
-          Open the plan room
+          Open the drawing sets
         </DocumentAction>
       </DocumentActionRow>
     </div>

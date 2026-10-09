@@ -221,7 +221,7 @@ beforeEach(() => {
 });
 
 describe('the Margin sheet (D-B30 / W5-R1, the whole margin)', () => {
-  it('the door prints "Margin · N" as the first row of More, above Plan room', () => {
+  it('the door prints "Margin · N" as the first row of More, above Drawing sets', () => {
     mockItems = [row({ item_id: 'a' }), row({ item_id: 'b', anchor_kind: 'section' })];
     mountBarAndSheets({ marginCount: 2 });
     const menu = openMore();
@@ -230,7 +230,7 @@ describe('the Margin sheet (D-B30 / W5-R1, the whole margin)', () => {
       el.textContent?.replace('→', ''),
     );
     expect(labels[0]).toBe('Margin · 2');
-    expect(labels.indexOf('Margin · 2')).toBeLessThan(labels.indexOf('Plan room'));
+    expect(labels.indexOf('Margin · 2')).toBeLessThan(labels.indexOf('Drawing sets'));
   });
 
   it('opens the Margin sheet and names itself "The margin"', () => {

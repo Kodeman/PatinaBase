@@ -100,7 +100,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
     return (
       <main className="min-h-screen bg-[var(--doc-paper)] px-8 py-16">
         <p className="max-w-lg font-heading text-[1.25rem] italic text-[var(--color-charcoal)]">
-          This paper has no project yet — the plan room opens when one does.
+          This paper has no project yet — the drawing sets open when one does.
         </p>
         <Link
           href={`/doc/${routeId}`}
@@ -172,7 +172,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
             ← {projectName}
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-heading text-xl">Plan room</h1>
+            <h1 className="truncate font-heading text-xl">Drawing sets</h1>
             <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {bundle?.sheets.length ?? 0}{' '}
               {(bundle?.sheets.length ?? 0) === 1 ? 'sheet' : 'sheets'}
@@ -181,7 +181,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
               {(bundle?.issues.length ?? 0) === 1 ? 'issue' : 'issues'} to date
             </p>
           </div>
-          <nav aria-label="Plan room" className="flex items-center gap-1">
+          <nav aria-label="Drawing sets" className="flex items-center gap-1">
             {VIEW_TABS.map(([id, label]) => (
               <button
                 key={id}

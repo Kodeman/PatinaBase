@@ -670,7 +670,7 @@ export function MobileSheets({
                   className="flex min-h-11 w-full items-center gap-[8px] py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
                 >
                   <Compass size={14} strokeWidth={1.5} color="currentColor" aria-hidden="true" className="shrink-0" />
-                  Plan room
+                  Drawing sets
                 </button>
               </li>
               <li>
