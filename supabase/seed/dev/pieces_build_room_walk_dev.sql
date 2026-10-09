@@ -49,13 +49,12 @@ SELECT :'HOST' IN ('127.0.0.1', 'localhost', '::1') AND :'PORT' = '54322' AS wal
 -- is RETIRED (archived, name stamped), and a new proposal is minted only when
 -- no un-activated one is waiting. Reseeding before the walk is a no-op here.
 --
--- The items carry no scope room on purpose. Activating a legacy proposal
--- whose items sit in a scope room fails with "non-room assignment cannot
--- carry a room": the activation insert (00331 body, copied by 00762) sets
--- project_room_id but never assignment_scope, and
--- guard_project_ffe_selection_integrity (00434) refuses that. That is a
--- product defect (QA.md, Continuation 2), not something a fixture should hide
--- or work around beyond keeping the palette walk reachable.
+-- The items sit in scope rooms (bed and nightstands in the Primary Suite,
+-- chair and lamp in the Study). Before 00763 (T-60h) that activation failed
+-- with "non-room assignment cannot carry a room" (QA.md F18). An earlier
+-- fixture proposal minted with unscoped items while F18 stood may still be
+-- waiting; it is left alone (immutable), and a room-scoped one is minted
+-- beside it. walk11_proposal_id names the room-scoped one.
 BEGIN;
 
 -- Rename while active, then archive through archive_project (the only way
@@ -76,10 +75,12 @@ SELECT public.archive_project(id, status) FROM public.projects
 RESET ROLE;
 
 SELECT NOT EXISTS (
-  SELECT 1 FROM public.proposals
-   WHERE designer_id = 'a0000000-0000-0000-0000-000000000004'
-     AND title = 'Walk · Two palettes in the Primary Suite'
-     AND status = 'accepted' AND project_id IS NULL
+  SELECT 1 FROM public.proposals p
+   WHERE p.designer_id = 'a0000000-0000-0000-0000-000000000004'
+     AND p.title = 'Walk · Two palettes in the Primary Suite'
+     AND p.status = 'accepted' AND p.project_id IS NULL
+     AND NOT EXISTS (SELECT 1 FROM public.proposal_items pi
+                      WHERE pi.proposal_id = p.id AND pi.scope_room_id IS NULL)
 ) AS walk11_mint \gset
 
 \if :walk11_mint
@@ -127,13 +128,13 @@ INSERT INTO public.palette_swatches (palette_id, hex, name, role, sort_order) VA
   (current_setting('walk11.green')::uuid, '#3F5245', 'Library green', 'wall', 0);
 
 INSERT INTO public.proposal_items (
-  proposal_id, name, quantity, unit_price, markup_percent,
+  proposal_id, scope_room_id, name, quantity, unit_price, markup_percent,
   unit_sell_price, line_total_cents, item_type, vendor_name, position
 ) VALUES
-  (current_setting('walk11.proposal')::uuid, 'Bed, king, linen upholstered', 1, 380000, 25, 475000, 475000, 'fixed', 'Hollis Furniture Works', 0),
-  (current_setting('walk11.proposal')::uuid, 'Nightstands', 2, 96000, 25, 120000, 240000, 'fixed', 'Hollis Furniture Works', 1),
-  (current_setting('walk11.proposal')::uuid, 'Reading chair', 1, 222400, 25, 278000, 278000, 'fixed', NULL, 2),
-  (current_setting('walk11.proposal')::uuid, 'Desk lamp, brass', 2, 111200, 25, 139000, 278000, 'fixed', NULL, 3);
+  (current_setting('walk11.proposal')::uuid, current_setting('walk11.suite')::uuid, 'Bed, king, linen upholstered', 1, 380000, 25, 475000, 475000, 'fixed', 'Hollis Furniture Works', 0),
+  (current_setting('walk11.proposal')::uuid, current_setting('walk11.suite')::uuid, 'Nightstands', 2, 96000, 25, 120000, 240000, 'fixed', 'Hollis Furniture Works', 1),
+  (current_setting('walk11.proposal')::uuid, current_setting('walk11.study')::uuid, 'Reading chair', 1, 222400, 25, 278000, 278000, 'fixed', NULL, 2),
+  (current_setting('walk11.proposal')::uuid, current_setting('walk11.study')::uuid, 'Desk lamp, brass', 2, 111200, 25, 139000, 278000, 'fixed', NULL, 3);
 
 INSERT INTO public.proposal_payment_milestones (proposal_id, label, percentage, amount_cents, sort_order) VALUES
   (current_setting('walk11.proposal')::uuid, 'Deposit', 50, 635500, 0),
@@ -151,10 +152,12 @@ SELECT public.record_offline_signature(current_setting('walk11.proposal')::uuid,
 RESET ROLE;
 \endif
 
-SELECT id AS walk11_proposal_id FROM public.proposals
- WHERE designer_id = 'a0000000-0000-0000-0000-000000000004'
-   AND title = 'Walk · Two palettes in the Primary Suite'
-   AND status = 'accepted' AND project_id IS NULL;
+SELECT p.id AS walk11_proposal_id FROM public.proposals p
+ WHERE p.designer_id = 'a0000000-0000-0000-0000-000000000004'
+   AND p.title = 'Walk · Two palettes in the Primary Suite'
+   AND p.status = 'accepted' AND p.project_id IS NULL
+   AND NOT EXISTS (SELECT 1 FROM public.proposal_items pi
+                    WHERE pi.proposal_id = p.id AND pi.scope_room_id IS NULL);
 
 COMMIT;
 

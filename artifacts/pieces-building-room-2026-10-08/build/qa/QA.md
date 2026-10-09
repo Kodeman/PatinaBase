@@ -187,13 +187,40 @@ Step counts count every key press, typed field or tap. The column headings are: 
 
 The first 1440 activation used swatches with non-paint roles (textile, metal, accent). By design (`finishes-lens.tsx` `OLD_ROLE_SURFACE`), the lens showed only `Walls · Oat limewash`. The fixture was changed so each palette carries two paint roles, and the walk above was run again on a fresh proposal.
 
+### Item 11 re-walk after 00763 (T-60h), items in scope rooms (continuation run 2)
+
+- **Base:** `pieces/build-room` at 0264b6eb6. The shared local DB has 00763 (`_activate_proposal_as_project_impl` names `assignment_scope`).
+- **Fixture:** the four proposal items are back in scope rooms. The bed and nightstands are in the Primary Suite; the chair and lamp are in the Study.
+  - The seed now mints a proposal only when no room-scoped one is waiting.
+  - The older unscoped proposal from run 1 is still waiting. It is immutable, so it is left alone.
+  - The seed was applied three times, exit 0 each time (logs `c2-seed-run{1,2,3}.log`).
+
+| Width | Result | Evidence |
+|---|---|---|
+| 1440 | **PASS.** `OPEN THE PROJECT →` → `activate_proposal_as_project` 200 → the new job. In SQL, every line has `assignment_scope = room`: Bed and Nightstands in Primary Suite, Reading chair and Desk lamp in Study. Each line is in one room, so it has no `project_ffe_placements` row, as 00734 intends. The Rough lens shows Primary Suite 2, Study 2, and Not in a room yet 0. The palette is `Warm neutrals · Brass accents`. Its swatches are renumbered 0–4 in source order. The Finishes lens reads **Walls · Oat limewash, Ceiling · Linen white, Trim · Brass trim enamel, Floor · Smoked walnut floor**: palette A's swatches, then B's. **F17 is fixed.** The notes are joined with a blank line. | `c3-i11r-1440-before.jpg`, `c3-i11r-rough-1440.jpg`, `c3-i11r-fin-1440.jpg`; `i11r-1440.jsonl`, `i11r-fin-1440.jsonl`, `c2r-check11r-1440.txt` |
+| 390 | **PASS.** A fresh proposal, activated at 390 (200). It shows the same lines in the same rooms, the same 0–4 swatch order, and the same four Finishes rows. The Rough inputs list all four lines. | `c3-i11r-fin-390.jpg`; `i11r-390.jsonl`, `i11r-fin-390.jsonl`, `c2r-check11r-390.txt` |
+
+**The F18 room-scoped case now passes.** **A note on the orchestrator's comment:** it gave the expected order as "Walls, Trim, Ceiling, Floor in source order". The source order is A0 wall, A1 ceiling, B0 trim, B1 floor, so the correct reading is Walls, Ceiling, Trim, Floor. That is the order the lens shows. Walls, Trim, Ceiling, Floor was the F17 interleave.
+
 ## Item 12 · release → PO → send → receipt → invoice
 
-**NOT RUN in this pass.** The fixture is ready (job `Walk · Release to invoice`; the reseed prints `walk12_project_id`). This pass stopped at a continuation checkpoint, so the release walk, PO, send, receipt and invoice belong to the next pass.
+**PARTIAL (continuation run 2). The Release stage passed. The PO stage is BLOCKED by F19.** The job is `Walk · Release to invoice` 501aee23-…, Dining a20f38f6…, Living Room 92ededae…. Edge functions were served locally with an env file that holds only `EMAIL_DEV_MODE=dry_run`.
+
+| Step | Width | Result | Evidence |
+|---|---|---|---|
+| Release lens, Dining | 1440 | **PASS.** `Install, dining table delivery and set` is its own row (`↳`, `LABOR`, `READY`) under the table. The set is 3 lines · $12,350, and the labor line is listed separately (`(labor) $450`). The consequence names "2 pieces and the one labor line that goes with its piece". | `c3-i12-release-dining-1440.jpg` |
+| Release lens, Living Room | 1440 + 390 | **PASS.** The allowance prints **`Up to $4,500`** in the head, the line and the act (`Release 1 line · Up to $4,500 for authorization`). The Sconces (vendor name only) show T-60d's sentence, **`Pick the maker from your vendors`** (readiness.ts:114), and sit under `Not in this release:`, out of the set. | `c3-i12-release-living-390.jpg`; `i12-release-living-1440.txt` |
+| Release, Dining | 1440 | **PASS.** The calls were `create_furnishings_authorization_from_schedule` → `send_commercial_document` → `proposal-send`, all 200. proposal-send was **dry_run** to client@patina.dev (functions log `[send-email:dry_run]`). It reads `Released 3 lines to the client for authorization.` **But see F20:** the set and its Release act stay on screen until reload. | `c3-i12-rel-dining-1440.jpg`; `i12-rel-1440.jsonl` |
+| Release, Living Room | 390 | **PASS**, same chain, all 200. The rug is released; the Sconces stay out. | `i12-rel-390.jsonl` |
+| After reload | 1440 | **PASS.** The lines read `RELEASED`, and the lens says `Nothing here is ready and selected for the client yet.` | `c3-i12-after-dining-1440.jpg` |
+| Client signs | SQL | **Not in a browser.** The client's `execute_furnishings_authorization` ran in psql under client@patina.dev's JWT for № 1 and № 2, and both returned `newlyExecuted`. The deposits are INV-0008 ($3,705) and INV-0009 ($1,350). | `i12-sign.txt` |
+| Deposits paid | SQL | **Not in a browser.** `record_invoice_payment` (the RPC behind the Money region's Record the payment) ran as Leah, by check. Before payment, the line's PO cell said `Waiting on the deposit (A1)`, which is a sentence. | `i12-pay.txt` |
+| Draft PO (order paper) | 1440 | **FAIL (F19).** The table line's `NEXT · ORDER` crashes the Document with `Runtime TypeError: input.split is not a function`. No paper opens, and no PO exists. | `c3-i12po-open-1440-after-order.jpg`; `i12po-open-1440.jsonl` |
+| PO send, receipt, invoice; labor off the maker PO | — | **NOT RUN.** Blocked by F19. The Orders ledger's Vendors page for Hollis shows `ORDERS · 0`. Its `Order all` path was not reached before the checkpoint. | `i12po-ledger-1440-vendors.png` |
 
 ## F10 · the admin 409 in the UI
 
-**NOT RUN in this pass** (continuation).
+**NOT RUN.** It was still owed at continuation run 2's checkpoint.
 
 ## New findings (none filtered)
 
@@ -201,3 +228,7 @@ The first 1440 activation used swatches with non-paint roles (textile, metal, ac
 |---|---|---|---|---|
 | F17 | Low | High | **The Finishes lens interleaves a merged palette.** The 00762 merge appends the second palette's swatches after the first, but each swatch keeps its own palette's `sort_order` (0, 1, 0, 1). `finishes-lens.tsx:109-113` sorts by `sort_order`, so the room reads Walls (A0), Trim (B0), Ceiling (A1), Floor (B1) instead of A's then B's. Every swatch is present; only the order on screen and on the painter's schedule is off. | `i11-fin2-1440.jsonl` → `finish-rows`; check11 SQL |
 | F18 | High | High | **Activating a legacy proposal whose items sit in a scope room fails.** `_activate_proposal_as_project_impl` (the 00331 body that 00762 copies) inserts `project_ffe_items` with `project_room_id` set but never sets `assignment_scope`, which defaults to `'unassigned'`. `guard_project_ffe_selection_integrity` (00434) then refuses: `non-room assignment cannot carry a room` (23514). So any accepted legacy proposal with room-scoped items can't be opened as a project. T-61a's `f8_activation` test seeds no `proposal_items`, so it never hit this. The seal's message hides the cause (`the activation did not go through`). This predates US-21 (00434), but it blocks the item 11 path for real proposals. | `i11-fail-1440.jsonl` (400 body); `c3-i11-fail-1440-refusal.jpg` |
+| F19 | High | High | **Order from a line in a room crashes the Document.** `NEXT · ORDER` (line-unfold.tsx:284, `order-ffe-line`) mounts `OrderPaper` with `ffeItems={[item]}`. The line-unfold query selects `room:project_rooms!project_room_id(id,name)`, so `item.room` is an object. `PaperSheet`'s `sharedRoom` (order-paper/index.tsx:302-305) passes it as `roomName` to `generateSidemark`, and `words()` calls `.split` on it (order-assistant/sidemark.ts:28): `Runtime TypeError: input.split is not a function`. Every line with a room (since 00763, every activated room line) cannot be ordered from the Document. This blocks item 12's PO, send, receipt and invoice. The likely root is the object/string mismatch between the line row's `room` join and `OrderPaper`'s `room?: string` (model.ts:46), but not traced to the commit that introduced it. Confidence High for the crash, Medium for the cause. | `c3-i12po-open-1440-after-order.jpg`; `i12po-open-1440.jsonl` (the vendors GET 200, the act enabled, no dialog) |
+| F20 | Medium | High | **After a release, the Release lens keeps offering the same set.** Once `Released 3 lines to the client for authorization.` appears, the head `This release · 3 lines · $12,350`, the lines, and the `Release 3 lines · $12,350 for authorization` act all stay until a page reload. After a reload the lines read RELEASED and the set is empty. `Ceremony.attempt` refetches only `draft`; the lines' readiness and stage are not invalidated. A second press would try to release lines already on № 1. Whether it is refused, and in what words, was not exercised. | `c3-i12-rel-dining-1440.jpg` vs `c3-i12-after-dining-1440.jpg`; `i12-rel-dining-1440.txt` |
+
+**Walk studio state.** Nine archived `Retired walk · …` jobs are on Leah's studio, all from reseeds (the orchestrator accepted this). An unscoped item-11 proposal from run 1 is still accepted and waiting. It cannot be deleted.
