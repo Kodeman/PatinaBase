@@ -21,24 +21,24 @@ if (errors.length) {
   process.exit(1);
 }
 
-const artDirection = fs.readFileSync(
-  path.join(REPO_ROOT, "marketing/canon/art-direction.md"),
-  "utf8",
-);
+// Test-only override so tests never touch the real canon file.
+const artDirectionPath =
+  process.env.MJ_PACK_ART_DIRECTION_PATH ??
+  path.join(REPO_ROOT, "marketing/canon/art-direction.md");
+const artDirection = fs.readFileSync(artDirectionPath, "utf8");
 const sref = (artDirection.match(/^SREF:[ \t]*(.*)$/m)?.[1] ?? "").trim();
-const srefSet = sref !== "" && sref !== "{{SREF}}";
+const srefSet = sref !== "" && !/^\{\{.*\}\}$/.test(sref);
 if (!srefSet) {
   console.warn(
-    "mj-pack: warning: marketing/canon/art-direction.md SREF is still the placeholder; {{SREF}} left in the prompts.",
+    "mj-pack: warning: no --sref set in art-direction.md; prompts carry no style reference",
   );
 }
 
 const paths = runPaths(runDir);
-fs.mkdirSync(paths.mj, { recursive: true });
 const jobs = plan.jobs.map((job) => {
-  const params = srefSet ? job.params.replaceAll("{{SREF}}", sref) : job.params;
-  const inbox = path.join(paths.inbox, job.id);
-  fs.mkdirSync(inbox, { recursive: true });
+  const params = srefSet
+    ? job.params.replaceAll("{{SREF}}", sref)
+    : job.params.replace(/\s*--sref\s+\S+/g, "").trim();
   return {
     id: job.id,
     kind: job.kind,
@@ -47,9 +47,22 @@ const jobs = plan.jobs.map((job) => {
     variants: job.variants,
     ...(job.startFrom ? { startFrom: job.startFrom } : {}),
     paste: [job.prompt, params].filter((s) => s && s.trim()).join(" "),
-    inbox,
+    inbox: path.join(paths.inbox, job.id),
   };
 });
+
+const unresolved = jobs.filter((job) => job.paste.includes("{{"));
+if (unresolved.length) {
+  console.error(
+    `mj-pack: unresolved placeholder left in prompt for ${unresolved.map((j) => j.id).join(", ")}`,
+  );
+  process.exit(1);
+}
+
+fs.mkdirSync(paths.mj, { recursive: true });
+for (const job of jobs) {
+  fs.mkdirSync(job.inbox, { recursive: true });
+}
 
 const inRepo = (p) =>
   path.relative(REPO_ROOT, p).startsWith("..")

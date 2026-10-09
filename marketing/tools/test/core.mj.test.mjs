@@ -54,7 +54,7 @@ test("mj-pack writes one block per job, jobs.json and inbox dirs; video block na
   fs.rmSync(path.join(runDir, "mj"), { recursive: true });
   const r = tool("mj-pack.mjs", [runDir]);
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stderr, /SREF is still the placeholder/);
+  assert.match(r.stderr, /no --sref set in art-direction\.md/);
 
   const prompts = fs.readFileSync(
     path.join(runDir, "mj", "prompts.md"),
@@ -64,9 +64,11 @@ test("mj-pack writes one block per job, jobs.json and inbox dirs; video block na
   assert.equal(prompts.match(/^```text$/gm).length, 3);
   assert.ok(
     prompts.includes(
-      "A Midwest design studio worktable with fabric swatches and warm afternoon light --ar 4:5 --style raw --v 8.1 --sref {{SREF}}",
+      "A Midwest design studio worktable with fabric swatches and warm afternoon light --ar 4:5 --style raw --v 8.1",
     ),
   );
+  assert.ok(!prompts.includes("--sref"));
+  assert.ok(!prompts.includes("{{"));
 
   const video = prompts.slice(prompts.indexOf("## 3. J03"));
   assert.match(video, /from J01, choose Animate/);
@@ -87,6 +89,48 @@ test("mj-pack writes one block per job, jobs.json and inbox dirs; video block na
       id,
     );
   }
+});
+
+test("mj-pack emits --sref <code> and no warning once art-direction.md has a real code", () => {
+  const runDir = copyRun();
+  fs.rmSync(path.join(runDir, "mj"), { recursive: true });
+  const fixtureArtDirection = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), "press-art-")),
+    "art-direction.md",
+  );
+  fs.writeFileSync(fixtureArtDirection, "SREF: 1234567890\n");
+
+  const r = tool("mj-pack.mjs", [runDir], {
+    MJ_PACK_ART_DIRECTION_PATH: fixtureArtDirection,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(!r.stderr.includes("no --sref set"));
+
+  const prompts = fs.readFileSync(
+    path.join(runDir, "mj", "prompts.md"),
+    "utf8",
+  );
+  assert.ok(
+    prompts.includes(
+      "A Midwest design studio worktable with fabric swatches and warm afternoon light --ar 4:5 --style raw --v 8.1 --sref 1234567890",
+    ),
+  );
+  assert.ok(!prompts.includes("{{"));
+});
+
+test("mj-pack exits 1 and writes nothing when an unknown {{...}} placeholder survives", () => {
+  const runDir = copyRun();
+  fs.rmSync(path.join(runDir, "mj"), { recursive: true });
+  const planFile = path.join(runDir, "plan.json");
+  const plan = JSON.parse(fs.readFileSync(planFile, "utf8"));
+  plan.jobs[0].prompt += " {{X}}";
+  fs.writeFileSync(planFile, JSON.stringify(plan));
+
+  const r = tool("mj-pack.mjs", [runDir]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /unresolved placeholder/);
+  assert.match(r.stderr, /J01/);
+  assert.equal(fs.existsSync(path.join(runDir, "mj", "prompts.md")), false);
 });
 
 test("mj-pack exits 1 on an invalid plan and writes nothing", () => {
