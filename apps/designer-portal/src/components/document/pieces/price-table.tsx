@@ -45,7 +45,10 @@ export interface PriceRow {
   tradeCents: number | null;
   /** Per unit, cents; 0 or null prints as no price. */
   clientCents: number | null;
-  /** An allowance's ceiling per unit, when the line has no client price. */
+  /**
+   * An allowance's ceiling: the line total (00744). When set, the line prints
+   * `Up to` from it, never from `clientCents`, and carries no markup.
+   */
   allowanceCents?: number | null;
   /** Per unit, internal (D12); only while it is what the line counts at. */
   roughCents: number | null;
@@ -241,6 +244,8 @@ function LineRow({
   onRemove,
   onGated,
 }: LineRowProps) {
+  const ceiling =
+    row.allowanceCents && row.allowanceCents > 0 ? row.allowanceCents : null;
   const notPriced = !(row.clientCents && row.clientCents > 0);
   return (
     <tr data-line-id={row.id} className={ROW}>
@@ -298,7 +303,8 @@ function LineRow({
         )}
       </td>
       <td data-label="Markup" className={cn(NUM_CELL, CARD_CELL)}>
-        {markupText(row.tradeCents, row.clientCents)}
+        {/* An allowance carries no markup until it is filled. */}
+        {ceiling ? DASH : markupText(row.tradeCents, row.clientCents)}
       </td>
       <td data-label="Client price" className={cn("p-0", CARD_CELL)}>
         {row.clientEditable ? (
@@ -309,8 +315,8 @@ function LineRow({
           />
         ) : (
           <span className={cn(NUM_CELL, "block")}>
-            {notPriced && row.allowanceCents ? (
-              `Up to ${money(row.allowanceCents)}`
+            {ceiling ? (
+              <AllowancePrice ceiling={ceiling} quantity={row.quantity} />
             ) : notPriced ? (
               <>
                 <span aria-hidden="true">{DASH}</span>
@@ -341,6 +347,30 @@ function LineRow({
         />
       </td>
     </tr>
+  );
+}
+
+/**
+ * An allowance's client price: `Up to` its ceiling per unit, and, when the
+ * line holds more than one unit, `Up to` the ceiling itself for the line.
+ */
+function AllowancePrice({
+  ceiling,
+  quantity,
+}: {
+  ceiling: number;
+  quantity: number;
+}) {
+  const each = quantity > 0 ? ceiling / quantity : ceiling;
+  return (
+    <>
+      <span className="block">{`Up to ${money(each)}`}</span>
+      {quantity > 1 ? (
+        <span className="block text-[13px] text-[var(--sheet-ink-muted)]">
+          {`Up to ${money(ceiling)} for the line`}
+        </span>
+      ) : null}
+    </>
   );
 }
 

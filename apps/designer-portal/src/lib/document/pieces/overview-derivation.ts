@@ -11,9 +11,10 @@
  * line is not a piece either: it counts as a line, never as a placeholder,
  * as its stamp never reads PLACEHOLDER.
  *
- * The money figure is the line's client price where it has one (a price, or
- * an allowance's ceiling) and its rough figure where it has not, per unit,
- * times the room's share (a placed line is split, never multiplied). Ready
+ * The money figure is the line's client price where it has one and its rough
+ * figure where it has not, per unit, times the room's share (a placed line is
+ * split, never multiplied). An allowance counts at its ceiling, the line
+ * total, shared out the same way. Ready
  * lines are `priced`, released lines `released`, the rest `roughed`.
  */
 import { fmtUsd } from "@/lib/document/format";
@@ -108,13 +109,22 @@ export function overviewStage(
   return pieceLineStage(line, laborPiece(line, live)).stage;
 }
 
-/** The line's figure per unit: its client price, else its rough figure. */
-function eachCents(line: OverviewLine): number {
-  if ((line.unit_price_cents ?? 0) > 0) return line.unit_price_cents ?? 0;
+/**
+ * The line's figure for `share` of its units. An allowance counts at its
+ * ceiling, which is the line total (00744 step 10, the Release amount): split
+ * by the share, never multiplied, and never its stale unit price. Any other
+ * line counts its client price per unit, else its rough figure.
+ */
+function shareCents(line: OverviewLine, share: number): number {
   if (line.item_type === "allowance" && (line.budget_max_cents ?? 0) > 0) {
-    return line.budget_max_cents ?? 0;
+    const ceiling = line.budget_max_cents ?? 0;
+    const quantity = line.quantity ?? 0;
+    if (share === quantity) return ceiling;
+    return quantity > 0 ? (ceiling * share) / quantity : 0;
   }
-  return Math.max(0, line.rough_cents ?? 0);
+  if ((line.unit_price_cents ?? 0) > 0)
+    return (line.unit_price_cents ?? 0) * share;
+  return Math.max(0, line.rough_cents ?? 0) * share;
 }
 
 function add(
@@ -141,7 +151,12 @@ export function deriveOverviewJob(
   const live = liveLines(lines);
   const job = emptyTally();
   for (const line of live) {
-    add(job, line, overviewStage(line, live), eachCents(line) * (line.quantity ?? 0));
+    add(
+      job,
+      line,
+      overviewStage(line, live),
+      shareCents(line, line.quantity ?? 0),
+    );
   }
   return job;
 }
@@ -183,7 +198,7 @@ export function deriveOverviewRows(
   const place = (target: OverviewRow, line: OverviewLine, stage: LineStage | null, share: number, primary: boolean) => {
     target.lineIds.push(line.id);
     if (primary) target.primaryLineIds.push(line.id);
-    add(target.tally, line, stage, eachCents(line) * share);
+    add(target.tally, line, stage, shareCents(line, share));
     if (stage === "placeholder") target.placeholderLines += 1;
     settledByRow.set(target, (settledByRow.get(target) ?? true) && stage === "released");
   };

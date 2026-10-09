@@ -20,6 +20,7 @@
  */
 import {
   useEffect,
+  useId,
   useMemo,
   useState,
   type FormEvent,
@@ -71,7 +72,7 @@ import {
   type LineStampRow,
 } from "@/lib/document/stamp-derivation";
 import { laborGate } from "./labor-act";
-import { AlsoInLine, unitWord } from "./placement-chips";
+import { AlsoInLine, money, unitWord } from "./placement-chips";
 import { PriceTable, type PriceRow } from "./price-table";
 import { UndoToast } from "./undo-toast";
 
@@ -669,7 +670,12 @@ function LaborForm({
   );
 }
 
-/** `Make it an allowance`: the line's ceiling per unit (00743). Rough $ stays internal. */
+/**
+ * `Make it an allowance` (00743). The ceiling is typed per unit, as designers
+ * think of rolls and square feet, and sent as the line total (per unit ×
+ * quantity), which is what the server reads (00744 step 10). Rough $ stays
+ * internal.
+ */
 function AllowanceForm({
   projectId,
   line,
@@ -680,22 +686,28 @@ function AllowanceForm({
   onDone: () => void;
 }) {
   const makeAllowance = useMakeFfeLineAllowance();
+  const units = Math.max(1, line.quantity ?? 0);
   const start =
-    (line.item_type === "allowance" ? line.budget_max_cents : null) ??
-    ((line.unit_price_cents ?? 0) > 0 ? line.unit_price_cents : null);
+    line.item_type === "allowance" && (line.budget_max_cents ?? 0) > 0
+      ? Math.round((line.budget_max_cents ?? 0) / units)
+      : (line.unit_price_cents ?? 0) > 0
+        ? (line.unit_price_cents ?? 0)
+        : null;
   const [ceiling, setCeiling] = useState(start ? String(start / 100) : "");
   const [error, setError] = useState<string | null>(null);
   const unit = lineUnit(line);
+  const perUnit = parseRough(ceiling);
+  const lineCents = perUnit != null && perUnit > 0 ? perUnit * units : null;
+  const lineTotalId = `${useId()}-line-total`;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (makeAllowance.isPending) return;
-    const cents = parseRough(ceiling);
-    if (cents == null || cents <= 0)
+    if (lineCents == null)
       return setError("An allowance needs a ceiling above $0.");
     setError(null);
     makeAllowance
-      .mutateAsync({ projectId, itemId: line.id, budgetMaxCents: cents })
+      .mutateAsync({ projectId, itemId: line.id, budgetMaxCents: lineCents })
       .then(onDone)
       .catch((cause: unknown) =>
         setError(errorText(cause) ?? "The allowance was not saved."),
@@ -718,9 +730,18 @@ function AllowanceForm({
             inputMode="decimal"
             value={ceiling}
             onChange={(e) => setCeiling(e.target.value)}
+            aria-describedby={lineCents != null ? lineTotalId : undefined}
             className={cn(INPUT, "w-[160px] tabular-nums")}
           />
         </label>
+        {lineCents != null ? (
+          <p
+            id={lineTotalId}
+            className="flex h-11 items-center font-sans text-[14px] tabular-nums text-[var(--sheet-ink)]"
+          >
+            {`Up to ${money(lineCents)} for the line`}
+          </p>
+        ) : null}
         <button
           type="submit"
           aria-busy={makeAllowance.isPending || undefined}

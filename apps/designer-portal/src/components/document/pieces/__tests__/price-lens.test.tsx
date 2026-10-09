@@ -374,7 +374,7 @@ describe("PriceLens: the row menu", () => {
     ).toEqual(["Add labor", "Make it an allowance", "Move to room…", "Remove"]);
   });
 
-  it("makes a line an allowance through useMakeFfeLineAllowance", async () => {
+  it("makes a line an allowance: typed per unit, sent as the line total (per unit × quantity)", async () => {
     renderLens();
     const menu = openMenu("Wallpaper, grasscloth");
     fireEvent.click(
@@ -385,17 +385,69 @@ describe("PriceLens: the row menu", () => {
     });
     const ceiling = within(form).getByLabelText("Ceiling / roll");
     expect(ceiling).toHaveValue("230");
+    expect(
+      within(form).getByText("Up to $2,070 for the line"),
+    ).toBeInTheDocument();
     fireEvent.change(ceiling, { target: { value: "250" } });
+    expect(
+      within(form).getByText("Up to $2,250 for the line"),
+    ).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(
         within(form).getByRole("button", { name: "Make it an allowance" }),
       );
     });
+    // 00744 step 10 reads budget_max_cents as the line total: 9 rolls × $250.
     expect(mockAllowance).toHaveBeenCalledWith({
       projectId: "proj",
       itemId: "r1",
-      budgetMaxCents: 25000,
+      budgetMaxCents: 225000,
     });
+  });
+
+  it("prefills an allowance's ceiling per unit from its line total", () => {
+    mockItems.data = fixture({
+      r1: { item_type: "allowance", budget_max_cents: 225000 },
+    });
+    renderLens();
+    const menu = openMenu("Wallpaper, grasscloth");
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "Make it an allowance" }),
+    );
+    const form = screen.getByRole("form", {
+      name: "Make Wallpaper, grasscloth an allowance",
+    });
+    expect(within(form).getByLabelText("Ceiling / roll")).toHaveValue("250");
+    expect(
+      within(form).getByText("Up to $2,250 for the line"),
+    ).toBeInTheDocument();
+  });
+
+  it("prints an allowance line from its ceiling, never its old price, with no markup", () => {
+    // After Make it an allowance on a priced line: 00743 keeps unit_price_cents.
+    mockItems.data = fixture({
+      r1: { item_type: "allowance", budget_max_cents: 225000 },
+    });
+    renderLens();
+    const r1 = rowOf("Wallpaper, grasscloth");
+    const client = r1.querySelector(
+      'td[data-label="Client price"]',
+    ) as HTMLElement;
+    expect(within(client).getByText("Up to $250")).toBeInTheDocument();
+    expect(
+      within(client).getByText("Up to $2,250 for the line"),
+    ).toBeInTheDocument();
+    expect(within(r1).queryByText("$230")).toBeNull();
+    const markup = r1.querySelector('td[data-label="Markup"]') as HTMLElement;
+    expect(markup).toHaveTextContent(/^—$/);
+    expect(within(r1).queryByText("25%")).toBeNull();
+    // The subtotal and the job count the ceiling once: $2,250 + $765 labor.
+    expect(
+      screen.getByText("Bedroom · $3,015 priced · ~$6,100 roughed"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Job · $30,940 priced · ~$36,368 roughed"),
+    ).toBeInTheDocument();
   });
 
   it("gates labor's acts with the server's own sentences", () => {
