@@ -448,7 +448,8 @@ BEGIN
   BEGIN
     PERFORM public.set_line_group(ARRAY['75140000-0000-4000-8000-0000000000ff']::uuid[], NULL);
     RAISE EXCEPTION 'refusals: an unknown line was accepted';
-  EXCEPTION WHEN no_data_found THEN
+  -- 00758 (F16): an unknown line reads like an unreachable one.
+  EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
 
