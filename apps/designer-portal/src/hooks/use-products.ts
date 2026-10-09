@@ -184,29 +184,14 @@ export function useUnpublishProduct() {
 }
 
 /**
- * Delete a product (admin/manufacturer only)
+ * There is no catalog hard delete (D11). A delete un-fills every line that
+ * uses the product (`project_ffe_items.product_id ON DELETE SET NULL`), and
+ * 00753 narrows `products_studio_delete` so a product on any line deletes
+ * nothing. A duplicate is merged instead, through `useMergeStudioProduct`.
+ * This is the sentence a refused delete says.
  */
-export function useDeleteProduct() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) =>
-      withMockData(
-        () => catalogApi.deleteProduct(id),
-        () => Promise.resolve({ id })
-      ),
-    onSuccess: (_, id) => {
-      // Invalidate the deleted product's cache
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(id) });
-      // Invalidate product lists to update counts and remove the deleted item
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
-      // Invalidate collections that might contain this product
-      queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
-      // Invalidate search results
-      queryClient.invalidateQueries({ queryKey: queryKeys.search.all });
-    },
-  });
-}
+export const REFERENCED_PRODUCT_DELETE_REFUSAL =
+  "A product on a line can't be deleted. Merge it into the one you keep.";
 
 // Collections
 export function useCollections(params?: Record<string, unknown>) {

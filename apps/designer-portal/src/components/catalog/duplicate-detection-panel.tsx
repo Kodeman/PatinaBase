@@ -25,9 +25,10 @@ import {
   useDuplicateCheck,
   useDismissDuplicate,
   useMarkAsDuplicate,
-  useMergeDuplicates,
+  useMergeStudioProduct,
 } from '@patina/supabase/hooks';
 import type { DuplicateMatch } from '@patina/supabase/hooks';
+import { REFERENCED_PRODUCT_DELETE_REFUSAL } from '@/hooks/use-products';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -73,16 +74,15 @@ function SimilarityBadge({ similarity }: { similarity: number }) {
 
 interface DuplicateCardProps {
   match: DuplicateMatch;
-  productId: string;
   onDismiss: () => void;
   onMark: () => void;
-  onMerge: () => void;
+  /** Absent when the match is not another catalog product (merge needs one). */
+  onMerge?: () => void;
   isActioning: boolean;
 }
 
 function DuplicateCard({
   match,
-  productId,
   onDismiss,
   onMark,
   onMerge,
@@ -145,16 +145,18 @@ function DuplicateCard({
                 <AlertTriangle className="mr-1 h-3 w-3" />
                 Mark Duplicate
               </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={onMerge}
-                disabled={isActioning}
-                className="text-xs"
-              >
-                <GitMerge className="mr-1 h-3 w-3" />
-                Merge
-              </Button>
+              {onMerge && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={onMerge}
+                  disabled={isActioning}
+                  className="text-xs"
+                >
+                  <GitMerge className="mr-1 h-3 w-3" />
+                  MERGE INTO THIS ONE
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -194,7 +196,7 @@ export function DuplicateDetectionPanel({
 
   const dismissMutation = useDismissDuplicate();
   const markMutation = useMarkAsDuplicate();
-  const mergeMutation = useMergeDuplicates();
+  const mergeMutation = useMergeStudioProduct();
 
   const isActioning =
     dismissMutation.isPending ||
@@ -249,25 +251,33 @@ export function DuplicateDetectionPanel({
     }
   };
 
-  const handleMerge = async (match: DuplicateMatch) => {
-    const mergeProductId = match.product?.id ?? match.assetId;
-    try {
-      await mergeMutation.mutateAsync({
-        keepProductId: productId,
-        mergeProductId,
-      });
-      toast({
-        title: 'Products merged',
-        description: 'The duplicate product has been merged into this one.',
-      });
-      onActionComplete?.();
-    } catch {
-      toast({
-        title: 'Error',
-        description: 'Failed to merge products.',
-        variant: 'error',
-      });
-    }
+  // D11 (00753): the duplicate merges into the product this panel is on. Its
+  // lines, boards and project lists move here; it is never hard deleted.
+  const mergeHandler = (match: DuplicateMatch) => {
+    const fromProductId = match.product?.id;
+    if (!fromProductId || fromProductId === productId) return undefined;
+    return async () => {
+      try {
+        await mergeMutation.mutateAsync({ fromProductId, intoProductId: productId });
+        toast({
+          title: 'Merged',
+          description: 'The duplicate now points here, and its lines use this product.',
+        });
+        refetch();
+        onActionComplete?.();
+      } catch (err) {
+        // merge_studio_product refuses in plain sentences; print them as-is.
+        const message =
+          err && typeof err === 'object' && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : '';
+        toast({
+          title: "The merge didn't go through",
+          description: message || 'Try again.',
+          variant: 'error',
+        });
+      }
+    };
   };
 
   // Collapsed state - just show a button
@@ -352,6 +362,11 @@ export function DuplicateDetectionPanel({
         </Alert>
       )}
 
+      {/* D11: no hard delete; a duplicate on a line merges instead */}
+      {result && totalMatches > 0 && (
+        <p className="text-sm text-muted-foreground">{REFERENCED_PRODUCT_DELETE_REFUSAL}</p>
+      )}
+
       {/* Exact matches */}
       {result && (result.exactMatches?.length ?? 0) > 0 && (
         <div className="space-y-3">
@@ -365,10 +380,9 @@ export function DuplicateDetectionPanel({
             <DuplicateCard
               key={match.assetId}
               match={match}
-              productId={productId}
               onDismiss={() => handleDismiss(match)}
               onMark={() => handleMark(match)}
-              onMerge={() => handleMerge(match)}
+              onMerge={mergeHandler(match)}
               isActioning={isActioning}
             />
           ))}
@@ -388,10 +402,9 @@ export function DuplicateDetectionPanel({
             <DuplicateCard
               key={match.assetId}
               match={match}
-              productId={productId}
               onDismiss={() => handleDismiss(match)}
               onMark={() => handleMark(match)}
-              onMerge={() => handleMerge(match)}
+              onMerge={mergeHandler(match)}
               isActioning={isActioning}
             />
           ))}
