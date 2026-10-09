@@ -450,6 +450,76 @@ describe("InvoiceComposer · deposit, then balance (C-31)", () => {
   });
 });
 
+describe("InvoiceComposer · an allowance with no price yet (F21)", () => {
+  const TABLE = {
+    id: "f1",
+    name: "Dining table, walnut",
+    quantity: 1,
+    unit_price_cents: 680_000,
+    product_id: "p-table",
+    item_type: "fixed",
+    room: { name: "Dining" },
+  };
+  const RUG = {
+    id: "rug",
+    name: "Area rug, 9 × 12",
+    quantity: 1,
+    unit_price_cents: 0,
+    product_id: null,
+    item_type: "allowance",
+    budget_max_cents: 450_000,
+    room: { name: "Living Room" },
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFlag = { value: false, isLoading: false };
+    mockFfeItems = [TABLE, RUG];
+  });
+
+  afterEach(() => {
+    mockFfeItems = [];
+  });
+
+  it("lists it by its ceiling, unselectable, and never drafts it", async () => {
+    render(
+      <InvoiceComposer
+        context={{ projectId: "project-1", initialFfeItemIds: ["f1", "rug"] }}
+        onDrafted={jest.fn()}
+      />,
+    );
+    const row = screen.getByTestId("composer-unfilled-allowance");
+    expect(row).toHaveTextContent("Area rug, 9 × 12");
+    expect(row).toHaveTextContent("Up to $4,500 · bills once it's filled");
+    expect(row).not.toHaveTextContent("$0.00");
+    const box = within(row).getByRole("checkbox");
+    expect(box).toBeDisabled();
+    expect(box).not.toBeChecked();
+    expect(screen.queryByTestId("composer-billed")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+    await waitFor(() => expect(mockCreateDraft).toHaveBeenCalledTimes(1));
+    const ffeIds = mockCreateDraft.mock.calls[0][0].lines
+      .map((l: { ffeItemId?: string }) => l.ffeItemId)
+      .filter(Boolean);
+    expect(ffeIds).toEqual(["f1"]);
+  });
+
+  it("bills it at its real price once it's filled", () => {
+    mockFfeItems = [{ ...RUG, unit_price_cents: 410_000, product_id: "p-rug" }];
+    render(
+      <InvoiceComposer
+        context={{ projectId: "project-1", initialFfeItemIds: ["rug"] }}
+        onDrafted={jest.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("composer-unfilled-allowance")).not.toBeInTheDocument();
+    const row = screen.getByText("Area rug, 9 × 12").closest("label") as HTMLElement;
+    expect(row).toHaveTextContent("$4,100.00");
+    expect(within(row).getByRole("checkbox")).toBeChecked();
+  });
+});
+
 describe("InvoiceComposer · studio mode", () => {
   beforeEach(() => {
     jest.clearAllMocks();

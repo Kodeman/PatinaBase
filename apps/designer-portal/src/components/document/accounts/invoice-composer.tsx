@@ -95,6 +95,7 @@ import {
   unbilledMilestones,
   unbilledPurchases,
   unbilledRiders,
+  unfilledAllowanceText,
   type ComposerAdhocRow,
   type ComposerFfeItem,
   type ComposerMilestone,
@@ -1070,11 +1071,36 @@ export function InvoiceComposer({
                       </span>
                     </label>
                   ))
-                ) : (
+                ) : ffePartition.unfilled.length === 0 ? (
                   <p className="py-1 text-[11px] italic text-[var(--text-muted)]">
                     Nothing uninvoiced — every priced line is billed.
                   </p>
-                )}
+                ) : null}
+                {ffeSettled &&
+                  ffePartition.unfilled.map((it) => (
+                    <label
+                      key={it.id}
+                      className={`${ROW} cursor-default`}
+                      data-testid="composer-unfilled-allowance"
+                    >
+                      <input
+                        type="checkbox"
+                        className={CHECK}
+                        checked={false}
+                        disabled
+                        readOnly
+                      />
+                      <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--text-muted)]">
+                        {it.name}
+                        {it.room?.name && (
+                          <span className="ml-1.5">{it.room.name}</span>
+                        )}
+                      </span>
+                      <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                        {unfilledAllowanceText(it)}
+                      </span>
+                    </label>
+                  ))}
                 {/* C-31 — balances owed: a live deposit, no balance yet. */}
                 {balanceOwed.length > 0 && (
                   <div className="mt-2" data-testid="composer-balances">

@@ -38,6 +38,7 @@ import {
   type TimeLineDateRow,
   type TimeLineEntryInput,
 } from "@/lib/time-billing";
+import { money } from "./project-commerce";
 import { priceWord } from "./stamp-derivation";
 
 /** Discriminates a time line's JSON `metadata.attribution` from the plain
@@ -77,6 +78,8 @@ export interface ComposerFfeItem {
    *  that is not an allowance prints `Not priced` (US-21 fix-now #5). */
   product_id?: string | null;
   item_type?: string | null;
+  /** An allowance's ceiling for the whole line (per unit × qty). */
+  budget_max_cents?: number | null;
   room?: { name: string | null } | null;
 }
 
@@ -144,6 +147,23 @@ export interface FfePartition<T extends ComposerFfeItem> {
   /** NULL client unit price, or a line that prints `Not priced` — nothing
    *  to bill yet. */
   unpriced: T[];
+  /** An allowance with no price yet (F21): listed, never selectable. */
+  unfilled: T[];
+}
+
+/** An allowance bills once it's filled; until then its price is unset (the
+ *  column defaults to 0, 00066). The server refuses the same line (00764). */
+export function isUnfilledAllowance(
+  item: Pick<ComposerFfeItem, "item_type" | "unit_price_cents">,
+): boolean {
+  return item.item_type === "allowance" && !item.unit_price_cents;
+}
+
+/** The picker's line for an unfilled allowance: its ceiling, never `$0.00`. */
+export function unfilledAllowanceText(
+  item: Pick<ComposerFfeItem, "budget_max_cents">,
+): string {
+  return `Up to ${money(item.budget_max_cents ?? 0)} · bills once it's filled`;
 }
 
 /**
@@ -158,9 +178,11 @@ export function partitionFfeBillable<T extends ComposerFfeItem>(
   const billable: T[] = [];
   const covered: T[] = [];
   const unpriced: T[] = [];
+  const unfilled: T[] = [];
   for (const item of items) {
     const cov = coverage?.[item.id];
     if (cov && cov.coverage !== "uninvoiced") covered.push(item);
+    else if (isUnfilledAllowance(item)) unfilled.push(item);
     else if (
       item.unit_price_cents === null ||
       item.unit_price_cents === undefined ||
@@ -173,7 +195,7 @@ export function partitionFfeBillable<T extends ComposerFfeItem>(
       unpriced.push(item);
     else billable.push(item);
   }
-  return { billable, covered, unpriced };
+  return { billable, covered, unpriced, unfilled };
 }
 
 // ── Purchases: the unbilled set (C-25, 00703) ───────────────────────────────
