@@ -13,13 +13,17 @@ import {
   poSendErrorMessage,
   SENT_NOT_RECORDED_MESSAGE,
   PO_OUT_OF_SYNC_MESSAGE,
+  UPLOAD_FAILED_MESSAGE,
+  PO_SEND_GENERIC_FAILURE_MESSAGE,
 } from '../po-send-actions';
 
 describe('one send UI (C-09)', () => {
   it('no longer exports the retired PoSendActions / PoSendPopover components', () => {
     expect(Object.keys(poSendModule).sort()).toEqual([
       'PO_OUT_OF_SYNC_MESSAGE',
+      'PO_SEND_GENERIC_FAILURE_MESSAGE',
       'SENT_NOT_RECORDED_MESSAGE',
+      'UPLOAD_FAILED_MESSAGE',
       'clientVendorEmailHint',
       'poSendErrorMessage',
     ]);
@@ -99,7 +103,22 @@ describe('poSendErrorMessage', () => {
     );
   });
 
-  it('passes unknown codes through for debuggability', () => {
-    expect(poSendErrorMessage('render_failed')).toContain('render_failed');
+  it('maps upload_failed (F24) to a plain sentence, never the raw code', () => {
+    expect(poSendErrorMessage('upload_failed')).toBe(UPLOAD_FAILED_MESSAGE);
+    expect(poSendErrorMessage('upload_failed')).not.toContain('upload_failed');
+  });
+
+  it('falls back unknown codes to the generic failure sentence, never the raw code (F24)', () => {
+    expect(poSendErrorMessage('render_failed')).toBe(
+      PO_SEND_GENERIC_FAILURE_MESSAGE,
+    );
+    expect(poSendErrorMessage('render_failed')).not.toContain('render_failed');
+  });
+
+  it('gives the same plain-sentence treatment to a failed mark-as-sent (F24) — the send sheet routes both send and mark_sent through this one mapping', () => {
+    expect(poSendErrorMessage('upload_failed')).toBe(UPLOAD_FAILED_MESSAGE);
+    expect(poSendErrorMessage('held_for_release')).toBe(
+      PO_SEND_GENERIC_FAILURE_MESSAGE,
+    );
   });
 });
