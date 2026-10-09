@@ -86,3 +86,60 @@ Step counts count every key press, typed field or tap. The column headings are: 
 | F9 | Medium (needs a ruling) | **The UI and SQL count placeholders differently.** With the hanger's vendor cleared, SQL `ffe_line_stage` stamps it `placeholder`. The overview, band and rows don't count it: they read 21, where SQL reads 22 non-superseded placeholders. Either the TS mirror and SQL disagree on a labor line without a maker, or the rule is intended. | `checks.jsonl` → counts-labor-superseded; `counts-labor-superseded-1440.jpg` |
 | F10 | Unknown | **The admin catalog API answers 401 locally.** `DELETE /api/catalog/products/<id>` and `POST …/bulk` return 401 for a session that landed on `/dashboard`. So the 409 merge sentence was not seen in admin. The cause may be local env. | `checks.jsonl` → admin-delete-referenced |
 | F11 | — (not confirmed) | **Tab-indent was not proven by keyboard.** Tabbing into a filled name selects all of it, so the next Tab moves on. Home does not move the caret on macOS. ⌘← was not tried. | kb S3 (1440) |
+
+---
+
+# Continuation (second pass, after T-60a)
+
+- **Tip walked:** `pieces/build-room` at 8db040ab6 (T-60a), with the first pass cherry-picked on top. Local DB at 00762 (00762 applied outside the ledger; its activation body is present). The walk fixture was reseeded before each scenario that needs it, and again at the end.
+- **Walker:** a fresh T-60 executor (Opus). It did not build the job.
+- **Server:** designer portal `next dev --webpack -p 3410`, the pieces config's env, `ask-the-paper` and `one-voice` on. Edge functions: `supabase functions serve --env-file <EMAIL_DEV_MODE=dry_run>` from this checkout.
+- **Raw evidence:** `verification/SQ-666/` → `kb2-chromium-1440.jsonl`, `kb2-chromium-390.jsonl`, `touch2-webkit-390.jsonl`, `checks2.jsonl`, `spec-pdf-project.pdf` (+ `.txt`), `i12-*.png`. The `c2-*.jpg` files in this folder are the chosen screenshots.
+- **Channels:** keyboard is Playwright key presses only after sign-in. Touch is **WebKit emulation** with the `iPhone 13` profile (`hasTouch`, `isMobile`); **the iOS Simulator was not used**. VoiceOver and S1 timed by hand: **NOT RUN (person)**, owed to Kody as a prod walk.
+
+## The T-60a fixes, re-walked
+
+| Finding | Keyboard 1440 | Keyboard 390 | Touch, WebKit iPhone 13 | Evidence |
+|---|---|---|---|---|
+| F1 landing at `?room=` | **PASS.** Rough-in scrolls Sunroom's heading into view (top 359px, main scrolled 1608). Price, Release and Finishes put Sunroom on screen. Spec is room-scoped by design (`spec-lens.tsx:184`), so it lists only Sunroom's lines. | **PASS.** Rough-in heading top 14px. Same for the other lenses. | **PASS.** Every scenario landed and returned at its room. | `checks2.jsonl` landing; `c2-landing-*.jpg` |
+| F2 focus on open, lens change, return | **PASS.** Landing focuses the room's `h2` (`Living Room`, `Sunroom`), or the `h1` `Build the pieces` in Spec. A lens change by keyboard focuses the room heading in Price, Release, Finishes and Rough-in, and the `h1` in Spec. On return to the overview, focus is the room's row button (`button "Living Room"`). History back focuses the `h1`. | **PASS**, same targets. | **PASS.** Return focus is the room row in all 8 (`button "Bedroom"` etc.). | `kb2-*.jsonl` trails; `checks2.jsonl` lens-change |
+| F3 taps on the row-menu acts | — | — | **PASS (emulation).** Fill, Make it an allowance, Remove/Undo and Move to room all ran: S3 filled (product 0101), S4 `Up to` shown, S5 restored, S6 moved and the refusal shown. Not confirmed on a simulator or device. | `touch2-webkit-390.jsonl` |
+| F4 no "Moved" before a refusal | **PASS.** The refused move announces only `This line sits in 4 rooms. Change its rooms instead.` A good move still announces `Moved Counter stools to Kitchen.` | **PASS.** | **PASS** (alert shown). | `c2-kb-1440-S6-refusal.jpg` |
+| F5 UNDO reachable | **PASS.** Remove puts focus on `Undo`; one Enter restores; status `Put back Rattan lounge chair ×2 in Sunroom.`; focus goes to the restored row's name. The status names the undo: `Undo puts it back.` | **PASS.** | **PASS.** | `c2-kb-1440-S5-undo-focus.jpg` |
+| F6 focus after allowance, finishes, labor, return | **PASS.** Allowance submit → `Up to $4,500`; Finishes Enters walk Product → Sheen → Swatch → `New surface in Bedroom`; return → room row. ADD LABOR was not re-walked by keyboard in this pass (the T-60a jest `labor-act.test.tsx` covers it). | **PASS.** | — | `c2-kb-390-S4-allowance.jpg`, `c2-kb-390-S8-finishes.jpg` |
+| F7 focus after fill, move, refused move | **PASS.** Fill → `Acts for Hardware, 2 knobs…` (the filled row). Move → `Acts for Counter stools` (the moved row). Refused move → `Acts for White oak floor…` (the same row). | **PASS.** | — | `kb2-*.jsonl` S3, S6 |
+| F8 `9 rolls` | **PASS.** Spec prints `9 rolls` ×3, Price `9 rolls` ×2. | **PASS.** | — | `c2-plurals-*.jpg` |
+| F11 grouping by keyboard | **PASS with ⌘←.** ⌘← then Tab on `Valve and trim` opens `Name the group for Valve and trim`; typing `Shower` and Enter makes the group; the status says `Valve and trim is in Shower.` Home still does nothing on macOS (first pass). | n/a (no grouping on the phone) | — | `kb2-chromium-1440.jsonl` S3 |
+
+**Step counts and times (keyboard, machine time):**
+
+| Scenario | 1440 | 390 | Touch WK |
+|---|---|---|---|
+| S1 | 41 steps (32 Tabs from the room heading to its entry, then 4 lines), 13.8 s | 23 steps (14 Tabs), 13.8 s | 11 taps, 12.3 s |
+| S2 | 21 (19 Tabs to the oak row) | 11 | 2 |
+| S3 | 127 (with ⌘← grouping) | 11 | 5 |
+| S4 | 13 (was 31) | 13 (was 21) | 5 |
+| S5 | 68 (was 275; 11 Tabs to the row, 0 to Undo) | 32 (was 123) | 4 |
+| S6 | 67 (was 147) | 35 (was 70) | 7 |
+| S7 | 46 (3 Tabs to Work this room; 38 Shift+Tabs from the room heading back to the lens buttons) | 21 (13 Shift+Tabs) | 4 |
+| S8 | 13 (was 38) | 13 (was 28) | 7 |
+
+## Owed items
+
+| # | Item | Result |
+|---|---|---|
+| 10 | spec-pdf served locally | **PASS** for the asked strings: the project spec PDF (200, 11 KB) prints `830 sq ft` for the oak (this fixture's total; 913 is the receiving-waste case, not this job), `ALSO IN HALL · DINING · KITCHEN · 320 SQ FT HERE`, the tile's also-in with area notes, and `LABOR` before `Install, wallpaper hanger`. It still prints `9 roll` (T-60b, SQ-700, owns that; not failed here). Two new defects, F13 and F14. `c2-spec-pdf-page-1.jpg` |
+| 11 | Two palettes in one room, browser half | **BLOCKED.** It needs a proposal with two palettes in one room activated into a project; the walk fixture has no proposal, and seeding the commercial chain by hand hits immutable-row guards (see item 12). The SQL proof from the first pass (`f8_activation: ok`) stands. Needs a fixture ticket. |
+| 12 | Client-linked release → PO → receipt → invoice | **BLOCKED at the release.** The client was linked with `set_document_client` as Leah. With the dining table and bed given a maker, the set read `This release · 4 lines · Up to $14,135` with labor as its own `↳ … (labor) $765` row and the allowance as `Up to $4,500` (`c2-i12-release-set.jpg`). The release then refused twice: `project … has no executed design-services origin`, and, after an origin was added by hand, `latest furnishings checkpoint must be acknowledged or audited override` (`c2-i12-release-refused.jpg`). PO, receipt and invoice were not reached. The hand-added origin was removed and the fixture reseeded. Needs a fixture with an executed origin and an acknowledged checkpoint. |
+| F10 | Admin 401 | **Cause found; 409 still not seen.** The admin catalog routes authenticate only by `Authorization: Bearer` (`apps/admin-portal/src/app/api/catalog/products/[id]/route.ts:77-78`, `verifyAdmin(supabase, req.headers.get('authorization'))`). The first pass's probe sent cookies only, so the 401 was the probe, not the product. The admin server was not started in this pass to see the 409 in the UI. |
+| VO, S1 by hand | Screen reader; human timing | **NOT RUN (person).** Owed to Kody. |
+
+## New findings (none filtered)
+
+| ID | Sev | Finding | Evidence |
+|---|---|---|---|
+| F12 | Low | **The room entry is far from the landing.** Landing focuses the room heading, but the room's `New line in …` entry sits after every row: 32 Tabs at 1440, 14 at 390, for Living Room. ⌘↓ does nothing from the heading. Back to the lens buttons is 38 Shift+Tabs at 1440. | `kb2-chromium-1440.jsonl` S1 (first run: 8 × ⌘↓ left focus on `h2 "Living Room"`), S7 |
+| F13 | High | **spec-pdf mangles primes.** `Runner, 2′6″ × 10′` prints as `Runner, 2263 × 102`: each ′ (U+2032) and ″ (U+2033) comes out as the low byte of its code point (`2`, `3`). A dimension printed wrong on a spec. | `c2-spec-pdf-page-1.jpg` (Hall) |
+| F14 | Medium | **spec-pdf columns collide.** The headers run together (`QTYLEAD`, `CLIENTSUPPLIER`), as do the values (`1-`, `$11.50Nord Hardwood Co.`), and `830 sq ft` and `finish` wrap mid-word (`830 sq-` / `ft`, `fin-` / `ish`). | `c2-spec-pdf-page-1.jpg`; `spec-pdf-project.txt` |
+| F15 | Medium | **Release lens says Ready, but the server leaves the line out.** The Dining table (`vendor_name` Woodward & Sons, no `vendor_id`) and the oak floor show `READY · Ready` with `Selected`, yet `get_project_ffe_readiness` returns `missingFields: ["vendor"]` and the set silently omits them. Nothing on the row says why. The stage counts `vendor_name` as a maker (story log #4); readiness wants `vendor_id`. | `i12-release-after-select.png`; psql readiness |
+| F16 | Medium | **Release refusals leak raw SQL text.** The toast reads `project e6590000-… has no executed design-services origin` and `latest furnishings checkpoint must be acknowledged or audited override`; the lens says only `The release did not go through.` Neither is a named refusal. | `c2-i12-release-refused.jpg` |
