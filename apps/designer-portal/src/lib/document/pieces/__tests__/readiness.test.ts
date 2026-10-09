@@ -169,7 +169,7 @@ describe("readiness sentences", () => {
         ready: false,
         missingFields: ["designDisposition", "vendor"],
       }),
-    ).toBe("Needs a maker");
+    ).toBe("Pick the maker from your vendors");
     expect(
       readinessSentence(d1, "ready", lines, {
         ready: false,
@@ -380,32 +380,6 @@ describe("W4 review fixes (T-43c)", () => {
     );
   });
 
-  it("a non-blank vendor_name is a maker: the line reads READY, never Needs a maker", () => {
-    const lines = [
-      line("V1", "hall", "Custom bench", {
-        design_disposition: "selected",
-        vendor_name: "Hollis Woodworks",
-        unit_price_cents: 210000,
-      }),
-    ];
-    const kind = releaseStamp(lines[0], lines);
-    expect(kind).toBe("ready");
-    expect(
-      readinessSentence(lines[0], kind, lines, {
-        ready: false,
-        missingFields: ["vendor"],
-      }),
-    ).toBe("Ready");
-    // A blank name is no maker.
-    const blank = { ...lines[0], vendor_id: "v-x", vendor_name: "  " };
-    expect(
-      readinessSentence(blank, "ready", [blank], {
-        ready: false,
-        missingFields: ["vendor"],
-      }),
-    ).toBe("Needs a maker");
-  });
-
   it("a pending blocking decision reads DECISION DUE here and in the Build room's stage", () => {
     const lines = fixture().map((l) =>
       l.id === "D1"
@@ -469,7 +443,9 @@ describe("an allowance prints Up to its ceiling (T-55b, F4)", () => {
     expect(model.set.rows.map((r) => r.line.id)).toContain("R1");
     // $30,760 − 9 × $230 + $2,250.
     expect(model.set.totalCents).toBe(3076000 - 207000 + 225000);
-    expect(releaseSetHead(model.set)).toBe("This release · 7 lines · Up to $30,940:");
+    expect(releaseSetHead(model.set)).toBe(
+      "This release · 7 lines · Up to $30,940:",
+    );
     expect(releaseActLabel(model.set)).toBe(
       "Release 7 lines · Up to $30,940 for authorization",
     );
@@ -483,5 +459,88 @@ describe("an allowance prints Up to its ceiling (T-55b, F4)", () => {
     const lines = fixture();
     const model = deriveReleaseLens(lines, ROOMS, null, allReady(lines));
     expect(releaseSetHead(model.set)).toBe("This release · 7 lines · $30,760:");
+  });
+});
+
+describe("T-60d F15: never Ready for a line the server refuses", () => {
+  const bench = () =>
+    line("V1", "hall", "Custom bench", {
+      design_disposition: "selected",
+      vendor_name: "Hollis Woodworks",
+      unit_price_cents: 210000,
+    });
+
+  it("a vendor name alone keeps D1's READY but is not releasable: pick the maker from your vendors", () => {
+    const lines = [bench()];
+    // D1's word is unchanged: a non-blank vendor_name is a maker.
+    const kind = releaseStamp(lines[0], lines);
+    expect(kind).toBe("ready");
+    expect(
+      readinessSentence(lines[0], kind, lines, {
+        ready: false,
+        missingFields: ["vendor"],
+      }),
+    ).toBe("Pick the maker from your vendors");
+  });
+
+  it("the row keeps the D1 kind, prints no READY stamp, and the set and total leave it out", () => {
+    const lines = [...fixture(), bench()];
+    const server = allReady(lines);
+    server.set("V1", { ready: false, missingFields: ["vendor"] });
+    const model = deriveReleaseLens(lines, ROOMS, null, server);
+    const v1 = model.groups
+      .flatMap((g) => g.rows)
+      .find((r) => r.line.id === "V1")!;
+    expect(v1.kind).toBe("ready");
+    expect(v1.stamp).toBeNull();
+    expect(v1.readiness).toBe("Pick the maker from your vendors");
+    expect(model.set.rows.map((r) => r.line.id)).not.toContain("V1");
+    expect(model.set.totalCents).toBe(3_076_000);
+    expect(model.omitted.map((o) => [o.row.line.id, o.reason])).toEqual([
+      ["V1", "Pick the maker from your vendors"],
+    ]);
+    // A line the server calls ready keeps its READY stamp.
+    const l1 = model.groups
+      .flatMap((g) => g.rows)
+      .find((r) => r.line.id === "L1")!;
+    expect(l1.stamp).toBe("ready");
+    expect(l1.readiness).toBe("Ready");
+  });
+
+  it("a refusal under a key the lens does not know never reads Ready", () => {
+    const lines = fixture();
+    const d1 = lines.find((l) => l.id === "D1")!;
+    expect(
+      readinessSentence(d1, "ready", lines, {
+        ready: false,
+        missingFields: ["somethingNew"],
+      }),
+    ).toBe("Check it in Spec before releasing");
+  });
+
+  it("names every Selected line the set leaves out, and why; unselected, released and drafted lines are not named", () => {
+    const lines = fixture().map((l) =>
+      l.id === "R1a"
+        ? { ...l, design_disposition: "candidate" }
+        : l.id === "L1"
+          ? { ...l, ffe_line_authorization: "sent" }
+          : l,
+    );
+    const server = allReady(lines);
+    server.set("T1", { ready: false, missingFields: ["image"] });
+    server.delete("F1"); // its check has not answered yet
+    const model = deriveReleaseLens(
+      lines,
+      ROOMS,
+      null,
+      server,
+      new Set(["D1"]),
+    );
+    expect(model.omitted.map((o) => [o.row.line.id, o.reason])).toEqual([
+      ["F1", "Still being checked"],
+      ["T1", "Needs an image"],
+      ["R1", "Waits on its labor"],
+    ]);
+    expect(model.set.rows.map((r) => r.line.id)).toEqual(["L3"]);
   });
 });

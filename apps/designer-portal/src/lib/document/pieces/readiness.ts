@@ -12,6 +12,8 @@
  *   Selected that the server calls ready, plus every active labor line on it
  *   (00733 releases labor with its piece). A piece whose labor is not ready
  *   stays out, because the server would refuse the whole release for it.
+ *   A line the server gate refuses never reads Ready or READY here, and every
+ *   Selected line the set leaves out is named with its reason (T-60d, F15).
  * - **A drafted release** (00755 `draft_release_for_project`). Its lines read
  *   `On a drafted release` and never join the set: the server refuses to
  *   release a line a live authorization already names.
@@ -99,17 +101,17 @@ export function fmtReleaseUsd(cents: number): string {
   });
 }
 
-/** D1's maker: a vendor, or a vendor name that is not blank. */
-function hasVendorName(line: ReleaseLensLine): boolean {
-  return (line.vendor_name ?? "").trim() !== "";
-}
-
 /** The server gate's keys (00733 `get_project_ffe_readiness`), first match
  *  printed. `designDisposition` is absent on purpose: Selected is the
- *  `FOR THE CLIENT` column's question, not a blocker. */
+ *  `FOR THE CLIENT` column's question, not a blocker.
+ *
+ *  `vendor` reads vendor_id only. A vendor name makes a line READY in D1, but
+ *  the release leads to a purchase order whose vendor must be on file
+ *  (po-send reads `vendors.orders_email` through it), so a name alone is
+ *  refused here. */
 const SERVER_BLOCKERS: ReadonlyArray<readonly [string, string]> = [
   ["selection", NEEDS_MAKER],
-  ["vendor", "Needs a maker"],
+  ["vendor", "Pick the maker from your vendors"],
   ["clientPrice", NEEDS_PRICE],
   ["allowanceCeiling", NEEDS_PRICE],
   ["itemType", NEEDS_PRICE],
@@ -120,7 +122,12 @@ const SERVER_BLOCKERS: ReadonlyArray<readonly [string, string]> = [
   ["name", "Needs a name"],
   ["documentCode", "Needs a document code"],
   ["image", "Needs an image"],
+  ["removed", "Restore it in Rough in"],
 ];
+/** A refusal under a key this lens does not know yet: never `Ready`. */
+const NOT_RELEASABLE = "Check it in Spec before releasing";
+/** Why a Selected line is not in the set while its server check is out. */
+const CHECKING = "Still being checked";
 
 /** The line's word, from the D1 mirror. The one stage call on this lens. */
 export function releaseStamp(
@@ -157,17 +164,16 @@ function releaseTotalText(set: ReleaseSet): string {
     : usd;
 }
 
-function serverBlocker(
-  line: ReleaseLensLine,
-  readiness: ServerReadiness | undefined,
-): string | null {
+/** The sentence for the server gate's refusal, or `null` when it has not
+ *  answered, says ready, or refuses only because the line is not Selected. */
+function serverBlocker(readiness: ServerReadiness | undefined): string | null {
   if (!readiness || readiness.ready) return null;
   for (const [key, sentence] of SERVER_BLOCKERS) {
-    // The server's `vendor` key reads vendor_id only; D1 also takes a name.
-    if (key === "vendor" && hasVendorName(line)) continue;
     if (readiness.missingFields.includes(key)) return sentence;
   }
-  return null;
+  return readiness.missingFields.some((key) => key !== "designDisposition")
+    ? NOT_RELEASABLE
+    : null;
 }
 
 /** The READINESS cell. `null` prints `—`: the line is released, or past the
@@ -191,7 +197,7 @@ export function readinessSentence(
       return stage.lineKind === "labor" ? WAITS_ON_PIECE : NEEDS_PRICE;
     }
     case "ready":
-      return serverBlocker(line, server) ?? READY_SENTENCE;
+      return serverBlocker(server) ?? READY_SENTENCE;
     case "decision_due":
       return WAITS_ON_DECISION;
     default:
@@ -205,7 +211,12 @@ export type DispositionCell = "select" | "read" | "none";
 
 export interface ReleaseRow {
   line: ReleaseLensLine;
+  /** The D1 word, unchanged. */
   kind: LineStampKind;
+  /** The stamp the STAGE cell prints: `kind`, or `null` when D1 says READY
+   *  but the server gate refuses the line, so the cell prints the readiness
+   *  sentence in place of READY. */
+  stamp: LineStampKind | null;
   labor: boolean;
   readiness: string | null;
   disposition: DispositionCell;
@@ -226,9 +237,18 @@ export interface ReleaseSet {
   totalCents: number;
 }
 
+/** A Selected line the set leaves out, and why. */
+export interface ReleaseOmission {
+  row: ReleaseRow;
+  reason: string;
+}
+
 export interface ReleaseLensModel {
   groups: ReleaseGroup[];
   set: ReleaseSet;
+  /** Every Selected line in view that the set leaves out: nothing is dropped
+   *  without a word. */
+  omitted: ReleaseOmission[];
 }
 
 const THROUGHOUT_KEY = "__throughout__";
@@ -278,6 +298,7 @@ export function deriveReleaseLens(
     return {
       groups: [],
       set: { rows: [], pieces: 0, labor: 0, totalCents: 0 },
+      omitted: [],
     };
   }
   const roomIds = new Set(rooms.map((r) => r.id));
@@ -305,6 +326,10 @@ export function deriveReleaseLens(
     let readiness = readinessSentence(line, kind, lines, server.get(line.id));
     // Released and ordered-on lines print `—`; a drafted line is neither.
     const onDraft = readiness != null && drafted.has(line.id);
+    const refused =
+      !onDraft &&
+      kind === "ready" &&
+      serverBlocker(server.get(line.id)) != null;
     if (onDraft) {
       readiness = DRAFTED_SENTENCE;
     } else if (
@@ -317,6 +342,7 @@ export function deriveReleaseLens(
     return {
       line,
       kind,
+      stamp: refused ? null : kind,
       labor: isLaborLine(line),
       readiness,
       disposition:
@@ -374,9 +400,30 @@ export function deriveReleaseLens(
       }
     }
   }
+  const inSet = new Set(setRows.map((r) => r.line.id));
+  const omitted: ReleaseOmission[] = [];
+  for (const group of groups) {
+    for (const row of group.rows) {
+      if (
+        row.line.design_disposition !== "selected" ||
+        inSet.has(row.line.id) ||
+        // Released and ordered-on lines are past the question; drafted ones
+        // are the draft's to send.
+        row.readiness == null ||
+        row.readiness === DRAFTED_SENTENCE
+      ) {
+        continue;
+      }
+      omitted.push({
+        row,
+        reason: row.readiness === READY_SENTENCE ? CHECKING : row.readiness,
+      });
+    }
+  }
   const labor = setRows.filter((r) => r.labor).length;
   return {
     groups,
+    omitted,
     set: {
       rows: setRows,
       pieces: setRows.length - labor,
@@ -397,13 +444,17 @@ export function draftReleaseSet(
 ): ReleaseSet {
   const named = new Set(itemIds);
   const onDraft = lines.filter((line) => named.has(line.id));
-  const toRow = (line: ReleaseLensLine): ReleaseRow => ({
-    line,
-    kind: releaseStamp(line, lines),
-    labor: isLaborLine(line),
-    readiness: DRAFTED_SENTENCE,
-    disposition: "read",
-  });
+  const toRow = (line: ReleaseLensLine): ReleaseRow => {
+    const kind = releaseStamp(line, lines);
+    return {
+      line,
+      kind,
+      stamp: kind,
+      labor: isLaborLine(line),
+      readiness: DRAFTED_SENTENCE,
+      disposition: "read",
+    };
+  };
   const rows: ReleaseRow[] = [];
   for (const line of onDraft) {
     const underPiece =

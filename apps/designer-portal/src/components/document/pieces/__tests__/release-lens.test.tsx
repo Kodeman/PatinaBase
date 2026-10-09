@@ -23,6 +23,11 @@ type Draft = { documentId: string; proposalId: string; itemIds: string[] };
 /** The server's draft read (00755): `null` is no draft. */
 const mockDraft: { data: Draft | null } = { data: null };
 const mockDraftRefetch = jest.fn();
+/** The server gate's refusals by line id; every other line it calls ready. */
+const mockRefused = new Map<
+  string,
+  { ready: boolean; missingFields: string[] }
+>();
 const mockProject: { data: { id: string; client_id: string | null } } = {
   data: { id: "proj-1", client_id: "client-1" },
 };
@@ -38,8 +43,7 @@ jest.mock("@patina/supabase", () => ({
   useProjectFfeReadiness: (ids: readonly string[]) => ({
     data: ids.map((id) => ({
       selectionId: id,
-      ready: true,
-      missingFields: [],
+      ...(mockRefused.get(id) ?? { ready: true, missingFields: [] }),
     })),
     isError: false,
     refetch: jest.fn(),
@@ -201,6 +205,7 @@ beforeEach(() => {
   mockVoid.mockReset().mockResolvedValue({});
   mockDraft.data = null;
   mockDraftRefetch.mockReset();
+  mockRefused.clear();
   mockProject.data = { id: "proj-1", client_id: "client-1" };
 });
 
@@ -355,7 +360,7 @@ describe("ReleaseLens", () => {
       fireEvent.click(screen.getByRole("button", { name: /^Release 7 lines/ }));
     });
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "The send did not go through.",
+      "The release did not go through.",
     );
     expect(mockDraftRefetch).toHaveBeenCalled();
     // The refetch finds the draft the release made.
@@ -472,6 +477,70 @@ describe("ReleaseLens", () => {
       expect(row.getByText("Selected")).toBeInTheDocument();
     }
     expect(screen.queryByRole("button", { name: /^Release / })).toBeNull();
+  });
+
+  it("T-60d F15: a maker named but not on file is never READY, leaves the set, and the ceremony says why", async () => {
+    mockItems.data = fixture().map((l) =>
+      l.id === "D1"
+        ? { ...l, vendor_id: null, vendor_name: "Woodward & Sons" }
+        : l,
+    );
+    mockRefused.set("D1", { ready: false, missingFields: ["vendor"] });
+    render(<ReleaseLens {...props} />);
+
+    const d1 = rowOf("Dining table, custom walnut");
+    expect(d1.querySelector(".stamp--ready")).toBeNull();
+    expect(within(d1).queryByText("Ready")).toBeNull();
+    // The STAGE cell and the READINESS cell both name the designer's next act.
+    expect(
+      within(d1).getAllByText("Pick the maker from your vendors"),
+    ).toHaveLength(2);
+    // Every other ready line still prints its D1 word.
+    expect(
+      within(rowOf("Custom cabinet")).getByText("Ready", {
+        selector: ".stamp",
+      }),
+    ).toHaveClass("stamp--ready");
+
+    const ceremony = within(
+      screen.getByRole("region", { name: "This release" }),
+    );
+    expect(
+      ceremony.getByText("This release · 6 lines · $23,960:"),
+    ).toBeInTheDocument();
+    const leftOut = within(
+      ceremony.getByRole("region", { name: "Not in this release" }),
+    );
+    expect(
+      leftOut.getAllByRole("listitem").map((li) => li.textContent),
+    ).toEqual([
+      "Dining table, custom walnut: Pick the maker from your vendors",
+    ]);
+    await act(async () => {
+      fireEvent.click(
+        ceremony.getByRole("button", {
+          name: "Release 6 lines · $23,960 for authorization",
+        }),
+      );
+    });
+    expect(mockRelease.mock.calls[0][0].ffeItemIds).not.toContain("D1");
+  });
+
+  it("T-60d F16: a refusal reads as a sentence, never SQL text", async () => {
+    mockRelease.mockRejectedValueOnce(
+      new Error(
+        "project e6590000-0000-0000-0000-000000000001 has no executed design-services origin",
+      ),
+    );
+    render(<ReleaseLens {...props} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Release 7 lines/ }));
+    });
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(
+      "Sign the design agreement with the client before releasing pieces.",
+    );
+    expect(alert).not.toHaveTextContent(/design-services origin|e6590000/);
   });
 
   it("a seat without money sees the table and never the ceremony", () => {

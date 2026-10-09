@@ -20,6 +20,8 @@
  *   offers no new release.
  * - **No client linked:** the send would be refused, so the act is replaced
  *   by a sentence and nothing is drafted.
+ * - **Refusals** read as sentences (`releaseRefusalMessage`), never SQL text,
+ *   and the ceremony names every Selected line it leaves out, with its reason.
  *
  * Nothing here edits a spec or a price.
  */
@@ -61,10 +63,12 @@ import {
   releaseSetHead,
   type ReleaseGroup,
   type ReleaseLensLine,
+  type ReleaseOmission,
   type ReleaseRow,
   type ReleaseSet,
   type ServerReadiness,
 } from "@/lib/document/pieces/readiness";
+import { releaseRefusalMessage } from "@/lib/document/pieces/release-refusals";
 import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
 import {
   QUIET_FOCUS,
@@ -227,6 +231,7 @@ export function ReleaseLens({
         <Ceremony
           projectId={projectId}
           set={model.set}
+          omitted={model.omitted}
           lines={lines}
           draft={draft}
         />
@@ -303,8 +308,9 @@ function LineRow({
   projectId: string;
   roomName: ReadonlyMap<string, string>;
 }) {
-  const { line, kind, labor, readiness, disposition } = row;
-  const word = lineStampLabel(kind);
+  const { line, stamp, labor, readiness, disposition } = row;
+  // A line the server gate refuses prints its blocker where READY would be.
+  const word = stamp ? lineStampLabel(stamp) : readiness;
   return (
     <tr
       data-line-id={line.id}
@@ -327,7 +333,9 @@ function LineRow({
           {labor && (
             <span className="stamp stamp--labor">{LABOR_STAMP_LABEL}</span>
           )}
-          {word && <span className={`stamp stamp--${kind}`}>{word}</span>}
+          {stamp
+            ? word && <span className={`stamp stamp--${stamp}`}>{word}</span>
+            : word}
         </span>
       </td>
       <td className={CELL}>{readiness ?? "—"}</td>
@@ -451,23 +459,40 @@ function CeremonyLines({ set }: { set: ReleaseSet }) {
       {set.rows.map((row) => (
         <li key={row.line.id} className={CONSEQUENCE_CLS}>
           {row.labor ? `↳ ${row.line.name} (labor)` : row.line.name}{" "}
-          <span className="tabular-nums">
-            {releaseAmountText(row.line)}
-          </span>
+          <span className="tabular-nums">{releaseAmountText(row.line)}</span>
         </li>
       ))}
     </ul>
   );
 }
 
+/** The Selected lines the set leaves out, each with its reason. */
+function LeftOut({ omitted }: { omitted: readonly ReleaseOmission[] }) {
+  if (omitted.length === 0) return null;
+  return (
+    <section aria-label="Not in this release" className="flex flex-col gap-1">
+      <p className={CONSEQUENCE_CLS}>Not in this release:</p>
+      <ul className="flex flex-col gap-1">
+        {omitted.map(({ row, reason }) => (
+          <li key={row.line.id} className={CONSEQUENCE_CLS}>
+            {row.labor ? `↳ ${row.line.name} (labor)` : row.line.name}: {reason}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function Ceremony({
   projectId,
   set,
+  omitted,
   lines,
   draft,
 }: {
   projectId: string;
   set: ReleaseSet;
+  omitted: readonly ReleaseOmission[];
   lines: readonly ReleaseLensLine[];
   draft: ReturnType<typeof useDraftRelease>;
 }) {
@@ -491,11 +516,7 @@ function Ceremony({
     try {
       setDone(await act());
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "The release did not go through.",
-      );
+      setError(releaseRefusalMessage(cause));
     } finally {
       // A draft made before a failed send is found here, never held in state.
       void draft.refetch();
@@ -599,6 +620,7 @@ function Ceremony({
         <p className="font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink-faint)]">
           Nothing here is ready and selected for the client yet.
         </p>
+        <LeftOut omitted={omitted} />
       </div>
     );
   }
@@ -625,6 +647,7 @@ function Ceremony({
     >
       <p className={CONSEQUENCE_CLS}>{releaseSetHead(set)}</p>
       <CeremonyLines set={set} />
+      <LeftOut omitted={omitted} />
       <p className={CONSEQUENCE_CLS}>{releaseConsequence(set)}</p>
       {errorNote}
       {doneNote}
