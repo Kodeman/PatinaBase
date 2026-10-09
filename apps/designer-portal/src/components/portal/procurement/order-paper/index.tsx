@@ -31,6 +31,7 @@ import {
   useCreatePurchaseOrder,
   useFfeInvoiceCoverage,
   useProcurementItems,
+  useProjectRoomPlacements,
   useSendPurchaseOrder,
   useSetPurchaseOrderHeader,
   useStartPoCheckout,
@@ -147,6 +148,32 @@ const FIELD =
 const RULE = 'border-t border-[var(--color-pearl)]';
 
 const todayIso = () => new Date().toISOString();
+
+/**
+ * The room the sidemark names: the one room every line on the paper sits in.
+ * A line placed in several rooms (00734) names none, and neither do lines in
+ * different rooms. A line's `room` is its room's name; callers map the
+ * PostgREST `{id, name}` join to it, and anything else is read as no room.
+ */
+export function sharedRoomName(
+  items: ReadonlyArray<Pick<OrderPaperFFEItem, 'id' | 'room'>>,
+  placements?: ReadonlyArray<{ ffeItemId: string; projectRoomId: string }>,
+): string | undefined {
+  const ids = new Set(items.map((i) => i.id));
+  const placedIn = new Map<string, Set<string>>();
+  for (const p of placements ?? []) {
+    if (!ids.has(p.ffeItemId)) continue;
+    const rooms = placedIn.get(p.ffeItemId) ?? new Set<string>();
+    rooms.add(p.projectRoomId);
+    if (rooms.size > 1) return undefined;
+    placedIn.set(p.ffeItemId, rooms);
+  }
+  const names = new Set<string>();
+  for (const { room } of items) {
+    if (typeof room === 'string' && room.trim()) names.add(room);
+  }
+  return names.size === 1 ? Array.from(names)[0] : undefined;
+}
 
 /** The order paper. Mounts fresh on every open, so a put-back paper starts clean. */
 export function OrderPaper(props: OrderPaperProps) {
@@ -299,10 +326,11 @@ function PaperSheet({
   });
 
   // ─── Header fields ──────────────────────────────────────────────────────
-  const sharedRoom = useMemo(() => {
-    const rooms = new Set(ffeItems.map((i) => i.room).filter(Boolean));
-    return rooms.size === 1 ? (Array.from(rooms)[0] as string) : undefined;
-  }, [ffeItems]);
+  const { data: placements } = useProjectRoomPlacements(project.id);
+  const sharedRoom = useMemo(
+    () => sharedRoomName(ffeItems, placements),
+    [ffeItems, placements],
+  );
   const generatedSidemark = generateSidemark({
     studioName,
     projectName: project.name,

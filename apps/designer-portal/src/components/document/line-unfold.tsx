@@ -572,7 +572,8 @@ export function LineUnfold({
             onClose={() => setPaperOpen(false)}
             vendor={vendor}
             project={{ id: projectId, name: projectName }}
-            ffeItems={[item]}
+            // The paper's room is a name; the row's is the {id, name} join.
+            ffeItems={[{ ...item, room: item.room?.name ?? undefined }]}
           />
         )}
         {po && (

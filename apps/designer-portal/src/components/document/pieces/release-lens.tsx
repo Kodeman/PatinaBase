@@ -26,7 +26,8 @@
  * Nothing here edits a spec or a price.
  */
 
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useDraftRelease,
   useHandBackRoom,
@@ -503,14 +504,22 @@ function Ceremony({
   const voidDraft = useVoidAuthorization(projectId);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
-  const busy = release.isPending || send.isPending || voidDraft.isPending;
+  const queryClient = useQueryClient();
+  // Held from the press until the lens has re-read what the act changed. The
+  // ref stops a second press before React re-renders; the state disables it.
+  const acting = useRef(false);
+  const [rereading, setRereading] = useState(false);
+  const busy =
+    rereading || release.isPending || send.isPending || voidDraft.isPending;
   // Unknown while either read loads: nothing is drafted on a guess.
   const settled = project != null && draft.data !== undefined;
   const noClient = project != null && project.client_id == null;
   const pending = draft.data ?? null;
 
   const attempt = async (act: () => Promise<string>) => {
-    if (busy) return;
+    if (busy || acting.current) return;
+    acting.current = true;
+    setRereading(true);
     setError(null);
     setDone(null);
     try {
@@ -518,8 +527,18 @@ function Ceremony({
     } catch (cause) {
       setError(releaseRefusalMessage(cause));
     } finally {
-      // A draft made before a failed send is found here, never held in state.
-      void draft.refetch();
+      // Every read the lens draws from: the lines (their stage and their
+      // authorization), the server gate, and the draft. A draft made before a
+      // failed send is found here, never held in state.
+      await Promise.allSettled([
+        queryClient.invalidateQueries({
+          queryKey: ["project-ffe-items", projectId],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["project-ffe-readiness"] }),
+        draft.refetch(),
+      ]);
+      acting.current = false;
+      setRereading(false);
     }
   };
 

@@ -20,6 +20,7 @@ const mockSubmittals: { data: Record<string, unknown>[] } = { data: [] };
 
 jest.mock('@patina/supabase', () => ({
   useVendorQuotes: () => ({ data: [] }),
+  useProjectRoomPlacements: () => ({ data: [] }),
   useCreatePurchaseOrder: () => ({ mutateAsync: mockCreate, isPending: false }),
   useSetPurchaseOrderHeader: () => ({ mutateAsync: mockSetHeader, isPending: false }),
   useSendPurchaseOrder: () => ({ mutateAsync: mockSend, isPending: false }),

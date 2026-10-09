@@ -17,9 +17,11 @@ const mockSetShipToLocation = jest.fn();
 const mockPush = jest.fn();
 const mockCoverage: { data: Record<string, unknown> } = { data: {} };
 const mockQuotes: { data: unknown[] } = { data: [] };
+const mockPlacements: { data: { ffeItemId: string; projectRoomId: string }[] } = { data: [] };
 
 jest.mock('@patina/supabase', () => ({
   useVendorQuotes: () => ({ data: mockQuotes.data }),
+  useProjectRoomPlacements: () => ({ data: mockPlacements.data }),
   useCreatePurchaseOrder: () => ({ mutateAsync: mockCreate, isPending: false }),
   useSetPurchaseOrderHeader: () => ({ mutateAsync: mockSetHeader, isPending: false }),
   useSendPurchaseOrder: () => ({ mutateAsync: mockSend, isPending: false }),
@@ -110,7 +112,12 @@ jest.mock('@/lib/analytics/procurement-events', () => ({
   },
 }));
 
-import { OrderPaper, OrderPaperQueue, type OrderPaperPurchaseOrder } from '..';
+import {
+  OrderPaper,
+  OrderPaperQueue,
+  sharedRoomName,
+  type OrderPaperPurchaseOrder,
+} from '..';
 
 const HEWN = {
   id: 'vendor-hewn',
@@ -147,6 +154,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockCoverage.data = { 'line-sofa': { coverage: 'paid' } };
   mockQuotes.data = [];
+  mockPlacements.data = [];
   mockCreate.mockResolvedValue({ id: 'po-1', total_cents: 1_248_000 });
   mockSetHeader.mockResolvedValue({ id: 'po-1', project_id: 'project-1' });
   mockSetShipTo.mockResolvedValue({ id: 'po-1' });
@@ -414,5 +422,71 @@ describe('the QUOTED column (C-29)', () => {
     );
     expect(quoted).toEqual(['$11,840', '—']);
     expect(screen.getByText('Quoted')).toBeInTheDocument();
+  });
+});
+
+describe('the sidemark room (T-60j F19)', () => {
+  // A FF&E row as useProjectFFEItems / useProcurementItems return it: its room
+  // is the PostgREST join `room:project_rooms!project_room_id(id, name)`.
+  const row = (id: string, room: { id: string; name: string } | null) => ({
+    ...SOFA,
+    id,
+    room,
+  });
+  const LIVING = { id: 'room-living', name: 'Living Room' };
+  const DEN = { id: 'room-den', name: 'Den' };
+  // Each caller's mapping to the paper's `room` name.
+  const spreadMapping = (r: ReturnType<typeof row>) => ({ ...r, room: r.room?.name ?? undefined });
+  const pickMapping = (r: ReturnType<typeof row>) => ({
+    id: r.id,
+    name: r.name,
+    room: r.room?.name,
+    line_total_cents: r.line_total_cents,
+    quantity: r.quantity,
+    trade_price_cents: r.trade_price_cents,
+  });
+
+  it.each([
+    ['line unfold and exception overlay', spreadMapping],
+    ['orders book and ledger draft', pickMapping],
+  ])('reads the room name from the {id, name} join (%s)', (_caller, map) => {
+    renderPaper({ ffeItems: [map(row('line-sofa', LIVING))] });
+    expect(screen.getByLabelText('Sidemark')).toHaveValue('MWS-KOCHAVER-LR');
+    expect(screen.getByText(/· Living Room/)).toBeInTheDocument();
+  });
+
+  it('reads an unmapped join object as no room, never as a name to split', () => {
+    expect(sharedRoomName([row('line-sofa', LIVING) as never])).toBeUndefined();
+    expect(sharedRoomName([spreadMapping(row('line-sofa', LIVING))])).toBe('Living Room');
+  });
+
+  it('names the room only when every line shares it', () => {
+    renderPaper({
+      ffeItems: [spreadMapping(row('line-sofa', LIVING)), spreadMapping(row('line-chair', LIVING))],
+    });
+    expect(screen.getByLabelText('Sidemark')).toHaveValue('MWS-KOCHAVER-LR');
+  });
+
+  it('names no room for lines in different rooms', () => {
+    renderPaper({
+      ffeItems: [spreadMapping(row('line-sofa', LIVING)), spreadMapping(row('line-chair', DEN))],
+    });
+    expect(screen.getByLabelText('Sidemark')).toHaveValue('MWS-KOCHAVER');
+  });
+
+  it('names no room for a line placed in several rooms (00734)', () => {
+    mockPlacements.data = [
+      { ffeItemId: 'line-sofa', projectRoomId: 'room-living' },
+      { ffeItemId: 'line-sofa', projectRoomId: 'room-den' },
+      { ffeItemId: 'line-elsewhere', projectRoomId: 'room-den' },
+    ];
+    renderPaper({ ffeItems: [spreadMapping(row('line-sofa', LIVING))] });
+    expect(screen.getByLabelText('Sidemark')).toHaveValue('MWS-KOCHAVER');
+  });
+
+  it('keeps the room for a line with a single placement', () => {
+    mockPlacements.data = [{ ffeItemId: 'line-sofa', projectRoomId: 'room-living' }];
+    renderPaper({ ffeItems: [spreadMapping(row('line-sofa', LIVING))] });
+    expect(screen.getByLabelText('Sidemark')).toHaveValue('MWS-KOCHAVER-LR');
   });
 });

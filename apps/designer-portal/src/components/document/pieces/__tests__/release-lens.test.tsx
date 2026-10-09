@@ -71,6 +71,10 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
     isPending: false,
   }),
 }));
+const mockInvalidate = jest.fn();
+jest.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
+}));
 jest.mock("@/hooks/use-document-rooms", () => ({
   useDocumentRooms: () => ({
     data: [
@@ -205,6 +209,7 @@ beforeEach(() => {
   mockVoid.mockReset().mockResolvedValue({});
   mockDraft.data = null;
   mockDraftRefetch.mockReset();
+  mockInvalidate.mockReset().mockResolvedValue(undefined);
   mockRefused.clear();
   mockProject.data = { id: "proj-1", client_id: "client-1" };
 });
@@ -541,6 +546,67 @@ describe("ReleaseLens", () => {
       "Sign the design agreement with the client before releasing pieces.",
     );
     expect(alert).not.toHaveTextContent(/design-services origin|e6590000/);
+  });
+
+  it("T-60j F20: after a release the lens re-reads its lines, the server gate and the draft, and settles with the done note", async () => {
+    const { rerender } = render(<ReleaseLens {...props} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Release 7 lines/ }));
+    });
+    expect(mockInvalidate).toHaveBeenCalledWith({
+      queryKey: ["project-ffe-items", "proj-1"],
+    });
+    expect(mockInvalidate).toHaveBeenCalledWith({
+      queryKey: ["project-ffe-readiness"],
+    });
+    expect(mockDraftRefetch).toHaveBeenCalled();
+    // The re-read lands: the released lines carry their sent authorization.
+    mockItems.data = fixture().map((l) =>
+      ["H1", "L6"].includes(l.id)
+        ? l
+        : { ...l, ffe_line_authorization: "sent" },
+    );
+    rerender(<ReleaseLens {...props} />);
+    expect(screen.queryByRole("button", { name: /^Release / })).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Released 7 lines to the client for authorization.",
+    );
+    expect(within(rowOf("Custom cabinet")).getByText("Released")).toBeInTheDocument();
+  });
+
+  it("T-60j F20: a second press never releases twice, while the act runs or while the lens re-reads", async () => {
+    let finishRelease!: (v: unknown) => void;
+    mockRelease.mockImplementationOnce(
+      () => new Promise((resolve) => (finishRelease = resolve)),
+    );
+    const rereads: Array<() => void> = [];
+    mockInvalidate.mockImplementation(
+      () => new Promise<void>((resolve) => rereads.push(resolve)),
+    );
+    render(<ReleaseLens {...props} />);
+    const releaseAct = screen.getByRole("button", { name: /^Release 7 lines/ });
+    // Two presses in the same tick, before React re-renders.
+    await act(async () => {
+      fireEvent.click(releaseAct);
+      fireEvent.click(releaseAct);
+    });
+    expect(releaseAct).toHaveAttribute("aria-disabled", "true");
+    await act(async () => {
+      finishRelease({ proposalId: "prop-3", documentId: "doc-3", itemCount: 7 });
+    });
+    // Released and sent; the re-read has not landed, so the old set still shows.
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Released 7 lines");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Release 7 lines/ }));
+    });
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      rereads.forEach((resolve) => resolve());
+    });
+    expect(
+      screen.getByRole("button", { name: /^Release 7 lines/ }),
+    ).not.toHaveAttribute("aria-disabled");
   });
 
   it("a seat without money sees the table and never the ceremony", () => {

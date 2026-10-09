@@ -547,6 +547,10 @@ export function SubstitutionFlow({
   const alternateVendorId =
     stage.stage === 'order' ? (stage.alternate.vendor_id ?? '') : '';
   const { data: alternateVendor } = useVendor(alternateVendorId) as { data: AnyRow };
+  const alternateRow: AnyRow =
+    stage.stage === 'order'
+      ? (lineRows ?? []).find((l: AnyRow) => l.id === stage.alternate.id)
+      : undefined;
   const refresh = () => {
     invalidateProcurementExceptions(qc);
     void qc.invalidateQueries({ queryKey: ['document-state'] });
@@ -711,13 +715,14 @@ export function SubstitutionFlow({
           {stage.alternate.vendor_id
             ? act('order-substitution', `Order ${stage.alternate.name}`, () => setPaperOpen(true))
             : sentence(`Name the maker for ${stage.alternate.name} on its line, then order it.`)}
-          {alternateVendor && (
+          {alternateVendor && alternateRow && (
             <OrderPaper
               open={paperOpen}
               onClose={() => setPaperOpen(false)}
               vendor={alternateVendor}
               project={{ id: projectId, name: '' }}
-              ffeItems={[(lineRows ?? []).find((l: AnyRow) => l.id === stage.alternate.id)]}
+              // The paper's room is a name; the row's is the {id, name} join.
+              ffeItems={[{ ...alternateRow, room: alternateRow.room?.name ?? undefined }]}
               onCreated={refresh}
             />
           )}
