@@ -539,12 +539,20 @@ cd apps/designer-portal && ! grep -rnE '\bA[I]\b|[Aa]lgo[r]ithm|[Ee]ngin[e]|[Pp]
    - `git diff --stat .claude/settings.json` is empty, or restored.
    - `supabase migration list --linked` shows Strata's last applied number.
    - `ls supabase/migrations | tail -25` is reconciled against it.
+   - **Probe 1 (stops the ship).** 00760's `CREATE UNIQUE INDEX project_palettes_one_per_room` fails if any project already has two palettes in one room. This must return no rows; if it returns any, stop and reconcile them first:
+     ```sql
+     select project_id, scope_room_id, count(*) from project_palettes where scope_room_id is not null group by 1,2 having count(*) > 1;
+     ```
+   - **Probe 2 (informational).** Proposals with two palettes in one room. Activation merges them into one room row (00762), so rows here do not stop the ship; record the count.
+     ```sql
+     select proposal_id, scope_room_id, count(*) from proposal_palettes where scope_room_id is not null group by 1,2 having count(*) > 1;
+     ```
 2. **`db push`, in this order.**
    - Run `supabase db push --include-all`.
    - Before accepting, confirm that the plan lists exactly, in order:
      - **`00727_maker_eta_request_drafts.sql`, `00728_maker_follow_up_drafts.sql` (US-19, first)**;
-     - then **00729–00736, 00742–00745, 00750–00754, 00760** (the final numbers from the integration branch).
-   - **If the plan lists anything else, stop and reconcile the ledger.** The directory carries `20260910152111_create_contact_messages.sql` and `_pending/` outside the series.
+     - then **00729–00737, 00742–00745, 00750–00762** (the final numbers from the integration branch).
+   - **If the plan lists anything other than 00727–00728, 00729–00737, 00742–00745 and 00750–00762, stop and reconcile the ledger.** The directory carries `20260910152111_create_contact_messages.sql` and `_pending/` outside the series.
    - **Verify on Strata.** US-19:
      - `procurement_drafts` kind accepts `maker_eta_request` and `maker_follow_up`;
      - `procurement_drafts.ffe_item_id` exists;
@@ -558,9 +566,10 @@ cd apps/designer-portal && ! grep -rnE '\bA[I]\b|[Aa]lgo[r]ithm|[Ee]ngin[e]|[Pp]
 3. **Edge functions.**
    - `supabase functions deploy po-send` (COM filter, unit, sidemark rooms).
    - `supabase functions deploy spec-book-render` (unit, labor, rooms, groups).
-   - **`_shared/po-pdf.ts` changed, so redeploy every importer:** `po-send`, `spec-pdf` (via `_shared/spec-pdf.ts`) and `fulfillment-po` (via `_shared/fulfillment-po-pdf.ts`).
+   - `supabase functions deploy spec-pdf` (T-61b edits it).
+   - **`_shared/po-pdf.ts` changed.** Its only importer is `po-send`, deployed above. `_shared/spec-pdf.ts` and `_shared/fulfillment-po-pdf.ts` name po-pdf only in comments and import nothing from it, so `fulfillment-po` is not redeployed for it.
    - If `_shared/spec-pdf.ts` itself changed, `_shared/spec-pdf.importers.json` lists the importers (`spec-pdf`).
-   - Verify with `supabase functions list`: the updated_at of all four is newer than the push.
+   - Verify with `supabase functions list`: the updated_at of `po-send`, `spec-book-render` and `spec-pdf` is newer than the push.
    - US-19 has no edge-function change.
 4. **Portals.** In the same shell for each, export from that portal's `wrangler.jsonc` production vars:
    - `NEXT_PUBLIC_SUPABASE_URL`;
