@@ -363,6 +363,98 @@ describe("BuildRoomShell — the return path (S7, a10, R1-F10)", () => {
   });
 });
 
+describe("BuildRoomShell — ⌘↓ from the landing reaches the lines (T-60e, F12)", () => {
+  /** A lens body as the lenses print it: a section per room, its heading first. */
+  function renderSheet(room: BuildRoomShellProps["room"]) {
+    const props: BuildRoomShellProps = {
+      docId: "doc-1",
+      jobName: "Whole Home Renovation",
+      rooms: ROOMS,
+      counts: COUNTS,
+      removedCount: 1,
+      lens: "rough",
+      room,
+      canSeeMoney: true,
+      onNavigate: jest.fn(),
+      onReturn: jest.fn(),
+    };
+    render(
+      <BuildRoomShell {...props}>
+        {["hall", "living"].map((id) => (
+          <section key={id}>
+            <div>
+              <h2 tabIndex={-1} data-room-heading={id}>
+                {id}
+              </h2>
+              <button type="button">Add labor</button>
+            </div>
+            <table>
+              <tbody>
+                <tr>
+                  <td>
+                    <input type="hidden" defaultValue="x" />
+                    <input aria-label={`${id} line name`} disabled />
+                    <input aria-label={`${id} first name`} />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        ))}
+      </BuildRoomShell>,
+    );
+  }
+
+  it("goes from the room's heading to its first editable cell in one key", () => {
+    renderSheet("living");
+    const heading = screen.getByRole("heading", { level: 2, name: "living" });
+    expect(heading).toHaveFocus();
+
+    fireEvent.keyDown(heading, { key: "ArrowDown", metaKey: true });
+    expect(screen.getByLabelText("living first name")).toHaveFocus();
+  });
+
+  it("goes from the title to the sheet's first editable cell when no room is set, Ctrl↓ too", () => {
+    renderSheet(null);
+    const title = screen.getByRole("heading", {
+      level: 1,
+      name: "Build the pieces",
+    });
+    expect(title).toHaveFocus();
+    expect(title).toHaveAttribute(
+      "aria-keyshortcuts",
+      "Meta+ArrowDown Control+ArrowDown",
+    );
+
+    fireEvent.keyDown(title, { key: "ArrowDown", ctrlKey: true });
+    expect(screen.getByLabelText("hall first name")).toHaveFocus();
+  });
+
+  it("leaves a plain ↓, ⇧⌘↓ and ⌘↓ from anywhere else alone", () => {
+    renderSheet("living");
+    const heading = screen.getByRole("heading", { level: 2, name: "living" });
+    const plain = fireEvent.keyDown(heading, { key: "ArrowDown" });
+    fireEvent.keyDown(heading, {
+      key: "ArrowDown",
+      metaKey: true,
+      shiftKey: true,
+    });
+    expect(heading).toHaveFocus();
+    expect(plain).toBe(true);
+
+    const addLabor = within(heading.parentElement!).getByRole("button", {
+      name: "Add labor",
+    });
+    addLabor.focus();
+    const passed = fireEvent.keyDown(addLabor, {
+      key: "ArrowDown",
+      metaKey: true,
+    });
+    expect(addLabor).toHaveFocus();
+    expect(passed).toBe(true);
+  });
+});
+
 describe("BuildRoomShell — at 390 (a13)", () => {
   it("shortens the job to WHOLE HOME and picks the room from Living Room ▾", () => {
     const { props } = renderShell();

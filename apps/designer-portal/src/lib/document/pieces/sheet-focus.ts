@@ -89,6 +89,30 @@ export function focusPlace(
   heading?.focus({ preventScroll: true });
 }
 
+const EDITABLE_CELL =
+  'input:not([type="hidden"]):not(:disabled), select:not(:disabled), textarea:not(:disabled)';
+
+/**
+ * ⌘↓ from a landing target (T-60e, F12): from a place's heading, focus the
+ * first editable cell in its section; from the Build room's title, the first
+ * on the sheet. False when `from` is neither, or nothing there is editable.
+ */
+export function focusFirstCell(
+  sheet: ParentNode | null | undefined,
+  from: EventTarget | null,
+): boolean {
+  if (!(from instanceof HTMLElement)) return false;
+  const scope = from.hasAttribute(ROOM_HEADING_ATTR)
+    ? from.closest("section, tbody")
+    : from.hasAttribute(BUILD_ROOM_TITLE_ATTR)
+      ? sheet
+      : null;
+  const cell = scope?.querySelector<HTMLElement>(EDITABLE_CELL);
+  if (!cell) return false;
+  cell.focus();
+  return true;
+}
+
 /**
  * The line that takes a row's place once it leaves its section: the next
  * line, else the one before, else none. Read before the row goes.

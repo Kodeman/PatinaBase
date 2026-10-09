@@ -605,6 +605,37 @@ for (const vp of VIEWPORTS) {
         page.locator(`[data-pieces-room="${ROOM.sunroom}"]`).getByRole('button', { name: 'Sunroom', exact: true }),
       ).toBeFocused();
     });
+
+    test(`F12 ⌘↓ from the landing goes into the lines: the room's first editable cell, or the sheet's from the title @${vp.name}`, async ({
+      authenticatedPage: page,
+    }) => {
+      /** Where focus sits: its tag, and whether the Living Room's section holds it. */
+      const focused = () =>
+        page.evaluate((living) => {
+          const el = document.activeElement;
+          const heading = Array.from(document.querySelectorAll('[data-room-heading]')).find(
+            (h) => h.getAttribute('data-room-heading') === living,
+          );
+          return {
+            tag: el?.tagName ?? '',
+            inLiving: !!el && !!heading?.closest('section, tbody')?.contains(el),
+          };
+        }, ROOM.living);
+
+      for (const lens of ['rough', 'price'] as const) {
+        await openSheet(page, lens, ROOM.living);
+        await expect(roomHeading(page, ROOM.living)).toBeFocused({ timeout: 15_000 });
+        await page.keyboard.press('ControlOrMeta+ArrowDown');
+        await expect.poll(focused).toEqual({ tag: expect.stringMatching(/^(INPUT|SELECT|TEXTAREA)$/), inLiving: true });
+      }
+
+      await openSheet(page, 'rough');
+      const title = page.getByRole('heading', { name: 'Build the pieces' });
+      await expect(title).toBeFocused();
+      await page.keyboard.press('ControlOrMeta+ArrowDown');
+      await expect.poll(async () => (await focused()).tag).toMatch(/^(INPUT|SELECT|TEXTAREA)$/);
+      expect(await page.evaluate(() => !!document.activeElement?.closest('main'))).toBe(true);
+    });
   });
 }
 

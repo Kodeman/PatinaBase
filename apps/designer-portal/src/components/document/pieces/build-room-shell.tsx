@@ -39,6 +39,7 @@ import {
 import {
   BUILD_ROOM_TITLE_ATTR,
   QUIET_FOCUS,
+  focusFirstCell,
   roomHeading,
 } from "@/lib/document/pieces/sheet-focus";
 import type {
@@ -358,6 +359,19 @@ export function BuildRoomShell({
       data-drafting-stock=""
       data-testid="build-room"
       className="flex h-[100dvh] flex-col bg-[var(--sheet)] pb-16 text-[var(--sheet-ink)] min-[1180px]:pb-[60px]"
+      // The Rough in key map's ⌘↓ (rough-in-keys.ts), read from the landing
+      // target: the room's heading or the title goes down into the lines (T-60e, F12).
+      onKeyDown={(event) => {
+        if (
+          event.key !== "ArrowDown" ||
+          !(event.metaKey || event.ctrlKey) ||
+          event.altKey ||
+          event.shiftKey
+        )
+          return;
+        if (focusFirstCell(mainRef.current, event.target))
+          event.preventDefault();
+      }}
     >
       <header className="relative flex flex-wrap items-center gap-x-6 border-b border-[var(--sheet-rule-strong)] bg-[var(--sheet-head)] px-4 md:min-h-[var(--head)] md:flex-nowrap md:px-6">
         <a
@@ -377,6 +391,7 @@ export function BuildRoomShell({
         <h1
           ref={titleRef}
           tabIndex={-1}
+          aria-keyshortcuts="Meta+ArrowDown Control+ArrowDown"
           {...{ [BUILD_ROOM_TITLE_ATTR]: "" }}
           className={`sr-only font-mono text-[12px] font-medium uppercase leading-none tracking-[0.08em] md:not-sr-only md:shrink-0 ${QUIET_FOCUS}`}
         >
