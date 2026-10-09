@@ -150,6 +150,7 @@ import {
   useDeliveryCalendar,
   useTodayProcurementCounts,
   useCreateReceivingInspection,
+  useFfePlacementReceipts,
   useDamageClaims,
   useUpdateDamageClaim,
   useUpdatePurchaseOrderETA,
@@ -1111,6 +1112,99 @@ describe('useCreateReceivingInspection — C-19 per-line check-in (00700)', () =
       p_notes: null,
       p_photo_asset_ids: [],
     });
+  });
+
+  it('T-54: a line that names its rooms carries placements to record_project_ffe_inspection (00756)', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { inspectionId: 'insp-rooms' }, error: null });
+
+    await run({
+      purchaseOrderId: 'po-1',
+      projectId: 'project-1',
+      outcome: 'partial',
+      items: [
+        {
+          ffeItemId: 'oak',
+          receivedQuantity: 500,
+          orderedQuantity: 913,
+          condition: 'good',
+          placements: [
+            { placementId: 'pl-hall', quantity: 120 },
+            { placementId: 'pl-living', quantity: 320 },
+            { placementId: 'pl-dining', quantity: 60 },
+          ],
+        },
+        { ffeItemId: 'runner', receivedQuantity: 3, orderedQuantity: 3, condition: 'good' },
+      ],
+    });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('record_project_ffe_inspection', {
+      p_purchase_order_id: 'po-1',
+      p_lines: [
+        {
+          selectionId: 'oak',
+          receivedQuantity: 500,
+          condition: 'good',
+          notedOnBol: false,
+          placements: [
+            { placementId: 'pl-hall', quantity: 120 },
+            { placementId: 'pl-living', quantity: 320 },
+            { placementId: 'pl-dining', quantity: 60 },
+          ],
+        },
+        // A single-room line names no rooms: the server fills it.
+        { selectionId: 'runner', receivedQuantity: 3, condition: 'good', notedOnBol: false },
+      ],
+      p_outcome: 'partial',
+      p_notes: null,
+      p_photo_asset_ids: [],
+    });
+  });
+
+  it('T-54: a receipt refreshes the earlier room receipts', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { inspectionId: 'insp-rooms' }, error: null });
+    const config = useCreateReceivingInspection() as unknown as {
+      mutationFn: (input: unknown) => Promise<{ inspection: { purchase_order_id: string } }>;
+      onSuccess: (result: unknown, variables: unknown) => void;
+    };
+    const input = {
+      purchaseOrderId: 'po-1',
+      outcome: 'clean',
+      items: [{ ffeItemId: 'oak', receivedQuantity: 913, condition: 'good' }],
+    };
+    config.onSuccess(await config.mutationFn(input), input);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['ffe-placement-receipts'] });
+  });
+});
+
+describe('useFfePlacementReceipts — earlier room receipts (00754, T-54)', () => {
+  it('sums project_ffe_placement_receipts per placement for the given placements', async () => {
+    const builder = setTableDefault('project_ffe_placement_receipts', {
+      data: [
+        { placement_id: 'pl-hall', quantity: 100 },
+        { placement_id: 'pl-hall', quantity: 20 },
+        { placement_id: 'pl-living', quantity: 320 },
+      ],
+      error: null,
+    });
+    const config = useFfePlacementReceipts(['pl-hall', 'pl-living', 'pl-dining']) as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<Record<string, number>>;
+      enabled: boolean;
+    };
+
+    expect(config.queryKey).toEqual(['ffe-placement-receipts', ['pl-hall', 'pl-living', 'pl-dining']]);
+    expect(config.enabled).toBe(true);
+    await expect(config.queryFn()).resolves.toEqual({ 'pl-hall': 120, 'pl-living': 320 });
+    expect(supabaseClient.from).toHaveBeenCalledWith('project_ffe_placement_receipts');
+    expect(builder.__chain).toContainEqual({
+      method: 'in',
+      args: ['placement_id', ['pl-hall', 'pl-living', 'pl-dining']],
+    });
+  });
+
+  it('stays idle with no placements', () => {
+    const config = useFfePlacementReceipts([]) as unknown as { enabled: boolean };
+    expect(config.enabled).toBe(false);
   });
 });
 

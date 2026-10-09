@@ -12,6 +12,10 @@ let items: Array<{ id: string; name: string; quantity: number; project_id?: stri
 jest.mock('@patina/supabase', () => ({
   useCreateReceivingInspection: () => ({ mutateAsync, isPending: false }),
   useProcurementItems: () => ({ data: items, isLoading: false }),
+  // T-54 — no line here is placed in several rooms.
+  useProjectRoomPlacements: () => ({ data: [], isLoading: false }),
+  useProjectRooms: () => ({ data: [], isLoading: false }),
+  useFfePlacementReceipts: () => ({ data: undefined, isLoading: false }),
 }));
 
 jest.mock('@/components/portal/toast-provider', () => ({

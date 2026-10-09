@@ -1760,6 +1760,8 @@ export {
   useStartPoCheckout,
   // Sprint 2 — Receiving, damage claims, calendar
   useReceivingInspections,
+  // US-21 T-54 — earlier room receipts, for receiving by room (00754)
+  useFfePlacementReceipts,
   useDamageClaims,
   useDeliveryCalendar,
   useTodayProcurementCounts,
