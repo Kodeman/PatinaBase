@@ -754,11 +754,24 @@ function normalizePlacements(value: unknown): AudiencePlacement[] {
   return placements;
 }
 
-/** A quantity and the unit it counts: `913 sq ft`, or the bare number for
- *  `each` (the PO's Qty cell reads the same way, `_shared/po-pdf.ts`). */
+// Units that are counted, so any quantity but 1 reads plural (T-60a F8,
+// mirrored from `document/pieces/placement-chips.tsx` COUNTED_PLURAL; Deno
+// can't import from the portal).
+const COUNTED_PLURAL: Readonly<Record<string, string>> = {
+  roll: "rolls",
+  box: "boxes",
+  hour: "hours",
+  lot: "lots",
+};
+
+/** A quantity and the unit it counts: `913 sq ft`, `9 rolls`, `1 roll`, or
+ *  the bare number for `each` (the PO's Qty cell reads the same way,
+ *  `_shared/po-pdf.ts`). */
 export function quantityText(quantity: number, unit?: string | null): string {
   if (!unit || unit === "each") return String(quantity);
-  return `${quantity} ${unit.replace(/_/g, " ")}`;
+  const plural = COUNTED_PLURAL[unit];
+  const word = plural && quantity !== 1 ? plural : unit.replace(/_/g, " ");
+  return `${quantity} ${word}`;
 }
 
 /** The also-in line under a placed line's name: the other rooms, then this

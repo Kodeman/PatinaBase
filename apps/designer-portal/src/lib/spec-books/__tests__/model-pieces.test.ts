@@ -20,7 +20,8 @@ describe('specQuantityLabel', () => {
   it('prints the quantity with the unit it counts', () => {
     expect(specQuantityLabel(913, 'sq_ft')).toBe('913 sq ft');
     expect(specQuantityLabel(42, 'lin_ft')).toBe('42 lin ft');
-    expect(specQuantityLabel(9, 'roll')).toBe('9 roll');
+    expect(specQuantityLabel(9, 'roll')).toBe('9 rolls');
+    expect(specQuantityLabel(1, 'roll')).toBe('1 roll');
   });
 
   it('prints the bare number for each and for a line with no unit, as today', () => {

@@ -24,6 +24,7 @@ import {
   buildItemModel,
   buildScheduleModel,
   computeRecordPct,
+  quantityText,
   renderBoardCompositionPdf,
   renderBoardPdf,
   renderSpecItemPdf,
@@ -411,6 +412,15 @@ const FLOOR_PLACEMENTS = [
   { roomName: 'Hall', quantity: 120 },
   { roomName: 'Dining', quantity: 180 },
 ];
+
+// ── T-60b: counted units (roll, box, hour, lot) read plural for any
+// quantity but 1 ────────────────────────────────────────────────────────
+
+Deno.test('quantityText pluralizes counted units but leaves measures alone', () => {
+  assertEquals(quantityText(9, 'roll'), '9 rolls');
+  assertEquals(quantityText(1, 'roll'), '1 roll');
+  assertEquals(quantityText(913, 'sq_ft'), '913 sq ft');
+});
 
 Deno.test('a goods line in one room counted each gains no key', () => {
   const model = buildScheduleModel([{ roomName: 'Living Room', lines: [line({ unit: 'each' })] }], {});

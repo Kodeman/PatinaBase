@@ -502,11 +502,26 @@ export interface SpecRoomPlacement {
   areaNote?: string | null;
 }
 
-/** A quantity and the unit it counts: `913 sq ft`, or the bare number for
- *  `each` and for a line with no unit (D3, 00729 codes, `_` read as a space). */
+/**
+ * Units that are counted, so any quantity but 1 reads plural (T-60a F8,
+ * mirrored from `document/pieces/placement-chips.tsx` COUNTED_PLURAL).
+ * Measures (sq ft, lin ft, yard) stay as they are.
+ */
+const COUNTED_PLURAL: Partial<Record<string, string>> = {
+  roll: 'rolls',
+  box: 'boxes',
+  hour: 'hours',
+  lot: 'lots',
+};
+
+/** A quantity and the unit it counts: `913 sq ft`, `9 rolls`, `1 roll`, or
+ *  the bare number for `each` and for a line with no unit (D3, 00729 codes,
+ *  `_` read as a space). */
 export function specQuantityLabel(quantity: number, unit?: string | null): string {
   if (!unit || unit === 'each') return String(quantity);
-  return `${quantity} ${unit.replace(/_/g, ' ')}`;
+  const plural = COUNTED_PLURAL[unit];
+  const word = plural && quantity !== 1 ? plural : unit.replace(/_/g, ' ');
+  return `${quantity} ${word}`;
 }
 
 /** The also-in line under a placed line's name: the other rooms, then this

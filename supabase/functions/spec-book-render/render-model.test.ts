@@ -697,6 +697,15 @@ Deno.test("a placed line prints its unit, need label and also-in line; labor is 
   assertEquals(alsoInText(labor), null);
 });
 
+// ── T-60b: counted units (roll, box, hour, lot) read plural for any
+// quantity but 1 ────────────────────────────────────────────────────────
+
+Deno.test("quantityText pluralizes counted units but leaves measures alone", () => {
+  assertEquals(quantityText(9, "roll"), "9 rolls");
+  assertEquals(quantityText(1, "roll"), "1 roll");
+  assertEquals(quantityText(913, "sq_ft"), "913 sq ft");
+});
+
 Deno.test("each edition carries only the piece keys its allow-list admits", async () => {
   const snapshot = piecesBook();
   const read = async (audience: (typeof SPEC_BOOK_AUDIENCES)[number]) => {
