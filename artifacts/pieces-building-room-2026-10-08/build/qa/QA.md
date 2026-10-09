@@ -143,3 +143,61 @@ Step counts count every key press, typed field or tap. The column headings are: 
 | F14 | Medium | **spec-pdf columns collide.** The headers run together (`QTYLEAD`, `CLIENTSUPPLIER`), as do the values (`1-`, `$11.50Nord Hardwood Co.`), and `830 sq ft` and `finish` wrap mid-word (`830 sq-` / `ft`, `fin-` / `ish`). | `c2-spec-pdf-page-1.jpg`; `spec-pdf-project.txt` |
 | F15 | Medium | **Release lens says Ready, but the server leaves the line out.** The Dining table (`vendor_name` Woodward & Sons, no `vendor_id`) and the oak floor show `READY · Ready` with `Selected`, yet `get_project_ffe_readiness` returns `missingFields: ["vendor"]` and the set silently omits them. Nothing on the row says why. The stage counts `vendor_name` as a maker (story log #4); readiness wants `vendor_id`. | `i12-release-after-select.png`; psql readiness |
 | F16 | Medium | **Release refusals leak raw SQL text.** The toast reads `project e6590000-… has no executed design-services origin` and `latest furnishings checkpoint must be acknowledged or audited override`; the lens says only `The release did not go through.` Neither is a named refusal. | `c2-i12-release-refused.jpg` |
+
+---
+
+# Continuation 2 (T-60f, SQ-704: the walk fixture, items 11 and 12, F10 in the UI)
+
+- **Tip walked:** `pieces/build-room` at bbbb3c75c (T-60c, T-60d, T-60e in). Local DB at 00762, shared. There was no reset.
+- **Walker:** the T-60f executor (Opus). It did not build the job.
+- **Server:** designer portal `pnpm exec next dev --webpack -p 3410`, pinned to the local stack (the pieces config's env), with `ask-the-paper` and `one-voice` on.
+- **Raw evidence:** board-owned, under `verification/SQ-704/`: one `*.jsonl` per run (every step, the RPC responses, and console errors), the full-size PNGs, and the text dumps. The `c3-*.jpg` files in this folder are the chosen screenshots, cut to 1400px.
+
+## The fixture (`supabase/seed/dev/pieces_build_room_walk_dev.sql`)
+
+- **Local guard.** The seed now refuses to run unless psql's `HOST` is 127.0.0.1, localhost or ::1 and `PORT` is 54322. The env check: `NEXT_PUBLIC_SUPABASE_URL` is unset in the process, `apps/designer-portal/.env.example` says `http://localhost:54321`, and this worktree has no `.env*` file.
+- **Why nothing is deleted.** Four guards make a delete-and-recreate seed impossible without disabling triggers:
+  - `guard_commercial_immutable_row` refuses every UPDATE and DELETE on `project_commercial_documents` and `commercial_document_signatures`, the superuser's included. A project delete cascades into them.
+  - `guard_proposal_copy_immutability` refuses to DELETE a non-draft proposal, and refuses to null `proposals.project_id`. That FK is ON DELETE SET NULL, so an activated proposal's project can't be deleted either.
+  - `guard_proposal_child_draft_only` allows children only while the proposal is a draft. `guard_proposal_authority` moves status only through the lifecycle RPCs.
+  - `guard_project_terminal_identity_integrity` lets a project into `archived` only through `archive_project`.
+- **So the seed retires instead.** An earlier walk job is renamed `Retired walk · <timestamp>` and archived through `archive_project`, as Leah.
+  - Item 11 mints a new proposal only when no un-activated one is waiting. A reseed before the walk is a no-op for it.
+  - Item 12 mints a fresh job each run.
+  - The makers (`e659b000-…201/202`) are upserted, never deleted. Their `orders_email` is on the reserved `.invalid` TLD.
+- **Product rail, not hand rows.**
+  - Item 11: draft → `send_proposal` → `record_offline_signature(…, p_auto_activate => false)`, as Leah.
+  - Item 12: `upsert_design_services_draft` → `send_commercial_document` (Leah) → `sign_design_services_agreement` (client@patina.dev) → `countersign_design_services_agreement` (Leah). Then `batch_create_named_project_needs`, `add_labor_line`, and `make_ffe_line_allowance`. Then `derive_working_budget_draft` and `publish_budget_checkpoint`, and finally `acknowledge_budget_checkpoint` (the client).
+- **Reseeds.** It was applied twice back to back, with exit 0 both times. Item 11's proposal id held across the two runs. Item 12's previous job was archived and the new one has `origin = 1`, `commercial_state executed` and its checkpoint `acknowledged`.
+- **Item 12's lines:**
+  - Dining table: maker `vendor_id` Hollis, $6,800.
+  - Dining chairs ×6: Hollis.
+  - Its labor `Install, dining table delivery and set`: installer `vendor_id` Ridge, $450.
+  - Area rug: allowance, Hollis, ceiling $4,500.
+  - Sconces ×2: `vendor_name` Lumen Atelier only, $650.
+- **The studio.** The countersign opens the job in Leah's own studio (`set_project_studio_id_owned` → `designer_tier_pricing_studio`), which is "Leah Hartwell", not "Local Dev Studio". The seed leaves that as the product sets it.
+
+## Item 11 · two palettes in one room, activated in the browser
+
+| Width | Result | Evidence |
+|---|---|---|
+| 1440 | **PASS.** The Document for the accepted proposal shows the SIGNED seal: `Signed Oct 9 — waiting on your hand to open the project.` `OPEN THE PROJECT →` called `activate_proposal_as_project` (200) and walked into the new job. In SQL, the Primary Suite has one `project_palettes` row: `Warm neutrals · Brass accents`. Its swatches are appended in order (`Oat limewash`, `Linen white`, `Brass trim enamel`, `Smoked walnut floor`, `Unlacquered brass`), and its notes are `Limewash on the walls.` + blank line + `Unlacquered brass at the bed wall.`. Study keeps `Library green`. The Finishes lens shows all four paint-role swatches, `Walls`, `Trim`, `Ceiling`, `Floor`, but in that order (F17). | `c3-i11-ok-1440-before.jpg`, `c3-i11-fin2-1440.jpg`; `i11-ok-*.jsonl`, `i11-fin2-*.jsonl` |
+| 390 | **PASS**, same rows and the same order. The 390 activation was a second proposal, which the reseed minted after the first one was activated. | `c3-i11-fin2-390-full.jpg` |
+| Room-scoped items | **FAIL (F18).** The first fixture proposal put its items in scope rooms. `OPEN THE PROJECT` returned 400 `non-room assignment cannot carry a room`. The seal said `Could not open the project — the activation did not go through. Try again.` That is a sentence, but it neither names the cause nor gives a fix. | `c3-i11-fail-1440-refusal.jpg`; `i11-fail-1440.jsonl` |
+
+The first 1440 activation used swatches with non-paint roles (textile, metal, accent). By design (`finishes-lens.tsx` `OLD_ROLE_SURFACE`), the lens showed only `Walls · Oat limewash`. The fixture was changed so each palette carries two paint roles, and the walk above was run again on a fresh proposal.
+
+## Item 12 · release → PO → send → receipt → invoice
+
+**NOT RUN in this pass.** The fixture is ready (job `Walk · Release to invoice`; the reseed prints `walk12_project_id`). This pass stopped at a continuation checkpoint, so the release walk, PO, send, receipt and invoice belong to the next pass.
+
+## F10 · the admin 409 in the UI
+
+**NOT RUN in this pass** (continuation).
+
+## New findings (none filtered)
+
+| ID | Sev | Conf | Finding | Evidence |
+|---|---|---|---|---|
+| F17 | Low | High | **The Finishes lens interleaves a merged palette.** The 00762 merge appends the second palette's swatches after the first, but each swatch keeps its own palette's `sort_order` (0, 1, 0, 1). `finishes-lens.tsx:109-113` sorts by `sort_order`, so the room reads Walls (A0), Trim (B0), Ceiling (A1), Floor (B1) instead of A's then B's. Every swatch is present; only the order on screen and on the painter's schedule is off. | `i11-fin2-1440.jsonl` → `finish-rows`; check11 SQL |
+| F18 | High | High | **Activating a legacy proposal whose items sit in a scope room fails.** `_activate_proposal_as_project_impl` (the 00331 body that 00762 copies) inserts `project_ffe_items` with `project_room_id` set but never sets `assignment_scope`, which defaults to `'unassigned'`. `guard_project_ffe_selection_integrity` (00434) then refuses: `non-room assignment cannot carry a room` (23514). So any accepted legacy proposal with room-scoped items can't be opened as a project. T-61a's `f8_activation` test seeds no `proposal_items`, so it never hit this. The seal's message hides the cause (`the activation did not go through`). This predates US-21 (00434), but it blocks the item 11 path for real proposals. | `i11-fail-1440.jsonl` (400 body); `c3-i11-fail-1440-refusal.jpg` |
