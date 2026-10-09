@@ -462,6 +462,25 @@ describe('CommercialDocumentShell', () => {
     expect(container).not.toHaveTextContent('$9,500');
   });
 
+  // T-43d (F-E8): a released line in one room still used clientRoomsLine's
+  // null fallback, which printed the bare quantity with no unit at all. The
+  // fallback now reuses clientQuantityLabel, the same formatter the
+  // multi-room rooms list already prints with.
+  it('prints the unit on a single-room line whose unit is not each', () => {
+    const base = furnishingsBundle();
+    render(<CommercialDocumentShell bundle={{
+      ...base,
+      furnishings: {
+        ...base.furnishings!,
+        items: [
+          { ...base.furnishings!.items[0], description: 'Wallpaper roll', quantity: 9, unit: 'roll' },
+        ],
+      },
+    }} />);
+    expect(screen.getByText('Quantity 9 roll')).toBeInTheDocument();
+    expect(screen.queryByText('Quantity 9')).not.toBeInTheDocument();
+  });
+
   it('labels a trade scope, states who performs it, and never shows a countersignature wait', () => {
     render(<CommercialDocumentShell bundle={tradeScopeBundle()} />);
     expect(screen.getByText('Trade scope')).toBeInTheDocument();

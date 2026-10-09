@@ -18,6 +18,7 @@ import { Stamp } from '@/components/threshold/instruments/stamp';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import { formatCalendarDate } from '@/lib/utils/format';
 import {
+  clientQuantityLabel,
   clientRoomsLine,
   type CommercialDocumentBundle,
   type CommercialDocumentKind,
@@ -389,7 +390,9 @@ function FurnishingsBody({ bundle }: { bundle: CommercialDocumentBundle }) {
                       <div>
                         <p className="type-body-small text-[var(--text-primary)]">{roomsLine ?? item.description}</p>
                         {roomsLine === null && (
-                          <p className="type-meta-small mt-0.5">Quantity {item.quantity}</p>
+                          <p className="type-meta-small mt-0.5">
+                            Quantity {clientQuantityLabel(item.quantity, item.unit)}
+                          </p>
                         )}
                       </div>
                       <p className="type-label text-right">
