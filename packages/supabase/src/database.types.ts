@@ -39852,6 +39852,10 @@ export type Database = {
         Args: { p_milestone_id: string }
         Returns: string
       }
+      draft_release_for_project: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       duplicate_proposal_board: {
         Args: { p_board_id: string; p_proposal_id: string }
         Returns: {

@@ -21306,6 +21306,102 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.make_ffe_line_allowance(uuid, integer) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.make_ffe_line_allowance(uuid, integer) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_labor_line_price(uuid, integer) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_labor_line_price(uuid, integer) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.draft_release_for_project(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.draft_release_for_project(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.triage_project_ffe_items(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.triage_project_ffe_items(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_room_handbacks_append_only() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.project_room_handbacks FROM service_role, authenticated, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_selections(uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid) TO authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_threshold(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_threshold(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00755_pieces_w4_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
