@@ -1,9 +1,11 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Room finishes on project_palettes (00760; US-21 T-56, SQ-662)
+-- Room finishes on project_palettes (00760, 00761; US-21 T-56/T-58a, SQ-662/694)
 --
--- CONTRACT §2 "00760"; direction.md D16, ruling Q10.
+-- CONTRACT §2 "00760"; direction.md D16, ruling Q10. 00761 adds F7/F8 from the
+-- T-58 W6 review (SQ-664).
 -- Anchors: project_palettes + "Inherit project access for palettes" (00140:16-61),
--- "project_palettes_studio_rw" (00316:178).
+-- "project_palettes_studio_rw" (00316:178), scope_room_id FK + room-same-project
+-- trigger (00761).
 --
 -- Named cases, each one DO block:
 --   shape          the 00140 policy is SELECT only; no write policy names the
@@ -15,6 +17,9 @@
 --   client_read    a client JWT reads the project's finishes, old role rows too
 --   client_write   a client UPDATE, DELETE, INSERT and upsert are refused
 --   constraints    a second row for a room and a non-array swatches refuse
+--   cross_project  a finishes row naming another project's room is refused (F7)
+--   room_delete    deleting a room removes its finishes row, not just its
+--                  scope_room_id (F8)
 --
 -- Run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
@@ -50,7 +55,18 @@ VALUES
 
 INSERT INTO public.project_rooms (id, project_id, name, sort_order) VALUES
   ('76020000-0000-4000-8000-000000000001', '76010000-0000-4000-8000-000000000001', 'Living', 0),
-  ('76020000-0000-4000-8000-000000000002', '76010000-0000-4000-8000-000000000001', 'Dining', 1);
+  ('76020000-0000-4000-8000-000000000002', '76010000-0000-4000-8000-000000000001', 'Dining', 1),
+  ('76020000-0000-4000-8000-000000000003', '76010000-0000-4000-8000-000000000001', 'Guest', 2);
+
+-- A second project (same designer) for the cross-project refusal case.
+INSERT INTO public.projects (id, name, designer_id, client_id, created_by, status)
+VALUES
+  ('76010000-0000-4000-8000-000000000002', 'Room finishes project, other',
+   '76000000-0000-4000-8000-000000000001', '76000000-0000-4000-8000-000000000002',
+   '76000000-0000-4000-8000-000000000001', 'active');
+
+INSERT INTO public.project_rooms (id, project_id, name, sort_order) VALUES
+  ('76020000-0000-4000-8000-000000000009', '76010000-0000-4000-8000-000000000002', 'Other room', 0);
 
 -- ── shape ─────────────────────────────────────────────────────────────────
 DO $shape$
@@ -264,5 +280,81 @@ BEGIN
   END;
 END
 $constraints$;
+
+-- ── cross_project (F7: a finishes row must name a room of its own project) ──
+SET LOCAL "request.jwt.claim.sub" TO '76000000-0000-4000-8000-000000000001';
+SET LOCAL "request.jwt.claim.role" TO 'authenticated';
+SET LOCAL "request.jwt.claims" TO '{"sub":"76000000-0000-4000-8000-000000000001","role":"authenticated"}';
+SET LOCAL ROLE authenticated;
+
+DO $cross_project$
+BEGIN
+  -- Project 1's row naming project 2's room: the studio WITH CHECK passes
+  -- (same designer owns both), but the 00761 trigger must refuse it.
+  BEGIN
+    INSERT INTO public.project_palettes (project_id, scope_room_id, name, swatches)
+    VALUES ('76010000-0000-4000-8000-000000000001', '76020000-0000-4000-8000-000000000009',
+            'Cross-project finishes', '[]');
+    RAISE EXCEPTION 'cross_project: an insert naming another project''s room was allowed';
+  EXCEPTION WHEN check_violation THEN
+    NULL;
+  END;
+
+  -- Same refusal on UPDATE: move an existing Living-scoped row onto project 2's room.
+  BEGIN
+    UPDATE public.project_palettes
+    SET scope_room_id = '76020000-0000-4000-8000-000000000009'
+    WHERE project_id = '76010000-0000-4000-8000-000000000001'
+      AND scope_room_id = '76020000-0000-4000-8000-000000000001';
+    RAISE EXCEPTION 'cross_project: an update naming another project''s room was allowed';
+  EXCEPTION WHEN check_violation THEN
+    NULL;
+  END;
+END
+$cross_project$;
+
+RESET ROLE;
+
+-- ── room_delete (F8: a hard-deleted room takes its finishes with it) ───────
+SET LOCAL "request.jwt.claim.sub" TO '76000000-0000-4000-8000-000000000001';
+SET LOCAL "request.jwt.claim.role" TO 'authenticated';
+SET LOCAL "request.jwt.claims" TO '{"sub":"76000000-0000-4000-8000-000000000001","role":"authenticated"}';
+SET LOCAL ROLE authenticated;
+
+DO $room_delete_setup$
+BEGIN
+  INSERT INTO public.project_palettes (project_id, scope_room_id, name, swatches)
+  VALUES ('76010000-0000-4000-8000-000000000001', '76020000-0000-4000-8000-000000000003',
+          'Guest finishes', '[{"surface":"Walls","product":"Linen White","brand":"Benjamin Moore","brand_code":"OC-146","sheen":"eggshell","hex":"#F2EFE4","sort_order":0}]');
+END
+$room_delete_setup$;
+
+RESET ROLE;
+
+DO $room_delete$
+BEGIN
+  IF (SELECT count(*) FROM public.project_palettes
+      WHERE project_id = '76010000-0000-4000-8000-000000000001'
+        AND scope_room_id = '76020000-0000-4000-8000-000000000003') <> 1 THEN
+    RAISE EXCEPTION 'room_delete: the Guest finishes row must exist before the room is deleted';
+  END IF;
+
+  DELETE FROM public.project_rooms WHERE id = '76020000-0000-4000-8000-000000000003';
+
+  IF EXISTS (
+    SELECT 1 FROM public.project_palettes
+    WHERE scope_room_id = '76020000-0000-4000-8000-000000000003'
+  ) THEN
+    RAISE EXCEPTION 'room_delete: a finishes row survived its room''s hard delete';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.project_palettes
+    WHERE project_id = '76010000-0000-4000-8000-000000000001' AND name = 'Guest finishes'
+  ) THEN
+    RAISE EXCEPTION 'room_delete: the Guest finishes row must be gone, not turned project-wide';
+  END IF;
+END
+$room_delete$;
 
 ROLLBACK;
