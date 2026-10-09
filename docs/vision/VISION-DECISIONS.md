@@ -420,6 +420,54 @@ LibreOffice for EMF and `.ppt`, PDF decks via pdfjs.
 
 ---
 
+## Ruled — 2026-10-09 (US-21, the Build room)
+
+### V15 · The Build room — 2026-10-09
+
+**Decisions (Kody, delegated to the Fable design council where noted; `artifacts/pieces-building-room-2026-10-08/synthesis/direction.md` §"Rulings", CONTRACT §6 step 7):**
+
+- **Q1 · A lens head is not a tab bar.** Ruled as V7 did: a working sheet opened from the Document may carry a lens head; the reading paper may not. The test: a lens that removes acts is a lens; a lens that duplicates content is a tab.
+- **Q2 · A third stock, white with full ink.** Yes. Named the **drafting stock**, bound to working sheets, keeping V9 P5's type families, radii and rhythm; the spec book already runs white, this makes it deliberate.
+- **Q3 · New stage words on the stamp:** Placeholder · Specced · Ready · Released, derived (D1, with its precedence table) before the goods words. A rough price never changes the word. "Placeholder" means no product and no maker, whatever price it carries; it never reaches the client — the client page lists only lines with a set disposition.
+- **Q4 · One line in several rooms: a join table, with the primary room kept.** Placements lock at Released and change through Record a change. The authorized row stays one row with a room breakdown. Three worked cases, each a SQL test gating the migration: waste over measured area (`line.quantity ≥ sum(placements)`); partial receipt (one count on the line until a later per-room allocation); a share change after the PO.
+- **Q5 · Labor is a line, not Trade Scope.** Attached to its piece with `link_kind='labor'`, released with it, billed on its own line (R-PB7). Trade Scope stays for lump-sum trades with their own agreement and can draw labor lines in.
+- **Q7 · Who sees money in Rough in.** Rough $ (an internal planning figure, printed `~`, never client-visible) is visible to every studio seat in Rough in and Spec; trade cost, markup and client price exist only in Price, governed by R1. Only `Make it an allowance`, in Price, creates a ceiling the client sees.
+- **Q9 · A group heading inside a room** (e.g. the shower's components) is a new nesting level: a heading with no money, no stage and no acts of its own.
+- **Q10 · A paint and finish schedule, in minimally and last.** The feature test passes 3 of 4 (the stream is the floor, not margin): a per-room Finishes table, one swatch, one print addressed to the painter — nothing more until a second studio asks. Logged here as the V-entry the feature test calls for.
+- **Q12 · An allowance may be filled after signing without voiding the authorization, at or under the ceiling.** Yes, recording the variance; over the ceiling it is Record a change (US-19). Only an explicit allowance (made with `Make it an allowance`) has a ceiling; a rough `~` figure never does and never reaches the authorization.
+- **Q13 · `READY FOR LEAH`**, a per-room hand-back act for the first hire. Yes. It records an internal review fact (who handed back, when) and sends nothing; it never writes `design_disposition`, never selects a line and cannot release. A room with placeholders can be handed back and they stay placeholders.
+- **Q14 · The Document's Pieces region becomes per-room overview rows.** Yes. Rooms, not lines, are the overview; before release a line opens in the Build room; after release it unfolds on the paper as US-16 built it.
+- **Q15 · "The studio won't notice Patina" and a sheet she works in for an hour.** No ruling needed — the promise is about not being summoned. Recorded as a reading, not a ruling.
+- **Q16 · Who may change a client price on an active job, and through what.** After activation, `set_project_ffe_line_commercials` (`00692:31-54`) takes only vendor and trade price. **Future work (D19), not scheduled.** For now, Price shows the client price read-only on an active job (§1.2 below), and the path is Record a change. A direct path with its own authorization guard is built only if Record a change proves too heavy for small corrections.
+- **Client price note (§1.2).** Client price and markup are editable only before activation. On an active job the Price cells are read-only with the sentence "Markup and client price change through Record a change." — because `set_project_ffe_line_commercials` takes only vendor and trade price after activation. **Amendment (orchestrator, 2026-10-08):** a labor line's client price is the one exception while the line is unreleased — it can be set at creation (`add_labor_line(p_unit_price_cents)`) or afterwards (`set_labor_line_price`), because under Q5/R-PB7 labor is billed on its own line, the same way a product placement brings its own price. This is **not D19**; after release it changes through Record a change like any other line, and D19 stays unbuilt.
+
+**From the W5 review triage (orchestrator rulings, SQ-661 → SQ-691/SQ-692):**
+
+- **Catalog delete policy (T-55a, 00758).** A `BEFORE DELETE` guard on `products` refuses hard deletion of any product still referenced by a project line, an authorization, fulfillment or review item, or an issued board item, and refuses any product merged into another — for every caller, service role and admin portal included. This replaces the 00390 behaviour (null the issued board item's `product_id`, keep the copy). Rationale: D11, merge and never hard-delete. Consequence for admins: a referenced catalog product can no longer be deleted from the admin portal; retiring it is the path.
+- **Supersede.** The successor carries `line_group_id`, COM facts, `na_declarations`, source verifications and spec-book settings.
+- **Working-budget rollup** excludes removed and superseded lines.
+
+**From T-61 (SQ-667), accepted and not fixed — recorded here, not re-opened as rulings:**
+
+- **F4.** The PO fingerprint (`_po_spec_lines`) hashes neither rooms nor unit, so editing a placement on a released PO re-renders the PDF's room cell without tripping the resend gate. Not new in kind — room was never fingerprinted. Follow-up: add rooms and unit to the fingerprint.
+- **F9.** The base `playwright.config.ts` cannot take the flags-on override because the pre-commit secret scan reads the whole staged file, which holds the CLI demo JWT; only `playwright.pieces.config.ts` runs with the flags on. Follow-up: a hook allowlist for the well-known demo key, Kody's call.
+- **F11.** The Spec lens prints the dim rough line "~$X each · set the price in Price" (SPEC:456). This is a sanctioned exception to the "Spec shows no money" ruling.
+
+**From the T-60 QA wave (orchestrator rulings, 2026-10-09):**
+
+- **Release needs a vendor on file (T-60d, F15).** A line releases only with `vendor_id` set, because `purchase_orders.vendor_id` must reference the vendor; a vendor name alone still counts as Specced, not Released. The Release lens STAGE cell names the blocker ("Pick the maker from your vendors"), and lines left out are listed under "Not in this release". Refusals read as sentences (`release-refusals.ts`).
+- **An unfilled allowance is not billable (T-60k, 00764, F21).** The invoice picker lists it, unselectable, as "Up to $X · bills once it's filled". A `BEFORE` trigger on `invoice_line_items` refuses any line naming an allowance with no price, raising "An allowance bills once it's filled."
+- **Activation sets `assignment_scope` (T-60h, 00763, F18).** Activating a proposal with items in rooms had failed since 00438 ("non-room assignment cannot carry a room"); fixed in `_activate_proposal_as_project_impl` and `_apply_client_decision_authorized`.
+- **The order paper takes a room name (T-60j, F19).** ORDER on a line in a room had crashed (`input.split`). Pre-existing on main, now fixed.
+
+**Still open (recorded, not ruled):** F23 (admin cannot open a studio-layer product, RLS), F25 (a draft PO stamps the line `ordered` / RELEASED TO MAKER, pre-existing from 00703/00709/00718), F26 (`po-send` numbers a PO before uploading it), F27 (the invoice picker offers a Specced line the release held out — may be meant for studio-direct buys). See `docs/design/the-document/DECISIONS.md` § Open — needs design ruling.
+
+**Source:** `artifacts/pieces-building-room-2026-10-08/build/CONTRACT.md` §6 step 7; `synthesis/direction.md` §"Rulings"; story log #1, #2, #4, #15, #20 (US-21).
+
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · V14 · V15 · last id = V15*
+
+---
+
 ## Parked — 2026-10-06 (studio buying side journeys)
 
 These are side journeys from the studio buying review (`artifacts/procurement-buying-review-2026-10-05/synthesis/direction.md` §10). They were logged, not built, when US-16 shipped. Each one failed the feature test (surface, studio moment, stream, promise) or is gated elsewhere. None is a ruling, so they take no V-id.
