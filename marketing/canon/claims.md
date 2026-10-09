@@ -53,6 +53,12 @@ source. Keep `|` out of cells.
 | C22 | Mydoma charges a one-time onboarding fee on its annual plan. | https://mydomastudio.com/pricing/ via 05-competitor-activation.md line 52 (competitor price; pricing has changed over time) | todo |
 | C23 | The Founding 50 is a circle of 50 working designers shaping Patina; Kody and Leah read every application at patina.cloud/designers. | https://patina.cloud/designers (hero and application sections, read 2026-10-08) | verified |
 | C24 | Patina's app and marketplace are pre-launch. | https://patina.cloud (status line, read 2026-10-08) | verified |
+| C25 | Kippley Custom Carpentry is a family-owned builder in Sauk City, Wisconsin, building homes since 1987, that employs its own framing and finishing carpenters. | https://www.kippleycustomcarpentry.com (home page: "Since 1987", "family-owned", "we employ our own framing and finishing carpenters", footer address; read 2026-10-09) | verified |
+| C26 | Kippley Custom Carpentry builds its own custom woodwork: fireplace mantels, entertainment centers, built-ins and cabinetry. | https://www.kippleycustomcarpentry.com (home page, "Intricate Custom Woodworking" and "Remodeling and Additions"; read 2026-10-09) | verified |
+| C27 | The Madison Area Parade of Homes is presented by the Madison Area Builders Association; Kilkenny Farms West in Waunakee is one of its Parade-site neighborhoods. | https://www.channel3000.com/features/in-the-608-madison-area-parade-of-homes-returns-this-weekend/article_93ebf6fc-0fac-47fc-be57-c8a30cdb80b9.html (2026 Parade article; read 2026-10-09) | verified |
+| C28 | Middle West Studio designs the interiors of the house Kippley Custom Carpentry is building in Kilkenny Farms West, Waunakee (the Kilkenny house). | Kody, chat 2026-10-09; Middle West design proposal for the Kippley build in Kilkenny Farms West. Needs Kippley's written OK and an in-repo or public source before use | todo |
+| C29 | The Kilkenny house will be on the 2027 Madison Area Parade of Homes. | Kody, chat 2026-10-09. Promote when MABA lists the 2027 homes or Kippley confirms in writing | todo |
+| C30 | The Kilkenny house runs on one Patina page: Leah composes, and the Kippley crew delivers from it. | docs/prds/FieldCaptrueApp/Field-Site-Portal-PRD-v1.md §15 Pilot (a plan, not yet run). Promote once the pilot has run on this house | todo |
 
 ## Never claim (not ledger rows; lint cannot catch all of these)
 
