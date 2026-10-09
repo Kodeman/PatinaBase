@@ -17740,7 +17740,7 @@ export type Database = {
           ceiling_cents: number
           ffe_item_id: string
           filled_at: string
-          filled_by: string
+          filled_by: string | null
           filled_cents: number
           id: string
           variance_cents: number
@@ -17750,7 +17750,7 @@ export type Database = {
           ceiling_cents: number
           ffe_item_id: string
           filled_at?: string
-          filled_by: string
+          filled_by?: string | null
           filled_cents: number
           id?: string
           variance_cents: number
@@ -17760,7 +17760,7 @@ export type Database = {
           ceiling_cents?: number
           ffe_item_id?: string
           filled_at?: string
-          filled_by?: string
+          filled_by?: string | null
           filled_cents?: number
           id?: string
           variance_cents?: number
@@ -20390,21 +20390,21 @@ export type Database = {
       project_room_handbacks: {
         Row: {
           handed_back_at: string
-          handed_back_by: string
+          handed_back_by: string | null
           id: string
           project_id: string
           project_room_id: string
         }
         Insert: {
           handed_back_at?: string
-          handed_back_by: string
+          handed_back_by?: string | null
           id?: string
           project_id: string
           project_room_id: string
         }
         Update: {
           handed_back_at?: string
-          handed_back_by?: string
+          handed_back_by?: string | null
           id?: string
           project_id?: string
           project_room_id?: string
