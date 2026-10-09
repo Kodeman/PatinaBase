@@ -17734,6 +17734,68 @@ export type Database = {
           },
         ]
       }
+      project_ffe_allowance_fills: {
+        Row: {
+          authorization_item_id: string
+          ceiling_cents: number
+          ffe_item_id: string
+          filled_at: string
+          filled_by: string
+          filled_cents: number
+          id: string
+          variance_cents: number
+        }
+        Insert: {
+          authorization_item_id: string
+          ceiling_cents: number
+          ffe_item_id: string
+          filled_at?: string
+          filled_by: string
+          filled_cents: number
+          id?: string
+          variance_cents: number
+        }
+        Update: {
+          authorization_item_id?: string
+          ceiling_cents?: number
+          ffe_item_id?: string
+          filled_at?: string
+          filled_by?: string
+          filled_cents?: number
+          id?: string
+          variance_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_allowance_fills_authorization_item_id_fkey"
+            columns: ["authorization_item_id"]
+            isOneToOne: false
+            referencedRelation: "furnishing_authorization_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_allowance_fills_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_allowance_fills_filled_by_fkey"
+            columns: ["filled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_allowance_fills_filled_by_fkey"
+            columns: ["filled_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_ffe_board_reconciliation: {
         Row: {
           mapped_board_id: string | null
@@ -18012,6 +18074,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
           link_kind: string | null
@@ -18067,6 +18130,7 @@ export type Database = {
           installed_on?: string | null
           item_type?: string
           last_status_change_at?: string | null
+          line_group_id?: string | null
           line_kind?: string
           line_total_cents?: number | null
           link_kind?: string | null
@@ -18122,6 +18186,7 @@ export type Database = {
           installed_on?: string | null
           item_type?: string
           last_status_change_at?: string | null
+          line_group_id?: string | null
           line_kind?: string
           line_total_cents?: number | null
           link_kind?: string | null
@@ -18179,6 +18244,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "task_blocked_state"
             referencedColumns: ["blocking_item_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_line_group_id_fkey"
+            columns: ["line_group_id"]
+            isOneToOne: false
+            referencedRelation: "project_line_groups"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "project_ffe_items_parent_ffe_item_id_fkey"
@@ -18522,6 +18594,45 @@ export type Database = {
           },
         ]
       }
+      project_ffe_placement_receipts: {
+        Row: {
+          created_at: string
+          id: string
+          placement_id: string
+          quantity: number
+          receipt_batch_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          placement_id: string
+          quantity: number
+          receipt_batch_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          placement_id?: string
+          quantity?: number
+          receipt_batch_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_placement_receipts_placement_id_fkey"
+            columns: ["placement_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_placements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_placement_receipts_receipt_batch_id_fkey"
+            columns: ["receipt_batch_id"]
+            isOneToOne: false
+            referencedRelation: "receiving_inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_ffe_placements: {
         Row: {
           area_note: string | null
@@ -18796,6 +18907,55 @@ export type Database = {
             columns: ["ffe_item_id"]
             isOneToOne: true
             referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_line_groups: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          project_id: string
+          project_room_id: string | null
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          project_id: string
+          project_room_id?: string | null
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          project_id?: string
+          project_room_id?: string | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_line_groups_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_line_groups_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_line_groups_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
             referencedColumns: ["id"]
           },
         ]
@@ -36695,6 +36855,10 @@ export type Database = {
         Args: { p_configuration_id: string }
         Returns: Json
       }
+      _product_on_a_schedule_line: {
+        Args: { p_product_id: string }
+        Returns: boolean
+      }
       _project_agreement_terms: {
         Args: {
           p_allow_null_ceiling?: boolean
@@ -41258,6 +41422,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
           link_kind: string | null
@@ -41503,6 +41668,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
           link_kind: string | null
@@ -41787,6 +41953,10 @@ export type Database = {
       merge_studio_contacts: {
         Args: { p_matched_on: string; p_merged: string; p_survivor: string }
         Returns: string
+      }
+      merge_studio_product: {
+        Args: { p_from: string; p_into: string }
+        Returns: Json
       }
       migrate_legacy_ffe_notes: { Args: never; Returns: number }
       mint_paperwork_link: {
@@ -42635,6 +42805,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
           link_kind: string | null
@@ -44312,6 +44483,10 @@ export type Database = {
         Args: { p_ffe_item_id: string; p_unit_price_cents: number }
         Returns: Json
       }
+      set_line_group: {
+        Args: { p_ffe_item_ids: string[]; p_group: Json }
+        Returns: Json
+      }
       set_line_placements: {
         Args: { p_ffe_item_id: string; p_placements: Json }
         Returns: Json
@@ -44363,6 +44538,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
           link_kind: string | null
@@ -44427,6 +44603,7 @@ export type Database = {
           installed_on: string | null
           item_type: string
           last_status_change_at: string | null
+          line_group_id: string | null
           line_kind: string
           line_total_cents: number | null
           link_kind: string | null

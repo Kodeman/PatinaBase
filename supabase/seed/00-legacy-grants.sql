@@ -21174,6 +21174,138 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00751_pieces_line_groups.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_line_groups FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00751_pieces_line_groups.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.project_line_groups TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00751_pieces_line_groups.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.project_line_groups TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00751_pieces_line_groups.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_line_group(uuid[], jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00751_pieces_line_groups.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_line_group(uuid[], jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00751_pieces_line_groups.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._spec_book_current_item_snapshots(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00751_pieces_line_groups.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._spec_book_current_item_snapshots(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00752_pieces_allowance_fill.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_ffe_allowance_fills FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00752_pieces_allowance_fill.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.project_ffe_allowance_fills TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00752_pieces_allowance_fill.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.place_product_in_project_v2(jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00752_pieces_allowance_fill.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.place_product_in_project_v2(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00753_pieces_catalog_merge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._product_on_a_schedule_line(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00753_pieces_catalog_merge.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._product_on_a_schedule_line(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00753_pieces_catalog_merge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.merge_studio_product(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00753_pieces_catalog_merge.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.merge_studio_product(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00754_pieces_order_rooms.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_ffe_placement_receipts FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00754_pieces_order_rooms.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.project_ffe_placement_receipts TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00754_pieces_order_rooms.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT ON TABLE public.project_ffe_placement_receipts TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00754_pieces_order_rooms.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_project_ffe_receipt_batch( uuid, jsonb, public.receiving_inspection_outcome, text, uuid[] ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00754_pieces_order_rooms.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_project_ffe_receipt_batch( uuid, jsonb, public.receiving_inspection_outcome, text, uuid[] ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00754_pieces_order_rooms.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_line_placements(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00754_pieces_order_rooms.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_line_placements(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
