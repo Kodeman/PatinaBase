@@ -113,6 +113,8 @@ export function useProjectPalettes(projectId: string) {
       return (data ?? []) as ProjectPalette[];
     },
     enabled: !!projectId,
+    // R83: the readers show their own empty state; a failed read never toasts.
+    meta: { errorSurface: 'silent' as const },
   });
 }
 

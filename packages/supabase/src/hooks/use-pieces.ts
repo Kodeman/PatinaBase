@@ -479,15 +479,30 @@ export function useMakeFfeLineAllowance() {
 // mutation while the tab is hidden, so a write could wait unseen.)
 let finishesWrite: Promise<unknown> = Promise.resolve();
 
+/** A finish as the lens holds it, with the stored swatch it was read from. */
+export interface RoomFinishEdit extends RoomFinish {
+  /** The swatch as stored. Its keys the lens does not own (an older row's
+   *  `role`, `name`, `paint_color_id`, anything else) are written back. */
+  stored?: Readonly<Record<string, unknown>> | null;
+}
+
+export interface SetRoomFinishesVars {
+  projectId: string;
+  roomId: string;
+  finishes: RoomFinishEdit[];
+  /** Swatches the lens does not show (an older non-paint role): written back unchanged, after the finishes. */
+  kept?: readonly unknown[];
+  /** The room palette's name. A palette the lens creates is named `Finishes`. */
+  name?: string | null;
+}
+
 async function writeRoomFinishes({
   projectId,
   roomId,
   finishes,
-}: {
-  projectId: string;
-  roomId: string;
-  finishes: RoomFinish[];
-}): Promise<ProjectPalette> {
+  kept = [],
+  name,
+}: SetRoomFinishesVars): Promise<ProjectPalette> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (getSupabase() as any)
     .from('project_palettes')
@@ -495,16 +510,20 @@ async function writeRoomFinishes({
       {
         project_id: projectId,
         scope_room_id: roomId,
-        name: 'Finishes',
-        swatches: finishes.map((f, index) => ({
-          surface: f.surface,
-          product: f.product,
-          brand: f.brand,
-          brand_code: f.brandCode,
-          sheen: f.sheen,
-          hex: f.hex,
-          sort_order: index,
-        })),
+        name: name || 'Finishes',
+        swatches: [
+          ...finishes.map((f, index) => ({
+            ...f.stored,
+            surface: f.surface,
+            product: f.product,
+            brand: f.brand,
+            brand_code: f.brandCode,
+            sheen: f.sheen,
+            hex: f.hex,
+            sort_order: index,
+          })),
+          ...kept,
+        ],
       },
       { onConflict: 'project_id,scope_room_id' },
     )
@@ -518,14 +537,18 @@ async function writeRoomFinishes({
  * Writes a room's whole finish list: an upsert of the room's one
  * `project_palettes` row (00760 `project_palettes_one_per_room`) under the
  * studio's RLS. There is no RPC. Each finish is stored as a swatch element
- * `{surface, product, brand, brand_code, sheen, hex, sort_order}`; the
- * upsert names the row `Finishes`. Writes run one at a time, and the saved
- * row goes into the `useProjectPalettes` cache before it is refreshed.
+ * `{surface, product, brand, brand_code, sheen, hex, sort_order}` over the
+ * swatch it was read from, so an older row keeps its other keys; the
+ * swatches the lens does not show follow unchanged. The row keeps its name,
+ * or is named `Finishes`. Writes run one at a time, and the saved row goes
+ * into the `useProjectPalettes` cache before it is refreshed. The lens shows
+ * a failed write itself, so it never toasts (R83).
  */
 export function useSetRoomFinishes() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { projectId: string; roomId: string; finishes: RoomFinish[] }) => {
+    meta: { errorSurface: 'inline' as const },
+    mutationFn: (vars: SetRoomFinishesVars) => {
       const write = () => writeRoomFinishes(vars);
       const run = finishesWrite.then(write, write);
       finishesWrite = run.catch(() => undefined);

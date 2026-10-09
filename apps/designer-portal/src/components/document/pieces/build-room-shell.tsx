@@ -357,13 +357,11 @@ export function BuildRoomShell({
           </button>
         </div>
 
+        {/* At 390 five lens words do not fit in fixed fifths: the row wraps instead. */}
         <div
           role="group"
           aria-label="Lens"
-          className="order-last -mx-4 grid w-[calc(100%+2rem)] border-t border-[var(--sheet-rule)] md:order-none md:mx-0 md:flex md:w-auto md:flex-1 md:justify-center md:gap-6 md:border-t-0"
-          style={{
-            gridTemplateColumns: `repeat(${lenses.length}, minmax(0, 1fr))`,
-          }}
+          className="order-last -mx-4 flex w-[calc(100%+2rem)] flex-wrap justify-center gap-x-1 border-t border-[var(--sheet-rule)] md:order-none md:mx-0 md:w-auto md:flex-1 md:flex-nowrap md:gap-6 md:border-t-0"
         >
           {lenses.map((candidate) => {
             const pressed = candidate === activeLens;

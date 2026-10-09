@@ -434,12 +434,26 @@ describe("BuildRoomShell — at 390 (a13)", () => {
     expect(onAddRoom).toHaveBeenCalledWith("Mudroom");
   });
 
-  it("lays the lens words out as a full-width segmented row with 44px targets", () => {
+  it("lays the lens words out as a full-width row with 44px targets", () => {
     renderShell();
     const group = screen.getByRole("group", { name: "Lens" });
-    expect(group.className).toContain("grid");
-    expect(group.style.gridTemplateColumns).toBe("repeat(5, minmax(0, 1fr))");
+    expect(group.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(["flex", "w-[calc(100%+2rem)]"]),
+    );
+    expect(lensButtons()).toHaveLength(5);
     for (const button of lensButtons())
       expect(button.className).toContain("min-h-11");
+  });
+
+  it("wraps five lens words at 390 rather than squeezing them into fixed fifths (T-58 F4)", () => {
+    renderShell();
+    const group = screen.getByRole("group", { name: "Lens" });
+    const phoneClasses = group.className
+      .split(/\s+/)
+      .filter((cls) => !/^(sm|md|lg|xl):/.test(cls));
+    expect(phoneClasses).toContain("flex-wrap");
+    expect(phoneClasses).not.toContain("grid");
+    expect(group.style.gridTemplateColumns).toBe("");
+    expect(group.getAttribute("style") ?? "").not.toMatch(/repeat\(/);
   });
 });

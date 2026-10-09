@@ -12,7 +12,7 @@ import type { ReactNode } from 'react';
 import type { RoomFinish } from '@patina/types';
 import { DocumentAction } from '../document-action';
 import { StrataMark } from '../strata-mark';
-import { FinishSwatch } from './finishes-lens';
+import { FinishSwatch } from './finish-swatch';
 import { buildRoomHref } from '@/lib/document/pieces/build-room-url';
 import {
   overviewRowCounts,

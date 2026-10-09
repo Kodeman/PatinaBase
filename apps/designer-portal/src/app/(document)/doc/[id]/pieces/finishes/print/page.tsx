@@ -12,13 +12,16 @@
  */
 
 import { use, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useProjectPalettes } from "@patina/supabase";
 import {
-  FinishSwatch,
+  finishesPrintHref,
   roomFinishesByRoom,
-  swatchLabel,
 } from "@/components/document/pieces/finishes-lens";
+import {
+  FinishSwatch,
+  swatchLabel,
+} from "@/components/document/pieces/finish-swatch";
 import { useDocumentRooms } from "@/hooks/use-document-rooms";
 import { useDocumentEngagement } from "@/hooks/use-document-state";
 import { buildRoomHref } from "@/lib/document/pieces/build-room-url";
@@ -36,9 +39,13 @@ const HEAD_CELL =
   "border-b border-[var(--ink)] py-2 pr-4 text-left font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--ink)]";
 const CELL =
   "border-b border-[var(--hairline-strong)] py-3 pr-4 align-middle text-[14px] text-[var(--ink)]";
+const BACK_CLS =
+  "inline-flex min-h-[44px] items-center font-mono text-[12px] font-medium uppercase tracking-[0.06em] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]";
 
 function FinishesPrint({ docId }: { docId: string }) {
   const router = useRouter();
+  // The place the lens was in, so `← Back to Finishes` lands there again.
+  const room = useSearchParams()?.get("room")?.trim() || null;
   const { data: resolution } = useDocumentEngagement(docId);
   const row = resolution?.kind === "engagement" ? resolution.row : null;
   const projectId = row?.project_id ?? null;
@@ -48,8 +55,8 @@ function FinishesPrint({ docId }: { docId: string }) {
   // An activated proposal's or accepted lead's id answers at its project (R6, F1).
   useEffect(() => {
     if (resolution?.kind !== "redirect") return;
-    router.replace(`/doc/${resolution.projectId}/pieces/finishes/print`);
-  }, [resolution, router]);
+    router.replace(finishesPrintHref(resolution.projectId, room));
+  }, [resolution, router, room]);
 
   const pages = useMemo(() => {
     const byRoom = roomFinishesByRoom(palettes);
@@ -58,7 +65,30 @@ function FinishesPrint({ docId }: { docId: string }) {
       .filter((page) => page.finishes.length > 0);
   }, [rooms, palettes]);
 
-  if (!row) return <main aria-busy={resolution == null} />;
+  const backHref = buildRoomHref(docId, { lens: "finishes", room });
+
+  // Still finding the document, or on the way to its project.
+  if (resolution == null || resolution.kind === "redirect") {
+    return <main aria-busy="true" />;
+  }
+
+  if (!row || !projectId) {
+    return (
+      <main className="mx-auto max-w-[56ch] px-6 py-12 text-[14px] leading-[1.5] text-[var(--ink)]">
+        <p>
+          {row
+            ? "The paint and finish schedule is kept on a project. This document has none yet."
+            : "No document answers to this name, so there is no schedule to print."}
+        </p>
+        <a
+          href={row ? `/doc/${docId}` : "/desk"}
+          className={`mt-3 ${BACK_CLS}`}
+        >
+          {row ? "← Back to the document" : "← Back to the desk"}
+        </a>
+      </main>
+    );
+  }
 
   return (
     <div
@@ -87,10 +117,7 @@ function FinishesPrint({ docId }: { docId: string }) {
       `}</style>
 
       <div className="finishes-print-toolbar sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[var(--hairline-strong)] bg-[var(--paper-doc,#FFFFFF)] px-6 py-2">
-        <a
-          href={buildRoomHref(docId, { lens: "finishes", room: null })}
-          className="inline-flex min-h-[44px] items-center font-mono text-[12px] font-medium uppercase tracking-[0.06em] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
-        >
+        <a href={backHref} className={BACK_CLS}>
           ← Back to Finishes
         </a>
         {pages.length > 0 && (
@@ -145,14 +172,23 @@ function FinishesPrint({ docId }: { docId: string }) {
                 <tbody>
                   {finishes.map((finish, index) => (
                     <tr key={index}>
-                      <td className={CELL}>{finish.surface}</td>
+                      {/* An emptied surface prints a dash, as every empty cell does. */}
+                      <td className={CELL}>{finish.surface || "—"}</td>
                       <td className={CELL}>{finish.product ?? "—"}</td>
                       <td className={CELL}>{finish.sheen ?? "—"}</td>
-                      <td className={`${CELL} text-[var(--ink-faint)]`}>
-                        <FinishSwatch
-                          hex={finish.hex}
-                          label={swatchLabel(finish)}
-                        />
+                      <td className={CELL}>
+                        {/* The hex prints beside the swatch: it survives a black-and-white print. */}
+                        <span className="flex items-center gap-2">
+                          <span className="text-[var(--ink-faint)]">
+                            <FinishSwatch
+                              hex={finish.hex}
+                              label={swatchLabel(finish)}
+                            />
+                          </span>
+                          <span className="font-mono text-[12px] uppercase">
+                            {finish.hex ?? "—"}
+                          </span>
+                        </span>
                       </td>
                     </tr>
                   ))}

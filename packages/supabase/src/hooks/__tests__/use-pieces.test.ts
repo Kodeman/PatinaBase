@@ -59,7 +59,7 @@ import {
   useSetLinePlacements,
   useSetRoomFinishes,
 } from '../use-pieces';
-import { useProjectFFEItems } from '../use-project-v2';
+import { useProjectFFEItems, useProjectPalettes } from '../use-project-v2';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -497,6 +497,67 @@ describe('useSetRoomFinishes', () => {
     expect(invalidatedKeys()).toEqual([['project-palettes', 'p1']]);
   });
 
+  it('writes over an older swatch, keeping its other keys, the hidden swatches and the palette name', async () => {
+    const { chain, calls } = upsertChain({ data: { id: 'pal1' }, error: null });
+    from.mockReturnValue(chain);
+    const mutation = useSetRoomFinishes() as unknown as MutationConfig<unknown, unknown>;
+    const wall = {
+      hex: '#E8E4DA',
+      name: 'Pointing',
+      role: 'wall',
+      brand: 'Farrow & Ball',
+      brand_code: 'No. 2003',
+      paint_color_id: 'pc-2003',
+      source_note: 'from the proposal',
+      sort_order: 3,
+    };
+    const textile = { hex: '#7A6A58', name: 'Linen', role: 'textile', sort_order: 1 };
+    await mutation.mutationFn({
+      projectId: 'p1',
+      roomId: 'r1',
+      name: 'Kitchen palette',
+      finishes: [
+        {
+          surface: 'Walls',
+          product: 'Farrow & Ball Pointing No. 2003',
+          brand: 'Farrow & Ball',
+          brandCode: 'No. 2003',
+          sheen: 'Eggshell',
+          hex: '#E8E4DA',
+          sortOrder: 3,
+          stored: wall,
+        },
+      ],
+      kept: [textile],
+    });
+
+    const row = (calls[0][1] as [{ name: string; swatches: unknown[] }])[0];
+    expect(row.name).toBe('Kitchen palette');
+    expect(row.swatches).toEqual([
+      {
+        name: 'Pointing',
+        role: 'wall',
+        paint_color_id: 'pc-2003',
+        source_note: 'from the proposal',
+        surface: 'Walls',
+        product: 'Farrow & Ball Pointing No. 2003',
+        brand: 'Farrow & Ball',
+        brand_code: 'No. 2003',
+        sheen: 'Eggshell',
+        hex: '#E8E4DA',
+        sort_order: 0,
+      },
+      textile,
+    ]);
+    expect(row.swatches[1]).toBe(textile);
+  });
+
+  it('shows a failed write only inline, never as a toast (R83)', () => {
+    expect((useSetRoomFinishes() as unknown as { meta: unknown }).meta).toEqual({
+      errorSurface: 'inline',
+    });
+  });
+
   it('starts a write only after the one before it has landed, so the last list wins', async () => {
     const order: string[] = [];
     let landFirst!: () => void;
@@ -690,5 +751,13 @@ describe('useProjectFFEItems', () => {
     expect(columns).toContain('ffe_line_stage');
     expect(columns).toContain('ffe_line_authorization');
     expect(calls).toContainEqual(['is', ['removed_at', null]]);
+  });
+});
+
+describe('useProjectPalettes', () => {
+  it('fails silently: its readers show their own empty state (R83)', () => {
+    const config = useProjectPalettes('p1') as unknown as { queryKey: unknown[]; meta: unknown };
+    expect(config.queryKey).toEqual(['project-palettes', 'p1']);
+    expect(config.meta).toEqual({ errorSurface: 'silent' });
   });
 });

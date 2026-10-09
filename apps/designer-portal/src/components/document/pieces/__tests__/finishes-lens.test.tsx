@@ -7,12 +7,18 @@ import { Suspense } from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 
 const mockMutate = jest.fn();
-let mockPalettes: Array<{ scope_room_id: string | null; swatches: unknown }> =
-  [];
+let mockPending = false;
+let mockPalettes: Array<{
+  scope_room_id: string | null;
+  name?: string;
+  swatches: unknown;
+}> = [];
+let mockEngagement: unknown;
+let mockSearch = new URLSearchParams();
 
 jest.mock("@patina/supabase", () => ({
   useProjectPalettes: () => ({ data: mockPalettes }),
-  useSetRoomFinishes: () => ({ mutate: mockMutate, isPending: false }),
+  useSetRoomFinishes: () => ({ mutate: mockMutate, isPending: mockPending }),
 }));
 jest.mock("@/hooks/use-document-rooms", () => ({
   useDocumentRooms: () => ({
@@ -24,16 +30,17 @@ jest.mock("@/hooks/use-document-rooms", () => ({
   }),
 }));
 jest.mock("@/hooks/use-document-state", () => ({
-  useDocumentEngagement: () => ({
-    data: {
-      kind: "engagement",
-      row: { project_id: "project-1", title: "Whole Home Renovation" },
-    },
-  }),
+  useDocumentEngagement: () => ({ data: mockEngagement }),
 }));
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+  useSearchParams: () => mockSearch,
 }));
+
+const ENGAGEMENT = {
+  kind: "engagement",
+  row: { project_id: "project-1", title: "Whole Home Renovation" },
+};
 
 import {
   FinishesLens,
@@ -76,24 +83,41 @@ const BEDROOM = {
   ],
 };
 
+/** An older swatch with a paint role, as activation copied it (00331). */
+const KITCHEN_WALL = {
+  hex: "#E8E4DA",
+  name: "Pointing",
+  role: "wall",
+  brand: "Farrow & Ball",
+  brand_code: "No. 2003",
+  paint_color_id: "pc-2003",
+  source_note: "from the proposal",
+  sort_order: 0,
+};
+/** An older swatch with a role that is not a paint or a finish. */
+const KITCHEN_TEXTILE = {
+  hex: "#7A6A58",
+  name: "Linen",
+  role: "textile",
+  brand: null,
+  brand_code: null,
+  paint_color_id: null,
+  sort_order: 1,
+};
+
 const KITCHEN = {
   scope_room_id: "kitchen",
-  // An older palette row: {hex, name, role, brand, brand_code, sort_order}.
-  swatches: [
-    {
-      hex: "#E8E4DA",
-      name: "Pointing",
-      role: "wall",
-      brand: "Farrow & Ball",
-      brand_code: "No. 2003",
-      sort_order: 0,
-    },
-  ],
+  name: "Kitchen palette",
+  // An older palette row: {hex, name, role, brand, brand_code, paint_color_id, sort_order}.
+  swatches: [KITCHEN_WALL, KITCHEN_TEXTILE],
 };
 
 beforeEach(() => {
   mockMutate.mockReset();
+  mockPending = false;
   mockPalettes = [BEDROOM, KITCHEN];
+  mockEngagement = ENGAGEMENT;
+  mockSearch = new URLSearchParams();
 });
 
 const renderLens = (room: string | null = "bedroom") =>
@@ -147,7 +171,11 @@ describe("the Finishes lens (a11)", () => {
     const print = screen.getByRole("link", {
       name: "Print the paint and finish schedule",
     });
-    expect(print).toHaveAttribute("href", "/doc/doc-1/pieces/finishes/print");
+    // It keeps the room, so the print's way back lands in it (F12).
+    expect(print).toHaveAttribute(
+      "href",
+      "/doc/doc-1/pieces/finishes/print?room=bedroom",
+    );
     expect(
       screen.getByText(
         "One page per room, addressed to the painter. Nothing else prints on it.",
@@ -211,23 +239,80 @@ describe("the Finishes lens (a11)", () => {
     ).toEqual(["Walls", "Trim and doors"]);
   });
 
-  it("writes a swatch colour as #RRGGBB and refuses anything else, saying how", () => {
+  it("writes a swatch color as #RRGGBB and refuses anything else, saying how", () => {
     renderLens();
     const hex = screen.getByRole("textbox", {
-      name: "Swatch colour for Trim and doors",
+      name: "Swatch color for Trim and doors",
     });
     fireEvent.change(hex, { target: { value: "eggshell white" } });
     fireEvent.blur(hex);
     expect(mockMutate).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Write the colour as #RRGGBB, for example #F2DCD2.",
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(
+      "Write the color as #RRGGBB, for example #F2DCD2.",
     );
     expect(hex).toHaveAttribute("aria-invalid", "true");
+    // The alert is tied to the input it is about (F15).
+    expect(alert.id).not.toBe("");
+    expect(hex).toHaveAttribute("aria-describedby", alert.id);
 
     fireEvent.change(hex, { target: { value: "fff" } });
     fireEvent.blur(hex);
     expect(lastWrite().finishes[2].hex).toBe("#FFFFFF");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Swatch color for Trim and doors" }),
+    ).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("keeps what she typed when a save fails, and sends it again when she next leaves a cell (F10)", () => {
+    const view = renderLens();
+    const rerender = () =>
+      view.rerender(
+        <FinishesLens
+          docId="doc-1"
+          projectId="project-1"
+          room="bedroom"
+          canSeeMoney
+        />,
+      );
+    const sheen = screen.getByRole("combobox", { name: "Sheen for Ceiling" });
+    fireEvent.change(sheen, { target: { value: "Matte" } });
+    fireEvent.blur(sheen);
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    act(() => {
+      mockPending = true;
+      rerender();
+    });
+    // The write fails: onError lands before the mutation stops pending.
+    act(() => {
+      mockMutate.mock.calls[0][1].onError(new Error("network"));
+      mockPending = false;
+      rerender();
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The finishes for Bedroom were not saved. Try again.",
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Sheen for Ceiling" }),
+    ).toHaveValue("Matte");
+
+    fireEvent.blur(screen.getByRole("textbox", { name: "Product for Walls" }));
+    expect(mockMutate).toHaveBeenCalledTimes(2);
+    expect(lastWrite().finishes[1].sheen).toBe("Matte");
+  });
+
+  it("names a swatch by its hex when it has no product (F9)", () => {
+    mockPalettes = [
+      {
+        scope_room_id: "bedroom",
+        swatches: [{ surface: "Closet walls", hex: "#AABBCC", sort_order: 0 }],
+      },
+    ];
+    renderLens();
+    expect(
+      screen.getByRole("img", { name: "#AABBCC swatch" }),
+    ).toBeInTheDocument();
   });
 
   it("lays every room out on the whole job, an empty room with only its entry row", () => {
@@ -243,6 +328,43 @@ describe("the Finishes lens (a11)", () => {
     expect(
       screen.getByRole("textbox", { name: "New surface in Hall" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Print the paint and finish schedule" }),
+    ).toHaveAttribute("href", "/doc/doc-1/pieces/finishes/print");
+  });
+
+  it("writes into an older palette without losing its name, its swatches' other keys, or the swatches it does not show (F2, F3)", () => {
+    renderLens("kitchen");
+    // Only the paint row shows; the textile row is not a finish.
+    expect(
+      screen
+        .getAllByRole("textbox", { name: /^Surface \d/ })
+        .map((input) => (input as HTMLInputElement).value),
+    ).toEqual(["Walls"]);
+    expect(screen.queryByDisplayValue(/Linen/)).not.toBeInTheDocument();
+
+    const sheen = screen.getByRole("combobox", { name: "Sheen for Walls" });
+    fireEvent.change(sheen, { target: { value: "Eggshell" } });
+    fireEvent.blur(sheen);
+    const write = lastWrite();
+    expect(write.roomId).toBe("kitchen");
+    expect(write.name).toBe("Kitchen palette");
+    expect(write.finishes).toHaveLength(1);
+    expect(write.finishes[0]).toMatchObject({
+      surface: "Walls",
+      sheen: "Eggshell",
+      hex: "#E8E4DA",
+      stored: KITCHEN_WALL,
+    });
+    expect(write.kept).toEqual([KITCHEN_TEXTILE]);
+  });
+
+  it("passes no name for a room with no palette yet, so the hook names it Finishes", () => {
+    renderLens("hall");
+    const entry = screen.getByRole("textbox", { name: "New surface in Hall" });
+    fireEvent.change(entry, { target: { value: "Walls" } });
+    fireEvent.keyDown(entry, { key: "Enter" });
+    expect(lastWrite()).toMatchObject({ roomId: "hall", name: null, kept: [] });
   });
 
   it("sends a place that is not a room back to its rooms", () => {
@@ -345,6 +467,75 @@ describe("the painter's print", () => {
         })
         .querySelector("rect"),
     ).toHaveAttribute("fill", "#F2DCD2");
+    // The hex prints beside the swatch, for a black-and-white print (F9).
+    const walls = within(bedroom).getAllByRole("row")[1];
+    expect(within(walls).getAllByRole("cell")[3]).toHaveTextContent("#F2DCD2");
+  });
+
+  it("prints only paint and finish rows, an older role's surface in sentence case (F3)", async () => {
+    await renderPrint();
+    const [kitchen] = await screen.findAllByTestId("finishes-print-page");
+    const rows = within(kitchen).getAllByRole("row");
+    expect(rows).toHaveLength(2);
+    expect(within(rows[1]).getAllByRole("cell")[0]).toHaveTextContent(
+      /^Walls$/,
+    );
+    expect(kitchen).not.toHaveTextContent(/textile|Linen/i);
+  });
+
+  it("prints a dash for an emptied surface (F11)", async () => {
+    mockPalettes = [
+      {
+        scope_room_id: "bedroom",
+        swatches: [
+          { surface: "", product: "Chantilly Lace OC-65", sort_order: 0 },
+        ],
+      },
+    ];
+    await renderPrint();
+    const [bedroom] = await screen.findAllByTestId("finishes-print-page");
+    const cells = within(within(bedroom).getAllByRole("row")[1]).getAllByRole(
+      "cell",
+    );
+    expect(cells[0]).toHaveTextContent(/^—$/);
+    expect(cells[3]).toHaveTextContent(/^—$/);
+  });
+
+  it("goes back to Finishes in the room it was printed from (F12)", async () => {
+    mockSearch = new URLSearchParams({ room: "bedroom" });
+    await renderPrint();
+    expect(
+      screen.getByRole("link", { name: "← Back to Finishes" }),
+    ).toHaveAttribute("href", "/doc/doc-1/pieces?lens=finishes&room=bedroom");
+  });
+
+  it("says so when the document is missing, never an empty page (F13)", async () => {
+    mockEngagement = { kind: "missing" };
+    await renderPrint();
+    expect(
+      await screen.findByText(
+        "No document answers to this name, so there is no schedule to print.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "← Back to the desk" }),
+    ).toHaveAttribute("href", "/desk");
+  });
+
+  it("says so when the document has no project, never an empty page (F13)", async () => {
+    mockEngagement = {
+      kind: "engagement",
+      row: { project_id: null, title: "Whole Home Renovation" },
+    };
+    await renderPrint();
+    expect(
+      await screen.findByText(
+        "The paint and finish schedule is kept on a project. This document has none yet.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "← Back to the document" }),
+    ).toHaveAttribute("href", "/doc/doc-1");
   });
 
   it("says so when no room has a finish yet", async () => {
