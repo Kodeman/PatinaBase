@@ -10,11 +10,11 @@
  * @module app/(dashboard)/catalog/[productId]/__tests__/product-edit-client
  */
 
-import { render } from '@testing-library/react';
-import { toast } from 'sonner';
-import { ProductEditPageClient } from '../product-edit-client';
+import { render } from "@testing-library/react";
+import { toast } from "sonner";
+import { ProductEditPageClient } from "../product-edit-client";
 
-jest.mock('sonner', () => ({
+jest.mock("sonner", () => ({
   toast: {
     success: jest.fn(),
     error: jest.fn(),
@@ -23,13 +23,13 @@ jest.mock('sonner', () => ({
   },
 }));
 
-jest.mock('next/navigation', () => ({
+jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
-jest.mock('@/hooks/use-admin-products', () => ({
+jest.mock("@/hooks/use-admin-products", () => ({
   useProduct: () => ({
-    product: { id: 'prod-1', name: 'Oak Console' },
+    product: { id: "prod-1", name: "Oak Console" },
     isLoading: false,
     error: null,
   }),
@@ -39,19 +39,19 @@ jest.mock('@/hooks/use-admin-products', () => ({
   useUnpublishProduct: () => ({ mutateAsync: jest.fn() }),
 }));
 
-jest.mock('@/components/ui/skeleton', () => ({
+jest.mock("@/components/ui/skeleton", () => ({
   Skeleton: () => null,
 }));
 
-jest.mock('@/components/catalog/detail/admin-edit-bar', () => ({
+jest.mock("@/components/catalog/detail/admin-edit-bar", () => ({
   AdminEditBar: () => null,
 }));
 
-jest.mock('@/components/catalog/detail/validation-issues-bar', () => ({
+jest.mock("@/components/catalog/detail/validation-issues-bar", () => ({
   ValidationIssuesBar: () => null,
 }));
 
-jest.mock('@/components/catalog/detail/seo-panel', () => ({
+jest.mock("@/components/catalog/detail/seo-panel", () => ({
   SEOPanel: () => null,
 }));
 
@@ -60,12 +60,16 @@ jest.mock('@/components/catalog/detail/seo-panel', () => ({
 // save/publish/unpublish/delete paths do.
 let capturedOnToast: ((message: string, variant: string) => void) | undefined;
 
-jest.mock('@patina/catalog-ui', () => ({
+jest.mock("@patina/catalog-ui", () => ({
   ProductEditProvider: ({ onToast, children }: any) => {
     capturedOnToast = onToast;
     return <>{children}</>;
   },
-  useProductEdit: () => ({ toggleMode: jest.fn(), saveNow: jest.fn(), mode: 'present' }),
+  useProductEdit: () => ({
+    toggleMode: jest.fn(),
+    saveNow: jest.fn(),
+    mode: "present",
+  }),
   HeroGallery: () => null,
   ProductIdentity: () => null,
   ProductStory: () => null,
@@ -77,32 +81,35 @@ jest.mock('@patina/catalog-ui', () => ({
   defaultNormalize: (raw: any) => raw,
 }));
 
-describe('ProductEditPageClient onToast routing', () => {
+describe("ProductEditPageClient onToast routing", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedOnToast = undefined;
   });
 
-  it('routes an error toast to sonner, the Toaster actually mounted in app/layout.tsx', () => {
+  it("routes an error toast to sonner, the Toaster actually mounted in app/layout.tsx", () => {
     render(<ProductEditPageClient productId="prod-1" />);
 
     expect(capturedOnToast).toBeDefined();
-    capturedOnToast!("A product on a line can't be deleted. Merge it into the one you keep.", 'error');
+    capturedOnToast!(
+      "A product on a line can't be deleted. Merge it into the one you keep.",
+      "error",
+    );
 
     expect(toast.error).toHaveBeenCalledWith(
-      "A product on a line can't be deleted. Merge it into the one you keep."
+      "A product on a line can't be deleted. Merge it into the one you keep.",
     );
   });
 
-  it('routes success, warning, and info toasts to their matching sonner call', () => {
+  it("routes success, warning, and info toasts to their matching sonner call", () => {
     render(<ProductEditPageClient productId="prod-1" />);
 
-    capturedOnToast!('Changes published', 'success');
-    capturedOnToast!('Product unpublished', 'warning');
-    capturedOnToast!('Just so you know', 'info');
+    capturedOnToast!("Changes published", "success");
+    capturedOnToast!("Product unpublished", "warning");
+    capturedOnToast!("Just so you know", "info");
 
-    expect(toast.success).toHaveBeenCalledWith('Changes published');
-    expect(toast.warning).toHaveBeenCalledWith('Product unpublished');
-    expect(toast.info).toHaveBeenCalledWith('Just so you know');
+    expect(toast.success).toHaveBeenCalledWith("Changes published");
+    expect(toast.warning).toHaveBeenCalledWith("Product unpublished");
+    expect(toast.info).toHaveBeenCalledWith("Just so you know");
   });
 });

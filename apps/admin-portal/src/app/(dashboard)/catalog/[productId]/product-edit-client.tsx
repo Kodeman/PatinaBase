@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
-import { z } from 'zod';
+import { useCallback, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { z } from "zod";
 import {
   ProductEditProvider,
   useProductEdit,
@@ -19,18 +19,18 @@ import {
   type ProductDraft,
   type ValidationResult,
   type BaseProductDraft,
-} from '@patina/catalog-ui';
+} from "@patina/catalog-ui";
 import {
   useProduct,
   useUpdateProduct,
   useDeleteProduct,
   usePublishProduct,
   useUnpublishProduct,
-} from '@/hooks/use-admin-products';
-import { Skeleton } from '@/components/ui/skeleton';
-import { AdminEditBar } from '@/components/catalog/detail/admin-edit-bar';
-import { ValidationIssuesBar } from '@/components/catalog/detail/validation-issues-bar';
-import { SEOPanel } from '@/components/catalog/detail/seo-panel';
+} from "@/hooks/use-admin-products";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AdminEditBar } from "@/components/catalog/detail/admin-edit-bar";
+import { ValidationIssuesBar } from "@/components/catalog/detail/validation-issues-bar";
+import { SEOPanel } from "@/components/catalog/detail/seo-panel";
 
 // ── Admin extras ───────────────────────────────────────────────────────
 
@@ -52,15 +52,21 @@ type AdminProductDraft = ProductDraft<AdminExtras>;
 // ── Validation ─────────────────────────────────────────────────────────
 
 const validationSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(200, 'Name too long'),
-  brand: z.string().min(1, 'Brand is required').max(100, 'Brand too long'),
-  price: z.number().min(0, 'Price must be positive'),
+  name: z.string().min(1, "Name is required").max(200, "Name too long"),
+  brand: z.string().min(1, "Brand is required").max(100, "Brand too long"),
+  price: z.number().min(0, "Price must be positive"),
   slug: z
     .string()
-    .min(1, 'Slug is required')
-    .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens'),
-  seoTitle: z.string().max(60, 'SEO title should be under 60 characters').optional(),
-  seoDescription: z.string().max(160, 'SEO description should be under 160 characters').optional(),
+    .min(1, "Slug is required")
+    .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
+  seoTitle: z
+    .string()
+    .max(60, "SEO title should be under 60 characters")
+    .optional(),
+  seoDescription: z
+    .string()
+    .max(160, "SEO description should be under 160 characters")
+    .optional(),
 });
 
 function runValidation(draft: AdminProductDraft): ValidationResult {
@@ -69,9 +75,9 @@ function runValidation(draft: AdminProductDraft): ValidationResult {
   return {
     valid: false,
     issues: result.error.errors.map((e) => ({
-      field: e.path.join('.'),
+      field: e.path.join("."),
       message: e.message,
-      severity: 'error' as const,
+      severity: "error" as const,
     })),
   };
 }
@@ -85,13 +91,13 @@ function normalizeAdmin(raw: any): AdminProductDraft {
   const extras: AdminExtras = {
     msrp: p.msrp || undefined,
     salePrice: p.salePrice || p.sale_price || undefined,
-    currency: p.currency || 'USD',
-    slug: p.slug || '',
-    seoTitle: p.seoTitle || p.seo_title || '',
-    seoDescription: p.seoDescription || p.seo_description || '',
+    currency: p.currency || "USD",
+    slug: p.slug || "",
+    seoTitle: p.seoTitle || p.seo_title || "",
+    seoDescription: p.seoDescription || p.seo_description || "",
     seoKeywords: p.seoKeywords || p.seo_keywords || [],
-    shortDescription: p.shortDescription || p.short_description || '',
-    longDescription: p.longDescription || p.long_description || '',
+    shortDescription: p.shortDescription || p.short_description || "",
+    longDescription: p.longDescription || p.long_description || "",
   };
   return { ...base, ...extras };
 }
@@ -103,17 +109,17 @@ function KeyboardShortcuts() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+      if ((e.metaKey || e.ctrlKey) && e.key === "e") {
         e.preventDefault();
         toggleMode();
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 's' && mode === 'edit') {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s" && mode === "edit") {
         e.preventDefault();
         void saveNow();
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [toggleMode, saveNow, mode]);
 
   return null;
@@ -149,7 +155,9 @@ interface ProductEditPageClientProps {
   productId: string;
 }
 
-export function ProductEditPageClient({ productId }: ProductEditPageClientProps) {
+export function ProductEditPageClient({
+  productId,
+}: ProductEditPageClientProps) {
   const router = useRouter();
   const { product, isLoading, error } = useProduct(productId);
 
@@ -189,7 +197,7 @@ export function ProductEditPageClient({ productId }: ProductEditPageClientProps)
         },
       });
     },
-    [updateProduct]
+    [updateProduct],
   );
 
   const handlePublish = useCallback(async () => {
@@ -202,22 +210,22 @@ export function ProductEditPageClient({ productId }: ProductEditPageClientProps)
       // client-side and can be wired into the audit trail when the API accepts it.
       await unpublishProduct.mutateAsync(productId);
     },
-    [unpublishProduct, productId]
+    [unpublishProduct, productId],
   );
 
   const handleDelete = useCallback(async () => {
     await deleteProduct.mutateAsync(productId);
-    router.push('/catalog');
+    router.push("/catalog");
   }, [deleteProduct, productId, router]);
 
   const handleToast = useCallback(
-    (message: string, variant: 'success' | 'error' | 'warning' | 'info') => {
-      if (variant === 'error') toast.error(message);
-      else if (variant === 'warning') toast.warning(message);
-      else if (variant === 'success') toast.success(message);
+    (message: string, variant: "success" | "error" | "warning" | "info") => {
+      if (variant === "error") toast.error(message);
+      else if (variant === "warning") toast.warning(message);
+      else if (variant === "success") toast.success(message);
       else toast.info(message);
     },
-    []
+    [],
   );
 
   const memoizedSchema = useMemo(() => runValidation, []);
