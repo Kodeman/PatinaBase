@@ -12,7 +12,7 @@ import { hideDevOverlays } from "../helpers/hide-dev-overlays";
 
 /**
  * US-16 Phase 1 (SQ-417) — the buying walk as a NON-OWNER studio member:
- * the Pieces overview (US-21 T-31: Work the pieces, Add to the job, Release,
+ * the Pieces overview (US-21 T-31: Build the item list, Add to the job, Release,
  * Record a change; the margin default is `everyone`) → the six-cell
  * unfold → Order → the order paper (the studio account's terms and 50% deposit
  * prefilled; the default receiver listed first, nothing preselected) → "Send
@@ -296,7 +296,7 @@ async function openDocument(page: Page): Promise<void> {
 }
 
 /**
- * The Pieces overview's head (US-21 T-31): Work the pieces (the door into
+ * The Pieces overview's head (US-21 T-31): Build the item list (the door into
  * this Document's Build room), Add to the job and Record a change. Release is
  * not asserted: with `delivery-procurement` on and a release offered, it
  * moves to the Delivery table head (`releaseInHead`).

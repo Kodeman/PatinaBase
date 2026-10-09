@@ -204,18 +204,18 @@ describe('FF&E project-mode region head', () => {
     line({ product_id: 'product-1', ...over });
   const head = () => document.querySelector('[data-region-head="ffe"]') as HTMLElement;
 
-  it('inks exactly one ledger entry — Work the pieces, to the Build room', () => {
+  it('inks exactly one ledger entry — Build the item list, to the Build room', () => {
     mockItems = [settled()];
     mockCoverage = { 'line-1': { coverage: 'invoiced' } };
     renderProject();
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Work the pieces');
+    expect(inked[0]).toHaveTextContent('Build the item list');
     expect(inked[0]).toHaveAttribute('data-action-key', 'work-the-pieces');
     expect(inked[0]).toHaveAttribute('href', '/doc/project-1/pieces?lens=rough');
   });
 
-  it('US-21 Q14 — prints Work the pieces, Add to the job, Release, Record a change, in that order', () => {
+  it('US-21 Q14 — prints Build the item list, Add to the job, Release, Record a change, in that order', () => {
     renderProject();
     const keys = Array.from(head().querySelectorAll('[data-action-key]'))
       .map((el) => el.getAttribute('data-action-key'))
@@ -275,7 +275,7 @@ describe('FF&E project-mode region head', () => {
     );
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Work the pieces');
+    expect(inked[0]).toHaveTextContent('Build the item list');
     for (const retired of [
       'open-spec-book',
       'bill-project-ffe',
@@ -502,10 +502,10 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     renderProject();
 
     const head = document.querySelector('[data-region-head="ffe"]')!;
-    // US-21 Q14: entry 0 is Work the pieces; Add to the job and the release
+    // US-21 Q14: entry 0 is Build the item list; Add to the job and the release
     // are overflow.
     expect(head).toContainElement(
-      screen.getByRole('link', { name: /Work the pieces/ }),
+      screen.getByRole('link', { name: /Build the item list/ }),
     );
     // Not rendered, not hidden: `DocumentActionGroup`'s one-leader guard and
     // `action-visibility.spec.ts` both COUNT `[data-action-key]` nodes, so an

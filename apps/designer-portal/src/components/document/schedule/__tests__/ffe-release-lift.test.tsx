@@ -180,10 +180,10 @@ describe('the release lift — the schedule’s half', () => {
       />,
     );
 
-    // US-21 Q14: the head's leader is Work the pieces, release lifted or not.
+    // US-21 Q14: the head's leader is Build the item list, release lifted or not.
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Work the pieces');
+    expect(inked[0]).toHaveTextContent('Build the item list');
     expect(
       screen.queryByRole('button', { name: 'Release for authorization' }),
     ).toBeNull();
@@ -285,10 +285,10 @@ describe('the release lift — the schedule’s half', () => {
       <FFESection projectId="project-1" projectName="Ellsworth" mode="project" />,
     );
 
-    // US-21 Q14: Work the pieces leads; the release stands in the head's ledger.
+    // US-21 Q14: Build the item list leads; the release stands in the head's ledger.
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Work the pieces');
+    expect(inked[0]).toHaveTextContent('Build the item list');
     expect(
       screen.getByRole('button', { name: 'Release for authorization' }),
     ).not.toHaveAttribute('aria-disabled', 'true');

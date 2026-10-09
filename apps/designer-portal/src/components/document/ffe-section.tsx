@@ -2118,7 +2118,7 @@ function FFESectionBody({
   const ffeLedger: RegionLedgerEntry[] = [
     {
       key: 'work-the-pieces',
-      label: 'Work the pieces',
+      label: 'Build the item list',
       href: buildRoomHref(docId, { lens: 'rough', room: null }),
       trailing: '→',
     },

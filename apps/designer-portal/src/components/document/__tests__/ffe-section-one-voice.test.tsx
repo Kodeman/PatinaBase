@@ -1,6 +1,6 @@
 /**
  * The Pieces region with `one-voice` and `ask-the-paper` pinned ON:
- *   US-21 Q14     — the project spread's head is Work the pieces (inked),
+ *   US-21 Q14     — the project spread's head is Build the item list (inked),
  *                   Add to the job, Release for authorization and Record a
  *                   change; the own act, the held lead, the bill leader, the
  *                   reading lens, Tasks and the guided empty state retire.
@@ -203,12 +203,12 @@ afterEach(() => {
 });
 
 describe('The project spread’s Pieces head (US-21 Q14)', () => {
-  it('prints Work the pieces, inked, beside Record a change at quiet', () => {
+  it('prints Build the item list, inked, beside Record a change at quiet', () => {
     renderProject();
     expect(document.getElementById('project-ffe')).toHaveAttribute('data-density', 'quiet');
     expect(headActs()).toEqual(['work-the-pieces', 'record-a-change-pieces-head']);
     const lead = document.querySelector('[data-action-key="work-the-pieces"]');
-    expect(lead).toHaveTextContent('Work the pieces');
+    expect(lead).toHaveTextContent('Build the item list');
     expect(lead).toHaveAttribute('data-action-variant', 'inked');
     expect(lead).toHaveAttribute('href', '/doc/project-1/pieces?lens=rough');
     expect(
@@ -216,7 +216,7 @@ describe('The project spread’s Pieces head (US-21 Q14)', () => {
     ).toHaveAttribute('data-action-variant', 'secondary');
   });
 
-  it('prints Work the pieces, Add to the job, Release for authorization, Record a change in the full ledger', () => {
+  it('prints Build the item list, Add to the job, Release for authorization, Record a change in the full ledger', () => {
     act(() => {
       __setDensityForTest('full');
     });

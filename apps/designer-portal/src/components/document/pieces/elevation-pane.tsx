@@ -74,7 +74,7 @@ export function ElevationPane({ roomName, fileHref }: ElevationPaneProps) {
           + File
         </a>
         <span id={fileHintId} className="sr-only">
-          Opens the Plan Room, where the job&apos;s drawings are filed.
+          Opens the drawing sets, where the job&apos;s drawings are filed.
         </span>
       </div>
     </aside>

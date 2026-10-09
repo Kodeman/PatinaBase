@@ -333,7 +333,7 @@ describe('Record a change — the router (D5)', () => {
 describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
   const headAct = () => screen.getByRole('button', { name: 'Record a change' });
 
-  it('prints in the head after Work the pieces and Add to the job (US-21 Q14)', () => {
+  it('prints in the head after Build the item list and Add to the job (US-21 Q14)', () => {
     renderPaper();
     // The head's ledger, links and buttons alike: index 0 is the leader.
     const head = document.querySelector('[data-region-head="ffe"]') as HTMLElement;

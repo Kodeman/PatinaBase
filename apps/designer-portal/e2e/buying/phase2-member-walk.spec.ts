@@ -749,7 +749,7 @@ WHERE c.purchase_order_id = ${q(poId)}`),
 
     // ── 9. The Pieces overview's head (US-21 T-31). ────────────────────────
     // The next-act reading this step once read was retired with the T-31
-    // overview. Its head carries the acts: Work the pieces (this Document's
+    // overview. Its head carries the acts: Build the item list (this Document's
     // Build room), Add to the job, Release, Record a change.
     await openDocument(page);
     const head = page.locator('[data-region-head="ffe"]').first();
