@@ -233,12 +233,10 @@ import { money } from '@/lib/document/project-commerce';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { selectUndrawnVendorPayments } from '@/lib/document/vendor-payouts';
 import {
-  deriveLineStamp,
-  laborPiece,
-  lineStageInputFromRow,
   OPEN_DAMAGE_CLAIM_STATES,
   type LineStampRow,
 } from '@/lib/document/stamp-derivation';
+import { buildRoomTicketLines } from '@/lib/document/pieces/live-lines';
 import { deriveTableComposition } from '@/lib/document/table-derivation';
 import { useTablePin } from '@/components/document/worktable/use-table-pin';
 import { ReleaseLift } from '@/components/document/worktable/release-lift';
@@ -308,6 +306,7 @@ type TicketFFERow = LineStampRow & {
   id: string;
   project_room_id?: string | null;
   removed_at?: string | null;
+  design_disposition?: string | null;
   /** `damage_claims!ffe_item_id(id, state, created_at)` — the embed
    *  `use-project-v2.ts:192` already selects. The stamp reads only the
    *  state; the rail's Pieces value reads the date beside it. */
@@ -639,23 +638,13 @@ function ProjectTicketFacts({
   const purchaseOrdersQuery = usePurchaseOrders({ projectId });
   const moneyRead = useMoneyLadder(projectId);
 
-  const lines = useMemo<TicketLine[]>(() => {
-    const live = (ffeQuery.data ?? []).filter((item) => item.removed_at == null);
-    return live.map((item) => {
-      const stamp = deriveLineStamp({
-        ...item,
-        stage: lineStageInputFromRow(item, laborPiece(item, live)),
-      }).kind;
-      return {
-        stamp,
-        roomId: item.project_room_id ?? null,
-        // US-21 D1: the same test the FF&E ledger's placeholder count runs —
-        // the stamp itself — so the ticket, the region and the stamps can
-        // never count different lines.
-        specified: stamp !== 'placeholder',
-      };
-    });
-  }, [ffeQuery.data]);
+  // US-21 D1: the stamp itself, so the ticket and the stamps can never count
+  // different lines. T-61 F7: the Build room's live lines, and only a piece
+  // counts as a placeholder, as on the overview head and its rooms.
+  const lines = useMemo<TicketLine[]>(
+    () => buildRoomTicketLines(ffeQuery.data),
+    [ffeQuery.data],
+  );
 
   // The oldest OPEN claim standing on any line — the same claim
   // `deriveLineStamp` reads to stamp the line `damaged`, so the rail's date
@@ -2611,12 +2600,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     if (bandSection === 'proposal' && !liveProposalStatus) return undefined;
     const family = familyLabel(bandHousehold);
     // US-21 D1: the lines the paper stamps PLACEHOLDER, and only those.
-    const unspecified = (ownActPieces ?? []).filter(
-      (item) =>
-        deriveLineStamp({
-          ...item,
-          stage: lineStageInputFromRow(item, laborPiece(item, ownActPieces)),
-        }).kind === 'placeholder',
+    // T-61 F7: live pieces only, as the ticket and the overview count them.
+    const unspecified = buildRoomTicketLines(ownActPieces).filter(
+      (line) => !line.specified,
     ).length;
     const act = ownAct(bandSection, {
       inquiryOpen: bandLeadStatus === 'new' || bandLeadStatus === 'viewed',
@@ -4022,7 +4008,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {/* D5 (US-19): Record a change — the router every doorway dispatches
-          `document:open-record-a-change` to. Self-gated on `ask-the-paper`. */}
+          `document:open-record-a-change` to. Self-gated on `ask-the-paper` or
+          `one-voice`, except the Pieces head's door (T-61 F6). */}
       {row.engagement_kind === 'project' && row.project_id && (
         <RecordAChangeSheet projectId={row.project_id} clientName={row.client_name} />
       )}

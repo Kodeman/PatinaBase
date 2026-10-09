@@ -82,6 +82,12 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     .delete()
     .eq('id', id);
 
+  // guard_products_referenced_delete (00758) refuses a product a line names
+  // with check_violation and its own sentence: say it, as the designer
+  // portal's route does (T-61 F10), never a 500.
+  if (error?.code === '23514') {
+    return NextResponse.json({ error: error.message }, { status: 409 });
+  }
   if (error) return serverError(error.message);
 
   return NextResponse.json({ success: true });

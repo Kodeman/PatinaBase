@@ -400,6 +400,75 @@ Deno.test('item PDF prints the client price in the row currency', async () => {
   renderedText(pdf, '£7,000.00');
 });
 
+// ─── Unit, LABOR, also-in (US-21 T-61 F3; wording = spec-book-render) ───────
+
+/** The page's text runs joined, as a narrow cell wraps its words across runs. */
+const joinedText = (pdf: Awaited<ReturnType<typeof inspectRenderedPdf>>) =>
+  pdf.text.map((t) => t.str).join(' ').replace(/\s+/g, ' ');
+
+const FLOOR_PLACEMENTS = [
+  { roomName: 'Living', quantity: 320, areaNote: 'Back entry' },
+  { roomName: 'Hall', quantity: 120 },
+  { roomName: 'Dining', quantity: 180 },
+];
+
+Deno.test('a goods line in one room counted each gains no key', () => {
+  const model = buildScheduleModel([{ roomName: 'Living Room', lines: [line({ unit: 'each' })] }], {});
+  const l = model.sections[0].lines[0];
+  assertEquals('unit' in l || 'labor' in l || 'alsoIn' in l, false);
+});
+
+Deno.test('schedule PDF prints the unit, the LABOR mark and the also-in line', async () => {
+  const model = buildScheduleModel(
+    [
+      {
+        roomName: 'Living',
+        lines: [
+          line({
+            code: 'F1',
+            name: 'Oak floor',
+            quantity: 913,
+            unit: 'sq_ft',
+            roomName: 'Living',
+            placements: FLOOR_PLACEMENTS,
+          }),
+          line({ code: 'F1a', name: 'Floor install', quantity: 913, unit: 'sq_ft', lineKind: 'labor' }),
+        ],
+      },
+    ],
+    {},
+  );
+  const [floor, labor] = model.sections[0].lines;
+  assertEquals(floor.alsoIn, 'ALSO IN HALL · DINING · 320 SQ FT HERE · BACK ENTRY');
+  assertEquals(labor.labor, true);
+  const pdf = await inspectRenderedPdf(await renderSpecSchedulePdf(model, goldenHeader));
+  const joined = joinedText(pdf);
+  for (const words of ['913 sq ft', 'F1a · LABOR', 'ALSO IN HALL · DINING · 320 SQ FT HERE · BACK ENTRY']) {
+    assert(joined.includes(words), `Expected ${JSON.stringify(words)} in ${JSON.stringify(joined)}`);
+  }
+  assertEquals(joined.includes('F1 · LABOR'), false);
+});
+
+Deno.test('item PDF prints Quantity with its unit, LABOR and the also-in line', async () => {
+  const model = buildItemModel(
+    {
+      ...itemBase,
+      code: 'F1',
+      roomName: 'Living',
+      quantity: 913,
+      unit: 'sq_ft',
+      lineKind: 'labor',
+      placements: FLOOR_PLACEMENTS,
+    },
+    {},
+  );
+  const pdf = await inspectRenderedPdf(await renderSpecItemPdf(model));
+  const joined = joinedText(pdf);
+  for (const words of ['913 sq ft', 'F1 · LABOR', 'ALSO IN HALL · DINING · 320 SQ FT HERE · BACK ENTRY']) {
+    assert(joined.includes(words), `Expected ${JSON.stringify(words)} in ${JSON.stringify(joined)}`);
+  }
+});
+
 // ─── money-never-trade — structural, not a filter ───────────────────────────
 
 Deno.test('SpecLine/SpecSection/SpecScheduleModel carry no trade/markup/margin key', () => {

@@ -14,7 +14,10 @@ import {
   pieceLineStage,
   type PieceLineStageRow,
 } from "@/lib/document/pieces/line-stage";
-import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
+import {
+  countsAsPiece,
+  liveBuildRoomLines,
+} from "@/lib/document/pieces/live-lines";
 
 export interface RoomCounts {
   lines: number;
@@ -67,9 +70,11 @@ function add(
   counts: RoomCounts,
   stage: LineStage | null,
   roughCents: number,
+  piece: boolean,
 ): void {
   counts.lines += 1;
-  if (stage === "placeholder") counts.placeholders += 1;
+  // T-61 F7: a placeholder count counts pieces only (`countsAsPiece`).
+  if (stage === "placeholder") counts.placeholders += piece ? 1 : 0;
   else if (stage === "specced") counts.specced += 1;
   else if (stage === "ready") counts.ready += 1;
   else if (stage === "released") counts.released += 1;
@@ -100,9 +105,10 @@ export function deriveRoomCounts(
   const live = liveBuildRoomLines(lines);
   for (const line of live) {
     const { stage } = pieceLineStage(line, laborPiece(line, live));
+    const piece = countsAsPiece(line);
     const roughEach = line.rough_cents ?? 0;
     const quantity = line.quantity ?? 0;
-    add(result.job, stage, roughEach * quantity);
+    add(result.job, stage, roughEach * quantity, piece);
 
     // The primary room plus every placement, each room once.
     const shares = new Map<string, number>();
@@ -118,7 +124,7 @@ export function deriveRoomCounts(
       const counts = rooms[roomId];
       if (!counts) continue;
       inKnownRoom = true;
-      add(counts, stage, roughEach * share);
+      add(counts, stage, roughEach * share, piece);
     }
     if (inKnownRoom) continue;
     add(
@@ -127,6 +133,7 @@ export function deriveRoomCounts(
         : result.throughout,
       stage,
       roughEach * quantity,
+      piece,
     );
   }
   return result;

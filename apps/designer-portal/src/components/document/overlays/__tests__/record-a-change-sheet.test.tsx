@@ -220,13 +220,22 @@ afterEach(() => {
 });
 
 describe('Record a change — the router (D5)', () => {
-  it('mounts nothing and hears nothing with ask-the-paper off', () => {
+  it('with both flags off, hears only the Pieces head (T-61 F6)', () => {
     mockAskThePaper = false;
+    const heard = jest.fn();
+    window.addEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
     const { container } = renderRouter();
     expect(container).toBeEmptyDOMElement();
 
-    act(() => openRecordAChange({ origin: 'pieces-head' }));
+    act(() => openRecordAChange({ origin: 'money-head' }));
+    act(() => openRecordAChange({ origin: 'cmdk' }));
+    act(() => openRecordAChange({ origin: 'line', itemId: 'line-sofa' }));
     expect(screen.queryByText('What changed?')).not.toBeInTheDocument();
+    expect(heard).not.toHaveBeenCalled();
+
+    act(() => openRecordAChange({ origin: 'pieces-head' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('What changed?');
+    window.removeEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
   });
 
   it('asks one question with two native radio options and their helpers', () => {
@@ -333,6 +342,17 @@ describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
     );
     expect(keys.slice(0, 2)).toEqual(['work-the-pieces', 'open-add-to-project']);
     expect(keys).toContain('record-a-change-pieces-head');
+  });
+
+  it('with both flags off, the head\'s act still opens the sheet (T-61 F6)', () => {
+    mockAskThePaper = false;
+    renderPaper();
+    fireEvent.click(headAct());
+    expect(screen.getByRole('dialog')).toHaveTextContent('What changed?');
+
+    fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
+    fireEvent.click(continueAct());
+    expect(screen.getByText('Choose the piece')).toBeInTheDocument();
   });
 
   it('On the agreement opens the amendment sheet', () => {

@@ -56,10 +56,77 @@ export interface SpecVisibility {
   itemDetails?: boolean;
 }
 
+// ─── Unit, LABOR and the also-in line (US-21 T-61 F3) ────────────────────────
+
+/** One room a multi-room line is placed in (00734), in placement order. */
+export interface SpecPlacement {
+  roomName: string;
+  quantity: number;
+  areaNote?: string | null;
+}
+
+/** The line fields the unit, LABOR mark and also-in line read. All optional:
+ *  a proposal line carries none of them and prints as before. */
+export interface SpecLineBuildFields {
+  unit?: string | null; // project_ffe_items.unit; 'each' or missing prints the bare number
+  lineKind?: string | null; // 'labor' prints the LABOR mark
+  roomName?: string | null; // the line's primary room, which the also-in line leaves out
+  placements?: SpecPlacement[] | null;
+}
+
+/** What a line prints beside its quantity and name. Each key is present only
+ *  when it prints, so a goods line in one room counted `each` is unchanged. */
+interface SpecLineBuildMarks {
+  unit?: string;
+  labor?: true;
+  alsoIn?: string;
+}
+
+/** A quantity and the unit it counts: `913 sq ft`, or the bare number for
+ *  `each`. Mirrors `quantityText` in spec-book-render/render-model.ts, which
+ *  is not importable from `_shared`; keep the two words the same. */
+export function quantityText(quantity: number, unit?: string | null): string {
+  if (!unit || unit === 'each') return String(quantity);
+  return `${quantity} ${unit.replace(/_/g, ' ')}`;
+}
+
+/** The also-in line under a placed line's name: the other rooms, then this
+ *  room's share and its area note,
+ *  `ALSO IN DINING · KITCHEN · 320 SQ FT HERE · BACK ENTRY`. Null for a line
+ *  in one room. Mirrors `alsoInText` in spec-book-render/render-model.ts. */
+export function alsoInText(item: SpecLineBuildFields): string | null {
+  const placements = item.placements ?? [];
+  if (placements.length < 2) return null;
+  const others = placements.filter((entry) => entry.roomName !== item.roomName);
+  if (others.length === 0) return null;
+  const here = placements.find((entry) => entry.roomName === item.roomName);
+  const parts = [
+    `Also in ${others.map((entry) => entry.roomName).join(' · ')}`,
+    here ? `${quantityText(here.quantity, item.unit)} here` : null,
+    here?.areaNote ?? null,
+  ];
+  return parts.filter(Boolean).join(' · ').toLocaleUpperCase('en-US');
+}
+
+/** The code cell, with the LABOR mark the spec book prints (render-model's
+ *  `pdf.ts`: `<code>  ·  LABOR`). */
+function codeText(code: string | null, labor: boolean | undefined, missing: string): string {
+  return labor ? `${code ?? missing}  ·  LABOR` : code ?? missing;
+}
+
+function buildMarks(input: SpecLineBuildFields): SpecLineBuildMarks {
+  const marks: SpecLineBuildMarks = {};
+  if (input.unit && input.unit !== 'each') marks.unit = input.unit;
+  if (input.lineKind === 'labor') marks.labor = true;
+  const alsoIn = alsoInText(input);
+  if (alsoIn) marks.alsoIn = alsoIn;
+  return marks;
+}
+
 // ─── Schedule model (pure) ───────────────────────────────────────────────────
 
 /** One normalized line the edge fn hands us (source-agnostic: pre- or post-sale). */
-export interface SpecLineInput {
+export interface SpecLineInput extends SpecLineBuildFields {
   code: string | null; // doc_code
   name: string;
   quantity: number;
@@ -78,7 +145,7 @@ export interface SpecLineInput {
  * filter. `clientPriceCents` and `supplierName` are OMITTED (key absent) when
  * their visibility flag is off.
  */
-export interface SpecLine {
+export interface SpecLine extends SpecLineBuildMarks {
   code: string | null;
   name: string;
   quantity: number;
@@ -142,6 +209,7 @@ export function buildScheduleModel(
         name: input.name,
         quantity: input.quantity,
         leadLabel: input.leadLabel,
+        ...buildMarks(input),
       };
       // Assign only when visible so `'clientPriceCents' in line` is false when
       // pricing is off (never write an undefined value).
@@ -183,7 +251,7 @@ export interface SpecItemCustomField {
   value: string;
 }
 
-export interface SpecItemModel {
+export interface SpecItemModel extends SpecLineBuildMarks {
   studioName: string;
   /** Optional public studio logo URL (Designer Studios). Rendered small in the
    *  header; null/undefined → no logo, byte-identical to the pre-logo output. */
@@ -210,7 +278,7 @@ export interface SpecItemModel {
 }
 
 /** Raw fields the edge fn normalizes before building the item model. */
-export interface SpecItemInput {
+export interface SpecItemInput extends SpecLineBuildFields {
   studioName: string;
   /** Optional public studio logo URL (Designer Studios). */
   studioLogoUrl?: string;
@@ -282,6 +350,7 @@ export function buildItemModel(
       brand: input.brand,
     },
     imageUrls: input.imageUrls,
+    ...buildMarks(input),
   };
   if (showPricing && input.clientUnitCents != null) {
     model.clientPriceCents = input.clientUnitCents;
@@ -802,6 +871,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontFamily: 'Courier',
   },
+  // The also-in line under a multi-room line's name (spec-book-render pdf.ts).
+  alsoIn: { fontSize: 8, color: '#5C4A3C', marginTop: 2 },
   label: {
     fontSize: 7,
     textTransform: 'uppercase',
@@ -994,7 +1065,10 @@ function ItemDocument(model: SpecItemModel) {
           [model.studioName, model.projectName, 'Specification'].filter(Boolean)
             .join(' · '),
         ),
-        model.code ? h(Text, { style: styles.itemCode }, model.code) : null,
+        model.code || model.labor
+          ? h(Text, { style: styles.itemCode }, codeText(model.code, model.labor, 'UNASSIGNED CODE'))
+          : null,
+        model.alsoIn ? h(Text, { style: styles.alsoIn }, model.alsoIn) : null,
       ),
       // Meta grid — category / room / qty / lead-time (lead only when visible)
       h(
@@ -1002,7 +1076,7 @@ function ItemDocument(model: SpecItemModel) {
         { style: styles.metaGrid },
         metaCell('Category', model.category ?? '-'),
         metaCell('Room', model.roomName ?? '-'),
-        metaCell('Quantity', String(model.quantity)),
+        metaCell('Quantity', quantityText(model.quantity, model.unit)),
         model.leadLabel ? metaCell('Lead Time', model.leadLabel) : null,
       ),
       // Images (up to 4) — react-pdf Image fetches src at render time
@@ -1119,9 +1193,16 @@ function ScheduleDocument(
               h(
                 View,
                 { key: lIdx, style: styles.tableRow },
-                h(Text, { style: styles.cellCode }, line.code ?? '-'),
-                h(Text, { style: styles.cellName }, line.name),
-                h(Text, { style: styles.cellQty }, String(line.quantity)),
+                h(Text, { style: styles.cellCode }, codeText(line.code, line.labor, '-')),
+                line.alsoIn
+                  ? h(
+                    View,
+                    { style: styles.cellName },
+                    h(Text, null, line.name),
+                    h(Text, { style: styles.alsoIn }, line.alsoIn),
+                  )
+                  : h(Text, { style: styles.cellName }, line.name),
+                h(Text, { style: styles.cellQty }, quantityText(line.quantity, line.unit)),
                 h(Text, { style: styles.cellLead }, line.leadLabel ?? '-'),
                 model.showPricing
                   ? h(

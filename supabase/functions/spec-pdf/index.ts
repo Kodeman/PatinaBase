@@ -43,6 +43,7 @@ import {
   type SpecItemInput,
   type SpecItemModel,
   type SpecLineInput,
+  type SpecPlacement,
   type SpecScheduleModel,
   type SpecVisibility,
 } from '../_shared/spec-pdf.ts';
@@ -122,6 +123,25 @@ interface NormItem {
   roomName: string | null;
   roomSort: number;
   itemSort: number;
+  // US-21 (T-61 F3): the quantity's unit, the LABOR mark and a multi-room
+  // line's rooms. Null on a proposal line, which prints as before.
+  unit: string | null;
+  lineKind: string | null;
+  placements: SpecPlacement[] | null;
+}
+
+/** A line's room placements (00734) in placement order, as the spec book reads
+ *  them (00744: sort_order, created_at, id). */
+function normPlacements(rows: unknown): SpecPlacement[] | null {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  return [...rows]
+    .sort((a, b) =>
+      (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
+      String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')) ||
+      String(a.id ?? '').localeCompare(String(b.id ?? ''))
+    )
+    .filter((p) => typeof p.room?.name === 'string' && typeof p.quantity === 'number')
+    .map((p) => ({ roomName: p.room.name, quantity: p.quantity, areaNote: p.area_note ?? null }));
 }
 
 /** Map spec_field_defs (ordered) + a line's custom_fields → non-empty rows. */
@@ -530,6 +550,9 @@ Deno.serve(async (req: Request) => {
           roomName: r.room?.name ?? null,
           roomSort: r.room?.sort_order ?? Number.POSITIVE_INFINITY,
           itemSort: r.position ?? 0,
+          unit: null,
+          lineKind: null,
+          placements: null,
         }));
       } else {
         const { data, error } = await admin
@@ -538,8 +561,12 @@ Deno.serve(async (req: Request) => {
             `
           id, name, doc_code, ffe_category, project_room_id, quantity,
           unit_price_cents, line_total_cents, currency, custom_fields, product_id,
-          vendor_name, item_type, eta, sort_order, notes,
-          room:project_rooms!project_room_id(name, sort_order)
+          vendor_name, item_type, eta, sort_order, notes, unit, line_kind,
+          room:project_rooms!project_room_id(name, sort_order),
+          placements:project_ffe_placements!ffe_item_id(
+            id, quantity, area_note, sort_order, created_at,
+            room:project_rooms!project_room_id(name)
+          )
         `,
           )
           .eq('project_id', ownerId)
@@ -564,6 +591,9 @@ Deno.serve(async (req: Request) => {
           roomName: r.room?.name ?? null,
           roomSort: r.room?.sort_order ?? Number.POSITIVE_INFINITY,
           itemSort: r.sort_order ?? 0,
+          unit: r.unit ?? null,
+          lineKind: r.line_kind ?? null,
+          placements: normPlacements(r.placements),
         }));
       }
 
@@ -616,6 +646,10 @@ Deno.serve(async (req: Request) => {
           supplierName: n.supplierName,
           itemType: n.itemType,
           recordVerified: recordPctFor(n.productId) === 100,
+          unit: n.unit,
+          lineKind: n.lineKind,
+          roomName: n.roomName,
+          placements: n.placements,
         });
         const sections = groupSections(items, toLine);
         const model = buildScheduleModel(sections, visibility);
@@ -688,6 +722,9 @@ Deno.serve(async (req: Request) => {
           imageUrls,
           clientUnitCents: item.clientUnitCents,
           currency: item.currency,
+          unit: item.unit,
+          lineKind: item.lineKind,
+          placements: item.placements,
         };
         const model = buildItemModel(input, visibility);
         prepared = {

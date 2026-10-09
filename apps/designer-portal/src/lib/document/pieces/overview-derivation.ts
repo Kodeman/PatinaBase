@@ -21,11 +21,7 @@
  * predecessor never counts (`liveBuildRoomLines`).
  */
 import { fmtUsd } from "@/lib/document/format";
-import {
-  isLaborLine,
-  laborPiece,
-  type LineStage,
-} from "@/lib/document/stamp-derivation";
+import { laborPiece, type LineStage } from "@/lib/document/stamp-derivation";
 import {
   THROUGHOUT_PLACE,
   UNASSIGNED_PLACE,
@@ -34,7 +30,10 @@ import {
   pieceLineStage,
   type PieceLineStageRow,
 } from "@/lib/document/pieces/line-stage";
-import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
+import {
+  countsAsPiece,
+  liveBuildRoomLines,
+} from "@/lib/document/pieces/live-lines";
 
 export interface OverviewLine extends PieceLineStageRow {
   id: string;
@@ -82,7 +81,8 @@ export interface OverviewRow {
   /** Only the lines whose primary room this is (each line once on the page). */
   primaryLineIds: string[];
   tally: OverviewTally;
-  /** Room placeholders count every line, labor included (`6 lines · 5 placeholders`). */
+  /** Room placeholders count pieces only, as the head does (`6 lines ·
+   *  5 placeholders`; T-61 F7, `countsAsPiece`). */
   placeholderLines: number;
   mark: OverviewMark;
 }
@@ -163,7 +163,7 @@ function add(
   if (stage === "released") tally.releasedCents += cents;
   else if (stage === "ready") tally.pricedCents += cents;
   else tally.roughedCents += cents;
-  if (isLaborLine(line) || line.trade_scope_document_id) return;
+  if (!countsAsPiece(line)) return;
   if (stage === "placeholder") tally.placeholders += 1;
   else if (stage === "specced") tally.specced += 1;
   else if (stage === "ready") tally.ready += 1;
@@ -220,7 +220,7 @@ export function deriveOverviewRows(
     target.lineIds.push(line.id);
     if (primary) target.primaryLineIds.push(line.id);
     add(target.tally, line, stage, cents);
-    if (stage === "placeholder") target.placeholderLines += 1;
+    if (stage === "placeholder" && countsAsPiece(line)) target.placeholderLines += 1;
     settledByRow.set(target, (settledByRow.get(target) ?? true) && stage === "released");
   };
 
