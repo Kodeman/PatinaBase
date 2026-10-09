@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Patina video 16x9</title>
+    <!-- Patina HyperFrames scaffold, video-16x9 (1920x1080, <= 60 s). Scenes: title card ->
+         still with slow pan -> Midjourney clip -> end card. Every clip is a direct child of
+         #root. See ../README.md before editing. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=Inter:wght@400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        background: #ede9e4;
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        font-family: "Inter", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+        color: #3f3b37;
+      }
+      .clip {
+        position: absolute;
+        margin: 0;
+      }
+      .full {
+        left: 0;
+        top: 0;
+        width: 1920px;
+        height: 1080px;
+        object-fit: cover;
+      }
+      #paper {
+        background: #ede9e4;
+      }
+      .eyebrow {
+        left: 192px;
+        top: 340px;
+        width: 1200px;
+        font-family: "DM Mono", Menlo, monospace;
+        font-size: 30px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #a3927c;
+      }
+      .title {
+        left: 192px;
+        top: 400px;
+        width: 1200px;
+        font-family: "Playfair Display", Georgia, serif;
+        font-weight: 400;
+        font-size: 96px;
+        line-height: 1.08;
+      }
+      .onscreen {
+        left: 192px;
+        top: 430px;
+        width: 1200px;
+        box-sizing: border-box;
+        padding: 28px 36px;
+        background: #ede9e4;
+        font-size: 48px;
+        font-weight: 500;
+        line-height: 1.2;
+        color: #3f3b37;
+      }
+      .wordmark {
+        left: 192px;
+        top: 360px;
+        width: 1200px;
+        font-family: "Playfair Display", Georgia, serif;
+        font-size: 120px;
+        color: #3f3b37;
+      }
+      .end-line {
+        left: 192px;
+        top: 540px;
+        width: 1200px;
+        font-family: "Playfair Display", Georgia, serif;
+        font-style: italic;
+        font-size: 48px;
+        color: #655b52;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-width="1920" data-height="1080" data-duration="24">
+      <!-- Paper ground for the whole piece (a full-bleed child, never the root's own background). -->
+      <div id="paper" class="clip full" data-start="0" data-duration="24" data-track-index="0"></div>
+
+      <!-- SCENE 1 title card (0-4 s): eyebrow = concept name, title = final.md title. -->
+      <p id="title-eyebrow" class="clip eyebrow" data-start="0" data-duration="4" data-track-index="2">Concept name</p>
+      <h1 id="title-text" class="clip title" data-start="0" data-duration="4" data-track-index="3">Video title from final.md</h1>
+
+      <!-- SCENE 2 still with slow pan (4-11 s): assets/still.jpg = the picked still (mj/picks.json). -->
+      <img id="still-image" class="clip full" src="assets/still.jpg" alt="" data-start="4" data-duration="7" data-track-index="1" />
+      <p id="still-onscreen" class="clip onscreen" data-start="4" data-duration="7" data-track-index="4">Seven words or fewer on screen</p>
+
+      <!-- SCENE 3 Midjourney clip (11-20 s): assets/clip.mp4, image-to-video from the job's startFrom still, <= 10 s. -->
+      <video id="mj-clip" class="clip full" src="assets/clip.mp4" data-start="11" data-duration="9" data-track-index="1" muted playsinline></video>
+      <p id="clip-onscreen" class="clip onscreen" data-start="11" data-duration="9" data-track-index="4">Seven words or fewer on screen</p>
+
+      <!-- SCENE 4 end card (20-24 s): the Patina mark once, at the end, on paper. -->
+      <p id="end-wordmark" class="clip wordmark" data-start="20" data-duration="4" data-track-index="2">Patina</p>
+      <p id="end-line" class="clip end-line" data-start="20" data-duration="4" data-track-index="3">One closing line from the last scene.</p>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo("#title-eyebrow", { opacity: 0 }, { opacity: 1, duration: 0.8, ease: "power2.out" }, 0.3);
+      tl.fromTo("#title-text", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 1.0, ease: "power2.out" }, 0.5);
+      tl.fromTo("#still-image", { scale: 1.12, x: 40 }, { scale: 1.02, x: -40, duration: 7, ease: "none" }, 4);
+      tl.fromTo("#still-onscreen", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power1.out" }, 4.8);
+      tl.fromTo("#clip-onscreen", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power1.out" }, 11.8);
+      tl.fromTo("#end-wordmark", { opacity: 0 }, { opacity: 1, duration: 0.8, ease: "power2.out" }, 20.3);
+      tl.fromTo("#end-line", { opacity: 0 }, { opacity: 1, duration: 0.8, ease: "power2.out" }, 20.9);
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

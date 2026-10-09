@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en" data-channel="{{channel}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width={{width}}, initial-scale=1">
+<title>{{title}}</title>
+<!-- Patina social card. Channels: instagram-4x5 and linkedin-portrait (1080x1350, image over words),
+     linkedin-landscape (1200x627, image left 60%, words right). Filled by marketing/tools/compose.mjs. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDE9E4;      /* patinaOffWhite */
+    --clay:#A3927C;       /* clayBeige */
+    --rule:#B8B0A6;       /* mediumGray */
+    --mocha:#655B52;      /* mochaBrown */
+    --ink:#3F3B37;        /* charcoal */
+    --font-display:'Playfair Display', Georgia, 'Times New Roman', serif;
+    --font-body:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --font-mono:'DM Mono', 'SF Mono', Menlo, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html, body{ margin:0; padding:0; background:var(--paper); }
+  .frame{
+    width:{{width}}px; height:{{height}}px; overflow:hidden; position:relative;
+    background:var(--paper); color:var(--ink); font-family:var(--font-body);
+    display:grid;
+  }
+  .media{ position:relative; overflow:hidden; background:var(--clay); }
+  .image{ display:block; width:100%; height:100%; object-fit:cover; }
+  .image-pending{ display:flex; align-items:center; justify-content:center; background:var(--clay); }
+  .image-pending span{ font-family:var(--font-mono); letter-spacing:0.2em; color:var(--paper); font-size:20px; }
+  .words{ display:flex; flex-direction:column; min-width:0; }
+  .eyebrow{
+    font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.18em; color:var(--clay);
+    display:flex; align-items:center; gap:0.7em; margin:0;
+  }
+  .eyebrow::before{ content:''; display:inline-block; width:1.4em; height:1px; background:var(--clay); }
+  .eyebrow:empty{ display:none; }
+  h1{ font-family:var(--font-display); font-weight:400; color:var(--ink); margin:0; text-wrap:balance; letter-spacing:-0.005em; }
+  .foot{ margin-top:auto; display:flex; justify-content:flex-end; align-items:baseline; }
+  .wordmark-type{ font-family:var(--font-display); color:var(--mocha); letter-spacing:-0.01em; }
+  .wordmark-logo{ display:block; }
+
+  /* Portrait: image owns the top two thirds; words on paper below, outside the outer 64 px. */
+  html[data-channel="instagram-4x5"] .frame,
+  html[data-channel="linkedin-portrait"] .frame{ grid-template-rows:900px 1fr; }
+  html[data-channel="instagram-4x5"] .words,
+  html[data-channel="linkedin-portrait"] .words{ padding:52px 72px 60px; gap:22px; }
+  html[data-channel="instagram-4x5"] .eyebrow,
+  html[data-channel="linkedin-portrait"] .eyebrow{ font-size:20px; }
+  html[data-channel="instagram-4x5"] h1,
+  html[data-channel="linkedin-portrait"] h1{ font-size:62px; line-height:1.1; max-width:20ch; }
+  html[data-channel="instagram-4x5"] .wordmark-type,
+  html[data-channel="linkedin-portrait"] .wordmark-type{ font-size:30px; }
+  html[data-channel="instagram-4x5"] .wordmark-logo,
+  html[data-channel="linkedin-portrait"] .wordmark-logo{ height:30px; }
+
+  /* Landscape: image left 60%, words right on paper. Feeds crop to the centre. */
+  html[data-channel="linkedin-landscape"] .frame{ grid-template-columns:720px 1fr; }
+  html[data-channel="linkedin-landscape"] .words{ padding:56px 52px 44px 48px; gap:18px; }
+  html[data-channel="linkedin-landscape"] .eyebrow{ font-size:14px; margin-top:auto; }
+  html[data-channel="linkedin-landscape"] .eyebrow:empty + h1{ margin-top:auto; }
+  html[data-channel="linkedin-landscape"] h1{ font-size:40px; line-height:1.14; }
+  html[data-channel="linkedin-landscape"] .foot{ margin-top:auto; }
+  html[data-channel="linkedin-landscape"] .wordmark-type{ font-size:22px; }
+  html[data-channel="linkedin-landscape"] .wordmark-logo{ height:22px; }
+</style>
+</head>
+<body>
+<main class="frame" data-piece="{{piece}}">
+  <div class="media">{{{image}}}</div>
+  <div class="words">
+    <p class="eyebrow">{{eyebrow}}</p>
+    <h1>{{headline}}</h1>
+    <div class="foot">{{{wordmark}}}</div>
+  </div>
+</main>
+</body>
+</html>

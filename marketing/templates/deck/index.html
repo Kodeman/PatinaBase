@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- SLOT: title (2-4 words, the deck's name) -->
+<title>Studio deck title</title>
+<!--
+  Patina house deck (deck-16x9, 1920x1080). Adapted from
+  artifacts/designer-onboarding-learning-2026-09-03/deck/index.html: same slide mechanics
+  (arrow keys, i = index, r = read as a page), house palette from
+  packages/patina-design-system/src/tokens/colors.ts.
+
+  How an agent fills it (from copy/<P>.final.md: title, slides[{headline, body, visual?}]):
+    1. Copy this folder to compose/<P>/ and edit compose/<P>/index.html only.
+    2. Replace every region between a "SLOT:" comment and its "/SLOT" comment. Slide 1 is the cover (title); repeat the
+       "content slide" section once per slides[] entry, renumbering ids (slide-2, slide-3, ...);
+       keep the closing slide last.
+    3. One idea per slide. Headline top-left, generous paper. Images full bleed or not at all:
+       put the picked file (mj/picks.json) next to index.html and reference it relatively, e.g.
+       <img src="image-J01.png">. render.mjs inlines relative images into the single-file copy.
+    4. Strip [Cnn] claim markers from the copy; cite sources in the DM Mono footer line instead.
+  render.mjs then writes out/<P>/<P>.html (single file) and out/<P>/<P>.pdf (one 1920x1080 page per slide).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDE9E4;          /* patinaOffWhite */
+    --paper-raised:#F5F2ED;   /* lightGray */
+    --ink:#3F3B37;            /* charcoal */
+    --ink-body:#4A453F;       /* darkGray */
+    --ink-soft:#655B52;       /* mochaBrown */
+    --ink-faint:#A3927C;      /* clayBeige */
+    --hairline:#B8B0A6;       /* mediumGray */
+    --accent:#A3927C;         /* clayBeige */
+    --font-display:'Playfair Display', Georgia, 'Times New Roman', serif;
+    --font-body:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:'DM Mono', 'SF Mono', Menlo, monospace;
+    --measure:62ch;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#2B2825;
+      --paper-raised:#34302C;
+      --ink:#EDE9E4;
+      --ink-body:#E0DAD2;
+      --ink-soft:#B8B0A6;
+      --ink-faint:#A3927C;
+      --hairline:#4A453F;
+      --accent:#A3927C;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#2B2825;
+    --paper-raised:#34302C;
+    --ink:#EDE9E4;
+    --ink-body:#E0DAD2;
+    --ink-soft:#B8B0A6;
+    --ink-faint:#A3927C;
+    --hairline:#4A453F;
+    --accent:#A3927C;
+  }
+
+  *{ box-sizing:border-box; }
+  html, body{ margin:0; padding:0; }
+  body{ background:var(--paper); color:var(--ink-body); }
+  #deck-root{ font-family:var(--font-body); color:var(--ink-body); background:var(--paper); line-height:1.55; }
+  h1,h2,h3{ font-family:var(--font-display); font-weight:400; color:var(--ink); text-wrap:balance; margin:0; }
+  p{ margin:0 0 0.9em 0; }
+  p:last-child{ margin-bottom:0; }
+  .measure{ max-width:var(--measure); }
+
+  .eyebrow{
+    font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.18em;
+    font-size:0.78rem; color:var(--ink-faint); display:flex; align-items:center; gap:0.6em;
+  }
+  .eyebrow::before{ content:''; display:inline-block; width:1.1em; height:1px; background:var(--ink-faint); }
+
+  kbd{ font-family:var(--font-mono); font-size:0.82em; background:var(--paper-raised); border:1px solid var(--hairline); border-radius:3px; padding:0.08em 0.42em; color:var(--ink); }
+
+  /* ---------- slide mechanics ---------- */
+  #deck{ position:relative; }
+  .slide{
+    min-height:100vh; width:100%;
+    padding:7vh 7vw 9vh;
+    display:none; flex-direction:column; justify-content:flex-start; gap:1.6rem;
+    position:relative;
+  }
+  .slide.active{ display:flex; }
+  .slide-inner{ max-width:1500px; margin:0; width:100%; }
+  .slide-head{ display:flex; flex-direction:column; gap:0.7rem; margin-bottom:1.6rem; }
+  .slide-head h2{ font-size:clamp(2.2rem, 4vw, 3.6rem); line-height:1.1; max-width:22ch; }
+  .slide-body{ font-size:clamp(1.05rem, 1.5vw, 1.45rem); max-width:var(--measure); }
+  .slide-foot{
+    position:absolute; left:7vw; right:7vw; bottom:3.2vh;
+    font-family:var(--font-mono); font-size:0.72rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-faint);
+    display:flex; justify-content:space-between; border-top:1px solid var(--hairline); padding-top:0.7rem;
+  }
+
+  .cover-slide{ display:flex; flex-direction:column; gap:1.6rem; min-height:72vh; justify-content:center; }
+  .cover-title{ font-size:clamp(3rem, 7vw, 6rem); line-height:1.04; max-width:16ch; }
+  .cover-sub{ font-family:var(--font-display); font-style:italic; font-size:clamp(1.3rem, 2vw, 1.9rem); color:var(--ink-soft); max-width:36ch; }
+
+  /* Images full bleed or not at all (art-direction §4), never a side panel: the image fills the
+     whole slide and the headline and body sit on a paper band across its foot. */
+  .bleed{ position:absolute; inset:0; margin:0; overflow:hidden; background:var(--ink-faint); z-index:0; }
+  .bleed img{ display:block; width:100%; height:100%; object-fit:cover; }
+  .has-bleed .slide-inner{
+    position:absolute; left:0; right:0; bottom:0; z-index:1; max-width:none;
+    background:var(--paper); padding:3.2vh 7vw 9vh;
+  }
+  .has-bleed .slide-head{ margin-bottom:0.8rem; }
+  .has-bleed .slide-foot{ z-index:2; }
+  @media (max-width:900px){
+    .bleed{ position:relative; inset:auto; order:-1; height:40vh; margin:-7vh -7vw 0; }
+    .has-bleed .slide-inner{ position:static; padding:0; }
+  }
+
+  .close-line{ font-family:var(--font-display); font-style:italic; font-size:clamp(1.8rem, 3.2vw, 3rem); color:var(--ink); max-width:24ch; }
+  .wordmark-type{ font-family:var(--font-display); font-size:1.6rem; color:var(--ink-soft); }
+
+  /* read-as-page mode */
+  body.read-mode .slide{ display:flex !important; min-height:auto; padding:6vh 7vw 10vh; border-bottom:1px solid var(--hairline); }
+  body.read-mode .nav-ui{ display:none; }
+  body.read-mode .has-bleed{ min-height:100vh; }
+
+  /* controls */
+  .nav-ui{ position:fixed; z-index:40; font-family:var(--font-mono); }
+  .counter{ bottom:1.4rem; right:1.6rem; font-size:0.8rem; color:var(--ink-faint); background:var(--paper); padding:0.2em 0.5em; letter-spacing:0.04em; }
+  .arrows{ bottom:1.3rem; right:6rem; display:flex; gap:0.4rem; }
+  .arrow-btn{ font-family:var(--font-mono); background:var(--paper-raised); border:1px solid var(--hairline); color:var(--ink); width:2.1rem; height:2.1rem; cursor:pointer; font-size:0.9rem; }
+  .clickzone{ position:fixed; top:0; bottom:0; width:8%; z-index:20; cursor:pointer; background:transparent; border:none; }
+  .clickzone.left{ left:0; }
+  .clickzone.right{ right:0; }
+  .hint{ top:1.4rem; left:1.6rem; font-size:0.72rem; color:var(--ink-faint); letter-spacing:0.04em; }
+  :focus-visible{ outline:2px solid var(--ink-soft); outline-offset:2px; }
+
+  #indexOverlay{ position:fixed; inset:0; z-index:60; background:var(--paper); padding:6vh 8vw; overflow-y:auto; }
+  #indexOverlay[hidden]{ display:none; }
+  #indexOverlay h3{ font-size:1.6rem; margin-bottom:1.2rem; }
+  .index-list{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:0.15rem 2rem; }
+  .index-list li{ border-bottom:1px solid var(--hairline); padding:0.5rem 0; }
+  .index-list button{ all:unset; cursor:pointer; display:flex; gap:0.8rem; align-items:baseline; width:100%; font-family:var(--font-body); }
+  .idx-num{ font-family:var(--font-mono); color:var(--ink-faint); font-size:0.78rem; min-width:1.6em; }
+
+  @media (prefers-reduced-motion: no-preference){ .slide.active{ animation:fadein 0.18s ease; } }
+  @keyframes fadein{ from{ opacity:0.4; } to{ opacity:1; } }
+  @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
+
+  /* print: one 1920x1080 page per slide, light paper, no controls (render.mjs PDF) */
+  @page{ size:1920px 1080px; margin:0; }
+  @media print{
+    :root{ --paper:#EDE9E4; --paper-raised:#F5F2ED; --ink:#3F3B37; --ink-body:#4A453F; --ink-soft:#655B52; --ink-faint:#A3927C; --hairline:#B8B0A6; }
+    html, body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .nav-ui, .clickzone, #indexOverlay{ display:none !important; }
+    .slide{ display:flex !important; width:1920px; height:1080px; min-height:0; padding:96px 134px 120px; overflow:hidden; break-after:page; page-break-after:always; animation:none !important; }
+    .slide:last-child{ break-after:auto; page-break-after:auto; }
+    .slide-foot{ left:134px; right:134px; bottom:40px; }
+    .has-bleed .slide-inner{ padding:40px 134px 120px; }
+    .slide-head h2{ font-size:64px; }
+    .slide-body{ font-size:26px; }
+    .cover-title{ font-size:104px; }
+    .cover-sub{ font-size:34px; }
+    .cover-slide{ min-height:0; height:100%; }
+    .close-line{ font-size:54px; }
+  }
+</style>
+</head>
+<body>
+<div id="deck-root">
+<div id="deck">
+
+<!-- SLOT: slide 1, cover. eyebrow = final.md eyebrow, else the run's place line, else delete it
+     (never the concept name unless the copy puts it there); h1 = final.md title; sub = one line of angle -->
+<section class="slide active" id="slide-1" data-title="Cover">
+  <div class="slide-inner cover-slide">
+    <div class="eyebrow">Place line</div>
+    <h1 class="cover-title">Deck title from final.md</h1>
+    <p class="cover-sub">One line on what the studio gets from these next few minutes.</p>
+  </div>
+  <div class="slide-foot"><span>Patina</span><span>Month YYYY</span></div>
+</section>
+<!-- /SLOT -->
+
+<!-- SLOT: content slide. Repeat once per slides[] entry: h2 = headline, .slide-body = body.
+     With a visual: keep class "has-bleed" and the .bleed figure, which fills the whole slide
+     behind a paper band holding the headline and body; without one, delete both. -->
+<section class="slide has-bleed" id="slide-2" data-title="Slide headline">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow">02</div>
+      <h2>Slide headline from slides[].headline</h2>
+    </div>
+    <div class="slide-body">
+      <p>Slide body from slides[].body. One idea, a few sentences, no bullets unless the copy has them.</p>
+    </div>
+  </div>
+  <figure class="bleed"><img src="image-J01.png" alt="Describe the picked image"></figure>
+  <div class="slide-foot"><span>Source: claims.md row, if any</span><span>02</span></div>
+</section>
+<!-- /SLOT -->
+
+<!-- SLOT: closing slide. close-line = the deck's last thought or call to action -->
+<section class="slide" id="slide-3" data-title="Close">
+  <div class="slide-inner cover-slide">
+    <div class="eyebrow">Next</div>
+    <p class="close-line">The closing line or the ask.</p>
+    <span class="wordmark-type">Patina</span>
+  </div>
+  <div class="slide-foot"><span>Patina</span><span>03</span></div>
+</section>
+<!-- /SLOT -->
+
+</div>
+</div>
+
+<div id="indexOverlay" hidden role="dialog" aria-label="Slide index">
+  <h3>Index</h3>
+  <ul class="index-list" id="indexList"></ul>
+</div>
+
+<div class="nav-ui hint">Press <kbd>i</kbd> for index · <kbd>r</kbd> to read as a page · ← → to move</div>
+<div class="nav-ui counter" id="counter">01 / 03</div>
+<div class="nav-ui arrows">
+  <button class="arrow-btn" id="prevBtn" aria-label="Previous slide">←</button>
+  <button class="arrow-btn" id="nextBtn" aria-label="Next slide">→</button>
+</div>
+<button class="clickzone left" id="clickLeft" aria-label="Previous slide"></button>
+<button class="clickzone right" id="clickRight" aria-label="Next slide"></button>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var total = slides.length;
+  var counter = document.getElementById('counter');
+  var indexOverlay = document.getElementById('indexOverlay');
+  var indexList = document.getElementById('indexList');
+
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function currentIndex(){
+    for (var i = 0; i < total; i++){ if (slides[i].classList.contains('active')) return i; }
+    return 0;
+  }
+  function go(i, pushHash){
+    if (i < 0 || i >= total) return;
+    slides.forEach(function(s){ s.classList.remove('active'); });
+    slides[i].classList.add('active');
+    counter.textContent = pad(i+1) + ' / ' + pad(total);
+    if (pushHash !== false){ history.replaceState(null, '', '#' + (i+1)); }
+    slides[i].scrollTop = 0;
+  }
+  function next(){ go(Math.min(currentIndex()+1, total-1)); }
+  function prev(){ go(Math.max(currentIndex()-1, 0)); }
+
+  document.getElementById('nextBtn').addEventListener('click', next);
+  document.getElementById('prevBtn').addEventListener('click', prev);
+  document.getElementById('clickLeft').addEventListener('click', prev);
+  document.getElementById('clickRight').addEventListener('click', next);
+
+  slides.forEach(function(s, i){
+    var li = document.createElement('li');
+    var btn = document.createElement('button');
+    var num = document.createElement('span');
+    num.className = 'idx-num';
+    num.textContent = pad(i+1);
+    var title = document.createElement('span');
+    title.textContent = s.getAttribute('data-title') || '';
+    btn.appendChild(num);
+    btn.appendChild(title);
+    btn.addEventListener('click', function(){ go(i); toggleIndex(false); });
+    li.appendChild(btn);
+    indexList.appendChild(li);
+  });
+
+  function toggleIndex(force){
+    var show = force !== undefined ? force : indexOverlay.hasAttribute('hidden');
+    if (show){ indexOverlay.removeAttribute('hidden'); } else { indexOverlay.setAttribute('hidden',''); }
+  }
+
+  document.addEventListener('keydown', function(e){
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (document.body.classList.contains('read-mode') && e.key !== 'r' && e.key !== 'i') return;
+    switch(e.key){
+      case 'ArrowRight': case 'PageDown': case ' ': e.preventDefault(); next(); break;
+      case 'ArrowLeft': case 'PageUp': e.preventDefault(); prev(); break;
+      case 'i': case 'I': toggleIndex(); break;
+      case 'r': case 'R': document.body.classList.toggle('read-mode'); break;
+      case 'Escape': if (!indexOverlay.hasAttribute('hidden')) toggleIndex(false); break;
+    }
+  });
+
+  var hash = parseInt(location.hash.replace('#',''), 10);
+  go(hash && hash >= 1 && hash <= total ? hash - 1 : 0, false);
+  window.addEventListener('hashchange', function(){
+    var h = parseInt(location.hash.replace('#',''), 10);
+    if (h && h >= 1 && h <= total) go(h - 1, false);
+  });
+})();
+</script>
+</body>
+</html>

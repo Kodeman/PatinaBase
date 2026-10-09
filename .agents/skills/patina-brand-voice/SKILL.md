@@ -8,7 +8,10 @@ description: Patina's voice, lexicon, and copy rules. Use for ANY text a
 
 # Patina Brand Voice
 
-Tagline: "Where Time Adds Value." Patina celebrates furniture and design that
+Canonical long form: `marketing/canon/voice.md` (VISION-reconciled; read it for any marketing piece).
+
+Tagline: "Where Time Adds Value" is HELD pending VISION V5 — do not use it in
+copy until ruled. Patina celebrates furniture and design that
 age gracefully — Midwestern craft, provenance, quality over quantity.
 
 ## Voice attributes
@@ -24,8 +27,7 @@ age gracefully — Midwestern craft, provenance, quality over quantity.
   mechanics, ML, or "powered by" language in external copy. Outcomes first.
 - Designers are the intelligence layer. Never "our designers" as labor, never
   gig framing, never "unlimited revisions" energy.
-- The 25% Pledge is stated plainly and contractually: "a quarter of our
-  commission goes back to the designers who teach the system." No hedging.
+- Pledge language is legal-gated: never in public copy (VISION §3).
 - Midwest examples and testimonials only. No coastal signifiers (no "NYC
   penthouse," no "LA modern").
 - Numbers in copy must be true and sourced. No puffery stats.

@@ -1,0 +1,82 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>{{subject}}</title>
+  <!-- Patina marketing email (channel: email, 600 px). Table layout and inline styles, mirroring
+       packages/email/branded/*.html (bg table, 600 px shell, wordmark row, hairline, footer) in the
+       Patina house palette and type. Letter first; one image at most, under the opening paragraph;
+       readable with images off. {{business_address}}, {{unsub_url}} and {{prefs_url}} are left for
+       the sender to fill. Filled by marketing/tools/compose.mjs; never sent by The Press. -->
+  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    html, body { margin:0 !important; padding:0 !important; height:100% !important; width:100% !important; }
+    * { -ms-text-size-adjust:100%; -webkit-text-size-adjust:100%; }
+    table, td { mso-table-lspace:0pt !important; mso-table-rspace:0pt !important; border-collapse:collapse !important; }
+    img { -ms-interpolation-mode:bicubic; border:0; height:auto; line-height:100%; outline:none; text-decoration:none; }
+    a { color:#655B52; }
+    a[x-apple-data-detectors] { color:inherit !important; text-decoration:none !important; }
+    @media screen and (max-width:620px) {
+      .container { width:100% !important; }
+      .px { padding-left:24px !important; padding-right:24px !important; }
+      .h1 { font-size:26px !important; line-height:1.2 !important; }
+    }
+    @media (prefers-color-scheme: dark) {
+      body, .bg, .bg td { background:#2B2825 !important; }
+      .shell { background:#34302C !important; border-color:#4A453F !important; }
+      .ink, .ink p, .ink li { color:#EDE9E4 !important; }
+      .ink2 { color:#B8B0A6 !important; }
+      .wordmark { color:#EDE9E4 !important; }
+      .hairbg { background:#4A453F !important; }
+    }
+  </style>
+</head>
+<body class="bg" style="margin:0; padding:0; background:#EDE9E4;">
+  <div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all; color:transparent;">{{preheader}}&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
+  <table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; background:#EDE9E4;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+      <table role="presentation" class="container shell" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background:#F5F2ED; border:1px solid #B8B0A6;">
+        <tr><td class="px" style="padding:28px 40px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;"><tr>
+            <td align="left" valign="middle" class="wordmark" style="font-family:'Playfair Display', Georgia, 'Times New Roman', serif; font-size:23px; font-weight:400; letter-spacing:-0.01em; color:#3F3B37;">Patina</td>
+            <td align="right" valign="middle" class="ink2" style="font-family:'DM Mono', ui-monospace, SFMono-Regular, Menlo, 'Courier New', monospace; font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:#A3927C;">{{eyebrow}}</td>
+          </tr></table>
+        </td></tr>
+        <tr><td class="px" style="padding:22px 40px 0;">
+          <div class="hairbg" style="height:1px; background:#B8B0A6; font-size:0; line-height:0;">&nbsp;</div>
+        </td></tr>
+        <tr><td class="px ink" style="padding:30px 40px 8px;">
+          <h1 class="h1 ink" style="margin:0 0 20px; font-family:'Playfair Display', Georgia, 'Times New Roman', serif; font-size:30px; font-weight:400; line-height:1.2; color:#3F3B37;">{{subject}}</h1>
+          {{{body_first}}}
+          {{{image}}}
+          {{{body_rest}}}
+        </td></tr>
+        <tr><td class="px" style="padding:18px 40px 0;">
+          <div class="hairbg" style="height:1px; background:#B8B0A6; font-size:0; line-height:0;">&nbsp;</div>
+        </td></tr>
+        <tr><td class="px" style="padding:20px 40px 30px;">
+          <div class="wordmark" style="font-family:'Playfair Display', Georgia, 'Times New Roman', serif; font-size:15px; color:#655B52; margin-bottom:4px;">Patina</div>
+          <div class="ink2" style="font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; line-height:1.5; color:#655B52;">Middle West Studio &middot; Madison, Wisconsin</div>
+        </td></tr>
+      </table>
+      <!--[if mso]></td></tr></table><![endif]-->
+      <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px;">
+        <tr><td class="px ink2" align="center" style="padding:18px 40px 10px; font-family:'DM Mono', ui-monospace, SFMono-Regular, Menlo, 'Courier New', monospace; font-size:11px; line-height:1.8; letter-spacing:0.03em; color:#655B52;">
+          Patina &nbsp;·&nbsp; {{business_address}}<br>
+          <a href="{{unsub_url}}" style="color:#655B52; text-decoration:underline;">Unsubscribe</a> &nbsp;·&nbsp; <a href="{{prefs_url}}" style="color:#655B52; text-decoration:underline;">Manage preferences</a>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

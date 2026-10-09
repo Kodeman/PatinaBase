@@ -41,6 +41,8 @@ validate these four folders.
 | `concierge-order-playbook` | Coordinate a Rail A concierge furniture order end-to-end — PO/invoice drafts, freight research, damage-claim prep |
 | `trade-paperwork-prep` | Prepare (never submit) trade program applications and account paperwork for makers/brands |
 
+`patina-marketing` (added 2026-10-08) runs The Press (`marketing/`): brief → `marketing-draft` Workflow → Kody's hand-made Midjourney images → `marketing-compose` Workflow → a private review board; it never sends or publishes.
+
 Two of the four ship with a `references/` file this session filled in:
 `vendor-qualification-rubric/references/rubric.md` (the full 8-dimension
 table + scoring anchors, generated from `packages/types/src/vendor-pipeline.ts`)

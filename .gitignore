@@ -105,6 +105,12 @@ packages/patina-design-system/.dssync-tailwind.css
 # Transient multi-agent run artifacts (parity re-sweeps etc.)
 .claude/runs/
 
+# The Press (marketing/): Midjourney drops, FLUX placeholders and rendered video stay local
+marketing/runs/*/mj/inbox/
+marketing/runs/*/flux/
+marketing/runs/*/out/**/*.mp4
+marketing/runs/*/compose/**/*.mp4
+
 # OpenNext / wrangler build artifacts (portals on Cloudflare Workers)
 .open-next/
 .wrangler/
