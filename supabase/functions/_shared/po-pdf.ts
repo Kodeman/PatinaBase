@@ -20,12 +20,13 @@ import React from 'npm:react@19.1.0';
 import {
   Document,
   Page,
-  Text,
   View,
   Image,
   StyleSheet,
   renderToBuffer,
 } from 'npm:@react-pdf/renderer@4.3.0';
+// Every printed string passes through pdfText (base-14 WinAnsi; T-60c F13).
+import { Text } from './pdf-text.ts';
 
 const h = React.createElement;
 

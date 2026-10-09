@@ -20,13 +20,15 @@
 import React from 'npm:react@19.1.0';
 import {
   Document,
+  Font,
   Image,
   Page,
   renderToBuffer,
   StyleSheet,
-  Text,
   View,
 } from 'npm:@react-pdf/renderer@4.3.0';
+// Every printed string passes through pdfText (base-14 WinAnsi; T-60c F13).
+import { Text } from './pdf-text.ts';
 import {
   type CurrencyTotal,
   DEFAULT_CURRENCY,
@@ -38,6 +40,16 @@ import {
 } from './currency-totals.ts';
 
 const h = React.createElement;
+
+// react-pdf hyphenates by default (`fin-` / `ish`). A spec wraps only between
+// words, so every word comes back whole (T-60c F14). Registers no font.
+// textkit treats only a single space as a word gap and hyphenates at any other
+// run of spaces, so the code cell's `F1a  ·  LABOR` wrapped as `F1a ·-`; a run
+// of spaces comes back one space at a time.
+export function wholeWordParts(word: string): string[] {
+  return /^ {2,}$/.test(word) ? [...word] : [word];
+}
+Font.registerHyphenationCallback(wholeWordParts);
 
 // ─── Visibility contract ─────────────────────────────────────────────────────
 
@@ -859,6 +871,88 @@ export function buildBoardCompositionModel(
   };
 }
 
+// ─── Schedule columns (T-60c F14) ────────────────────────────────────────────
+
+/** The schedule row's inner width: the LETTER page's 612pt, less the 56pt page
+ *  padding, the 1pt table border and the 8pt row padding on each side. */
+export const SCHEDULE_ROW_WIDTH = 612 - 2 * 56 - 2 * 1 - 2 * 8;
+
+/** The space between two schedule columns, in the header and in every row. */
+export const SCHEDULE_COLUMN_GAP = 8;
+
+export type ScheduleColumnKey = 'code' | 'item' | 'qty' | 'lead' | 'client' | 'supplier';
+
+/** A fixed column has a width and never shrinks, so neither its header nor its
+ *  cell runs into the next column. Item and Supplier share what is left, 3:2.
+ *  Client is wide enough for `$9,999,999.99`, so a money cell never wraps. */
+export const SCHEDULE_COLUMNS: Readonly<
+  Record<ScheduleColumnKey, { width?: number; grow?: number; align: 'left' | 'right' }>
+> = {
+  code: { width: 52, align: 'left' },
+  item: { grow: 3, align: 'left' },
+  qty: { width: 52, align: 'right' },
+  lead: { width: 56, align: 'left' },
+  client: { width: 72, align: 'right' },
+  supplier: { grow: 2, align: 'left' },
+};
+
+const SCHEDULE_HEADS: Readonly<Record<ScheduleColumnKey, string>> = {
+  code: 'Code',
+  item: 'Item',
+  qty: 'Qty',
+  lead: 'Lead',
+  client: 'Client',
+  supplier: 'Supplier',
+};
+
+function scheduleColumnStyle(key: ScheduleColumnKey) {
+  const column = SCHEDULE_COLUMNS[key];
+  return column.width != null
+    ? { width: column.width, flexGrow: 0, flexShrink: 0, textAlign: column.align }
+    : { flexGrow: column.grow, flexShrink: 1, flexBasis: 0, textAlign: column.align };
+}
+
+/** The columns a schedule prints, in order: Client only with pricing,
+ *  Supplier only with supplier identity. */
+export function scheduleColumnKeys(
+  model: Pick<SpecScheduleModel, 'showPricing' | 'showSupplier'>,
+): ScheduleColumnKey[] {
+  return (['code', 'item', 'qty', 'lead', 'client', 'supplier'] as const).filter((key) =>
+    (key !== 'client' || model.showPricing) && (key !== 'supplier' || model.showSupplier)
+  );
+}
+
+/** One printed cell of a schedule line. `note` is the also-in line under the
+ *  item's name. */
+export interface ScheduleCell {
+  key: ScheduleColumnKey;
+  text: string;
+  note?: string;
+}
+
+/** What each visible column prints for one line, in column order. */
+export function scheduleCells(model: SpecScheduleModel, line: SpecLine): ScheduleCell[] {
+  return scheduleColumnKeys(model).map((key): ScheduleCell => {
+    switch (key) {
+      case 'code':
+        return { key, text: codeText(line.code, line.labor, '-') };
+      case 'item':
+        return line.alsoIn ? { key, text: line.name, note: line.alsoIn } : { key, text: line.name };
+      case 'qty':
+        return { key, text: quantityText(line.quantity, line.unit) };
+      case 'lead':
+        return { key, text: line.leadLabel ?? '-' };
+      case 'client':
+        return {
+          key,
+          text: line.clientPriceCents != null ? fmt(line.clientPriceCents, line.currency) : '-',
+        };
+      case 'supplier':
+        return { key, text: line.supplierName ?? '-' };
+    }
+  });
+}
+
 // ─── Styles (ported from po-pdf.ts) ──────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -923,43 +1017,54 @@ const styles = StyleSheet.create({
   section: { marginBottom: 20 },
   sectionHeading: { fontSize: 13, fontWeight: 700, marginBottom: 8 },
   table: { border: '1pt solid #E5E2DD', borderRadius: 2 },
-  tableHead: { flexDirection: 'row', backgroundColor: '#E5E2DD', padding: 8 },
+  tableHead: {
+    flexDirection: 'row',
+    columnGap: SCHEDULE_COLUMN_GAP,
+    backgroundColor: '#E5E2DD',
+    padding: 8,
+  },
   tableRow: {
     flexDirection: 'row',
+    columnGap: SCHEDULE_COLUMN_GAP,
     padding: 8,
     borderTop: '1pt solid #E5E2DD',
   },
-  cellCode: { flex: 2, fontFamily: 'Courier', fontSize: 9 },
-  cellName: { flex: 4 },
-  cellQty: { flex: 1, textAlign: 'right' },
-  cellLead: { flex: 2 },
-  cellPrice: { flex: 2, textAlign: 'right' },
-  cellSupplier: { flex: 3 },
+  cellCode: { ...scheduleColumnStyle('code'), fontFamily: 'Courier', fontSize: 9 },
+  cellName: scheduleColumnStyle('item'),
+  cellQty: scheduleColumnStyle('qty'),
+  cellLead: scheduleColumnStyle('lead'),
+  cellPrice: scheduleColumnStyle('client'),
+  cellSupplier: scheduleColumnStyle('supplier'),
   subtotalRow: {
     flexDirection: 'row',
+    columnGap: SCHEDULE_COLUMN_GAP,
     padding: 8,
     borderTop: '1pt solid #2C2926',
   },
-  subtotalSpacer: {
-    flex: 9,
+  subtotalStrong: { textAlign: 'right', fontWeight: 700 },
+  // A mixed-currency note needs more room than the figure cell: it spans the
+  // Qty, Lead and Client columns.
+  subtotalMixed: {
+    width: SCHEDULE_COLUMNS.qty.width! + SCHEDULE_COLUMNS.lead.width! +
+      SCHEDULE_COLUMNS.client.width! + 2 * SCHEDULE_COLUMN_GAP,
+    flexGrow: 0,
+    flexShrink: 0,
     textAlign: 'right',
     fontWeight: 700,
-    paddingRight: 8,
   },
-  subtotalAmount: { flex: 2, textAlign: 'right', fontWeight: 700 },
-  // A mixed-currency note needs room the figure cell doesn't have.
-  subtotalSpacerMixed: { flex: 4 },
-  subtotalAmountMixed: { flex: 7 },
-  subtotalSupplierPad: { flex: 3 },
   totals: { marginTop: 12, flexDirection: 'row', justifyContent: 'flex-end' },
   totalsBlock: { width: 220 },
   totalsTotal: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    columnGap: SCHEDULE_COLUMN_GAP,
     paddingVertical: 6,
     borderTop: '1pt solid #2C2926',
     fontWeight: 700,
   },
+  // The figure, or the mixed note, which wraps beside `Total` rather than
+  // running into it.
+  totalsFigure: { flexShrink: 1, textAlign: 'right' },
   footer: {
     position: 'absolute',
     bottom: 32,
@@ -995,6 +1100,15 @@ const styles = StyleSheet.create({
   boardTilePrice: { fontSize: 10, fontWeight: 700, marginTop: 2 },
   boardTileNote: { fontSize: 9, color: '#3D3A36', lineHeight: 1.3 },
 });
+
+const cellStyles = {
+  code: styles.cellCode,
+  item: styles.cellName,
+  qty: styles.cellQty,
+  lead: styles.cellLead,
+  client: styles.cellPrice,
+  supplier: styles.cellSupplier,
+} satisfies Record<ScheduleColumnKey, unknown>;
 
 // ─── Helpers (same shapes as po-pdf.ts) ──────────────────────────────────────
 
@@ -1153,6 +1267,7 @@ function ScheduleDocument(
     studioLogoUrl?: string;
   },
 ) {
+  const columns = scheduleColumnKeys(model);
   return h(
     Document,
     null,
@@ -1186,77 +1301,54 @@ function ScheduleDocument(
             h(
               View,
               { style: styles.tableHead },
-              h(Text, { style: [styles.cellCode, styles.label] }, 'Code'),
-              h(Text, { style: [styles.cellName, styles.label] }, 'Item'),
-              h(Text, { style: [styles.cellQty, styles.label] }, 'Qty'),
-              h(Text, { style: [styles.cellLead, styles.label] }, 'Lead'),
-              model.showPricing
-                ? h(Text, { style: [styles.cellPrice, styles.label] }, 'Client')
-                : null,
-              model.showSupplier
-                ? h(
-                  Text,
-                  { style: [styles.cellSupplier, styles.label] },
-                  'Supplier',
-                )
-                : null,
+              ...columns.map((key) =>
+                h(Text, { key, style: [cellStyles[key], styles.label] }, SCHEDULE_HEADS[key])
+              ),
             ),
             // Rows
             ...section.lines.map((line, lIdx) =>
               h(
                 View,
                 { key: lIdx, style: styles.tableRow },
-                h(Text, { style: styles.cellCode }, codeText(line.code, line.labor, '-')),
-                line.alsoIn
-                  ? h(
-                    View,
-                    { style: styles.cellName },
-                    h(Text, null, line.name),
-                    h(Text, { style: styles.alsoIn }, line.alsoIn),
-                  )
-                  : h(Text, { style: styles.cellName }, line.name),
-                h(Text, { style: styles.cellQty }, quantityText(line.quantity, line.unit)),
-                h(Text, { style: styles.cellLead }, line.leadLabel ?? '-'),
-                model.showPricing
-                  ? h(
-                    Text,
-                    { style: styles.cellPrice },
-                    line.clientPriceCents != null ? fmt(line.clientPriceCents, line.currency) : '-',
-                  )
-                  : null,
-                model.showSupplier
-                  ? h(
-                    Text,
-                    { style: styles.cellSupplier },
-                    line.supplierName ?? '-',
-                  )
-                  : null,
+                ...scheduleCells(model, line).map((cell) =>
+                  cell.note
+                    ? h(
+                      View,
+                      { key: cell.key, style: cellStyles[cell.key] },
+                      h(Text, null, cell.text),
+                      h(Text, { style: styles.alsoIn }, cell.note),
+                    )
+                    : h(Text, { key: cell.key, style: cellStyles[cell.key] }, cell.text)
+                ),
               )
             ),
-            // Section subtotal (pricing only)
+            // Section subtotal (pricing only), on the same columns as the rows:
+            // the figure under Client, or the mixed note across Qty to Client.
             model.showPricing
               ? h(
                 View,
                 { style: styles.subtotalRow },
-                h(
-                  Text,
-                  {
-                    style: section.subtotal && isMixed(section.subtotal)
-                      ? [styles.subtotalSpacer, styles.subtotalSpacerMixed]
-                      : styles.subtotalSpacer,
-                  },
-                  'Subtotal',
-                ),
-                h(
-                  Text,
-                  {
-                    style: section.subtotal && isMixed(section.subtotal)
-                      ? [styles.subtotalAmount, styles.subtotalAmountMixed]
-                      : styles.subtotalAmount,
-                  },
-                  fmtTotal(section.subtotal),
-                ),
-                model.showSupplier ? h(Text, { style: styles.subtotalSupplierPad }, '') : null,
+                ...(section.subtotal && isMixed(section.subtotal)
+                  ? [
+                    h(Text, { key: 'code', style: cellStyles.code }, ''),
+                    h(Text, { key: 'item', style: [cellStyles.item, styles.subtotalStrong] }, 'Subtotal'),
+                    h(Text, { key: 'mixed', style: styles.subtotalMixed }, fmtTotal(section.subtotal)),
+                    model.showSupplier
+                      ? h(Text, { key: 'supplier', style: cellStyles.supplier }, '')
+                      : null,
+                  ]
+                  : columns.map((key) =>
+                    h(
+                      Text,
+                      {
+                        key,
+                        style: key === 'lead' || key === 'client'
+                          ? [cellStyles[key], styles.subtotalStrong]
+                          : cellStyles[key],
+                      },
+                      key === 'lead' ? 'Subtotal' : key === 'client' ? fmtTotal(section.subtotal) : '',
+                    )
+                  )),
               )
               : null,
           ),
@@ -1274,7 +1366,7 @@ function ScheduleDocument(
               View,
               { style: styles.totalsTotal },
               h(Text, null, 'Total'),
-              h(Text, null, fmtTotal(model.documentTotal)),
+              h(Text, { style: styles.totalsFigure }, fmtTotal(model.documentTotal)),
             ),
           ),
         )

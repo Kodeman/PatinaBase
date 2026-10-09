@@ -29,12 +29,19 @@ import {
   renderBoardPdf,
   renderSpecItemPdf,
   renderSpecSchedulePdf,
+  SCHEDULE_COLUMN_GAP,
+  SCHEDULE_COLUMNS,
+  SCHEDULE_ROW_WIDTH,
+  scheduleCells,
+  scheduleColumnKeys,
   type SpecBoardCompositionInput,
   type SpecBoardCompositionPinInput,
   type SpecBoardInput,
   type SpecItemInput,
   type SpecLineInput,
+  wholeWordParts,
 } from './spec-pdf.ts';
+import { pdfText } from './pdf-text.ts';
 
 const compositionPinTypeWitness: SpecBoardCompositionPinInput = {
   type: 'product',
@@ -320,11 +327,14 @@ const goldenHeader = {
   title: 'Specification',
 };
 
-Deno.test('all-USD schedule PDF is byte-for-byte the pre-SQ-212 output', async () => {
+// The schedule hashes were re-pinned for T-60c F14, whose fixed-width columns
+// and gaps move every cell on purpose. The pre-SQ-212 pins were
+// 517e48fd… (pricing on) and ecaa5418… (pricing off).
+Deno.test('all-USD schedule PDF is byte-for-byte its pinned output', async () => {
   for (
     const [visibility, expected] of [
-      [{}, '517e48fd6e0f979d967bc1ea099138ebf6e898227d8da4dd3ab064770ccc3715'],
-      [{ pricing: false }, 'ecaa54181760846bcf1381cc1f9b578d3a19c7b10a50ffdd68eb82560e20c284'],
+      [{}, '9e35fda92237bc680f936708f7cead151f86bf3dc9d8b777f05f9f409497ce82'],
+      [{ pricing: false }, '0751ee407b22a5da5e3d22b5bbb7e1d793f10620effbe3b02204de83e16ffe09'],
     ] as const
   ) {
     const bytes = await renderSpecSchedulePdf(
@@ -457,6 +467,85 @@ Deno.test('schedule PDF prints the unit, the LABOR mark and the also-in line', a
     assert(joined.includes(words), `Expected ${JSON.stringify(words)} in ${JSON.stringify(joined)}`);
   }
   assertEquals(joined.includes('F1 · LABOR'), false);
+});
+
+// ─── T-60c: primes and columns ───────────────────────────────────────────────
+
+Deno.test('F13: a dimension in a line name prints as feet and inches, and the data is unchanged', () => {
+  const name = 'Runner, 2′6″ × 10′';
+  const model = buildScheduleModel([{ roomName: 'Hall', lines: [line({ name })] }], {});
+  const [runner] = model.sections[0].lines;
+  assertEquals(runner.name, name);
+  const item = scheduleCells(model, runner).find((cell) => cell.key === 'item')!;
+  assertEquals(item.text, name);
+  assertEquals(pdfText(item.text), `Runner, 2'6" × 10'`);
+});
+
+// Helvetica's AFM advance widths, in 1/1000 em, for what a USD figure prints.
+function helveticaMoneyWidth(text: string, fontSize: number): number {
+  const em = [...text].reduce((sum, ch) => sum + (ch === ',' || ch === '.' ? 278 : 556), 0);
+  return (em * fontSize) / 1000;
+}
+
+Deno.test('F14: a long maker name next to a money cell keeps its own column; the money never wraps', () => {
+  const maker = 'Nordiska Hantverkshuset Snickeri och Möbelverkstad Aktiebolag';
+  const model = buildScheduleModel(
+    [{
+      roomName: 'Living Room',
+      lines: [
+        line({
+          name: 'White oak floor, satin Bona finish',
+          quantity: 830,
+          unit: 'sq_ft',
+          clientUnitCents: 1150,
+          lineTotalCents: 954500,
+          supplierName: maker,
+        }),
+      ],
+    }],
+    {},
+  );
+  const cells = scheduleCells(model, model.sections[0].lines[0]);
+  assertEquals(cells.map((cell) => cell.key), ['code', 'item', 'qty', 'lead', 'client', 'supplier']);
+  const client = cells.find((cell) => cell.key === 'client')!;
+  const supplier = cells.find((cell) => cell.key === 'supplier')!;
+  assertEquals(client.text, '$11.50');
+  // The maker is one cell, whole, and the text boundary leaves it whole.
+  assertEquals(supplier.text, maker);
+  assertEquals(pdfText(supplier.text), maker);
+  // The money cell has no break opportunity, a fixed width that never
+  // shrinks, and room for a seven-figure price at the 10pt body size.
+  assertEquals(/[ \-]/.test(client.text), false);
+  const money = SCHEDULE_COLUMNS.client;
+  assert(money.width !== undefined && money.grow === undefined);
+  assert(money.width >= helveticaMoneyWidth('$9,999,999.99', 10));
+  // Supplier takes what is left after the gap, never the money column's space.
+  assertEquals(SCHEDULE_COLUMNS.supplier.width, undefined);
+  assert(SCHEDULE_COLUMN_GAP > 0);
+});
+
+Deno.test('F14: every visible column set fits the LETTER row with a gap between columns', () => {
+  for (
+    const visibility of [{}, { pricing: false }, { supplierIdentity: false }, {
+      pricing: false,
+      supplierIdentity: false,
+    }]
+  ) {
+    const keys = scheduleColumnKeys(buildScheduleModel([], visibility));
+    const fixed = keys.reduce((sum, key) => sum + (SCHEDULE_COLUMNS[key].width ?? 0), 0);
+    const grow = keys.reduce((sum, key) => sum + (SCHEDULE_COLUMNS[key].grow ?? 0), 0);
+    const left = SCHEDULE_ROW_WIDTH - fixed - SCHEDULE_COLUMN_GAP * (keys.length - 1);
+    // The Item column keeps at least 120pt for a name.
+    const itemWidth = (left * SCHEDULE_COLUMNS.item.grow!) / grow;
+    assert(itemWidth >= 120, `${JSON.stringify(visibility)}: Item is ${itemWidth}pt`);
+  }
+});
+
+Deno.test('F14: the hyphenation callback returns each word whole and splits a run of spaces', () => {
+  assertEquals(wholeWordParts('finish'), ['finish']);
+  assertEquals(wholeWordParts('Möbelverkstad'), ['Möbelverkstad']);
+  assertEquals(wholeWordParts(' '), [' ']);
+  assertEquals(wholeWordParts('  '), [' ', ' ']);
 });
 
 Deno.test('item PDF prints Quantity with its unit, LABOR and the also-in line', async () => {
