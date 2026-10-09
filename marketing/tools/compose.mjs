@@ -213,6 +213,7 @@ function varsFor(piece, data, body, image, job, place) {
         headline: data.headline || '',
         subhead: data.subhead || '',
         body: data.body || '',
+        imageLabel: data.imageLabel || '',
         image: imageBlock(image, data.alt || data.headline),
       };
     case 'one-pager': {
