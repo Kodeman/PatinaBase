@@ -326,3 +326,33 @@ export interface RoomHandback {
   handedBackBy: string;
   handedBackAt: string;
 }
+
+/**
+ * A group heading inside a room (00751, D6, Q9, W5): the shower's
+ * components. No money, no stage and no acts of its own; `projectRoomId`
+ * is null for the unassigned pile.
+ */
+export interface ProjectLineGroup {
+  id: string;
+  projectId: string;
+  projectRoomId: string | null;
+  name: string;
+  sortOrder: number;
+}
+
+/** `set_line_group` result (00751, W5): the group after the move. */
+export interface SetLineGroupResult {
+  groupId: string | null;
+  ffeItemIds: string[];
+  deletedGroupIds: string[];
+}
+
+/** `merge_studio_product` result (00753, D11, Q11, S5, W5). */
+export interface MergeStudioProductResult {
+  fromId: string;
+  intoId: string;
+  lines: number;
+  boardItems: number;
+  projectProducts: number;
+  earlierMerges: number;
+}

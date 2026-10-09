@@ -1,16 +1,20 @@
 /**
  * The pieces primitives (US-21 W2, CONTRACT §3.2): room placements (00734),
  * batch needs and build fields (00730), restore (00731) and labor lines
- * (00732; client price 00737). Every write is a SECURITY DEFINER RPC; each one invalidates the
- * FF&E caches (invalidateFfeCaches) plus its own key.
+ * (00732; client price 00737). Also line groups (00751, W5) and catalog
+ * merge (00753, W5). Every write is a SECURITY DEFINER RPC; each one
+ * invalidates the FF&E caches (invalidateFfeCaches) plus its own key.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AddLaborLineRequest,
   BatchCreateNamedProjectNeedsRequest,
   FfeRoomPlacement,
+  MergeStudioProductResult,
+  ProjectLineGroup,
   RoomHandback,
   SetFfeLineBuildFieldsRequest,
+  SetLineGroupResult,
   SetLinePlacementsResult,
 } from '@patina/types';
 import { createBrowserClient } from '../client';
@@ -215,6 +219,108 @@ export function useAddLaborLine() {
       return data as { selectionId: string };
     },
     onSuccess: (_result, { projectId }) => invalidateFfeCaches(queryClient, projectId),
+  });
+}
+
+// ─── Line groups (00751, D6, Q9, W5) ─────────────────────────────────────────
+
+export const projectLineGroupsKey = (projectId: string) =>
+  ['project-line-groups', projectId] as const;
+
+interface ProjectLineGroupRow {
+  id: string;
+  project_id: string;
+  project_room_id: string | null;
+  name: string;
+  sort_order: number;
+}
+
+/** Group headings inside a room — the shower's components (00751, D6, Q9). */
+export function useProjectLineGroups(projectId: string) {
+  return useQuery({
+    queryKey: projectLineGroupsKey(projectId),
+    queryFn: async (): Promise<ProjectLineGroup[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (getSupabase() as any)
+        .from('project_line_groups')
+        .select('id, project_id, project_room_id, name, sort_order')
+        .eq('project_id', projectId)
+        .order('project_room_id', { ascending: true })
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return ((data ?? []) as ProjectLineGroupRow[]).map((row) => ({
+        id: row.id,
+        projectId: row.project_id,
+        projectRoomId: row.project_room_id,
+        name: row.name,
+        sortOrder: row.sort_order,
+      }));
+    },
+    enabled: !!projectId,
+  });
+}
+
+export type SetLineGroupInput = {
+  projectId: string;
+  itemIds: string[];
+  /** `{groupId}` moves into an existing group; `{name, roomId}` creates one; `null` ungroups. */
+  group: { groupId: string } | { name: string; roomId: string | null } | null;
+};
+
+/** Groups or ungroups lines under a heading inside one room (00751). */
+export function useSetLineGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemIds, group }: SetLineGroupInput): Promise<SetLineGroupResult> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (getSupabase() as any).rpc('set_line_group', {
+        p_ffe_item_ids: itemIds,
+        p_group: group,
+      });
+      if (error) throw error;
+      return data as SetLineGroupResult;
+    },
+    onSuccess: (_result, { projectId }) => {
+      invalidateFfeCaches(queryClient, projectId);
+      queryClient.invalidateQueries({ queryKey: projectLineGroupsKey(projectId) });
+    },
+  });
+}
+
+// ─── Catalog merge (00753, D11, Q11, S5, W5) ─────────────────────────────────
+
+/**
+ * Merges a duplicate studio product into the one to keep (00753): re-points
+ * schedule lines, boards and project product lists, never hard-deletes.
+ * The lines a merge rewrites can span many projects, so there is no single
+ * projectId to scope invalidateFfeCaches to — this sweeps the same prefixes
+ * it targets, plus the products cache.
+ */
+export function useMergeStudioProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      fromProductId,
+      intoProductId,
+    }: {
+      fromProductId: string;
+      intoProductId: string;
+    }): Promise<MergeStudioProductResult> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (getSupabase() as any).rpc('merge_studio_product', {
+        p_from: fromProductId,
+        p_into: intoProductId,
+      });
+      if (error) throw error;
+      return data as MergeStudioProductResult;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['project-ffe-items'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-items'] });
+      queryClient.invalidateQueries({ queryKey: ['project-ffe-readiness'] });
+    },
   });
 }
 

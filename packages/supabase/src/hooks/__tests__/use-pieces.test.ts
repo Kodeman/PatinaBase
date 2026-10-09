@@ -44,12 +44,15 @@ import {
   useBatchCreateNamedProjectNeeds,
   useHandBackRoom,
   useMakeFfeLineAllowance,
+  useMergeStudioProduct,
+  useProjectLineGroups,
   useProjectRoomPlacements,
   useRemovedProjectLines,
   useRestoreProjectSelection,
   useRoomHandbacks,
   useSetFfeLineBuildFields,
   useSetLaborLinePrice,
+  useSetLineGroup,
   useSetLinePlacements,
 } from '../use-pieces';
 import { useProjectFFEItems } from '../use-project-v2';
@@ -375,6 +378,113 @@ describe('useMakeFfeLineAllowance', () => {
     const mutation = useMakeFfeLineAllowance() as unknown as MutationConfig<unknown, unknown>;
 
     await expect(mutation.mutationFn({ projectId: 'p1', itemId: 'i1', budgetMaxCents: 0 })).rejects.toBe(error);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Line groups (00751, D6, Q9, W5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useProjectLineGroups', () => {
+  interface Config {
+    queryKey: unknown[];
+    queryFn: () => Promise<unknown>;
+    enabled: boolean;
+  }
+
+  it('keys on ["project-line-groups", projectId] and maps rows to ProjectLineGroup', async () => {
+    const { chain, calls } = makeChain({
+      data: [{ id: 'g1', project_id: 'p1', project_room_id: 'r1', name: 'Shower', sort_order: 0 }],
+      error: null,
+    });
+    from.mockReturnValue(chain);
+    const config = useProjectLineGroups('p1') as unknown as Config;
+    expect(config.queryKey).toEqual(['project-line-groups', 'p1']);
+    expect(config.enabled).toBe(true);
+    await expect(config.queryFn()).resolves.toEqual([
+      { id: 'g1', projectId: 'p1', projectRoomId: 'r1', name: 'Shower', sortOrder: 0 },
+    ]);
+    expect(from).toHaveBeenCalledWith('project_line_groups');
+    expect(calls).toContainEqual(['eq', ['project_id', 'p1']]);
+  });
+});
+
+describe('useSetLineGroup', () => {
+  it('calls set_line_group with p_ffe_item_ids and p_group, and invalidates groups + ffe caches', async () => {
+    rpc.mockResolvedValue({
+      data: { groupId: 'g1', ffeItemIds: ['i1', 'i2'], deletedGroupIds: [] },
+      error: null,
+    });
+    const group = { name: 'Shower', roomId: 'r1' };
+    const result = await runMutation(useSetLineGroup(), { projectId: 'p1', itemIds: ['i1', 'i2'], group });
+
+    expect(rpc).toHaveBeenCalledWith('set_line_group', { p_ffe_item_ids: ['i1', 'i2'], p_group: group });
+    expect(result).toEqual({ groupId: 'g1', ffeItemIds: ['i1', 'i2'], deletedGroupIds: [] });
+    expect(invalidatedKeys()).toContainEqual(['project-line-groups', 'p1']);
+    expectFfeCachesInvalidated();
+  });
+
+  it('ungroups with a null group', async () => {
+    rpc.mockResolvedValue({ data: { groupId: null, ffeItemIds: ['i1'], deletedGroupIds: ['g1'] }, error: null });
+    const result = await runMutation(useSetLineGroup(), { projectId: 'p1', itemIds: ['i1'], group: null });
+
+    expect(rpc).toHaveBeenCalledWith('set_line_group', { p_ffe_item_ids: ['i1'], p_group: null });
+    expect(result).toEqual({ groupId: null, ffeItemIds: ['i1'], deletedGroupIds: ['g1'] });
+  });
+
+  it('throws the RPC error and invalidates nothing', async () => {
+    const error = { message: 'This line was removed.' };
+    rpc.mockResolvedValue({ data: null, error });
+    const mutation = useSetLineGroup() as unknown as MutationConfig<unknown, unknown>;
+
+    await expect(
+      mutation.mutationFn({ projectId: 'p1', itemIds: ['i1'], group: { groupId: 'g1' } }),
+    ).rejects.toBe(error);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Catalog merge (00753, D11, Q11, S5, W5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useMergeStudioProduct', () => {
+  it('calls merge_studio_product with p_from and p_into, and invalidates products + ffe caches', async () => {
+    rpc.mockResolvedValue({
+      data: { fromId: 'prod-dup', intoId: 'prod-keep', lines: 3, boardItems: 1, projectProducts: 2, earlierMerges: 0 },
+      error: null,
+    });
+    const result = await runMutation(useMergeStudioProduct(), {
+      fromProductId: 'prod-dup',
+      intoProductId: 'prod-keep',
+    });
+
+    expect(rpc).toHaveBeenCalledWith('merge_studio_product', { p_from: 'prod-dup', p_into: 'prod-keep' });
+    expect(result).toEqual({
+      fromId: 'prod-dup',
+      intoId: 'prod-keep',
+      lines: 3,
+      boardItems: 1,
+      projectProducts: 2,
+      earlierMerges: 0,
+    });
+    const keys = invalidatedKeys();
+    expect(keys).toContainEqual(['products']);
+    expect(keys).toContainEqual(['project-ffe-items']);
+    expect(keys).toContainEqual(['projects']);
+    expect(keys).toContainEqual(['procurement-items']);
+    expect(keys).toContainEqual(['project-ffe-readiness']);
+  });
+
+  it('throws the RPC error and invalidates nothing', async () => {
+    const error = { message: 'A product cannot merge into itself.' };
+    rpc.mockResolvedValue({ data: null, error });
+    const mutation = useMergeStudioProduct() as unknown as MutationConfig<unknown, unknown>;
+
+    await expect(
+      mutation.mutationFn({ fromProductId: 'prod-dup', intoProductId: 'prod-dup' }),
+    ).rejects.toBe(error);
     expect(invalidateQueries).not.toHaveBeenCalled();
   });
 });
