@@ -5,7 +5,7 @@
  * Writes <runDir>/board.html: one self-contained review page (< 16 MB). A header with the concept
  * and content test, then one card per piece: the rendered preview (downscaled to <= 1200 px JPEG
  * with sips on macOS, else with Playwright chromium, and inlined), the final copy, the rival draft,
- * lint results ("Not linted yet" vs "Lint crashed"), the review findings that name the piece, a
+ * lint results ("Not linted yet" vs "Lint crashed"), the piece's own `## Pnn` section of review.md, a
  * PLACEHOLDER badge when any image on the piece is a FLUX placeholder and a MISSING badge when a
  * job has no image at all. Videos show a poster frame plus the local mp4 path. A ledger table
  * closes the page. The only external requests are Google Fonts. A board of 16 MB or more is not
@@ -146,14 +146,43 @@ function finalData(runDir, pieceId) {
   }
 }
 
-/** Review blocks (paragraphs or list items) that name the piece id. */
+/**
+ * The body lines of the review.md sections whose `## ` heading starts with the piece id
+ * (`## P01 — ...`, `## P01: ...`, `## P01 ...`). A mention of the id anywhere else, a preamble or
+ * a `## Cross-piece notes` section never attributes text to the piece.
+ */
 function reviewFor(review, pieceId) {
   if (!review) return [];
-  const re = new RegExp(`\\b${pieceId}\\b`);
-  return review
-    .split(/\n\s*\n|\n(?=\s*(?:[-*]|\d+\.)\s)/)
-    .map((b) => b.trim().replace(/^(?:[-*]|\d+\.)\s+/, ''))
-    .filter((b) => re.test(b));
+  const own = new RegExp(`^##\\s+${pieceId}(?:[\\s:]|$)`);
+  const lines = [];
+  let inside = false;
+  for (const line of review.split(/\r?\n/)) {
+    if (/^##\s/.test(line)) inside = own.test(line);
+    else if (inside) lines.push(line);
+  }
+  return lines;
+}
+
+/** Table cells of a markdown row, honouring `\|` escapes. */
+function tableCells(line) {
+  return line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'));
+}
+
+/** A piece's review section as escaped HTML: paragraphs, list items and markdown tables. */
+function reviewHtml(lines) {
+  const out = [];
+  const blocks = lines.join('\n').split(/\n\s*\n/).map((b) => b.trim()).filter((b) => b && !/^-{3,}$/.test(b));
+  for (const block of blocks) {
+    const rows = block.split('\n');
+    if (rows.every((r) => r.trim().startsWith('|'))) {
+      const body = rows.filter((r) => !/^\s*\|?[\s:|-]+\|?\s*$/.test(r)).map(tableCells);
+      const [head, ...rest] = /^\s*\|?[\s:|-]+\|?\s*$/.test(rows[1] || '') ? body : [null, ...body];
+      out.push(`<div class="scroll"><table class="review">${head ? `<thead><tr>${head.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead>` : ''}<tbody>${rest.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+    } else {
+      out.push(`<p class="finding">${esc(block.replace(/\s*\n\s*/g, ' '))}</p>`);
+    }
+  }
+  return out.join('');
 }
 
 /**
@@ -212,7 +241,7 @@ async function pieceCard(runDir, plan, piece, ctx) {
   const placeholder = usesPlaceholder(runDir, jobs, ctx.assets, ctx.picks);
   const missing = missingJobs(runDir, jobs);
   const preview = previewFile(paths, piece);
-  const findings = reviewFor(ctx.review, piece.id);
+  const findings = reviewHtml(reviewFor(ctx.review, piece.id));
 
   let media = '<div class="preview empty"><span>No render yet</span></div>';
   if (piece.kind === 'pr-pitch') {
@@ -244,7 +273,7 @@ async function pieceCard(runDir, plan, piece, ctx) {
       <details><summary>Rival draft (Sol)</summary>${rival ? `<pre class="final">${esc(rival)}</pre>` : '<p class="muted">No rival draft.</p>'}</details>
       <h3>Lint</h3>
       ${lintBlock(lint)}
-      ${findings.length ? `<h3>Review</h3><ul class="findings">${findings.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
+      ${findings ? `<h3>Review</h3><div class="findings">${findings}</div>` : ''}
     </div>
   </div>
 </article>`;
@@ -320,8 +349,12 @@ pre{ white-space:pre-wrap; overflow-wrap:anywhere; font-family:var(--font-mono);
 details{ margin-top:0.8rem; }
 summary{ cursor:pointer; font-family:var(--font-mono); font-size:0.8rem; color:var(--ink-soft); }
 details pre{ margin-top:0.6rem; }
-ul.lint, ul.findings{ margin:0; padding-left:1.1rem; }
-ul.lint li, ul.findings li{ margin-bottom:0.3rem; white-space:pre-wrap; }
+ul.lint{ margin:0; padding-left:1.1rem; }
+ul.lint li{ margin-bottom:0.3rem; white-space:pre-wrap; }
+.findings p{ overflow-wrap:anywhere; }
+table.review{ border-collapse:collapse; width:100%; font-size:0.85rem; margin:0 0 0.8em; }
+.review th, .review td{ text-align:left; padding:0.35rem 0.7rem 0.35rem 0; border-bottom:1px solid var(--hairline); vertical-align:top; }
+.review th{ font-family:var(--font-mono); font-weight:400; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--ink-faint); }
 .lint-kind{ font-family:var(--font-mono); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--ink-faint); }
 .lint-sum{ font-family:var(--font-mono); font-size:0.85rem; }
 .scroll{ overflow-x:auto; }

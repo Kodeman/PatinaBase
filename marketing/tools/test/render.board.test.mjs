@@ -53,7 +53,58 @@ fs.writeFileSync(path.join(runDir, 'critique', 'lint-P02.json'), '');
 fs.writeFileSync(path.join(runDir, 'critique', 'lint-P03.json'), JSON.stringify({
   file: 'copy/P03.final.md', fatal: 'YAMLParseError: unexpected end', errors: [{ rule: 'lint-crashed', match: 'YAMLParseError: unexpected end', line: 0 }], warnings: [],
 }));
-fs.writeFileSync(path.join(runDir, 'critique', 'review.md'), '# Review\n\n- P01: lead with the handoff, not the hire.\n- P07: the subhead is generic.\n');
+// review.md in the shape the Fable review writes: a preamble, one `## Pnn` section per piece
+// (What I see, a findings table, a Voice line, `---` between pieces), then cross-piece notes that
+// name several pieces. P03's table points back at P01 and P01's section mentions P06.
+const REVIEW = `# Press review — sample
+
+## State of the run (read first)
+
+Preamble note: every piece in this run uses P01's palette.
+
+---
+
+## P01 — social, instagram-4x5 (\`out/P01/P01.png\`)
+
+**What I see.** P01-ONLY: the hire sits low on the page; compare P06 slide 5.
+
+| # | Severity | Finding | Fix |
+|---|---|---|---|
+| 1 | major | P01-FINDING lead with the handoff, not the hire | Swap the headline \\| move the date |
+
+Voice: P01-VOICE passes.
+
+---
+
+## P03: pin, pinterest-2x3
+
+**What I see.** P03-ONLY: tall placeholder.
+
+| # | Severity | Finding | Fix |
+|---|---|---|---|
+| 1 | minor | Same as P01 #1 | P03-FIX keep the band |
+
+Voice: P03-VOICE passes.
+
+---
+
+## P07 PR pitch, email
+
+**What I see.** P07-ONLY: the subhead is generic.
+
+| # | Severity | Finding | Fix |
+|---|---|---|---|
+| 1 | minor | P07-FINDING subject runs long | Cut to 40 chars |
+
+Voice: P07-VOICE passes.
+
+---
+
+## Cross-piece notes
+
+- CROSS-BULLET: P05 and P08 share a placeholder; fix both with P01.
+`;
+fs.writeFileSync(path.join(runDir, 'critique', 'review.md'), REVIEW);
 fs.writeFileSync(path.join(runDir, 'copy', 'P01.sol.md'), '---\nheadline: A second set of hands\n---\n\nRival body from Sol.\n');
 fs.writeFileSync(path.join(runDir, 'ledger.json'), JSON.stringify([
   { ts: '2026-10-08T12:00:00.000Z', piece: 'P01', step: 'draft', seat: 'rival', model: 'claude-gpt-6-sol[1m]', usage: { input_tokens: 1200, output_tokens: 345 } },
@@ -103,6 +154,47 @@ test('a piece card carries its inlined preview, final copy, rival draft, lint an
   assert.match(p01, /unverified-claim/);
   assert.match(p01, /lead with the handoff, not the hire/);
   assert.doesNotMatch(p01, /the subhead is generic/);
+});
+
+test('review: each card shows only its own ## Pnn section, rendered with an HTML table', () => {
+  const own = ['P01', 'P03', 'P07'];
+  const markers = (id) => [`${id}-ONLY`, `${id}-VOICE`];
+  for (const piece of plan.pieces) {
+    const c = card(piece.id);
+    for (const other of own) {
+      for (const m of markers(other)) {
+        if (other === piece.id) assert.ok(c.includes(m), `${piece.id} card lacks its own ${m}`);
+        else assert.ok(!c.includes(m), `${piece.id} card shows ${other}'s ${m}`);
+      }
+    }
+    if (!own.includes(piece.id)) assert.doesNotMatch(c, /<h3>Review<\/h3>/, `${piece.id} has no section, so no Review block`);
+  }
+  const p01 = card('P01');
+  assert.match(p01, /<table class="review"><thead><tr><th>#<\/th><th>Severity<\/th><th>Finding<\/th><th>Fix<\/th><\/tr><\/thead>/);
+  assert.match(p01, /<td>major<\/td><td>P01-FINDING lead with the handoff, not the hire<\/td><td>Swap the headline \| move the date<\/td>/);
+  assert.match(p01, /compare P06 slide 5/);
+  assert.match(card('P07'), /P07-FINDING subject runs long/);
+  // P03: its own table row, and P01 appears only inside the quoted "Same as P01 #1".
+  const p03 = card('P03');
+  assert.match(p03, /<td>Same as P01 #1<\/td><td>P03-FIX keep the band<\/td>/);
+  assert.doesNotMatch(p03, /P01-FINDING/);
+  const p03Body = p03.slice(p03.indexOf('<h3>Review</h3>'));
+  assert.equal(p03Body.split('P01').length - 1, 1, 'P01 appears once on P03, in the quoted finding');
+  // P06 is mentioned inside P01's section only; it gets nothing.
+  assert.doesNotMatch(card('P06'), /compare P06 slide 5/);
+});
+
+test('review: cross-piece notes and the preamble stay in the Full review block, never on a card', () => {
+  for (const piece of plan.pieces) {
+    const c = card(piece.id);
+    assert.ok(!c.includes('CROSS-BULLET'), `${piece.id} card carries the cross-piece bullet`);
+    assert.ok(!c.includes('Preamble note'), `${piece.id} card carries the preamble`);
+    assert.ok(!c.includes('Cross-piece notes'), `${piece.id} card carries the cross-piece heading`);
+  }
+  const full = html.slice(html.indexOf('<summary>Full review (critique/review.md)</summary>'));
+  assert.ok(full.length < html.length, 'Full review block is present');
+  assert.match(full, /CROSS-BULLET: P05 and P08 share a placeholder/);
+  assert.match(full, /Preamble note/);
 });
 
 test('only pieces that use a FLUX image carry the PLACEHOLDER badge', () => {
