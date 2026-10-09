@@ -982,3 +982,32 @@ export function comArrivingSeparately(
   }
   return notes;
 }
+
+// ─── The room cell names every room (US-21 T-51, D7 phase 3) ────────────────
+// A line placed in more than one room (project_ffe_placements, 00734) prints
+// each room with its share, in placement order, and the unit once at the end:
+// `Hall 120 · Living Room 320 · Dining 180 · Kitchen 210 sq ft`. Waste (the
+// line's quantity past the placed sum) is not a room and never prints here.
+// A line with one placement or none prints its primary room, as before.
+
+/** One room placement of a PO line, as the items select embeds it. */
+export interface PoLinePlacement {
+  quantity: number;
+  sort_order: number;
+  room: { name: string | null } | null;
+}
+
+export function poLineRoomLabel(
+  primaryRoom: string | null,
+  placements: readonly PoLinePlacement[] | null | undefined,
+  unit: string | null | undefined,
+): string | null {
+  if (!placements || placements.length < 2) return primaryRoom;
+  // The unit word follows the Qty cell's rule (_shared/po-pdf.ts poQuantityLabel).
+  const unitWord = unit && unit !== 'each' ? ` ${unit.replace(/_/g, ' ')}` : '';
+  const rooms = [...placements]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((p) => `${p.room?.name?.trim() || 'Room'} ${p.quantity}`)
+    .join(' · ');
+  return `${rooms}${unitWord}`;
+}

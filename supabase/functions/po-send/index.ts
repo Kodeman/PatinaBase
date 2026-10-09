@@ -80,6 +80,8 @@ import {
   numberPurchaseOrder,
   persistSidemarkDefault,
   PO_OUT_OF_SYNC_DETAIL,
+  poLineRoomLabel,
+  type PoLinePlacement,
   type SupplyingLine,
   type SupplyingPurchaseOrder,
   parsePoSendBody,
@@ -160,6 +162,8 @@ interface FfeItemRow {
   /** project_ffe_items.link_kind: 'com' pairs a line to its piece (C-24). */
   link_kind?: string | null;
   room: { id: string; name: string } | null;
+  /** Room placements (00734); two or more name every room on the line. */
+  placements: PoLinePlacement[] | null;
   /** project_ffe_specs embed (UNIQUE ffe_item_id → object, not array). */
   spec: VendorConfigurationSpec | null;
   /** products embed via product_id: the spec fields' fallback (C-06). */
@@ -304,6 +308,9 @@ Deno.serve(async (req: Request) => {
       id, name, quantity, unit, trade_price_cents, unit_price_cents, notes,
       ffe_category, line_kind, link_kind,
       room:project_rooms!project_room_id(id, name),
+      placements:project_ffe_placements!ffe_item_id(
+        quantity, sort_order, room:project_rooms!project_room_id(name)
+      ),
       spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
         configuration_id, configuration_snapshot,
         configuration_snapshot_hash, configuration_locked_at,
@@ -485,7 +492,7 @@ Deno.serve(async (req: Request) => {
     ];
     return {
       name: item.name,
-      room: item.room?.name ?? null,
+      room: poLineRoomLabel(item.room?.name ?? null, item.placements, item.unit),
       quantity,
       unit: item.unit,
       unitTradeCents,

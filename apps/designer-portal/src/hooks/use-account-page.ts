@@ -34,7 +34,8 @@ export interface AccountMilestone {
   sort_order: number;
 }
 
-interface ItemSlice {
+export interface ItemSlice {
+  id: string;
   line_total_cents: number | null;
   trade_price_cents: number | null;
   unit_price_cents: number | null;
@@ -43,6 +44,20 @@ interface ItemSlice {
   project_room_id: string | null;
   item_type: string | null;
   currency: string | null;
+}
+
+/** A line's room placement (00734): its room and its share of the line. */
+export interface AccountPlacement {
+  ffe_item_id: string;
+  project_room_id: string;
+  quantity: number;
+  sort_order: number;
+}
+
+export interface AccountRoom {
+  id: string;
+  name: string;
+  budget_cents: number | null;
 }
 
 export interface RoomVariance {
@@ -96,7 +111,13 @@ export function useAccountPage(projectId: string | null) {
     enabled: Boolean(projectId),
     queryFn: async () => {
       const supabase = getSupabase();
-      const [{ data: project, error: pErr }, { data: items, error: iErr }, { data: rooms, error: rErr }, { data: milestones, error: mErr }] =
+      const [
+        { data: project, error: pErr },
+        { data: items, error: iErr },
+        { data: rooms, error: rErr },
+        { data: milestones, error: mErr },
+        { data: placements, error: plErr },
+      ] =
         await Promise.all([
           supabase
             .from('projects')
@@ -105,7 +126,7 @@ export function useAccountPage(projectId: string | null) {
             .single(),
           supabase
             .from('project_ffe_items')
-            .select('line_total_cents, trade_price_cents, unit_price_cents, quantity, status, project_room_id, item_type, currency')
+            .select('id, line_total_cents, trade_price_cents, unit_price_cents, quantity, status, project_room_id, item_type, currency')
             .eq('project_id', projectId),
           supabase
             .from('project_rooms')
@@ -117,11 +138,16 @@ export function useAccountPage(projectId: string | null) {
             .select('id, label, percentage, amount_cents, status, due_date, paid_at, trigger_kind, trigger_section_key, invoice_id, sort_order')
             .eq('project_id', projectId)
             .order('sort_order', { ascending: true }),
+          supabase
+            .from('project_ffe_placements')
+            .select('ffe_item_id, project_room_id, quantity, sort_order')
+            .eq('project_id', projectId),
         ]);
       if (pErr) throw pErr;
       if (iErr) throw iErr;
       if (rErr) throw rErr;
       if (mErr) throw mErr;
+      if (plErr) throw plErr;
 
       const all = (items ?? []) as ItemSlice[];
       const committed = all.filter((i) => COMMITTED_STATUSES.has(i.status));
@@ -142,31 +168,11 @@ export function useAccountPage(projectId: string | null) {
           ? Math.round(((clientValueCents - tradeCostCents) / clientValueCents) * 100)
           : null;
 
-      const roomRows: RoomVariance[] = [
-        ...((rooms ?? []) as any[]).map((room) => {
-          const inRoom = committed.filter((i) => i.project_room_id === room.id);
-          const allocatedCents = (room.budget_cents as number) ?? 0;
-          return {
-            roomId: room.id as string,
-            roomName: room.name as string,
-            allocatedCents,
-            ...committedAgainst(inRoom, allocatedCents),
-            categories: categorize(inRoom),
-          };
-        }),
-      ];
-      const unassigned = committed.filter(
-        (i) => !i.project_room_id || !roomRows.some((r) => r.roomId === i.project_room_id),
+      const roomRows = accountRoomRows(
+        (rooms ?? []) as AccountRoom[],
+        committed,
+        (placements ?? []) as AccountPlacement[],
       );
-      if (unassigned.length > 0) {
-        roomRows.push({
-          roomId: null,
-          roomName: 'Throughout',
-          allocatedCents: 0,
-          ...committedAgainst(unassigned, 0),
-          categories: categorize(unassigned),
-        });
-      }
 
       return {
         budgetCents: project?.budget_cents ?? 0,
@@ -185,6 +191,73 @@ export function useAccountPage(projectId: string | null) {
       };
     },
   });
+}
+
+/**
+ * The room budget rows (R25), with a placed line split by share (US-21 T-51,
+ * D7 phase 3). A line in two or more rooms (project_ffe_placements, 00734)
+ * counts in each room by its placed quantity over the placed sum, so the
+ * rooms together hold exactly the line's money: never doubled, and the
+ * waste past the placed sum is shared rather than dropped. Cents are split
+ * by largest remainder, ties to placement order. A line with one placement
+ * or none counts whole in its primary room (project_room_id), as before.
+ */
+export function accountRoomRows(
+  rooms: readonly AccountRoom[],
+  committed: readonly ItemSlice[],
+  placements: readonly AccountPlacement[],
+): RoomVariance[] {
+  const byItem = new Map<string, AccountPlacement[]>();
+  for (const p of placements) byItem.set(p.ffe_item_id, [...(byItem.get(p.ffe_item_id) ?? []), p]);
+  const slices = committed.flatMap((item) => splitByShare(item, byItem.get(item.id) ?? []));
+
+  const roomRows: RoomVariance[] = rooms.map((room) => {
+    const inRoom = slices.filter((i) => i.project_room_id === room.id);
+    const allocatedCents = room.budget_cents ?? 0;
+    return {
+      roomId: room.id,
+      roomName: room.name,
+      allocatedCents,
+      ...committedAgainst(inRoom, allocatedCents),
+      categories: categorize(inRoom),
+    };
+  });
+  const unassigned = slices.filter(
+    (i) => !i.project_room_id || !roomRows.some((r) => r.roomId === i.project_room_id),
+  );
+  if (unassigned.length > 0) {
+    roomRows.push({
+      roomId: null,
+      roomName: 'Throughout',
+      allocatedCents: 0,
+      ...committedAgainst(unassigned, 0),
+      categories: categorize(unassigned),
+    });
+  }
+  return roomRows;
+}
+
+function splitByShare(item: ItemSlice, placements: AccountPlacement[]): ItemSlice[] {
+  const placedSum = placements.reduce((s, p) => s + p.quantity, 0);
+  if (placements.length < 2 || placedSum <= 0) return [item];
+  const ordered = [...placements].sort((a, b) => a.sort_order - b.sort_order);
+  const total = item.line_total_cents ?? 0;
+  const raw = ordered.map((p) => (total * p.quantity) / placedSum);
+  const cents = raw.map(Math.floor);
+  let left = total - cents.reduce((s, c) => s + c, 0);
+  const byRemainder = raw
+    .map((r, i) => ({ i, rem: r - cents[i] }))
+    .sort((a, b) => b.rem - a.rem || a.i - b.i);
+  for (const { i } of byRemainder) {
+    if (left <= 0) break;
+    cents[i] += 1;
+    left -= 1;
+  }
+  return ordered.map((p, i) => ({
+    ...item,
+    project_room_id: p.project_room_id,
+    line_total_cents: cents[i],
+  }));
 }
 
 /** A total's cents, or 0 when it spans currencies — never a cross-currency sum. */

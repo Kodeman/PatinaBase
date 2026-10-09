@@ -7,7 +7,7 @@
 // prints "COM arriving separately": only a 'com' link is the COM pair.
 
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { comArrivingSeparately } from "./lib.ts";
+import { comArrivingSeparately, poLineRoomLabel } from "./lib.ts";
 import { poQuantityLabel } from "../_shared/po-pdf.ts";
 
 const WALLPAPER = { id: "line-wallpaper", spec: {} };
@@ -67,4 +67,41 @@ Deno.test("each, or no unit, prints the bare quantity as before", () => {
   assertEquals(poQuantityLabel(2, "each"), "2");
   assertEquals(poQuantityLabel(1, null), "1");
   assertEquals(poQuantityLabel(3), "3");
+});
+
+// T-51 (D7 phase 3): the oak floor, 913 sq ft ordered over 830 measured in
+// four rooms. The embed arrives in any order; the room cell reads in
+// placement order, the unit once, and the 83 sq ft of waste is no room.
+const OAK_PLACEMENTS = [
+  { quantity: 210, sort_order: 3, room: { name: "Kitchen" } },
+  { quantity: 120, sort_order: 0, room: { name: "Hall" } },
+  { quantity: 180, sort_order: 2, room: { name: "Dining" } },
+  { quantity: 320, sort_order: 1, room: { name: "Living Room" } },
+];
+
+Deno.test("the oak floor's PO line names every room with its share", () => {
+  assertEquals(
+    poLineRoomLabel("Hall", OAK_PLACEMENTS, "sq_ft"),
+    "Hall 120 · Living Room 320 · Dining 180 · Kitchen 210 sq ft",
+  );
+});
+
+Deno.test("a multi-room line counted each prints the shares without a unit", () => {
+  assertEquals(
+    poLineRoomLabel("Hall", [
+      { quantity: 2, sort_order: 0, room: { name: "Hall" } },
+      { quantity: 1, sort_order: 1, room: { name: "Dining" } },
+    ], "each"),
+    "Hall 2 · Dining 1",
+  );
+});
+
+Deno.test("a single-room line prints its primary room, as before", () => {
+  assertEquals(poLineRoomLabel("Kitchen", [], "sq_ft"), "Kitchen");
+  assertEquals(poLineRoomLabel("Kitchen", null, "sq_ft"), "Kitchen");
+  assertEquals(
+    poLineRoomLabel("Kitchen", [{ quantity: 210, sort_order: 0, room: { name: "Kitchen" } }], "sq_ft"),
+    "Kitchen",
+  );
+  assertEquals(poLineRoomLabel(null, undefined, null), null);
 });
