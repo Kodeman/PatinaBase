@@ -18,8 +18,22 @@ const mockTriage = jest.fn();
 const mockHandBack = jest.fn();
 const mockRelease = jest.fn();
 const mockSend = jest.fn();
+const mockVoid = jest.fn();
+type Draft = { documentId: string; proposalId: string; itemIds: string[] };
+/** The server's draft read (00755): `null` is no draft. */
+const mockDraft: { data: Draft | null } = { data: null };
+const mockDraftRefetch = jest.fn();
+const mockProject: { data: { id: string; client_id: string | null } } = {
+  data: { id: "proj-1", client_id: "client-1" },
+};
 
 jest.mock("@patina/supabase", () => ({
+  useDraftRelease: () => ({
+    data: mockDraft.data,
+    isError: false,
+    refetch: mockDraftRefetch,
+  }),
+  useProject: () => ({ data: mockProject.data }),
   useProjectFFEItems: () => ({ data: mockItems.data }),
   useProjectFfeReadiness: (ids: readonly string[]) => ({
     data: ids.map((id) => ({
@@ -46,6 +60,10 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
   }),
   useSendFurnishingsAuthorization: () => ({
     mutateAsync: mockSend,
+    isPending: false,
+  }),
+  useVoidAuthorization: () => ({
+    mutateAsync: mockVoid,
     isPending: false,
   }),
 }));
@@ -174,25 +192,56 @@ beforeEach(() => {
   mockHandbacks.data = [];
   mockTriage.mockReset();
   mockHandBack.mockReset();
-  mockRelease
-    .mockReset()
-    .mockResolvedValue({
-      proposalId: "prop-3",
-      documentId: "doc-3",
-      itemCount: 7,
-    });
+  mockRelease.mockReset().mockResolvedValue({
+    proposalId: "prop-3",
+    documentId: "doc-3",
+    itemCount: 7,
+  });
   mockSend.mockReset().mockResolvedValue({});
+  mockVoid.mockReset().mockResolvedValue({});
+  mockDraft.data = null;
+  mockDraftRefetch.mockReset();
+  mockProject.data = { id: "proj-1", client_id: "client-1" };
 });
 
+/** What 00755's read returns once the W4 set has been drafted and not sent. */
+const W4_DRAFT: Draft = {
+  documentId: "doc-3",
+  proposalId: "prop-3",
+  itemIds: ["L1", "L3", "F1", "D1", "T1", "R1", "R1a"],
+};
+
 describe("ReleaseLens", () => {
-  it("prints the table across rooms: LINE · ROOM · STAGE · READINESS · FOR THE CLIENT", () => {
+  it("prints the table across rooms: LINE · ROOM · STAGE · READINESS · FOR THE CLIENT · and an empty 6th column", () => {
     render(<ReleaseLens {...props} />);
     const table = screen.getByRole("table", { name: "Release" });
     expect(
       within(table)
         .getAllByRole("columnheader")
         .map((th) => th.textContent),
-    ).toEqual(["Line", "Room", "Stage", "Readiness", "For the client"]);
+    ).toEqual([
+      "Line",
+      "Room",
+      "Stage",
+      "Readiness",
+      "For the client",
+      "Line menu",
+    ]);
+    // a3: the 6th column's header is for screen readers only, its cells empty.
+    expect(table.querySelectorAll("col")).toHaveLength(6);
+    expect(
+      within(table).getByRole("columnheader", { name: "Line menu" })
+        .firstElementChild,
+    ).toHaveClass("sr-only");
+    for (const tr of Array.from(table.querySelectorAll("tbody tr"))) {
+      const cells = Array.from(tr.children);
+      const span = cells.reduce(
+        (n, c) => n + Number(c.getAttribute("colspan") ?? 1),
+        0,
+      );
+      expect(span).toBe(6);
+      expect(cells[cells.length - 1].textContent).toBe("");
+    }
     expect(
       within(table)
         .getAllByRole("rowheader")
@@ -299,21 +348,109 @@ describe("ReleaseLens", () => {
     );
   });
 
-  it("a failed send retries the send alone, never a second authorization", async () => {
+  it("a failed send re-reads the draft from the server and offers its send, never a second authorization", async () => {
     mockSend.mockRejectedValueOnce(new Error("The send did not go through."));
-    render(<ReleaseLens {...props} />);
-    const act_ = screen.getByRole("button", { name: /^Release 7 lines/ });
+    const { rerender } = render(<ReleaseLens {...props} />);
     await act(async () => {
-      fireEvent.click(act_);
+      fireEvent.click(screen.getByRole("button", { name: /^Release 7 lines/ }));
     });
     expect(screen.getByRole("alert")).toHaveTextContent(
       "The send did not go through.",
     );
+    expect(mockDraftRefetch).toHaveBeenCalled();
+    // The refetch finds the draft the release made.
+    mockDraft.data = W4_DRAFT;
+    rerender(<ReleaseLens {...props} />);
+    expect(screen.queryByRole("button", { name: /^Release / })).toBeNull();
     await act(async () => {
-      fireEvent.click(act_);
+      fireEvent.click(screen.getByRole("button", { name: "SEND THE DRAFT" }));
     });
     expect(mockRelease).toHaveBeenCalledTimes(1);
     expect(mockSend).toHaveBeenCalledTimes(2);
+    expect(mockSend).toHaveBeenLastCalledWith("prop-3");
+  });
+
+  it("a draft found after a reload shows its lines with SEND THE DRAFT and VOID THE DRAFT, and no release", async () => {
+    // A fresh mount: nothing in React state, only the server's draft read.
+    mockDraft.data = W4_DRAFT;
+    render(<ReleaseLens {...props} />);
+    const ceremony = within(
+      screen.getByRole("region", { name: "This release" }),
+    );
+    expect(
+      ceremony.getByText("Drafted, not sent · 7 lines · $30,760:"),
+    ).toBeInTheDocument();
+    const items = ceremony.getAllByRole("listitem").map((li) => li.textContent);
+    expect(items).toHaveLength(7);
+    expect(items[0]).toBe("Custom cabinet $9,600");
+    expect(items[6]).toBe("↳ Install, wallpaper hanger (labor) $765");
+    expect(screen.queryByRole("button", { name: /^Release / })).toBeNull();
+
+    // Lines on the draft are not READY: they read "On a drafted release".
+    const l1 = within(rowOf("Custom cabinet"));
+    expect(l1.getByText("On a drafted release")).toBeInTheDocument();
+    expect(l1.queryByText("Ready", { selector: "td" })).toBeNull();
+    expect(l1.queryByRole("combobox")).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(ceremony.getByRole("button", { name: "SEND THE DRAFT" }));
+    });
+    expect(mockSend).toHaveBeenCalledWith("prop-3");
+    expect(mockRelease).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Released 7 lines to the client for authorization.",
+    );
+    expect(mockDraftRefetch).toHaveBeenCalled();
+  });
+
+  it("VOID THE DRAFT voids by proposal id with a reason, then re-reads the draft", async () => {
+    mockDraft.data = W4_DRAFT;
+    render(<ReleaseLens {...props} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "VOID THE DRAFT" }));
+    });
+    expect(mockVoid).toHaveBeenCalledTimes(1);
+    const [{ proposalId, reason }] = mockVoid.mock.calls[0];
+    expect(proposalId).toBe("prop-3");
+    expect(reason.trim().length).toBeGreaterThanOrEqual(5);
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(mockRelease).not.toHaveBeenCalled();
+    expect(mockDraftRefetch).toHaveBeenCalled();
+  });
+
+  it("with no client linked the act is a sentence and nothing is drafted", async () => {
+    mockProject.data = { id: "proj-1", client_id: null };
+    render(<ReleaseLens {...props} />);
+    const region = screen.getByRole("region", { name: "This release" });
+    expect(
+      within(region).getByText("Link a client to this job before releasing."),
+    ).toBeInTheDocument();
+    expect(within(region).queryByRole("button")).toBeNull();
+    expect(mockRelease).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("prints cents in the ceremony when they are not zero", () => {
+    mockItems.data = fixture().map((l) =>
+      l.id === "L1"
+        ? { ...l, unit_price_cents: 479975, line_total_cents: 959950 }
+        : l,
+    );
+    render(<ReleaseLens {...props} />);
+    const ceremony = within(
+      screen.getByRole("region", { name: "This release" }),
+    );
+    expect(
+      ceremony.getByText("This release · 7 lines · $30,759.50:"),
+    ).toBeInTheDocument();
+    expect(ceremony.getAllByRole("listitem")[0]).toHaveTextContent(
+      "Custom cabinet $9,599.50",
+    );
+    expect(
+      ceremony.getByRole("button", {
+        name: "Release 7 lines · $30,759.50 for authorization",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("after release the lines read RELEASED and the act is gone", () => {

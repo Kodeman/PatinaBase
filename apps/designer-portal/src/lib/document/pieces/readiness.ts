@@ -12,9 +12,11 @@
  *   Selected that the server calls ready, plus every active labor line on it
  *   (00733 releases labor with its piece). A piece whose labor is not ready
  *   stays out, because the server would refuse the whole release for it.
+ * - **A drafted release** (00755 `draft_release_for_project`). Its lines read
+ *   `On a drafted release` and never join the set: the server refuses to
+ *   release a line a live authorization already names.
  */
 
-import { fmtUsd } from "@/lib/document/format";
 import {
   deriveLineStamp,
   isLaborLine,
@@ -83,6 +85,24 @@ const NEEDS_QUANTITY = "Needs a quantity";
 const WAITS_ON_PIECE = "Ready when its piece is";
 const WAITS_ON_LABOR = "Waits on its labor";
 const WAITS_ON_DECISION = "Waits on a decision";
+export const DRAFTED_SENTENCE = "On a drafted release";
+
+/** The ceremony's money: exact cents when there are any (`$10,499.50`),
+ *  whole dollars without `.00` (`$30,760`). */
+export function fmtReleaseUsd(cents: number): string {
+  const whole = cents % 100 === 0;
+  return (cents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2,
+  });
+}
+
+/** D1's maker: a vendor, or a vendor name that is not blank. */
+function hasVendorName(line: ReleaseLensLine): boolean {
+  return (line.vendor_name ?? "").trim() !== "";
+}
 
 /** The server gate's keys (00733 `get_project_ffe_readiness`), first match
  *  printed. `designDisposition` is absent on purpose: Selected is the
@@ -122,9 +142,14 @@ export function releaseAmountCents(line: ReleaseLensLine): number {
   );
 }
 
-function serverBlocker(readiness: ServerReadiness | undefined): string | null {
+function serverBlocker(
+  line: ReleaseLensLine,
+  readiness: ServerReadiness | undefined,
+): string | null {
   if (!readiness || readiness.ready) return null;
   for (const [key, sentence] of SERVER_BLOCKERS) {
+    // The server's `vendor` key reads vendor_id only; D1 also takes a name.
+    if (key === "vendor" && hasVendorName(line)) continue;
     if (readiness.missingFields.includes(key)) return sentence;
   }
   return null;
@@ -151,7 +176,7 @@ export function readinessSentence(
       return stage.lineKind === "labor" ? WAITS_ON_PIECE : NEEDS_PRICE;
     }
     case "ready":
-      return serverBlocker(server) ?? READY_SENTENCE;
+      return serverBlocker(line, server) ?? READY_SENTENCE;
     case "decision_due":
       return WAITS_ON_DECISION;
     default:
@@ -231,6 +256,8 @@ export function deriveReleaseLens(
   rooms: readonly ReleaseRoom[],
   place: BuildRoomPlace,
   server: ReadonlyMap<string, ServerReadiness>,
+  /** The line ids an unsent draft release names (`useDraftRelease`). */
+  drafted: ReadonlySet<string> = new Set(),
 ): ReleaseLensModel {
   if (place === REMOVED_PLACE) {
     return {
@@ -251,6 +278,7 @@ export function deriveReleaseLens(
   const lineIds = new Set(lines.map((l) => l.id));
 
   const releasable = (line: ReleaseLensLine) =>
+    !drafted.has(line.id) &&
     kinds.get(line.id) === "ready" &&
     line.design_disposition === "selected" &&
     server.get(line.id)?.ready === true;
@@ -260,7 +288,11 @@ export function deriveReleaseLens(
   const toRow = (line: ReleaseLensLine): ReleaseRow => {
     const kind = kinds.get(line.id) ?? "placeholder";
     let readiness = readinessSentence(line, kind, lines, server.get(line.id));
-    if (
+    // Released and ordered-on lines print `—`; a drafted line is neither.
+    const onDraft = readiness != null && drafted.has(line.id);
+    if (onDraft) {
+      readiness = DRAFTED_SENTENCE;
+    } else if (
       readiness === READY_SENTENCE &&
       !isLaborLine(line) &&
       laborHolds(line)
@@ -273,10 +305,10 @@ export function deriveReleaseLens(
       labor: isLaborLine(line),
       readiness,
       disposition:
-        kind === "specced" || kind === "ready"
-          ? "select"
-          : kind === "released"
-            ? "read"
+        kind === "released" || onDraft
+          ? "read"
+          : kind === "specced" || kind === "ready"
+            ? "select"
             : "none",
     };
   };
@@ -342,12 +374,56 @@ export function deriveReleaseLens(
   };
 }
 
+/** The lines an unsent draft names, each labor line under its piece, for the
+ *  ceremony to show in place of a new set. */
+export function draftReleaseSet(
+  lines: readonly ReleaseLensLine[],
+  itemIds: readonly string[],
+): ReleaseSet {
+  const named = new Set(itemIds);
+  const onDraft = lines.filter((line) => named.has(line.id));
+  const toRow = (line: ReleaseLensLine): ReleaseRow => ({
+    line,
+    kind: releaseStamp(line, lines),
+    labor: isLaborLine(line),
+    readiness: DRAFTED_SENTENCE,
+    disposition: "read",
+  });
+  const rows: ReleaseRow[] = [];
+  for (const line of onDraft) {
+    const underPiece =
+      isLaborLine(line) &&
+      line.parent_ffe_item_id != null &&
+      named.has(line.parent_ffe_item_id);
+    if (underPiece) continue;
+    rows.push(toRow(line));
+    for (const labor of onDraft) {
+      if (isLaborLine(labor) && labor.parent_ffe_item_id === line.id) {
+        rows.push(toRow(labor));
+      }
+    }
+  }
+  const labor = rows.filter((r) => r.labor).length;
+  return {
+    rows,
+    pieces: rows.length - labor,
+    labor,
+    totalCents: rows.reduce((sum, r) => sum + releaseAmountCents(r.line), 0),
+  };
+}
+
 const lineWord = (n: number) => (n === 1 ? "line" : "lines");
+
+/** `Drafted, not sent · 7 lines · $30,760:` */
+export function draftReleaseHead(set: ReleaseSet): string {
+  const n = set.rows.length;
+  return `Drafted, not sent · ${n} ${lineWord(n)} · ${fmtReleaseUsd(set.totalCents)}:`;
+}
 
 /** `This release · 7 lines · $30,760:` */
 export function releaseSetHead(set: ReleaseSet): string {
   const n = set.rows.length;
-  return `This release · ${n} ${lineWord(n)} · ${fmtUsd(set.totalCents)}:`;
+  return `This release · ${n} ${lineWord(n)} · ${fmtReleaseUsd(set.totalCents)}:`;
 }
 
 /** The consequence sentence directly above the terminal act (a3). */
@@ -376,5 +452,5 @@ export function releaseConsequence(set: ReleaseSet): string {
 /** `Release 7 lines · $30,760 for authorization` */
 export function releaseActLabel(set: ReleaseSet): string {
   const n = set.rows.length;
-  return `Release ${n} ${lineWord(n)} · ${fmtUsd(set.totalCents)} for authorization`;
+  return `Release ${n} ${lineWord(n)} · ${fmtReleaseUsd(set.totalCents)} for authorization`;
 }

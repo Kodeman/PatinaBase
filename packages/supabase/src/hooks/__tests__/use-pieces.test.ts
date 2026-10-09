@@ -42,6 +42,7 @@ vi.mock('@tanstack/react-query', () => ({
 import {
   useAddLaborLine,
   useBatchCreateNamedProjectNeeds,
+  useDraftRelease,
   useHandBackRoom,
   useMakeFfeLineAllowance,
   useMergeStudioProduct,
@@ -355,6 +356,48 @@ describe('useHandBackRoom', () => {
 
     await expect(mutation.mutationFn({ projectId: 'p1', roomId: 'r1' })).rejects.toBe(error);
     expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Drafted release (00755, W4 review F-B1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useDraftRelease', () => {
+  interface Config {
+    queryKey: unknown[];
+    queryFn: () => Promise<unknown>;
+    enabled: boolean;
+  }
+
+  it('reads draft_release_for_project from the server, keyed on ["project-draft-release", projectId]', async () => {
+    rpc.mockResolvedValue({
+      data: { documentId: 'doc-3', proposalId: 'prop-3', itemIds: ['L1', 'R1', 'R1a'] },
+      error: null,
+    });
+    const config = useDraftRelease('p1') as unknown as Config;
+
+    expect(config.queryKey).toEqual(['project-draft-release', 'p1']);
+    expect(config.enabled).toBe(true);
+    await expect(config.queryFn()).resolves.toEqual({
+      documentId: 'doc-3',
+      proposalId: 'prop-3',
+      itemIds: ['L1', 'R1', 'R1a'],
+    });
+    expect(rpc).toHaveBeenCalledWith('draft_release_for_project', { p_project_id: 'p1' });
+  });
+
+  it('returns null when the job has no draft', async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    const config = useDraftRelease('p1') as unknown as Config;
+    await expect(config.queryFn()).resolves.toBeNull();
+  });
+
+  it('throws the RPC error', async () => {
+    const error = { message: 'project not found or access denied' };
+    rpc.mockResolvedValue({ data: null, error });
+    const config = useDraftRelease('p1') as unknown as Config;
+    await expect(config.queryFn()).rejects.toBe(error);
   });
 });
 

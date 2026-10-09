@@ -173,3 +173,55 @@ describe("the head counts and the overview agree (F3)", () => {
     expect(row.tally).toMatchObject({ lines: 1, placeholders: 0, released: 1 });
   });
 });
+
+describe("R1 and R2 decide first, as in Release (W4 review F-C1)", () => {
+  // A READY piece: a maker, a client price, a quantity.
+  const READY = {
+    vendor_id: "v-maker",
+    item_type: "fixed",
+    unit_price_cents: 680000,
+  };
+  const DECISION = {
+    blocked: true,
+    blocking_decision: { status: "pending", due_date: "2026-10-20" },
+  };
+
+  it("a pending blocking decision reads DECISION DUE and never counts as ready", () => {
+    const held = line("d1", { ...READY, ...DECISION });
+    const read = pieceLineStage(held);
+    expect(read.kind).toBe("decision_due");
+    expect(lineStampLabel(read.kind)).toBe("Decision due");
+    expect(read.stage).toBe("specced");
+    expect(read.lock).toBeNull();
+
+    // The head and the overview do not count it ready.
+    const lines = [held, line("d2", READY)];
+    expect(deriveRoomCounts(lines, [], ["bath"]).rooms.bath).toMatchObject({
+      lines: 2,
+      ready: 1,
+      specced: 1,
+    });
+    expect(deriveOverviewJob(lines)).toMatchObject({ ready: 1, specced: 1 });
+  });
+
+  it("a settled decision leaves D1's word alone", () => {
+    const read = pieceLineStage(
+      line("d1", {
+        ...READY,
+        blocked: true,
+        blocking_decision: { status: "resolved", due_date: null },
+      }),
+    );
+    expect(read.kind).toBe("ready");
+    expect(read.stage).toBe("ready");
+  });
+
+  it("an open damage claim reads DAMAGED on an ordered line, still released", () => {
+    const read = pieceLineStage(
+      line("o1", { status: "delivered", item_claims: [{ state: "drafted" }] }),
+    );
+    expect(read.kind).toBe("damaged");
+    expect(read.stage).toBe("released");
+    expect(read.lock).toBe("ordered");
+  });
+});

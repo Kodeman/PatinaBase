@@ -408,7 +408,42 @@ export function useHandBackRoom() {
   });
 }
 
-// ─── Allowance (00743, W4) ───────────────────────────────────────────────────
+// ─── Drafted release (00755, W4 review F-B1) ─────────────────────────────────
+
+export const projectDraftReleaseKey = (projectId: string) =>
+  ['project-draft-release', projectId] as const;
+
+/** A furnishing authorization drafted and never sent. Its lines cannot be
+ *  released again: send it, or void it with `void_furnishings_authorization`
+ *  (which takes the proposal id). */
+export interface DraftRelease {
+  documentId: string;
+  proposalId: string;
+  itemIds: string[];
+}
+
+/** The job's newest unsent draft release (00755), or null when there is none. */
+export function useDraftRelease(projectId: string) {
+  return useQuery({
+    queryKey: projectDraftReleaseKey(projectId),
+    queryFn: async (): Promise<DraftRelease | null> => {
+      const { data, error } = await getSupabase().rpc('draft_release_for_project', {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      if (data == null) return null;
+      const draft = data as unknown as Partial<DraftRelease>;
+      return {
+        documentId: String(draft.documentId),
+        proposalId: String(draft.proposalId),
+        itemIds: draft.itemIds ?? [],
+      };
+    },
+    enabled: !!projectId,
+  });
+}
+
+// ─── Allowance (00743, W4)───────────────────────────────────────────────────
 
 /** Makes the line an allowance with a ceiling (00743); refused once released. */
 export function useMakeFfeLineAllowance() {

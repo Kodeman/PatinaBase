@@ -14,13 +14,21 @@
  *   sentence, then the one terminal act. It drafts the authorization through
  *   `create_furnishings_authorization_from_schedule` and sends it, so the lines
  *   read RELEASED. A seat without money sees the table, never the ceremony.
+ * - **A drafted release** is read from the server (00755
+ *   `draft_release_for_project`), never kept in React state. While one exists
+ *   the ceremony shows its lines with SEND THE DRAFT and VOID THE DRAFT, and
+ *   offers no new release.
+ * - **No client linked:** the send would be refused, so the act is replaced
+ *   by a sentence and nothing is drafted.
  *
  * Nothing here edits a spec or a price.
  */
 
 import { useId, useMemo, useState } from "react";
 import {
+  useDraftRelease,
   useHandBackRoom,
+  useProject,
   useProjectFFEItems,
   useProjectFfeReadiness,
   useRoomHandbacks,
@@ -31,10 +39,11 @@ import {
   useProjectInstruments,
   useReleaseForAuthorization,
   useSendFurnishingsAuthorization,
+  useVoidAuthorization,
 } from "@/hooks/use-commercial-documents";
 import { useDocumentRooms } from "@/hooks/use-document-rooms";
 import { nextInstrumentNumber } from "@/lib/document/authorization-derivation";
-import { fmtDay, fmtUsd } from "@/lib/document/format";
+import { fmtDay } from "@/lib/document/format";
 import {
   REMOVED_PLACE,
   type BuildRoomPlace,
@@ -43,6 +52,9 @@ import {
   CLIENT_DISPOSITIONS,
   deriveReleaseLens,
   dispositionWord,
+  draftReleaseHead,
+  draftReleaseSet,
+  fmtReleaseUsd,
   readyLineIds,
   releaseActLabel,
   releaseAmountCents,
@@ -51,6 +63,7 @@ import {
   type ReleaseGroup,
   type ReleaseLensLine,
   type ReleaseRow,
+  type ReleaseSet,
   type ServerReadiness,
 } from "@/lib/document/pieces/readiness";
 import {
@@ -87,7 +100,15 @@ const COLUMNS = [
   { label: "Stage", width: "180px" },
   { label: "Readiness", width: "240px" },
   { label: "For the client", width: "170px" },
+  // a3's trailing column: the line menu's place, empty for now.
+  { label: "Line menu", width: "52px" },
 ] as const;
+
+const NO_CLIENT = "Link a client to this job before releasing.";
+const VOID_REASON = "Voided in the Build room to release again.";
+
+const releasedWords = (count: number) =>
+  `Released ${count} ${count === 1 ? "line" : "lines"} to the client for authorization.`;
 
 export function ReleaseLens({
   projectId,
@@ -113,9 +134,14 @@ export function ReleaseLens({
       ),
     [readiness.data],
   );
+  const draft = useDraftRelease(projectId);
+  const drafted = useMemo(
+    () => new Set(draft.data?.itemIds ?? []),
+    [draft.data],
+  );
   const model = useMemo(
-    () => deriveReleaseLens(lines, rooms, room, server),
-    [lines, rooms, room, server],
+    () => deriveReleaseLens(lines, rooms, room, server, drafted),
+    [lines, rooms, room, server, drafted],
   );
   const roomName = useMemo(
     () => new Map(rooms.map((r) => [r.id, r.name])),
@@ -169,11 +195,17 @@ export function ReleaseLens({
           </colgroup>
           <thead>
             <tr className="border-b border-[var(--sheet-rule-strong)]">
-              {COLUMNS.map((col) => (
-                <th key={col.label} scope="col" className={HEAD_CELL}>
-                  {col.label}
-                </th>
-              ))}
+              {COLUMNS.map((col, i) =>
+                i === COLUMNS.length - 1 ? (
+                  <th key={col.label} scope="col" className={HEAD_CELL}>
+                    <span className="sr-only">{col.label}</span>
+                  </th>
+                ) : (
+                  <th key={col.label} scope="col" className={HEAD_CELL}>
+                    {col.label}
+                  </th>
+                ),
+              )}
             </tr>
           </thead>
           {model.groups.map((group) => (
@@ -186,7 +218,14 @@ export function ReleaseLens({
           ))}
         </table>
       </div>
-      {canSeeMoney && <Ceremony projectId={projectId} set={model.set} />}
+      {canSeeMoney && (
+        <Ceremony
+          projectId={projectId}
+          set={model.set}
+          lines={lines}
+          draft={draft}
+        />
+      )}
     </div>
   );
 }
@@ -219,6 +258,7 @@ function RoomGroup({
             />
           )}
         </td>
+        <td />
       </tr>
       {group.rows.map((row) => (
         <LineRow
@@ -290,6 +330,7 @@ function LineRow({
           "—"
         )}
       </td>
+      <td className={CELL} />
     </tr>
   );
 }
@@ -394,27 +435,148 @@ function HandBack({
   );
 }
 
+function CeremonyLines({ set }: { set: ReleaseSet }) {
+  return (
+    <ul className="flex flex-col gap-1">
+      {set.rows.map((row) => (
+        <li key={row.line.id} className={CONSEQUENCE_CLS}>
+          {row.labor ? `↳ ${row.line.name} (labor)` : row.line.name}{" "}
+          <span className="tabular-nums">
+            {fmtReleaseUsd(releaseAmountCents(row.line))}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Ceremony({
   projectId,
   set,
+  lines,
+  draft,
 }: {
   projectId: string;
-  set: ReturnType<typeof deriveReleaseLens>["set"];
+  set: ReleaseSet;
+  lines: readonly ReleaseLensLine[];
+  draft: ReturnType<typeof useDraftRelease>;
 }) {
   const { data: instruments } = useProjectInstruments(projectId);
+  const { data: project } = useProject(projectId);
   const release = useReleaseForAuthorization(projectId);
   const send = useSendFurnishingsAuthorization(projectId);
+  const voidDraft = useVoidAuthorization(projectId);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
-  // Kept once drafted, so a send that fails retries the send alone and never
-  // mints a second instrument for the same lines.
-  const [drafted, setDrafted] = useState<{
-    ids: string;
-    proposalId: string;
-  } | null>(null);
-  const busy = release.isPending || send.isPending;
-  const ids = set.rows.map((r) => r.line.id);
-  const idsKey = [...ids].sort().join(",");
+  const busy = release.isPending || send.isPending || voidDraft.isPending;
+  // Unknown while either read loads: nothing is drafted on a guess.
+  const settled = project != null && draft.data !== undefined;
+  const noClient = project != null && project.client_id == null;
+  const pending = draft.data ?? null;
+
+  const attempt = async (act: () => Promise<string>) => {
+    if (busy) return;
+    setError(null);
+    setDone(null);
+    try {
+      setDone(await act());
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "The release did not go through.",
+      );
+    } finally {
+      // A draft made before a failed send is found here, never held in state.
+      void draft.refetch();
+    }
+  };
+
+  const errorNote = error && (
+    <p role="alert" className="font-sans text-[14px] text-[var(--sheet-ink)]">
+      {error}
+    </p>
+  );
+  const doneNote = done && (
+    <p role="status" className={CONSEQUENCE_CLS}>
+      {done}
+    </p>
+  );
+  const noClientNote = <p className={CONSEQUENCE_CLS}>{NO_CLIENT}</p>;
+
+  if (draft.isError) {
+    return (
+      <p
+        role="alert"
+        className="ml-auto font-sans text-[14px] text-[var(--sheet-ink)]"
+      >
+        The draft check did not load, so nothing can be released yet.{" "}
+        <button
+          type="button"
+          className={ACT_CLS}
+          onClick={() => void draft.refetch()}
+        >
+          TRY AGAIN
+        </button>
+      </p>
+    );
+  }
+
+  if (pending) {
+    const shown = draftReleaseSet(lines, pending.itemIds);
+    const count = pending.itemIds.length;
+    return (
+      <section
+        aria-label="This release"
+        className="ml-auto flex max-w-[640px] flex-col items-end gap-3 text-right"
+      >
+        <p className={CONSEQUENCE_CLS}>{draftReleaseHead(shown)}</p>
+        <CeremonyLines set={shown} />
+        <p className={CONSEQUENCE_CLS}>
+          These lines are on a drafted release. Send it to the client for
+          authorization, or void it to release them again.
+        </p>
+        {errorNote}
+        {doneNote}
+        <div className="flex flex-wrap items-center justify-end gap-4">
+          <button
+            type="button"
+            className={ACT_CLS}
+            aria-disabled={busy || undefined}
+            onClick={() =>
+              void attempt(async () => {
+                await voidDraft.mutateAsync({
+                  proposalId: pending.proposalId,
+                  reason: VOID_REASON,
+                });
+                return "The draft is void. Its lines can be released again.";
+              })
+            }
+          >
+            VOID THE DRAFT
+          </button>
+          {noClient ? (
+            noClientNote
+          ) : (
+            <button
+              type="button"
+              className={TERMINAL_CLS}
+              aria-disabled={busy || !settled || undefined}
+              onClick={() => {
+                if (!settled) return;
+                void attempt(async () => {
+                  await send.mutateAsync(pending.proposalId);
+                  return releasedWords(count);
+                });
+              }}
+            >
+              SEND THE DRAFT
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   if (set.rows.length === 0) {
     return (
@@ -431,34 +593,19 @@ function Ceremony({
     );
   }
 
-  const run = async () => {
-    if (busy) return;
-    setError(null);
-    setDone(null);
-    const count = set.rows.length;
-    try {
-      let proposalId = drafted?.ids === idsKey ? drafted.proposalId : null;
-      if (!proposalId) {
-        const number = nextInstrumentNumber(instruments ?? []);
-        const created = await release.mutateAsync({
-          name: `Furnishings authorization № ${number}`,
-          ffeItemIds: ids,
-        });
-        proposalId = created.proposalId;
-        setDrafted({ ids: idsKey, proposalId });
-      }
-      await send.mutateAsync(proposalId);
-      setDrafted(null);
-      setDone(
-        `Released ${count} ${count === 1 ? "line" : "lines"} to the client for authorization.`,
-      );
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "The release did not go through.",
-      );
-    }
+  const run = () => {
+    if (!settled || noClient) return;
+    const ids = set.rows.map((r) => r.line.id);
+    void attempt(async () => {
+      const number = nextInstrumentNumber(instruments ?? []);
+      const created = await release.mutateAsync({
+        name: `Furnishings authorization № ${number}`,
+        ffeItemIds: ids,
+      });
+      // If the send fails, the refetch finds this draft and offers Send/Void.
+      await send.mutateAsync(created.proposalId);
+      return releasedWords(ids.length);
+    });
   };
 
   return (
@@ -467,38 +614,22 @@ function Ceremony({
       className="ml-auto flex max-w-[640px] flex-col items-end gap-3 text-right"
     >
       <p className={CONSEQUENCE_CLS}>{releaseSetHead(set)}</p>
-      <ul className="flex flex-col gap-1">
-        {set.rows.map((row) => (
-          <li key={row.line.id} className={CONSEQUENCE_CLS}>
-            {row.labor ? `↳ ${row.line.name} (labor)` : row.line.name}{" "}
-            <span className="tabular-nums">
-              {fmtUsd(releaseAmountCents(row.line))}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <CeremonyLines set={set} />
       <p className={CONSEQUENCE_CLS}>{releaseConsequence(set)}</p>
-      {error && (
-        <p
-          role="alert"
-          className="font-sans text-[14px] text-[var(--sheet-ink)]"
+      {errorNote}
+      {doneNote}
+      {noClient ? (
+        noClientNote
+      ) : (
+        <button
+          type="button"
+          className={TERMINAL_CLS}
+          aria-disabled={busy || !settled || undefined}
+          onClick={run}
         >
-          {error}
-        </p>
+          {releaseActLabel(set)}
+        </button>
       )}
-      {done && (
-        <p role="status" className={CONSEQUENCE_CLS}>
-          {done}
-        </p>
-      )}
-      <button
-        type="button"
-        className={TERMINAL_CLS}
-        aria-disabled={busy || undefined}
-        onClick={() => void run()}
-      >
-        {releaseActLabel(set)}
-      </button>
     </section>
   );
 }

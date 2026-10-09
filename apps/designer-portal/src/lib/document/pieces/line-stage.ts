@@ -9,8 +9,11 @@
  * (`deriveLineStage`). The rules are not restated here: both words come from
  * `deriveLineStamp` and `deriveLineStage`.
  *
- * The Build room's rows carry no blocking-decision or damage-claim embeds, so
- * R1 and R2 never decide here; they stay with the paper.
+ * R1 and R2 decide first, as on the paper and in Release: `useProjectFFEItems`
+ * embeds `blocked`, `blocking_decision` and `item_claims`, so a pending
+ * blocking decision reads DECISION DUE and an open damage claim DAMAGED. Such
+ * a line is not ready to release, so before an order a READY line counts as
+ * specced until the decision or claim is settled.
  */
 import {
   deriveLineStage,
@@ -37,7 +40,13 @@ const ORDERED_ON: ReadonlySet<string> = new Set([
 export interface PieceLineStageRow extends LineStageRow {
   trade_scope_document_id?: string | null;
   received_quantity?: number | null;
+  blocked?: boolean | null;
+  blocking_decision?: { status: string; due_date: string | null } | null;
+  item_claims?: { state: string }[] | null;
 }
+
+/** R1 and R2: the words that win over every stage. */
+const HELD: ReadonlySet<LineStampKind> = new Set(["decision_due", "damaged"]);
 
 /** Why no act in any lens may change the line; null when it is open. */
 export type PieceLineLock = "trade_scope" | "ordered" | null;
@@ -68,14 +77,12 @@ export function pieceLineStage(
   const input = lineStageInputFromRow(line, piece);
   const trade = line.trade_scope_document_id != null;
   const ordered = ORDERED_ON.has(line.status ?? "");
-  if (!trade && !ordered) {
-    const stage = deriveLineStage(input);
-    return { kind: stage, stage, lock: null };
-  }
   const { kind } = deriveLineStamp(
     {
       status: line.status ?? "",
-      blocked: null,
+      blocked: line.blocked ?? null,
+      blocking_decision: line.blocking_decision ?? null,
+      item_claims: line.item_claims ?? null,
       received_quantity: line.received_quantity ?? null,
       quantity: line.quantity ?? null,
       trade_scope_document_id: line.trade_scope_document_id ?? null,
@@ -83,6 +90,11 @@ export function pieceLineStage(
     },
     tradeProgress,
   );
+  if (!trade && !ordered) {
+    const stage = deriveLineStage(input);
+    if (!HELD.has(kind)) return { kind: stage, stage, lock: null };
+    return { kind, stage: stage === "ready" ? "specced" : stage, lock: null };
+  }
   return {
     kind,
     stage: ordered ? "released" : null,

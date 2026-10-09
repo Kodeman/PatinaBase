@@ -5,8 +5,12 @@
  * $30,760.
  */
 
+import { pieceLineStage } from "../line-stage";
 import {
   deriveReleaseLens,
+  draftReleaseHead,
+  draftReleaseSet,
+  fmtReleaseUsd,
   readinessSentence,
   readyLineIds,
   releaseActLabel,
@@ -336,5 +340,107 @@ describe("the table and the set (a3)", () => {
       "D1",
       "T1",
     ]);
+  });
+});
+
+describe("W4 review fixes (T-43c)", () => {
+  const W4_DRAFT = ["L1", "L3", "F1", "D1", "T1", "R1", "R1a"];
+
+  it("lines on a drafted release are not READY, read On a drafted release, and leave the set", () => {
+    const lines = fixture();
+    const model = deriveReleaseLens(
+      lines,
+      ROOMS,
+      null,
+      allReady(lines),
+      new Set(["L1", "R1", "R1a"]),
+    );
+    const rows = model.groups.flatMap((g) => g.rows);
+    for (const id of ["L1", "R1", "R1a"]) {
+      const row = rows.find((r) => r.line.id === id)!;
+      expect(row.readiness).toBe("On a drafted release");
+      expect(row.disposition).toBe("read");
+    }
+    expect(model.set.rows.map((r) => r.line.id)).toEqual([
+      "L3",
+      "F1",
+      "D1",
+      "T1",
+    ]);
+  });
+
+  it("the draft's own set names its 7 lines and $30,760, the install under its piece", () => {
+    const set = draftReleaseSet(fixture(), W4_DRAFT);
+    expect(set.rows.map((r) => r.line.id)).toEqual(W4_DRAFT);
+    expect(set.pieces).toBe(6);
+    expect(set.labor).toBe(1);
+    expect(draftReleaseHead(set)).toBe(
+      "Drafted, not sent · 7 lines · $30,760:",
+    );
+  });
+
+  it("a non-blank vendor_name is a maker: the line reads READY, never Needs a maker", () => {
+    const lines = [
+      line("V1", "hall", "Custom bench", {
+        design_disposition: "selected",
+        vendor_name: "Hollis Woodworks",
+        unit_price_cents: 210000,
+      }),
+    ];
+    const kind = releaseStamp(lines[0], lines);
+    expect(kind).toBe("ready");
+    expect(
+      readinessSentence(lines[0], kind, lines, {
+        ready: false,
+        missingFields: ["vendor"],
+      }),
+    ).toBe("Ready");
+    // A blank name is no maker.
+    const blank = { ...lines[0], vendor_id: "v-x", vendor_name: "  " };
+    expect(
+      readinessSentence(blank, "ready", [blank], {
+        ready: false,
+        missingFields: ["vendor"],
+      }),
+    ).toBe("Needs a maker");
+  });
+
+  it("a pending blocking decision reads DECISION DUE here and in the Build room's stage", () => {
+    const lines = fixture().map((l) =>
+      l.id === "D1"
+        ? {
+            ...l,
+            blocked: true,
+            blocking_decision: { status: "pending", due_date: "2026-10-20" },
+          }
+        : l,
+    );
+    const d1 = lines.find((l) => l.id === "D1")!;
+    expect(releaseStamp(d1, lines)).toBe("decision_due");
+    expect(pieceLineStage(d1).kind).toBe("decision_due");
+    expect(pieceLineStage(d1).stage).not.toBe("ready");
+    expect(readinessSentence(d1, "decision_due", lines)).toBe(
+      "Waits on a decision",
+    );
+    const model = deriveReleaseLens(lines, ROOMS, null, allReady(lines));
+    expect(model.set.rows.map((r) => r.line.id)).not.toContain("D1");
+  });
+
+  it("prints cents when they are not zero, and whole dollars without .00", () => {
+    expect(fmtReleaseUsd(1049950)).toBe("$10,499.50");
+    expect(fmtReleaseUsd(3076000)).toBe("$30,760");
+    expect(fmtReleaseUsd(5)).toBe("$0.05");
+    const lines = fixture().map((l) =>
+      l.id === "L1"
+        ? { ...l, unit_price_cents: 479975, line_total_cents: 959950 }
+        : l,
+    );
+    const model = deriveReleaseLens(lines, ROOMS, null, allReady(lines));
+    expect(releaseSetHead(model.set)).toBe(
+      "This release · 7 lines · $30,759.50:",
+    );
+    expect(releaseActLabel(model.set)).toBe(
+      "Release 7 lines · $30,759.50 for authorization",
+    );
   });
 });
