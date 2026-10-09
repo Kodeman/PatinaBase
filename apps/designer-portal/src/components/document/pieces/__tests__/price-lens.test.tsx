@@ -24,6 +24,10 @@ const mockAddLabor = jest.fn(async () => ({ selectionId: "new-labor" }));
 const mockArchive = jest.fn(async () => ({}));
 const mockRestore = jest.fn(async () => ({}));
 const mockAssign = jest.fn();
+const mockAssignState: { isError: boolean; error: unknown } = {
+  isError: false,
+  error: null,
+};
 
 const mutation = (fn: jest.Mock) => ({
   mutate: fn,
@@ -50,7 +54,7 @@ jest.mock("@/hooks/use-document-rooms", () => ({
       { id: "bedroom", name: "Bedroom" },
     ],
   }),
-  useAssignLineRoom: () => ({ mutate: mockAssign, isError: false }),
+  useAssignLineRoom: () => ({ mutate: mockAssign, ...mockAssignState }),
 }));
 jest.mock("@/hooks/use-document-state", () => ({
   useDocumentEngagement: () => ({
@@ -176,6 +180,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockItems.data = fixture();
   mockStatus.value = "active";
+  mockAssignState.isError = false;
+  mockAssignState.error = null;
 });
 
 describe("PriceLens: front matter and the table (a7)", () => {
@@ -534,6 +540,32 @@ describe("PriceLens: the row menu", () => {
       roomId: "living",
       assignmentScope: "room",
     });
+  });
+
+  it.each([
+    "This line sits in 4 rooms. Change its rooms instead.",
+    "Labor moves with its piece.",
+    "This line is on a drafted release. Send it or void the draft first.",
+  ])("a refused move prints the server's sentence: %s", (sentence) => {
+    mockAssignState.isError = true;
+    mockAssignState.error = Object.assign(new Error(sentence), {
+      code: "23514",
+    });
+    renderLens();
+    expect(screen.getByRole("alert")).toHaveTextContent(sentence);
+    expect(screen.queryByText(/The move did not save/)).toBeNull();
+  });
+
+  it("a move that fails for no named reason keeps the generic sentence", () => {
+    mockAssignState.isError = true;
+    mockAssignState.error = new Error(
+      'duplicate key value violates unique constraint "x"',
+    );
+    renderLens();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The move did not save. Use Move to room… to try again.",
+    );
+    expect(screen.queryByText(/duplicate key/)).toBeNull();
   });
 
   it("removes a line with an undo", async () => {

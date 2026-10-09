@@ -407,7 +407,7 @@ for (const vp of VIEWPORTS) {
         const floorMenu = await openRowMenu(page, floor, 'White oak floor, satin Bona finish');
         await floorMenu.getByRole('menuitem', { name: 'Move to room…' }).click();
         await page.getByRole('menu', { name: 'Move to room' }).getByRole('menuitem', { name: /^Kitchen/ }).click();
-        await expect(page.getByRole('alert').filter({ hasText: /move/i })).toBeVisible();
+        await expect(page.getByRole('alert').filter({ hasText: 'This line sits in 4 rooms. Change its rooms instead.' })).toBeVisible();
         expect(psqlScalar(`SELECT project_room_id FROM public.project_ffe_items WHERE id = '${floor}'`)).toBe(ROOM.living);
 
         // Return path: ← the job.
@@ -476,11 +476,9 @@ for (const vp of VIEWPORTS) {
         await surface.press('Enter');
         const product = lens.getByRole('textbox', { name: 'Product for Walls' });
         if (vp.phone) {
-          // FINDING (T-59): at 390 the finishes table is table-fixed at min-w-[560px]
-          // with fixed columns of 200 + 140 + 140 + 88 = 568px, so the Product
-          // column (the one auto <col>) collapses to 0px and its input cannot be
-          // reached (finishes-lens.tsx colgroup). Expected to fail until fixed.
-          test.fail(true, 'Finishes lens at 390: the Product column collapses to 0px');
+          // T-59 found the Product column (the one auto <col>) collapsed to 0px
+          // at 390; T-59a widened the table past its 568px of fixed columns,
+          // and the table scrolls inside its own frame.
           await expect(product).toBeAttached();
           const box = await product.boundingBox();
           expect(box?.width ?? 0, 'Product for Walls has width at 390').toBeGreaterThan(0);
@@ -531,9 +529,8 @@ for (const vp of VIEWPORTS) {
 }
 
 /**
- * Product defects the walk found (T-59). Each is marked test.fail: it names the
- * defect and passes while the defect stands. A fix flips it to an unexpected
- * pass, which is the cue to drop the mark.
+ * Product defects the walk found (T-59), fixed in T-59a. Each case now holds
+ * the fix.
  */
 test.describe('The Build room · findings @1440', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
@@ -542,10 +539,8 @@ test.describe('The Build room · findings @1440', () => {
   });
 
   test('FINDING: a refused move names the server refusal (a9)', async ({ authenticatedPage: page }) => {
-    // DEFECT: rough-in and price lens Move/drag show the generic "The move did
-    // not save. Use Move to room… to try again." instead of the server's
-    // sentence, "This line sits in 4 rooms. Change its rooms instead." (00759).
-    test.fail(true, 'Move to room… refusals show a generic alert, not the named refusal');
+    // Move/drag print the server's named refusal (00755, 00759), not the
+    // generic "The move did not save." sentence.
     const floor = lineId('White oak floor, satin Bona finish');
     await openSheet(page, 'rough', ROOM.living);
     const menu = await openRowMenu(page, floor, 'White oak floor, satin Bona finish');
@@ -556,14 +551,55 @@ test.describe('The Build room · findings @1440', () => {
     });
   });
 
-  test('FINDING: MERGE INTO THIS ONE asks first, and a refused delete is reported (a15)', async ({ authenticatedPage: page }) => {
-    // DEFECT: components/catalog/duplicate-detection-panel.tsx (MERGE INTO THIS
-    // ONE → "Confirm the merge") and delete-product-dialog.tsx are mounted on
-    // no route, so neither the merge confirmation nor the delete refusal can
-    // be reached in the portal. The 409 refusal is held at the API in S5.
-    test.fail(true, 'DuplicateDetectionPanel and DeleteProductDialog are not mounted on any route');
+  test('FINDING: MERGE INTO THIS ONE asks first, in the Piece room (a15)', async ({ authenticatedPage: page }) => {
+    // The Piece room mounts the duplicate panel for a studio piece (D11). The
+    // match itself comes from the media service's image check, which this
+    // walk does not run, so the check answers here with the fixture's
+    // duplicate. It keeps naming it after the merge, as an image match would;
+    // the merge itself is the real RPC. The delete stays unwired (T-53): its
+    // 409 refusal is held at the API in S5.
+    await page.route(/\/api\/media\/duplicates\?/, async (route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get('action') !== 'check' || url.searchParams.get('productId') !== WALLPAPER) {
+        return route.fallback();
+      }
+      await route.fulfill({
+        json: {
+          isDuplicate: true,
+          phash: 'e659',
+          exactMatches: [
+            {
+              assetId: 'e6590000-asset-0104',
+              similarity: 100,
+              phash: 'e659',
+              product: {
+                id: WALLPAPER_DUPLICATE,
+                name: 'Phillip Jeffries Manila Hemp - Chalk',
+                images: [],
+                vendorName: 'Phillip Jeffries',
+                priceRetail: null,
+              },
+            },
+          ],
+          similarMatches: [],
+        },
+      });
+    });
     await page.goto(`/library/${WALLPAPER}`, { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: /merge into this one/i }).first().click({ timeout: 15_000 });
-    await expect(page.getByRole('group', { name: 'Confirm the merge' })).toBeVisible();
+    const duplicates = page.getByRole('region', { name: 'Possible duplicates' });
+    await expect(duplicates.getByText('Phillip Jeffries Manila Hemp - Chalk')).toBeVisible({ timeout: 30_000 });
+    await duplicates.getByRole('button', { name: /merge into this one/i }).click({ timeout: 15_000 });
+    const confirm = page.getByRole('group', { name: 'Confirm the merge' });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'MERGE', exact: true }).click();
+
+    await expect
+      .poll(() =>
+        psqlScalar(`SELECT merged_into_id || '|' || (deleted_at IS NOT NULL) FROM public.products WHERE id = '${WALLPAPER_DUPLICATE}'`),
+      )
+      .toBe(`${WALLPAPER}|true`);
+    // The duplicate leaves the panel; with nothing left, the panel goes.
+    await expect(duplicates).toHaveCount(0);
+    await expect(page.getByText('Phillip Jeffries Manila Hemp - Chalk')).toHaveCount(0);
   });
 });

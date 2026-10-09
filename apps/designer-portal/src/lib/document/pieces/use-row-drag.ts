@@ -25,6 +25,30 @@ export const DRAG_HANDLE_GLYPH = "⋮⋮";
 export const RELEASED_DRAG_REASON =
   "Released lines change through Record a change.";
 
+/** A move that failed for no reason the server named (network, unknown). */
+export const MOVE_DID_NOT_SAVE =
+  "The move did not save. Use Move to room… to try again.";
+
+/** The named refusals of `triage_project_ffe_items` (00755, 00759). */
+const NAMED_MOVE_REFUSALS = [
+  /^This line sits in \d+ rooms\. Change its rooms instead\.$/,
+  /^Labor moves with its piece\.$/,
+  /^This line is on a drafted release\. Send it or void the draft first\.$/,
+];
+
+/**
+ * The sentence a failed move prints: the server's named refusal verbatim,
+ * else the generic one. Raw Postgres text is never printed.
+ */
+export function moveFailureText(cause: unknown): string {
+  const message = (cause as { message?: unknown } | null)?.message;
+  if (typeof message !== "string") return MOVE_DID_NOT_SAVE;
+  const sentence = message.trim();
+  return NAMED_MOVE_REFUSALS.some((refusal) => refusal.test(sentence))
+    ? sentence
+    : MOVE_DID_NOT_SAVE;
+}
+
 export interface RowDragLine {
   id: string;
   name: string;
@@ -115,9 +139,8 @@ export function useRowDrag({ projectId, lines }: UseRowDragOptions) {
   );
 
   useEffect(() => {
-    if (assign.isError)
-      setAnnouncement("The move did not save. Use Move to room… to try again.");
-  }, [assign.isError]);
+    if (assign.isError) setAnnouncement(moveFailureText(assign.error));
+  }, [assign.isError, assign.error]);
 
   const endDrag = useCallback(() => {
     liftedRef.current = [];

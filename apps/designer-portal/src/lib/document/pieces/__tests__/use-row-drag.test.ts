@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import {
   DRAG_HANDLE_GLYPH,
+  MOVE_DID_NOT_SAVE,
   RELEASED_DRAG_REASON,
   useRowDrag,
   type RowDragLine,
@@ -8,7 +9,11 @@ import {
 } from "../use-row-drag";
 
 const mockMutate = jest.fn();
-const mockAssignState = { mutate: mockMutate, isError: false };
+const mockAssignState: {
+  mutate: jest.Mock;
+  isError: boolean;
+  error: unknown;
+} = { mutate: mockMutate, isError: false, error: null };
 const mockUseAssignLineRoom = jest.fn(
   (_projectId: string | null) => mockAssignState,
 );
@@ -76,6 +81,7 @@ beforeEach(() => {
   mockMutate.mockClear();
   mockUseAssignLineRoom.mockClear();
   mockAssignState.isError = false;
+  mockAssignState.error = null;
   setReducedMotion(false);
 });
 
@@ -252,6 +258,31 @@ describe("useRowDrag", () => {
     expect(result.current.announcement).toBe(
       "The move did not save. Use Move to room… to try again.",
     );
+  });
+
+  it.each([
+    "This line sits in 4 rooms. Change its rooms instead.",
+    "Labor moves with its piece.",
+    "This line is on a drafted release. Send it or void the draft first.",
+  ])("announces the server's named refusal verbatim: %s", (sentence) => {
+    const { result, rerender } = render();
+    mockAssignState.isError = true;
+    mockAssignState.error = Object.assign(new Error(sentence), {
+      code: "23514",
+    });
+    rerender();
+    expect(result.current.announcement).toBe(sentence);
+  });
+
+  it("never announces raw Postgres text", () => {
+    const { result, rerender } = render();
+    mockAssignState.isError = true;
+    mockAssignState.error = {
+      message: 'new row violates row-level security policy for table "x"',
+      code: "42501",
+    };
+    rerender();
+    expect(result.current.announcement).toBe(MOVE_DID_NOT_SAVE);
   });
 
   it("gives no transition under prefers-reduced-motion", () => {

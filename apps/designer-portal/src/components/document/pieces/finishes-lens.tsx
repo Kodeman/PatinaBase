@@ -390,11 +390,14 @@ function RoomFinishesTable({
       >
         {roomName} · Finishes
       </h2>
-      <div className="max-w-full overflow-x-auto">
+      {/* The fixed columns take 568px; min-w keeps 200px for Product, the
+          one flexible column, and a narrow screen scrolls the table instead.
+          `relative` holds the sr-only header inside the scroll, not the page. */}
+      <div className="relative max-w-full overflow-x-auto">
         <table
           ref={tableRef}
           aria-labelledby={headingId}
-          className="w-full min-w-[560px] max-w-[860px] table-fixed border-collapse"
+          className="w-full min-w-[768px] max-w-[860px] table-fixed border-collapse"
         >
           <colgroup>
             <col style={{ width: "200px" }} />

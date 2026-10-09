@@ -12,6 +12,7 @@ jest.mock("next/navigation", () => ({
 }));
 
 let mockProduct: Record<string, unknown>;
+let mockOrgs: Array<Record<string, unknown>> = [];
 
 const editablePiece = () => ({
   id: "piece-1",
@@ -44,7 +45,7 @@ jest.mock("@patina/supabase", () => ({
     user: { id: "user-1" },
     isSuperAdmin: false,
   }),
-  useOrganizations: () => ({ data: [] }),
+  useOrganizations: () => ({ data: mockOrgs }),
   useCaptureProduct: () => ({
     mutateAsync: jest.fn().mockResolvedValue({ id: "copy-1" }),
     isPending: false,
@@ -227,6 +228,59 @@ jest.mock("@/components/products/promotion/promote-to-studio-modal", () => ({
 jest.mock("@/components/products/nomination/nominate-to-catalog-modal", () => ({
   NominateToCatalogModal: () => null,
 }));
+
+jest.mock("@/components/catalog/duplicate-detection-panel", () => ({
+  DuplicateDetectionPanel: ({ productId }: { productId: string }) => (
+    <div data-testid="duplicate-panel" data-product-id={productId} />
+  ),
+}));
+
+describe("PieceRoom — the duplicate merge (D11, T-59a)", () => {
+  beforeEach(() => {
+    mockOrgs = [
+      {
+        id: "studio-1",
+        type: "design_studio",
+        membership: { role: "owner" },
+      },
+    ];
+  });
+  afterEach(() => {
+    mockOrgs = [];
+  });
+
+  it("mounts the duplicate panel on a studio piece of her studio", () => {
+    mockProduct = {
+      ...editablePiece(),
+      layer: "studio",
+      owner_user_id: null,
+      studio_id: "studio-1",
+    };
+    render(<PieceRoom productId="piece-1" />);
+    expect(screen.getByTestId("duplicate-panel")).toHaveAttribute(
+      "data-product-id",
+      "piece-1",
+    );
+  });
+
+  it("does not mount it on a personal or catalog piece, or on another studio's piece", () => {
+    for (const piece of [
+      editablePiece(),
+      { ...editablePiece(), layer: "catalog", owner_user_id: null },
+      {
+        ...editablePiece(),
+        layer: "studio",
+        owner_user_id: null,
+        studio_id: "studio-2",
+      },
+    ]) {
+      mockProduct = piece;
+      const { unmount } = render(<PieceRoom productId="piece-1" />);
+      expect(screen.queryByTestId("duplicate-panel")).toBeNull();
+      unmount();
+    }
+  });
+});
 
 describe("PieceRoom quiet facets", () => {
   beforeEach(() => {

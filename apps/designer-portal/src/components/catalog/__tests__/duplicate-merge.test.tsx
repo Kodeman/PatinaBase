@@ -52,9 +52,9 @@ function match(assetId: string, product?: { id: string; name: string }) {
   };
 }
 
+/** The panel checks as it mounts (T-59a): no button opens it. */
 function openPanel() {
-  render(<DuplicateDetectionPanel productId={KEEP_ID} productName="Ledge Bed" />);
-  fireEvent.click(screen.getByRole('button', { name: /check for duplicates/i }));
+  return render(<DuplicateDetectionPanel productId={KEEP_ID} productName="Ledge Bed" />);
 }
 
 beforeEach(() => {
@@ -182,6 +182,36 @@ describe('duplicate merge (T-53)', () => {
     expect(screen.getByText(productHooks.REFERENCED_PRODUCT_DELETE_REFUSAL)).toBeInTheDocument();
     // No delete act anywhere on the panel; DeleteProductDialog is never wired.
     expect(screen.queryByRole('button', { name: /delete/i })).toBeNull();
+  });
+
+  it('renders nothing while it checks, when it cannot check, or when it finds no duplicate', () => {
+    for (const result of [
+      undefined,
+      { isDuplicate: false, phash: 'abc', exactMatches: [], similarMatches: [] },
+    ]) {
+      mockCheckResult = result;
+      const { container, unmount } = openPanel();
+      expect(container).toBeEmptyDOMElement();
+      unmount();
+    }
+  });
+
+  it('the merged duplicate leaves the panel, even while the image match still names it', async () => {
+    mockMergeMutateAsync.mockResolvedValue({ fromId: 'prod-dup', intoId: KEEP_ID });
+    mockCheckResult = {
+      isDuplicate: true,
+      phash: 'abc',
+      exactMatches: [match('asset-dup', { id: 'prod-dup', name: 'Ledge Bed (copy)' })],
+      similarMatches: [],
+    };
+    const { container } = openPanel();
+    expect(screen.getByText('Ledge Bed (copy)')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'MERGE INTO THIS ONE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'MERGE' }));
+
+    await waitFor(() => expect(screen.queryByText('Ledge Bed (copy)')).toBeNull());
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('the hard delete hook is retired', () => {

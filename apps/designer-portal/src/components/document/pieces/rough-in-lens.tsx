@@ -65,6 +65,7 @@ import {
   type BuildRoomPlace,
 } from "@/lib/document/pieces/build-room-url";
 import {
+  moveFailureText,
   RELEASED_DRAG_REASON,
   useRowDrag,
   type RowDragLine,
@@ -890,10 +891,7 @@ export function RoughInLens({
   }
 
   const shownNotice =
-    notice ??
-    (assign.isError
-      ? "The move did not save. Use Move to room… to try again."
-      : null);
+    notice ?? (assign.isError ? moveFailureText(assign.error) : null);
   const activeRoomId = room && roomIds.has(room) ? room : null;
   const shownRoomId = paneRoomId ?? activeRoomId ?? rooms[0]?.id ?? null;
   const shownRoom = rooms.find((r) => r.id === shownRoomId) ?? null;

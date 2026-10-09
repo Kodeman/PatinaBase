@@ -166,6 +166,19 @@ describe("the Finishes lens (a11)", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps the Product column readable on a narrow screen: the table's min width clears the fixed columns", () => {
+    renderLens();
+    const table = screen.getByRole("table", { name: "Bedroom · Finishes" });
+    const fixed = Array.from(table.querySelectorAll("col"))
+      .map((col) => parseInt(col.style.width, 10))
+      .filter((width) => !Number.isNaN(width))
+      .reduce((sum, width) => sum + width, 0);
+    const minWidth = Number(table.className.match(/min-w-\[(\d+)px\]/)?.[1]);
+    expect(fixed).toBe(568);
+    // At 390 the table scrolls at its min width; Product keeps what is left.
+    expect(minWidth - fixed).toBeGreaterThanOrEqual(192);
+  });
+
   it("offers the print, addressed to the painter, and nothing more", () => {
     renderLens();
     const print = screen.getByRole("link", {

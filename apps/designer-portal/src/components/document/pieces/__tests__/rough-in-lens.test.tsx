@@ -17,6 +17,10 @@ const mockArchive = jest.fn();
 const mockRestore = jest.fn();
 const mockPlace = jest.fn();
 const mockAssign = jest.fn();
+const mockAssignState: { isError: boolean; error: unknown } = {
+  isError: false,
+  error: null,
+};
 const mockPush = jest.fn();
 const mockState: {
   lines: Array<Record<string, unknown>>;
@@ -88,7 +92,7 @@ jest.mock("@patina/supabase", () => ({
   }),
 }));
 jest.mock("@/hooks/use-document-rooms", () => ({
-  useAssignLineRoom: () => ({ mutate: mockAssign, isError: false }),
+  useAssignLineRoom: () => ({ mutate: mockAssign, ...mockAssignState }),
 }));
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -161,6 +165,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockState.lines = [];
   mockState.removed = [];
+  mockAssignState.isError = false;
+  mockAssignState.error = null;
   for (const id of Object.keys(mockThreads)) delete mockThreads[id];
   mockMatches.phone = false;
   window.matchMedia = jest.fn().mockImplementation((query: string) => ({
@@ -241,6 +247,32 @@ describe("RoughInLens — the hooks", () => {
       roomId: KITCHEN,
       assignmentScope: "room",
     });
+  });
+
+  it.each([
+    "This line sits in 4 rooms. Change its rooms instead.",
+    "Labor moves with its piece.",
+    "This line is on a drafted release. Send it or void the draft first.",
+  ])("a refused move prints the server's sentence: %s", (sentence) => {
+    mockState.lines = [L1];
+    mockAssignState.isError = true;
+    mockAssignState.error = Object.assign(new Error(sentence), {
+      code: "23514",
+    });
+    setup();
+    expect(screen.getByRole("alert")).toHaveTextContent(sentence);
+    expect(screen.queryByText(/The move did not save/)).toBeNull();
+  });
+
+  it("a move that fails for no named reason keeps the generic sentence", () => {
+    mockState.lines = [L1];
+    mockAssignState.isError = true;
+    mockAssignState.error = new Error("Failed to fetch");
+    setup();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The move did not save. Use Move to room… to try again.",
+    );
+    expect(screen.queryByText(/Failed to fetch/)).toBeNull();
   });
 
   it("Fill with a product fills the placeholder through place_product_in_project_v2", async () => {

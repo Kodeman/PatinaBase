@@ -63,7 +63,10 @@ import {
   parseRough,
   unitLabel,
 } from "@/lib/document/pieces/rough-in-keys";
-import { RELEASED_DRAG_REASON } from "@/lib/document/pieces/use-row-drag";
+import {
+  moveFailureText,
+  RELEASED_DRAG_REASON,
+} from "@/lib/document/pieces/use-row-drag";
 import {
   deriveLineStamp,
   isLaborLine,
@@ -418,10 +421,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
   }
 
   const shownNotice =
-    notice ??
-    (assign.isError
-      ? "The move did not save. Use Move to room… to try again."
-      : null);
+    notice ?? (assign.isError ? moveFailureText(assign.error) : null);
 
   return (
     <div data-price-lens="" className="py-6">

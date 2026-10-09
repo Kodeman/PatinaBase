@@ -71,6 +71,7 @@ import type {
   PieceConfigurationSelectionView,
 } from "./piece-configuration-model";
 import { DeepAnalysisSheet } from "../library/deep-analysis-sheet";
+import { DuplicateDetectionPanel } from "@/components/catalog/duplicate-detection-panel";
 import { PromoteToStudioModal } from "@/components/products/promotion/promote-to-studio-modal";
 import { NominateToCatalogModal } from "@/components/products/nomination/nominate-to-catalog-modal";
 import {
@@ -722,6 +723,14 @@ export function PieceRoom({ productId }: { productId: string }) {
             )}
           </div>
         </section>
+
+        {/* D11: a studio piece's duplicates merge into it, here. The panel
+            renders nothing when it finds none. */}
+        {layer === "studio" && canEdit && (
+          <div className="pt-7">
+            <DuplicateDetectionPanel productId={p.id} productName={p.name} />
+          </div>
+        )}
 
         <PieceConfigurationWorkspace
           piece={configurationPiece}
