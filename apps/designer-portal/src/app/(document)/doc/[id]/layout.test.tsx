@@ -4,10 +4,17 @@
  * no release; a different [id] releases and re-holds once.
  *
  * The real DocumentTimeProvider and the real useHoldDocument run here. Only
- * their data edges are mocked, as in hooks/document-time-provider.test.tsx. A
- * hold is observed as the timer start it causes, a release as the stop of the
- * held project's running timer: a release-then-hold of the same document would
- * read `startTimer, stopTimer, startTimer`.
+ * their data edges are mocked, as in hooks/document-time-provider.test.tsx.
+ * Automatic time-keeping is off (AUTOSTART_ENABLED, SQ-714), so a hold starts
+ * no timer and cannot be observed as one. Instead:
+ * - each hold and each release queues exactly one read of the running row
+ *   (`fetchRunning`, the provider's only `maybeSingle`), so `mockMaybeSingle`
+ *   counts holds plus releases;
+ * - a timer the designer started by hand is already running on project A, so
+ *   a release of A shows as the stop of that timer, while a hold of A adopts
+ *   it as-is: a release-then-hold of the same document would read
+ *   `stopTimer:project-a` and two more running-row reads;
+ * - the drawer's `heldProjectId` shows which document is held.
  */
 import { act, render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -24,16 +31,26 @@ let runningTimerRow: {
   billable: boolean;
 } | null = null;
 
+/** A timer the designer started by hand on project A before opening it. */
+function handStartedTimerOnA() {
+  return {
+    id: 'entry-project-a',
+    project_id: 'project-a',
+    started_at: new Date().toISOString(),
+    billable: false,
+  };
+}
+
+/** The running-row read: one per hold, one per release. */
+const mockMaybeSingle = jest.fn(async () => ({ data: runningTimerRow, error: null }));
+
 function chainBuilder() {
   const builder: Record<string, jest.Mock> & { then?: (resolve: (v: unknown) => void) => void } =
     {};
   ['select', 'is', 'eq', 'gte', 'not', 'order'].forEach((method) => {
     builder[method] = jest.fn(() => builder);
   });
-  (builder as { maybeSingle: () => Promise<unknown> }).maybeSingle = jest.fn(async () => ({
-    data: runningTimerRow,
-    error: null,
-  }));
+  (builder as { maybeSingle: () => Promise<unknown> }).maybeSingle = mockMaybeSingle;
   builder.then = ((resolve: (v: unknown) => void) => resolve({ data: [], error: null })) as any;
   return builder;
 }
@@ -172,6 +189,7 @@ describe('/doc/[id] layout — the time hold (US-21 D14)', () => {
     events.length = 0;
     heldSeen.length = 0;
     runningTimerRow = null;
+    mockMaybeSingle.mockClear();
     mockStartTimer.mockClear();
     mockStopTimer.mockClear();
     mockUseDocumentEngagement.mockClear();
@@ -184,16 +202,15 @@ describe('/doc/[id] layout — the time hold (US-21 D14)', () => {
   });
 
   it('holds once, and never releases, across /doc/A → /doc/A/spec-book → /doc/A', async () => {
+    runningTimerRow = handStartedTimerOnA();
     const view = render(
       <DocumentHoldLayout params={paramsFor('doc-a')}>
         <DocPaper />
       </DocumentHoldLayout>,
       { wrapper },
     );
-    await waitFor(() => expect(mockStartTimer).toHaveBeenCalledTimes(1));
-    expect(mockStartTimer).toHaveBeenCalledWith(
-      expect.objectContaining({ projectId: 'project-a', phaseKey: 'design_development' }),
-    );
+    await waitFor(() => expect(mockMaybeSingle).toHaveBeenCalledTimes(1));
+    expect(heldSeen).toContain('project-a');
 
     view.rerender(
       <DocumentHoldLayout params={paramsFor('doc-a')}>
@@ -210,8 +227,10 @@ describe('/doc/[id] layout — the time hold (US-21 D14)', () => {
     );
     await settle();
 
-    expect(events).toEqual(['startTimer:project-a']);
-    expect(mockStopTimer).not.toHaveBeenCalled();
+    // One hold, no release: a single running-row read, and A's timer untouched.
+    expect(mockMaybeSingle).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([]);
+    expect(runningTimerRow?.project_id).toBe('project-a');
     // Once held, the drawer never saw the document put down.
     const firstHeld = heldSeen.indexOf('project-a');
     expect(firstHeld).toBeGreaterThanOrEqual(0);
@@ -223,23 +242,29 @@ describe('/doc/[id] layout — the time hold (US-21 D14)', () => {
   });
 
   it('a move to /doc/B releases A and holds B once', async () => {
+    runningTimerRow = handStartedTimerOnA();
     const view = render(
       <DocumentHoldLayout params={paramsFor('doc-a')}>
         <DocPaper />
       </DocumentHoldLayout>,
       { wrapper },
     );
-    await waitFor(() => expect(mockStartTimer).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockMaybeSingle).toHaveBeenCalledTimes(1));
+    expect(heldSeen).toContain('project-a');
 
     view.rerender(
       <DocumentHoldLayout params={paramsFor('doc-b')}>
         <DocPaper />
       </DocumentHoldLayout>,
     );
-    await waitFor(() => expect(mockStartTimer).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockStopTimer).toHaveBeenCalledTimes(1));
     await settle();
 
-    expect(events).toEqual(['startTimer:project-a', 'stopTimer:project-a', 'startTimer:project-b']);
+    // Hold A, release A, hold B: three running-row reads, and A's timer is
+    // put down. With automatic time-keeping off, B starts no timer.
+    expect(mockMaybeSingle).toHaveBeenCalledTimes(3);
+    expect(events).toEqual(['stopTimer:project-a']);
+    expect(mockStartTimer).not.toHaveBeenCalled();
     expect(heldSeen[heldSeen.length - 1]).toBe('project-b');
   });
 
@@ -252,6 +277,7 @@ describe('/doc/[id] layout — the time hold (US-21 D14)', () => {
     );
     await settle();
 
+    expect(mockMaybeSingle).not.toHaveBeenCalled();
     expect(events).toEqual([]);
     expect(heldSeen.every((held) => held === null)).toBe(true);
   });
