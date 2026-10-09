@@ -283,7 +283,15 @@ export function StudioDrawer() {
       <nav
         aria-label="Studio drawer"
         data-tour-anchor="studio-drawer"
-        className="doc-elevated fixed inset-x-0 bottom-0 z-40 hidden h-[60px] grid-cols-[1fr_auto_1fr] items-center gap-4 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-[22px] min-[1180px]:grid"
+        /* SQ-715 — with Find and Keys on one row, the right zone (clock,
+           THE POST, identity) is wider than its even share at 1180–1440, so
+           its track never shrinks below its own content; the centre gives
+           way leftward instead of printing over it. */
+        className={`doc-elevated fixed inset-x-0 bottom-0 z-40 hidden h-[60px] items-center gap-4 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-[22px] min-[1180px]:grid ${
+          askThePaperOn
+            ? 'grid-cols-[1fr_auto_minmax(max-content,1fr)]'
+            : 'grid-cols-[1fr_auto_1fr]'
+        }`}
       >
         {/* Left — the studio wordmark (home) + a quiet breadcrumb. */}
         <div className="flex min-w-0 items-center gap-2.5">
@@ -437,12 +445,14 @@ export function StudioDrawer() {
 
           {/* C-AP-05 — the register gets a printed door, so reaching a
               document-scoped surface at 1280 is two acts and neither is
-              recalling a chord. R22 — with `Keys ?` printed, the two stand as
-              one column, Keys its own row directly beneath, so neither reaches
-              into the right zone. */}
+              recalling a chord. R22 stood `Keys ?` as its own row beneath
+              `Find anything ⌘K`; on 2026-10-09 that stacked column was replaced
+              by one row, because the stack overflowed the 60px bar — Keys hung
+              below the edge and Find rode above the room links' line. The two
+              now sit side by side on the room links' line, same height. */}
           <div
             data-drawer-find-stack
-            className={askThePaperOn ? 'flex flex-col items-start justify-center' : 'contents'}
+            className={askThePaperOn ? 'flex items-center gap-0.5' : 'contents'}
           >
           <button
             type="button"
@@ -452,9 +462,7 @@ export function StudioDrawer() {
                name. The words on the paper are the ruled ones and do not move;
                the name says which door this is. */
             aria-label="Find anything (⌘K), from the studio drawer"
-            className={`relative inline-flex items-center gap-1.5 rounded-[3px] px-2.5 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)] ${
-              askThePaperOn ? 'min-h-8 py-1' : 'min-h-11 py-2'
-            }`}
+            className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
           >
             <Search className="h-[15px] w-[15px] shrink-0" strokeWidth={1.5} aria-hidden />
             {/* F03 — at 1280 the drawer's centre and right zones overprint.
@@ -466,16 +474,18 @@ export function StudioDrawer() {
               ⌘K
             </span>
           </button>
-          {/* US-19 D4 — `?` printed: its own act beneath `Find anything ⌘K`,
-              words and key at every width the drawer stands at. The two rows
-              share the 60px bar, so each stays at least 24px tall. */}
+          {/* US-19 D4 — `?` printed: its own act beside `Find anything ⌘K`,
+              on the same line and at the same 44px height. Like Find, the
+              word goes first below 1440 (a held clock and a presence line
+              leave no room for it at 1280); the key and the name stay. */}
           {askThePaperOn && (
             <button
               type="button"
               onClick={() => openKeys('drawer')}
-              className="relative inline-flex min-h-6 items-center gap-1.5 rounded-[3px] px-2.5 py-0.5 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+              aria-label="Keys (?)"
+              className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
             >
-              <span>Keys</span>
+              <span className="hidden min-[1440px]:inline">Keys</span>
               <kbd className="rounded-[3px] border border-[var(--border-default)] px-1.5 py-px font-mono text-[12px] leading-none text-[var(--text-muted)]">
                 ?
               </kbd>
