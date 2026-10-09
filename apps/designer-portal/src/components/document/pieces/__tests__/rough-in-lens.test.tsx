@@ -76,6 +76,8 @@ jest.mock("@patina/supabase", () => ({
   }),
   usePlaceProductInProjectV2: () => ({ mutateAsync: mockPlace }),
   useSetLinePlacements: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useProjectLineGroups: () => ({ data: [] }),
+  useSetLineGroup: () => ({ mutate: jest.fn() }),
   useCrossLayerSearch: (opts: { enabled?: boolean }) => ({
     data:
       opts.enabled === false

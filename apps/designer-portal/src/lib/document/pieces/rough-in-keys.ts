@@ -1,8 +1,10 @@
 /**
  * US-21 T-24 — the Rough in table's key map (CONTRACT §3.6, SPEC a2).
  *
- * Pure: the table asks what a keystroke means and does it. Tab is never
- * claimed; the cells sit in DOM order, so the browser's Tab moves across.
+ * Pure: the table asks what a keystroke means and does it. The cells sit in
+ * DOM order, so the browser's Tab moves across. The one exception (T-52, D6):
+ * Tab with the caret at the start of a line's name indents it into a group,
+ * and Shift-Tab there takes it out. The table claims it only when it applies.
  */
 import type { FfeLineUnit } from "@patina/types";
 
@@ -26,7 +28,11 @@ export type RoughInKeyAction =
   /** Backspace on an empty name, or ⌘⌫ / Ctrl⌫ anywhere on a line. */
   | "remove"
   /** `/` in an empty name: search the Library. */
-  | "search";
+  | "search"
+  /** Tab at the start of a line's name: into the group above, or a new one. */
+  | "indent"
+  /** Shift-Tab at the start of a line's name: out of its group. */
+  | "outdent";
 
 export interface RoughInKeyContext {
   /** The entry row (always last) rather than an existing line. */
@@ -35,6 +41,17 @@ export interface RoughInKeyContext {
   nameCell: boolean;
   /** The focused cell's current text. */
   value: string;
+  /** The caret sits at the start of the cell with nothing selected. */
+  caretAtStart?: boolean;
+}
+
+/** True when an input's caret is at 0 with no selection (a Tab in selects all). */
+export function isCaretAtStart(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement &&
+    target.selectionStart === 0 &&
+    target.selectionEnd === 0
+  );
 }
 
 type KeyLike = Pick<
@@ -57,6 +74,15 @@ export function roughInKeyAction(
   }
   if (event.key === "/" && !mod && ctx.nameCell && ctx.value === "")
     return "search";
+  if (
+    event.key === "Tab" &&
+    !mod &&
+    !event.altKey &&
+    !ctx.entry &&
+    ctx.nameCell &&
+    ctx.caretAtStart
+  )
+    return event.shiftKey ? "outdent" : "indent";
   return null;
 }
 

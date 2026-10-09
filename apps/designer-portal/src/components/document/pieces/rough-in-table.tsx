@@ -19,6 +19,12 @@
  * At 1440 with the elevation pane open the table has about 790px: the fixed
  * columns keep their a2 widths and LINE takes what is left, so STAGE and `⋯`
  * stay on screen. Under 640px (md to lg, no pane) it scrolls sideways.
+ *
+ * Groups (T-52, S3, D6, Q9): a group prints as a heading row with its members
+ * under it, each starting `↳`. Tab with the caret at the start of a line's
+ * name puts it in the group directly above, or, with none above, opens a
+ * heading row to name a new one; Shift-Tab there takes it out. Labor follows
+ * its piece and is never grouped on its own.
  */
 import {
   useEffect,
@@ -47,6 +53,7 @@ import {
   ROUGH_IN_UNITS,
   focusNextRoomEntry,
   formatRough,
+  isCaretAtStart,
   isPastedList,
   menuKeyIndex,
   parseQuantity,
@@ -56,8 +63,20 @@ import {
   type RoughInKeyAction,
 } from "@/lib/document/pieces/rough-in-keys";
 import { MoveToRoomMenu, type MoveRoom } from "./move-to-room-menu";
+import {
+  GROUP_MEMBER_MARK,
+  LineGroupDraftRow,
+  LineGroupRow,
+  layoutLineGroups,
+  memberInset,
+  type LineGroupHeading,
+} from "./line-group-row";
 
-export type RoughInRowAct = "fill" | "move" | "alsoPlace" | "remove";
+/** The row menu's acts, plus `group`: Tab-indent, gated the same way. */
+export type RoughInRowAct = "fill" | "move" | "alsoPlace" | "remove" | "group";
+
+/** Where Tab or Shift-Tab sends a line: an existing group, a new one, or out. */
+export type RoughInGroupTarget = { groupId: string } | { name: string } | null;
 
 export interface RoughInRow {
   id: string;
@@ -70,6 +89,8 @@ export interface RoughInRow {
   stage: LineStampKind;
   /** A labor line: indented `↳` under its piece, `LABOR` beside the name. */
   labor?: boolean;
+  /** The group it sits in (00751 `line_group_id`); prints only if in `groups`. */
+  groupId?: string | null;
   /** Acts this line cannot take, each with the sentence that says why. */
   gates?: Partial<Record<RoughInRowAct, string>>;
 }
@@ -104,6 +125,10 @@ export interface RoughInTableProps {
   roomDropProps?: HTMLAttributes<HTMLDivElement>;
   /** Acts at the right of the room heading (T-27's `ELEVATION`). */
   headingActs?: ReactNode;
+  /** The groups that print in this room (T-52). */
+  groups?: LineGroupHeading[];
+  /** Tab / Shift-Tab at the start of a name; without it Tab only moves across. */
+  onGroup?: (row: RoughInRow, target: RoughInGroupTarget) => void;
 }
 
 /**
@@ -167,6 +192,8 @@ export function RoughInTable({
   rowDragProps,
   roomDropProps,
   headingActs,
+  groups,
+  onGroup,
 }: RoughInTableProps) {
   const uid = useId();
   const headingId = `${uid}-heading`;
@@ -175,7 +202,28 @@ export function RoughInTable({
   const doneRef = useRef<HTMLButtonElement>(null);
   const nameRefs = useRef(new Map<string, HTMLInputElement>());
   const [announcement, setAnnouncement] = useState("");
+  /** The line whose new group heading is being named (Tab with no group above). */
+  const [draftFor, setDraftFor] = useState<string | null>(null);
   const phone = useRoughInPhone();
+
+  const entries = layoutLineGroups(rows, groups ?? [], {
+    groupId: (row) => row.groupId,
+    labor: (row) => row.labor === true,
+  });
+  /** The lines in the order they print, and the group each prints under. */
+  const ordered: RoughInRow[] = [];
+  const groupOf = new Map<string, LineGroupHeading>();
+  {
+    let heading: LineGroupHeading | null = null;
+    for (const entry of entries) {
+      if (entry.kind === "heading") {
+        heading = entry.group;
+        continue;
+      }
+      ordered.push(entry.item);
+      if (entry.member && heading) groupOf.set(entry.item.id, heading);
+    }
+  }
 
   const [entryName, setEntryName] = useState("");
   const [entryQty, setEntryQty] = useState("1");
@@ -219,9 +267,9 @@ export function RoughInTable({
       return;
     }
     // The row leaves the table; focus goes to the line above, or the entry row.
-    const index = rows.findIndex((r) => r.id === row.id);
+    const index = ordered.findIndex((r) => r.id === row.id);
     const above =
-      index > 0 ? nameRefs.current.get(rows[index - 1].id) : undefined;
+      index > 0 ? nameRefs.current.get(ordered[index - 1].id) : undefined;
     if (above) above.focus();
     else focusEntry();
     onRemove(row);
@@ -235,6 +283,43 @@ export function RoughInTable({
     if (to) setAnnouncement(`Moved ${row.name} to ${to.name}.`);
   }
 
+  /**
+   * Tab / Shift-Tab at the start of a name. False when it does not apply
+   * (labor, already in or out of a group, no `onGroup`): Tab then moves across.
+   */
+  function groupRow(row: RoughInRow, action: "indent" | "outdent"): boolean {
+    if (!onGroup || row.labor) return false;
+    const current = groupOf.get(row.id);
+    if (action === "outdent" ? !current : current) return false;
+    const gate = row.gates?.group;
+    if (gate) {
+      setAnnouncement(gate);
+      return true;
+    }
+    if (action === "outdent" && current) {
+      onGroup(row, null);
+      setAnnouncement(`${row.name} is out of ${current.name}.`);
+      return true;
+    }
+    const index = ordered.findIndex((r) => r.id === row.id);
+    const above = index > 0 ? groupOf.get(ordered[index - 1].id) : undefined;
+    if (above) {
+      onGroup(row, { groupId: above.id });
+      setAnnouncement(`${row.name} is in ${above.name}.`);
+    } else {
+      setDraftFor(row.id);
+    }
+    return true;
+  }
+
+  function settleDraft(row: RoughInRow, name: string | null) {
+    setDraftFor(null);
+    nameRefs.current.get(row.id)?.focus();
+    if (name === null || !onGroup) return;
+    onGroup(row, { name });
+    setAnnouncement(`${row.name} is in ${name}.`);
+  }
+
   function onCellKey(
     event: KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
     row: RoughInRow | null,
@@ -245,8 +330,13 @@ export function RoughInTable({
       entry: row === null,
       nameCell: cell === "name",
       value: event.currentTarget.value,
+      caretAtStart: isCaretAtStart(event.currentTarget),
     });
     if (!action) return;
+    if (action === "indent" || action === "outdent") {
+      if (row && groupRow(row, action)) event.preventDefault();
+      return;
+    }
     if (action === "search") {
       if (!onSlash) return;
       event.preventDefault();
@@ -322,25 +412,34 @@ export function RoughInTable({
             data-rough-in-cards=""
             className="border-t border-[var(--sheet-rule-strong)]"
           >
-            {rows.map((row, index) => (
-              <LineCard
-                key={row.id}
-                row={row}
-                index={index}
-                room={room}
-                rooms={rooms}
-                nameRef={(el) => {
-                  if (el) nameRefs.current.set(row.id, el);
-                  else nameRefs.current.delete(row.id);
-                }}
-                onKey={onCellKey}
-                onUpdate={onUpdate}
-                onRemove={removeRow}
-                onMove={moveRow}
-                onFill={onFill}
-                onAlsoPlace={onAlsoPlace}
-              />
-            ))}
+            {entries.map((entry) =>
+              entry.kind === "heading" ? (
+                <LineGroupRow
+                  key={`group:${entry.group.id}`}
+                  group={entry.group}
+                  variant="list"
+                />
+              ) : (
+                <LineCard
+                  key={entry.item.id}
+                  row={entry.item}
+                  index={ordered.indexOf(entry.item)}
+                  member={entry.member}
+                  room={room}
+                  rooms={rooms}
+                  nameRef={(el) => {
+                    if (el) nameRefs.current.set(entry.item.id, el);
+                    else nameRefs.current.delete(entry.item.id);
+                  }}
+                  onKey={onCellKey}
+                  onUpdate={onUpdate}
+                  onRemove={removeRow}
+                  onMove={moveRow}
+                  onFill={onFill}
+                  onAlsoPlace={onAlsoPlace}
+                />
+              ),
+            )}
           </ul>
           <div data-entry-row className="mt-2 flex flex-col">
             <button
@@ -401,26 +500,51 @@ export function RoughInTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, index) => (
-              <LineRow
-                key={row.id}
-                row={row}
-                index={index}
-                room={room}
-                rooms={rooms}
-                dragProps={rowDragProps?.(row.id)}
-                nameRef={(el) => {
-                  if (el) nameRefs.current.set(row.id, el);
-                  else nameRefs.current.delete(row.id);
-                }}
-                onKey={onCellKey}
-                onUpdate={onUpdate}
-                onRemove={removeRow}
-                onMove={moveRow}
-                onFill={onFill}
-                onAlsoPlace={onAlsoPlace}
-              />
-            ))}
+            {entries.flatMap((entry) => {
+              if (entry.kind === "heading")
+                return [
+                  <LineGroupRow
+                    key={`group:${entry.group.id}`}
+                    group={entry.group}
+                    variant="table"
+                    columns={COLUMNS.length}
+                  />,
+                ];
+              const row = entry.item;
+              const index = ordered.indexOf(row);
+              const line = (
+                <LineRow
+                  key={row.id}
+                  row={row}
+                  index={index}
+                  member={entry.member}
+                  room={room}
+                  rooms={rooms}
+                  dragProps={rowDragProps?.(row.id)}
+                  nameRef={(el) => {
+                    if (el) nameRefs.current.set(row.id, el);
+                    else nameRefs.current.delete(row.id);
+                  }}
+                  onKey={onCellKey}
+                  onUpdate={onUpdate}
+                  onRemove={removeRow}
+                  onMove={moveRow}
+                  onFill={onFill}
+                  onAlsoPlace={onAlsoPlace}
+                />
+              );
+              if (draftFor !== row.id) return [line];
+              return [
+                <LineGroupDraftRow
+                  key={`draft:${row.id}`}
+                  lineLabel={row.name || `line ${index + 1}`}
+                  columns={COLUMNS.length}
+                  onCommit={(name) => settleDraft(row, name)}
+                  onCancel={() => settleDraft(row, null)}
+                />,
+                line,
+              ];
+            })}
 
             <tr data-entry-row className={cn(ROW, ACTIVE_ROW)}>
               <td className="relative">{entryNameInput("")}</td>
@@ -503,6 +627,8 @@ function UnitSelect({
 interface LineRowProps {
   row: RoughInRow;
   index: number;
+  /** Under a group heading: `↳`, inset 24px (SPEC §2.6). */
+  member?: boolean;
   room: MoveRoom;
   rooms: MoveRoom[];
   dragProps?: HTMLAttributes<HTMLTableRowElement>;
@@ -522,6 +648,7 @@ interface LineRowProps {
 function LineRow({
   row,
   index,
+  member = false,
   room,
   rooms,
   dragProps,
@@ -568,7 +695,13 @@ function LineRow({
       )}
     >
       <td>
-        <div className={cn("flex items-center gap-2", row.labor && "pl-6")}>
+        <div
+          data-group-member={member ? "" : undefined}
+          className={cn(
+            "flex items-center gap-2",
+            memberInset(member, row.labor === true),
+          )}
+        >
           {dragProps ? (
             <span
               aria-hidden="true"
@@ -577,9 +710,9 @@ function LineRow({
               ⋮⋮
             </span>
           ) : null}
-          {row.labor ? (
+          {row.labor || member ? (
             <span aria-hidden="true" className="text-[var(--sheet-ink-faint)]">
-              ↳
+              {GROUP_MEMBER_MARK}
             </span>
           ) : null}
           <input
@@ -673,6 +806,7 @@ function useNameCell(
 function LineCard({
   row,
   index,
+  member = false,
   room,
   rooms,
   nameRef,
@@ -695,11 +829,17 @@ function LineCard({
       data-line-id={row.id}
       className="flex min-h-[56px] items-center gap-2 border-b border-[var(--sheet-rule)] focus-within:outline focus-within:outline-1 focus-within:outline-offset-[-1px] focus-within:outline-[var(--sheet-rule-strong)]"
     >
-      <div className={cn("min-w-0 flex-1 py-1", row.labor && "pl-4")}>
+      <div
+        data-group-member={member ? "" : undefined}
+        className={cn(
+          "min-w-0 flex-1 py-1",
+          member && row.labor ? "pl-8" : (member || row.labor) && "pl-4",
+        )}
+      >
         <div className="flex items-center gap-1">
-          {row.labor ? (
+          {row.labor || member ? (
             <span aria-hidden="true" className="text-[var(--sheet-ink-faint)]">
-              ↳
+              {GROUP_MEMBER_MARK}
             </span>
           ) : null}
           <input

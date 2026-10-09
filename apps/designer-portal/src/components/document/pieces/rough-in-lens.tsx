@@ -11,6 +11,7 @@
  * `restore_project_selection`, `Move to room…` and drag through
  * `triage_project_ffe_items` (`useAssignLineRoom`), and `Fill with a product`
  * or `/` through `place_product_in_project_v2`. Paste previews through T-25.
+ * Tab / Shift-Tab at the start of a name groups through `set_line_group` (T-52).
  * The room's elevation sits on the right (a2). Nothing here buys, bills or
  * releases: those cells and the roads live in their own lenses.
  *
@@ -35,10 +36,12 @@ import {
   useBatchCreateNamedProjectNeeds,
   usePlaceProductInProjectV2,
   useProjectFFEItems,
+  useProjectLineGroups,
   useProjectRoomPlacements,
   useRemovedProjectLines,
   useRestoreProjectSelection,
   useSetFfeLineBuildFields,
+  useSetLineGroup,
 } from "@patina/supabase";
 import type {
   FfeAssignmentScope,
@@ -70,6 +73,7 @@ import {
 import { ENTRY_NAME_ATTR } from "@/lib/document/pieces/rough-in-keys";
 import {
   RoughInTable,
+  type RoughInGroupTarget,
   type RoughInLinePatch,
   type RoughInNewLine,
   type RoughInRow,
@@ -111,6 +115,7 @@ interface RoughInLine extends PieceLineStageRow {
   removed_at?: string | null;
   selection_thread_id?: string | null;
   budget_min_cents?: number | null;
+  line_group_id?: string | null;
 }
 
 /** Thread id → its need label, where it has one. */
@@ -166,6 +171,9 @@ const KEPT_DISPOSITIONS: ReadonlySet<string> = new Set([
 const PENDING_REASON = "This line is still being saved.";
 const FILLED_REASON = "This line already has a product.";
 const LABOR_FILL_REASON = "A labor line takes no product.";
+/** 00751: a group sits in one room, its lines' first room (Q9). */
+const GROUP_ROOM_REASON =
+  "A group sits inside one room. Group this line in its first room.";
 const REASON_REFUSAL = "archive reason must be at least 5 characters";
 
 const ACT =
@@ -342,6 +350,8 @@ export function RoughInLens({
   const restore = useRestoreProjectSelection();
   const assign = useAssignLineRoom(projectId);
   const place = usePlaceProductInProjectV2();
+  const { data: groupData } = useProjectLineGroups(projectId);
+  const setGroup = useSetLineGroup();
 
   const [pending, setPending] = useState<PendingLine[]>([]);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
@@ -538,6 +548,8 @@ export function RoughInLens({
       } else if (labor) {
         gates.fill = LABOR_FILL_REASON;
       }
+      if ((line.project_room_id ?? null) !== placeItem.roomId)
+        gates.group = GROUP_ROOM_REASON;
       return {
         id: line.id,
         name: needOf(line),
@@ -546,6 +558,7 @@ export function RoughInLens({
         roughCents: line.rough_cents ?? null,
         stage,
         labor,
+        groupId: line.line_group_id ?? null,
         gates,
       };
     });
@@ -564,10 +577,43 @@ export function RoughInLens({
           move: PENDING_REASON,
           alsoPlace: PENDING_REASON,
           remove: PENDING_REASON,
+          group: PENDING_REASON,
         },
       });
     }
     return rows;
+  }
+
+  /** The groups that print in a place: the ones in its room (null: the unassigned pile). */
+  function groupsFor(placeItem: Place) {
+    return (groupData ?? [])
+      .filter((g) => g.projectRoomId === placeItem.roomId)
+      .map((g) => ({ id: g.id, name: g.name }));
+  }
+
+  function groupLine(
+    row: RoughInRow,
+    target: RoughInGroupTarget,
+    placeItem: Place,
+  ) {
+    if (!byId.has(row.id)) return;
+    setNotice(null);
+    setGroup.mutate(
+      {
+        projectId,
+        itemIds: [row.id],
+        group:
+          target === null || "groupId" in target
+            ? target
+            : { name: target.name, roomId: placeItem.roomId },
+      },
+      {
+        onError: (cause) =>
+          setNotice(
+            errorText(cause) ?? `${row.name} was not regrouped. Try again.`,
+          ),
+      },
+    );
   }
 
   function addLine(placeItem: Place, line: RoughInNewLine) {
@@ -878,6 +924,8 @@ export function RoughInLens({
                 room={{ id: placeItem.id, name: placeItem.name }}
                 rooms={moveRooms}
                 rows={rowsFor(placeItem)}
+                groups={groupsFor(placeItem)}
+                onGroup={(row, target) => groupLine(row, target, placeItem)}
                 onAdd={(line) => addLine(placeItem, line)}
                 onUpdate={updateLine}
                 onRemove={(row) => removeLine(row, placeItem)}

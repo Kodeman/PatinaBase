@@ -28,6 +28,7 @@ const mockItems: { data: Row[] } = { data: [] };
 const mockPlacements: { data: unknown[] } = { data: [] };
 const mockSpecs: { data: Row[] } = { data: [] };
 const mockThreads: { data: Row[] } = { data: [] };
+const mockGroups: { data: unknown[] } = { data: [] };
 const mockUpdateSpec = jest.fn();
 const mockCommercials = jest.fn();
 const mockBuildFields = jest.fn();
@@ -50,6 +51,7 @@ jest.mock("@patina/supabase", () => ({
   }),
   useProjectFFEItems: () => ({ data: mockItems.data }),
   useProjectRoomPlacements: () => ({ data: mockPlacements.data }),
+  useProjectLineGroups: () => ({ data: mockGroups.data }),
   useUpdateProjectFfeSpec: () => mutation(mockUpdateSpec),
   useSetFfeLineCommercials: () => mutation(mockCommercials),
   useSetFfeLineBuildFields: () => mutation(mockBuildFields),
@@ -280,6 +282,7 @@ function seed() {
     { id: "t1", need_label: "Custom cabinet" },
     { id: "t3", need_label: "Hardware, 2 knobs for custom cabinet" },
   ];
+  mockGroups.data = [];
 }
 
 let client: QueryClient;
@@ -357,6 +360,53 @@ describe("the left pane", () => {
     expect(rows[1]).toHaveTextContent(
       "↳Install, wallpaper hangerLaborPlaceholder0 OF 6",
     );
+  });
+
+  it("prints the shower as a heading over its six lines, each ↳ (T-52, S3)", async () => {
+    const bath = (id: string, name: string, grouped: boolean): Row => ({
+      ...base,
+      id,
+      name,
+      quantity: 1,
+      // The mocked rooms have no Primary Bath; the bedroom stands in.
+      project_room_id: "bedroom",
+      line_group_id: grouped ? "g1" : null,
+    });
+    mockItems.data = [
+      bath("b1", "Valve and trim", true),
+      bath("b2", "Shower head", true),
+      bath("b3", "Hand shower", true),
+      bath("b4", "Linear drain", true),
+      bath("b5", "Niche tile", true),
+      bath("b6", "Glass panel", true),
+      bath("b7", "Vanity, 60 in, double", false),
+    ];
+    mockSpecs.data = [];
+    mockGroups.data = [
+      {
+        id: "g1",
+        projectId: "p1",
+        projectRoomId: "bedroom",
+        name: "Shower",
+        sortOrder: 0,
+      },
+    ];
+    renderLens("bedroom");
+    const list = await screen.findByRole("list", { name: "Lines" });
+    const items = within(list).getAllByRole("listitem");
+    // The heading: its name only, no stamp, no count, no act.
+    expect(items[0]).toHaveTextContent(/^Shower$/);
+    expect(within(items[0]).queryByRole("button")).toBeNull();
+    expect(items[0].querySelector(".stamp")).toBeNull();
+    expect(items.slice(1).map((li) => li.textContent)).toEqual([
+      "↳Valve and trimPlaceholder0 OF 6",
+      "↳Shower headPlaceholder0 OF 6",
+      "↳Hand showerPlaceholder0 OF 6",
+      "↳Linear drainPlaceholder0 OF 6",
+      "↳Niche tilePlaceholder0 OF 6",
+      "↳Glass panelPlaceholder0 OF 6",
+      "Vanity, 60 in, doublePlaceholder0 OF 6",
+    ]);
   });
 });
 

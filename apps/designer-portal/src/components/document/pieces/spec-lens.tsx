@@ -8,7 +8,9 @@
  * fields first, `NEXT UNFINISHED →` at their foot, then the line list. There
  * a tapped line brings its pane into view and focuses its heading (F9). A
  * fill focuses the same heading and says so in a polite live region (F4/F5).
- * Money, procurement and receiving are not on this lens.
+ * Money, procurement and receiving are not on this lens. A group (T-52, D6)
+ * prints as its heading with its members under it, each `↳`; grouping itself
+ * is done in Rough in.
  *
  * The lens reads its own data. The spec columns and the need labels come from
  * `project_ffe_specs` and `project_ffe_selection_threads` under a key inside
@@ -20,6 +22,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createBrowserClient,
   useProjectFFEItems,
+  useProjectLineGroups,
   useProjectRoomPlacements,
   type ProjectFfeSpec,
 } from "@patina/supabase";
@@ -43,6 +46,12 @@ import {
 } from "@/lib/document/stamp-derivation";
 import { pieceLineStage } from "@/lib/document/pieces/line-stage";
 import { AlsoInLine } from "./placement-chips";
+import {
+  GROUP_MEMBER_MARK,
+  LineGroupRow,
+  layoutLineGroups,
+  memberInset,
+} from "./line-group-row";
 import {
   INKED_ACT_CLS,
   SpecFieldsPane,
@@ -130,6 +139,7 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
   const { data: rawLines } = useProjectFFEItems(projectId);
   const { data: placements } = useProjectRoomPlacements(projectId);
   const { data: roomRows } = useDocumentRooms(projectId);
+  const { data: groupData } = useProjectLineGroups(projectId);
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [focusRequest, setFocusRequest] = useState(0);
@@ -164,6 +174,22 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
       ),
     [allLines, placements, room, rooms],
   );
+  /** The list as it prints: each group's heading over its members (T-52). */
+  const entries = useMemo(() => {
+    // A room's groups print in that room; Throughout and the unassigned pile
+    // take the room-less ones; the whole job takes all.
+    const placeRoom =
+      room == null ? undefined : rooms.some((r) => r.id === room) ? room : null;
+    const groups = (groupData ?? [])
+      .filter((g) => placeRoom === undefined || g.projectRoomId === placeRoom)
+      .map((g) => ({ id: g.id, name: g.name }));
+    return layoutLineGroups(lines, groups, {
+      groupId: (line) =>
+        (line as SpecLensLine & { line_group_id?: string | null })
+          .line_group_id,
+      labor: isLaborLine,
+    });
+  }, [lines, groupData, room, rooms]);
   const fields = useSpecFieldRows(projectId, lines);
   const specs = fields.data?.specs ?? {};
   const needLabels = fields.data?.needLabels ?? {};
@@ -178,7 +204,9 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
   const placementsOf = (id: string): FfeRoomPlacement[] =>
     (placements ?? []).filter((p) => p.ffeItemId === id);
 
-  const orderedIds = lines.map((l) => l.id);
+  const orderedIds = entries.flatMap((entry) =>
+    entry.kind === "line" ? [entry.item.id] : [],
+  );
   const firstUnfinished = nextUnfinishedId(orderedIds, null, progressOf);
   const activeId =
     chosenId && orderedIds.includes(chosenId)
@@ -247,7 +275,16 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
 
   const list = (
     <ul aria-label="Lines" className="flex flex-col">
-      {lines.map((line) => {
+      {entries.map((entry) => {
+        if (entry.kind === "heading")
+          return (
+            <LineGroupRow
+              key={`group:${entry.group.id}`}
+              group={entry.group}
+              variant="list"
+            />
+          );
+        const { item: line, member } = entry;
         const stage = pieceLineStage(line, laborPiece(line, allLines)).kind;
         const labor = isLaborLine(line);
         const current = line.id === activeId;
@@ -258,17 +295,17 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
               aria-current={current ? "true" : undefined}
               onClick={() => choose(line.id)}
               className={`grid min-h-[var(--row,40px)] w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[var(--sheet-rule)] py-2 text-left hover:bg-[var(--sheet-row-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--clay-ink)] ${
-                labor ? "pl-6" : "pl-2"
+                memberInset(member, labor) || "pl-2"
               } pr-2 ${current ? "outline outline-1 -outline-offset-1 outline-[var(--sheet-rule-strong)]" : ""}`}
             >
               <span className="flex min-w-0 flex-col">
                 <span className="font-sans text-[14px] font-medium leading-[1.4] text-[var(--sheet-ink)]">
-                  {labor && (
+                  {(labor || member) && (
                     <span
                       aria-hidden="true"
                       className="mr-1 text-[var(--sheet-ink-faint)]"
                     >
-                      ↳
+                      {GROUP_MEMBER_MARK}
                     </span>
                   )}
                   {needLabelOf(line)}
