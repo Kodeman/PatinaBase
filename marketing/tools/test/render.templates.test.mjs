@@ -68,7 +68,7 @@ for (const file of files) {
   });
 }
 
-test('the extractor and the lint catch a smuggled tagline, AI and the held line', () => {
+test('the extractor and the lint catch a smuggled tagline and AI, and warn on the tagline', () => {
   const html = '<style>.a{}</style><!-- AI --><p>{{eyebrow}}</p><div>AI-powered help</div>'
     + '<td>Where Time Adds Value</td><img alt="powered by AI"><p>Designer-Taught Intelligence for growing design studios.</p>'
     + '<span>02</span><p>Studios save 40 hours a month.</p>';
@@ -77,7 +77,7 @@ test('the extractor and the lint catch a smuggled tagline, AI and the held line'
   const rules = errors.map((e) => e.rule);
   // The slide number is layout and dropped; a number in a sentence is still copy and still fails.
   assert.deepEqual(errors.filter((e) => e.rule === 'uncited-number').map((e) => e.match), ['40 hours']);
-  assert.ok(rules.includes('held-tagline'), rules.join(','));
+  assert.ok(lintText(text).warnings.some((w) => w.rule === 'tagline'), 'tagline warns');
   assert.ok(rules.includes('ai-powered'), rules.join(','));
   assert.ok(rules.includes('powered-by'), rules.join(','));
   assert.ok(text.split('\n').some((l) => TAGLINE.test(l)));

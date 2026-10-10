@@ -71,4 +71,4 @@ source. Keep `|` out of cells.
   reconciling" (completeness-critic.md §4.7).
 - "8–16 hours of transcription" (an inferred figure; completeness-critic.md §4.8).
 - "Leah Hartwell". Her surname is Kochaver.
-- "Where Time Adds Value" (held, VISION V5).
+- "Where Time Adds Value" (canon since VISION V5, 2026-10-09; used sparingly, lint warns).

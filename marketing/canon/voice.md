@@ -45,7 +45,6 @@ already spoken for twice. The one thing she cannot afford is a new system to lea
 
 - **The Pledge.** Pledge language is legal-gated (VISION §3). No teaching royalties, no "a share of
   our commission goes back to designers", no "when Patina earns, you earn". Not hinted, not softened.
-- **"Where Time Adds Value"** is HELD pending VISION V5. Lint fails it. No other tagline either.
 - **Prices, take rates, fees and percentages** wait on V1/V2. Every money number in
   `claims.md` is `todo`. Write "pricing is on one page" only once that page exists.
 - **"Your data exports" and "no lock-in"** are promises, not yet facts. Don't claim them as true.
@@ -79,7 +78,7 @@ hand-built, honest materials, trade, Designer-Taught Intelligence.
 **Avoid — lint ERROR (the piece fails):**
 - `AI` as a word, "AI-powered", "artificial intelligence", "machine learning", "powered by",
   "algorithm"
-- "pledge", "Where Time Adds Value"
+- "pledge"
 - disrupt*, revolutioni*, curated, luxury, gig, game-chang*, seamless, unlock
 - non-Midwest places: NYC, New York, Manhattan, Brooklyn, Hamptons, LA, Los Angeles,
   San Francisco, Miami, penthouse
@@ -90,7 +89,9 @@ hand-built, honest materials, trade, Designer-Taught Intelligence.
   characters
 
 **Avoid — lint WARN (fix unless you can defend it):** "elevated", "bespoke" (only when literally
-custom), emoji, more than one exclamation mark in a piece.
+custom), emoji, more than one exclamation mark in a piece. "Where Time Adds Value" also warns: it is canon
+(VISION V5, ruled 2026-10-09) but used sparingly: a footer, metadata, at most one brand moment per
+page or piece, never a headline. No other tagline.
 
 **Avoid by judgment (lint can't see these):** "platform", "solution", "empower", "leverage",
 "all-in-one", "next-level", "our designers" (as labor), "unlimited revisions", "dashboard",
