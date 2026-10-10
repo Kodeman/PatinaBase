@@ -117,7 +117,7 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
   it('names every stop from the one label table', () => {
     expect(deriveLadderSegments(input()).map((s) => s.name)).toEqual([
       'Client approvals',
-      'Schedule',
+      'Project schedule',
       'Pieces',
       'Money',
       'Closing the book',

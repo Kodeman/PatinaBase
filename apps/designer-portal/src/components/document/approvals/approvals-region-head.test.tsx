@@ -192,7 +192,7 @@ describe('Client approvals region head', () => {
       screen.queryByRole('heading', { name: 'Client approvals' }),
     ).not.toBeInTheDocument();
     const seam = screen.getByRole('button', {
-      name: 'Client approvals No decision lead · no approvals authored CLOSED BY YOU unfold ↓',
+      name: 'Client approvals No decision lead · no approvals authored CLOSED BY YOU Expand ↓',
     });
     expect(seam).toBeInTheDocument();
     expect(seam).toHaveAttribute('aria-expanded', 'false');
@@ -212,7 +212,7 @@ describe('Client approvals region head', () => {
       screen.getByText('This project does not have a designated decision lead yet.'),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /unfold/i }),
+      screen.queryByRole('button', { name: /expand/i }),
     ).not.toBeInTheDocument();
   });
 });
@@ -313,10 +313,10 @@ describe('Client approvals quiet body — the lens has not reached this stop', (
       screen.getByRole('heading', { name: 'Client approvals' }),
     ).toBeInTheDocument();
     const head = document.querySelector('[data-region-head="approvals-head"]')!;
-    expect(head).toHaveTextContent('Nothing yet');
+    expect(head).toHaveTextContent('No recorded activity');
     // W4-R1: with no fact there is nothing to press toward, so the sr-only
     // line is the phrase alone.
-    expect(screen.getByText('Nothing yet', { selector: '.sr-only' })).toBeInTheDocument();
+    expect(screen.getByText('No recorded activity', { selector: '.sr-only' })).toBeInTheDocument();
   });
 
   it('publishes its density and its short reserve on the index root (OD-12)', () => {

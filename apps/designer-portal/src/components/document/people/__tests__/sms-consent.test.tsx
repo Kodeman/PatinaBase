@@ -297,7 +297,7 @@ describe("the chip says which of six things is true", () => {
 describe("Send again — nothing leaves without evidence", () => {
   it("refuses an empty note in an announced alert and calls nothing", () => {
     openProfile();
-    fireEvent.click(screen.getByRole("button", { name: "Send again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resend text invitation" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Write down how they said yes before asking again.",
     );
@@ -306,13 +306,13 @@ describe("Send again — nothing leaves without evidence", () => {
 
   it("sends the source, the note and nothing typed by hand about the disclosure", async () => {
     openProfile();
-    fireEvent.change(screen.getByLabelText("How they said yes"), {
+    fireEvent.change(screen.getByLabelText("Consent method"), {
       target: { value: "kickoff" },
     });
-    fireEvent.change(screen.getByLabelText("What happened"), {
+    fireEvent.change(screen.getByLabelText("Consent details"), {
       target: { value: "  Said yes at the walk-through this morning  " },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Send again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resend text invitation" }));
 
     await waitFor(() => expect(resendCalls).toHaveLength(1));
     expect(resendCalls[0]).toEqual({
@@ -349,7 +349,7 @@ describe("the 24h floor is words beside an offered act, not a dead control", () 
 
   it("holds the act, keeps it in the tab order, and points at the visible reason", () => {
     openProfile();
-    const act = screen.getByRole("button", { name: "Send again" });
+    const act = screen.getByRole("button", { name: "Resend text invitation" });
     expect(act).not.toBeDisabled();
     expect(act).toHaveAttribute("aria-disabled", "true");
     expect(act).toHaveAttribute("aria-describedby", "field-resend-reason");
@@ -360,10 +360,10 @@ describe("the 24h floor is words beside an offered act, not a dead control", () 
 
   it("sends nothing when it is pressed anyway, note or no note", () => {
     openProfile();
-    fireEvent.change(screen.getByLabelText("What happened"), {
+    fireEvent.change(screen.getByLabelText("Consent details"), {
       target: { value: "Said yes on the phone just now" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Send again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resend text invitation" }));
     expect(resendCalls).toHaveLength(0);
   });
 
@@ -377,10 +377,10 @@ describe("the 24h floor is words beside an offered act, not a dead control", () 
       );
     };
     openProfile();
-    fireEvent.change(screen.getByLabelText("What happened"), {
+    fireEvent.change(screen.getByLabelText("Consent details"), {
       target: { value: "Said yes on the phone just now" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Send again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resend text invitation" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -399,10 +399,10 @@ describe("one press is one request", () => {
         release = resolve;
       });
     openProfile();
-    fireEvent.change(screen.getByLabelText("What happened"), {
+    fireEvent.change(screen.getByLabelText("Consent details"), {
       target: { value: "Said yes on the phone just now" },
     });
-    const act = screen.getByRole("button", { name: "Send again" });
+    const act = screen.getByRole("button", { name: "Resend text invitation" });
     fireEvent.click(act);
     fireEvent.click(act);
 
@@ -424,10 +424,10 @@ describe("one press is one request", () => {
         release = resolve;
       });
     openProfile();
-    fireEvent.change(screen.getByLabelText("What happened"), {
+    fireEvent.change(screen.getByLabelText("Consent details"), {
       target: { value: "Said yes on the phone just now" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Send again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Resend text invitation" }));
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Sending/ })).toHaveAttribute(
@@ -485,7 +485,7 @@ describe("the add sheet's quick capture writes the evidence, never skips it", ()
   it("the disclosure version travels with the seat's consent record", async () => {
     openAdd();
     fireEvent.click(screen.getByTestId("add-party-said-yes-on-the-phone"));
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
 
     await waitFor(() => expect(addParty).toHaveBeenCalledTimes(1));
     expect(addParty.mock.calls[0][0]).toMatchObject({
@@ -504,7 +504,7 @@ describe("the add sheet's quick capture writes the evidence, never skips it", ()
     fireEvent.change(screen.getByLabelText("Where and when they agreed"), {
       target: { value: "   " },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
 
     await waitFor(() =>
       expect(

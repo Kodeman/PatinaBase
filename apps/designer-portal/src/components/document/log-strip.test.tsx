@@ -82,7 +82,7 @@ describe('LogStrip', () => {
     expect(strip).toHaveAttribute('data-mobile-edge-owner', 'log-offer');
     expect(strip).toHaveClass('bottom-0', 'min-[1180px]:bottom-[60px]');
 
-    const minutes = screen.getByRole('spinbutton', { name: 'Minutes to log' });
+    const minutes = screen.getByRole('spinbutton', { name: 'Minutes to record' });
     const activity = screen.getByRole('combobox', { name: 'Activity' });
     expect(minutes).toHaveClass('min-h-11', 'text-[16px]');
     expect(activity).toHaveClass('min-h-11', 'text-[16px]');
@@ -94,12 +94,12 @@ describe('LogStrip', () => {
     render(<LogStrip />);
 
     fireEvent.change(
-      screen.getByRole('spinbutton', { name: 'Minutes to log' }),
+      screen.getByRole('spinbutton', { name: 'Minutes to record' }),
       {
         target: { value: '31' },
       },
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record time' }));
     // HT-24 — the activity is NOT defaulted to 'design' any more, and HT-11
     // puts the billable answer on the wire from the pill rather than leaving
     // it to a `?? true` two layers down.
@@ -107,9 +107,9 @@ describe('LogStrip', () => {
       expect(mockLogOffer).toHaveBeenCalledWith(31, null, false),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss time suggestion' }));
     expect(mockDiscardOffer).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: 'Log' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Record time' })).toHaveAttribute(
       'data-action-key',
       'log-time-offer',
     );
@@ -154,7 +154,7 @@ describe('LogStrip', () => {
     const activity = screen.getByRole('combobox', { name: 'Activity' });
     expect(activity).toHaveValue('');
     expect(
-      screen.getByRole('option', { name: 'activity not set' }),
+      screen.getByRole('option', { name: 'Activity not selected' }),
     ).toBeInTheDocument();
   });
 
@@ -253,7 +253,7 @@ describe('LogStrip', () => {
     render(<LogStrip />);
 
     fireEvent.click(screen.getByRole('button', { name: /Non-billable/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record time' }));
 
     await waitFor(() =>
       expect(mockLogOffer).toHaveBeenCalledWith(26, null, true),
@@ -264,7 +264,7 @@ describe('LogStrip', () => {
     mockOffer = offerFixture();
     render(<LogStrip />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record time' }));
     await waitFor(() =>
       expect(mockLogOffer).toHaveBeenCalledWith(26, null, false),
     );

@@ -46,7 +46,7 @@ describe('W4-R1 quiet status lines', () => {
     it('says Nothing yet with no fact at all', () => {
       expect(
         approvalsQuietStatus({ awaiting: 0, overdue: 0, overdueDays: null }),
-      ).toBe('Nothing yet');
+      ).toBe('No recorded activity');
     });
   });
 
@@ -80,10 +80,10 @@ describe('W4-R1 quiet status lines', () => {
 
     it('says Nothing yet with no install, Not known yet with an unreadable one', () => {
       expect(scheduleQuietStatus({ installStart: null, now })).toBe(
-        'Nothing yet',
+        'No recorded activity',
       );
       expect(scheduleQuietStatus({ installStart: 'not-a-date', now })).toBe(
-        'Not known yet',
+        'Not yet known',
       );
     });
 
@@ -109,7 +109,7 @@ describe('W4-R1 quiet status lines', () => {
 
     it('says Nothing yet on a paper with no lines', () => {
       expect(piecesQuietStatus({ total: 0, rooms: 3, damaged: 0 })).toBe(
-        'Nothing yet',
+        'No recorded activity',
       );
     });
   });
@@ -131,7 +131,7 @@ describe('W4-R1 quiet status lines', () => {
       ).toBe('$1,750 out');
       expect(
         moneyQuietStatus({ outCents: null, notDrawnCents: null, money }),
-      ).toBe('Nothing yet');
+      ).toBe('No recorded activity');
     });
   });
 
@@ -143,15 +143,15 @@ describe('W4-R1 quiet status lines', () => {
 
     // R13 (FR1 F8) — `N of M` is the count Q10 cut and V11 refuses.
     it('says Nothing yet until the first item closes, and never prints N of M', () => {
-      expect(careQuietStatus({ closed: 0, total: 6 })).toBe('Nothing yet');
+      expect(careQuietStatus({ closed: 0, total: 6 })).toBe('No recorded activity');
       for (const closed of [0, 1, 5, 6]) {
         expect(careQuietStatus({ closed, total: 6 })).not.toMatch(/\d+ of \d+/);
       }
     });
 
     it('never becomes a dash — no checklist and no record say Nothing yet', () => {
-      expect(careQuietStatus({ closed: 0, total: 0 })).toBe('Nothing yet');
-      expect(recordQuietStatus({ complete: 0 })).toBe('Nothing yet');
+      expect(careQuietStatus({ closed: 0, total: 0 })).toBe('No recorded activity');
+      expect(recordQuietStatus({ complete: 0 })).toBe('No recorded activity');
     });
   });
 
@@ -195,9 +195,9 @@ describe('W4-R1 quiet status lines', () => {
     });
 
     it('says the phrase alone when there is no fact to press toward', () => {
-      expect(quietStateSentence('Nothing yet', 'The record')).toBe('Nothing yet');
-      expect(quietStateSentence('Not known yet', 'Schedule')).toBe(
-        'Not known yet',
+      expect(quietStateSentence('No recorded activity', 'The record')).toBe('No recorded activity');
+      expect(quietStateSentence('Not yet known', 'Schedule')).toBe(
+        'Not yet known',
       );
     });
   });

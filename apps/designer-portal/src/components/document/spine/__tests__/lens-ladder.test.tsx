@@ -931,7 +931,7 @@ describe('the rail around the ladder', () => {
         doors={doors}
       />,
     );
-    const putDown = screen.getByRole('link', { name: 'Put down document' });
+    const putDown = screen.getByRole('link', { name: 'Back to Studio overview' });
     expect(ladderNav().contains(putDown)).toBe(false);
   });
 
@@ -988,7 +988,7 @@ describe('the rail around the ladder', () => {
       'Vandersteen',
       'Procurement & Orders',
       'Client approvals',
-      'Schedule',
+      'Project schedule',
       'Pieces',
       'Money',
       'Closing the book',

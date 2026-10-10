@@ -394,7 +394,7 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
 
     const panel = screen.getByRole('dialog');
     expect(panel).toHaveAttribute('data-doc-sheet-kind', 'standing');
-    expect(panel).toHaveAccessibleName('Everything open on this job');
+    expect(panel).toHaveAccessibleName('Everything open on this job, 4');
     const rows = screen.getAllByRole('listitem');
     expect(rows).toHaveLength(4);
     for (const label of [
@@ -428,7 +428,7 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
     // Four exceptions + one input, minus the one line 2 is naming.
     fireEvent.click(screen.getByRole('button', { name: '+4 MORE' }));
     const panel = screen.getByRole('dialog');
-    expect(panel).toHaveAccessibleName('Everything open on this job');
+    expect(panel).toHaveAccessibleName('Everything open on this job, 5');
     expect(panel).toHaveTextContent('INPUT NEEDED · 1');
     expect(
       panel.querySelectorAll('[data-standing-input-row]'),
@@ -848,7 +848,7 @@ describe('LensBand · the one live region (OD-7)', () => {
   });
 });
 
-// ── Slice 2 (`one-voice`) — D1's eyebrow, D2's Next act and the door ───────
+// ── Slice 2 (`one-voice`) — D1's eyebrow, D2's Next ─ act and the door ───────
 
 const NOW = new Date('2026-08-29T12:00:00');
 const dueNeed = (
@@ -873,7 +873,7 @@ const chen = (over: Partial<LensBandInput> = {}) =>
     now: NOW,
     ...over,
   });
-const CHEN_PROSE = 'PO WS-188 balance, 9 days overdue.';
+const CHEN_PROSE = 'Pay Woodward & Sons the PO WS-188 balance, $12,400 — 9 days overdue.';
 const door = () => document.querySelector('[data-lens-door]') as HTMLElement | null;
 
 describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
@@ -907,14 +907,14 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(line('2').querySelector('[data-lens-next-lead]')).toBeNull();
   });
 
-  it('on Chen, reads `Next … RECORD THE PAYMENT` left and `Everything open on this job` right, in the 56px box', () => {
+  it('on Chen, reads `Next ─ … RECORD THE PAYMENT` left and `All open · 2` right, in the 56px box', () => {
     render(<LensBand model={chen()} docId="doc-1" />);
-    expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next');
+    expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next ─');
     expect(sentence()).toHaveTextContent(CHEN_PROSE);
     expect(line('2')).toHaveClass('text-[15px]');
     const act = screen.getByRole('button', { name: 'Record the payment' });
     expect(act).toHaveAttribute('data-action-variant', 'primary');
-    expect(door()).toHaveTextContent('Everything open on this job');
+    expect(door()).toHaveTextContent('All open · 2');
     expect(door()).toHaveClass('ml-auto');
     // The door follows the act on the same line.
     expect(act.compareDocumentPosition(door() as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -937,7 +937,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         onStandingOpened={onStandingOpened}
       />,
     );
-    const word = screen.getByRole('button', { name: 'Everything open on this job' });
+    const word = screen.getByRole('button', { name: 'Everything open on this job, 3' });
     word.focus();
     fireEvent.click(word);
     expect(onStandingOpened).toHaveBeenCalledTimes(1);
@@ -969,7 +969,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Everything open on this job' })).toHaveFocus(),
+      expect(screen.getByRole('button', { name: 'Everything open on this job, 3' })).toHaveFocus(),
     );
   });
 
@@ -982,7 +982,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         docId="doc-1"
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job, 3' }));
     const needsYou = screen
       .getByRole('dialog')
       .querySelector('[data-standing-group="needs-you"]') as HTMLElement;
@@ -1016,7 +1016,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
       },
     };
     render(<LensBand model={gated} docId="doc-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job, 2' }));
 
     const held = screen.getByRole('button', { name: 'Follow up with the maker' });
     expect(held).toHaveAttribute('aria-disabled', 'true');
@@ -1065,7 +1065,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
       voice: {
         ...phone.voice,
         form: 'act',
-        lead: 'Next',
+        lead: 'Next ─',
         sentence: '',
         rungs: phone.voice.rungs.filter((rung) => rung.form === 'act'),
       },
@@ -1124,7 +1124,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
       expect(line('2')).toHaveAttribute('data-lens-line2-form', 'short');
       expect(sentence()).toHaveTextContent('PO WS-188 balance, 9 days overdue.');
       expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next');
-      expect(door()).toHaveTextContent('Everything open on this job');
+      expect(door()).toHaveTextContent('All open · 2');
     });
 
     it('prints NEXT ─ RECORD THE PAYMENT alone when the short form clips too', () => {
@@ -1132,16 +1132,16 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
       render(<LensBand model={chen({ tier: 'narrow' })} docId="doc-1" />);
       expect(line('2')).toHaveAttribute('data-lens-line2-form', 'act');
       expect(sentence().textContent).toBe('');
-      expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next');
+      expect(line('2').querySelector('[data-lens-next-lead]')).toHaveTextContent('Next ─');
       expect(screen.getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
       // The door yields only at the phone's measure.
-      expect(door()).toHaveTextContent('Everything open on this job');
+      expect(door()).toHaveTextContent('All open · 2');
     });
 
-    it('keeps the available short form when nothing clips', () => {
+    it('keeps the long form when nothing clips', () => {
       clips = () => false;
       render(<LensBand model={chen()} docId="doc-1" />);
-      expect(line('2')).toHaveAttribute('data-lens-line2-form', 'short');
+      expect(line('2')).toHaveAttribute('data-lens-line2-form', 'long');
       expect(sentence()).toHaveTextContent(CHEN_PROSE);
     });
 
@@ -1288,9 +1288,9 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
 
   it('F2-6 — the sheet’s title is the door’s count, and Next’s row stands first under NEXT', () => {
     render(<LensBand model={chen()} docId="doc-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job, 2' }));
     const panel = screen.getByRole('dialog');
-    expect(panel).toHaveAccessibleName('Everything open on this job');
+    expect(panel).toHaveAccessibleName('Everything open on this job, 2');
     const money = panel.querySelector('[data-standing-group="money"]') as HTMLElement;
     const first = money.querySelector('[data-standing-row]') as HTMLElement;
     expect(first).toHaveAttribute('data-standing-next');
@@ -1326,7 +1326,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(sentence()).toHaveTextContent('Paused — nothing moves until it resumes.');
     expect(line('2').querySelector('[data-lens-next-lead]')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Record the payment' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job, 3' }));
     expect(screen.getByRole('dialog').querySelector('[data-standing-group="setup"]')).toBeNull();
   });
 

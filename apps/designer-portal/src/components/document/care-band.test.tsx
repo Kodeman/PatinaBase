@@ -114,7 +114,7 @@ describe('CareBand closeout authority', () => {
     expect(screen.getByRole('region', { name: 'Project closeout ownership' })).toHaveTextContent(
       'Only Olivia Owner can close the book',
     );
-    expect(screen.queryByRole('button', { name: 'Close the book' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close out project' })).not.toBeInTheDocument();
   });
 
   it('keeps the owner action visible but blocks it on unfinished runtime work', () => {
@@ -129,7 +129,7 @@ describe('CareBand closeout authority', () => {
     expect(screen.getByText(/1 project phase not completed/)).toBeInTheDocument();
     expect(screen.getByText(/1 coordination item unresolved/)).toBeInTheDocument();
     expect(screen.getByText(/1 scope change unresolved/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Close the book' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Close out project' })).toBeDisabled();
   });
 
   // C-34 — open punch items print as one quiet line and block nothing.
@@ -146,7 +146,7 @@ describe('CareBand closeout authority', () => {
     expect(screen.getByTestId('closeout-note-punch_open')).toHaveTextContent(
       '2 punch items still open',
     );
-    expect(screen.queryByText('Operational closeout still open')).not.toBeInTheDocument();
+    expect(screen.queryByText('Closeout tasks outstanding')).not.toBeInTheDocument();
   });
 
   // A3-L7 — the care rest state ("Everything is settled." / CLOSE THE BOOK) is
@@ -228,7 +228,7 @@ describe('CareBand closeout authority', () => {
     ]) {
       fireEvent.click(screen.getByRole('button', { name: label }));
     }
-    fireEvent.click(screen.getByRole('button', { name: 'Close the book' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close out project' }));
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'project cannot close: 1 coordination/decision item(s) are unresolved',
@@ -247,7 +247,7 @@ describe('CareBand fold', () => {
 
     render(<CareBand projectId="project-1" />);
 
-    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close out project' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /closing the book/i })).not.toBeInTheDocument();
     // FR1 F8 / R13 — the full head's status line is the count alone, never
     // `N of M`.
@@ -273,7 +273,7 @@ describe('CareBand fold', () => {
 
     render(<CareBand projectId="project-1" />);
 
-    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close out project' })).toBeInTheDocument();
   });
 
   it('arrives OPEN on a non-install phase with no remembered choice — the default quiets a stop, it never folds it', () => {
@@ -298,7 +298,7 @@ describe('CareBand fold', () => {
 
     expect(document.querySelector('[data-fold-seam]')).toBeNull();
     expect(document.querySelector('[data-region-head]')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close out project' })).toBeInTheDocument();
   });
 
   it('folds to a quiet seam on a non-install phase when she folded it herself, and round-trips', () => {
@@ -322,7 +322,7 @@ describe('CareBand fold', () => {
 
     render(<CareBand projectId="project-1" />);
 
-    expect(screen.queryByRole('button', { name: 'Close the book' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close out project' })).not.toBeInTheDocument();
     const seam = screen.getByRole('button', { name: /closing the book/i });
     expect(seam).toBeInTheDocument();
     // FR1 F8 / R13 — the 390 fold line repeats the head's count, never `N of M`.
@@ -331,7 +331,7 @@ describe('CareBand fold', () => {
     expect(seamRoot.textContent).not.toMatch(/\d+ of \d+/);
 
     fireEvent.click(seam);
-    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close out project' })).toBeInTheDocument();
   });
 });
 
@@ -376,14 +376,14 @@ describe('CareBand running index root (W2 C-2)', () => {
   it('is absent from the open branch when indexRoot is not set', () => {
     const { container } = render(<CareBand projectId="project-1" />);
 
-    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close out project' })).toBeInTheDocument();
     expect(container.querySelector('[data-index-region="care"]')).toBeNull();
   });
 
   it('marks the open branch as the care root when indexRoot is set', () => {
     const { container } = render(<CareBand projectId="project-1" indexRoot />);
 
-    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close out project' })).toBeInTheDocument();
     const root = container.querySelector('[data-index-region="care"]');
     expect(root).not.toBeNull();
     expect(root).toHaveAttribute('id', 'care-region-heading');
@@ -456,7 +456,7 @@ describe('CareBand running index root (W2 C-2)', () => {
     expect(root!.className).not.toMatch(/\bmb-/);
     expect(screen.getByText(/The book is closed\./)).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Close the book' }),
+      screen.queryByRole('button', { name: 'Close out project' }),
     ).not.toBeInTheDocument();
   });
 
@@ -495,7 +495,7 @@ describe('CareBand running index root (W2 C-2)', () => {
     ]) {
       fireEvent.click(screen.getByRole('button', { name: label }));
     }
-    fireEvent.click(screen.getByRole('button', { name: 'Close the book' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close out project' }));
 
     expect(screen.getByText(/The book is closed\./)).toBeInTheDocument();
     const root = container.querySelector('[data-index-region="care"]');
@@ -568,7 +568,7 @@ describe('CareBand quiet body (W4)', () => {
     expect(document.getElementById('closing-the-book')).toBeNull();
     expect(screen.queryByText('The portfolio snapshot')).not.toBeInTheDocument();
     // The head keeps every act it has at full — the leader included.
-    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close out project' })).toBeInTheDocument();
   });
 
   it('keeps the SAME head element across quiet → full', () => {
@@ -625,7 +625,7 @@ describe('CareBand quiet body (W4)', () => {
     const { container } = render(<CareBand projectId="project-1" indexRoot />);
 
     expect(screen.getByRole('button', { name: /closing the book/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Close the book' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close out project' })).not.toBeInTheDocument();
     expect(
       screen.queryByText('Quiet — opens as you read'),
     ).not.toBeInTheDocument();
@@ -721,7 +721,7 @@ describe('CareBand quiet body (W4)', () => {
     ]) {
       fireEvent.click(screen.getByRole('button', { name: label }));
     }
-    fireEvent.click(screen.getByRole('button', { name: 'Close the book' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close out project' }));
     expect(screen.getByText(/The book is closed\./)).toBeInTheDocument();
     root = band.container.querySelector('[data-index-region="care"]');
     expect(root).toHaveAttribute('data-density', 'full');

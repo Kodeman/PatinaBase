@@ -327,10 +327,10 @@ describe("the regions", () => {
     renderCard();
     for (const head of [
       "Reach & access",
-      "Seats on projects",
-      "Past seats",
-      "Paper",
-      "History",
+      "Project assignments",
+      "Past assignments",
+      "Documents on file",
+      "Relationship history",
     ]) {
       expect(screen.getByRole("heading", { name: head })).toBeInTheDocument();
     }
@@ -488,7 +488,7 @@ describe("Send a text", () => {
   it("is held, with the reason beside it, when the studio holds no consent", () => {
     personData.current = person({ consent_status: "opted_out" });
     renderCard();
-    const act = screen.getByRole("button", { name: "Send a text" });
+    const act = screen.getByRole("button", { name: "Send text message" });
     expect(act).not.toBeDisabled();
     expect(act).toHaveAttribute("aria-disabled", "true");
     const reason = document.getElementById(
@@ -501,7 +501,7 @@ describe("Send a text", () => {
 
   it("opens the seat’s own sheet when consent stands", () => {
     const { onOpenSeat } = renderCard();
-    fireEvent.click(screen.getByRole("button", { name: "Send a text" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send text message" }));
     expect(onOpenSeat).toHaveBeenCalled();
   });
 
@@ -514,7 +514,7 @@ describe("Send a text", () => {
   it("is held, with its own sentence, when no seat is a field seat", () => {
     seatData.current = [seat({ party_kind: "client_rep", trade: null })];
     const { onOpenSeat } = renderCard();
-    const act = screen.getByRole("button", { name: "Send a text" });
+    const act = screen.getByRole("button", { name: "Send text message" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     expect(act).not.toBeDisabled();
     const reason = document.getElementById(
@@ -533,7 +533,7 @@ describe("Send a text", () => {
       seat({ seat_id: "seat-sub", party_kind: "sub" }),
     ];
     const { onOpenSeat } = renderCard();
-    fireEvent.click(screen.getByRole("button", { name: "Send a text" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send text message" }));
     expect(onOpenSeat).toHaveBeenCalledWith(
       expect.objectContaining({ seat_id: "seat-sub" }),
     );
@@ -565,7 +565,7 @@ describe("Send a text", () => {
       },
     ];
     const { onOpenSeat } = renderCard();
-    const act = screen.getByRole("button", { name: "Send a text" });
+    const act = screen.getByRole("button", { name: "Send text message" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     const reason = document.getElementById(
       act.getAttribute("aria-describedby") as string,
@@ -611,7 +611,7 @@ describe("Send a text", () => {
       },
     ];
     renderCard();
-    const act = screen.getByRole("button", { name: "Send a text" });
+    const act = screen.getByRole("button", { name: "Send text message" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     const reason = document.getElementById(
       act.getAttribute("aria-describedby") as string,
@@ -659,7 +659,7 @@ describe("the Hours door on a teammate (HT-8)", () => {
   it("opens for an owner — the one door into the member scope", () => {
     viewerStudioRole = "owner";
     renderTeammate();
-    expect(screen.getByRole("button", { name: "Hours" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Time records" })).toBeInTheDocument();
   });
 
   it("is absent for a plain member, who has no lens to leave that scope by", () => {
@@ -669,7 +669,7 @@ describe("the Hours door on a teammate (HT-8)", () => {
     viewerStudioRole = "member";
     renderTeammate();
     expect(
-      screen.queryByRole("button", { name: "Hours" }),
+      screen.queryByRole("button", { name: "Time records" }),
     ).not.toBeInTheDocument();
     viewerStudioRole = "owner";
   });
@@ -678,7 +678,7 @@ describe("the Hours door on a teammate (HT-8)", () => {
     viewerStudioRole = "owner";
     renderCard();
     expect(
-      screen.queryByRole("button", { name: "Hours" }),
+      screen.queryByRole("button", { name: "Time records" }),
     ).not.toBeInTheDocument();
   });
 
@@ -704,7 +704,7 @@ describe("the Hours door on a teammate (HT-8)", () => {
     cardData.current = null;
     seatData.current = [];
     renderCard({ personId: "card-leah", role: "contact" });
-    expect(screen.getByRole("button", { name: "Hours" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Time records" })).toBeInTheDocument();
   });
 
   /**
@@ -731,7 +731,7 @@ describe("the Hours door on a teammate (HT-8)", () => {
     seatData.current = [];
     renderCard({ personId: "card-leah", role: "contact" });
     expect(
-      screen.queryByRole("button", { name: "Hours" }),
+      screen.queryByRole("button", { name: "Time records" }),
     ).not.toBeInTheDocument();
   });
 
@@ -742,7 +742,7 @@ describe("the Hours door on a teammate (HT-8)", () => {
     seatData.current = [];
     renderCard();
     expect(
-      screen.queryByRole("button", { name: "Hours" }),
+      screen.queryByRole("button", { name: "Time records" }),
     ).not.toBeInTheDocument();
   });
 
@@ -758,7 +758,7 @@ describe("the Hours door on a teammate (HT-8)", () => {
     seatData.current = [];
     renderCard({ personId: "party-client-1", role: "client" });
     expect(
-      screen.queryByRole("button", { name: "Hours" }),
+      screen.queryByRole("button", { name: "Time records" }),
     ).not.toBeInTheDocument();
   });
 });

@@ -117,6 +117,9 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   'Call sheet': 'plain',
   Fold: 'plain',
   'Open the record': 'plain',
+  // The Money head (commercial/money-region.tsx, manifest C-0326, D2) still
+  // emits `Draw an invoice`; both labels classify until that row lands.
+  'Draw an invoice': 'plain',
   'Draft an invoice': 'plain',
   // Plain — Message and its repair (FR1 R6: a reconnect is a Message, plain)
   'Message {first name}': 'plain',

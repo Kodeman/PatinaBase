@@ -176,7 +176,7 @@ describe('quiet responsive document shell', () => {
   it('exposes a compact index at 1180px and the full labelled spine at 1440px', () => {
     render(<DocSpine sections={sections} onJump={jest.fn()} />);
 
-    const spine = screen.getByRole('complementary', { name: 'Document spine' });
+    const spine = screen.getByRole('complementary', { name: 'Project index' });
     expect(spine).toHaveAttribute(
       'data-spine-regime',
       'sheet-below-1180-narrow-to-1439-full-from-1440',
@@ -190,7 +190,7 @@ describe('quiet responsive document shell', () => {
       'min-[1440px]:w-auto',
     );
 
-    expect(screen.getByRole('link', { name: 'Put down document' })).toHaveClass(
+    expect(screen.getByRole('link', { name: 'Back to Studio overview' })).toHaveClass(
       'min-h-11',
       'min-w-11',
     );
@@ -486,7 +486,7 @@ describe('the 390 bar', () => {
     const [context, act, more] = controls;
     // OD-11 (W1-L3): the sections door names the reading STOP, not the
     // section — `held` above carries no `readingIndex`, so it names none.
-    expect(context).toHaveAccessibleName('Open sections');
+    expect(context).toHaveAccessibleName('Open project contents');
     expect(act).toHaveAttribute('data-action-key', 'pick-the-fabric');
     expect(act.querySelector('.da-label')?.textContent).toBe(
       'Pick the fabric for the Okonkwo sofa',
@@ -872,7 +872,7 @@ describe('a room in hand, carried down the widths', () => {
   const railHead = () =>
     document.querySelector<HTMLElement>('[data-spine-head]');
   const releaseAct = () =>
-    screen.queryByRole('button', { name: 'Put down the room' });
+    screen.queryByRole('button', { name: 'Clear room focus' });
 
   it('survives 1440 → 1280 → 390 with a release reachable at each', () => {
     const media = installWidthMatchMedia(1440);

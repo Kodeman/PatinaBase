@@ -226,7 +226,7 @@ describe('FF&E project-mode region head', () => {
       'release-for-authorization',
       'record-a-change-pieces-head',
     ]);
-    expect(screen.getByRole('button', { name: 'Fold ↑' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse ↑' })).toBeInTheDocument();
   });
 
   it('US-21 fix-now #3 — the head adds to the job; the room act stays Add a line', () => {
@@ -366,19 +366,19 @@ describe('FF&E project-mode region head', () => {
     // The fold she made herself is the only seam a stop can wear (OD-10).
     window.localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
     renderProject();
-    fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
+    fireEvent.click(screen.getByRole('button', { name: /expand/i }));
     expect(
       screen.getByRole('heading', { name: 'Pieces' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Fold ↑' }),
+      screen.getByRole('button', { name: 'Collapse ↑' }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Fold ↑' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse ↑' }));
     expect(
       screen.queryByRole('heading', { name: 'Pieces' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText(/unfold/i)).toBeInTheDocument();
+    expect(screen.getByText(/expand/i)).toBeInTheDocument();
   });
 
   it('leaves install mode rendering its own head, no RegionHead at all', () => {
@@ -386,9 +386,9 @@ describe('FF&E project-mode region head', () => {
     expect(screen.getByRole('heading', { name: 'Install' })).toBeInTheDocument();
     // RegionHead's fold control never appears in install mode.
     expect(
-      screen.queryByRole('button', { name: 'Fold ↑' }),
+      screen.queryByRole('button', { name: 'Collapse ↑' }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText(/unfold/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/expand/i)).not.toBeInTheDocument();
   });
 });
 

@@ -376,7 +376,7 @@ describe('the centre slot with no primary action (D5, VISION.md:50)', () => {
     const bar = screen.getByTestId('mobile-bar');
     expect(within(bar).queryByText('Today')).toBeNull();
     expect(within(bar).queryByText('In hand')).toBeNull();
-    expect(within(bar).queryByText('Hands free')).toBeNull();
+    expect(within(bar).queryByText('No active timer')).toBeNull();
     expect(within(bar).queryByText(/^\d+:\d{2}$/)).toBeNull();
     expect(within(bar).queryByText(/^\d+\s*min$/)).toBeNull();
   });
@@ -397,7 +397,7 @@ describe('the centre slot with no primary action (D5, VISION.md:50)', () => {
       within(bar).getByRole('button', { name: 'Mark the Okonkwo agreement signed' }),
     ).toBeInTheDocument();
     expect(within(bar).queryByText('Today')).toBeNull();
-    expect(within(bar).queryByText('Hands free')).toBeNull();
+    expect(within(bar).queryByText('No active timer')).toBeNull();
   });
 
   it('the More row still renders "Time in hand … review or adjust" — that timer stays, she opens it', () => {
@@ -406,7 +406,7 @@ describe('the centre slot with no primary action (D5, VISION.md:50)', () => {
     expect(
       menu.getByText(/review or adjust/),
     ).toBeInTheDocument();
-    expect(menu.getByText('Time in hand')).toBeInTheDocument();
+    expect(menu.getByText('Active session time')).toBeInTheDocument();
   });
 });
 
@@ -418,14 +418,14 @@ describe('the left zone · household and the current stop (OD-11, A-08)', () => 
 
   it('prints the household, not the active section, on the second line', () => {
     mountBar();
-    const doorway = screen.getByRole('button', { name: 'Open sections' });
+    const doorway = screen.getByRole('button', { name: 'Open project contents' });
     expect(within(doorway).getByText('Vandersteen')).toBeInTheDocument();
     expect(within(doorway).queryByText('Project')).toBeNull();
   });
 
   it('falls back to the document title when there is no household name', () => {
     mountBar({ doc: { ...heldDocument, clientName: '' } });
-    const doorway = screen.getByRole('button', { name: 'Open sections' });
+    const doorway = screen.getByRole('button', { name: 'Open project contents' });
     expect(
       within(doorway).getByText('Vandersteen residence'),
     ).toBeInTheDocument();
@@ -435,9 +435,9 @@ describe('the left zone · household and the current stop (OD-11, A-08)', () => 
     mountBar();
     const bar = screen.getByTestId('mobile-bar');
     expect(bar).toHaveAttribute('data-reading-index', '');
-    expect(screen.queryByText(/^At /)).toBeNull();
+    expect(screen.queryByText(/^Section: /)).toBeNull();
     expect(
-      screen.getByRole('button', { name: 'Open sections' }),
+      screen.getByRole('button', { name: 'Open project contents' }),
     ).toBeInTheDocument();
   });
 
@@ -445,9 +445,9 @@ describe('the left zone · household and the current stop (OD-11, A-08)', () => 
     mountBar({ doc: { ...heldDocument, readingIndex: 'ffe' } });
     const bar = screen.getByTestId('mobile-bar');
     expect(bar).toHaveAttribute('data-reading-index', 'ffe');
-    expect(screen.getByText('At Pieces')).toBeInTheDocument();
+    expect(screen.getByText('Section: Pieces')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Open sections, at Pieces' }),
+      screen.getByRole('button', { name: 'Open project contents, at Pieces' }),
     ).toBeInTheDocument();
   });
 
@@ -457,9 +457,9 @@ describe('the left zone · household and the current stop (OD-11, A-08)', () => 
     mockCallSheetOn = false;
     (
       [
-        ['approvals', 'At Client approvals', 'Open sections, at Client approvals'],
-        ['schedule', 'At Schedule', 'Open sections, at Schedule'],
-        ['money', 'At Money', 'Open sections, at Money'],
+        ['approvals', 'Section: Client approvals', 'Open project contents, at Client approvals'],
+        ['schedule', 'Section: Project schedule', 'Open project contents, at Project schedule'],
+        ['money', 'Section: Money', 'Open project contents, at Money'],
       ] as const
     ).forEach(([readingIndex, line, ariaLabel]) => {
       const { unmount } = mountBar({
@@ -491,7 +491,7 @@ function mountBarAndSheets({
 }
 
 function openSections() {
-  fireEvent.click(screen.getByRole('button', { name: /^Open sections/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Open project contents/ }));
 }
 
 function sectionsPanel() {
@@ -538,7 +538,7 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
 
     [
       'Client approvals',
-      'Schedule',
+      'Project schedule',
       'Pieces',
       'Money',
       'Closing the book',
@@ -556,8 +556,8 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     const piecesRow = within(panel).getByRole('button', { name: /Pieces/ });
     expect(within(piecesRow).getByText('36 lines · 1 damaged')).toBeInTheDocument();
 
-    const scheduleRow = within(panel).getByRole('button', { name: 'Schedule' });
-    expect(scheduleRow).toHaveTextContent('Schedule');
+    const scheduleRow = within(panel).getByRole('button', { name: 'Project schedule' });
+    expect(scheduleRow).toHaveTextContent('Project schedule');
   });
 
   it('marks the reading stop aria-current, and no other stop', () => {
@@ -568,7 +568,7 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
       within(panel).getByRole('button', { name: 'Money' }),
     ).toHaveAttribute('aria-current', 'true');
     expect(
-      within(panel).getByRole('button', { name: 'Schedule' }),
+      within(panel).getByRole('button', { name: 'Project schedule' }),
     ).not.toHaveAttribute('aria-current');
   });
 
@@ -1032,7 +1032,7 @@ describe('the phone at 390 under one-voice (FR2 F2-5, F2-8, F2-15)', () => {
     mountPhone();
     fireEvent.click(openMore().getByRole('button', { name: 'Standing · 2' }));
     const sheet = await screen.findByRole('dialog');
-    expect(sheet).toHaveTextContent('Standing · 0');
+    expect(sheet).toHaveTextContent('Everything open on this job, 0');
 
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -1044,7 +1044,7 @@ describe('the phone at 390 under one-voice (FR2 F2-5, F2-8, F2-15)', () => {
 
   it('F2-15: the dock never prints the no-login suffix', () => {
     mountPhone({ ...heldDocument, clientName: 'Elena Marlowe (no-login household)' });
-    const doorway = screen.getByRole('button', { name: 'Open sections' });
+    const doorway = screen.getByRole('button', { name: 'Open project contents' });
     expect(within(doorway).getByText('Elena Marlowe')).toBeInTheDocument();
     expect(doorway.textContent).not.toMatch(/no-login/);
   });
@@ -1056,23 +1056,23 @@ describe('the phone at 390 under one-voice (FR2 F2-5, F2-8, F2-15)', () => {
     ['Halloran: document_state’s `Client` fallback', 'Client'],
   ])('F6-7: %s prints no household; the left reads `At approvals`', (_case, clientName) => {
     mountPhone({ ...heldDocument, title: 'Halloran House', clientName, readingIndex: 'approvals' });
-    const doorway = screen.getByRole('button', { name: 'Open sections, at Client approvals' });
-    expect(doorway.textContent).toBe('In this documentAt approvals');
+    const doorway = screen.getByRole('button', { name: 'Open project contents, at Client approvals' });
+    expect(doorway.textContent).toBe('Project file sectionsSection: approvals');
     expect(doorway.textContent).not.toMatch(/the client|Client User|Halloran/);
   });
 
   it('FR4 Fix 2: a real household prints whole', () => {
     mountPhone({ ...heldDocument, clientName: 'The Ashfords (no-login household)' });
-    const doorway = screen.getByRole('button', { name: 'Open sections' });
+    const doorway = screen.getByRole('button', { name: 'Open project contents' });
     expect(within(doorway).getByText('The Ashfords')).toBeInTheDocument();
   });
 
   it('F2-15: the approvals stop reads `At approvals`; the door keeps its full name', () => {
     mountPhone({ ...heldDocument, readingIndex: 'approvals' });
-    expect(screen.getByText('At approvals')).toBeInTheDocument();
-    expect(screen.queryByText('At Client approvals')).toBeNull();
+    expect(screen.getByText('Section: approvals')).toBeInTheDocument();
+    expect(screen.queryByText('Section: Client approvals')).toBeNull();
     expect(
-      screen.getByRole('button', { name: 'Open sections, at Client approvals' }),
+      screen.getByRole('button', { name: 'Open project contents, at Client approvals' }),
     ).toBeInTheDocument();
   });
 
@@ -1084,6 +1084,6 @@ describe('the phone at 390 under one-voice (FR2 F2-5, F2-8, F2-15)', () => {
       readingIndex: 'approvals',
     });
     expect(screen.getByText('Elena Marlowe (no-login household)')).toBeInTheDocument();
-    expect(screen.getByText('At Client approvals')).toBeInTheDocument();
+    expect(screen.getByText('Section: Client approvals')).toBeInTheDocument();
   });
 });

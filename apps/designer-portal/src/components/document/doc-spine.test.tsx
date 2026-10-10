@@ -40,7 +40,7 @@ const sections: SpineSection[] = [
 describe('DocSpine at the narrow tier (1180–1439) — F02', () => {
   it('prints the active section label and "Put down" from 1180, not only from 1440', () => {
     render(<DocSpine sections={sections} onJump={jest.fn()} />);
-    expect(screen.getByText('Put down')).toHaveClass('min-[1180px]:inline');
+    expect(screen.getByText('Back to Studio overview')).toHaveClass('min-[1180px]:inline');
   });
 
   it('mounts the ladder at BOTH desktop tiers — the block is no longer gated at 1440 (OD-15.3)', () => {
@@ -191,7 +191,7 @@ describe('DocSpine · the rail head (R127 W1; W7-R1 §1)', () => {
     const line = screen.getByText('In hand · Kitchen');
     expect(line).toHaveClass('uppercase', 'font-mono', 'text-[11px]');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Put down the room' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear room focus' }));
     expect(onReleaseRoom).toHaveBeenCalledWith('r1');
   });
 
@@ -201,7 +201,7 @@ describe('DocSpine · the rail head (R127 W1; W7-R1 §1)', () => {
     );
     expect(container.querySelector('[data-spine-room-in-hand]')).toBeNull();
     expect(
-      screen.queryByRole('button', { name: 'Put down the room' }),
+      screen.queryByRole('button', { name: 'Clear room focus' }),
     ).toBeNull();
   });
 

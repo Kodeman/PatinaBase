@@ -35,7 +35,7 @@ describe('SkipToPaper', () => {
       </>,
     );
 
-    const link = screen.getByRole('link', { name: 'Skip to the paper' });
+    const link = screen.getByRole('link', { name: 'Skip to main content' });
     const button = screen.getByRole('button', { name: 'Studio books' });
     expect(
       link.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -50,7 +50,7 @@ describe('SkipToPaper', () => {
       </>,
     );
 
-    const link = screen.getByRole('link', { name: 'Skip to the paper' });
+    const link = screen.getByRole('link', { name: 'Skip to main content' });
     fireEvent.click(link);
 
     const paper = screen.getByText('The paper');
@@ -67,7 +67,7 @@ describe('SkipToPaper', () => {
       </>,
     );
 
-    fireEvent.click(screen.getByRole('link', { name: 'Skip to the paper' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Skip to main content' }));
 
     expect(screen.getByText('The paper')).toHaveFocus();
   });
@@ -80,7 +80,7 @@ describe('SkipToPaper', () => {
       </>,
     );
 
-    fireEvent.click(screen.getByRole('link', { name: 'Skip to the paper' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Skip to main content' }));
 
     expect(screen.getByText('The Desk')).toHaveFocus();
   });
@@ -88,7 +88,7 @@ describe('SkipToPaper', () => {
   it('does nothing (and does not throw) when no paper target exists', () => {
     render(<SkipToPaper />);
     expect(() =>
-      fireEvent.click(screen.getByRole('link', { name: 'Skip to the paper' })),
+      fireEvent.click(screen.getByRole('link', { name: 'Skip to main content' })),
     ).not.toThrow();
   });
 });

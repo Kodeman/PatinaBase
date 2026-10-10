@@ -120,7 +120,7 @@ describe('FoldSeam', () => {
     const seam = screen.getByRole('button');
     expect(seam).toHaveAttribute('aria-expanded', 'false');
     expect(seam).not.toHaveAttribute('aria-controls');
-    expect(seam).toHaveTextContent('unfold ↓');
+    expect(seam).toHaveTextContent('Expand ↓');
     expect(seam.className).not.toMatch(/grid-rows-\[0fr\]|max-h-/);
   });
 });

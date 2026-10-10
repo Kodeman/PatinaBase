@@ -44,7 +44,7 @@ describe('Desk need action labels', () => {
   // US-19 FR4 Fix 5 — the acts the one-voice Desk card borrows from the paper
   // are strings act-names.ts already owns; the Desk adds no vocabulary.
   it('borrows the paper’s own acts under one-voice, adding no vocabulary', () => {
-    expect(OPEN_THE_JOB).toBe('Open the job');
+    expect(OPEN_THE_JOB).toBe('Open project file');
     expect(ACT_TIER['Respond to the inquiry']).toBe('scored');
     expect(NEED_ACT_LABELS.new_lead).toBe('Respond to the inquiry');
     expect(ACT_TIER['Nudge {first name}']).toBe('scored');

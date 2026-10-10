@@ -230,7 +230,7 @@ describe('command-bar — the "This surface" call sheet row', () => {
     render(<CommandBar />);
     await openPalette();
 
-    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
+    expect(screen.queryByText('Project directory')).not.toBeInTheDocument();
   });
 
   // Flag retired (rulings §6): with a project document in hand the row is
@@ -244,8 +244,8 @@ describe('command-bar — the "This surface" call sheet row', () => {
     render(<CommandBar />);
     await openPalette();
 
-    expect(screen.getByText('This surface')).toBeInTheDocument();
-    expect(screen.getByText('Call sheet')).toBeInTheDocument();
+    expect(screen.getByText('Current workspace')).toBeInTheDocument();
+    expect(screen.getByText('Project directory')).toBeInTheDocument();
     expect(screen.getByText('this project · who is on the job')).toBeInTheDocument();
   });
 
@@ -257,11 +257,11 @@ describe('command-bar — the "This surface" call sheet row', () => {
     render(<CommandBar />);
     await openPalette();
 
-    const ledgersGroup = screen.getByText('Rooms & ledgers').closest('div');
+    const ledgersGroup = screen.getByText('Studio resources & administration').closest('div');
     expect(ledgersGroup).not.toBeNull();
     expect(
       ledgersGroup!.parentElement?.textContent ?? '',
-    ).not.toMatch(/Call sheet/);
+    ).not.toMatch(/Project directory/);
   });
 });
 
@@ -277,7 +277,7 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
     await act(async () => {
       window.dispatchEvent(new CustomEvent('document:open-command-bar'));
     });
-    const input = screen.getByPlaceholderText(/Find a document or a ledger/);
+    const input = screen.getByPlaceholderText(/Search project files, contacts and tools/);
     await act(async () => {
       fireEvent.change(input, { target: { value: query } });
     });
@@ -292,7 +292,7 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
 
     await openPaletteAndType('roster');
 
-    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
+    expect(screen.queryByText('Project directory')).not.toBeInTheDocument();
   });
 
   it('(c) flag on + a document in hand + "roster": the row appears and dispatches document:open-call-sheet', async () => {
@@ -305,7 +305,7 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
 
     await openPaletteAndType('roster');
 
-    const row = screen.getByText('Call sheet');
+    const row = screen.getByText('Project directory');
     expect(row).toBeInTheDocument();
 
     await act(async () => {
@@ -322,7 +322,7 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
     mockDeskData.mockReturnValue({ folders: [], chips: [] });
 
     await openPaletteAndType('who');
-    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
+    expect(screen.queryByText('Project directory')).not.toBeInTheDocument();
   });
 
   it('preserves the Drafting Room\'s working typed search with a draft proposal in hand', async () => {
@@ -344,7 +344,7 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
 
     await openPaletteAndType('drafting');
 
-    const row = screen.getByText('Contract Room');
+    const row = screen.getByText('Proposal workspace');
     await act(async () => {
       fireEvent.click(row.closest('button')!);
     });
@@ -358,7 +358,7 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
 
     await openPaletteAndType('drafting');
 
-    expect(screen.queryByText('Contract Room')).not.toBeInTheDocument();
+    expect(screen.queryByText('Proposal workspace')).not.toBeInTheDocument();
   });
 
   it('gives \'moodboards\' to the Boards door alone (F62 — three names become one)', async () => {
@@ -382,8 +382,8 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
     // The alias the Drafting Room used to squat on now names one door, and it
     // is not the Drafting Room — even with the draft proposal in hand that
     // would otherwise have offered it.
-    expect(screen.queryByText('Contract Room')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Boards')).toHaveLength(1);
+    expect(screen.queryByText('Proposal workspace')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Design boards')).toHaveLength(1);
   });
 });
 

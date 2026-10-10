@@ -112,9 +112,9 @@ describe('PostSheet quiet ledger', () => {
     render(<PostSheet />);
     act(() => openPost());
 
-    expect(screen.getByRole('dialog', { name: /The Post/ })).toBeInTheDocument();
-    const recordPage = screen.getByRole('button', { name: 'The Record' });
-    const lettersPage = screen.getByRole('button', { name: 'Letters' });
+    expect(screen.getByRole('dialog', { name: /Studio inbox/ })).toBeInTheDocument();
+    const recordPage = screen.getByRole('button', { name: 'Activity log' });
+    const lettersPage = screen.getByRole('button', { name: 'Correspondence' });
     expect(recordPage).toHaveAttribute('aria-current', 'page');
     expect(recordPage).toHaveClass('min-h-[44px]');
     expect(lettersPage).toHaveClass('min-h-[44px]');

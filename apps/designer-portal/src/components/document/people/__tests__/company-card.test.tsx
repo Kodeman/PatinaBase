@@ -240,11 +240,11 @@ describe("the six regions", () => {
   it("prints each head", () => {
     renderCard();
     for (const head of [
-      "Crew & designations",
-      "Paper",
-      "Payee",
-      "Locations",
-      "Jobs",
+      "Team & responsibilities",
+      "Documents on file",
+      "Payee details",
+      "Company locations",
+      "Project history",
       "History",
     ]) {
       expect(screen.getByRole("heading", { name: head })).toBeInTheDocument();
@@ -352,7 +352,7 @@ describe("R-P — the Paper region, in one fixed order", () => {
     const table = text.indexOf("COI, general liability");
     const clause = text.indexOf("Site access, payment and the draw are held");
     const sentence = text.indexOf("This drafts a note to");
-    const act = text.indexOf("Record a document");
+    const act = text.indexOf("Add document record");
     expect(table).toBeGreaterThanOrEqual(0);
     expect(clause).toBeGreaterThan(table);
     expect(sentence).toBeGreaterThan(clause);
@@ -364,7 +364,7 @@ describe("R-P — the Paper region, in one fixed order", () => {
     renderCard();
     expect(screen.getByText("Not on file")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Record a document" }),
+      screen.getByRole("button", { name: "Add document record" }),
     ).toBeInTheDocument();
   });
 
@@ -378,10 +378,10 @@ describe("R-P — the Paper region, in one fixed order", () => {
       screen.getByText("No paper is held for this firm."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Record a document" }),
+      screen.queryByRole("button", { name: "Add document record" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Chase the renewal" }),
+      screen.queryByRole("button", { name: "Draft renewal request" }),
     ).not.toBeInTheDocument();
   });
 });
@@ -389,7 +389,7 @@ describe("R-P — the Paper region, in one fixed order", () => {
 describe("Chase the renewal", () => {
   it("files a draft for review and says so — nothing is sent", () => {
     renderCard();
-    const act = screen.getByRole("button", { name: "Chase the renewal" });
+    const act = screen.getByRole("button", { name: "Draft renewal request" });
     const reason = document.getElementById(
       act.getAttribute("aria-describedby") as string,
     );
@@ -474,7 +474,7 @@ describe("the history region", () => {
   it("says no verdict is recorded, and offers to record one", () => {
     renderCard();
     expect(screen.getByText("No verdict recorded.")).toBeInTheDocument();
-    const act = screen.getByRole("button", { name: "Record a verdict" });
+    const act = screen.getByRole("button", { name: "Record supplier assessment" });
     expect(act).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(act);
     expect(act).toHaveAttribute("aria-expanded", "true");
@@ -493,12 +493,12 @@ describe("the history region", () => {
       studio_verdict: "Good crew. Slow to send paper.",
     };
     renderCard();
-    fireEvent.click(screen.getByRole("button", { name: "Record a verdict" }));
-    expect(screen.getByLabelText("What the studio thinks")).toHaveValue(
+    fireEvent.click(screen.getByRole("button", { name: "Record supplier assessment" }));
+    expect(screen.getByLabelText("Studio assessment")).toHaveValue(
       "Good crew. Slow to send paper.",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Save the verdict" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save assessment" }));
     await waitFor(() => expect(updateCardMutate).toHaveBeenCalled());
     expect(updateCardMutate.mock.calls[0][0].card).toEqual({
       studioVerdict: "Good crew. Slow to send paper.",
@@ -507,12 +507,12 @@ describe("the history region", () => {
 
   it("still records a first verdict on a card that holds none", async () => {
     renderCard();
-    fireEvent.click(screen.getByRole("button", { name: "Record a verdict" }));
-    expect(screen.getByLabelText("What the studio thinks")).toHaveValue("");
-    fireEvent.change(screen.getByLabelText("What the studio thinks"), {
+    fireEvent.click(screen.getByRole("button", { name: "Record supplier assessment" }));
+    expect(screen.getByLabelText("Studio assessment")).toHaveValue("");
+    fireEvent.change(screen.getByLabelText("Studio assessment"), {
       target: { value: "Would hire again." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save the verdict" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save assessment" }));
     await waitFor(() => expect(updateCardMutate).toHaveBeenCalled());
     expect(updateCardMutate.mock.calls[0][0].card).toEqual({
       studioVerdict: "Would hire again.",

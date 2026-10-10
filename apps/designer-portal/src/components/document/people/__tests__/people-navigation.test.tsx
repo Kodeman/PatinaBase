@@ -10,15 +10,15 @@ import {
 } from '../view-shell';
 
 const EXPECTED_GROUPS = [
-  { key: 'directory', name: 'Directory', views: ['directory'] },
+  { key: 'directory', name: 'Contact directory', views: ['directory'] },
   {
     key: 'relationships',
-    name: 'Relationships',
+    name: 'Client relations',
     views: ['threads', 'nurture', 'reviews'],
   },
   {
     key: 'practice',
-    name: 'Practice',
+    name: 'Studio marketing',
     views: ['portfolio', 'outreach', 'your-eye'],
   },
 ] as const;
@@ -64,7 +64,7 @@ describe('People Room navigation', () => {
     }
 
     expect(
-      within(rail!).getByRole('button', { name: 'Nurture' }),
+      within(rail!).getByRole('button', { name: 'Relationship follow-ups' }),
     ).toHaveAttribute('aria-current', 'page');
     expect(
       within(rail!).getByRole('button', { name: 'Directory 42' }),
@@ -121,10 +121,10 @@ describe('People Room navigation', () => {
     expect(panel).not.toHaveAttribute('hidden');
     expect(panel!.querySelectorAll('[data-people-view-group]')).toHaveLength(3);
 
-    fireEvent.click(within(panel!).getByRole('button', { name: 'Reviews' }));
+    fireEvent.click(within(panel!).getByRole('button', { name: 'Client reviews' }));
 
     expect(trigger).toHaveAccessibleName(
-      'Choose People view. Current view: Reviews',
+      'Choose People view. Current view: Client reviews',
     );
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(panel).toHaveAttribute('hidden');
@@ -149,7 +149,7 @@ describe('People Room navigation', () => {
     )!;
 
     fireEvent.click(trigger);
-    const threads = within(panel).getByRole('button', { name: 'Threads' });
+    const threads = within(panel).getByRole('button', { name: 'Correspondence' });
     threads.focus();
     fireEvent.keyDown(window, { key: 'Escape' });
 

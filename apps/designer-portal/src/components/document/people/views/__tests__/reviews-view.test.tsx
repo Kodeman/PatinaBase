@@ -65,7 +65,7 @@ describe('ReviewsView · pending', () => {
     render(<ReviewsView notify={jest.fn()} />);
 
     const row = screen.getByText('Dave Okonkwo').closest('li') as HTMLElement;
-    expect(row).toHaveTextContent('Request sent — awaiting their words');
+    expect(row).toHaveTextContent('Awaiting client review');
     expect(within(row).queryByTestId('delivery-word')).toBeNull();
   });
 
@@ -79,7 +79,7 @@ describe('ReviewsView · pending', () => {
     expect(word).toHaveTextContent("Bounced 9 Sept — didn't reach dave@okonkwo.net");
     expect(word).toHaveAttribute('role', 'status');
     // The reason line survives — the word joins it, it does not replace it.
-    expect(row).toHaveTextContent('Request sent — awaiting their words');
+    expect(row).toHaveTextContent('Awaiting client review');
   });
 
   it('asks the log only for the tab that prints the word', () => {
@@ -88,7 +88,7 @@ describe('ReviewsView · pending', () => {
     expect(mockUseEmailDelivery).toHaveBeenCalledWith('client_review', ['review-1']);
 
     mockUseEmailDelivery.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: /Collected/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Received reviews/ }));
     expect(mockUseEmailDelivery).toHaveBeenCalled();
     for (const call of mockUseEmailDelivery.mock.calls) {
       expect(call[1]).toEqual([]);

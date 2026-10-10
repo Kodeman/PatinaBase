@@ -70,10 +70,10 @@ describe('PreworkRegion', () => {
     });
 
     it('says the phrase alone when the stop carries no fact — no press target', () => {
-      renderAt(null, { status: 'Nothing yet' });
+      renderAt(null, { status: 'No recorded activity' });
 
       expect(
-        screen.getByText('Nothing yet', { selector: '.sr-only' }),
+        screen.getByText('No recorded activity', { selector: '.sr-only' }),
       ).toBeInTheDocument();
       expect(screen.queryByText(/not yet on the paper/)).not.toBeInTheDocument();
     });

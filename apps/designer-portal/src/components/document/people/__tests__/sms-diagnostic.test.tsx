@@ -183,13 +183,13 @@ describe("the card is behind the rail", () => {
     flags.trades = false;
     openProfile();
     expect(screen.queryByTestId("field-line-diagnostic-card")).toBeNull();
-    expect(screen.queryByText(/Why didn’t they get it/)).toBeNull();
+    expect(screen.queryByText(/Delivery details/)).toBeNull();
   });
 
   it("with the rail on the card is mounted for this seat", () => {
     openProfile();
     expect(screen.getByTestId("field-line-diagnostic-card")).toBeInTheDocument();
-    expect(screen.getByText(/Why didn’t they get it/)).toBeInTheDocument();
+    expect(screen.getByText(/Delivery details/)).toBeInTheDocument();
     expect(explainCalls).toContain("party-1");
   });
 });

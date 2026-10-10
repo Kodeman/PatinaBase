@@ -188,7 +188,7 @@ function openMore() {
 }
 
 function openSections() {
-  fireEvent.click(screen.getByRole('button', { name: /^Open sections/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Open project contents/ }));
 }
 
 function sectionsPanel() {
@@ -384,7 +384,7 @@ describe('the Margin sheet (D-B30 / W5-R1, the whole margin)', () => {
         onJumpToRoom,
       },
     });
-    fireEvent.click(screen.getByRole('button', { name: /^Open sections/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Open project contents/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Primary bedroom' }));
 
     expect(onJumpToRoom).toHaveBeenCalledWith('room-7');

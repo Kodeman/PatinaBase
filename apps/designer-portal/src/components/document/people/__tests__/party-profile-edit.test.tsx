@@ -173,11 +173,11 @@ describe('PartyProfileSheet — a CARDED seat, with no directory row of its own'
 
   it('offers Edit, and Save reaches the mutation with the SEAT’s project', async () => {
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
     fireEvent.change(screen.getByLabelText('Name'), {
       target: { value: 'Sal R. Moretti' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save contact details' }));
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
     expect(updateMutateAsync).toHaveBeenCalledWith({
@@ -193,7 +193,7 @@ describe('PartyProfileSheet — a CARDED seat, with no directory row of its own'
   it('offers the texts invite, because the number is on the seat', () => {
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
     expect(
-      screen.getByRole('button', { name: 'Invite to texts' }),
+      screen.getByRole('button', { name: 'Send text consent invitation' }),
     ).toBeInTheDocument();
     expect(
       screen.queryByText('Add a phone number to invite this party to texts.'),
@@ -205,13 +205,13 @@ describe('PartyProfileSheet — edit', () => {
   it('starts read-only, with an Edit action', () => {
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
     expect(screen.getByText('Moretti Plumbing')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit contact details' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
   });
 
   it('prefills the form from the record when Edit is pressed', () => {
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
 
     expect(screen.getByLabelText('Name')).toHaveValue('Sal Moretti');
     expect(screen.getByLabelText('Company')).toHaveValue('Moretti Plumbing');
@@ -222,7 +222,7 @@ describe('PartyProfileSheet — edit', () => {
 
   it('keeps Kind and Project as read-only text, never a control', () => {
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
 
     expect(screen.getByText(/Subcontractor.*The Ellsworth Kitchen/)).toBeInTheDocument();
     expect(screen.queryByLabelText('Kind')).not.toBeInTheDocument();
@@ -231,10 +231,10 @@ describe('PartyProfileSheet — edit', () => {
 
   it('saves only the changed field', async () => {
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
 
     fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '5559876543' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save contact details' }));
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
     expect(updateMutateAsync.mock.calls[0][0]).toEqual({
@@ -246,7 +246,7 @@ describe('PartyProfileSheet — edit', () => {
 
   it('returns to the read-only card after Cancel, with no write', () => {
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Someone Else' } });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
@@ -260,12 +260,12 @@ describe('PartyProfileSheet — edit', () => {
   // consent server-side).
   it('does not send a phone patch for a cosmetic reformat of the same number', async () => {
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
 
     // Same digits as the prefilled '5551234567', just reformatted.
     fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '(555) 123-4567' } });
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save contact details' }));
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
     expect(updateMutateAsync.mock.calls[0][0]).toEqual({
@@ -281,7 +281,7 @@ describe('PartyProfileSheet — edit', () => {
   it('warns inline only when editing the phone would clear a granted consent', () => {
     personData.current = person({ consent_status: 'granted' });
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
 
     expect(screen.queryByText(/clears their texting opt-in/i)).not.toBeInTheDocument();
 
@@ -291,7 +291,7 @@ describe('PartyProfileSheet — edit', () => {
 
   it('never warns for a not_asked party even after editing the phone', () => {
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
     fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '5559876543' } });
 
     expect(screen.queryByText(/clears their texting opt-in/i)).not.toBeInTheDocument();
@@ -303,7 +303,7 @@ describe('PartyProfileSheet — edit', () => {
     personData.current = null;
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
 
-    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit contact details' })).not.toBeInTheDocument();
   });
 
   it('offers Edit once the record arrives, prefilled from it', () => {
@@ -311,11 +311,11 @@ describe('PartyProfileSheet — edit', () => {
     const { rerender } = render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
-    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit contact details' })).not.toBeInTheDocument();
 
     personData.current = person();
     rerender(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
 
     expect(screen.getByLabelText('Company')).toHaveValue('Moretti Plumbing');
     expect(screen.getByLabelText('Trade')).toHaveValue('plumbing');
@@ -330,7 +330,7 @@ describe('PartyProfileSheet — edit', () => {
     const { rerender } = render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
     expect(screen.getByLabelText('Name')).toHaveValue('Sal Moretti');
 
     personData.current = person({
@@ -359,7 +359,7 @@ describe('PartyProfileSheet — edit', () => {
     const { rerender } = render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
     fireEvent.change(screen.getByLabelText('Company'), {
       target: { value: 'Moretti & Sons' },
     });
@@ -378,7 +378,7 @@ describe('PartyProfileSheet — edit', () => {
     const { rerender } = render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
 
     personData.current = null;
     rerender(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
@@ -402,7 +402,7 @@ describe('PartyProfileSheet — edit', () => {
       },
     });
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
 
     expect(screen.getByLabelText('Trade')).toHaveValue('stonemasonry');
     expect(
@@ -410,7 +410,7 @@ describe('PartyProfileSheet — edit', () => {
     ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save contact details' }));
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
     expect(updateMutateAsync.mock.calls[0][0].patch).toEqual({
@@ -426,9 +426,9 @@ describe('PartyProfileSheet — edit', () => {
       message: 'new row violates row-level security policy for table "project_parties"',
     });
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save contact details' }));
 
     expect(
       await screen.findByText("Only this project's designer can edit its crew."),
@@ -450,9 +450,9 @@ describe('PartyProfileSheet — edit', () => {
       message: 'JSON object requested, multiple (or no) rows returned',
     });
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save contact details' }));
 
     expect(
       await screen.findByText("Only this project's designer can edit its crew."),
@@ -474,9 +474,9 @@ describe('PartyProfileSheet — edit', () => {
     // The seat is gone too — that is what "vanished" means for a carded seat.
     seatRefetch.mockResolvedValue({ data: { seat: null, identity: null } });
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save contact details' }));
 
     expect(
       await screen.findByText("This person's record just changed — refresh to see it."),
@@ -492,9 +492,9 @@ describe('PartyProfileSheet — edit', () => {
     });
     personRefetch.mockRejectedValue(new Error('offline'));
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save contact details' }));
 
     expect(
       await screen.findByText("Only this project's designer can edit its crew."),
@@ -504,9 +504,9 @@ describe('PartyProfileSheet — edit', () => {
   it('shows a write failure that is not a refusal in its own words', async () => {
     updateMutateAsync.mockRejectedValue(new Error('Network request failed'));
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact details' }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save contact details' }));
 
     expect(await screen.findByText('Network request failed')).toBeInTheDocument();
   });

@@ -253,7 +253,7 @@ describe("the address", () => {
     const rail = document.querySelector<HTMLElement>(
       "[data-people-desktop-rail]",
     );
-    fireEvent.click(within(rail!).getByRole("button", { name: /Threads/ }));
+    fireEvent.click(within(rail!).getByRole("button", { name: /Correspondence/ }));
     expect(screen.queryByTestId("company-card")).toBeNull();
   });
 });

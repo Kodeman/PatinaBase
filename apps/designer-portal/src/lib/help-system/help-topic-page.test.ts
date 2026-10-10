@@ -9,23 +9,23 @@ import { prefixSectionLabel, topicForPrefix } from './help-topic-page';
 describe('topicForPrefix', () => {
   it('resolves an exact topic prefix to its shelf', () => {
     expect(topicForPrefix('designer-portal/document/guide')?.label).toBe('Getting started');
-    expect(topicForPrefix('designer-portal/document/desk')?.label).toBe('The Desk & the Studio');
-    expect(topicForPrefix('designer-portal/document/orders')?.label).toBe('Ledgers & money');
-    expect(topicForPrefix('client-portal')?.label).toBe('For your clients');
+    expect(topicForPrefix('designer-portal/document/desk')?.label).toBe('Studio overview & navigation');
+    expect(topicForPrefix('designer-portal/document/orders')?.label).toBe('Studio administration');
+    expect(topicForPrefix('client-portal')?.label).toBe('Client portal help');
   });
 
   it('resolves a descendant deep link to the owning shelf', () => {
     expect(topicForPrefix('designer-portal/document/guide/what-is-the-desk')?.label).toBe(
       'Getting started',
     );
-    expect(topicForPrefix('designer-portal/document/library/piece')?.label).toBe('Rooms');
-    expect(topicForPrefix('client-portal/invoices/pay')?.label).toBe('For your clients');
+    expect(topicForPrefix('designer-portal/document/library/piece')?.label).toBe('Studio resources');
+    expect(topicForPrefix('client-portal/invoices/pay')?.label).toBe('Client portal help');
   });
 
   it('matches on segment boundaries, never bare startsWith', () => {
-    expect(topicForPrefix('designer-portal/document/margin')?.label).toBe('Your documents');
+    expect(topicForPrefix('designer-portal/document/margin')?.label).toBe('Project files');
     expect(topicForPrefix('designer-portal/document/margin-note')?.label).not.toBe(
-      'Your documents',
+      'Project files',
     );
   });
 

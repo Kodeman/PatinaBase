@@ -101,13 +101,13 @@ describe('Boards region head', () => {
     expect(
       screen.getByText(/Start the project.s visual direction/),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /expand/i })).not.toBeInTheDocument();
   });
 
   it('round-trips the fold: an explicit fold shows the seam, and unfolding it restores the head and body', () => {
     render(<ProjectMoodBoards projectId="project-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Fold ↑' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse ↑' }));
 
     const seam = screen.getByRole('button', { name: /no boards yet/i });
     expect(seam).toBeInTheDocument();
@@ -123,7 +123,7 @@ describe('Boards region head', () => {
       screen.getByText(/Start the project.s visual direction/),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /unfold/i }),
+      screen.queryByRole('button', { name: /expand/i }),
     ).not.toBeInTheDocument();
   });
 });

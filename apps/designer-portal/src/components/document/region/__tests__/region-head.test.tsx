@@ -107,7 +107,7 @@ describe('RegionHead', () => {
   it('renders the fold toggle expanded and pointed at the body', () => {
     const onFold = jest.fn();
     renderHead({ bodyId: 'region-approvals-body', onFold });
-    const fold = screen.getByRole('button', { name: 'Fold ↑' });
+    const fold = screen.getByRole('button', { name: 'Collapse ↑' });
     expect(fold).toHaveAttribute('aria-expanded', 'true');
     expect(fold).toHaveAttribute('aria-controls', 'region-approvals-body');
     expect(fold).toHaveAttribute('data-action-variant', 'tertiary');
@@ -120,7 +120,7 @@ describe('RegionHead', () => {
       bodyId: 'region-approvals-body',
       onFold,
     });
-    expect(screen.getByRole('button', { name: 'Fold ↑' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse ↑' })).toBeInTheDocument();
     expect(
       document.querySelectorAll('[data-action-variant="inked"]'),
     ).toHaveLength(0);

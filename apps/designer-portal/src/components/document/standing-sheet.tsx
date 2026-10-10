@@ -22,11 +22,12 @@ import {
   ffeActLandingOf,
   type StandingRowKind,
 } from '@/lib/document/act-names';
-import type {
-  LensAct,
-  LensInputItem,
-  LensSetupItem,
-  LensStandingItem,
+import {
+  standingDoorName,
+  type LensAct,
+  type LensInputItem,
+  type LensSetupItem,
+  type LensStandingItem,
 } from '@/lib/document/lens-band-derivation';
 import { classOfStandingRow, compareForNext } from '@/lib/document/need-class';
 import { DocumentAction, DocumentActionGroup } from './document-action';
@@ -179,6 +180,7 @@ export function StandingSheet({
    *  the door, else the act line 2 is printing, else the band. */
   triggerRef?: RefObject<HTMLElement | null>;
 }) {
+  const nameId = useId();
   // A setup act that lands on the paper (the vitals editor, the schedule)
   // puts the sheet back first. The sheet unlocks the page's scroll as it
   // closes and hands focus to its door one frame later, so the act runs a
@@ -367,6 +369,8 @@ export function StandingSheet({
     );
   }
 
+  // F2-6 — the heading reads the phrase; the sheet's name carries the door's
+  // count, so it agrees with the door that opened it.
   return (
     <DocSheet
       open={open}
@@ -375,7 +379,11 @@ export function StandingSheet({
       icon={AlertCircle}
       kind="standing"
       fallbackFocusRef={triggerRef}
+      labelledBy={nameId}
     >
+      <span id={nameId} className="sr-only">
+        {standingDoorName(count ?? items.length + inputs.length + setup.length)}
+      </span>
       <DocumentActionGroup
         surfaceKey="document"
         regionKey="standing-sheet"

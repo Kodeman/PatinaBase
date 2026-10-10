@@ -61,7 +61,7 @@ describe('OpenProjectSheet date validity', () => {
   it('opens a project with no start date when the date is cleared', () => {
     render(<OpenProjectSheet open onClose={jest.fn()} />);
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Project title' }), {
       target: { value: 'Lake house refresh' },
     });
 
@@ -73,7 +73,7 @@ describe('OpenProjectSheet date validity', () => {
     fireEvent.change(start, { target: { value: '' } });
     expect(start).toHaveValue('');
 
-    fireEvent.click(screen.getByRole('button', { name: /open the project/i }));
+    fireEvent.click(screen.getByRole('button', { name: /create project file/i }));
 
     expect(mutate).toHaveBeenCalledTimes(1);
     expect(mutate.mock.calls[0][0]).toEqual(
@@ -84,13 +84,13 @@ describe('OpenProjectSheet date validity', () => {
   it('carries a real start date through to the mutation', () => {
     render(<OpenProjectSheet open onClose={jest.fn()} />);
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Project title' }), {
       target: { value: 'Lake house refresh' },
     });
     fireEvent.change(screen.getByLabelText('Start date'), {
       target: { value: '2027-03-01' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /open the project/i }));
+    fireEvent.click(screen.getByRole('button', { name: /create project file/i }));
 
     expect(mutate).toHaveBeenCalledTimes(1);
     expect(mutate.mock.calls[0][0]).toEqual(
@@ -101,10 +101,10 @@ describe('OpenProjectSheet date validity', () => {
   it('disables opening the project while the date reports invalid, and re-enables once it reports valid', () => {
     render(<OpenProjectSheet open onClose={jest.fn()} />);
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Project title' }), {
       target: { value: 'Lake house refresh' },
     });
-    const submit = screen.getByRole('button', { name: /open the project/i });
+    const submit = screen.getByRole('button', { name: /create project file/i });
     expect(submit).not.toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Start date invalid' }));

@@ -162,9 +162,9 @@ beforeEach(() => {
 });
 
 const billingIsIntact = () => {
-  expect(screen.getByText("Billing")).toBeInTheDocument();
+  expect(screen.getByText("Billing settings")).toBeInTheDocument();
   expect(screen.getByLabelText("Card fee (%)")).toBeInTheDocument();
-  expect(screen.getByLabelText("Remit checks to")).toBeInTheDocument();
+  expect(screen.getByLabelText("Check remittance instructions")).toBeInTheDocument();
 };
 
 describe("Account · Studio · Agreement Library", () => {
@@ -202,7 +202,7 @@ describe("Account · Studio · Agreement Library", () => {
 
   it("sits below Billing, and below Wave 1's defaults card", () => {
     render(<AccountStudioPage />);
-    const billing = screen.getByText("Billing");
+    const billing = screen.getByText("Billing settings");
     const defaults = screen.getByText("Agreement defaults");
     const library = screen.getByText("Agreement Library");
     expect(

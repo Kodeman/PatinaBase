@@ -187,17 +187,17 @@ beforeEach(() => {
 describe("the six chips", () => {
   it('prints exactly six, in order, inside a group labelled "Narrow the book"', () => {
     renderDirectory([]);
-    const group = screen.getByRole("group", { name: "Narrow the book" });
+    const group = screen.getByRole("group", { name: "Filter directory" });
     expect(
       within(group)
         .getAllByRole("button")
         .map((b) => b.textContent),
-    ).toEqual(["Everyone", "Clients", "Crew", "Makers", "Studio", "Firms"]);
+    ).toEqual(["All contacts", "Clients", "Trades & contractors", "Makers & suppliers", "Studio team", "Companies"]);
   });
 
   it("Everyone is the pressed chip on open", () => {
     renderDirectory([]);
-    expect(screen.getByRole("button", { name: "Everyone" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "All contacts" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -206,12 +206,12 @@ describe("the six chips", () => {
   it("shows the trade line only under Crew and Makers", () => {
     const { unmount } = renderDirectory([], { chip: "crew" });
     expect(
-      screen.getByRole("group", { name: "Narrow by trade" }),
+      screen.getByRole("group", { name: "Filter by trade" }),
     ).toBeInTheDocument();
     unmount();
     renderDirectory([], { chip: "clients" });
     expect(
-      screen.queryByRole("group", { name: "Narrow by trade" }),
+      screen.queryByRole("group", { name: "Filter by trade" }),
     ).not.toBeInTheDocument();
   });
 });
@@ -404,7 +404,7 @@ describe("the duplicate band", () => {
       within(band).getByRole("button", { name: "Chidi Okonkwo" }),
     ).toBeInTheDocument();
     expect(
-      within(band).getByRole("button", { name: "Compare these two" }),
+      within(band).getByRole("button", { name: "Compare contact records" }),
     ).toBeInTheDocument();
     fireEvent.click(
       within(band).getByRole("button", { name: "Chidi Okonkwo" }),

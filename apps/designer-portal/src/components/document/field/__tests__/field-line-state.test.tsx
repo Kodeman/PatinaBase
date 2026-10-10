@@ -56,7 +56,7 @@ it.each(['sent', 'queued'])('clears the draft only after a %s receipt', async (s
   let finish!: (value: unknown) => void;
   mockInvoke.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
   const { draft } = composer();
-  fireEvent.click(screen.getByRole('button', { name: 'Send text' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Send text message' }));
   expect(draft).toHaveValue('Studio: hello');
   expect(screen.queryByText('Sent')).not.toBeInTheDocument();
   await waitFor(() => expect(mockInvoke).toHaveBeenCalledTimes(1));
@@ -72,7 +72,7 @@ it('keeps a deferred draft attached to its id with local due time and no second 
   expect(await screen.findByRole('status')).toHaveTextContent('Will send at ' + new Date(dueAt).toLocaleString());
   expect(draft).toHaveValue('Studio: hello');
   expect(container.querySelector('[data-message-id="deferred1"]')).not.toBeNull();
-  expect(screen.queryByRole('button', { name: 'Send text' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Send text message' })).not.toBeInTheDocument();
   fireEvent.keyDown(draft, { key: 'Enter' });
   expect(mockInvoke).toHaveBeenCalledTimes(1);
 });
@@ -87,7 +87,7 @@ it.each([
 ])('preserves the draft and focuses it for HTTP %s %j', async (status, facts, words) => {
   mockInvoke.mockResolvedValue({ data: null, error: { context: { status, json: async () => ({ status: 'failed', ...facts }) } } });
   const { draft } = composer();
-  fireEvent.click(screen.getByRole('button', { name: 'Send text' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Send text message' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(words);
   expect(draft).toHaveValue('Studio: hello');
   expect(draft).toHaveFocus();
@@ -119,7 +119,7 @@ it('Shift+Enter permits a newline; Enter sends once and IME Enter does not send'
 it('keeps a draft and focuses after a network error', async () => {
   mockInvoke.mockRejectedValue(new Error('network'));
   const { draft } = composer();
-  fireEvent.click(screen.getByRole('button', { name: 'Send text' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Send text message' }));
   await screen.findByRole('alert');
   expect(draft).toHaveValue('Studio: hello'); expect(draft).toHaveFocus();
 });
@@ -214,7 +214,7 @@ it("keeps a failed deferred id locked rather than creating a resend", async () =
   rerender(<PartySmsComposer partyId="party1" thread={[{ id: "deferred1", twilio_status: "failed", error_code: "30007" } as any]} />);
   expect(screen.getByText("Carrier blocked this text.")).toBeInTheDocument();
   expect(draft).toHaveValue("Studio: hello");
-  expect(screen.queryByRole("button", { name: "Send text" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Send text message" })).not.toBeInTheDocument();
 });
 it("does not nudge a lead before 30 minutes", () => {
   render(<FieldDesk population={{ cards: [message({ owner_user_id: null, created_at: new Date().toISOString() })], lines: [], isLoading: false, isError: false }} />, { wrapper: Wrapper });

@@ -96,14 +96,14 @@ describe('DeskContents — Begin column', () => {
     renderContents();
 
     expect(
-      screen.queryByRole('button', { name: /^Capture a lead/ }),
+      screen.queryByRole('button', { name: /^Record an inquiry/ }),
     ).not.toBeInTheDocument();
 
     expect(
-      screen.getByRole('button', { name: /Open a project/ }),
+      screen.getByRole('button', { name: /Create a project file/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /Draft a design agreement/ }),
+      screen.getByRole('button', { name: /Draft a services agreement/ }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /Add a maker/ }),
@@ -159,10 +159,10 @@ describe('DeskContents — Begin column', () => {
     renderContents();
 
     expect(
-      screen.getByRole('button', { name: /^Draw an invoice$/ }),
+      screen.getByRole('button', { name: /^Draft an invoice$/ }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /Draw an invoice · new/ }),
+      screen.queryByRole('button', { name: /Draft an invoice · new/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -190,13 +190,13 @@ describe('DeskContents — F38 static sub-labels', () => {
     renderContents();
 
     expect(
-      screen.getByRole('button', { name: /Library.*pieces and makers/s }),
+      screen.getByRole('button', { name: /Resource library.*Products and makers/s }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /People.*clients, makers, trades/s }),
+      screen.getByRole('button', { name: /Studio contacts.*Clients, makers and trades/s }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /The Scans.*measured rooms/s }),
+      screen.getByRole('button', { name: /Measured rooms.*Measured room records/s }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /^The Rooms/ }),
@@ -207,18 +207,18 @@ describe('DeskContents — F38 static sub-labels', () => {
     renderContents();
 
     expect(
-      screen.getByRole('button', { name: /Orders.*POs, receiving, claims/s }),
+      screen.getByRole('button', { name: /Purchase orders.*Purchase orders, receiving and claims/s }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: /Accounts.*invoices, receivables, earnings/s,
+        name: /Studio accounts.*Invoices, receivables and earnings/s,
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /Hours.*time in hand/s }),
+      screen.getByRole('button', { name: /Timesheets.*Recorded hours/s }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /The Post.*mail and messages/s }),
+      screen.getByRole('button', { name: /Studio inbox.*Correspondence and notifications/s }),
     ).toBeInTheDocument();
   });
 
@@ -226,16 +226,16 @@ describe('DeskContents — F38 static sub-labels', () => {
     renderContents();
 
     expect(
-      screen.getByRole('button', { name: /Open a project.*no proposal needed/is }),
+      screen.getByRole('button', { name: /Create a project file.*Direct project setup/is }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: /Draft a design agreement.*for an existing household/is,
+        name: /Draft a services agreement.*For a client on file/is,
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: /Add a maker.*a vendor on your roster/is,
+        name: /Add a maker or supplier.*Add to studio contacts/is,
       }),
     ).toBeInTheDocument();
   });
@@ -247,7 +247,7 @@ describe('DeskContents — the Hours line’s one act (HT-29)', () => {
     renderContents();
 
     expect(
-      screen.getByRole('button', { name: /hours to bill →/ }),
+      screen.getByRole('button', { name: /Invoice recorded hours/ }),
     ).toBeInTheDocument();
   });
 
@@ -261,7 +261,7 @@ describe('DeskContents — the Hours line’s one act (HT-29)', () => {
     renderContents();
 
     expect(
-      screen.queryByRole('button', { name: /hours to bill →/ }),
+      screen.queryByRole('button', { name: /Invoice recorded hours/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -270,7 +270,7 @@ describe('DeskContents — the Hours line’s one act (HT-29)', () => {
     renderContents();
 
     expect(
-      screen.queryByRole('button', { name: /hours to bill →|^hours →$/ }),
+      screen.queryByRole('button', { name: /Invoice recorded hours|^hours →$/ }),
     ).not.toBeInTheDocument();
   });
 

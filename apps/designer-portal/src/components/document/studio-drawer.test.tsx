@@ -115,32 +115,32 @@ describe('StudioDrawer', () => {
 
     const drawer = screen.getByRole('navigation', { name: 'Studio drawer' });
     expect(drawer).toHaveClass('min-[1180px]:grid');
-    expect(screen.getByRole('button', { name: 'Library' })).toHaveClass(
+    expect(screen.getByRole('button', { name: 'Resource library' })).toHaveClass(
       'min-h-11',
     );
-    expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Studio contacts' })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'The Scans' }),
+      screen.getByRole('button', { name: 'Measured rooms' }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Orders' }),
+      screen.queryByRole('button', { name: 'Purchase orders' }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
     const menu = screen.getByRole('group', { name: 'Ledgers' });
-    expect(within(menu).getByRole('button', { name: 'Orders' })).toHaveFocus();
-    expect(within(menu).getByRole('button', { name: 'Accounts' })).toHaveClass(
+    expect(within(menu).getByRole('button', { name: 'Purchase orders' })).toHaveFocus();
+    expect(within(menu).getByRole('button', { name: 'Studio accounts' })).toHaveClass(
       'min-h-11',
     );
     expect(
-      within(menu).getByRole('button', { name: 'Hours' }),
+      within(menu).getByRole('button', { name: 'Timesheets' }),
     ).toBeInTheDocument();
     expect(
       within(menu).queryByRole('button', { name: 'Feedback' }),
     ).not.toBeInTheDocument();
     // Feedback left the books hub entirely — the Tester widget owns it now.
     expect(
-      within(menu).queryByRole('button', { name: 'Leave a note' }),
+      within(menu).queryByRole('button', { name: 'Share feedback' }),
     ).not.toBeInTheDocument();
   });
 
@@ -148,16 +148,16 @@ describe('StudioDrawer', () => {
     render(<StudioDrawer />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
-    const ordersRow = screen.getByRole('button', { name: 'Orders' });
+    const ordersRow = screen.getByRole('button', { name: 'Purchase orders' });
     ordersRow.focus();
     fireEvent.click(ordersRow);
 
     // Opening the sheet closes the books menu, so the row DocSheet captured as
     // the pre-open activeElement is gone by the time it restores.
     expect(
-      screen.queryByRole('button', { name: 'Orders' }),
+      screen.queryByRole('button', { name: 'Purchase orders' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: 'Orders' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Purchase orders' })).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() =>
@@ -171,10 +171,10 @@ describe('StudioDrawer', () => {
   it('puts the most recently opened book first on the next visit', async () => {
     const first = render(<StudioDrawer />);
     fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Accounts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Studio accounts' }));
 
     expect(
-      screen.getByRole('dialog', { name: 'Accounts' }),
+      screen.getByRole('dialog', { name: 'Studio accounts' }),
     ).toBeInTheDocument();
     expect(
       window.localStorage.getItem('patina.document.recentStudioBook'),
@@ -197,7 +197,7 @@ describe('StudioDrawer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
 
     expect(
-      screen.queryByRole('button', { name: /Leave a note/i }),
+      screen.queryByRole('button', { name: /Share feedback/i }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Feedback' }),
@@ -258,7 +258,7 @@ describe('StudioDrawer', () => {
   it('W1 — hands free prints no doorway: there is no clock to open', () => {
     render(<StudioDrawer />);
 
-    expect(screen.getByText('Hands free')).toBeInTheDocument();
+    expect(screen.getByText('No active timer')).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /Open time controls/i }),
     ).not.toBeInTheDocument();
@@ -300,7 +300,7 @@ describe('StudioDrawer', () => {
     // its badge both moved to the Tester pill.
     const menu = screen.getByRole('group', { name: 'Ledgers' });
     expect(
-      within(menu).queryByRole('button', { name: /Leave a note/i }),
+      within(menu).queryByRole('button', { name: /Share feedback/i }),
     ).not.toBeInTheDocument();
   });
 });

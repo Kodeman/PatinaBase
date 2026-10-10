@@ -1037,8 +1037,12 @@ const shortSentenceOf = (item: LensStandingItem) =>
     ? `${item.short.state} · ${item.short.subject}`
     : `${item.short.state} ${item.short.days}D · ${item.short.subject}`;
 
-/** D2's door, in its own words: the word and the count, nothing else. */
-export const standingDoorLabel = (_count: number) => "Everything open on this job";
+/** D2's door, in its own words: the word and the count, nothing else. The
+ *  short visible form keeps the old width, so the line-2 measure holds. */
+export const standingDoorLabel = (count: number) => `All open · ${count}`;
+
+/** The door's and the sheet's accessible name: the full phrase and the count. */
+export const standingDoorName = (count: number) => `Everything open on this job, ${count}`;
 
 /** D1 — a need's act is named from the one table, whatever its source printed,
  *  with the client's first name where the act names her (499-1: `Nudge Mei`;

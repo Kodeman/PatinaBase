@@ -31,7 +31,7 @@ describe('matchSurfaces', () => {
       const boards = rows.filter((surface) => surface.key === 'boards');
 
       expect(boards).toHaveLength(1);
-      expect(boards[0].label).toBe('Boards');
+      expect(boards[0].label).toBe('Design boards');
       expect(rows.map((surface) => surface.key)).not.toContain('drafting-room');
       expect(rows.map((surface) => surface.label)).not.toContain('Mood boards');
     }

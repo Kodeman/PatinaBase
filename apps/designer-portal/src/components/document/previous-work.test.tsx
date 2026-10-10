@@ -113,7 +113,7 @@ describe('PreviousWork', () => {
       expect(screen.getByText('The record')).toBeInTheDocument();
       // Reconciliation §"Quiet regions" ratifies `Nothing yet` for the empty
       // read; F-07 caught the paraphrase.
-      expect(screen.getByText('Nothing yet')).toBeInTheDocument();
+      expect(screen.getByText('No recorded activity')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /open the record/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /fold/i })).not.toBeInTheDocument();
     });
@@ -260,7 +260,7 @@ describe('PreviousWork', () => {
         'data-density',
         'full',
       );
-      expect(screen.getByText('Nothing yet')).toBeInTheDocument();
+      expect(screen.getByText('No recorded activity')).toBeInTheDocument();
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
       expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
 
@@ -269,7 +269,7 @@ describe('PreviousWork', () => {
       });
       rerender(<PreviousWork count={0}>{null}</PreviousWork>);
 
-      expect(screen.getByText('Nothing yet')).toBeInTheDocument();
+      expect(screen.getByText('No recorded activity')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /open/i })).not.toBeInTheDocument();
       // `allowNoActs` still stands the guard down in both densities.
       expect(errorSpy).not.toHaveBeenCalled();
@@ -290,7 +290,7 @@ describe('PreviousWork', () => {
       const root = () => container.querySelector('[data-index-region="record"]');
 
       expect(root()).toHaveAttribute('data-density', 'quiet');
-      expect(container.textContent).toContain('Nothing yet');
+      expect(container.textContent).toContain('No recorded activity');
 
       // The read lands: three records, and the lens has still said nothing.
       act(() => {

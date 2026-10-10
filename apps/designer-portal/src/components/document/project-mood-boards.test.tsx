@@ -83,10 +83,10 @@ describe('ProjectMoodBoards', () => {
   // the leaf and quietly shuts the region on the paper.
   it('offers no fold inside the always-unfolded shelf leaf', () => {
     const { rerender } = render(<ProjectMoodBoards projectId="project-1" />);
-    expect(screen.getByRole('button', { name: /fold/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /collapse/i })).toBeInTheDocument();
 
     rerender(<ProjectMoodBoards projectId="project-1" alwaysUnfolded />);
-    expect(screen.queryByRole('button', { name: /fold/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /collapse/i })).not.toBeInTheDocument();
   });
 
   it('renders an id-less frozen snapshot read-only and continues it into the room', async () => {

@@ -88,7 +88,7 @@ const settledEmpty = {
  *  seam so they read the same body regardless of which side of the default
  *  they land on. */
 function unfoldIfNeeded() {
-  const seam = screen.queryByRole('button', { name: /unfold/i });
+  const seam = screen.queryByRole('button', { name: /expand/i });
   if (seam) fireEvent.click(seam);
 }
 
@@ -408,7 +408,7 @@ describe('MoneyRegion', () => {
       screen.queryByRole('heading', { name: 'Money' }),
     ).not.toBeInTheDocument();
     expect(screen.getByText('no budget yet · $0 authorized')).toBeVisible();
-    expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /expand/i })).toBeInTheDocument();
   });
 
   it('stays open for an overdue invoice even with nothing executed', () => {
@@ -434,7 +434,7 @@ describe('MoneyRegion', () => {
     render(<MoneyRegion projectId="project-1" />);
 
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
-    expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /expand/i })).not.toBeInTheDocument();
   });
 
   it('still refuses to fold itself when every milestone is planned but none is receivable', () => {
@@ -463,14 +463,14 @@ describe('MoneyRegion', () => {
 
     const { unmount } = render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /expand/i })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
 
     unmount();
     window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /expand/i })).toBeInTheDocument();
   });
 
   it('names the amendment by the section it is composed from', () => {
@@ -491,18 +491,18 @@ describe('MoneyRegion', () => {
     window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
     render(<MoneyRegion projectId="project-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
+    fireEvent.click(screen.getByRole('button', { name: /expand/i }));
 
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
     expect(screen.getByText('Account band')).toBeVisible();
-    expect(screen.getByRole('button', { name: /fold/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /collapse/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /fold/i }));
+    fireEvent.click(screen.getByRole('button', { name: /collapse/i }));
 
     expect(
       screen.queryByRole('heading', { name: 'Money' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /expand/i })).toBeInTheDocument();
   });
 
   it('draws an invoice from the ledger with the same call the accounts band makes', () => {
@@ -644,9 +644,9 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
 
     expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
     const head = document.querySelector('[data-region-head="money-head"]')!;
-    expect(head).toHaveTextContent('Nothing yet');
+    expect(head).toHaveTextContent('No recorded activity');
     expect(head).not.toHaveTextContent(/out|not drawn/);
-    expect(screen.getByText('Nothing yet', { selector: '.sr-only' })).toBeInTheDocument();
+    expect(screen.getByText('No recorded activity', { selector: '.sr-only' })).toBeInTheDocument();
   });
 
   it('publishes its density and its short reserve on the index root (OD-12)', () => {

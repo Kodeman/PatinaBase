@@ -274,7 +274,7 @@ describe('AccountStudioPage owner transitions', () => {
     expect(coOwnerRow).not.toBeNull();
     expect(
       within(coOwnerRow as HTMLElement).queryByRole('button', {
-        name: 'Remove',
+        name: 'Remove member',
       }),
     ).not.toBeInTheDocument();
 
@@ -373,7 +373,7 @@ describe('AccountStudioPage owner transitions', () => {
     const memberRow = screen.getByText('Team Member').closest('li');
     expect(memberRow).not.toBeNull();
     fireEvent.click(
-      within(memberRow as HTMLElement).getByRole('button', { name: 'Remove' }),
+      within(memberRow as HTMLElement).getByRole('button', { name: 'Remove member' }),
     );
     expect(removeMembership).toHaveBeenCalledWith('membership-member');
     expect(transferOwnership).not.toHaveBeenCalled();
@@ -438,7 +438,7 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
     const row = screen.getByText('invited@test.invalid').closest('li');
     expect(row).not.toBeNull();
     fireEvent.click(
-      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invitation' }),
     );
 
     expect(resendInvite).toHaveBeenCalledTimes(1);
@@ -470,7 +470,7 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
 
     const row = screen.getByText('invited@test.invalid').closest('li');
     expect(
-      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invitation' }),
     ).toBeInTheDocument();
   });
 
@@ -481,7 +481,7 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
     render(<AccountStudioPage />);
 
     expect(
-      screen.queryByRole('button', { name: 'Resend invite' }),
+      screen.queryByRole('button', { name: 'Resend invitation' }),
     ).not.toBeInTheDocument();
   });
 
@@ -496,7 +496,7 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
 
     const row = screen.getByText('invited@test.invalid').closest('li');
     fireEvent.click(
-      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invitation' }),
     );
 
     expect(
@@ -515,7 +515,7 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
 
     const row = screen.getByText('invited@test.invalid').closest('li');
     fireEvent.click(
-      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invitation' }),
     );
 
     expect(within(row as HTMLElement).getByText('smtp down')).toBeInTheDocument();
@@ -532,7 +532,7 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
 
     const row = screen.getByText('invited@test.invalid').closest('li');
     fireEvent.click(
-      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invitation' }),
     );
 
     expect(
@@ -559,7 +559,7 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
 
     const row = screen.getByText('invited@test.invalid').closest('li');
     fireEvent.click(
-      within(row as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+      within(row as HTMLElement).getByRole('button', { name: 'Resend invitation' }),
     );
 
     const [payload] = resendInvite.mock.calls[0];
@@ -595,7 +595,7 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
     const row2 = screen.getByText('invited2@test.invalid').closest('li');
 
     fireEvent.click(
-      within(row1 as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+      within(row1 as HTMLElement).getByRole('button', { name: 'Resend invitation' }),
     );
 
     // The active row spins…
@@ -606,7 +606,7 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
     // mutation instance, so a second concurrent resend would clobber
     // resendingMemberId / resendFeedback and strand the first row's spinner.
     expect(
-      within(row2 as HTMLElement).getByRole('button', { name: 'Resend invite' }),
+      within(row2 as HTMLElement).getByRole('button', { name: 'Resend invitation' }),
     ).toBeDisabled();
   });
 });
@@ -622,7 +622,7 @@ describe('AccountStudioPage — the studio rate card (HT-3)', () => {
     });
     const asMember = render(<AccountStudioPage />);
     expect(
-      asMember.queryByRole('heading', { name: 'Studio rates' }),
+      asMember.queryByRole('heading', { name: 'Studio rate schedule' }),
     ).not.toBeInTheDocument();
     asMember.unmount();
 
@@ -635,7 +635,7 @@ describe('AccountStudioPage — the studio rate card (HT-3)', () => {
     });
     render(<AccountStudioPage />);
     expect(
-      screen.getByRole('heading', { name: 'Studio rates' }),
+      screen.getByRole('heading', { name: 'Studio rate schedule' }),
     ).toBeInTheDocument();
   });
 
@@ -718,7 +718,7 @@ describe('AccountStudioPage — locations (C-13)', () => {
       mockUseOrganizations.mockReturnValue({ data: [organization(role)], isLoading: false });
       mockUseOrganizationMembers.mockReturnValue({ data: organizationMembers(role) });
       render(<AccountStudioPage />);
-      expect(screen.getByRole('heading', { name: 'Locations' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Studio locations' })).toBeInTheDocument();
       expect(mockLocationsEditor).toHaveBeenLastCalledWith({ organizationId: 'studio-1' });
     },
   );

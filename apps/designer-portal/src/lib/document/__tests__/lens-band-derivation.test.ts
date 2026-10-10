@@ -1532,17 +1532,17 @@ describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
 
   it('on Chen, names the balance with RECORD THE PAYMENT and counts two behind the door', () => {
     const { voice } = deriveLensBand(chen());
-    expect(voice.lead).toBe('Next');
-    expect(voice.form).toBe('short');
+    expect(voice.lead).toBe('Next ─');
+    expect(voice.form).toBe('long');
     expect(voice.sentence).toBe(
-      'PO WS-188 balance, 9 days overdue.',
+      'Pay Woodward & Sons the PO WS-188 balance, $12,400 — 9 days overdue.',
     );
     // F2-4 — every rung below it, in yield order; the act never yields.
-    expect(voice.rungs.map((rung) => rung.form)).toEqual(['short', 'act']);
-    expect(voice.rungs[1]).toEqual({ form: 'act', lead: 'Next ─', sentence: '' });
+    expect(voice.rungs.map((rung) => rung.form)).toEqual(['long', 'short', 'act']);
+    expect(voice.rungs[2]).toEqual({ form: 'act', lead: 'Next ─', sentence: '' });
     expect(voice.next?.act.label).toBe('Record the payment');
     expect(voice.standingCount).toBe(2);
-    expect(standingDoorLabel(voice.standingCount)).toBe('Everything open on this job');
+    expect(standingDoorLabel(voice.standingCount)).toBe('All open · 2');
     expect(voice.doorInDock).toBe(false);
   });
 
@@ -1787,7 +1787,7 @@ describe('deriveLensBand · the proposal’s inputs collapse to one row (F14)', 
     expect(voice.standingCount).toBe(0);
   });
 
-  it('stands as one row with one act behind `Everything open on this job` when Next names something else', () => {
+  it('stands as one row with one act behind `All open · 1` when Next names something else', () => {
     const onAct = jest.fn();
     const { voice } = deriveLensBand(
       elena({ needs: [CHEN_NEEDS[1]], now: NOW, ownAct: { ...WRITE, onAct } }),
@@ -1798,7 +1798,7 @@ describe('deriveLensBand · the proposal’s inputs collapse to one row (F14)', 
     expect(voice.inputs[0].act?.label).toBe('Write the proposal');
     voice.inputs[0].act?.onAct();
     expect(onAct).toHaveBeenCalledTimes(1);
-    expect(standingDoorLabel(voice.standingCount)).toBe('Everything open on this job');
+    expect(standingDoorLabel(voice.standingCount)).toBe('All open · 1');
   });
 
   it.each<LensSpreadKind>(['direction', 'proposal'])(
@@ -2088,7 +2088,7 @@ describe('deriveLensBand · FR3: one need, one row (F3-9, 512-7)', () => {
     expect(voice.standingCount).toBe(1);
   });
 
-  it('Chen: `Everything open on this job` — 1 stuck + 4 setup, Next uncounted', () => {
+  it('Chen: `All open · 5` — 1 stuck + 4 setup, Next uncounted', () => {
     const { voice } = deriveLensBand(
       chen({
         needs: [CHEN_NEEDS[1], SCHEDULE_NEED],
@@ -2106,7 +2106,7 @@ describe('deriveLensBand · FR3: one need, one row (F3-9, 512-7)', () => {
     expect(voice.standing.find((item) => item.key === 'ticket:spec')?.act?.label).toBe(
       'Fill the 3 placeholders',
     );
-    expect(standingDoorLabel(voice.standingCount)).toBe('Everything open on this job');
+    expect(standingDoorLabel(voice.standingCount)).toBe('All open · 5');
   });
 });
 
@@ -2153,7 +2153,7 @@ describe('deriveLensBand · FR3: Cedar’s band sentence is D6’s reading (F3-1
     expect(voice.sentence).toBe(LONG);
   });
 
-  it('Cedar at 1440, `Standing · 4` beside it: the short reading, never the act alone', () => {
+  it('Cedar at 1440, `All open · 4` beside it: the short reading, never the act alone', () => {
     const voice = cedar({
       needs: [
         need('sched-0', 'schedule_unconfigured', 'Name the phases for this project', 'Open the schedule'),

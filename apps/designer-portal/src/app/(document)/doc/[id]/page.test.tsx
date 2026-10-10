@@ -1570,7 +1570,7 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(
-      screen.getByRole('region', { name: 'The job' }),
+      screen.getByRole('region', { name: 'Project overview' }),
     ).not.toHaveTextContent('No client linked');
     openStanding();
     expect(setupRows()).toEqual([expect.stringContaining('No client linked')]);
@@ -1638,7 +1638,7 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    const band = screen.getByRole('region', { name: 'The job' });
+    const band = screen.getByRole('region', { name: 'Project overview' });
     expect(band).not.toHaveTextContent('Name the phases for this project');
     // Line 2 is the stage's own guide line; setup stands behind the door.
     expect(band.querySelector('[data-lens-line2-kind]')).toHaveAttribute(
@@ -1672,7 +1672,7 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(
-      screen.getByRole('region', { name: 'The job' }),
+      screen.getByRole('region', { name: 'Project overview' }),
     ).toHaveTextContent('Confirm the site measure');
     expect(document.querySelector('[data-standing-setup-row]')).toBeNull();
   });
@@ -1903,7 +1903,7 @@ describe('DocumentPage guide activation', () => {
         render(<DocumentPage params={fulfilledParams} />);
 
         expect(band()).not.toBeNull();
-        expect(screen.getByRole('region', { name: 'The job' })).toBe(band());
+        expect(screen.getByRole('region', { name: 'Project overview' })).toBe(band());
       },
     );
 
@@ -2740,7 +2740,7 @@ describe('DocumentPage guide activation', () => {
       render(<DocumentPage params={fulfilledParams} />);
 
       expect(bandLine2()?.getAttribute('data-lens-line2-kind')).toBe('next');
-      expect(screen.getByRole('button', { name: 'Standing · 2' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Everything open on this job, 2' })).toBeInTheDocument();
       // FR6 F6-10 (D20) — no maker is recorded, so the held ask's repair is
       // Next: `Add the maker`, quoting the reading. The shorter act leaves room
       // for the long reading at 1440.

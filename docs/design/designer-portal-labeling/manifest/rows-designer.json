@@ -27267,7 +27267,7 @@
       "element": "Project standing heading"
     },
     "state": "default",
-    "source": "apps/designer-portal/src/components/document/standing-sheet.tsx:367",
+    "source": "apps/designer-portal/src/components/document/standing-sheet.tsx:378",
     "current": "Standing ·",
     "proposed": "Everything open on this job",
     "meaning": "Project standing heading in apps/designer-portal/src/components/document/standing-sheet.tsx; presentation copy only, with existing behavior and access unchanged.",
@@ -27276,9 +27276,9 @@
       "US-25 Day Sheet"
     ],
     "exception": null,
-    "verify": "manual rendered-copy check at apps/designer-portal/src/components/document/standing-sheet.tsx",
+    "verify": "apps/designer-portal/src/components/document/__tests__/standing-sheet.test.tsx",
     "status": "implemented",
-    "evidence": "D1 display source and associated owner tests; verified after Day Sheet baseline 4b5285d0a."
+    "evidence": "standing-sheet.tsx:378 title \"Everything open on this job\" (unchanged heading). Orchestrator ruling 2026-10-10 (SQ-759 c_mv2jk2yt_6512c9, option A): the US-25 phrase \"Everything open on this job\" lives on in the sheet heading and the accessible names; \"All open · {count}\" is the short visible door form, the same length as \"Standing · N\", so the count and the lens-band line-2 measure are kept. Tests: standing-sheet.test.tsx, lens-band.test.tsx."
   },
   {
     "id": "C-10002",
@@ -27289,16 +27289,16 @@
       "element": "Project standing door label"
     },
     "state": "default",
-    "source": "apps/designer-portal/src/lib/document/lens-band-derivation.ts:1039",
+    "source": "apps/designer-portal/src/lib/document/lens-band-derivation.ts:1042",
     "current": "Standing ·",
-    "proposed": "Everything open on this job",
+    "proposed": "All open · {count}",
     "meaning": "Project standing door label in apps/designer-portal/src/lib/document/lens-band-derivation.ts; presentation copy only, with existing behavior and access unchanged.",
     "owner": "D1",
     "depends": [],
     "exception": null,
-    "verify": "manual rendered-copy check at apps/designer-portal/src/lib/document/lens-band-derivation.ts",
+    "verify": "apps/designer-portal/src/lib/document/__tests__/lens-band-derivation.test.ts",
     "status": "implemented",
-    "evidence": "D1 display source and associated owner tests; verified after Day Sheet baseline 4b5285d0a."
+    "evidence": "lens-band-derivation.ts:1042 standingDoorLabel = \"All open · {count}\"; consumed by lens-band.tsx:488 and letterhead-instruments More row. Orchestrator ruling 2026-10-10 (SQ-759 c_mv2jk2yt_6512c9, option A): the US-25 phrase \"Everything open on this job\" lives on in the sheet heading and the accessible names; \"All open · {count}\" is the short visible door form, the same length as \"Standing · N\", so the count and the lens-band line-2 measure are kept. Tests: lens-band-derivation.test.ts, lens-band.test.tsx, letterhead-instruments.test.tsx."
   },
   {
     "id": "C-10003",
@@ -27309,18 +27309,18 @@
       "element": "Standing sheet accessible name"
     },
     "state": "aria",
-    "source": "apps/designer-portal/src/components/document/standing-sheet.tsx:375",
+    "source": "apps/designer-portal/src/components/document/standing-sheet.tsx:384",
     "current": "Standing actions",
-    "proposed": "Everything open on this job",
+    "proposed": "Everything open on this job, {count}",
     "meaning": "Standing sheet accessible name in apps/designer-portal/src/components/document/standing-sheet.tsx; presentation copy only, with existing behavior and access unchanged.",
     "owner": "D1",
     "depends": [
       "US-25 Day Sheet"
     ],
     "exception": null,
-    "verify": "manual rendered-copy check at apps/designer-portal/src/components/document/standing-sheet.tsx",
+    "verify": "apps/designer-portal/src/components/document/__tests__/standing-sheet.test.tsx",
     "status": "implemented",
-    "evidence": "D1 display source and associated owner tests; verified after Day Sheet baseline 4b5285d0a."
+    "evidence": "standing-sheet.tsx:382-385 DocSheet labelledBy an sr-only standingDoorName(count) = \"Everything open on this job, {count}\" (lens-band-derivation.ts:1045). Orchestrator ruling 2026-10-10 (SQ-759 c_mv2jk2yt_6512c9, option A): the US-25 phrase \"Everything open on this job\" lives on in the sheet heading and the accessible names; \"All open · {count}\" is the short visible door form, the same length as \"Standing · N\", so the count and the lens-band line-2 measure are kept. Tests: standing-sheet.test.tsx (toHaveAccessibleName with count), lens-band.test.tsx."
   },
   {
     "id": "C-10004",
@@ -27408,7 +27408,7 @@
     "exception": null,
     "verify": "manual rendered-copy check at apps/designer-portal/src/lib/document/act-names.ts",
     "status": "implemented",
-    "evidence": "apps/designer-portal/src/lib/document/act-names.ts:120 display copy changed; manual rendered-copy check at apps/designer-portal/src/lib/document/act-names.ts"
+    "evidence": "apps/designer-portal/src/lib/document/act-names.ts:122-123 classify both \"Draw an invoice\" and \"Draft an invoice\" as plain: D2 money-region (C-0326) and account-band (C-0343) still emit \"Draw an invoice\" until those rows land; act-label-agreement.test.ts unchanged and passing."
   },
   {
     "id": "C-10008",
@@ -32135,5 +32135,27 @@
     "verify": "apps/designer-portal/src/components/document/command-bar.test.tsx",
     "status": "implemented",
     "evidence": "apps/designer-portal/src/components/document/command-bar.tsx:1573 display copy changed; apps/designer-portal/src/components/document/command-bar.test.tsx"
+  },
+  {
+    "id": "C-20010",
+    "audience": "designer",
+    "surface": {
+      "area": "Supplemental document",
+      "route": "apps/designer-portal/src/components/document/lens-band.tsx",
+      "element": "Project standing door accessible name"
+    },
+    "state": "aria",
+    "source": "apps/designer-portal/src/components/document/lens-band.tsx:478",
+    "current": "Standing · {count}",
+    "proposed": "Everything open on this job, {count}",
+    "meaning": "Accessible name of the lens-band Standing door; the visible label is the short form \"All open · {count}\" (C-10002).",
+    "owner": "D1",
+    "depends": [
+      "US-25 Day Sheet"
+    ],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/__tests__/lens-band.test.tsx",
+    "status": "implemented",
+    "evidence": "lens-band.tsx:478 aria-label={standingDoorName(count)}. Orchestrator ruling 2026-10-10 (SQ-759 c_mv2jk2yt_6512c9, option A): the US-25 phrase \"Everything open on this job\" lives on in the sheet heading and the accessible names; \"All open · {count}\" is the short visible door form, the same length as \"Standing · N\", so the count and the lens-band line-2 measure are kept. Tests: lens-band.test.tsx (door button name with count), doc/[id]/page.test.tsx:2743."
   }
 ]

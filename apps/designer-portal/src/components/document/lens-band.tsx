@@ -28,6 +28,7 @@ import {
 } from '@/lib/document/lens-constants';
 import {
   standingDoorLabel,
+  standingDoorName,
   type LensAct,
   type LensBandModel,
   type LensBandLine2,
@@ -474,7 +475,8 @@ export function LensBand({
                   onStandingOpened?.();
                   setSheetOpen(true);
                 }}
-                // D2 — `Standing · 3`, the word and the count, in her words:
+                aria-label={standingDoorName(door.standingCount)}
+                // D2 — `All open · 3`, the word and the count, in her words:
                 // not caps, never a kind summary. F2-22 — terracotta only for
                 // money or a signature behind it, clay otherwise.
                 className={`ml-auto shrink-0 whitespace-nowrap font-mono text-[11px] tracking-[0.04em] underline underline-offset-[3px] ${

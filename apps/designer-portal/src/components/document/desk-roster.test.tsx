@@ -294,21 +294,21 @@ describe('DeskRoster — the acts', () => {
 describe('DeskRoster — By person', () => {
   async function toggle() {
     await act(async () => {
-      await userEvent.setup().click(screen.getByRole('button', { name: 'By person' }));
+      await userEvent.setup().click(screen.getByRole('button', { name: 'By team member' }));
     });
   }
 
   it('offers no By person act when no member of the studio can be named', () => {
     render(<DeskRoster roster={roster()} />);
-    expect(screen.queryByRole('button', { name: 'By person' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'By team member' })).toBeNull();
   });
 
   it('regroups the same lines by person, unassigned under the principal', async () => {
     const { container } = render(<DeskRoster roster={roster()} studioMembers={STUDIO} />);
-    const byPerson = screen.getByRole('button', { name: 'By person' });
+    const byPerson = screen.getByRole('button', { name: 'By team member' });
     expect(byPerson).toHaveAttribute('aria-pressed', 'false');
     await toggle();
-    expect(screen.getByRole('button', { name: 'By person' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'By team member' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -432,7 +432,7 @@ describe('DeskRoster — the line act agrees with the paper (FR4 Fix 5)', () => 
   it('one-voice on: setup at rest, Respond to the inquiry, Nudge the client', () => {
     const { container } = render(<DeskRoster roster={derived(true)} />);
 
-    const cedarAct = screen.getByRole('link', { name: 'Open the job — Cedar house' });
+    const cedarAct = screen.getByRole('link', { name: 'Open project file — Cedar house' });
     expect(cedarAct.closest('[data-roster-group]')).toHaveAttribute('data-roster-group', 'rest');
     expect(screen.queryByText(/Name the phases for this project/)).toBeNull();
 
@@ -453,7 +453,7 @@ describe('DeskRoster — the line act agrees with the paper (FR4 Fix 5)', () => 
   it('one-voice off: each line keeps its own act', () => {
     render(<DeskRoster roster={derived(false)} />);
     expect(screen.getByRole('link', { name: 'Open the schedule — Cedar house' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open the job — Wright apartment' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open project file — Wright apartment' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Follow up — Aspen residence' })).toBeInTheDocument();
   });
 });

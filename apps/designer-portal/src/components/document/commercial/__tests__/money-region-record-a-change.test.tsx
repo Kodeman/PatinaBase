@@ -92,7 +92,7 @@ describe('The Money head with ask-the-paper on (F16, R33)', () => {
       'Record a change',
       'Hours · this project ↗',
     ]);
-    expect(acts.some((act) => /Fold/.test(act))).toBe(true);
+    expect(acts.some((act) => /Collapse/.test(act))).toBe(true);
     expect(acts).not.toContain('Amendment');
     expect(
       document.querySelectorAll('[data-action-key="compose-project-amendment"]'),

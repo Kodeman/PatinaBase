@@ -121,7 +121,7 @@ describe("PartyProfileSheet — opted_out is a locked state, never a designer-fl
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(screen.queryByText("Invite to texts")).not.toBeInTheDocument();
+    expect(screen.queryByText("Send text consent invitation")).not.toBeInTheDocument();
   });
 });
 
@@ -145,7 +145,7 @@ describe('PartyProfileSheet — pending renders as "invite sent", no resend cont
         .queryAllByRole("button")
         .some((el) => /resend/i.test(el.textContent ?? "")),
     ).toBe(false);
-    expect(screen.queryByText("Invite to texts")).not.toBeInTheDocument();
+    expect(screen.queryByText("Send text consent invitation")).not.toBeInTheDocument();
   });
 });
 
@@ -169,7 +169,7 @@ describe("PartyProfileSheet — the invite control is hidden without a phone on 
       screen.getByText("Add a phone number to invite this party to texts."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(screen.queryByText("Invite to texts")).not.toBeInTheDocument();
+    expect(screen.queryByText("Send text consent invitation")).not.toBeInTheDocument();
   });
 });
 
@@ -189,7 +189,7 @@ describe("PartyProfileSheet — not_asked with a phone shows the invite-to-texts
       />,
     );
 
-    const submit = screen.getByRole("button", { name: "Invite to texts" });
+    const submit = screen.getByRole("button", { name: "Send text consent invitation" });
     expect(submit).not.toBeDisabled();
     expect(submit).toHaveAttribute("aria-disabled", "true");
     expect(submit).toHaveAttribute("aria-describedby", "field-invite-reason");
@@ -211,7 +211,7 @@ describe("PartyProfileSheet — not_asked with a phone shows the invite-to-texts
 
     fireEvent.click(screen.getByRole("checkbox"));
     // No method chosen, no evidence typed yet.
-    fireEvent.click(screen.getByText("Invite to texts"));
+    fireEvent.click(screen.getByText("Send text consent invitation"));
 
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent(
@@ -255,7 +255,7 @@ describe("PartyProfileSheet — not_asked with a phone shows the invite-to-texts
     fireEvent.change(screen.getByLabelText("Consent record"), {
       target: { value: "Told me at the site kickoff on Aug 8" },
     });
-    fireEvent.click(screen.getByText("Invite to texts"));
+    fireEvent.click(screen.getByText("Send text consent invitation"));
 
     expect(recordConsentMutate).toHaveBeenCalledTimes(1);
     const [input] = recordConsentMutate.mock.calls[0];
@@ -284,6 +284,6 @@ describe("PartyProfileSheet — granted keeps the existing texting composer", ()
     );
 
     expect(screen.getByLabelText("Send a text")).toBeInTheDocument();
-    expect(screen.queryByText("Invite to texts")).not.toBeInTheDocument();
+    expect(screen.queryByText("Send text consent invitation")).not.toBeInTheDocument();
   });
 });

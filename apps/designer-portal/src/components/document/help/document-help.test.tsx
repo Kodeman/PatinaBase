@@ -235,7 +235,7 @@ describe('DocumentHelpPanel (host surfaces answer, and the KEYS block)', () => {
       openHelp({ source: 'sheet-head', surfaceKey: DOCUMENT_SURFACE_KEYS.orders });
     });
     const keys = screen.getByTestId('panel-keys');
-    expect(keys).toHaveTextContent('Orders');
+    expect(keys).toHaveTextContent('Purchase orders');
     expect(keys).toHaveTextContent('G');
     expect(keys).toHaveTextContent('O');
   });
@@ -252,7 +252,7 @@ describe('R2-F2 — the "What changed" doorway follows the teaching-notes flag',
     act(() => {
       openHelp();
     });
-    expect(screen.queryByRole('link', { name: /What changed/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Release notes/ })).not.toBeInTheDocument();
   });
 
   it('prints the What changed link with the flag on', () => {
@@ -261,6 +261,6 @@ describe('R2-F2 — the "What changed" doorway follows the teaching-notes flag',
     act(() => {
       openHelp();
     });
-    expect(screen.getByRole('link', { name: /What changed/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Release notes/ })).toBeInTheDocument();
   });
 });

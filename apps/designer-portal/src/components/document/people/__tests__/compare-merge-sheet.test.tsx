@@ -208,14 +208,14 @@ describe("CompareMergeSheet", () => {
     ).map((el) => el.getAttribute("data-compare-field"));
     expect(fields).toEqual([
       "Name",
-      "What they are",
-      "Firm",
+      "Contact type",
+      "Company",
       "Mobile",
       "Email",
-      "Contact rule",
-      "Papers on file",
-      "Seats on jobs",
-      "In the book since",
+      "Contact restrictions",
+      "Documents on file",
+      "Project assignments",
+      "Date added",
     ]);
     expect(screen.getByText("adaeze@okonkwo.example")).toBeInTheDocument();
     expect(screen.getByText("chidi@okonkwo.example")).toBeInTheDocument();
@@ -249,14 +249,14 @@ describe("CompareMergeSheet", () => {
     ).map((el) => el.getAttribute("data-compare-field"));
     expect(fields).toEqual([
       "Name",
-      "What they are",
-      "Firm",
+      "Contact type",
+      "Company",
       "Mobile",
       "Email",
-      "Contact rule",
-      "Papers on file",
-      "Seats on jobs",
-      "In the book since",
+      "Contact restrictions",
+      "Documents on file",
+      "Project assignments",
+      "Date added",
       "Verdict",
       "Trades",
       "Specialties",
@@ -326,7 +326,7 @@ describe("CompareMergeSheet", () => {
   it("merges the pair the studio chose, with the evidence it named", async () => {
     render(<CompareMergeSheet {...props} />);
     fireEvent.change(
-      screen.getByLabelText("What makes these the same person"),
+      screen.getByLabelText("Merge reason"),
       {
         target: { value: "email" },
       },
@@ -381,7 +381,7 @@ describe("CompareMergeSheet", () => {
       company_id: null,
     };
     render(<CompareMergeSheet {...props} />);
-    const firm = document.querySelector('[data-compare-field="Firm"]');
+    const firm = document.querySelector('[data-compare-field="Company"]');
     expect(firm?.textContent).toContain("Northgate Electric");
   });
 

@@ -221,7 +221,7 @@ describe('deriveDeskRoster — the line', () => {
 
     expect(roster.groups[0].lines[0].state).toBe('Family m · punch list open');
     expect(roster.groups[1].lines[0].state).toBe(
-      'quiet · no current alert',
+      'No current alert',
     );
   });
 
@@ -358,7 +358,7 @@ describe('deriveDeskRoster — the line', () => {
     const paused = row('p', 'project', { is_paused: true });
     const roster = deriveDeskRoster(input({ live: [paused] }), NOW);
 
-    expect(roster.groups[0].lines[0].state).toContain('paused');
+    expect(roster.groups[0].lines[0].state).toContain('On hold');
     expect(roster.groups[0].lines[0].state).not.toContain('nothing needs your hand');
   });
 
@@ -1024,7 +1024,7 @@ describe('N2 · the cards rank by the band’s Next order, then name', () => {
     const result = claimsOf({ live: [mine], folders: [folder(mine)] });
 
     expect(result.cards[0].stage).toBe('project');
-    expect(result.cards[0].stageLabel).toBe('Project');
+    expect(result.cards[0].stageLabel).toBe('Project delivery');
     expect(result.cards[0].custody).toBe('Action with you');
   });
 });
@@ -1478,7 +1478,7 @@ describe('fix-now 6 — at rest only when every modelled feed answered', () => {
       const [line] = roster.groups.flatMap((g) => g.lines);
       expect(line.notChecked).toBeNull();
       expect(line.custody).toBe('No current alert');
-      expect(line.state).toContain('quiet · no current alert');
+      expect(line.state).toContain('No current alert');
     }
   });
 
@@ -1487,7 +1487,7 @@ describe('fix-now 6 — at rest only when every modelled feed answered', () => {
     const roster = deriveDeskRoster(input({ live: [paused], unreadFeeds: ['invoices'] }), NOW);
     const [line] = roster.groups.flatMap((g) => g.lines);
     expect(line.notChecked).toBeNull();
-    expect(line.state).toContain('paused');
+    expect(line.state).toContain('On hold');
   });
 });
 

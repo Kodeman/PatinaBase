@@ -71,10 +71,10 @@ describe("flag OFF — today’s sheet, unchanged", () => {
 
   it("sends today’s body shape, with no letter key", async () => {
     open();
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email address"), {
       target: { value: "dave@okonkwo.net" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
     await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
     expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty("letter");
     expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty("note");
@@ -154,7 +154,7 @@ describe("flag ON — R12’s rename and the letter", () => {
     fireEvent.change(screen.getByLabelText("Full name (optional)"), {
       target: { value: "Dave Okonkwo" },
     });
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email address"), {
       target: { value: "dave@okonkwo.net" },
     });
     fireEvent.change(screen.getByLabelText("A line for Dave"), {
@@ -174,7 +174,7 @@ describe("flag ON — R12’s rename and the letter", () => {
 
   it("sends no letter key at all when the checkbox is off", async () => {
     open();
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email address"), {
       target: { value: "dave@okonkwo.net" },
     });
     fireEvent.click(screen.getByLabelText("Send them the letter"));
@@ -197,7 +197,7 @@ describe("flag ON — R12’s rename and the letter", () => {
     fireEvent.change(screen.getByLabelText("Full name (optional)"), {
       target: { value: "Dave Okonkwo" },
     });
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email address"), {
       target: { value: "dave@okonkwo.net" },
     });
     fireEvent.click(
@@ -230,7 +230,7 @@ describe("flag ON — R12’s rename and the letter", () => {
     fireEvent.change(screen.getByLabelText("Full name (optional)"), {
       target: { value: "Priya Raman" },
     });
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email address"), {
       target: { value: "priya@ramanhouse.com" },
     });
     fireEvent.click(screen.getByLabelText("Send Priya the letter"));
@@ -261,7 +261,7 @@ describe("flag ON — R12’s rename and the letter", () => {
     fireEvent.change(screen.getByLabelText("Full name (optional)"), {
       target: { value: "Priya Raman" },
     });
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email address"), {
       target: { value: "priya@ramanhouse.com" },
     });
     fireEvent.click(
@@ -359,7 +359,7 @@ describe("P21 — a homeowner reached by phone", () => {
 
     it("carries no phone and no consent on an email-only add", async () => {
       openFor("org-1");
-      fireEvent.change(screen.getByLabelText("Email"), {
+      fireEvent.change(screen.getByLabelText("Email address"), {
         target: { value: "dave@okonkwo.net" },
       });
       fireEvent.click(

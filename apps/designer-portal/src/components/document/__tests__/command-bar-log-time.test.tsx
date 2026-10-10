@@ -201,20 +201,20 @@ describe('⌘K · Log time', () => {
     render(<Tree />);
     act(() => openPalette());
 
-    const verb = screen.getByRole('option', { name: /Log time/ });
+    const verb = screen.getByRole('option', { name: /Record time/ });
     expect(verb).toBeInTheDocument();
     // "This surface" is where an in-hand-gated row would live; with nothing
     // open that group is absent entirely, and the verb is still here.
     expect(
-      screen.queryByRole('group', { name: 'This surface' }),
+      screen.queryByRole('group', { name: 'Current workspace' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Begin' })).toContainElement(verb);
+    expect(screen.getByRole('group', { name: 'New work' })).toContainElement(verb);
   });
 
   it('opens a form, not a navigation', () => {
     render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
 
     expect(screen.getByRole('dialog', { name: 'Log time' })).toBeVisible();
     expect(mockPush).not.toHaveBeenCalled();
@@ -223,7 +223,7 @@ describe('⌘K · Log time', () => {
   it('lists documents the viewer is not rostered to, and says she will be seated (HT-25)', () => {
     render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
 
     const picker = screen.getByRole('combobox', { name: 'Document' });
     expect(
@@ -243,7 +243,7 @@ describe('⌘K · Log time', () => {
   it("writes source='command_bar' with the date, the stated billable and no rate", async () => {
     render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
       target: { value: 'proj-stranger' },
@@ -288,7 +288,7 @@ describe('⌘K · Log time', () => {
   it('leaves the activity unset unless it is chosen (HT-24)', async () => {
     render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
 
     expect(screen.getByRole('combobox', { name: 'Activity' })).toHaveValue('');
     fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
@@ -309,7 +309,7 @@ describe('⌘K · Log time', () => {
     // backspace away.
     render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
       target: { value: 'proj-stranger' },
@@ -337,7 +337,7 @@ describe('⌘K · Log time', () => {
     mockAuthority = { data: null, isLoading: true, isError: false };
     render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
 
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Minutes' }), {
       target: { value: '45' },
@@ -390,7 +390,7 @@ describe('⌘K · Log time', () => {
     mockAuthority = { data: null, isLoading: false, isError: true };
     render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
       target: { value: 'proj-stranger' },
@@ -419,7 +419,7 @@ describe('⌘K · Log time', () => {
   it('marks a date more than 30 days back as backdated, and today as nothing (HT-13)', () => {
     render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
 
     expect(screen.queryByText('backdated')).not.toBeInTheDocument();
 
@@ -440,7 +440,7 @@ describe('⌘K · Log time', () => {
     mockHeldProjectId = 'proj-rostered';
     render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
 
     expect(screen.getByRole('combobox', { name: 'Document' })).toHaveValue(
       'proj-rostered',
@@ -450,7 +450,7 @@ describe('⌘K · Log time', () => {
   it('does not carry the last document into the next opening', () => {
     render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
       target: { value: 'proj-stranger' },
@@ -461,7 +461,7 @@ describe('⌘K · Log time', () => {
     ).not.toBeInTheDocument();
 
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
     // Nothing is in hand this time, so the picker stands empty — not on
     // whatever house was filed against a moment ago.
     expect(screen.getByRole('combobox', { name: 'Document' })).toHaveValue('');
@@ -477,7 +477,7 @@ describe('⌘K · Log time', () => {
     it('offers "Studio time — no document" to a member of a design studio, and to nobody else', () => {
       const none = render(<Tree />);
       act(() => openPalette());
-      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+      fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
       expect(
         screen.queryByRole('option', { name: 'Studio time — no document' }),
       ).not.toBeInTheDocument();
@@ -486,7 +486,7 @@ describe('⌘K · Log time', () => {
       mockStudios = MEMBER_OF_ONE_STUDIO;
       render(<Tree />);
       act(() => openPalette());
-      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+      fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
       expect(
         screen.getByRole('option', { name: 'Studio time — no document' }),
       ).toBeInTheDocument();
@@ -505,7 +505,7 @@ describe('⌘K · Log time', () => {
       });
       render(<Tree />);
       act(() => openPalette());
-      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+      fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
 
       fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
         target: { value: '__internal__' },
@@ -547,7 +547,7 @@ describe('⌘K · Log time', () => {
       mockStudios = MEMBER_OF_ONE_STUDIO;
       render(<Tree />);
       act(() => openPalette());
-      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+      fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
       fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
         target: { value: '__internal__' },
       });
@@ -576,7 +576,7 @@ describe('⌘K · Log time', () => {
       mockMyRateRoles = ['support_designer', 'bookkeeper'];
       render(<Tree />);
       act(() => openPalette());
-      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+      fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
       fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
         target: { value: '__internal__' },
       });
@@ -595,7 +595,7 @@ describe('⌘K · Log time', () => {
       mockAuthority = { data: null, isLoading: true, isError: false };
       render(<Tree />);
       act(() => openPalette());
-      fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+      fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
       fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
         target: { value: '__internal__' },
       });
@@ -610,7 +610,7 @@ describe('⌘K · Log time', () => {
     mockMyRateRoles = ['support_designer'];
     const single = render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
       target: { value: 'proj-stranger' },
     });
@@ -622,7 +622,7 @@ describe('⌘K · Log time', () => {
     mockMyRateRoles = ['support_designer', 'bookkeeper'];
     render(<Tree />);
     act(() => openPalette());
-    fireEvent.click(screen.getByRole('option', { name: /Log time/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Record time/ }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Document' }), {
       target: { value: 'proj-stranger' },
     });

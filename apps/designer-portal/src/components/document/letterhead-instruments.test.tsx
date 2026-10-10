@@ -560,7 +560,7 @@ describe('the phone dock under one-voice (D7, §3 2-6)', () => {
   it('leads More with `Standing · N` when the band moved its door to the dock, opening the one sheet', () => {
     renderDock({ clientProfileId: 'client-1', doorInDock: true });
     const [first] = more();
-    expect(first.label).toBe('Standing · 2');
+    expect(first.label).toBe('All open · 2');
 
     const onOpen = jest.fn();
     window.addEventListener('document:open-standing-sheet', onOpen);
@@ -649,7 +649,7 @@ describe('a proposal paper’s More under one-voice (FR2 F2-17, 500-4)', () => {
   it('leads with `Standing · N` when the fallback is in force', () => {
     renderProposal({ clientProfileId: 'client-1', doorInDock: true });
     expect(more().map((act) => act.label)).toEqual([
-      'Standing · 3',
+      'All open · 3',
       'Message Elena',
       "Preview the client's copy",
       'Keys',
@@ -813,7 +813,7 @@ describe('a relationship paper’s letterhead under one-voice (FR3 F3-25, F3-6)'
 
   it('no login: held Message {first} with its real reason, Keys, and no Preview', () => {
     renderRelationship(true);
-    expect(more().map((act) => act.label)).toEqual(['Standing · 2', 'Message Elena', 'Keys']);
+    expect(more().map((act) => act.label)).toEqual(['All open · 2', 'Message Elena', 'Keys']);
     expect(more().find((act) => act.actionKey === 'message-family')?.held).toMatchObject({
       reason: 'Elena has no login yet.',
       repair: { label: 'Invite Elena' },
@@ -874,7 +874,7 @@ describe('a Brief paper’s letterhead under one-voice (FR4 524-d)', () => {
   it('Keys and Standing only: no Message, no Preview — even with an in-app profile', () => {
     mockOneVoice = true;
     renderBrief('profile-1');
-    expect(more()).toEqual(['Standing · 3', 'Keys']);
+    expect(more()).toEqual(['All open · 3', 'Keys']);
     expect(screen.queryByRole('button', { name: /Message/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Preview/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Document letterhead actions' })).toBeNull();

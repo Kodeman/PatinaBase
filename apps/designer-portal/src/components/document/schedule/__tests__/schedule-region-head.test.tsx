@@ -585,7 +585,7 @@ describe("ScheduleSpine quiet body (W4)", () => {
     const withPhases = renderSpine();
     expect(
       withPhases.container.querySelector('[data-region-head="schedule"]'),
-    ).toHaveTextContent("Nothing yet");
+    ).toHaveTextContent("No recorded activity");
     expect(screen.queryByText(/Install/)).not.toBeInTheDocument();
     withPhases.unmount();
 
@@ -598,9 +598,9 @@ describe("ScheduleSpine quiet body (W4)", () => {
     expect(screen.getByRole("heading", { name: "Schedule" })).toBeInTheDocument();
     expect(
       bare.container.querySelector('[data-region-head="schedule"]'),
-    ).toHaveTextContent("Nothing yet");
+    ).toHaveTextContent("No recorded activity");
     expect(
-      screen.getByText("Nothing yet", { selector: ".sr-only" }),
+      screen.getByText("No recorded activity", { selector: ".sr-only" }),
     ).toBeInTheDocument();
   });
 

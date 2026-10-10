@@ -27,19 +27,19 @@ describe('CaptureLeadSheet layout', () => {
     // email or project line, so the stack stays single-column at every width.
     const fields = screen.getByTestId('lead-contact-project-fields');
     expect(fields.className).not.toContain('grid-cols-2');
-    expect(screen.getByLabelText('Email')).toHaveClass('min-w-0');
-    expect(screen.getByLabelText('Phone')).toHaveClass('min-w-0');
-    expect(screen.getByLabelText(/The project \(one line\)/)).toHaveClass('min-w-0');
+    expect(screen.getByLabelText('Email address (optional)')).toHaveClass('min-w-0');
+    expect(screen.getByLabelText('Phone number (optional)')).toHaveClass('min-w-0');
+    expect(screen.getByLabelText(/Project summary/)).toHaveClass('min-w-0');
   });
 
   it('types the email and phone inputs so a phone keypad and autofill work', () => {
     render(<CaptureLeadSheet open onClose={jest.fn()} />);
 
-    const email = screen.getByLabelText('Email');
+    const email = screen.getByLabelText('Email address (optional)');
     expect(email).toHaveAttribute('type', 'email');
     expect(email).toHaveAttribute('autocomplete', 'email');
 
-    const phone = screen.getByLabelText('Phone');
+    const phone = screen.getByLabelText('Phone number (optional)');
     expect(phone).toHaveAttribute('type', 'tel');
     expect(phone).toHaveAttribute('autocomplete', 'tel');
   });
@@ -47,33 +47,33 @@ describe('CaptureLeadSheet layout', () => {
   it('keeps Begin disabled until a nonblank name and project note exist', () => {
     render(<CaptureLeadSheet open onClose={jest.fn()} />);
 
-    const submit = screen.getByRole('button', { name: /begin the brief/i });
+    const submit = screen.getByRole('button', { name: /create inquiry brief/i });
     expect(submit).toBeDisabled();
-    expect(screen.getByText(/add a name and one-line project note to begin/i)).toHaveAttribute(
+    expect(screen.getByText(/client name and project summary are required/i)).toHaveAttribute(
       'role',
       'status',
     );
 
-    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: '   ' } });
-    fireEvent.change(screen.getByLabelText(/The project \(one line\)/), {
+    fireEvent.change(screen.getByLabelText(/Client name/), { target: { value: '   ' } });
+    fireEvent.change(screen.getByLabelText(/Project summary/), {
       target: { value: 'Kitchen refresh' },
     });
     expect(submit).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: 'The Okafors' } });
+    fireEvent.change(screen.getByLabelText(/Client name/), { target: { value: 'The Okafors' } });
     expect(submit).toBeEnabled();
   });
 
   it('submits trimmed required values while leaving email, phone, and source optional', () => {
     render(<CaptureLeadSheet open onClose={jest.fn()} />);
 
-    fireEvent.change(screen.getByLabelText(/Name/), {
+    fireEvent.change(screen.getByLabelText(/Client name/), {
       target: { value: '  The Okafors  ' },
     });
-    fireEvent.change(screen.getByLabelText(/The project \(one line\)/), {
+    fireEvent.change(screen.getByLabelText(/Project summary/), {
       target: { value: '  Downtown loft refresh  ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /begin the brief/i }));
+    fireEvent.click(screen.getByRole('button', { name: /create inquiry brief/i }));
 
     expect(mutate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -93,19 +93,19 @@ describe('CaptureLeadSheet layout', () => {
   it('submits a trimmed email and phone to their own columns', () => {
     render(<CaptureLeadSheet open onClose={jest.fn()} />);
 
-    fireEvent.change(screen.getByLabelText(/Name/), {
+    fireEvent.change(screen.getByLabelText(/Client name/), {
       target: { value: 'The Okafors' },
     });
-    fireEvent.change(screen.getByLabelText(/The project \(one line\)/), {
+    fireEvent.change(screen.getByLabelText(/Project summary/), {
       target: { value: 'Downtown loft refresh' },
     });
-    fireEvent.change(screen.getByLabelText('Email'), {
+    fireEvent.change(screen.getByLabelText('Email address (optional)'), {
       target: { value: '  okafors@email.com  ' },
     });
-    fireEvent.change(screen.getByLabelText('Phone'), {
+    fireEvent.change(screen.getByLabelText('Phone number (optional)'), {
       target: { value: '  (555) 014-2200  ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /begin the brief/i }));
+    fireEvent.click(screen.getByRole('button', { name: /create inquiry brief/i }));
 
     expect(mutate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -121,16 +121,16 @@ describe('CaptureLeadSheet layout', () => {
   it("gates a malformed email in the sheet's own error channel, not a native bubble", () => {
     render(<CaptureLeadSheet open onClose={jest.fn()} />);
 
-    const email = screen.getByLabelText('Email');
+    const email = screen.getByLabelText('Email address (optional)');
     // noValidate: the browser never blocks the submit with an unstyled tooltip.
     expect(email.closest('form')).toHaveAttribute('novalidate');
 
-    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: 'The Okafors' } });
-    fireEvent.change(screen.getByLabelText(/The project \(one line\)/), {
+    fireEvent.change(screen.getByLabelText(/Client name/), { target: { value: 'The Okafors' } });
+    fireEvent.change(screen.getByLabelText(/Project summary/), {
       target: { value: 'Downtown loft refresh' },
     });
     fireEvent.change(email, { target: { value: '(555) 014-2200' } });
-    fireEvent.click(screen.getByRole('button', { name: /begin the brief/i }));
+    fireEvent.click(screen.getByRole('button', { name: /create inquiry brief/i }));
 
     expect(mutate).not.toHaveBeenCalled();
     expect(screen.getByText(/it needs an @ and a domain/i)).toBeInTheDocument();
@@ -140,19 +140,19 @@ describe('CaptureLeadSheet layout', () => {
     // Editing the address takes the notice away, and the capture goes through.
     fireEvent.change(email, { target: { value: 'okafors@email.com' } });
     expect(screen.queryByText(/it needs an @ and a domain/i)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /begin the brief/i }));
+    fireEvent.click(screen.getByRole('button', { name: /create inquiry brief/i }));
     expect(mutate).toHaveBeenCalledTimes(1);
   });
 
   it('announces field-specific validation when a required value is left blank', () => {
     render(<CaptureLeadSheet open onClose={jest.fn()} />);
 
-    const name = screen.getByLabelText(/Name/);
+    const name = screen.getByLabelText(/Client name/);
     fireEvent.focus(name);
     fireEvent.blur(name);
 
     expect(screen.getByRole('alert', { name: '' })).toHaveTextContent(
-      /add the client or household name/i,
+      /enter the client or household name/i,
     );
     expect(name).toHaveAttribute('aria-invalid', 'true');
     expect(name).toHaveAttribute('aria-describedby', 'capture-lead-name-error');

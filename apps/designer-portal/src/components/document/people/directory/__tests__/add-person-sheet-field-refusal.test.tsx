@@ -49,10 +49,10 @@ describe("AddPersonSheet — a field kind with no project", () => {
     renderWithClient(<AddPersonSheet open onClose={jest.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "a sub" }));
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Field crew work a project — pick which one they’re on.",
+      "Select this contact’s project.",
     );
     expect(addPartyMutateAsync).not.toHaveBeenCalled();
   });

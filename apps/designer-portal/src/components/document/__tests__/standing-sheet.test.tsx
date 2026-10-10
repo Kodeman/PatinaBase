@@ -36,7 +36,7 @@ describe('StandingSheet (OD-6 / L-11)', () => {
     render(<StandingSheet open onClose={jest.fn()} items={FOUR} />);
     const panel = screen.getByRole('dialog');
     expect(panel).toHaveAttribute('data-doc-sheet-kind', 'standing');
-    expect(panel).toHaveAccessibleName('Standing · 4');
+    expect(panel).toHaveAccessibleName('Everything open on this job, 4');
   });
 
   it('lists EVERY standing exception with its own kind, sentence and act', () => {
@@ -64,7 +64,7 @@ describe('StandingSheet (OD-6 / L-11)', () => {
     render(<StandingSheet open onClose={jest.fn()} items={items} />);
     expect(screen.getAllByRole('listitem')).toHaveLength(5);
     expect(screen.getByText('2 unspecified')).toBeInTheDocument();
-    expect(screen.getByRole('dialog')).toHaveAccessibleName('Standing · 5');
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Everything open on this job, 5');
   });
 
   it('fires the row act the band handed it', () => {
@@ -143,7 +143,7 @@ describe('StandingSheet (OD-6 / L-11)', () => {
       />,
     );
     const panel = screen.getByRole('dialog');
-    expect(panel).toHaveAccessibleName('Standing · 1');
+    expect(panel).toHaveAccessibleName('Everything open on this job, 1');
     const rows = panel.querySelectorAll('[data-standing-input-row]');
     expect(rows).toHaveLength(1);
     expect(rows[0].querySelectorAll('p')).toHaveLength(1);
@@ -178,7 +178,7 @@ describe('StandingSheet (OD-6 / L-11)', () => {
         ]}
       />,
     );
-    expect(screen.getByRole('dialog')).toHaveAccessibleName('Standing · 6');
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Everything open on this job, 6');
     const heading = screen.getByText('SETUP');
     expect(heading).toHaveClass('text-[var(--color-clay-ink)]');
     expect(heading.className).toMatch(/border-t/);
@@ -254,7 +254,7 @@ describe('StandingSheet · one voice (US-19 FR2)', () => {
     render(
       <StandingSheet open onClose={jest.fn()} items={[pay, claim, silence]} grouped count={2} nextKey="pay" />,
     );
-    expect(screen.getByRole('dialog')).toHaveAccessibleName('Standing · 2');
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Everything open on this job, 2');
   });
 
   it('F2-6 — stands Next’s row first in its group, under a NEXT eyebrow', () => {
@@ -284,7 +284,7 @@ describe('StandingSheet · one voice (US-19 FR2)', () => {
 
   it('keeps every act plain and the whole count while the flag is off', () => {
     render(<StandingSheet open onClose={jest.fn()} items={[pay, claim, silence]} nextKey="pay" />);
-    expect(screen.getByRole('dialog')).toHaveAccessibleName('Standing · 3');
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Everything open on this job, 3');
     expect(screen.getByRole('button', { name: 'File the claim' })).toHaveAttribute(
       'data-action-variant',
       'secondary',
@@ -372,7 +372,7 @@ describe('StandingSheet · one voice (US-19 FR2)', () => {
         nextKey={voice.next?.rowKey ?? null}
       />,
     );
-    expect(screen.getByRole('dialog')).toHaveAccessibleName('Standing · 4');
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Everything open on this job, 4');
     expect(screen.getAllByText(/NA-2026-077/)).toHaveLength(1);
     const behind = document.querySelectorAll(
       '[data-standing-row]:not([data-standing-next]), [data-standing-input-row], [data-standing-setup-row]:not([data-standing-next])',

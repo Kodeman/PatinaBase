@@ -76,7 +76,7 @@ describe('AddPersonSheet — edit mode', () => {
     expect(screen.getByLabelText('Name')).toHaveValue('Sal Moretti');
     expect(screen.getByLabelText('Company (optional)')).toHaveValue('Moretti Plumbing');
     expect(screen.getByLabelText('Trade (optional)')).toHaveValue('plumbing');
-    expect(screen.getByLabelText('Phone (optional)')).toHaveValue('5551234567');
+    expect(screen.getByLabelText('Phone number (optional)')).toHaveValue('5551234567');
     expect(screen.getByLabelText('Email (optional)')).toHaveValue('sal@morettiplumbing.com');
 
     expect(screen.queryByText('a client')).not.toBeInTheDocument();
@@ -96,7 +96,7 @@ describe('AddPersonSheet — edit mode', () => {
       <AddPersonSheet open onClose={jest.fn()} contact={contact()} />,
     );
 
-    fireEvent.change(screen.getByLabelText('Phone (optional)'), {
+    fireEvent.change(screen.getByLabelText('Phone number (optional)'), {
       target: { value: '5559876543' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -230,7 +230,7 @@ describe('AddPersonSheet — edit mode, a profile-holding card (F3-R1-06)', () =
     );
 
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Phone (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Phone number (optional)')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Email (optional)')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Company (optional)')).toHaveValue('Moretti Plumbing');
     expect(screen.getByLabelText('Trade (optional)')).toHaveValue('plumbing');
@@ -311,7 +311,7 @@ describe('AddPersonSheet — edit mode, Notes are editable on every card (F3-R2-
     );
 
     expect(screen.getByLabelText('Notes (optional)')).toHaveValue('');
-    expect(screen.getByLabelText('Phone (optional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Phone number (optional)')).toBeInTheDocument();
     expect(screen.getByLabelText('Email (optional)')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Notes (optional)'), {

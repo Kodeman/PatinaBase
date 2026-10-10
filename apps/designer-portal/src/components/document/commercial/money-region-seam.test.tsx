@@ -106,7 +106,7 @@ describe('the Money seam, on the Delivery table', () => {
   it('stands as one line: committed, against the authority it is spent from', () => {
     render(<MoneyRegion projectId="project-1" tableSeam />);
 
-    const seam = screen.getByRole('button', { name: /unfold/i });
+    const seam = screen.getByRole('button', { name: /expand/i });
     expect(seam).toHaveTextContent('$62,400 authorized of $80,000 budget');
     expect(screen.queryByRole('heading', { name: 'Money' })).toBeNull();
   });
@@ -130,7 +130,7 @@ describe('the Money seam, on the Delivery table', () => {
     ).toEqual(['mt-[var(--doc-region-gap)]']);
     expect(section.className).not.toMatch(/\bmb-/);
 
-    fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
+    fireEvent.click(screen.getByRole('button', { name: /expand/i }));
 
     // Same section element, now carrying the whole region: head, six rungs,
     // and the detail surfaces the rungs summarise.
@@ -166,7 +166,7 @@ describe('the Money seam, on the Delivery table', () => {
 
   it('remembers the table’s fold apart from the region’s own', () => {
     const { unmount } = render(<MoneyRegion projectId="project-1" tableSeam />);
-    fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
+    fireEvent.click(screen.getByRole('button', { name: /expand/i }));
     unmount();
 
     // Off the table the region keeps its own derived posture: a busy project
@@ -186,7 +186,7 @@ describe('the Money seam, on the Delivery table', () => {
       <MoneyRegion projectId="project-1" tableSeam />,
     );
     expect(container.querySelector('[data-fold-cause]')).toBeNull();
-    expect(screen.getByRole('button', { name: /unfold/i })).not.toHaveTextContent(
+    expect(screen.getByRole('button', { name: /expand/i })).not.toHaveTextContent(
       'CLOSED BY YOU',
     );
     unmount();
@@ -194,7 +194,7 @@ describe('the Money seam, on the Delivery table', () => {
     window.localStorage.setItem('patina:doc-fold:project-1:money-table', '1');
     render(<MoneyRegion projectId="project-1" tableSeam />);
 
-    expect(screen.getByRole('button', { name: /unfold/i })).toHaveTextContent(
+    expect(screen.getByRole('button', { name: /expand/i })).toHaveTextContent(
       'CLOSED BY YOU',
     );
   });
@@ -206,7 +206,7 @@ describe('the Money seam, on the Delivery table', () => {
 
     render(<MoneyRegion projectId="project-1" tableSeam />);
 
-    expect(screen.getByRole('button', { name: /unfold/i })).toHaveTextContent(
+    expect(screen.getByRole('button', { name: /expand/i })).toHaveTextContent(
       '$0 authorized of $80,000 budget',
     );
   });
@@ -219,7 +219,7 @@ describe('the Money seam, on the Delivery table', () => {
 
     render(<MoneyRegion projectId="project-1" tableSeam />);
 
-    expect(screen.queryByRole('button', { name: /unfold/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /expand/i })).toBeNull();
     // The seam's own sentence, in the shape it would have had: never printed.
     // This asserted "$0 committed · no authority yet" until the A hotfix — a
     // sentence SP-03 had already made unproducible, so the guard was green by
@@ -250,7 +250,7 @@ describe('the Money seam, on the Delivery table', () => {
 
     render(<MoneyRegion projectId="project-1" tableSeam />);
 
-    expect(screen.queryByRole('button', { name: /unfold/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /expand/i })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
     expect(screen.getByText('Account band')).toBeInTheDocument();
   });
@@ -269,6 +269,6 @@ describe('the Money seam, on the Delivery table', () => {
 
     // A schedule with nothing drawn and nothing owed is quiet, so the
     // declaration governs and the seam stands.
-    expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /expand/i })).toBeInTheDocument();
   });
 });

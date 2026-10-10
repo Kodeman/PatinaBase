@@ -1441,7 +1441,7 @@ describe('ProjectApprovalDocument region gap (W3-L4)', () => {
     ).toEqual(['mt-[var(--doc-region-gap)]']);
     expect(open!.className).not.toMatch(/\bmb-/);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Fold ↑' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse ↑' }));
 
     const folded = container.querySelector('[data-index-region="approvals"]');
     expect(folded).not.toBeNull();

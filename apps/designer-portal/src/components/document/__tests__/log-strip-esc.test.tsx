@@ -175,7 +175,7 @@ describe('LogStrip — Esc yields to the innermost open thing (FR5 F5-8)', () =>
 
   it('visible offer + Discard button focused (inside the strip): Esc discards (SQ-552)', () => {
     render(<LogStrip />);
-    const discard = screen.getByRole('button', { name: 'Discard' });
+    const discard = screen.getByRole('button', { name: 'Dismiss time suggestion' });
     discard.focus();
 
     const notCanceled = fireEvent.keyDown(discard, { key: 'Escape' });
@@ -225,7 +225,7 @@ describe('LogStrip — Esc yields to the innermost open thing (FR5 F5-8)', () =>
         <Composer />
       </>,
     );
-    const minutes = screen.getByRole('spinbutton', { name: 'Minutes to log' });
+    const minutes = screen.getByRole('spinbutton', { name: 'Minutes to record' });
     minutes.focus();
 
     fireEvent.keyDown(minutes, { key: 'Escape' });

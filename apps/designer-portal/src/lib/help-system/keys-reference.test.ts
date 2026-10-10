@@ -20,7 +20,7 @@ describe('buildKeysReference', () => {
     const rooms = sections.find((s) => s.heading === 'Rooms and books');
     expect(rooms).toBeDefined();
     expect(rooms!.rows).toContainEqual(
-      expect.objectContaining({ keys: ['G', 'O'], label: 'Orders' }),
+      expect.objectContaining({ keys: ['G', 'O'], label: 'Purchase orders' }),
     );
   });
 

@@ -141,9 +141,9 @@ describe('RolodexSeedSheet — Edit opens the card editor (F3-R1-07)', () => {
 
     // The archived company card gets no Edit door — makers/archived cards
     // stay read-only.
-    expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Edit contact record' })).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact record' }));
 
     expect(screen.getByText('Edit Rosa Martínez')).toBeInTheDocument();
     expect(screen.getByLabelText('Name')).toHaveValue('Rosa Martínez');
@@ -154,8 +154,8 @@ describe('RolodexSeedSheet — Edit opens the card editor (F3-R1-07)', () => {
       <RolodexSeedSheet open onClose={jest.fn()} organizationId="org-1" />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    fireEvent.change(screen.getByLabelText('Phone (optional)'), {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact record' }));
+    fireEvent.change(screen.getByLabelText('Phone number (optional)'), {
       target: { value: '5559876543' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -177,8 +177,8 @@ describe('RolodexSeedSheet — Edit opens the card editor (F3-R1-07)', () => {
       <RolodexSeedSheet open onClose={jest.fn()} organizationId="org-1" />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    fireEvent.change(screen.getByLabelText('Phone (optional)'), {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit contact record' }));
+    fireEvent.change(screen.getByLabelText('Phone number (optional)'), {
       target: { value: '5559876543' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -194,7 +194,7 @@ describe('RolodexSeedSheet — DONE closes', () => {
     const onClose = jest.fn();
     render(<RolodexSeedSheet open onClose={onClose} organizationId="org-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Complete directory setup' }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });

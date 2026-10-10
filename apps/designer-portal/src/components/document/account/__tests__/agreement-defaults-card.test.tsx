@@ -179,7 +179,7 @@ describe("Account · Studio · Agreement defaults", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getByLabelText("Billing cadence")).toHaveValue("monthly");
+    expect(screen.getByLabelText("Billing frequency")).toHaveValue("monthly");
     expect(screen.getByRole("button", { name: "Credited" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -211,7 +211,7 @@ describe("Account · Studio · Agreement defaults", () => {
 
   it("flips dirty on the cadence", () => {
     render(<AccountStudioPage />);
-    fireEvent.change(screen.getByLabelText("Billing cadence"), {
+    fireEvent.change(screen.getByLabelText("Billing frequency"), {
       target: { value: "biweekly" },
     });
     expect(saveButton()).toBeEnabled();
@@ -289,7 +289,7 @@ describe("Account · Studio · Agreement defaults", () => {
     expect(
       screen.getByText(/No deposit set — a new agreement leaves it open/),
     ).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Billing cadence"), {
+    fireEvent.change(screen.getByLabelText("Billing frequency"), {
       target: { value: "milestone" },
     });
     fireEvent.click(saveButton());
@@ -431,20 +431,20 @@ describe("Account · Studio · Agreement defaults", () => {
       screen.queryByRole("button", { name: "Save agreement defaults" }),
     ).not.toBeInTheDocument();
     // Billing, one block above it, is untouched either way.
-    expect(screen.getByText("Billing")).toBeInTheDocument();
+    expect(screen.getByText("Billing settings")).toBeInTheDocument();
     expect(screen.getByLabelText("Card fee (%)")).toBeInTheDocument();
   });
 
   it("leaves the Billing card exactly where it was, above it", () => {
     render(<AccountStudioPage />);
-    const billing = screen.getByText("Billing");
+    const billing = screen.getByText("Billing settings");
     const agreement = screen.getByText("Agreement defaults");
     expect(
       billing.compareDocumentPosition(agreement) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.getByLabelText("Card fee (%)")).toBeInTheDocument();
-    expect(screen.getByLabelText("Remit checks to")).toBeInTheDocument();
+    expect(screen.getByLabelText("Check remittance instructions")).toBeInTheDocument();
   });
 
   // W7-R6-01 — below `sm` the row stacks the picker onto its own line and

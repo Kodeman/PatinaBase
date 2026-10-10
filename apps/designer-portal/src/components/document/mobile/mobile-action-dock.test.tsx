@@ -279,16 +279,16 @@ describe('unified mobile edge owner', () => {
       screen.getByText('Find anything').closest('button'),
     ).toHaveFocus();
     expect(
-      screen.getByRole('button', { name: /Time in hand/i }),
+      screen.getByRole('button', { name: /Active session time/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /The Post/i }),
+      screen.getByRole('button', { name: /Studio inbox/i }),
     ).toBeInTheDocument();
     expect(screen.getByText('Ledgers')).toBeInTheDocument();
 
     // The feedback row moved out to the Tester widget.
     expect(
-      screen.queryByRole('button', { name: /Leave a note/i }),
+      screen.queryByRole('button', { name: /Share feedback/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -303,8 +303,8 @@ describe('unified mobile edge owner', () => {
 
     const menu = screen.getByRole('group', { name: 'More studio actions' });
     const mail = within(menu).getByRole('group', { name: 'Mail & messages' });
-    const post = within(mail).getByRole('button', { name: /The Post/i });
-    expect(post).toHaveTextContent('The Post');
+    const post = within(mail).getByRole('button', { name: /Studio inbox/i });
+    expect(post).toHaveTextContent('Studio inbox');
     // State-only, matching the drawer's dot (C4) — never a literal count.
     expect(post).toHaveTextContent('New');
     expect(post).not.toHaveTextContent(/\d+\s*new/i);

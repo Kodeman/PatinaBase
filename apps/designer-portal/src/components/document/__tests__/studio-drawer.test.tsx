@@ -81,7 +81,7 @@ describe('StudioDrawer — Keys beside Find anything (F6, SQ-715)', () => {
     expect(stack).not.toHaveClass('flex-col');
     expect(find.nextElementSibling).toBe(keys);
     // The same 44px target as the room links beside them.
-    const library = screen.getByRole('button', { name: 'Library' });
+    const library = screen.getByRole('button', { name: 'Resource library' });
     for (const control of [find, keys, library]) {
       expect(control).toHaveClass('min-h-11', 'py-2');
     }
@@ -111,7 +111,7 @@ describe('StudioDrawer — Keys beside Find anything (F6, SQ-715)', () => {
 
   it('holds THE POST to one line', () => {
     render(<StudioDrawer />);
-    const label = screen.getByText(/^the post$/i);
+    const label = screen.getByText(/^studio inbox$/i);
     expect(label).toHaveClass('whitespace-nowrap');
   });
 

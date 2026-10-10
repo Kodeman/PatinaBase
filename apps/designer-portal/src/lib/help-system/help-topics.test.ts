@@ -13,13 +13,13 @@ describe('HELP_TOPICS shape', () => {
   it('ships the 8 desk-era shelves, in reading order', () => {
     expect(HELP_TOPICS.map((t) => t.label)).toEqual([
       'Getting started',
-      'The Desk & the Studio',
-      'Your documents',
-      'Rooms',
-      'Ledgers & money',
-      'Ideas & vocabulary',
-      'How do I…',
-      'For your clients',
+      'Studio overview & navigation',
+      'Project files',
+      'Studio resources',
+      'Studio administration',
+      'Terminology',
+      'How-to guides',
+      'Client portal help',
     ]);
   });
 
@@ -42,22 +42,22 @@ describe('HELP_TOPICS shape', () => {
 describe('topicLabelFor', () => {
   it('maps an exact prefix to its shelf', () => {
     expect(topicLabelFor('designer-portal/document/guide')).toBe('Getting started');
-    expect(topicLabelFor('designer-portal/document/orders')).toBe('Ledgers & money');
-    expect(topicLabelFor('client-portal')).toBe('For your clients');
+    expect(topicLabelFor('designer-portal/document/orders')).toBe('Studio administration');
+    expect(topicLabelFor('client-portal')).toBe('Client portal help');
   });
 
   it('maps a descendant key to its shelf', () => {
     expect(topicLabelFor('designer-portal/document/guide/what-is-the-desk')).toBe('Getting started');
-    expect(topicLabelFor('designer-portal/document/orders/receiving')).toBe('Ledgers & money');
-    expect(topicLabelFor('designer-portal/document/desk/field')).toBe('The Desk & the Studio');
-    expect(topicLabelFor('designer-portal/document/library/piece')).toBe('Rooms');
-    expect(topicLabelFor('client-portal/proposals/detail/sign')).toBe('For your clients');
+    expect(topicLabelFor('designer-portal/document/orders/receiving')).toBe('Studio administration');
+    expect(topicLabelFor('designer-portal/document/desk/field')).toBe('Studio overview & navigation');
+    expect(topicLabelFor('designer-portal/document/library/piece')).toBe('Studio resources');
+    expect(topicLabelFor('client-portal/proposals/detail/sign')).toBe('Client portal help');
   });
 
   it('matches on segment boundaries, never bare startsWith', () => {
     // 'margin-note' must not be swallowed by the 'margin' prefix.
-    expect(topicLabelFor('designer-portal/document/margin')).toBe('Your documents');
-    expect(topicLabelFor('designer-portal/document/margin-note')).not.toBe('Your documents');
+    expect(topicLabelFor('designer-portal/document/margin')).toBe('Project files');
+    expect(topicLabelFor('designer-portal/document/margin-note')).not.toBe('Project files');
   });
 
   it('humanizes unclaimed keys — portal segment stripped, title-cased', () => {
