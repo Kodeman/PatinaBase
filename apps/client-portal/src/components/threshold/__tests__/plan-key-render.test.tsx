@@ -61,7 +61,7 @@ describe('PlanKey — a key on a drawing', () => {
       <PlanKey
         geometry={geometry()}
         marks={MARKS}
-        keySentence="Two marks stand open on this drawing."
+        keySentence="Two open requests on this plan."
       />,
     );
 
@@ -76,7 +76,7 @@ describe('PlanKey — a key on a drawing', () => {
       <PlanKey
         geometry={geometry()}
         marks={MARKS}
-        keySentence="Two marks stand open on this drawing."
+        keySentence="Two open requests on this plan."
       />,
     );
 
@@ -88,7 +88,7 @@ describe('PlanKey — a key on a drawing', () => {
       <PlanKey
         geometry={geometry()}
         marks={MARKS}
-        keySentence="Two marks stand open on this drawing."
+        keySentence="Two open requests on this plan."
       />,
     );
 
@@ -103,7 +103,7 @@ describe('PlanKey — a key on a drawing', () => {
       <PlanKey
         geometry={geometry()}
         marks={MARKS}
-        keySentence="Two marks stand open on this drawing."
+        keySentence="Two open requests on this plan."
       />,
     );
 
@@ -145,7 +145,7 @@ describe('PlanKey — a key on a drawing', () => {
       <PlanKey
         geometry={geometry()}
         marks={MARKS}
-        keySentence="Two marks stand open on this drawing."
+        keySentence="Two open requests on this plan."
       />,
     );
 

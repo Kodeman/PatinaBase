@@ -11,6 +11,7 @@ jest.mock('@tanstack/react-query', () => ({
         pendingCents: 0,
         processingCents: 0,
         completedCentsLast30Days: 0,
+        failedCount: 0,
       },
     },
     isLoading: false,
