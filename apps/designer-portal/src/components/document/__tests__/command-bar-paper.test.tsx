@@ -123,7 +123,7 @@ const LINES = [
 function openAndType(query: string) {
   render(<CommandBar />);
   act(() => openCommandBar());
-  fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+  fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
     target: { value: query },
   });
 }
@@ -156,24 +156,24 @@ const groupOptions = (name: string | RegExp) =>
   );
 
 describe('⌘K on the paper (D4)', () => {
-  it('groups On this paper → Acts on this paper → Elsewhere → the ask → Help, in that order', () => {
+  it('groups On this paper → Project file actions → Other studio results → the ask → Help, in that order', () => {
     openAndType('c');
     expect(groupNames()).toEqual([
-      'On this paper · Chen Residence',
-      'Acts on this paper',
-      'Elsewhere',
+      'Project file · Chen Residence',
+      'Project file actions',
+      'Other studio results',
       'Results',
       'Help',
     ]);
     expect(groupOptions('Results')).toEqual(['Ask about “c”ASK & PLACE']);
     // The paper's own rows are capped at five.
-    const paper = screen.getByRole('group', { name: 'On this paper · Chen Residence' });
+    const paper = screen.getByRole('group', { name: 'Project file · Chen Residence' });
     expect(within(paper).getAllByRole('option').length).toBeLessThanOrEqual(5);
   });
 
   it('prints the sectional on the paper, above any Help row, and lands on its Order cell', () => {
     openAndType('sectional');
-    const paper = screen.getByRole('group', { name: 'On this paper · Chen Residence' });
+    const paper = screen.getByRole('group', { name: 'Project file · Chen Residence' });
     const sectional = within(paper).getByRole('option', {
       name: /Custom Walnut Sectional — 3 pc/,
     });
@@ -204,7 +204,7 @@ describe('⌘K on the paper (D4)', () => {
 
   it('reads the synonym table: couch finds the sectional', () => {
     openAndType('couch');
-    const paper = screen.getByRole('group', { name: 'On this paper · Chen Residence' });
+    const paper = screen.getByRole('group', { name: 'Project file · Chen Residence' });
     expect(
       within(paper).getByRole('option', { name: /Custom Walnut Sectional — 3 pc/ }),
     ).toBeInTheDocument();
@@ -212,7 +212,7 @@ describe('⌘K on the paper (D4)', () => {
 
   it('reads the synonym table: change offers Record a change, which dispatches the router event', () => {
     openAndType('change');
-    const acts = screen.getByRole('group', { name: 'Acts on this paper' });
+    const acts = screen.getByRole('group', { name: 'Project file actions' });
     const record = within(acts).getByRole('option', { name: /Record a change/ });
     expect(screen.queryByText('Add a change')).not.toBeInTheDocument();
 
@@ -226,7 +226,7 @@ describe('⌘K on the paper (D4)', () => {
   it('R26 — late finds the Install reading as its own sentence, act Open Install, on an Install paper only', () => {
     mockRow = chenRow({ active_section: 'install' });
     openAndType('late');
-    const paper = screen.getByRole('group', { name: 'On this paper · Chen Residence' });
+    const paper = screen.getByRole('group', { name: 'Project file · Chen Residence' });
     const reading = within(paper).getAllByRole('option')[0];
     expect(reading).toHaveTextContent(
       "Møbler Lounge Chair — Bouclé isn't here, and no arrival date is recorded. 1 more isn't here.",
@@ -251,41 +251,41 @@ describe('⌘K on the paper (D4)', () => {
     expect(screen.getByText('Nothing on this paper matches "zzz".')).toBeInTheDocument();
     const options = optionNames();
     expect(options[0]).toBe('Open the pieces · 3 lines');
-    expect(options).toContain('Search all jobs for "zzz"');
+    expect(options).toContain('Search all project files for "zzz"');
     expect(options[options.length - 1]).toBe('Open Help');
     expect(screen.queryByText(/Browse the Help Center/)).not.toBeInTheDocument();
-    expect(screen.queryByText('No match')).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Nothing matches.');
+    expect(screen.queryByText('No matching results')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('No matching results.');
   });
 
-  it('R23 — Search all jobs switches the sheet in place, focus on the first result; Esc returns to the paper', async () => {
+  it('R23 — Search all project files switches the sheet in place, focus on the first result; Esc returns to the paper', async () => {
     openAndType('chen');
-    fireEvent.click(screen.getByRole('option', { name: 'Search all jobs for "chen"' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Search all project files for "chen"' }));
 
-    expect(screen.getByRole('dialog', { name: 'Command bar' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Studio search' })).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
-    expect(groupNames()).toEqual(['All jobs']);
-    const first = within(screen.getByRole('group', { name: 'All jobs' })).getAllByRole(
+    expect(groupNames()).toEqual(['All project files']);
+    const first = within(screen.getByRole('group', { name: 'All project files' })).getAllByRole(
       'option',
     )[0];
     expect(first).toHaveTextContent('Chen Residence');
     await waitFor(() => expect(first).toHaveFocus());
 
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(screen.getByRole('dialog', { name: 'Command bar' })).toBeInTheDocument();
-    expect(groupNames()).toContain('Elsewhere');
-    expect(screen.getByRole('combobox', { name: 'Find anything' })).toHaveFocus();
+    expect(screen.getByRole('dialog', { name: 'Studio search' })).toBeInTheDocument();
+    expect(groupNames()).toContain('Other studio results');
+    expect(screen.getByRole('combobox', { name: 'Studio search' })).toHaveFocus();
   });
 
-  it('R25 — Elsewhere holds Search all jobs, then Where the work stands, then the cross-paper hits, and nothing else', () => {
+  it('R25 — Other studio results holds Search all project files, then Where the work stands, then the cross-paper hits, and nothing else', () => {
     openAndType('procurement');
-    const elsewhere = groupOptions('Elsewhere');
-    expect(elsewhere[0]).toBe('Search all jobs for "procurement"');
+    const elsewhere = groupOptions('Other studio results');
+    expect(elsewhere[0]).toBe('Search all project files for "procurement"');
     expect(elsewhere[1]).toMatch(/^In procurement · 1/);
     expect(elsewhere.some((name) => /Ask about/.test(name))).toBe(false);
   });
 
-  it('R27 — each Money head act is its own row: Record the payment first when due, then Draw an invoice; no umbrella', () => {
+  it('R27 — each Money head act is its own row: Record the payment first when due, then Draft an invoice; no umbrella', () => {
     mockFolders = [
       {
         row: mockRow,
@@ -304,11 +304,11 @@ describe('⌘K on the paper (D4)', () => {
       },
     ];
     openAndType('payment');
-    const acts = screen.getByRole('group', { name: 'Acts on this paper' });
+    const acts = screen.getByRole('group', { name: 'Project file actions' });
     const names = within(acts)
       .getAllByRole('option')
       .map((option) => option.querySelector('.font-medium')?.textContent);
-    expect(names).toEqual(['Record the payment', 'Draw an invoice']);
+    expect(names).toEqual(['Record the payment', 'Draft an invoice']);
     expect(screen.queryByRole('option', { name: /^Money/ })).not.toBeInTheDocument();
 
     const ledger = jest.fn();
@@ -342,7 +342,7 @@ describe('⌘K on the paper (D4)', () => {
       },
     ];
     openAndType('payment');
-    const acts = screen.getByRole('group', { name: 'Acts on this paper' });
+    const acts = screen.getByRole('group', { name: 'Project file actions' });
     const ledger = jest.fn();
     const landed = jest.fn();
     window.addEventListener('document:open-ledger', ledger);
@@ -358,12 +358,12 @@ describe('⌘K on the paper (D4)', () => {
     expect((landed.mock.calls[0][0] as CustomEvent).detail).toEqual({ purchaseOrderId: 'po-188' });
   });
 
-  it('R27 — with nothing due, the money words offer Draw an invoice alone, as printed', () => {
+  it('R27 — with nothing due, the money words offer Draft an invoice alone, as printed', () => {
     openAndType('invoice');
-    const acts = screen.getByRole('group', { name: 'Acts on this paper' });
+    const acts = screen.getByRole('group', { name: 'Project file actions' });
     expect(within(acts).queryByRole('option', { name: /Record the payment/ })).not.toBeInTheDocument();
-    const draw = within(acts).getByRole('option', { name: /Draw an invoice/ });
-    expect(draw.querySelector('.font-medium')?.textContent).toBe('Draw an invoice');
+    const draw = within(acts).getByRole('option', { name: /Draft an invoice/ });
+    expect(draw.querySelector('.font-medium')?.textContent).toBe('Draft an invoice');
   });
 
   it('R29 — invoice numbers are searched through the paper’s invoice rows', () => {
@@ -372,7 +372,7 @@ describe('⌘K on the paper (D4)', () => {
       { id: 'inv-115', invoice_number: '2026-115', status: 'paid' },
     ];
     openAndType('2026-114');
-    const paper = screen.getByRole('group', { name: 'On this paper · Chen Residence' });
+    const paper = screen.getByRole('group', { name: 'Project file · Chen Residence' });
     const invoice = within(paper).getByRole('option', { name: /Invoice 2026-114/ });
     expect(within(paper).queryByRole('option', { name: /2026-115/ })).not.toBeInTheDocument();
 
@@ -383,9 +383,9 @@ describe('⌘K on the paper (D4)', () => {
     expect((folio.mock.calls[0][0] as CustomEvent).detail).toEqual({ invoiceId: 'inv-114' });
   });
 
-  it('R30 — keys offers a Keys row with its ? hint under Acts on this paper; Enter opens Keys', () => {
+  it('R30 — keys offers a Keys row with its ? hint under Project file actions; Enter opens Keys', () => {
     openAndType('keys');
-    const acts = screen.getByRole('group', { name: 'Acts on this paper' });
+    const acts = screen.getByRole('group', { name: 'Project file actions' });
     const keys = within(acts).getByRole('option', { name: /^Keys/ });
     expect(keys).toHaveTextContent('?');
     expect(within(acts).getAllByRole('option')[0]).toBe(keys);
@@ -397,11 +397,11 @@ describe('⌘K on the paper (D4)', () => {
     expect(opened).toHaveBeenCalledTimes(1);
   });
 
-  it('R31 — the Desk dry query: Nothing matches, Where the work stands, then one Open Help row', () => {
+  it('R31 — the Desk dry query: Nothing on this paper matches, Where the work stands, then one Open Help row', () => {
     mockPathname.mockReturnValue('/desk');
     openAndType('zzz');
-    expect(screen.getByText('Nothing matches "zzz".')).toBeInTheDocument();
-    expect(groupNames()).toEqual(['Results', 'Where the work stands', 'Results', 'Help']);
+    expect(screen.getByText('No matching results.')).toBeInTheDocument();
+    expect(groupNames()).toEqual(['Results', 'Project stages', 'Results', 'Help']);
     expect(groupOptions('Help')).toEqual(['Open Help']);
     expect(screen.queryByText(/Browse the Help Center/)).not.toBeInTheDocument();
 
@@ -447,8 +447,8 @@ describe('flag off — today’s ⌘K', () => {
     openAndType('sectional');
     expect(screen.queryByRole('group', { name: /On this paper/ })).not.toBeInTheDocument();
     expect(groupNames()).toEqual(['Results']);
-    expect(screen.getByText('No match')).toBeInTheDocument();
-    expect(screen.queryByText(/Search all jobs/)).not.toBeInTheDocument();
+    expect(screen.getByText('No matching results')).toBeInTheDocument();
+    expect(screen.queryByText(/Search all project files/)).not.toBeInTheDocument();
     expect(screen.queryByText('↵ open · ↑↓ move · ? keys · esc close')).not.toBeInTheDocument();
     expect(mockUseProjectFFEItems).not.toHaveBeenCalled();
   });
@@ -490,29 +490,29 @@ describe('one-voice ⌘K (FR2)', () => {
     expect(mockPush).toHaveBeenCalledWith('/drafting/prop-dir');
   });
 
-  it('F2-14 — the empty query’s This surface row prints Write the proposal, never Open the Contract Room', () => {
+  it('F2-14 — the empty query’s Current workspace row prints Write the proposal, never Open the Contract Room', () => {
     mockRow = directionRow();
     mockPathname.mockReturnValue('/doc/eng-dir');
     openAndType('');
-    const surface = screen.getByRole('group', { name: 'This surface' });
+    const surface = screen.getByRole('group', { name: 'Current workspace' });
     expect(within(surface).getByRole('option', { name: /^Write the proposal/ })).toBeInTheDocument();
     expect(screen.queryByText('Open the Contract Room')).not.toBeInTheDocument();
   });
 
-  it('F2-11 — a closed job’s dry query prints one sentence: no second Nothing matches., no pieces row', () => {
+  it('F2-11 — a closed job’s dry query prints one sentence: no second Nothing on this paper matches., no pieces row', () => {
     mockRow = chenRow({ project_status: 'completed', active_section: 'care', title: 'Lindqvist' });
     mockUseProjectFFEItems.mockReturnValue({ data: [] });
     openAndType('zzz');
     expect(screen.getAllByText('Nothing on this paper matches "zzz".')).toHaveLength(1);
     expect(screen.getByRole('status')).toHaveTextContent('Nothing on this paper matches "zzz".');
-    expect(screen.queryByText('Nothing matches.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nothing on this paper matches.')).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Open the pieces/ })).not.toBeInTheDocument();
   });
 
   it('F2-23 / 507-4 / F3-14 — the ask row reads Ask the paper: “{query}”, with no AI or Engine word', () => {
     openAndType('c');
     expect(groupOptions('Results')).toEqual(['Ask the paper: “c”ASK & PLACE']);
-    const dialog = screen.getByRole('dialog', { name: 'Command bar' });
+    const dialog = screen.getByRole('dialog', { name: 'Studio search' });
     expect(dialog.textContent).not.toMatch(/\b(AI|Engine)\b/);
   });
 
@@ -528,7 +528,7 @@ describe('one-voice ⌘K (FR2)', () => {
     mockPathname.mockReturnValue('/desk');
     openAndType('keys');
     expect(screen.queryByText('The keys')).not.toBeInTheDocument();
-    const keys = screen.getByRole('option', { name: /^Keys/ });
+    const keys = screen.getByRole('option', { name: /^Keyboard shortcuts/ });
     expect(keys).toHaveTextContent('?');
   });
 
@@ -536,7 +536,7 @@ describe('one-voice ⌘K (FR2)', () => {
     mockOneVoice = false;
     mockPathname.mockReturnValue('/desk');
     openAndType('keys');
-    expect(screen.getByText('The keys')).toBeInTheDocument();
+    expect(screen.getByText('Keyboard shortcuts')).toBeInTheDocument();
   });
 });
 
@@ -571,12 +571,12 @@ describe('one-voice ⌘K (FR3)', () => {
       </MobileShellProvider>,
     );
     act(() => openCommandBar());
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: query },
     });
   }
   const actRow = (name: RegExp) =>
-    within(screen.getByRole('group', { name: 'Acts on this paper' })).getByRole('option', { name });
+    within(screen.getByRole('group', { name: 'Project file actions' })).getByRole('option', { name });
 
   it.each([
     ['Aspen', 'nudge', 'Nudge the client', 'Waiting on the client: Design Development sign-off — drawing set B'],
@@ -615,7 +615,7 @@ describe('one-voice ⌘K (FR3)', () => {
       },
       'date',
     );
-    const paper = screen.getByRole('group', { name: 'On this paper · Chen Residence' });
+    const paper = screen.getByRole('group', { name: 'Project file · Chen Residence' });
     const reading = within(paper).getAllByRole('option')[0];
     expect(reading).toHaveTextContent('↵ Ask the maker for a date');
     expect(reading).not.toHaveTextContent('Open Install');

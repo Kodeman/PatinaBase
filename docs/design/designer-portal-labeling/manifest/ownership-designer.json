@@ -36,6 +36,7 @@
     "apps/designer-portal/src/app/auth/signin/page.test.tsx",
     "apps/designer-portal/src/app/auth/signin/page.tsx",
     "apps/designer-portal/src/app/auth/signup/page.tsx",
+    "apps/designer-portal/src/components/document/__tests__/command-bar-paper.test.tsx",
     "apps/designer-portal/src/components/document/__tests__/desk-contents.test.tsx",
     "apps/designer-portal/src/components/document/__tests__/lens-band.test.tsx",
     "apps/designer-portal/src/components/document/__tests__/standing-sheet-landing.test.tsx",

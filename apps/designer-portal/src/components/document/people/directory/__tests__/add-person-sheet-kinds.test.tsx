@@ -319,7 +319,7 @@ describe("a sub", () => {
     fireEvent.change(screen.getByLabelText("Full name"), {
       target: { value: "Joe Wozniak" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "A sub or an installer needs the trade they work in.",
     );
@@ -358,7 +358,7 @@ describe("a sub", () => {
     fireEvent.change(screen.getByLabelText("Mobile"), {
       target: { value: "(612) 555-0117" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
 
     await waitFor(() => expect(setAffiliation).toHaveBeenCalled());
     expect(addParty).toHaveBeenCalledWith(
@@ -396,7 +396,7 @@ describe("a sub", () => {
     fireEvent.change(screen.getByLabelText("Mobile"), {
       target: { value: "(612) 555-0117" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
 
     await waitFor(() => expect(addParty).toHaveBeenCalled());
     // CR5-1's rule governs the firm card too: the studio the JOB records.
@@ -433,7 +433,7 @@ describe("a sub", () => {
     fireEvent.change(screen.getByLabelText("New company name"), {
       target: { value: "  cedar & iron framing " },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
 
     await waitFor(() => expect(addParty).toHaveBeenCalled());
     expect(addFirmCard).not.toHaveBeenCalled();
@@ -456,7 +456,7 @@ describe("a sub", () => {
     fireEvent.change(screen.getByLabelText("New company name"), {
       target: { value: "Rusk Mechanical" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
 
     await waitFor(() => expect(addParty).toHaveBeenCalled());
     expect(addFirmCard).not.toHaveBeenCalled();
@@ -485,7 +485,7 @@ describe("a sub", () => {
     fireEvent.change(screen.getByLabelText("How to reach them"), {
       target: { value: "Text only. The email on file bounces." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
 
     await waitFor(() => expect(setRule).toHaveBeenCalled());
     expect(addParty).toHaveBeenCalledWith(
@@ -536,7 +536,7 @@ describe("a sub", () => {
     fireEvent.change(screen.getByLabelText("Mobile"), {
       target: { value: "(612) 555-0119" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
 
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
     expect(promote).not.toHaveBeenCalled();
@@ -589,7 +589,7 @@ describe("a sub", () => {
     expect(line).toHaveTextContent("land on Dana Kowalski’s card");
     // The act is described by it, so the fact reaches the ear at the act too.
     expect(
-      screen.getByRole("button", { name: "Add to the roster" }),
+      screen.getByRole("button", { name: "Add to directory" }),
     ).toHaveAttribute(
       "aria-describedby",
       "add-party-phone-on-file add-party-consequence",
@@ -629,7 +629,7 @@ describe("a sub", () => {
     fireEvent.change(screen.getByLabelText("Mobile"), {
       target: { value: "(612) 555-0111" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
     expect(onAdded.mock.calls[0][0]).toBe(
       "QA Collide Person added to Okonkwo residence. That number is already on file for Dana Kowalski, so this seat and what you wrote sit on Dana Kowalski’s card.",
@@ -654,7 +654,7 @@ describe("a sub", () => {
     fireEvent.change(screen.getByLabelText("Mobile"), {
       target: { value: "(612) 555-0111" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
     expect(onAdded.mock.calls[0][0]).toBe(
       "Dana Kowalski added to Okonkwo residence.",
@@ -729,7 +729,7 @@ describe("a household member (PR-c / C5)", () => {
     fireEvent.change(screen.getByLabelText("Authority"), {
       target: { value: "Signs money to $2,500" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
     await waitFor(() => expect(addParty).toHaveBeenCalled());
     expect(addParty).toHaveBeenCalledWith(
       expect.objectContaining({ partyKind: "client_rep" }),
@@ -759,7 +759,7 @@ describe("a household member (PR-c / C5)", () => {
     fireEvent.change(screen.getByLabelText("Project"), {
       target: { value: PROJECT },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "A household member needs a name.",
     );
@@ -784,7 +784,7 @@ describe("someone else (PR-f)", () => {
     fireEvent.change(screen.getByLabelText("Full name"), {
       target: { value: "Ray Thao" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Say what they are to this job.",
     );
@@ -803,7 +803,7 @@ describe("someone else (PR-f)", () => {
     fireEvent.change(screen.getByLabelText("What they are to this job"), {
       target: { value: "city inspector" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
     await waitFor(() => expect(addParty).toHaveBeenCalled());
     expect(addParty).toHaveBeenCalledWith(
       expect.objectContaining({ partyKind: "other", trade: "city inspector" }),
@@ -847,7 +847,7 @@ describe("the recorded studio, while it is still resolving", () => {
   it("holds the act while the query is still out, and writes nothing", async () => {
     recordedStudio.loading = true;
     openSub();
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     expect(act.getAttribute("aria-describedby")).toContain(
       "add-person-recorded-studio-held",
@@ -865,7 +865,7 @@ describe("the recorded studio, while it is still resolving", () => {
   it("takes the no-card path on a resolved none, and says what was not kept", async () => {
     recordedStudio.current = null;
     openSub();
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).not.toHaveAttribute("aria-disabled");
     fireEvent.click(act);
 
@@ -878,7 +878,7 @@ describe("the recorded studio, while it is still resolving", () => {
 
   it("mints the card into the studio the job records once it resolves", async () => {
     openSub();
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
 
     await waitFor(() => expect(promote).toHaveBeenCalled());
     expect(promote).toHaveBeenCalledWith(
@@ -908,7 +908,7 @@ describe("the recorded studio, while it is still resolving", () => {
   it("holds the act when the book could not be read, and pressing it asks again", async () => {
     recordedStudio.isError = true;
     openSub();
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     expect(act.getAttribute("aria-describedby")).toContain(
       "add-person-recorded-studio-held",
@@ -933,7 +933,7 @@ describe("the recorded studio, while it is still resolving", () => {
   it("holds the act while the fetch is paused offline, and writes nothing", async () => {
     recordedStudio.fetchStatus = "paused";
     openSub();
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     expect(
       screen.getByText(
@@ -952,7 +952,7 @@ describe("the recorded studio, while it is still resolving", () => {
     recordedStudio.loading = true;
     openSheet();
     fireEvent.click(screen.getByRole("button", { name: "a client" }));
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).not.toHaveAttribute("aria-disabled");
     expect(
       screen.queryByText("Checking which studio keeps this job’s book."),
@@ -980,7 +980,7 @@ describe("the recorded studio, while it is still resolving", () => {
       target: { value: "Letter of 3 March" },
     });
 
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     expect(act.getAttribute("aria-describedby")).toContain(
       "add-person-authority-standing-held",
@@ -1011,7 +1011,7 @@ describe("the recorded studio, while it is still resolving", () => {
       target: { value: "Letter of 3 March" },
     });
 
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     expect(act.getAttribute("aria-describedby")).toContain(
       "add-person-authority-standing-held",
@@ -1072,7 +1072,7 @@ describe("the recorded studio, while it is still resolving", () => {
     ).not.toBeInTheDocument();
     // The seat itself is unaffected — it is the GRANT that has nowhere to go.
     expect(
-      screen.getByRole("button", { name: "Add to the roster" }),
+      screen.getByRole("button", { name: "Add to directory" }),
     ).not.toHaveAttribute("aria-disabled");
   });
 
@@ -1125,12 +1125,12 @@ describe("the recorded studio, while it is still resolving", () => {
 
     // The act is not held on a standing there is no job to read: the press
     // lands on the refusal that names what is actually missing.
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).not.toHaveAttribute("aria-disabled");
     fireEvent.click(act);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Field crew work a project — pick which one they’re on.",
+      "Select this contact’s project.",
     );
     expect(addParty).not.toHaveBeenCalled();
     expect(recordedStudioRefetch).not.toHaveBeenCalled();
@@ -1175,7 +1175,7 @@ describe("the recorded studio, while it is still resolving", () => {
     // back as the generic "Could not add them just now. Try again.". The
     // point here is only that the guest's standing takes the GRANT off the
     // press and does not turn the press itself into a client-side refusal.
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).not.toHaveAttribute("aria-disabled");
     fireEvent.click(act);
 
@@ -1240,7 +1240,7 @@ describe("the recorded studio, while it is still resolving", () => {
     view.rerender(
       <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
     );
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).not.toHaveAttribute("aria-disabled");
     fireEvent.click(act);
 
@@ -1312,7 +1312,7 @@ describe("the recorded studio, while it is still resolving", () => {
       target: { value: "Letter of 3 March" },
     });
 
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     expect(act.getAttribute("aria-describedby")).toContain(
       "add-person-recorded-studio-held",
@@ -1344,7 +1344,7 @@ describe("the recorded studio, while it is still resolving", () => {
       target: { value: "Letter of 3 March" },
     });
 
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     expect(act.getAttribute("aria-describedby")).toContain(
       "add-person-recorded-studio-held",
@@ -1385,7 +1385,7 @@ describe("the recorded studio, while it is still resolving", () => {
       target: { value: "Letter of 3 March" },
     });
 
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     expect(act.getAttribute("aria-describedby")).toContain(
       "add-person-recorded-studio-held",
@@ -1450,7 +1450,7 @@ describe("the recorded studio, while it is still resolving", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Authority")).not.toBeInTheDocument();
 
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).not.toHaveAttribute("aria-disabled");
     fireEvent.click(act);
 
@@ -1521,7 +1521,7 @@ describe("the recorded studio, while it is still resolving", () => {
     });
     expect(screen.getByLabelText("Authority")).toHaveValue("");
 
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).toHaveAttribute("aria-disabled", "true");
     expect(act.getAttribute("aria-describedby")).toContain(
       "add-person-authority-standing-held",
@@ -1551,7 +1551,7 @@ describe("the recorded studio, while it is still resolving", () => {
       screen.getByRole("button", { name: "Record the authority" }),
     );
 
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     expect(act).not.toHaveAttribute("aria-disabled");
     expect(
       screen.queryByText(
@@ -1578,7 +1578,7 @@ describe("the recorded studio, while it is still resolving", () => {
     fireEvent.change(screen.getByLabelText("Authority"), {
       target: { value: "Letter of 3 March" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
     await waitFor(() => expect(orgsRefetch).toHaveBeenCalled());
 
     orgsState.isError = false;
@@ -1586,7 +1586,7 @@ describe("the recorded studio, while it is still resolving", () => {
       <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
     );
 
-    const act = screen.getByRole("button", { name: "Add to the roster" });
+    const act = screen.getByRole("button", { name: "Add to directory" });
     await waitFor(() => expect(act).not.toHaveAttribute("aria-disabled"));
     expect(
       screen.queryByText(
@@ -1610,7 +1610,7 @@ describe("the maker door resolves first (R-PB4 · C-12)", () => {
   function fillMaker() {
     openSheet();
     fireEvent.click(screen.getByRole("button", { name: "a maker" }));
-    fireEvent.change(makerField(/^Maker name/), {
+    fireEvent.change(makerField(/^Maker or supplier name/), {
       target: { value: "Hewn Woodworks" },
     });
     fireEvent.change(makerField(/^Specialty/), {
@@ -1622,7 +1622,7 @@ describe("the maker door resolves first (R-PB4 · C-12)", () => {
     fireEvent.change(makerField(/^Website/), {
       target: { value: "hewn.example" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to directory" }));
   }
 
   it("offers the maker already in Patina, and creates nothing until Use it", async () => {
