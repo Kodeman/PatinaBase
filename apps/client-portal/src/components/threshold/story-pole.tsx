@@ -186,11 +186,11 @@ export function StoryPole({ phases, sections, firstBandAnchor = null }: StoryPol
       id="story-pole"
       data-testid="story-pole"
       data-open={open ? 'true' : 'false'}
-      aria-label="The story pole"
+      aria-label="Project sections"
       className="pt-1.5 max-[600px]:sticky max-[600px]:top-0 max-[600px]:z-[2] max-[600px]:border-b max-[600px]:border-[var(--border-default)] max-[600px]:bg-[var(--bg-primary)] max-[600px]:pb-1 max-[600px]:pt-0"
     >
       <p className="mb-3 font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)] max-[600px]:hidden">
-        The story pole
+        Project sections
       </p>
 
       {/* ≤600: one line that says where she is and opens the same list. The

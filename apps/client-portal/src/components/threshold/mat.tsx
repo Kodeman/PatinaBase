@@ -98,7 +98,7 @@ export function Mat({
       className="mt-[clamp(34px,4vw,58px)] border-t border-[var(--border-default)] pb-[clamp(90px,10vw,140px)] pt-4"
     >
       <p className="font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
-        The mat
+        Project details and documents
       </p>
 
       <div className="mt-4 grid gap-[clamp(18px,2.6vw,38px)] [grid-template-columns:repeat(auto-fit,minmax(230px,1fr))]">

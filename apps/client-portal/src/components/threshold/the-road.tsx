@@ -90,7 +90,7 @@ export function TheRoad({
           id="road-title"
           className="font-heading text-[1.35rem] font-medium tracking-[-0.012em]"
         >
-          The road
+          Orders in progress
         </h2>
         <p
           data-testid="road-lintel"
@@ -107,7 +107,7 @@ export function TheRoad({
       <svg
         data-testid="road-drawing"
         role="img"
-        aria-label="The road, ruled in the six stops a piece passes through, with the house at its right-hand edge"
+        aria-label="Orders in progress, shown across six delivery stages for each item"
         viewBox={`0 0 ${ROAD_W} ${ROAD_H}`}
         className="mt-4 block h-auto w-full"
         style={{ stroke: 'currentColor', fill: 'none', strokeWidth: 1, color: 'inherit' }}
@@ -155,14 +155,14 @@ export function TheRoad({
           data-testid="road-orders-error"
           className="mt-2.5 max-w-[60ch] text-[15px] leading-relaxed text-[var(--text-body)]"
         >
-          Couldn&rsquo;t load what you bought direct. Please refresh.
+          Couldn&rsquo;t load your direct purchases. Please refresh.
         </p>
       ) : null}
 
       {inMotion === 0 ? (
         closedOrders.length > 0 || ordersUnread ? null : (
           <p className="mt-2.5 max-w-[60ch] text-[15px] leading-relaxed text-[var(--text-body)]">
-            Nothing on the road.
+            No orders in progress.
           </p>
         )
       ) : pieces.length === 0 ? null : (
@@ -206,7 +206,7 @@ export function TheRoad({
                       <p>
                         {piece.roomName
                           ? `Bound for the ${piece.roomName}.`
-                          : 'No room is named on the record, so it stands on the road.'}
+                          : 'No room is named on the record for this order.'}
                       </p>
                       <ThresholdJourney stopIndex={piece.stageIndex} />
                     </div>

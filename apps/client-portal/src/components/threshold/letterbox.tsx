@@ -260,7 +260,7 @@ export function Letterbox({
       className="border-t border-[var(--border-default)] pt-3"
     >
       <p className="mb-2 font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
-        The letterbox
+        Invoices and payments
       </p>
 
       {/* One polite region for the surface: an act that opens the till says so
@@ -373,7 +373,7 @@ export function Letterbox({
               aria-controls="letterbox-letter"
               onClick={() => setOpen((was) => !was)}
             >
-              {open ? 'Close the letterbox' : 'Open the letterbox'}
+              {open ? 'Close invoice details' : 'Open invoice details'}
             </ScoredAction>
             {/* The letter in the slot keeps its printable sheet too: the line
                 items, the tax, the memo and the payments live on it, and the
@@ -406,7 +406,7 @@ export function Letterbox({
               ref={settlementRegion}
               tabIndex={-1}
               role="group"
-              aria-label="Settle this invoice"
+              aria-label="Pay this invoice"
             >
               {open && (
                 <Settlement
@@ -431,7 +431,7 @@ export function Letterbox({
           data-testid="letterbox-body"
           className="max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
         >
-          Nothing in the letterbox.
+          No current invoice.
         </p>
       )}
 

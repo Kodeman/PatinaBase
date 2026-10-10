@@ -194,7 +194,7 @@ export function PapersUnread({ onRetry }: { onRetry: () => void }) {
   return (
     <div data-testid="papers-unread" className="mt-6 max-w-[52ch]">
       <p className="text-[17px] leading-[1.62] text-[var(--text-primary)]">
-        Your papers could not be drawn just now. Nothing on them has changed.
+        Your documents could not load just now. Nothing on them has changed.
       </p>
       <div className="mt-3">
         <ScoredAction

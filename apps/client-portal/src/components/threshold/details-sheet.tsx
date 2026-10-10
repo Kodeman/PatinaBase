@@ -445,7 +445,7 @@ function NotificationsSection() {
           <p
             role="status"
             data-testid="details-prefs-saving"
-            aria-label="Saving what reaches you"
+            aria-label="Saving notification preferences"
             className="text-[13px] text-[var(--text-muted)]"
           >
             Saving…

@@ -50,7 +50,7 @@ export function LandmarkLedger({
 }: LandmarkLedgerProps) {
   const landmarks: Landmark[] = [
     ...(whereWeAre
-      ? [{ key: 'where_we_are', label: 'Where we are', anchor: 'doorstep' }]
+      ? [{ key: 'where_we_are', label: 'Project status', anchor: 'doorstep' }]
       : []),
     ...(whatChanged
       ? [{ key: 'what_changed', label: 'What changed', anchor: 'changed' }]
@@ -59,7 +59,7 @@ export function LandmarkLedger({
       ? [
           {
             key: 'what_you_owe',
-            label: 'What you owe',
+            label: 'Unpaid invoices',
             anchor: 'letterbox',
             neverDim: true as const,
           },
@@ -69,7 +69,7 @@ export function LandmarkLedger({
       ? [{ key: 'what_needs_you', label: 'What needs you', anchor: whatNeedsYou }]
       : []),
     ...(thePapers
-      ? [{ key: 'the_papers', label: 'The papers', anchor: 'mat-papers' }]
+      ? [{ key: 'the_papers', label: 'Documents', anchor: 'mat-papers' }]
       : []),
   ];
 

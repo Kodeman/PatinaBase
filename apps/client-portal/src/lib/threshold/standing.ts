@@ -60,8 +60,8 @@ export interface ThresholdStandingInput {
 
 function doorsClause(doors: number): string | null {
   if (doors <= 0) return null;
-  if (doors === 1) return 'one door in this house is closed until you sign it';
-  return `${countInWords(doors)} doors in this house are closed until you sign them`;
+  if (doors === 1) return 'one document needs your signature';
+  return `${countInWords(doors)} documents need your signature`;
 }
 
 /**
@@ -185,7 +185,7 @@ export function previouslyLine(receipt: { label: string; date: Date } | null): s
 /** The key's own heading — how much of this drawing waits on her hand. */
 export function keySentence(markCount: number): string {
   const marks = tally(markCount);
-  if (marks === 0) return 'Nothing stands open on this drawing.';
+  if (marks === 0) return 'No open requests on this room drawing.';
   if (marks === 1) return 'One mark stands open on this drawing.';
   return `${capitalize(countInWords(marks))} marks stand open on this drawing.`;
 }

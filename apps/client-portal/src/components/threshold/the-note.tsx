@@ -111,7 +111,7 @@ export function TheNote({
       // the screen reader's cursor.
       tabIndex={-1}
       data-threshold-unit="note"
-      aria-label="The note"
+      aria-label="Message from your designer"
       className="relative mt-8 border-t border-[var(--border-subtle)] pb-8 text-[var(--text-primary)]"
     >
       {line && (

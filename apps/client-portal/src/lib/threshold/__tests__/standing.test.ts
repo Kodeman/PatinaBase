@@ -9,7 +9,7 @@ describe('thresholdStanding — what is asked of the client', () => {
   it('names one closed door', () => {
     expect(
       thresholdStanding({ doors: 1, walls: 0, balanceCents: 0, nothingOwed: false }),
-    ).toBe('One door in this house is closed until you sign it.');
+    ).toBe('One document needs your signature.');
   });
 
   it('names finished work with no door', () => {
@@ -22,28 +22,28 @@ describe('thresholdStanding — what is asked of the client', () => {
     expect(
       thresholdStanding({ doors: 1, walls: 1, balanceCents: 0, nothingOwed: false }),
     ).toBe(
-      'One door in this house is closed until you sign it, and finished work waits for your acceptance.',
+      'One document needs your signature, and finished work waits for your acceptance.',
     );
   });
 
   it('counts several doors in words', () => {
     expect(
       thresholdStanding({ doors: 3, walls: 0, balanceCents: 0, nothingOwed: false }),
-    ).toBe('Three doors in this house are closed until you sign them.');
+    ).toBe('Three documents need your signature.');
   });
 
   it('counts several doors alongside the wall clause', () => {
     expect(
       thresholdStanding({ doors: 2, walls: 1, balanceCents: 0, nothingOwed: false }),
     ).toBe(
-      'Two doors in this house are closed until you sign them, and finished work waits for your acceptance.',
+      'Two documents need your signature, and finished work waits for your acceptance.',
     );
   });
 
   it('falls to figures past twelve', () => {
     expect(
       thresholdStanding({ doors: 13, walls: 0, balanceCents: 0, nothingOwed: false }),
-    ).toBe('13 doors in this house are closed until you sign them.');
+    ).toBe('13 documents need your signature.');
   });
 });
 
@@ -127,7 +127,7 @@ describe('keySentence', () => {
   });
 
   it('reports a clear drawing', () => {
-    expect(keySentence(0)).toBe('Nothing stands open on this drawing.');
+    expect(keySentence(0)).toBe('No open requests on this room drawing.');
   });
 
   it('counts more than two in words', () => {
@@ -139,7 +139,7 @@ describe('thresholdStanding — a real ask is never silenced', () => {
   it('names the door even when the caller says nothing is owed', () => {
     expect(
       thresholdStanding({ doors: 1, walls: 0, balanceCents: 0, nothingOwed: true }),
-    ).toBe('One door in this house is closed until you sign it.');
+    ).toBe('One document needs your signature.');
   });
 
   it('names finished work even when the caller says nothing is owed', () => {

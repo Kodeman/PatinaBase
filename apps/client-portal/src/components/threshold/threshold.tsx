@@ -1331,13 +1331,13 @@ export function Threshold({
     // noun the ≤600px bar puts after "You are in: ", which supplies the verb
     // itself — "You are in: You stand at the doorstep" says it twice.
     const sections = [
-      { id: "doorstep", label: "You stand at the doorstep", short: "the doorstep" },
+      { id: "doorstep", label: "Project status", short: "project status" },
       // The money and the ask, in the order the page prints them. Without
       // these two the caret could land on every part of the house except the
       // two the page is actually about.
       ...(model.groundFloor
         ? []
-        : [{ id: "letterbox", label: "The letterbox", short: "the letterbox" }]),
+        : [{ id: "letterbox", label: "Invoices and payments", short: "invoices and payments" }]),
       ...(firstGateAnchor
         ? [
             {
@@ -1345,7 +1345,7 @@ export function Threshold({
               label: "What needs you",
               // `firstGateAnchor` is only ever "wall" or "door" — the two
               // gates whose paper the page has already proven is present.
-              short: firstGateAnchor === "wall" ? "the wall" : "the door",
+              short: firstGateAnchor === "wall" ? "finished work to review" : "document to sign",
             },
           ]
         : []),
@@ -1355,18 +1355,18 @@ export function Threshold({
       // IA-21's own failure.
       ...(roomsUnread
         ? []
-        : [{ id: "key", label: "The whole house", short: "the whole house" }]),
+        : [{ id: "key", label: "Project rooms", short: "project rooms" }]),
       ...model.bands.map((band) => ({
         id: band.anchor,
         label: band.name,
         short: band.name,
       })),
-      ...(road ? [{ id: "road", label: "The road", short: "the road" }] : []),
-      ...(model.note ? [{ id: "note", label: "The note", short: "the note" }] : []),
+      ...(road ? [{ id: "road", label: "Orders in progress", short: "orders in progress" }] : []),
+      ...(model.note ? [{ id: "note", label: "Message from your designer", short: "designer message" }] : []),
       ...(model.previously.length > 0
         ? [{ id: "previously", label: "Previously", short: "Previously" }]
         : []),
-      { id: "mat", label: "The mat", short: "the mat" },
+      { id: "mat", label: "Project details and documents", short: "project details and documents" },
     ];
 
     body = (

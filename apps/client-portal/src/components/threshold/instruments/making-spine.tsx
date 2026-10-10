@@ -567,7 +567,7 @@ export function SpineMarker({
     >
       <div className="pb-4 pl-2">
         <p className="m-0 pt-4 font-mono text-[12.5px] font-semibold uppercase leading-none tracking-[0.26em] text-[var(--text-primary)]">
-          You are here
+          Current project stage
         </p>
         {openChapter ? (
           <p className="m-0 mt-[7px] font-heading text-[13.5px] italic leading-[1.45] text-[var(--text-body)]">

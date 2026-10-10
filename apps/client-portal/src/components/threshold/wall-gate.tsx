@@ -223,7 +223,7 @@ export function WallGate({
           id={`wall-title-${fieldId}`}
           className="font-heading text-[1.35rem] font-medium tracking-[-0.012em]"
         >
-          The painted wall
+          Finished work to review
         </h2>
         <p className="max-w-[34ch] text-[15px] leading-normal text-[var(--text-body)] sm:text-right">
           {[selection.roomName || null, party, 'substantially complete']

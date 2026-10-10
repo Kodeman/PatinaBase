@@ -91,7 +91,7 @@ export function hasChangedBlock(
  */
 const SENTENCE_OBJECTS: ReadonlyArray<{ pattern: RegExp; anchor: string }> = [
   { pattern: /finished work/i, anchor: 'wall' },
-  { pattern: /(?:one paper|[a-z0-9]+ papers)(?= waits? for your name)/i, anchor: 'door' },
+  { pattern: /(?:one document|[a-z0-9]+ documents)(?= needs? your signature)/i, anchor: 'door' },
   { pattern: /a balance of \S+(?= stands open)/i, anchor: 'letterbox' },
 ];
 
@@ -200,7 +200,7 @@ export function Doorstep({
               aria-pressed={sinceActive}
               onClick={onToggleSince}
             >
-              {sinceActive ? 'Show the whole house' : 'What changed since yesterday'}
+              {sinceActive ? 'Show all project updates' : 'What changed since yesterday'}
             </ScoredAction>
           )}
           {readingMark && (

@@ -28,7 +28,7 @@ export function OtherHouses({ houses }: { houses: OtherHouse[] }) {
 
   return (
     <div data-testid="mat-other-houses">
-      <h2 className={COLUMN_HEAD_CLASS}>Your other houses</h2>
+      <h2 className={COLUMN_HEAD_CLASS}>Your other projects</h2>
       {houses.map((house) => {
         const waiting = waitingSentence(house);
         return (

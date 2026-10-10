@@ -135,14 +135,14 @@ export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
           {keySentence}
         </p>
         <p className="font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
-          Key · the whole house
+          Key · project rooms
         </p>
       </div>
 
       <div className="mt-2.5 grid items-start gap-[clamp(18px,2.6vw,36px)] [grid-template-columns:minmax(0,1.45fr)_minmax(230px,1fr)] max-[960px]:[grid-template-columns:minmax(0,1fr)]">
         <svg
           role="group"
-          aria-label="The whole house"
+          aria-label="Project rooms"
           viewBox={phone ? phoneViewBox : geometry.viewBox}
           data-vb-phone={phoneViewBox}
           className="block h-auto w-full max-w-[560px] fill-none stroke-current stroke-1 text-[var(--text-primary)]"
@@ -166,7 +166,7 @@ export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
             );
           })}
 
-          <a href={`#${geometry.road.anchor}`} aria-label="The road" className={ANCHOR_CLASS}>
+          <a href={`#${geometry.road.anchor}`} aria-label="Orders in progress" className={ANCHOR_CLASS}>
             <line
               x1={geometry.road.x1}
               y1={geometry.road.y}
@@ -183,7 +183,7 @@ export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
               fontSize={type}
               className={TEXT_CLASS}
             >
-              The road
+              Orders in progress
             </text>
           </a>
 

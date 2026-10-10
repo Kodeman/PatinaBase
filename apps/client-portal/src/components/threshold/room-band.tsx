@@ -172,9 +172,9 @@ function RoomDrawing({
     <svg
       data-testid="room-band-drawing"
       role="img"
-      aria-label={`Section through ${roomName}, with ${countInWords(feet.length)} ${
-        feet.length === 1 ? 'footprint' : 'footprints'
-      } on the floor`}
+      aria-label={`${roomName} selections, ${countInWords(feet.length)} ${
+        feet.length === 1 ? 'piece' : 'pieces'
+      }`}
       viewBox={`0 0 ${drawW} ${DRAW_H}`}
       className="mt-4 block h-auto max-h-[140px] w-full"
       style={{ stroke: 'currentColor', fill: 'none', strokeWidth: 1, color: 'inherit' }}

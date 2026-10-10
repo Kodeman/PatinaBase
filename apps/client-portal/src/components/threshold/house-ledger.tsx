@@ -73,15 +73,15 @@ function figure(cents: number | null | undefined): cents is number {
  */
 function owedWords(count: number, studioCount: number, number: string | null): string {
   if (studioCount <= 0) {
-    if (count > 1) return `Owed across ${countInWords(count)} open invoices`;
-    return number ? `Owed on ${number}` : 'Owed on the open invoice';
+    if (count > 1) return `Unpaid across ${countInWords(count)} open invoices`;
+    return number ? `Unpaid on invoice ${number}` : 'Unpaid on the open invoice';
   }
   if (studioCount >= count) {
     return count > 1
-      ? `Owed across ${countInWords(count)} open invoices from the studio, not for this house`
-      : 'Owed on the open invoice from the studio, not for this house';
+      ? `Unpaid across ${countInWords(count)} open invoices from the studio, not for this house`
+      : 'Unpaid on the open invoice from the studio, not for this house';
   }
-  return `Owed across ${countInWords(count)} open invoices, ${countInWords(studioCount)} from the studio`;
+  return `Unpaid across ${countInWords(count)} open invoices, ${countInWords(studioCount)} from the studio`;
 }
 
 /**

@@ -5,7 +5,7 @@ import { Doorstep, type DoorstepProps } from '../doorstep';
 
 function step(overrides: Partial<DoorstepProps> = {}): DoorstepProps {
   return {
-    sentence: 'One door in this house is closed until you sign it.',
+    sentence: 'One document needs your signature.',
     previously: 'Previously — fourteen selections agreed, 19 June.',
     changedCount: 2,
     showSince: true,
@@ -20,8 +20,10 @@ describe('Doorstep — where she stands', () => {
     render(<Doorstep {...step()} />);
 
     expect(screen.getByTestId('doorstep-sentence')).toHaveTextContent(
-      'One door in this house is closed until you sign it.',
+      'One document needs your signature.',
     );
+    expect(screen.getByTestId('doorstep-sentence-object')).toHaveAttribute('href', '#door');
+    expect(screen.getByTestId('doorstep-sentence-object')).toHaveTextContent('One document');
     expect(screen.getByTestId('doorstep-previously')).toHaveTextContent(
       'Previously — fourteen selections agreed, 19 June.',
     );
@@ -76,7 +78,7 @@ describe('Doorstep — where she stands', () => {
     unmount();
 
     render(<Doorstep {...step({ sinceActive: true })} />);
-    const back = screen.getByRole('button', { name: /show the whole house/i });
+    const back = screen.getByRole('button', { name: /show all project updates/i });
     expect(back).toHaveAttribute('aria-pressed', 'true');
     expect(
       screen.queryByRole('button', { name: /what changed since yesterday/i }),
@@ -176,25 +178,25 @@ describe('Doorstep — a sentence that names a thing links to it', () => {
   it('links the papers to the door that holds them', () => {
     render(
       <Doorstep
-        {...step({ sentence: 'Two papers wait for your name. Installation comes next.' })}
+        {...step({ sentence: 'Two documents need your signature. Installation comes next.' })}
       />,
     );
 
     const object = screen.getByTestId('doorstep-sentence-object');
     expect(object).toHaveAttribute('href', '#door');
-    expect(object).toHaveTextContent('Two papers');
+    expect(object).toHaveTextContent('Two documents');
   });
 
   it('links the papers when the count outruns the words and comes back a numeral', () => {
     render(
       <Doorstep
-        {...step({ sentence: '13 papers wait for your name. Installation comes next.' })}
+        {...step({ sentence: '13 documents need your signature. Installation comes next.' })}
       />,
     );
 
     const object = screen.getByTestId('doorstep-sentence-object');
     expect(object).toHaveAttribute('href', '#door');
-    expect(object).toHaveTextContent('13 papers');
+    expect(object).toHaveTextContent('13 documents');
   });
 
   it('links an open balance to the letterbox', () => {
@@ -214,7 +216,7 @@ describe('Doorstep — a sentence that names a thing links to it', () => {
       <Doorstep
         {...step({
           sentence:
-            'One paper waits for your name, and a balance of $9,125.00 stands open.',
+            'One document needs your signature, and a balance of $9,125.00 stands open.',
         })}
       />,
     );

@@ -245,7 +245,7 @@ export function DoorActs({
   // reading a paper is not acting on it.
   const answerable = !declinedAt && !expired;
   const acts: { key: ActKey; label: string }[] = [
-    ...(kind && !isLegacy ? [{ key: 'read' as const, label: 'Read it in full' }] : []),
+    ...(kind && !isLegacy ? [{ key: 'read' as const, label: 'Read document' }] : []),
     ...(answerable && canAsk
       ? [{ key: 'question' as const, label: 'Ask a question' }]
       : []),
