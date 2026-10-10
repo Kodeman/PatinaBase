@@ -75,10 +75,10 @@ function ForgotPasswordContent() {
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <p className={EYEBROW}>
-                Password recovery
+                Password reset
               </p>
               <h2 className="mt-2 font-heading text-3xl leading-[1.1] tracking-[-0.03em] text-[#2C2926]">
-                Reset your password.
+                Reset your password
               </h2>
               <div aria-hidden="true" className={`mt-3.5 ${GILDED_RULE}`} />
               <p className="mt-3 text-sm leading-6 text-[#65594E]">

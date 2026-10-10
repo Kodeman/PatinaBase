@@ -104,21 +104,20 @@ export function OpenProjectSheet({
   };
 
   return (
-    <DocSheet open={open} onClose={onClose} title="Open a project">
+    <DocSheet open={open} onClose={onClose} title="Create a project file">
       <form onSubmit={submit} className="mx-auto w-full max-w-[34rem]">
         <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
-          New project · no proposal needed
+          Direct project setup
         </span>
         <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-charcoal)]">
-          What are you opening?
+          New project details
         </h2>
         <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-aged-oak)]">
-          Essentials only — the document fills in as you compose. Everything
-          here can change from the letterhead later.
+          Set up the project essentials. Edit these details from the project header later.
         </p>
 
         <div className="mt-7 space-y-5">
-          <Field label="Title">
+          <Field label="Project title">
             <Input
               autoFocus
               value={title}
@@ -127,7 +126,7 @@ export function OpenProjectSheet({
             />
           </Field>
 
-          <Field label="Household">
+          <Field label="Client">
             {/* The R73 picker: linked clients select directly; a captured
                 household with an email arms an invite that only sends on an
                 explicit confirm (J2). Optional — the household sheet can set
@@ -135,12 +134,12 @@ export function OpenProjectSheet({
             <ClientPicker
               value={clientId}
               onChange={setClientId}
-              placeholder="Who is this for? (optional)"
+              placeholder="Select client (optional)"
             />
           </Field>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <Field label="Budget band">
+            <Field label="Project budget range">
               <div className="flex items-baseline gap-2">
                 <span className="text-[13px] text-[var(--color-aged-oak)]">
                   $
@@ -148,7 +147,7 @@ export function OpenProjectSheet({
                 <Input
                   value={bandMin}
                   onChange={setBandMin}
-                  placeholder="from"
+                  placeholder="Lower budget"
                   inputMode="decimal"
                 />
                 <span className="text-[13px] text-[var(--color-aged-oak)]">
@@ -157,12 +156,12 @@ export function OpenProjectSheet({
                 <Input
                   value={bandMax}
                   onChange={setBandMax}
-                  placeholder="to"
+                  placeholder="Upper budget"
                   inputMode="decimal"
                 />
               </div>
             </Field>
-            <Field label="Start date">
+            <Field label="Project start date">
               <DateTextInput
                 value={startDate}
                 onChange={(value) => setStartDate(value ?? '')}
@@ -195,10 +194,10 @@ export function OpenProjectSheet({
             type="submit"
             disabled={!title.trim() || !dateValid}
             loading={openProject.isPending}
-            loadingLabel="Opening…"
+            loadingLabel="Creating project file…"
             trailing="→"
           >
-            Open the project
+            Create project file
           </DocumentAction>
           <DocumentAction
             actionKey="cancel-open-project"
@@ -208,7 +207,7 @@ export function OpenProjectSheet({
             Cancel
           </DocumentAction>
           <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-            opens the document
+            Creates and opens the project file
           </span>
         </DocumentActionGroup>
       </form>

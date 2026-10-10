@@ -29,9 +29,9 @@ import { DocumentAction } from '../../document-action';
 type ReviewTab = 'pending' | 'collected' | 'queued';
 
 const TABS: Array<[ReviewTab, string]> = [
-  ['pending', 'Pending'],
-  ['collected', 'Collected'],
-  ['queued', 'Queued'],
+  ['pending', 'Open review requests'],
+  ['collected', 'Received reviews'],
+  ['queued', 'Scheduled requests'],
 ];
 
 function stars(rating: number | null | undefined): string {
@@ -141,7 +141,7 @@ export function ReviewsView({ notify }: PeopleViewProps) {
               name={reviewClientName(r)}
               why={
                 <>
-                  Request sent — awaiting their words
+                  Awaiting client review
                   <DeliveryWord
                     delivery={requestDelivery.byRef[r.id] ?? null}
                     recipient={r.designer_client?.client_email ?? null}
@@ -356,7 +356,7 @@ function RequestButton({
       variant="primary"
       onClick={onClick}
     >
-      Request
+      Request client review
     </DocumentAction>
   );
 }

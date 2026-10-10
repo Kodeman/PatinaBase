@@ -25,25 +25,25 @@ export interface PeopleViewGroup {
 export const PEOPLE_VIEW_GROUPS: readonly PeopleViewGroup[] = [
   {
     key: "directory",
-    name: "Directory",
+    name: "Contact directory",
     views: [{ key: "directory", name: "Directory" }],
   },
   {
     key: "relationships",
-    name: "Relationships",
+    name: "Client relations",
     views: [
-      { key: "threads", name: "Threads" },
-      { key: "nurture", name: "Nurture" },
-      { key: "reviews", name: "Reviews" },
+      { key: "threads", name: "Correspondence" },
+      { key: "nurture", name: "Relationship follow-ups" },
+      { key: "reviews", name: "Client reviews" },
     ],
   },
   {
     key: "practice",
-    name: "Practice",
+    name: "Studio marketing",
     views: [
       { key: "portfolio", name: "Portfolio" },
-      { key: "outreach", name: "Outreach" },
-      { key: "your-eye", name: "Your Eye" },
+      { key: "outreach", name: "Email campaigns" },
+      { key: "your-eye", name: "Design profile" },
     ],
   },
 ];

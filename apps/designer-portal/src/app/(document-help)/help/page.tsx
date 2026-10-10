@@ -53,7 +53,7 @@ export default function HelpCenterPage() {
       </section>
 
       {/* Pinned walkthrough row — always present, above Featured. */}
-      <section aria-label="The Desk walkthrough">
+      <section aria-label="Studio overview tour">
         <Link
           href="/desk?tour=desk-walkthrough"
           className="flex items-baseline justify-between gap-4 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-4 py-3.5 transition-colors hover:border-[var(--color-clay)]"
@@ -75,7 +75,7 @@ export default function HelpCenterPage() {
           id="featured-heading"
           className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
         >
-          Featured
+          Featured guides
           <span className="h-px flex-1 bg-[var(--color-pearl)]" />
         </p>
         {featuredEmpty ? (
@@ -98,7 +98,7 @@ export default function HelpCenterPage() {
           id="categories-heading"
           className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
         >
-          By topic
+          Browse topics
           <span className="h-px flex-1 bg-[var(--color-pearl)]" />
         </p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

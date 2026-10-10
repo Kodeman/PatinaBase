@@ -760,8 +760,8 @@ export function CommandBar() {
         kind: 'help',
         key: 'help-center',
         icon: LifeBuoy,
-        label: 'Browse the Help Center',
-        sub: 'guides · every surface',
+        label: 'Help center',
+        sub: 'Workspace guides',
         run: () => router.push('/help'),
         match: 'browse help center guides support articles every surface',
       },
@@ -770,8 +770,8 @@ export function CommandBar() {
         kind: 'help',
         key: 'what-changed',
         icon: History,
-        label: 'What changed',
-        sub: 'changes to the Document, newest first',
+        label: 'Release notes',
+        sub: 'Portal release notes, newest first',
         run: () => router.push(CHANGES_HREF),
         match: 'what changed changes release notes updates recent the document',
       },
@@ -783,7 +783,7 @@ export function CommandBar() {
         kind: 'help',
         key: 'the-keys',
         icon: Keyboard,
-        label: oneVoice ? 'Keys' : 'The keys',
+        label: oneVoice ? 'Keyboard shortcuts' : 'Keyboard shortcuts',
         sub: oneVoice ? '' : 'shortcuts, one page',
         ...(oneVoice ? { shortcut: ['?'] } : {}),
         run: () => openKeys('palette'),
@@ -794,8 +794,8 @@ export function CommandBar() {
         kind: 'help',
         key: 'the-words',
         icon: Type,
-        label: 'The words',
-        sub: 'what Patina calls things',
+        label: 'Terminology guide',
+        sub: 'Studio terminology explained',
         run: () => {
           safeCapture(HELP_EVENTS.GLOSSARY_OPENED, { source: 'palette' });
           router.push(THE_WORDS_HREF);
@@ -805,8 +805,8 @@ export function CommandBar() {
       {
         kind: 'action',
         key: 'help-panel',
-        label: 'Help…',
-        sub: 'about this surface',
+        label: 'Page help',
+        sub: 'Help for this workspace',
         run: () => openHelp(),
         match: 'help guide docs how to support question learn about this surface',
       },
@@ -815,23 +815,23 @@ export function CommandBar() {
         // param; the walkthrough reads it, restart()s, and strips the param.
         kind: 'action',
         key: 'take-walkthrough',
-        label: 'Take the walkthrough',
-        sub: 'the Desk, in a minute',
+        label: 'Studio orientation',
+        sub: 'An introduction to the studio overview',
         run: () => router.push('/desk?tour=desk-walkthrough'),
         match: 'walkthrough tour show me around orientation intro take the walkthrough',
       },
       {
         kind: 'action',
         key: 'leave-note',
-        label: 'Leave a note',
-        sub: 'feedback on this screen',
+        label: 'Share feedback',
+        sub: 'Feedback about this workspace',
         run: () => openFeedbackSheet(),
         match: 'feedback note comment bug idea working missing change suggestion leave a note',
       },
       {
         kind: 'action',
         key: 'desk',
-        label: 'The Desk',
+        label: 'Studio overview',
         sub: 'go home',
         run: () => router.push('/desk'),
         match: 'the desk go home',
@@ -839,16 +839,16 @@ export function CommandBar() {
       {
         kind: 'action',
         key: 'interruptions',
-        label: 'Interruptions',
-        sub: 'break-through settings',
+        label: 'Priority notifications',
+        sub: 'Configure priority notifications',
         run: () => window.dispatchEvent(new CustomEvent('document:open-interruptions')),
         match: 'interruptions break-through settings notifications',
       },
       {
         kind: 'action',
         key: 'settings',
-        label: 'Settings',
-        sub: 'profile · notifications · security',
+        label: 'Studio settings',
+        sub: 'Profile · notifications · security',
         run: openAccount,
         match: 'account profile preferences settings security notifications devices password studio',
       },
@@ -1053,14 +1053,14 @@ export function CommandBar() {
       // below the fold (the list scrolls).
       sections = [];
       if (stageRows.length) {
-        sections.push({ eyebrow: 'Where the work stands', rows: stageRows });
+        sections.push({ eyebrow: 'Project stages', rows: stageRows });
       }
       if (inHandRow) {
-        sections.push({ eyebrow: 'In hand', rows: [documentRow(inHandRow, 'resume')] });
+        sections.push({ eyebrow: 'Open project file', rows: [documentRow(inHandRow, 'resume')] });
       }
       if (recentBoards.length) {
         sections.push({
-          eyebrow: 'Recent boards',
+          eyebrow: 'Recent design boards',
           rows: recentBoards.slice(0, 4).map(recentBoardRow),
         });
       }
@@ -1068,7 +1068,7 @@ export function CommandBar() {
         .filter((r) => r.id !== inHandRow?.engagement_id)
         .slice(0, 3)
         .map(recentRow);
-      if (recentRows.length) sections.push({ eyebrow: 'Recent', rows: recentRows });
+      if (recentRows.length) sections.push({ eyebrow: 'Recent files', rows: recentRows });
 
       const thisSurface: PaletteRow[] = [];
       if (addToProjectRow) thisSurface.push(addToProjectRow);
@@ -1079,7 +1079,7 @@ export function CommandBar() {
         thisSurface.push({
           kind: 'verb',
           key: 'draw-invoice-here',
-          label: `Draw an invoice · ${projectName}`,
+          label: `Draft an invoice · ${projectName}`,
           sub: 'this household · pre-addressed',
           icon: DRAW_INVOICE_ICON,
           run: () => openInvoiceComposer({ projectId }),
@@ -1090,7 +1090,7 @@ export function CommandBar() {
         thisSurface.push({
           kind: oneVoice ? 'verb' : 'room',
           key: 'drafting-room-here',
-          label: oneVoice ? WRITE_THE_PROPOSAL : 'Open the Contract Room',
+          label: oneVoice ? WRITE_THE_PROPOSAL : 'Open the proposal workspace',
           sub: 'this proposal · boards & lines',
           icon: DRAFTING_ROOM_ICON,
           run: () => router.push(`/drafting/${draftingProposalId}`),
@@ -1112,19 +1112,19 @@ export function CommandBar() {
           ),
         );
       }
-      if (thisSurface.length) sections.push({ eyebrow: 'This surface', rows: thisSurface });
+      if (thisSurface.length) sections.push({ eyebrow: 'Current workspace', rows: thisSurface });
 
       // F37 — the doors you already have stand above the doors that start
       // something new.
       sections.push({
-        eyebrow: 'Rooms & ledgers',
+        eyebrow: 'Studio resources & administration',
         rows: [
           ...STUDIO_ROOMS.filter((s) => s.scope === 'global'),
           ...STUDIO_LEDGERS.filter((s) => s.scope === 'global'),
         ].map(surfaceRow),
       });
-      sections.push({ eyebrow: 'Begin', rows: STUDIO_VERBS.map(surfaceRow) });
-      sections.push({ eyebrow: 'Studio', rows: utilityRows });
+      sections.push({ eyebrow: 'New work', rows: STUDIO_VERBS.map(surfaceRow) });
+      sections.push({ eyebrow: 'Studio support & settings', rows: utilityRows });
     } else {
       // Typed: filter across documents + registry surfaces (matchSurfaces folds
       // in aliases — "invoicing" finds Draw an invoice, "moodboards" Boards,
@@ -1460,7 +1460,7 @@ export function CommandBar() {
             match: recordPayment.toLowerCase(),
           });
         }
-        const drawInvoice = 'Draw an invoice';
+        const drawInvoice = 'Draft an invoice';
         if (moneyAsked || drawInvoice.toLowerCase().includes(q)) {
           acts.push({
             kind: 'verb',
@@ -1512,7 +1512,7 @@ export function CommandBar() {
         const searchAllRow: PaletteRow = {
           kind: 'action',
           key: 'search-all-jobs',
-          label: `Search all jobs for "${typed}"`,
+          label: `Search all project files for "${typed}"`,
           sub: '',
           run: () => setSearchAll(true),
           match: '',
@@ -1542,13 +1542,13 @@ export function CommandBar() {
           });
         } else {
           if (paperRows.length) {
-            sections.push({ eyebrow: `On this paper · ${paperProject.title}`, rows: paperRows });
+            sections.push({ eyebrow: `Project file · ${paperProject.title}`, rows: paperRows });
           }
-          if (acts.length) sections.push({ eyebrow: 'Acts on this paper', rows: acts });
+          if (acts.length) sections.push({ eyebrow: 'Project file actions', rows: acts });
         }
         // R25 — `Elsewhere` holds these three, in this order, and nothing else.
         sections.push({
-          eyebrow: 'Elsewhere',
+          eyebrow: 'Other studio results',
           rows: [searchAllRow, ...typedStageRows, ...elsewhere],
         });
         // R24 — the Engine's ask stands after Elsewhere, before Help.
@@ -1562,13 +1562,13 @@ export function CommandBar() {
         // Esc steps back to the paper; the first result takes focus.
         const allJobs = list.filter((r) => r.key.startsWith('doc:') || r.kind === 'person');
         sections = allJobs.length
-          ? [{ eyebrow: 'All jobs', rows: allJobs }]
-          : [{ eyebrow: null, note: `Nothing matches "${typed}".`, rows: [] }];
+          ? [{ eyebrow: 'All project files', rows: allJobs }]
+          : [{ eyebrow: null, note: `No results for "${typed}". Refine your search.`, rows: [] }];
         matches = allJobs.length;
       } else if (matches === 0 && askThePaperOn) {
         // R31 — the Desk's dry query: the sentence, where the work stands,
         // the ask, and one Help row.
-        sections = [{ eyebrow: null, note: `Nothing matches "${typed}".`, rows: [] }];
+        sections = [{ eyebrow: null, note: `No results for "${typed}". Refine your search.`, rows: [] }];
         if (stageRows.length) {
           sections.push({ eyebrow: 'Where the work stands', rows: stageRows });
         }
@@ -1580,7 +1580,7 @@ export function CommandBar() {
             kind: 'help',
             key: 'help-center-recovery',
             icon: LifeBuoy,
-            label: 'No match',
+            label: 'No matching results',
             sub: 'Try the Help Center',
             run: () => router.push('/help'),
             match: '',
@@ -1802,12 +1802,12 @@ export function CommandBar() {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Command bar"
+      aria-label="Studio search"
       className="fixed inset-0 z-[70] flex items-start justify-center pt-[12vh]"
     >
       <button
         type="button"
-        aria-label="Close command bar"
+        aria-label="Close studio search"
         className="absolute inset-0 cursor-default bg-[rgba(44,41,38,0.45)]"
         onClick={() => setOpen(false)}
       />
@@ -1836,8 +1836,8 @@ export function CommandBar() {
           }
           aria-controls={asking ? undefined : RESULTS_ID}
           aria-owns={asking ? undefined : RESULTS_ID}
-          aria-label="Find anything"
-          placeholder="Find a document or a ledger…"
+          aria-label="Studio search"
+          placeholder="Search project files, contacts and tools…"
           className="w-full border-b border-[var(--color-pearl)] bg-transparent px-4 py-3 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-muted)] focus:outline-none"
           value={query}
           onChange={(e) => {
@@ -1895,7 +1895,7 @@ export function CommandBar() {
             ) : (
               <p role="status" className="sr-only">
                 {resultCount === 0
-                  ? 'Nothing matches.'
+                  ? 'No matching results.'
                   : `${resultCount} ${resultCount === 1 ? 'result' : 'results'}`}
               </p>
             )}

@@ -102,7 +102,7 @@ function ContactRow({
           onClick={() => onEdit(contact)}
           disabled={pending}
         >
-          Edit
+          Edit contact record
         </DocumentAction>
       )}
       <DocumentAction
@@ -187,9 +187,9 @@ export function RolodexSeedSheet({
   };
 
   return (
-    <RoomSheet open={open} onClose={onClose} title="Seed the rolodex">
+    <RoomSheet open={open} onClose={onClose} title="Set up studio directory">
       <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
-        The rolodex · seeded
+        Directory setup
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
         Seed the rolodex
@@ -247,7 +247,7 @@ export function RolodexSeedSheet({
         className="mt-5 border-t border-[var(--color-pearl)] pt-4"
       >
         <DocumentAction actionKey="done-rolodex-seed-review" variant="primary" onClick={onClose}>
-          Done
+          Complete directory setup
         </DocumentAction>
       </DocumentActionGroup>
 

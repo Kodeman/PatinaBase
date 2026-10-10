@@ -20,22 +20,22 @@ import { marginAccent } from '@/lib/document/margin-derivation';
 const KINDS: { key: InterruptionKind; label: string; blurb: string }[] = [
   {
     key: 'decision',
-    label: 'Decisions',
+    label: 'Overdue decisions',
     blurb: 'An overdue decision breaks through.',
   },
   {
     key: 'message',
-    label: 'Messages',
+    label: 'Client messages',
     blurb: 'A new client message breaks through.',
   },
-  { key: 'invoice', label: 'Money', blurb: 'A payment event breaks through.' },
+  { key: 'invoice', label: 'Payment events', blurb: 'A payment event breaks through.' },
   {
     key: 'pulse',
-    label: 'The Pulse',
+    label: 'Weekly studio summary',
     blurb: 'The Friday Pulse breaks through.',
   },
-  { key: 'time', label: 'Time', blurb: 'Time summaries break through.' },
-  { key: 'note', label: 'Notes', blurb: 'A dued note breaks through.' },
+  { key: 'time', label: 'Time summaries', blurb: 'Time summaries break through.' },
+  { key: 'note', label: 'Due notes', blurb: 'A dued note breaks through.' },
 ];
 
 export function InterruptionSettings() {
@@ -51,7 +51,7 @@ export function InterruptionSettings() {
   }, []);
 
   return (
-    <DocSheet open={open} onClose={() => setOpen(false)} title="Interruptions">
+    <DocSheet open={open} onClose={() => setOpen(false)} title="Priority notifications">
       <div className="mx-auto max-w-xl">
         <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
           Interruptions

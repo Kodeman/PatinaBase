@@ -59,12 +59,12 @@ export const DIRECTORY_CHIPS: readonly DirectoryChip[] = [
 ] as const;
 
 export const DIRECTORY_CHIP_LABELS: Record<DirectoryChip, string> = {
-  everyone: 'Everyone',
+  everyone: 'All contacts',
   clients: 'Clients',
-  crew: 'Crew',
-  makers: 'Makers',
-  studio: 'Studio',
-  firms: 'Firms',
+  crew: 'Trades & contractors',
+  makers: 'Makers & suppliers',
+  studio: 'Studio team',
+  firms: 'Companies',
 };
 
 /** The chip the Directory opens on when the address names none. */

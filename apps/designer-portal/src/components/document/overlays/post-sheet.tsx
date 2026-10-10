@@ -60,8 +60,8 @@ const POST_ICON = STUDIO_LEDGERS.find((l) => l.key === 'the-post')!.icon;
 const PAGES: { key: PostPage; label: string }[] = [
   // Letters first per R82's naming, but the bell lands on the Record — the
   // notices are what its dot counts. See the open handler below.
-  { key: 'letters', label: 'Letters' },
-  { key: 'record', label: 'The Record' },
+  { key: 'letters', label: 'Correspondence' },
+  { key: 'record', label: 'Activity log' },
 ];
 
 /** Open the Post from anywhere in the document model (the sheet listens). */
@@ -217,7 +217,7 @@ export function PostSheet() {
     <DocSheet
       open={open}
       onClose={() => setOpen(false)}
-      title="The Post"
+      title="Studio inbox"
       icon={POST_ICON}
       pageLabel={page === 'record' ? 'The Record' : 'Letters'}
       helpKey={DOCUMENT_SURFACE_KEYS.thePost}
@@ -234,7 +234,7 @@ export function PostSheet() {
               onClick={markAllRead}
               className="text-[var(--text-body)]"
             >
-              Mark all read
+              Mark all notifications as read
             </DocumentAction>
           </div>
         )}
@@ -307,12 +307,12 @@ function RecordList({
   loading: boolean;
   onOpen: (item: RecordItem) => void;
 }) {
-  if (loading) return <QuietLine text="Gathering the record…" />;
+  if (loading) return <QuietLine text="Loading activity…" />;
   if (items.length === 0) {
     return (
       <QuietLine
-        text="The record is clear."
-        hint="Decisions, deliveries, and updates are noted here as they happen."
+        text="No activity yet."
+        hint="Project decisions, deliveries, and updates appear here."
       />
     );
   }
@@ -380,7 +380,7 @@ function RecordRow({ item, onOpen }: { item: RecordItem; onOpen: () => void }) {
                   <span aria-hidden> · </span>
                   {/* A quiet reference, not an act — the Desk already holds it. */}
                   <span className="font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
-                    on your Desk ↗
+                    Also in Studio overview ↗
                   </span>
                 </>
               )}
@@ -403,11 +403,11 @@ function LetterList({
   loading: boolean;
   onOpen: (m: InboxMessage) => void;
 }) {
-  if (loading) return <QuietLine text="Gathering the letters…" />;
+  if (loading) return <QuietLine text="Loading correspondence…" />;
   if (letters.length === 0) {
     return (
       <QuietLine
-        text="No letters yet."
+        text="No correspondence yet."
         hint="Messages from a project, a vendor brief, or a person gather here."
       />
     );

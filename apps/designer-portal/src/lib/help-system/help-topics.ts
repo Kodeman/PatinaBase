@@ -29,7 +29,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     prefixes: ['designer-portal/document/guide'],
   },
   {
-    label: 'The Desk & the Studio',
+    label: 'Studio overview & navigation',
     description: 'The one screen you start from, and the index of every room, ledger, and way in.',
     prefixes: [
       'designer-portal/document/desk',
@@ -38,7 +38,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
-    label: 'Your documents',
+    label: 'Project files',
     description:
       "A project is one document, brief through care — sections, stamps, the margin, and the client's copy.",
     prefixes: [
@@ -48,7 +48,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
-    label: 'Rooms',
+    label: 'Studio resources',
     description: 'The places you walk into: the Library, the People room, the Contract Room, Composing.',
     prefixes: [
       'designer-portal/document/library',
@@ -58,7 +58,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
-    label: 'Ledgers & money',
+    label: 'Studio administration',
     description: 'The books that slide over your work: Orders, Accounts, Hours, and The Post.',
     prefixes: [
       'designer-portal/document/orders',
@@ -69,17 +69,17 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
   },
   {
-    label: 'Ideas & vocabulary',
+    label: 'Terminology',
     description: 'The words Patina uses on purpose — stamps, courts, the margin, the Engine — and why.',
     prefixes: ['designer-portal/document/concept'],
   },
   {
-    label: 'How do I…',
+    label: 'How-to guides',
     description: 'Short answers to the everyday moves: send a proposal, chase an invoice, log a delivery.',
     prefixes: ['designer-portal/document/how-to'],
   },
   {
-    label: 'For your clients',
+    label: 'Client portal help',
     description: 'What your client sees in their portal, and how to help them read and respond.',
     prefixes: ['client-portal'],
   },

@@ -59,16 +59,16 @@ type RowVariant = 'room' | 'ledger' | 'verb';
 // consumers, e.g. `rooms`'s longer drawer gloss) — the Desk Contents' own
 // concise phrasing lives here.
 const ROOM_SUBLABEL: Record<string, string> = {
-  library: 'pieces and makers',
-  people: 'clients, makers, trades',
-  rooms: 'measured rooms',
+  library: 'Products and makers',
+  people: 'Clients, makers and trades',
+  rooms: 'Measured room records',
 };
 
 const LEDGER_SUBLABEL: Record<string, string> = {
-  orders: 'POs, receiving, claims',
-  accounts: 'invoices, receivables, earnings',
-  hours: 'time in hand',
-  'the-post': 'mail and messages',
+  orders: 'Purchase orders, receiving and claims',
+  accounts: 'Invoices, receivables and earnings',
+  hours: 'Recorded hours',
+  'the-post': 'Correspondence and notifications',
 };
 
 /**
@@ -170,7 +170,7 @@ function HoursInHandAct() {
       }}
       className="doc-type-meta pl-[22px] text-left text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4"
     >
-      hours to bill →
+      Invoice recorded hours
     </button>
   );
 }
@@ -343,12 +343,12 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
       }
     >
       <SectionEyebrow>
-        <span id="the-studio">The Studio</span>
+        <span id="the-studio">Studio resources</span>
       </SectionEyebrow>
 
       <div className="grid grid-cols-1 gap-x-12 gap-y-9 min-[700px]:grid-cols-3">
         <div>
-          <ColumnHead>Rooms</ColumnHead>
+          <ColumnHead>Studio resources</ColumnHead>
           <ul>
             {rooms.map((room) => (
               <ContentsRow
@@ -365,7 +365,7 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
         </div>
 
         <div>
-          <ColumnHead>Ledgers</ColumnHead>
+          <ColumnHead>Studio administration</ColumnHead>
           <ul>
             {ledgers.map((ledger) => (
               <ContentsRow
@@ -383,7 +383,7 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
         </div>
 
         <div>
-          <ColumnHead>Begin</ColumnHead>
+          <ColumnHead>New work</ColumnHead>
           <ul>
             {/* A9: capture-lead is the Desk header's primary CTA — showing it
                 again in the Studio Contents index is the A9 triplicate; ⌘K
@@ -407,8 +407,8 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
                 exports rather than a doorway string (C-AF-01). */}
             <ContentsRow
               icon={PenTool}
-              label={oneVoice ? 'Write the proposal' : 'Open the Contract Room'}
-              subLabel="facets fill in any order"
+              label={oneVoice ? 'Prepare a design proposal' : 'Open the Contract Room'}
+              subLabel="Prepare sections in any order"
               variant="verb"
               prominent={prominent}
               onOpen={openDraftingRoomRow}

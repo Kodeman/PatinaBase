@@ -372,7 +372,7 @@ export function PersonProfile({
           variant="tertiary"
           onClick={onBack}
         >
-          Back
+          Back to directory
         </DocumentAction>
         <p className="t-body-sm py-6 text-[var(--ink-subtle)]">
           {isLoading
@@ -514,7 +514,7 @@ export function PersonProfile({
                   )
                 }
               >
-                Hours
+                Time records
               </DocumentAction>
             </div>
           )}
@@ -575,13 +575,13 @@ export function PersonProfile({
             if (textableSeat && onOpenSeat) onOpenSeat(textableSeat);
           }}
         >
-          Send a text
+          Send text message
         </DocumentAction>
       </section>
 
       {/* R4 — Seats on projects */}
       <section className={REGION}>
-        <h3 className={REGION_HEAD}>Seats on projects</h3>
+        <h3 className={REGION_HEAD}>Project assignments</h3>
         {liveSeats.length === 0 ? (
           <p className="t-body-sm text-[var(--ink-subtle)]">
             {NO_SEAT_SENTENCE}
@@ -615,7 +615,7 @@ export function PersonProfile({
 
       {/* R4b — Past seats, folded */}
       <section className={REGION}>
-        <h3 className={REGION_HEAD}>Past seats</h3>
+        <h3 className={REGION_HEAD}>Past assignments</h3>
         {pastSeats.length === 0 ? (
           <p className="t-body-sm text-[var(--ink-subtle)]">
             {NO_PAST_SEATS_SENTENCE}
@@ -659,7 +659,7 @@ export function PersonProfile({
           documents are the firm's (direction §3.2 R5). */}
       {soleProprietor && (
         <section className={REGION} data-person-paper>
-          <h3 className={REGION_HEAD}>Paper</h3>
+          <h3 className={REGION_HEAD}>Documents on file</h3>
           {!owesPaper ? (
             <p className="t-body-sm text-[var(--ink-subtle)]">
               {NO_PAPER_OWED_SENTENCE}
@@ -690,7 +690,7 @@ export function PersonProfile({
                 variant="secondary"
                 onClick={() => setRecordOpen(true)}
               >
-                Record a document
+                Add document record
               </DocumentAction>
             </>
           )}
@@ -699,7 +699,7 @@ export function PersonProfile({
 
       {/* R6 — History */}
       <section className={REGION}>
-        <h3 className={REGION_HEAD}>History</h3>
+        <h3 className={REGION_HEAD}>Relationship history</h3>
         <p className="t-body-sm text-[var(--ink)]">
           {`Worked ${projectCount} of the studio's ${
             projectCount === 1 ? "project" : "projects"

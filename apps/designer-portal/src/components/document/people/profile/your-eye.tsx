@@ -118,7 +118,7 @@ export function YourEyePanel() {
             . It keeps learning as you teach.
           </>
         ) : (
-          <>Your eye is still being learned from your teaching. Weigh a few pairs and it starts to take shape.</>
+          <>Compare product pairs to begin your design profile.</>
         )}
       </p>
 
@@ -131,7 +131,7 @@ export function YourEyePanel() {
 
       {/* 1. Center of gravity */}
       <section>
-        <SectionHead title="Center of gravity" note="Where your choices settle, across the six dimensions." />
+        <SectionHead title="Style profile" note="Where your choices settle, across the six dimensions." />
         {hasCenter && profile ? (
           <div className="mt-4 space-y-3.5">
             {SPECTRUM_POLES.map((pole) => (
@@ -146,7 +146,7 @@ export function YourEyePanel() {
       {/* 2. Signature biases */}
       <section>
         <SectionHead
-          title="Signature moves"
+          title="Signature preferences"
           note="Named leans the Engine has noticed. Confirm the true ones, soften or mute the rest — your edits never rewrite what was learned."
         />
         {biases && biases.length > 0 ? (
@@ -167,7 +167,7 @@ export function YourEyePanel() {
 
       {/* 3. Confidence by style */}
       <section>
-        <SectionHead title="Confidence by style" note="How settled your eye is, style by style." />
+        <SectionHead title="Style confidence" note="How settled your eye is, style by style." />
         {confidence && confidence.length > 0 ? (
           <ul className="mt-4 space-y-1.5">
             {confidence.map((row) => (
@@ -189,7 +189,7 @@ export function YourEyePanel() {
       {/* 4. Deviation from house */}
       <section>
         <SectionHead
-          title="Where you diverge from the house"
+          title="Differences from Patina’s style"
           note="That divergence is the point — it's what makes you you."
         />
         <DeviationList profile={profile ?? null} />

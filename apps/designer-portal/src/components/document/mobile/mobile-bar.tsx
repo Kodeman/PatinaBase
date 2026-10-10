@@ -352,14 +352,14 @@ export function MobileBar() {
           // element detached, webkit never found it at all.
           data-sections-door=""
           aria-label={
-            stopLabel ? `Open sections, at ${stopLabel}` : 'Open sections'
+            stopLabel ? `Open project contents, at ${stopLabel}` : 'Open project contents'
           }
           className="flex min-h-11 min-w-0 flex-[1_1_0] items-center gap-2 rounded-[4px] px-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
           {STRATA}
           <span className="min-w-0">
             <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.58)]">
-              In this document
+              Project file sections
             </span>
             {household && (
               <span
@@ -386,7 +386,7 @@ export function MobileBar() {
                 oneVoice ? 'break-words' : 'truncate'
               } ${stopLabel ? '' : 'invisible'}`}
             >
-              At {placeWord ?? '\u00a0'}
+              Section: {placeWord ?? '\u00a0'}
             </span>
           </span>
         </button>
@@ -395,7 +395,7 @@ export function MobileBar() {
           {STRATA}
           <span className="min-w-0">
             <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.58)]">
-              In the studio
+              Studio navigation
             </span>
             <span className="block truncate font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
               {context}
@@ -435,7 +435,7 @@ export function MobileBar() {
       >
         <Ellipsis className="h-5 w-5" strokeWidth={1.5} aria-hidden />
         <span className="font-mono text-[12px] uppercase tracking-[0.08em]">
-          More
+          More actions
         </span>
       </button>
 
@@ -630,7 +630,7 @@ export function MobileBar() {
               aria-hidden
             />
             <span className="min-w-0 flex-1">
-              <span className="block text-[14px]">Time in hand</span>
+              <span className="block text-[14px]">Active session time</span>
               <span className="block font-mono text-[12px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.58)]">
                 {fmtElapsedQuiet(elapsedSeconds)} · review or adjust
               </span>

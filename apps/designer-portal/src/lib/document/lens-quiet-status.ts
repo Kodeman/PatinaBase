@@ -25,8 +25,8 @@ import { calendarDaysPast } from '@patina/supabase';
 import { LENS_COUNT_MAX_CHARS } from './lens-constants';
 import { DAY_MONTH_FORMAT } from './dates';
 
-export const QUIET_NOTHING_YET = 'Nothing yet';
-export const QUIET_NOT_KNOWN_YET = 'Not known yet';
+export const QUIET_NOTHING_YET = 'No recorded activity';
+export const QUIET_NOT_KNOWN_YET = 'Not yet known';
 
 /**
  * Join the segments that have a fact behind them, inside OD-3's cap.

@@ -392,7 +392,7 @@ export function DirectoryView({
 
       <div
         role="group"
-        aria-label="Narrow the book"
+        aria-label="Filter directory"
         className="mb-3 flex flex-wrap gap-2"
       >
         {DIRECTORY_CHIPS.map((key) => {
@@ -422,7 +422,7 @@ export function DirectoryView({
       {showsTradeLine && !marketplace && (
         <div
           role="group"
-          aria-label="Narrow by trade"
+          aria-label="Filter by trade"
           className="mb-3 flex flex-wrap gap-x-3 gap-y-1"
         >
           {TRADE_LINE.filter((t) =>
@@ -457,8 +457,8 @@ export function DirectoryView({
         <p className="mb-4 flex items-baseline gap-x-3 border-b border-[var(--hairline-strong)] pb-2">
           {(
             [
-              ["roster", "your roster"],
-              ["marketplace", "the marketplace"],
+              ["roster", "Studio suppliers"],
+              ["marketplace", "Supplier directory"],
             ] as Array<[MakerLens, string]>
           ).map(([key, label]) => (
             <button
@@ -514,7 +514,7 @@ export function DirectoryView({
                 onClick={() => setComparing([a.person_id, b.person_id])}
                 className="min-h-11 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--ink)] underline decoration-[var(--color-clay)] underline-offset-[3px]"
               >
-                Compare these two
+                Compare contact records
               </button>
             </p>
           ))}

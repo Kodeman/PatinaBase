@@ -143,7 +143,7 @@ export function LogStrip() {
             <strong className="font-medium text-[var(--color-pearl)] min-[1180px]:text-[var(--text-primary)]">
               {offer.projectName}
             </strong>{' '}
-            · {fmtMinutes(offer.suggestedMinutes)} in hand
+            · {fmtMinutes(offer.suggestedMinutes)} session time
           </p>
           <span className="shrink-0 font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-clay)] min-[1180px]:hidden">
             {idleAnnotation(offer.idleSeconds) ??
@@ -157,7 +157,7 @@ export function LogStrip() {
           <input
             type="number"
             min={1}
-            aria-label="Minutes to log"
+            aria-label="Minutes to record"
             className="min-h-11 w-[72px] rounded-[4px] border border-[rgba(250,247,242,0.22)] bg-[rgba(250,247,242,0.06)] px-2 text-[16px] text-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none min-[1180px]:border-[var(--border-default)] min-[1180px]:bg-[var(--bg-surface)] min-[1180px]:text-[16px] min-[1180px]:text-[var(--text-primary)]"
             value={minutes}
             onChange={(e) => setMinutes(e.target.value)}
@@ -172,7 +172,7 @@ export function LogStrip() {
             onChange={(e) => setActivity(e.target.value)}
           >
             {/* HT-24 — honest, and never required. */}
-            <option value="">activity not set</option>
+            <option value="">Activity not selected</option>
             {ACTIVITIES.map((a) => (
               <option key={a.key} value={a.key}>
                 {a.label}
@@ -186,11 +186,11 @@ export function LogStrip() {
             variant="primary"
             disabled={!valid || busy}
             loading={busy}
-            loadingLabel="Logging…"
+            loadingLabel="Recording time…"
             onClick={() => void submit()}
             className="min-h-11 max-[1179px]:!text-[var(--color-off-white)]"
           >
-            Log
+            Record time
           </DocumentAction>
           <DocumentAction
             actionKey="discard-time-offer"
@@ -208,7 +208,7 @@ export function LogStrip() {
             }}
             className="min-h-11 max-[1179px]:!text-[rgba(250,247,242,0.72)]"
           >
-            Discard
+            Dismiss time suggestion
           </DocumentAction>
         </div>
 
@@ -242,7 +242,7 @@ export function LogStrip() {
 
         {adjusted && (
           <span className="hidden font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-muted)] min-[1180px]:inline">
-            adjusted from {fmtMinutes(offer.suggestedMinutes)}
+            Adjusted from {fmtMinutes(offer.suggestedMinutes)}
           </span>
         )}
         {/* D10: idle is annotated, never trimmed — the designer decides if the

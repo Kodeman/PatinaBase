@@ -45,7 +45,7 @@ function SignUpContent() {
   const fields: AuthFormField[] = [
     {
       name: 'name',
-      label: 'Full Name',
+      label: 'Full name',
       type: 'text',
       placeholder: 'John Doe',
       required: true,
@@ -53,7 +53,7 @@ function SignUpContent() {
     },
     {
       name: 'company',
-      label: 'Company/Studio Name',
+      label: 'Studio name',
       type: 'text',
       placeholder: 'Your Design Studio',
       required: true,
@@ -61,7 +61,7 @@ function SignUpContent() {
     },
     {
       name: 'email',
-      label: 'Email Address',
+      label: 'Email address',
       type: 'email',
       placeholder: 'you@example.com',
       required: true,
@@ -69,7 +69,7 @@ function SignUpContent() {
     },
     {
       name: 'phone',
-      label: 'Phone Number',
+      label: 'Phone number',
       type: 'tel',
       placeholder: '+1 (555) 000-0000',
       required: false,
@@ -85,7 +85,7 @@ function SignUpContent() {
     },
     {
       name: 'confirmPassword',
-      label: 'Confirm Password',
+      label: 'Confirm password',
       type: 'password',
       placeholder: 'Confirm your password',
       required: true,
@@ -192,11 +192,11 @@ function SignUpContent() {
       <div className="space-y-5">
         <div>
           <h2 className="font-heading text-3xl leading-[1.1] tracking-[-0.03em] text-[#2C2926]">
-            Create Designer Account
+            Create designer account
           </h2>
           <div aria-hidden="true" className={`mt-3.5 ${GILDED_RULE}`} />
           <p className="mt-3 text-sm leading-6 text-[#65594E]">
-            Join Patina to start creating beautiful spaces
+            Create your account for your design practice.
           </p>
         </div>
 

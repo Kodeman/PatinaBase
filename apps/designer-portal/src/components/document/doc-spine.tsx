@@ -157,7 +157,7 @@ export function DocSpine({
     : 'Document progress';
   return (
     <aside
-      aria-label="Document spine"
+      aria-label="Project index"
       data-document-spine
       data-spine-regime="sheet-below-1180-narrow-to-1439-full-from-1440"
       // D13: below 1180px the unified bar's section handle replaces the rail
@@ -171,12 +171,12 @@ export function DocSpine({
       <div className="min-[1180px]:flex min-[1180px]:h-full min-[1180px]:flex-col">
         <Link
           href="/desk"
-          aria-label="Put down document"
+          aria-label="Back to Studio overview"
           className="group mb-3 inline-flex min-h-11 w-full min-w-11 shrink-0 items-center justify-center gap-1 rounded-[3px] font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1440px]:mb-4 min-[1440px]:justify-start min-[1440px]:px-1.5"
         >
           <span aria-hidden>←</span>
           <span className="da-score-hover hidden group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 min-[1180px]:inline">
-            Put down
+            Back to Studio overview
           </span>
         </Link>
 
@@ -292,7 +292,7 @@ export function DocSpine({
               className="group inline-flex min-h-11 w-full min-w-11 items-center justify-start rounded-[3px] font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
               <span className="da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100">
-                Put down the room
+                Clear room focus
               </span>
             </button>
           )}

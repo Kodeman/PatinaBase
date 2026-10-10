@@ -125,7 +125,7 @@ export function TouchpointSheet({
 
         <div>
           <span className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-            When
+            Scheduled date
           </span>
           <DateTextInput
             value={date || null}
@@ -140,7 +140,7 @@ export function TouchpointSheet({
             htmlFor="touchpoint-reason"
             className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
           >
-            Why now (a note to yourself)
+            Internal follow-up notes
           </label>
           <textarea
             id="touchpoint-reason"
@@ -174,7 +174,7 @@ export function TouchpointSheet({
             loading={create.isPending}
             loadingLabel="Scheduling…"
           >
-            Schedule the touchpoint
+            Schedule client follow-up
           </DocumentAction>
         </DocumentActionGroup>
       </div>

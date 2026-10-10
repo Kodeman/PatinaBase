@@ -303,7 +303,7 @@ export function RegionHead({
               aria-controls={bodyId}
               onClick={onFold}
             >
-              Fold ↑
+              Collapse ↑
             </DocumentAction>
           )}
           {heldActions.map((entry) => (

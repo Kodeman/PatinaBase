@@ -90,7 +90,7 @@ export function ReviewRequestSheet({
             htmlFor="review-message"
             className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
           >
-            A personal note (optional)
+            Personal message (optional)
           </label>
           <textarea
             id="review-message"
@@ -109,7 +109,7 @@ export function ReviewRequestSheet({
           <DateTextInput
             value={scheduledFor || null}
             onChange={(value) => setScheduledFor(value ?? '')}
-            ariaLabel="Send when (leave blank to send now)"
+            ariaLabel="Scheduled send date (blank sends now)"
             className="rounded-[6px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.78rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
           />
         </div>
@@ -138,7 +138,7 @@ export function ReviewRequestSheet({
             loading={create.isPending}
             loadingLabel="Sending…"
           >
-            {scheduledFor ? 'Queue the request' : 'Send the request'}
+            {scheduledFor ? 'Schedule review request' : 'Send review request'}
           </DocumentAction>
         </DocumentActionGroup>
       </div>

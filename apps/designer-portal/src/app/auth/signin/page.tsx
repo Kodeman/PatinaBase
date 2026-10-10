@@ -259,7 +259,7 @@ function SignInContent() {
         destinationHref={destination}
       />
       <div className="mt-6 space-y-3 text-center text-sm text-[#65594E]">
-        <p><Link className="underline underline-offset-4" href={`/auth/signup?callbackUrl=${encodeURIComponent(destination)}`}>Need an account? Ask to join your studio.</Link></p>
+        <p><Link className="underline underline-offset-4" href={`/auth/signup?callbackUrl=${encodeURIComponent(destination)}`}>Create designer account</Link></p>
         {process.env.NODE_ENV === 'development' && <DevAccountsPanel accounts={getAccountsForPortal('designer')} onLogin={handleDevLogin} isLoading={isAuthSubmitting} error={devAuthError} defaultCollapsed />}
       </div>
     </DesignerAuthShell>

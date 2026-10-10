@@ -130,7 +130,7 @@ function MfaVerifyContent() {
         {success ? <PortalAuthSuccess destinationHref={callbackUrl} onContinue={() => window.location.replace(callbackUrl)} /> : <>
         <div>
           <h2 className="font-heading text-3xl leading-[1.1] tracking-[-0.03em] text-[#2C2926]">
-            Two-Factor Verification
+            Two-factor verification
           </h2>
           <div aria-hidden="true" className={`mt-3.5 ${GILDED_RULE}`} />
           <p className="mt-3 text-sm leading-6 text-[#65594E]">
@@ -178,7 +178,7 @@ function MfaVerifyContent() {
           <div className="space-y-5">
             <div className="space-y-2">
               <label htmlFor="designer-mfa-code" className={LABEL}>
-                Verification Code
+                Authenticator code
               </label>
               <div className={SEAM}>
                 <input
@@ -220,7 +220,7 @@ function MfaVerifyContent() {
             className={QUIET_LINK}
             onClick={() => router.push('/auth/signin')}
           >
-            Cancel and sign in with a different account
+            Use a different account
           </button>
         </div>
         </>}

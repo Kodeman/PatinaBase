@@ -421,7 +421,7 @@ export function CareBand({
   const headLedger: RegionLedgerEntry[] = [
     {
       key: 'close-project',
-      label: 'Close the book',
+      label: 'Close out project',
       onClick: submit,
       disabled: !ready || closeProject.isPending,
       loading: closeProject.isPending,
@@ -437,7 +437,7 @@ export function CareBand({
       <RegionRule />
       {/* The band head — R68.1: mark · mono label · reading · the solid act. */}
       <div className="flex items-center gap-4">
-        <StrataMark size="lg" label="Closing the book" />
+        <StrataMark size="lg" label="Project closeout" />
         <div className="min-w-0 flex-1">
           <RegionHead
             headingId={HEADING_ID}
@@ -486,7 +486,7 @@ export function CareBand({
           className="mt-3 rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.08)] px-3.5 py-2.5"
         >
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
-            Operational closeout still open
+            Closeout tasks outstanding
           </p>
           <ul className="mt-1 space-y-0.5 text-[11.5px] text-[var(--color-charcoal)]">
             {operational.blockers.map((blocker) => (
@@ -641,7 +641,7 @@ export function CareBand({
             variant="tertiary"
             onClick={() => fold.setFolded(true)}
           >
-            Not yet — fold it away
+            Collapse closeout
           </DocumentAction>
         </div>
       )}

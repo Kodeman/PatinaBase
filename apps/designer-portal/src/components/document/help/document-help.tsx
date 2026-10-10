@@ -185,7 +185,7 @@ function BrowseAllHelpLink() {
       </Link>
       {teachingNotesOn && (
         <Link href={CHANGES_HREF} className={linkClass}>
-          What changed
+          Release notes
         </Link>
       )}
     </div>

@@ -524,11 +524,10 @@ export default function DeskPage() {
           className="mt-16 max-w-[440px]"
         >
           <p className="font-heading text-[15px] italic text-[var(--text-muted)]">
-            The desk could not be read.
+            Your studio overview couldn't load.
           </p>
           <p className="doc-type-body mt-2">
-            Something interrupted the read — often a session that needs
-            refreshing. Try again, or reload the page.
+            Try again or reload this page.
           </p>
           <DocumentActionGroup
             surfaceKey="desk"

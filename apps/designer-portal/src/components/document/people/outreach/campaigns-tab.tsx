@@ -84,12 +84,12 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
   const stats = [
     {
       n: dash ? dash.stats.totalSent.toLocaleString('en-US') : '—',
-      label: 'sent · 30 days',
+      label: 'Sends: last 30 days',
     },
-    { n: dash ? `${dash.stats.openRate}%` : '—', label: 'avg. open rate' },
+    { n: dash ? `${dash.stats.openRate}%` : '—', label: 'Average open rate' },
     {
       n: campaigns ? campaigns.filter((c) => c.status === 'sent').length : '—',
-      label: 'sends on record',
+      label: 'Total sends',
     },
   ];
 
@@ -135,7 +135,7 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
             tone="primary"
             onClick={() => setComposing((v) => !v)}
           >
-            {composing ? 'Close' : '+ New campaign'}
+            {composing ? 'Close' : 'New campaign'}
           </OutreachButton>
         }
       />
@@ -151,7 +151,7 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
                 className="w-full rounded-[6px] border border-[var(--color-pearl)] bg-white px-2.5 py-1.5 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
               />
             </Field>
-            <Field label="Subject line">
+            <Field label="Email subject">
               <input
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
@@ -159,7 +159,7 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
                 className="w-full rounded-[6px] border border-[var(--color-pearl)] bg-white px-2.5 py-1.5 text-[0.8rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
               />
             </Field>
-            <Field label="Template">
+            <Field label="Email template">
               <select
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
@@ -173,7 +173,7 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
                 ))}
               </select>
             </Field>
-            <Field label="Audience (from the directory)">
+            <Field label="Audience segment">
               <select
                 value={segmentId}
                 onChange={(e) => setSegmentId(e.target.value)}
@@ -236,7 +236,7 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
                       }
                       disabled={sendCampaign.isPending}
                     >
-                      Send
+                      Send campaign
                     </OutreachButton>
                     <OutreachButton
                       actionKey="discard-campaign"
@@ -254,7 +254,7 @@ export function CampaignsTab({ notify }: { notify: (m: string) => void }) {
                       }
                       disabled={deleteCampaign.isPending}
                     >
-                      Discard
+                      Discard campaign draft
                     </OutreachButton>
                   </>
                 )}

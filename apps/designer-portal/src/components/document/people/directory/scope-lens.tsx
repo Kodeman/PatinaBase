@@ -23,8 +23,8 @@ import type { ContactScope } from '@patina/types';
 export const DEFAULT_CONTACT_SCOPE: ContactScope = 'studio';
 
 const LENS: ReadonlyArray<[ContactScope, string]> = [
-  ['mine', 'mine'],
-  ['studio', 'studio'],
+  ['mine', 'My contacts'],
+  ['studio', 'Studio contacts'],
 ];
 
 export function ScopeLens({
@@ -37,7 +37,7 @@ export function ScopeLens({
   return (
     <p
       role="group"
-      aria-label="Scope"
+      aria-label="Contact visibility"
       className="mb-4 flex items-baseline gap-x-3 border-b border-[var(--color-pearl)]/70 pb-2"
     >
       {LENS.map(([key, label]) => {

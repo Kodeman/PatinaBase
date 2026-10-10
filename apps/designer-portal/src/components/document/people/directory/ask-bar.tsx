@@ -70,7 +70,7 @@ export function AskBar({
           htmlFor="people-engine-ask"
           className="doc-type-meta block font-semibold uppercase tracking-[0.1em]"
         >
-          Ask the Engine
+          Search directory
         </label>
         <div className="mt-1 flex min-h-12 items-center gap-2 border-b border-[var(--border-default)] transition-colors focus-within:border-[var(--color-charcoal)] motion-reduce:transition-none">
           <input
@@ -78,7 +78,7 @@ export function AskBar({
             data-people-ask-input
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder="Find someone, or ask who to reconnect with"
+            placeholder="Search contacts and relationship history"
             className="doc-type-control min-h-11 min-w-0 flex-1 bg-transparent px-1 text-[var(--text-primary)] placeholder:text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           />
           {value.trim() && (

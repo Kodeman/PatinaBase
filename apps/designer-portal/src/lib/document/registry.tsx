@@ -81,7 +81,7 @@ export const STUDIO_ROOMS: StudioSurface[] = [
   {
     key: 'library',
     kind: 'room',
-    label: 'Library',
+    label: 'Resource library',
     aliases: ['library', 'catalog', 'pieces', 'products', 'shelves'],
     icon: BookOpen,
     weight: 'room',
@@ -95,7 +95,7 @@ export const STUDIO_ROOMS: StudioSurface[] = [
   {
     key: 'people',
     kind: 'room',
-    label: 'People',
+    label: 'Studio contacts',
     aliases: ['people', 'clients', 'contacts', 'vendors', 'makers', 'crm', 'directory'],
     icon: Users,
     weight: 'room',
@@ -109,7 +109,7 @@ export const STUDIO_ROOMS: StudioSurface[] = [
   {
     key: 'rooms',
     kind: 'room',
-    label: 'The Scans',
+    label: 'Measured rooms',
     subLabel: 'measured rooms, from the field',
     aliases: ['rooms', 'the rooms', 'scans', 'room view'],
     icon: Scan,
@@ -124,7 +124,7 @@ export const STUDIO_ROOMS: StudioSurface[] = [
   {
     key: 'drafting-room',
     kind: 'room',
-    label: 'Contract Room',
+    label: 'Proposal workspace',
     subLabel: 'proposal in hand',
     // F62 — 'boards'/'moodboards' used to resolve here as well as to the
     // boards themselves; the Drafting Room gives them back so one typed word
@@ -160,7 +160,7 @@ export const STUDIO_LEDGERS: StudioSurface[] = [
   {
     key: 'orders',
     kind: 'ledger',
-    label: 'Orders',
+    label: 'Purchase orders',
     aliases: [
       'orders',
       'procurement',
@@ -183,7 +183,7 @@ export const STUDIO_LEDGERS: StudioSurface[] = [
   {
     key: 'accounts',
     kind: 'ledger',
-    label: 'Accounts',
+    label: 'Studio accounts',
     aliases: [
       'accounts',
       'invoices',
@@ -207,7 +207,7 @@ export const STUDIO_LEDGERS: StudioSurface[] = [
   {
     key: 'hours',
     kind: 'ledger',
-    label: 'Hours',
+    label: 'Timesheets',
     aliases: ['hours', 'time', 'time tracking', 'timesheet'],
     icon: Clock,
     weight: 'sheet',
@@ -221,7 +221,7 @@ export const STUDIO_LEDGERS: StudioSurface[] = [
   {
     key: 'the-post',
     kind: 'ledger',
-    label: 'The Post',
+    label: 'Studio inbox',
     aliases: ['post', 'inbox', 'notifications', 'messages', 'mail', 'letters'],
     icon: Bell,
     weight: 'sheet',
@@ -235,7 +235,7 @@ export const STUDIO_LEDGERS: StudioSurface[] = [
   {
     key: 'call-sheet',
     kind: 'ledger',
-    label: 'Call sheet',
+    label: 'Project directory',
     subLabel: 'this project · who is on the job',
     aliases: ['call sheet', 'roster', 'crew', 'team', 'parties', 'who'],
     icon: ClipboardList,
@@ -260,8 +260,8 @@ export const STUDIO_VERBS: StudioSurface[] = [
   {
     key: 'capture-lead',
     kind: 'verb',
-    label: 'Capture a lead',
-    subLabel: 'begin a Brief',
+    label: 'Record an inquiry',
+    subLabel: 'Create an inquiry brief',
     aliases: ['new lead', 'new client', 'capture', 'prospect', 'intake', 'brief'],
     icon: UserPlus,
     scope: 'global',
@@ -273,8 +273,8 @@ export const STUDIO_VERBS: StudioSurface[] = [
   {
     key: 'open-project',
     kind: 'verb',
-    label: 'Open a project',
-    subLabel: 'no proposal needed',
+    label: 'Create a project file',
+    subLabel: 'Direct project setup',
     aliases: ['new project', 'start project', 'create project', 'manual project'],
     icon: FolderPlus,
     scope: 'global',
@@ -286,8 +286,8 @@ export const STUDIO_VERBS: StudioSurface[] = [
   {
     key: 'draft-proposal',
     kind: 'verb',
-    label: 'Draft a design agreement',
-    subLabel: 'for an existing household',
+    label: 'Draft a services agreement',
+    subLabel: 'For a client on file',
     aliases: [
       'proposal',
       'quote',
@@ -309,8 +309,8 @@ export const STUDIO_VERBS: StudioSurface[] = [
   {
     key: 'draw-invoice',
     kind: 'verb',
-    label: 'Draw an invoice',
-    subLabel: 'milestones · time · FF&E · ad-hoc',
+    label: 'Draft an invoice',
+    subLabel: 'Milestones · fees · FF&E · additional charges',
     aliases: ['invoice', 'invoicing', 'bill', 'billing', 'new invoice'],
     icon: FileText,
     scope: 'global',
@@ -322,8 +322,8 @@ export const STUDIO_VERBS: StudioSurface[] = [
   {
     key: 'log-time',
     kind: 'verb',
-    label: 'Log time',
-    subLabel: 'an hour with nothing in hand',
+    label: 'Record time',
+    subLabel: 'Manual time entry',
     // Deliberately NOT bare 'time'/'hours': those belong to the Hours ledger
     // (the review surface). What a designer types to CAPTURE an hour is a verb.
     aliases: [
@@ -344,8 +344,8 @@ export const STUDIO_VERBS: StudioSurface[] = [
   {
     key: 'add-maker',
     kind: 'verb',
-    label: 'Add a maker',
-    subLabel: 'a vendor on your roster',
+    label: 'Add a maker or supplier',
+    subLabel: 'Add to studio contacts',
     aliases: ['vendor', 'maker', 'supplier', 'trade', 'new vendor'],
     icon: Hammer,
     scope: 'global',
@@ -404,7 +404,7 @@ export const PLAN_ROOM_SURFACE: StudioSurface = {
 export const SPEC_BOOK_SURFACE: StudioSurface = {
   key: 'spec-book',
   kind: 'room',
-  label: 'Spec book',
+  label: 'Specification book',
   subLabel: 'this project · by room',
   aliases: [
     'spec book',
@@ -427,7 +427,7 @@ export const SPEC_BOOK_SURFACE: StudioSurface = {
 export const BOARDS_SURFACE: StudioSurface = {
   key: 'boards',
   kind: 'room',
-  label: 'Boards',
+  label: 'Design boards',
   subLabel: 'this project · the boards',
   aliases: ['boards', 'board', 'moodboards', 'mood boards', 'mood board'],
   icon: Images,
@@ -454,7 +454,7 @@ export const HOST_SURFACES: StudioSurface[] = [
   {
     key: 'desk-host',
     kind: 'host',
-    label: 'The Desk',
+    label: 'Studio overview',
     aliases: [],
     icon: ClipboardList,
     scope: 'global',
@@ -466,7 +466,7 @@ export const HOST_SURFACES: StudioSurface[] = [
   {
     key: 'doc-host',
     kind: 'host',
-    label: 'The document',
+    label: 'Project file',
     aliases: [],
     icon: FileText,
     scope: 'global',

@@ -75,7 +75,7 @@ export function DeskRoster({
             aria-pressed={byPerson}
             onClick={() => setByPerson((on) => !on)}
           >
-            By person
+            By team member
           </DocumentAction>
         )}
       </div>

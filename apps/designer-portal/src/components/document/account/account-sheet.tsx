@@ -69,10 +69,10 @@ export const ACCOUNT_PAGES: readonly AccountPage[] = [
 ];
 
 const PAGES: { key: AccountPage; label: string }[] = [
-  { key: 'profile', label: 'Profile' },
+  { key: 'profile', label: 'Personal profile' },
   { key: 'notifications', label: 'Notifications' },
   { key: 'security', label: 'Security' },
-  { key: 'devices', label: 'Devices' },
+  { key: 'devices', label: 'Mobile sign-in' },
 ];
 
 /** Open the Account sheet from anywhere in the document model.
@@ -162,12 +162,12 @@ export function AccountSheet() {
     : 'offline';
   const pages = [
     ...PAGES,
-    { key: 'extension' as const, label: 'Extension' },
-    ...(studioEnabled ? [{ key: 'studio' as const, label: 'Studio' }] : []),
+    { key: 'extension' as const, label: 'Browser extension' },
+    ...(studioEnabled ? [{ key: 'studio' as const, label: 'Studio settings' }] : []),
   ];
 
   return (
-    <DocSheet open={open} onClose={() => setOpen(false)} title="Account">
+    <DocSheet open={open} onClose={() => setOpen(false)} title="Account settings">
       <div className="mx-auto max-w-xl">
         {/* Identity front-matter — the literal answer to "what account is this". */}
         <div className="flex items-start gap-3.5">
@@ -211,7 +211,7 @@ export function AccountSheet() {
         {/* Availability — declared, not live (same model as the old AccountMenu). */}
         <div className="mt-4">
           <p className="mb-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-            Status
+            Availability
           </p>
           <div
             role="radiogroup"

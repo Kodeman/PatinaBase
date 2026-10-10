@@ -130,14 +130,14 @@ export function CaptureLeadSheet({
           router.push(`/doc/${lead.id}`);
         },
         onError: (err: Error) => {
-          setError(err.message ?? 'Could not begin the Brief. Try again.');
+          setError(err.message ?? "The inquiry couldn't be saved. Try again.");
         },
       },
     );
   };
 
   return (
-    <DocSheet open={open} onClose={onClose} title="Capture a lead">
+    <DocSheet open={open} onClose={onClose} title="Record an inquiry">
       <form
         onSubmit={submit}
         noValidate
@@ -145,22 +145,21 @@ export function CaptureLeadSheet({
         className="mx-auto w-full max-w-[34rem]"
       >
         <span className="font-mono text-[12px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
-          New lead · begin a Brief
+          New inquiry brief
         </span>
         <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-charcoal)]">
-          Who just came in?
+          New client inquiry
         </h2>
         <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--color-charcoal)]">
-          A name and one-line project note are enough to begin. Email, phone,
-          and source can come later.
+          Record a client name and project summary. Contact details and inquiry source can follow.
         </p>
 
         <div className="mt-7 space-y-5">
           <Field
             id="capture-lead-name"
-            label="Name"
+            label="Client name"
             required
-            error={touched.name && nameMissing ? 'Add the client or household name.' : undefined}
+            error={touched.name && nameMissing ? 'Enter the client or household name.' : undefined}
           >
             <Input
               id="capture-lead-name"
@@ -179,7 +178,7 @@ export function CaptureLeadSheet({
             data-testid="lead-contact-project-fields"
             className="grid grid-cols-1 gap-5"
           >
-            <Field id="capture-lead-email" label="Email" error={emailError ?? undefined}>
+            <Field id="capture-lead-email" label="Email address (optional)" error={emailError ?? undefined}>
               <Input
                 id="capture-lead-email"
                 type="email"
@@ -194,7 +193,7 @@ export function CaptureLeadSheet({
                 describedBy={emailError ? 'capture-lead-email-error' : undefined}
               />
             </Field>
-            <Field id="capture-lead-phone" label="Phone">
+            <Field id="capture-lead-phone" label="Phone number (optional)">
               <Input
                 id="capture-lead-phone"
                 type="tel"
@@ -206,11 +205,11 @@ export function CaptureLeadSheet({
             </Field>
             <Field
               id="capture-lead-project"
-              label="The project (one line)"
+              label="Project summary"
               required
               error={
                 touched.project && projectMissing
-                  ? 'Add a one-line note about the project.'
+                  ? 'Enter a brief project summary.'
                   : undefined
               }
             >
@@ -229,12 +228,12 @@ export function CaptureLeadSheet({
             </Field>
           </div>
 
-          <Field id="capture-lead-source" label="Where from">
+          <Field id="capture-lead-source" label="Inquiry source">
             <Input
               id="capture-lead-source"
               value={source}
               onChange={setSource}
-              placeholder="how they found you"
+              placeholder="Referral or inquiry source"
             />
             <div className="mt-2 flex flex-wrap gap-1.5">
               {SOURCE_CHIPS.map((s) => {
@@ -280,11 +279,11 @@ export function CaptureLeadSheet({
             type="submit"
             disabled={!canSubmit || createLead.isPending}
             loading={createLead.isPending}
-            loadingLabel="Beginning…"
+            loadingLabel="Recording inquiry…"
             trailing="→"
             aria-describedby={!canSubmit ? 'capture-lead-requirements' : undefined}
           >
-            Begin the Brief
+            Create inquiry brief
           </DocumentAction>
           <DocumentAction
             actionKey="cancel-capture-lead"
@@ -294,7 +293,7 @@ export function CaptureLeadSheet({
             Cancel
           </DocumentAction>
           <span className="ml-auto font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-body)]">
-            opens the Brief
+            Opens the inquiry brief
           </span>
         </DocumentActionGroup>
         {!canSubmit && (
@@ -303,7 +302,7 @@ export function CaptureLeadSheet({
             role="status"
             className="mt-2 text-[12px] text-[var(--color-aged-oak)]"
           >
-            Add a name and one-line project note to begin.
+            Client name and project summary are required.
           </p>
         )}
       </form>

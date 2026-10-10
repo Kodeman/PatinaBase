@@ -23,7 +23,7 @@ export function AccountExtensionPage() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.11em] text-[var(--color-clay-ink)]">
-            Chrome capture
+            Browser product capture
           </p>
           <h3 className="mt-1 font-heading text-[18px] text-[var(--color-charcoal)]">
             Patina Capture for Chrome
@@ -71,7 +71,7 @@ export function AccountExtensionPage() {
         </section>
       ) : (
         <section aria-labelledby="capture-extension-review-status">
-          <h4 id="capture-extension-review-status" className="font-heading text-[15px] text-[var(--color-charcoal)]">While Chrome reviews the update</h4>
+          <h4 id="capture-extension-review-status" className="font-heading text-[15px] text-[var(--color-charcoal)]">Extension availability</h4>
           <p className="mt-3 text-[11.5px] leading-relaxed text-[var(--color-mocha)]">
             Paste URL uses the same guarded capture service and keeps every capture reusable in My Library.
           </p>

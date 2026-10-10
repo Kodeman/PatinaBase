@@ -95,7 +95,7 @@ export function AccountSecurityPage() {
   if (isLoading) {
     return (
       <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
-        Reading your factors…
+        Loading security settings…
       </p>
     );
   }
@@ -126,7 +126,7 @@ export function AccountSecurityPage() {
 
       {/* Enrolled factors */}
       <h3 className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-        Status
+        Two-factor status
       </h3>
       {hasMfa ? (
         <ul className="mb-5">
@@ -155,7 +155,7 @@ export function AccountSecurityPage() {
                 disabled={unenrollMfa.isPending}
                 className="text-[var(--color-terracotta-ink)]"
               >
-                Remove
+                Remove authenticator
               </DocumentAction>
             </li>
           ))}
@@ -189,7 +189,7 @@ export function AccountSecurityPage() {
       ) : (
         <div className="max-w-md">
           <h3 className="mb-2 font-heading text-[15px] text-[var(--color-charcoal)]">
-            Scan the QR code
+            Scan authenticator QR code
           </h3>
           <p className="mb-4 text-[12px] text-[var(--color-aged-oak)]">
             Scan this with your authenticator app, then enter the 6-digit code
@@ -208,7 +208,7 @@ export function AccountSecurityPage() {
 
           <div className="mb-4">
             <span className="block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-              Or enter this secret manually
+              Manual setup key
             </span>
             <code className="mt-1 block break-all font-mono text-[12px] text-[var(--color-charcoal)]">
               {enroll.secret}
@@ -219,7 +219,7 @@ export function AccountSecurityPage() {
             htmlFor="account-mfa-code"
             className="mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
           >
-            Verification code
+            Authenticator code
           </label>
           <input
             id="account-mfa-code"
@@ -250,7 +250,7 @@ export function AccountSecurityPage() {
               loading={verifyEnrollment.isPending}
               loadingLabel="Verifying…"
             >
-              Verify &amp; enable
+              Verify &amp; enable two-factor authentication
             </DocumentAction>
             <DocumentAction
               actionKey="cancel-two-factor"

@@ -256,7 +256,7 @@ function FieldLineResendBand({
         <>
           <div className="mt-3 rounded border border-[var(--color-pearl)] bg-[var(--color-linen)]/45 p-3">
             <label htmlFor="field-resend-source" className={META}>
-              How they said yes
+              Consent method
             </label>
             <select
               id="field-resend-source"
@@ -271,7 +271,7 @@ function FieldLineResendBand({
               ))}
             </select>
             <label htmlFor="field-resend-note" className={META}>
-              What happened
+              Consent details
             </label>
             <textarea
               id="field-resend-note"
@@ -315,7 +315,7 @@ function FieldLineResendBand({
               loading={resend.isPending}
               loadingLabel="Sending…"
             >
-              Send again
+              Resend text invitation
             </DocumentAction>
           </DocumentActionRow>
         </>
@@ -351,7 +351,7 @@ function FieldLineDiagnosticCard({ partyId }: { partyId: string | null }) {
       data-testid="field-line-diagnostic-card"
       className="mt-5 rounded-[8px] border border-[var(--color-pearl)] bg-white/50 px-4 py-3"
     >
-      <div className={META}>Why didn’t they get it?</div>
+      <div className={META}>Delivery details</div>
       <ul className="mt-2 flex flex-col gap-1.5">
         {lines.map((line) => (
           <li
@@ -822,7 +822,7 @@ export function PartyProfileSheet({
   };
 
   return (
-    <RoomSheet open={open} onClose={onClose} title="Field party">
+    <RoomSheet open={open} onClose={onClose} title="Project contact">
       <div className={META}>Field crew · {getPartyKindLabel(role)}</div>
       <div className="mt-1 flex items-baseline justify-between gap-3">
         <h2 className="font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
@@ -955,7 +955,7 @@ export function PartyProfileSheet({
               loading={updateParty.isPending}
               loadingLabel="Saving…"
             >
-              Save
+              Save contact details
             </DocumentAction>
             <DocumentAction
               actionKey="cancel-party-details"
@@ -995,7 +995,7 @@ export function PartyProfileSheet({
               onClick={() => setEditing(true)}
               className="mt-2"
             >
-              Edit
+              Edit contact details
             </DocumentAction>
           )}
         </>
@@ -1004,7 +1004,7 @@ export function PartyProfileSheet({
       {/* Field link — the no-auth "what's on me" link for the field party. */}
       <section className="mt-4">
         <div className="mb-1.5 flex items-baseline justify-between">
-          <span className={META}>Field link</span>
+          <span className={META}>Project access link</span>
           {activeLink && (
             <DocumentAction
               actionKey="revoke-field-link"
@@ -1016,7 +1016,7 @@ export function PartyProfileSheet({
               loadingLabel="Revoking…"
               className="text-[var(--color-terracotta-ink)] decoration-[var(--color-terracotta)]"
             >
-              Revoke
+              Revoke access link
             </DocumentAction>
           )}
         </div>
@@ -1068,7 +1068,7 @@ export function PartyProfileSheet({
       {/* SMS thread */}
       <section className="mt-5">
         <div className="mb-2 flex items-baseline justify-between">
-          <span className={META}>Texts</span>
+          <span className={META}>Text messages</span>
         </div>
         {(thread ?? []).length === 0 ? (
           <p className="rounded-[8px] border border-dashed border-[var(--color-pearl)] bg-white/40 px-4 py-6 text-center text-[0.74rem] text-[var(--color-aged-oak)]">
@@ -1216,7 +1216,7 @@ export function PartyProfileSheet({
                 loading={recordConsent.isPending}
                 loadingLabel="Inviting…"
               >
-                Invite to texts
+                Send text consent invitation
               </DocumentAction>
             </DocumentActionRow>
           </div>
@@ -1280,7 +1280,7 @@ export function PartySmsComposer({ partyId, thread }: { partyId: string | null; 
         className="w-full resize-none rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)]" />
       <DocumentActionRow surfaceKey="people" regionKey="field-text-composer" aria-label="Field text actions">
         {!deferred && <DocumentAction actionKey="send-field-text" variant="primary" onClick={() => void doSend()}
-          disabled={!body.trim() || send.isPending} loading={send.isPending} loadingLabel="Sending…">Send text</DocumentAction>}
+          disabled={!body.trim() || send.isPending} loading={send.isPending} loadingLabel="Sending…">Send text message</DocumentAction>}
         {(receipt || error) && <p role={error || receipt?.status === 'failed' ? 'alert' : 'status'}>
           {error ?? deferredFailure ?? (receipt ? smsResultWords(receipt) : '')}
         </p>}

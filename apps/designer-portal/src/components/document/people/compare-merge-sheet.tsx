@@ -408,14 +408,14 @@ export function CompareMergeSheet({
     const b = fieldsOf(right, rightId);
     return [
       { label: "Name", a: a.name, b: b.name },
-      { label: "What they are", a: a.kind, b: b.kind },
-      { label: "Firm", a: a.firm, b: b.firm },
+      { label: "Contact type", a: a.kind, b: b.kind },
+      { label: "Company", a: a.firm, b: b.firm },
       { label: "Mobile", a: a.mobile, b: b.mobile },
       { label: "Email", a: a.email, b: b.email },
-      { label: "Contact rule", a: a.rule, b: b.rule },
-      { label: "Papers on file", a: a.paper, b: b.paper },
-      { label: "Seats on jobs", a: a.seats, b: b.seats },
-      { label: "In the book since", a: a.since, b: b.since },
+      { label: "Contact restrictions", a: a.rule, b: b.rule },
+      { label: "Documents on file", a: a.paper, b: b.paper },
+      { label: "Project assignments", a: a.seats, b: b.seats },
+      { label: "Date added", a: a.since, b: b.since },
       ...carriedRows(left, right, namesById),
     ];
     // `channelLine` and `seatCount` close over the same four queries the deps
@@ -504,7 +504,7 @@ export function CompareMergeSheet({
             data-survivor-archived={id ?? undefined}
             className={`mt-0.5 block ${LABEL} text-[var(--terracotta-ink)]`}
           >
-            Put away
+            Close
           </span>
         ) : null}
       </button>
@@ -515,14 +515,14 @@ export function CompareMergeSheet({
     <DocSheet
       open={open}
       onClose={onClose}
-      title="Compare these two"
+      title="Compare contact records"
       icon={GitMerge}
       wide
     >
       <div data-compare-merge-sheet>
         <p className={LABEL}>Compare · two cards</p>
         <h2 className="mt-1 font-heading text-[1.35rem] text-[var(--ink)]">
-          One person, two cards
+          Merge duplicate records
         </h2>
         <p className="t-body-sm mt-1 text-[var(--ink-subtle)]">
           Choose the card that stays. The other one folds into it and is kept as
@@ -567,7 +567,7 @@ export function CompareMergeSheet({
 
         <div className="mt-4">
           <label className={`${LABEL} mb-1 block`} htmlFor="merge-matched-on">
-            What makes these the same person
+            Merge reason
           </label>
           <select
             id="merge-matched-on"
@@ -616,7 +616,7 @@ export function CompareMergeSheet({
             variant="tertiary"
             onClick={onClose}
           >
-            Not the same person
+            Keep separate records
           </DocumentAction>
         </DocumentActionRow>
 

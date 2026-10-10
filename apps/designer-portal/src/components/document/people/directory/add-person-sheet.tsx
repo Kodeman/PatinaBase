@@ -1120,7 +1120,7 @@ export function AddPersonSheet({
     const trimmedName = partyName.trim();
     const partyKind = SEAT_PARTY_KIND[kind];
     if (!projectId) {
-      setError("Field crew work a project — pick which one they\u2019re on.");
+      setError("Select this contact’s project.");
       return;
     }
     if (!trimmedName) {
@@ -1503,14 +1503,14 @@ export function AddPersonSheet({
       open={open}
       onClose={close}
       title={
-        isEditMode ? `Edit ${contactDisplayName}` : "Add someone to your people"
+        isEditMode ? `Edit ${contactDisplayName}` : "New contact"
       }
     >
       <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         {isEditMode ? "Edit · your rolodex" : `Add · ${kindLabel}`}
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
-        {isEditMode ? `Edit ${contactDisplayName}` : "Bring someone in"}
+        {isEditMode ? `Edit ${contactDisplayName}` : "New contact"}
       </h2>
       <p className="mb-4 mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
         {intro}
@@ -1578,7 +1578,7 @@ export function AddPersonSheet({
             onChange={(e) => setTrade(e.target.value)}
             className={`${FIELD_INPUT} mb-4`}
           >
-            <option value="">Which trade…</option>
+            <option value="">Select trade…</option>
             {outOfVocabSpecialty && (
               <option value={outOfVocabSpecialty}>{outOfVocabSpecialty}</option>
             )}
@@ -1603,7 +1603,7 @@ export function AddPersonSheet({
           {!hasProfile && (
             <>
               <label className={FIELD_LABEL} htmlFor="edit-contact-phone">
-                Phone <span className="opacity-60">(optional)</span>
+                Phone number <span className="opacity-60">(optional)</span>
               </label>
               <input
                 id="edit-contact-phone"
@@ -1643,7 +1643,7 @@ export function AddPersonSheet({
           />
 
           <label className={FIELD_LABEL} htmlFor="client-email">
-            Email
+            Email address
           </label>
           <input
             id="client-email"
@@ -1787,7 +1787,7 @@ export function AddPersonSheet({
         </>
       ) : kind === "maker" ? (
         <>
-          <label className={FIELD_LABEL}>Maker name</label>
+          <label className={FIELD_LABEL}>Maker or supplier name</label>
           <input
             type="text"
             value={makerName}
@@ -1863,7 +1863,7 @@ export function AddPersonSheet({
             onChange={(e) => setProjectId(e.target.value)}
             className={`${FIELD_INPUT} mb-4`}
           >
-            <option value="">Which project…</option>
+            <option value="">Select project…</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -1918,7 +1918,7 @@ export function AddPersonSheet({
             }}
             className={`${FIELD_INPUT} mb-2`}
           >
-            <option value="">A firm not on this list</option>
+            <option value="">New company</option>
             {firms.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.company_name}
@@ -2241,7 +2241,7 @@ export function AddPersonSheet({
                 }
                 className={`${FIELD_INPUT} mb-3`}
               >
-                <option value="">Choose a method…</option>
+                <option value="">Select consent method…</option>
                 <option value="verbal">Verbal agreement</option>
                 <option value="written">Written agreement</option>
                 <option value="web_form">Website or form</option>
@@ -2367,7 +2367,7 @@ export function AddPersonSheet({
             ? "Save"
             : kind === "client" && letterOn && !letterLoading
               ? sendButtonLabel(invite)
-              : "Add to the roster"}
+              : "Add to directory"}
         </DocumentAction>
         <DocumentAction
           actionKey={isEditMode ? "cancel-edit-person" : "cancel-add-person"}

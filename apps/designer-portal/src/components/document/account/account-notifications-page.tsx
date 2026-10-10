@@ -27,7 +27,7 @@ const QuietTheNotesRow = lazy(() =>
         <div className="mt-6 flex items-center gap-3 border-y border-[var(--color-pearl)] py-3">
           <span className="min-w-0 flex-1">
             <span className="block text-[13px] font-medium text-[var(--color-charcoal)]">
-              Quiet the notes
+              Hide guidance notes
             </span>
             <span className="block text-[11px] text-[var(--color-aged-oak)]">
               Turns off Patina&rsquo;s notes in the margin. ⌘K and What changed stay.
@@ -71,7 +71,7 @@ type Prefs = Record<string, boolean>;
 const PREFERENCES: { key: string; label: string; blurb: string }[] = [
   {
     key: 'type_new_lead',
-    label: 'New leads',
+    label: 'New inquiries',
     blurb: 'A prospect reaches out or a lead is captured.',
   },
   {
@@ -86,7 +86,7 @@ const PREFERENCES: { key: string; label: string; blurb: string }[] = [
   },
   {
     key: 'type_commission_earned',
-    label: 'Earnings',
+    label: 'Fees & commissions',
     blurb: 'A design fee or commission is recorded.',
   },
 ];
@@ -144,7 +144,7 @@ export function AccountNotificationsPage() {
           </span>
         </span>
         <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-          In app
+          In-app notifications
         </span>
       </div>
       <ul>

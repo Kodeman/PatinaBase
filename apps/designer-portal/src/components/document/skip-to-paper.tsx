@@ -37,7 +37,7 @@ export function SkipToPaper() {
       onClick={skipToPaper}
       className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-[999] focus-visible:rounded-[3px] focus-visible:bg-[var(--bg-primary)] focus-visible:px-4 focus-visible:py-2 focus-visible:font-mono focus-visible:text-[12px] focus-visible:uppercase focus-visible:tracking-[0.08em] focus-visible:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
-      Skip to the paper
+      Skip to main content
     </a>
   );
 }

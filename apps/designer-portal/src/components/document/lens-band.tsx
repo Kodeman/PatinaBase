@@ -324,7 +324,7 @@ export function LensBand({
       />
       <section
         ref={bandRef}
-        aria-label="The job"
+        aria-label="Project overview"
         // C-12 — the last rung of the focus chain. Programmatic only: it never
         // enters the tab order.
         tabIndex={-1}

@@ -25,32 +25,32 @@ const TONE_EDGE: Record<string, string> = {
 
 const ERROR_CONFIGS: Record<string, { title: string; description: string; tone: string }> = {
   Configuration: {
-    title: 'Configuration Error',
+    title: 'Sign-in unavailable',
     description: 'There is a problem with the server configuration. Please contact your system administrator.',
     tone: TONE_HALT,
   },
   AccessDenied: {
-    title: 'Access Denied',
+    title: 'Access denied',
     description: 'You do not have the required permissions to access this resource. Please contact your administrator if you believe this is an error.',
     tone: TONE_HALT,
   },
   InsufficientPermissions: {
-    title: 'Insufficient Permissions',
+    title: 'Access required',
     description: 'You do not have the required permissions to access this resource.',
     tone: TONE_HOLD,
   },
   Verification: {
-    title: 'Verification Required',
+    title: 'Account verification required',
     description: 'Your account needs to be verified before you can access the designer portal.',
     tone: TONE_HOLD,
   },
   SessionExpired: {
-    title: 'Session Expired',
+    title: 'Session expired',
     description: 'Your session has expired. Please sign in again to continue.',
     tone: TONE_HOLD,
   },
   Default: {
-    title: 'Authentication Error',
+    title: 'Sign-in unsuccessful',
     description: 'An error occurred during authentication. Please try signing in again.',
     tone: TONE_HALT,
   },
@@ -84,7 +84,7 @@ function AuthErrorContent() {
             className="flex h-12 w-full items-center justify-center px-4 text-sm font-semibold text-[#FAF7F2] bg-[#1A1816] transition-colors hover:bg-[#2C2926] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none"
           >
             <ArrowLeft aria-hidden="true" className="mr-2 h-4 w-4" />
-            Back to Sign In
+            Back to sign in
           </Link>
 
           {error === 'InsufficientPermissions' && (
@@ -92,7 +92,7 @@ function AuthErrorContent() {
               href="/projects"
               className="flex h-12 w-full items-center justify-center border border-[#8B7355] px-4 text-sm font-semibold text-[#2C2926] transition-colors hover:border-[#2C2926] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none"
             >
-              Go to Projects
+              Open project files
             </Link>
           )}
         </div>
@@ -104,7 +104,7 @@ function AuthErrorContent() {
               href="mailto:support@patina.cloud"
               className="font-semibold text-[#2C2926] underline decoration-[#8B7355] underline-offset-4 transition-colors hover:decoration-[#2C2926] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none"
             >
-              Contact Support
+              Contact support
             </a>
           </p>
         </div>

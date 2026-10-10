@@ -1038,7 +1038,7 @@ const shortSentenceOf = (item: LensStandingItem) =>
     : `${item.short.state} ${item.short.days}D · ${item.short.subject}`;
 
 /** D2's door, in its own words: the word and the count, nothing else. */
-export const standingDoorLabel = (count: number) => `Standing · ${count}`;
+export const standingDoorLabel = (_count: number) => "Everything open on this job";
 
 /** D1 — a need's act is named from the one table, whatever its source printed,
  *  with the client's first name where the act names her (499-1: `Nudge Mei`;

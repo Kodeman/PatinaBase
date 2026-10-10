@@ -57,13 +57,13 @@ export const ROSTER_STAGE_ORDER: readonly SectionKey[] = [
 
 /** Stored sentence-case; the roster's CSS uppercases. */
 const STAGE_LABEL: Record<SectionKey, string> = {
-  brief: 'Brief',
-  discovery: 'Discovery',
-  direction: 'Direction',
-  proposal: 'Proposal',
-  project: 'Project',
-  install: 'Install',
-  care: 'Care',
+  brief: 'Inquiry brief',
+  discovery: 'Client discovery',
+  direction: 'Concept development',
+  proposal: 'Design proposal',
+  project: 'Project delivery',
+  install: 'Installation',
+  care: 'Project aftercare',
 };
 
 /**
@@ -91,13 +91,13 @@ const URGENT_NEED_KINDS: ReadonlySet<NeedKind> = new Set([
  *  whole-string test lets it through as if it were a family name. */
 const PLACEHOLDER_CLIENT_NAMES: ReadonlySet<string> = new Set(['client', 'user']);
 
-const QUIET_STATE = 'quiet · no current alert';
+const QUIET_STATE = 'No current alert';
 
 /** `deriveDocumentGuide`'s rung 2 says "This project is paused" on the paper;
  *  the roster line says the same thing in its own register. */
-const PAUSED_STATE = 'paused';
+const PAUSED_STATE = 'On hold';
 
-export const OPEN_THE_JOB = 'Open the job';
+export const OPEN_THE_JOB = 'Open project file';
 
 /** `urgent` is terracotta, `quiet` is dusty blue; a job carrying no need at
  *  all wears no mark. §2.1: "Needs are a red-letter mark on the job's line". */

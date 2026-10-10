@@ -591,7 +591,7 @@ export function PeopleRoom() {
 
   return (
     <RoomShell
-      title="The People Room"
+      title="Studio contacts"
       count={
         all
           ? // QA-R2-9: the head counts identities, and a company-only
@@ -615,7 +615,7 @@ export function PeopleRoom() {
             leading="+"
             onClick={() => setAddOpen(true)}
           >
-            Add person
+            Add contact
           </DocumentAction>
         </DocumentActionGroup>
       }

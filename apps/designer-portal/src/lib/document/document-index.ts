@@ -58,7 +58,7 @@ export const PROJECT_PAPER_ORDER: readonly ProjectPaperRegion[] = [
   },
   {
     key: 'schedule',
-    label: 'Schedule',
+    label: 'Project schedule',
     headingId: () => 'project-schedule-title',
   },
   {

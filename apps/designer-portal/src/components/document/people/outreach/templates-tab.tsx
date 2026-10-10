@@ -114,7 +114,7 @@ export function TemplatesTab({ notify }: { notify: (m: string) => void }) {
             </label>
             <label className="block sm:col-span-1">
               <span className="mb-1 block font-mono text-[0.44rem] font-semibold uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
-                Default subject
+                Default subject line
               </span>
               <input
                 value={subject}
@@ -125,7 +125,7 @@ export function TemplatesTab({ notify }: { notify: (m: string) => void }) {
             </label>
             <label className="block sm:col-span-1">
               <span className="mb-1 block font-mono text-[0.44rem] font-semibold uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
-                Category
+                Template category
               </span>
               <select
                 value={category}
@@ -189,7 +189,7 @@ export function TemplatesTab({ notify }: { notify: (m: string) => void }) {
                 }
                 disabled={deleteTemplate.isPending}
               >
-                Delete
+                Delete template
               </OutreachButton>
             }
           />

@@ -799,7 +799,7 @@ export function AccountStudioPage() {
                 loading={updateOrg.isPending}
                 loadingLabel="Saving…"
               >
-                Save
+                Save studio name
               </DocumentAction>
               <DocumentAction
                 actionKey="cancel-studio-rename"
@@ -852,7 +852,7 @@ export function AccountStudioPage() {
                 onClick={startRename}
                 className="shrink-0"
               >
-                Rename
+                Rename studio
               </DocumentAction>
             )}
           </div>
@@ -871,7 +871,7 @@ export function AccountStudioPage() {
 
       {/* Branding */}
       <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
-        <h3 className={`${LABEL} mb-3`}>Branding</h3>
+        <h3 className={`${LABEL} mb-3`}>Studio identity</h3>
         <p className={`${HELP} mb-4 mt-0`}>
           Your studio&rsquo;s logo and contact details appear on invoices,
           client-facing emails, and the client app.
@@ -879,7 +879,7 @@ export function AccountStudioPage() {
 
         {/* Logo */}
         <div className="mb-5">
-          <span className={LABEL}>Logo</span>
+          <span className={LABEL}>Studio logo</span>
           {canManage ? (
             <div className="mt-1.5">
               <StudioLogoUploadField
@@ -934,7 +934,7 @@ export function AccountStudioPage() {
             </div>
             <div className="mb-4">
               <label htmlFor="studio-phone" className={LABEL}>
-                Phone
+                Contact phone
               </label>
               <input
                 id="studio-phone"
@@ -948,7 +948,7 @@ export function AccountStudioPage() {
               />
             </div>
 
-            <span className={`${LABEL} mt-2`}>Address</span>
+            <span className={`${LABEL} mt-2`}>Studio address</span>
             <div className="mt-1.5 space-y-3">
               <input
                 aria-label="Address line 1"
@@ -1017,7 +1017,7 @@ export function AccountStudioPage() {
                 loading={updateOrg.isPending}
                 loadingLabel="Saving…"
               >
-                Save branding
+                Save studio identity
               </DocumentAction>
               {!brandingDirty && !updateOrg.isPending && (
                 <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
@@ -1079,7 +1079,7 @@ export function AccountStudioPage() {
 
       {/* Billing */}
       <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
-        <h3 className={`${LABEL} mb-3`}>Billing</h3>
+        <h3 className={`${LABEL} mb-3`}>Billing settings</h3>
         <p className={`${HELP} mb-4 mt-0`}>
           The card fee and check remit-to instructions a client sees when
           paying an invoice from the client portal.
@@ -1122,7 +1122,7 @@ export function AccountStudioPage() {
             </div>
             <div className="mb-4">
               <label htmlFor="studio-check-remit" className={LABEL}>
-                Remit checks to
+                Check remittance instructions
               </label>
               <textarea
                 id="studio-check-remit"
@@ -1153,7 +1153,7 @@ export function AccountStudioPage() {
                 loading={updateBilling.isPending}
                 loadingLabel="Saving…"
               >
-                Save billing
+                Save billing settings
               </DocumentAction>
               {!billingDirty && !updateBilling.isPending && (
                 <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
@@ -1176,7 +1176,7 @@ export function AccountStudioPage() {
         ) : (
           <dl className="max-w-md space-y-3">
             <div>
-              <dt className={LABEL}>Card fee</dt>
+              <dt className={LABEL}>Card payment fee</dt>
               <dd className="text-[13px] text-[var(--color-charcoal)]">
                 {billingSettings ? `${billingSettings.card_surcharge_bps / 100}%` : '—'}
               </dd>
@@ -1213,7 +1213,7 @@ export function AccountStudioPage() {
           card in People; the Order Assistant's ship-to lists these first. */}
       {myRole !== null && myRole !== 'guest' && (
         <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
-          <h3 className={`${LABEL} mb-3`}>Locations</h3>
+          <h3 className={`${LABEL} mb-3`}>Studio locations</h3>
           <StudioLocationsEditor organizationId={studio.id} />
         </div>
       )}
@@ -1237,7 +1237,7 @@ export function AccountStudioPage() {
           {canManage ? (
             <div className="max-w-md">
               <div className="mb-4">
-                <span className={LABEL}>Rate card</span>
+                <span className={LABEL}>Default rate schedule</span>
                 <div className="space-y-2">
                   {agreementForm.rateCard.map((role, index) => (
                     <div
@@ -1420,7 +1420,7 @@ export function AccountStudioPage() {
 
               <div className="mb-4">
                 <label htmlFor="studio-agreement-cadence" className={LABEL}>
-                  Billing cadence
+                  Billing frequency
                 </label>
                 <Select
                   id="studio-agreement-cadence"
@@ -1440,7 +1440,7 @@ export function AccountStudioPage() {
               </div>
 
               <div className="mb-4">
-                <span className={LABEL}>Retainer credit rule</span>
+                <span className={LABEL}>Retainer treatment</span>
                 <div className="flex flex-wrap gap-2">
                   {AGREEMENT_CREDIT_RULES.map((rule) => (
                     <button
@@ -1604,7 +1604,7 @@ export function AccountStudioPage() {
       <div ref={membersRef} className={TEACHING_MARGIN_COLUMN}>
       <div className="min-w-0">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className={LABEL}>Members</h3>
+        <h3 className={LABEL}>Studio members</h3>
         {canManage && (
           <DocumentAction
             actionKey="invite-studio-teammate"
@@ -1704,7 +1704,7 @@ export function AccountStudioPage() {
                       loading={isResending}
                       loadingLabel="Sending…"
                     >
-                      Resend invite
+                      Resend invitation
                     </DocumentAction>
                   )}
                   {canEditMembership ? (
@@ -1755,7 +1755,7 @@ export function AccountStudioPage() {
                       disabled={removeMember.isPending}
                       className="text-[var(--color-terracotta-ink)]"
                     >
-                      Remove
+                      Remove member
                     </DocumentAction>
                   )}
                 </div>
@@ -1794,7 +1794,7 @@ export function AccountStudioPage() {
           admin was briefly offered the inert field on her OWN row. */}
       {canManage && user?.id && (
         <div className="mt-6 border-t border-[var(--color-pearl)] pt-5">
-          <h3 className={`${LABEL} mb-3`}>Studio rates</h3>
+          <h3 className={`${LABEL} mb-3`}>Studio rate schedule</h3>
           <p className={`${HELP} mb-4 mt-0`}>
             What an hour of each teammate&rsquo;s time is worth when no signed
             agreement names a rate for the work. A new figure is a new dated

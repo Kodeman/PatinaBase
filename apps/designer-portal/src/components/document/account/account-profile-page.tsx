@@ -141,7 +141,7 @@ export function AccountProfilePage() {
 
         <div>
           <label htmlFor="account-bio" className={LABEL}>
-            Bio
+            Professional bio
           </label>
           <textarea
             id="account-bio"
@@ -182,7 +182,7 @@ export function AccountProfilePage() {
         <>
           <div>
             <h3 className="mb-1 font-heading text-[15px] text-[var(--color-charcoal)]">
-              The clock
+              Time tracking
             </h3>
             <p className="mb-3 text-[11.5px] text-[var(--color-aged-oak)]">
               While a document is open, Patina keeps the time for you. Turn that off
@@ -212,7 +212,7 @@ export function AccountProfilePage() {
                 }}
               />
               <span className="text-[13px] leading-relaxed text-[var(--color-charcoal)]">
-                Keep the time automatically while a document is open
+                Track time while a project file is open
               </span>
             </label>
             {autostartNote && (

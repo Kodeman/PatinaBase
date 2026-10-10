@@ -120,7 +120,7 @@ export function AudiencesTab({ notify }: { notify: (m: string) => void }) {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block font-mono text-[0.44rem] font-semibold uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
-                Segment name
+                Audience name
               </span>
               <input
                 value={name}
@@ -131,7 +131,7 @@ export function AudiencesTab({ notify }: { notify: (m: string) => void }) {
             </label>
             <label className="block">
               <span className="mb-1 block font-mono text-[0.44rem] font-semibold uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
-                Draw from the directory by
+                Directory filters
               </span>
               <select
                 value={presetKey}
@@ -220,7 +220,7 @@ export function AudiencesTab({ notify }: { notify: (m: string) => void }) {
                   }
                   disabled={deleteSegment.isPending}
                 >
-                  Delete
+                  Delete audience segment
                 </OutreachButton>
               ) : (
                 <span className="shrink-0 font-mono text-[0.42rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">

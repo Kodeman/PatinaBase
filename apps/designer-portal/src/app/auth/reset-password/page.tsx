@@ -140,7 +140,7 @@ function ResetPasswordContent() {
               Password recovery
             </p>
             <h2 className="mt-2 font-heading text-3xl leading-[1.1] tracking-[-0.03em] text-[#2C2926]">
-              Choose a new password.
+              Choose a new password
             </h2>
             <div aria-hidden="true" className={`mt-3.5 ${GILDED_RULE}`} />
             <p className="mt-3 text-sm leading-6 text-[#65594E]">

@@ -27,8 +27,8 @@ type OutreachTab = 'campaigns' | 'templates' | 'audiences';
 
 const TABS: ReadonlyArray<readonly [OutreachTab, string]> = [
   ['campaigns', 'Campaigns'],
-  ['templates', 'Templates'],
-  ['audiences', 'Audiences'],
+  ['templates', 'Email templates'],
+  ['audiences', 'Audience segments'],
 ];
 
 export function OutreachView({ notify }: PeopleViewProps) {

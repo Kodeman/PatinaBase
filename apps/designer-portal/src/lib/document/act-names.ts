@@ -117,7 +117,7 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   'Call sheet': 'plain',
   Fold: 'plain',
   'Open the record': 'plain',
-  'Draw an invoice': 'plain',
+  'Draft an invoice': 'plain',
   // Plain — Message and its repair (FR1 R6: a reconnect is a Message, plain)
   'Message {first name}': 'plain',
   'Link a client': 'plain',

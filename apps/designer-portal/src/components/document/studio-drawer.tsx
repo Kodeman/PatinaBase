@@ -526,7 +526,7 @@ export function StudioDrawer() {
           ) : (
             <span className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap px-2 py-1.5">
               <span className="font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                Hands free
+                No active timer
               </span>
             </span>
           )}

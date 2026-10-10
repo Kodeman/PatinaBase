@@ -371,7 +371,7 @@ export function StandingSheet({
     <DocSheet
       open={open}
       onClose={onClose}
-      title={`Standing · ${count ?? items.length + inputs.length + setup.length}`}
+      title="Everything open on this job"
       icon={AlertCircle}
       kind="standing"
       fallbackFocusRef={triggerRef}
@@ -379,7 +379,7 @@ export function StandingSheet({
       <DocumentActionGroup
         surfaceKey="document"
         regionKey="standing-sheet"
-        aria-label="Standing actions"
+        aria-label="Everything open on this job"
       >
         {content}
       </DocumentActionGroup>

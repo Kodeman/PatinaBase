@@ -676,7 +676,7 @@ export function CompanyCard({
 
       {/* R2 — Crew & designations */}
       <section className={REGION}>
-        <h3 className={REGION_HEAD}>Crew &amp; designations</h3>
+        <h3 className={REGION_HEAD}>Team &amp; responsibilities</h3>
         {crew.length === 0 ? (
           <p className="t-body-sm text-[var(--ink-subtle)]">
             {NO_CREW_SENTENCE}
@@ -744,9 +744,9 @@ export function CompanyCard({
               phone width the act keeps the shorter name for the same three
               designations, and the three fields it opens name themselves
               ("Paperwork contact", "Signer", "Site contact"). */}
-          <span className="sm:hidden">Set designations</span>
+          <span className="sm:hidden">Set contact responsibilities</span>
           <span className="hidden sm:inline">
-            Set paperwork contact, signer and site contact
+            Set contact responsibilities
           </span>
         </DocumentAction>
         <div
@@ -779,7 +779,7 @@ export function CompanyCard({
                     }
                     className={FIELD_INPUT}
                   >
-                    <option value="">Nobody named</option>
+                    <option value="">Unassigned</option>
                     {crew.map((a) => (
                       <option key={a.person_id} value={a.person_id}>
                         {namesById.get(a.person_id) ?? "Unnamed"}
@@ -797,7 +797,7 @@ export function CompanyCard({
                 loadingLabel="Recording…"
                 onClick={() => void saveDesignations()}
               >
-                Save the designations
+                Save responsibilities
               </DocumentAction>
             </>
           )}
@@ -810,7 +810,7 @@ export function CompanyCard({
           agree to a text message and no door is opened onto a firm
           (SPEC §5.3 #9). */}
       <section className={REGION}>
-        <h3 className={REGION_HEAD}>Reach &amp; access</h3>
+        <h3 className={REGION_HEAD}>Contact &amp; access</h3>
         <ReachAccess
           cardId={card.id}
           cardKind="company"
@@ -833,7 +833,7 @@ export function CompanyCard({
 
       {/* R3 — Paper. Always printed; R-P fixes the order inside it. */}
       <section className={REGION} data-company-paper>
-        <h3 className={REGION_HEAD}>Paper</h3>
+        <h3 className={REGION_HEAD}>Documents on file</h3>
         {/* Spec §6 — paper the FIRM sent, waiting for the studio's check. It
             prints ABOVE the table and OUTSIDE the `owesPaper` branch: a firm
             the studio never asked paper of owes no paper WORD (R-A / C13), but
@@ -888,7 +888,7 @@ export function CompanyCard({
                 variant="secondary"
                 onClick={() => setRecordOpen(true)}
               >
-                Record a document
+                Add document record
               </DocumentAction>
               <DocumentAction
                 actionKey="chase-the-renewal"
@@ -930,7 +930,7 @@ export function CompanyCard({
                   );
                 }}
               >
-                Chase the renewal
+                Draft renewal request
               </DocumentAction>
               {/* PR-a / V10 — the firm's own door onto its paper. R-AD's end
                   date is chosen out loud inside the band this opens. */}
@@ -944,7 +944,7 @@ export function CompanyCard({
             </DocumentActionRow>
             {chased && (
               <p className="t-body-sm mt-1 text-[var(--ink-subtle)]">
-                Filed for your review. Nothing is sent until you send it.
+                Renewal draft ready for review. Not sent.
               </p>
             )}
           </>
@@ -953,7 +953,7 @@ export function CompanyCard({
 
       {/* R4 — Payee */}
       <section className={REGION}>
-        <h3 className={REGION_HEAD}>Payee</h3>
+        <h3 className={REGION_HEAD}>Payee details</h3>
         {/* CR13-6 — a payee the studio never wrote is not a payee. `remit_to`
             is NULL on most seeded firms, and falling back to the firm's own
             name asserted a bookkeeping fact from nothing, on the one region
@@ -991,7 +991,7 @@ export function CompanyCard({
           aria-controls={`company-payee-${card.id}`}
           onClick={() => setPayeeOpen((open) => !open)}
         >
-          Edit payee
+          Edit payee details
         </DocumentAction>
         <div
           id={`company-payee-${card.id}`}
@@ -999,7 +999,7 @@ export function CompanyCard({
           className="mt-2"
         >
           <label className={FIELD_LABEL} htmlFor={`company-remit-${card.id}`}>
-            Remit to
+            Remit payment to
           </label>
           <input
             id={`company-remit-${card.id}`}
@@ -1011,7 +1011,7 @@ export function CompanyCard({
             className={`${FIELD_INPUT} mb-3`}
           />
           <label className={FIELD_LABEL} htmlFor={`company-taxid-${card.id}`}>
-            Last four of the tax id
+            Tax ID: last 4 digits
           </label>
           <input
             id={`company-taxid-${card.id}`}
@@ -1031,7 +1031,7 @@ export function CompanyCard({
             className={FIELD_LABEL}
             htmlFor={`company-retainage-${card.id}`}
           >
-            Retainage, in percent
+            Retainage (%)
           </label>
           <input
             id={`company-retainage-${card.id}`}
@@ -1055,7 +1055,7 @@ export function CompanyCard({
             loadingLabel="Recording…"
             onClick={() => void savePayee()}
           >
-            Save the payee
+            Save payee details
           </DocumentAction>
         </div>
       </section>
@@ -1063,7 +1063,7 @@ export function CompanyCard({
       {/* C-13 — the places goods go that this firm keeps: a receiver, a
           workroom, storage. The Order Assistant's ship-to lists them. */}
       <section className={REGION}>
-        <h3 className={REGION_HEAD}>Locations</h3>
+        <h3 className={REGION_HEAD}>Company locations</h3>
         <StudioLocationsEditor
           organizationId={card.organization_id}
           studioContactId={card.id}
@@ -1073,7 +1073,7 @@ export function CompanyCard({
 
       {/* R5 — Jobs, with the money book read-only beside them */}
       <section className={REGION}>
-        <h3 className={REGION_HEAD}>Jobs</h3>
+        <h3 className={REGION_HEAD}>Project history</h3>
         {!crewHoldsASeat ? (
           <p className="t-body-sm text-[var(--ink-subtle)]">
             {NO_JOBS_SENTENCE}
@@ -1127,7 +1127,7 @@ export function CompanyCard({
           aria-controls={`company-verdict-${card.id}`}
           onClick={() => setVerdictOpen((open) => !open)}
         >
-          Record a verdict
+          Record supplier assessment
         </DocumentAction>
         <div
           id={`company-verdict-${card.id}`}
@@ -1138,7 +1138,7 @@ export function CompanyCard({
             className="t-head mb-1 block text-[var(--ink-subtle)]"
             htmlFor={`company-verdict-field-${card.id}`}
           >
-            What the studio thinks
+            Studio assessment
           </label>
           <input
             id={`company-verdict-field-${card.id}`}
@@ -1156,7 +1156,7 @@ export function CompanyCard({
             loadingLabel="Recording…"
             onClick={() => void recordVerdict()}
           >
-            Save the verdict
+            Save assessment
           </DocumentAction>
         </div>
       </section>
