@@ -264,7 +264,7 @@ function useClientScans(clientProfileId: string | null, projectId: string | null
  * designer↔client 1:1 DIRECT thread keyed on the client's profile id
  * (rpc_start_direct_thread, 00103) — which needs no project_id.
  */
-function useSendDocumentNote(
+export function useSendDocumentNote(
   projectId: string | null,
   counterpartProfileId: string | null,
 ) {

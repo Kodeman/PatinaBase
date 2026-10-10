@@ -28,6 +28,7 @@ import { ReturnToLeadUndo } from '@/components/document/return-to-lead-undo';
 import { SkipToPaper } from '@/components/document/skip-to-paper';
 import { ArrivalMount } from '@/components/document/arrival/arrival-mount';
 import { ArrivalRoute } from '@/components/document/arrival/arrival-route';
+import { NeedActSheetProvider } from '@/components/document/acts/need-act-sheet';
 import '@/lib/arrival/arrival.css';
 
 export const metadata: Metadata = {
@@ -95,6 +96,11 @@ export default function DocumentLayout({
                 {/* R97 — the Desk Walkthrough publishes first-touch suppression +
                     offer eligibility to desk/page through this provider. */}
                 <DeskWalkthroughProvider>
+                  {/* US-25 slice 5 — the scoped act sheet (Chase this PO,
+                      Remind this invoice, Follow up this proposal, Release
+                      this order), mounted once: useNeedActSheet().open(need)
+                      from the band, the Standing sheet and the Desk. */}
+                  <NeedActSheetProvider>
                   {/* US-14 — one route's arrival. Inside the time and
                       walkthrough providers (its busy signals read both) and
                       before the page, so it hides the route root at the
@@ -144,6 +150,7 @@ export default function DocumentLayout({
                       Renders nothing; self-wraps its useSearchParams read in a
                       Suspense boundary. */}
                   <DeskDoorway />
+                  </NeedActSheetProvider>
                 </DeskWalkthroughProvider>
               </DocumentHelpProvider>
             </HelpStateProvider>

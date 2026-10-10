@@ -28,6 +28,7 @@ import {
 } from '@/lib/document/lens-constants';
 import {
   standingDoorLabel,
+  type LensAct,
   type LensBandModel,
   type LensBandLine2,
   type LensReadingStop,
@@ -136,6 +137,7 @@ export function LensBand({
   onPinChange,
   onActed,
   onStandingOpened,
+  openActSheet,
 }: {
   model: LensBandModel;
   readingStop?: LensReadingStop | null;
@@ -147,6 +149,10 @@ export function LensBand({
   /** D-B22 — telemetry fires from the page; the band never captures. */
   onActed?: () => void;
   onStandingOpened?: () => void;
+  /** US-25 slice 5 — a Standing row's act opens its scoped act sheet first;
+   *  false keeps the row's own landing. The band's Next act already opens it
+   *  through its own `onAct`. */
+  openActSheet?: (act: LensAct) => boolean;
 }) {
   const { line1 } = model;
   // Slice 2 (D1, D2) — the stage word on line 1, Next and the door on line 2.
@@ -578,6 +584,7 @@ export function LensBand({
         count={voice ? voice.standingCount : undefined}
         nextKey={voice?.next?.rowKey ?? null}
         triggerRef={fallbackFocusRef}
+        openActSheet={openActSheet}
       />
     </>
   );

@@ -151,7 +151,11 @@ export function StandingSheet({
   count,
   nextKey = null,
   triggerRef,
+  openActSheet,
 }: {
+  /** US-25 slice 5 — a row's scoped act sheet, tried before any landing;
+   *  false when the row has none. */
+  openActSheet?: (act: LensAct) => boolean;
   open: boolean;
   onClose: () => void;
   items: readonly LensStandingItem[];
@@ -193,6 +197,8 @@ export function StandingSheet({
   // does: the sheet goes back first, as a setup act's does, then the region
   // that owns the control takes the act; where none does, the act keeps its
   // own landing. Off, the act runs as the 0b sheet ran it.
+  // US-25 slice 5 — the row's scoped act sheet comes first, ahead of the
+  // region landings, and opens once this sheet is back.
   const pressRow = (act: LensAct) => {
     if (!grouped) {
       act.onAct();
@@ -201,6 +207,7 @@ export function StandingSheet({
     onClose();
     window.requestAnimationFrame(() =>
       window.requestAnimationFrame(() => {
+        if (openActSheet?.(act)) return;
         if (!landInRegion(act)) act.onAct();
       }),
     );

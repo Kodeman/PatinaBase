@@ -170,6 +170,9 @@ import {
   type PoSilenceLine,
   type PoSilenceNeed,
 } from '@/lib/document/po-silences';
+import type { DeskNeed } from '@/lib/document/desk-need-list';
+import { useNeedActSheet } from '@/components/document/acts/need-act-sheet';
+import { silencePoId } from '@/components/document/acts/act-sheet-kind';
 import { familyLabel } from '@/lib/document/family-label';
 import {
   installReading,
@@ -1906,8 +1909,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     { withLifecycle: true },
   ).data as PoSilenceLine[] | undefined;
 
-  const redLetterRows: LensNeedRow[] = useMemo(() => {
-    if (!row || row.engagement_kind !== 'project') return [];
+  // US-25 slice 5 — a need's act opens its scoped act sheet first, where one
+  // exists; otherwise the act keeps today's landing. Keyed by row (and act) key.
+  const actSheet = useNeedActSheet();
+  const { rows: redLetterRows, sheetNeeds: actSheetNeeds } = useMemo((): {
+    rows: LensNeedRow[];
+    sheetNeeds: ReadonlyMap<string, DeskNeed>;
+  } => {
+    const sheetNeeds = new Map<string, DeskNeed>();
+    if (!row || row.engagement_kind !== 'project') return { rows: [], sheetNeeds };
     // US-19 FR9 F9-1 (X1) — under one-voice two makers' silences are two rows,
     // oldest first, each landing on its own PO's line; the Desk keeps its
     // aggregate. Where the lines name fewer POs than the row counts, the
@@ -1917,8 +1927,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           expandPoSilences({ need, lines: silenceLines, unackedPoCount: row.unacked_po_count }),
         )
       : rankedOperationalNeeds;
-    if (!needs) return [];
-    return needs.map((need, index) => {
+    if (!needs) return { rows: [], sheetNeeds };
+    const rows = needs.map((need, index): LensNeedRow => {
+      const key = `${need.kind}-${index}`;
+      const poId = need.kind === 'po_unacknowledged' ? silencePoId(need, silenceLines) : null;
+      const sheetNeed: DeskNeed = {
+        key: need.key,
+        projectId: row.project_id ?? row.engagement_id,
+        projectName: row.title,
+        need: poId ? { ...need, recordId: poId } : need,
+      };
+      sheetNeeds.set(key, sheetNeed);
       const action = needGuideAction(
         need,
         row.active_section,
@@ -1994,13 +2013,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   })
               : null;
       return {
-        key: `${need.kind}-${index}`,
+        key,
         kind: need.kind,
         text: need.text,
         actionLabel: action.label,
         onAct: landingPoId
           ? () => landRecordPayment(landingPoId)
           : () => {
+              if (actSheet.open(sheetNeed)) return;
               if (landing?.()) return;
               activateDestination(action.destination);
             },
@@ -2013,7 +2033,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         ...(oneVoice && need.draft ? { draft: need.draft } : {}),
       };
     });
-  }, [row, rankedOperationalNeeds, silenceLines, activateDestination, oneVoice, nudgeNamed, liveProposal?.decline_reason]);
+    return { rows, sheetNeeds };
+  }, [row, rankedOperationalNeeds, silenceLines, activateDestination, oneVoice, nudgeNamed, liveProposal?.decline_reason, actSheet]);
+  // The Standing sheet hands a row's act here before its region landings.
+  const openActSheet = useCallback(
+    (act: { key: string }) => {
+      const need = actSheetNeeds.get(act.key);
+      return need ? actSheet.open(need) : false;
+    },
+    [actSheetNeeds, actSheet],
+  );
 
   // NF4-01 — the ranked need's act, elected from the rows that already carry
   // each need's kind beside the destination the guide offers, so the approvals
@@ -3445,6 +3474,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             onPinChange={onLensPinChange}
             onActed={onLensActed}
             onStandingOpened={onLensStandingOpened}
+            openActSheet={openActSheet}
           />
         )}
         {/* US-19 D8 — the one-note tour, in flow under the band. */}
