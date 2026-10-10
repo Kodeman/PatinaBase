@@ -69,6 +69,7 @@ const OWNER_BY_KIND: Record<NeedKind, 'designer' | 'client' | 'maker'> = {
   memo_return: 'designer',
   exception_open: 'designer',
   return_by: 'designer',
+  handoff: 'designer',
 };
 
 /** C-22 Phase 2 kinds: registered as types, no rule emits them yet. Their
@@ -77,6 +78,7 @@ const UNEMITTED_KINDS: readonly NeedKind[] = [
   'ack_discrepancy',
   'cfa_pending',
   'memo_return',
+  'handoff',
 ];
 
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
@@ -382,6 +384,7 @@ const DERIVE_BY_KIND: Record<NeedKind, (() => NeedLine | null) | null> = {
     ]),
   return_by: () =>
     deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, null, [returnSignal()]),
+  handoff: null,
 };
 
 describe('D6 · every kind’s owner, read off a real derivation', () => {
