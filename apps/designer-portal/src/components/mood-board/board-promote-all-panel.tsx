@@ -178,7 +178,7 @@ export function BoardPromoteAllPanel({
             disabled={sendingAll || promote.isPending}
             onClick={() => void sendAll()}
           >
-            {sendingAll ? 'Promoting…' : `Add ${eligible.length} project ${eligible.length === 1 ? 'selection' : 'selections'}`}
+            {sendingAll ? 'Adding…' : `Add ${eligible.length} project ${eligible.length === 1 ? 'selection' : 'selections'}`}
           </Button>
           {justMaterialized && (
             <button

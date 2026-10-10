@@ -142,7 +142,7 @@ export function BoardShareDialog({
         <DialogHeader>
           <DialogTitle>Share {boardName}</DialogTitle>
           <DialogDescription>
-            Share view-only access to this design board. Feedback is optional and fixed when the review link is created. Create a new link to change access.
+            Share view-only access to this design board. Feedback is optional and fixed when the share link is created. Create a new link to change access.
           </DialogDescription>
         </DialogHeader>
 
@@ -171,14 +171,14 @@ export function BoardShareDialog({
 
         <section aria-labelledby="active-board-links">
           <h3 id="active-board-links" className="font-mono text-[10px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
-            Active review links
+            Active share links
           </h3>
           {isLoading ? (
             <p className="mt-2 text-[12px] text-[var(--text-muted)]">Loading links…</p>
           ) : isError ? (
             <p role="alert" className="mt-2 text-[12px] text-[var(--color-clay-ink)]">Share links could not be loaded. Try again.</p>
           ) : activeShares.length === 0 ? (
-            <p className="mt-2 text-[12px] italic text-[var(--text-muted)]">No active review links.</p>
+            <p className="mt-2 text-[12px] italic text-[var(--text-muted)]">No active share links.</p>
           ) : (
             <ul className="mt-2 space-y-2">
               {activeShares.map((share) => (
@@ -210,7 +210,7 @@ export function BoardShareDialog({
 
         <section className="border-t border-[var(--border-default)] pt-4" aria-labelledby="new-board-link">
           <h3 id="new-board-link" className="font-mono text-[10px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
-            New review link
+            New share link
           </h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="text-[11px] text-[var(--text-muted)]">
@@ -250,7 +250,7 @@ export function BoardShareDialog({
             disabled={createShare.isPending}
             onClick={() => void handleCreate()}
           >
-            {createShare.isPending ? 'Creating…' : 'Create and copy review link'}
+            {createShare.isPending ? 'Creating…' : 'Create and copy share link'}
           </Button>
         </section>
 

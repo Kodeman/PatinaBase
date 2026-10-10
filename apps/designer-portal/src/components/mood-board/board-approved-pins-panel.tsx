@@ -219,7 +219,7 @@ export function BoardApprovedPinsPanel({
             disabled={sendingAll || promote.isPending}
             onClick={() => void sendAll()}
           >
-            {sendingAll ? 'Sending…' : `Add approved selections (${eligible.length})`}
+            {sendingAll ? 'Adding…' : `Add approved selections (${eligible.length})`}
           </Button>
         )}
       </div>
@@ -260,7 +260,7 @@ export function BoardApprovedPinsPanel({
                 disabled={sendingId === item.id || sendingAll}
                 onClick={() => void sendOne(item)}
               >
-                {sendingId === item.id ? 'Sending…' : 'Add to item schedule'}
+                {sendingId === item.id ? 'Adding…' : 'Add to item schedule'}
               </Button>
             )}
           </li>

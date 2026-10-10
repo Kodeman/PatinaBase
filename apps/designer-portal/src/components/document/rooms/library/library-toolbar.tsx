@@ -143,7 +143,7 @@ export function LibraryToolbar({
               role="tab"
               aria-selected={selected}
               aria-controls="library-shelf-panel"
-              aria-label={`${lens.label}${count == null ? "" : `, ${count} pieces`}`}
+              aria-label={`${lens.label}${count == null ? "" : `, ${count} ${count === 1 ? "product" : "products"}`}`}
               tabIndex={selected ? 0 : -1}
               leading={selected ? <ActiveStrata /> : undefined}
               data-library-lens={lens.layer}

@@ -104,6 +104,6 @@ describe('double-send guard (SQ-368 F15)', () => {
     expect(addItemMutateAsync).toHaveBeenCalledTimes(1);
 
     resolveAdd({ id: 'line-1' });
-    await screen.findByText(/Added to the schedule/);
+    await screen.findByText(/Added to item schedule/);
   });
 });

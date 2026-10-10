@@ -191,11 +191,11 @@ describe('the boards page', () => {
     render(<ProjectBoardsView routeId="eng-1" />);
 
     expect(
-      screen.getByRole('link', { name: 'Open agreement workspace' }),
+      screen.getByRole('link', { name: 'Open the proposal workspace' }),
     ).toHaveAttribute('href', '/drafting/prop-9');
     expect(
       screen.getByText(
-        'This proposal’s design boards are in the agreement workspace.',
+        'This proposal’s design boards are in the proposal workspace.',
       ),
     ).toBeInTheDocument();
   });
@@ -205,12 +205,21 @@ describe('the boards page', () => {
       engagement({ engagement_kind: 'proposal', project_id: null }),
     );
     render(<ProjectBoardsView routeId="eng-1" />);
-    expect(screen.queryByRole('link', { name: /agreement workspace/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /proposal workspace/ })).toBeNull();
     expect(
       screen.getByText(
         'Design boards are available once a project is created.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('uses singular item for a one-item signed snapshot', () => {
+    mockFrozen.mockReturnValue({
+      isLoading: false,
+      data: [{ id: 'f1', name: 'Signed direction', items: [{}] }],
+    });
+    render(<ProjectBoardsView routeId="eng-1" />);
+    expect(screen.getByText('Signed snapshot · 1 item')).toBeInTheDocument();
   });
 
   it('is what /doc/[id]/boards renders', async () => {

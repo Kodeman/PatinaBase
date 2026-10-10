@@ -142,7 +142,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
       <main className="min-h-screen bg-[var(--doc-paper)] px-8 py-16">
         <p className="max-w-lg font-heading text-[1.25rem] italic text-[var(--color-charcoal)]">
           {draftingProposalId
-            ? 'This proposal’s design boards are in the agreement workspace.'
+            ? 'This proposal’s design boards are in the proposal workspace.'
             : 'Design boards are available once a project is created.'}
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-6">
@@ -151,7 +151,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
               href={`/drafting/${draftingProposalId}`}
               className="inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]"
             >
-              Open agreement workspace
+              Open the proposal workspace
             </Link>
           )}
           <Link
@@ -259,7 +259,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
                           {snapshot.name}
                         </span>
                         <span className="mt-0.5 block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-                          Signed snapshot · {snapshot.items.length} items
+                          Signed snapshot · {snapshot.items.length} {snapshot.items.length === 1 ? 'item' : 'items'}
                         </span>
                       </span>
                     </div>

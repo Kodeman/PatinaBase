@@ -101,9 +101,11 @@ describe("Library omnibox", () => {
 function ToolbarHarness({
   onCompose,
   onImport,
+  personalCount = 2,
 }: {
   onCompose: () => void;
   onImport: () => void;
+  personalCount?: number;
 }) {
   const [active, setActive] = useState<LayerProductLayer>("personal");
   const [capability, setCapability] = useState<LibraryCapabilityFilter>("all");
@@ -111,7 +113,7 @@ function ToolbarHarness({
     <>
       <LibraryToolbar
         activeLayer={active}
-        counts={{ personal: 2, studio: 7, catalog: 31 }}
+        counts={{ personal: personalCount, studio: 7, catalog: 31 }}
         onLayerChange={setActive}
         onCompose={onCompose}
         onImport={onImport}
@@ -134,8 +136,8 @@ describe("Library lens and Add disclosure", () => {
   it("shows one active counted shelf lens and supports arrow-key selection", async () => {
     render(<ToolbarHarness onCompose={jest.fn()} onImport={jest.fn()} />);
 
-    const mine = screen.getByRole("tab", { name: "Personal, 2 pieces" });
-    const studio = screen.getByRole("tab", { name: "Studio, 7 pieces" });
+    const mine = screen.getByRole("tab", { name: "Personal, 2 products" });
+    const studio = screen.getByRole("tab", { name: "Studio, 7 products" });
     const panel = screen.getByRole("tabpanel");
     expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
     expect(panel).toHaveAttribute("id", "library-shelf-panel");
@@ -149,10 +151,22 @@ describe("Library lens and Add disclosure", () => {
     expect(screen.getByRole("tabpanel")).toHaveTextContent("studio");
 
     fireEvent.keyDown(studio, { key: "ArrowRight" });
-    const patina = screen.getByRole("tab", { name: "Patina catalog, 31 pieces" });
+    const patina = screen.getByRole("tab", { name: "Patina catalog, 31 products" });
     expect(patina).toHaveAttribute("aria-controls", panel.id);
     expect(patina).toHaveAttribute("aria-selected", "true");
     await waitFor(() => expect(patina).toHaveFocus());
+  });
+
+  it("uses singular product in the accessible name for one result", () => {
+    render(
+      <ToolbarHarness
+        onCompose={jest.fn()}
+        onImport={jest.fn()}
+        personalCount={1}
+      />,
+    );
+
+    expect(screen.getByRole("tab", { name: "Personal, 1 product" })).toBeInTheDocument();
   });
 
   it("routes Compose and Import through one disclosure with quiet dismissal", async () => {

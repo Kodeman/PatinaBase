@@ -55,7 +55,7 @@ export function BoardScheduleInspectorAction({
   if (status) {
     return (
       <p className="text-[11px] text-[var(--text-muted)]" role="status">
-        {status.kind === 'added' ? 'Added to the schedule' : 'Already on item schedule'}
+        {status.kind === 'added' ? 'Added to item schedule' : 'Already on item schedule'}
         {status.docCode ? ` · ${status.docCode}` : ''}
       </p>
     );

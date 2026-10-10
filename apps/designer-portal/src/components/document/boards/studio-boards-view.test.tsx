@@ -156,6 +156,35 @@ describe('StudioBoardsView', () => {
     expect(screen.getByText('Showing the most recently updated design boards.')).toBeInTheDocument();
   });
 
+  it.each([
+    ['awaiting_reaction', 'Awaiting board feedback', '2 design boards awaiting board feedback', 'No design boards awaiting board feedback.'],
+    ['reactions_in', 'Feedback received', '2 design boards with feedback received', 'No design boards with feedback received.'],
+    ['approved_pipeline', 'Approved items for item schedule', '2 boards with approved items for the item schedule', 'No design boards with approved items for the item schedule.'],
+  ] as const)('uses grammatical board count and empty copy for %s', (status, _label, countText, emptyText) => {
+    searchParams = new URLSearchParams(`status=${status}`);
+    useStudioBoardsOverview.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        boards: [
+          board({ id: 'board-a', reactionStatus: status }),
+          board({ id: 'board-b', reactionStatus: status }),
+        ],
+        capped: false,
+      },
+    });
+    const { rerender } = render(<StudioBoardsView />);
+    expect(screen.getByText(countText)).toBeInTheDocument();
+
+    useStudioBoardsOverview.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { boards: [], capped: false },
+    });
+    rerender(<StudioBoardsView />);
+    expect(screen.getByText(emptyText)).toBeInTheDocument();
+  });
+
   it('shows an empty state when no boards are active', () => {
     useStudioBoardsOverview.mockReturnValue({
       isLoading: false,

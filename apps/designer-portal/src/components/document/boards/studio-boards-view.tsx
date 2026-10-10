@@ -26,10 +26,30 @@ import { verdictChipSpec } from '@/lib/document/verdict-chip';
 const LABEL =
   'font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]';
 
-const STATUS_FILTERS: ReadonlyArray<{ key: BoardReactionStatus; label: string }> = [
-  { key: 'awaiting_reaction', label: 'Awaiting board feedback' },
-  { key: 'reactions_in', label: 'Feedback received' },
-  { key: 'approved_pipeline', label: 'Approved items for item schedule' },
+const STATUS_FILTERS: ReadonlyArray<{
+  key: BoardReactionStatus;
+  label: string;
+  countPhrase: (count: number) => string;
+  emptyPhrase: string;
+}> = [
+  {
+    key: 'awaiting_reaction',
+    label: 'Awaiting board feedback',
+    countPhrase: (count) => `${count} design board${count === 1 ? '' : 's'} awaiting board feedback`,
+    emptyPhrase: 'No design boards awaiting board feedback.',
+  },
+  {
+    key: 'reactions_in',
+    label: 'Feedback received',
+    countPhrase: (count) => `${count} design board${count === 1 ? '' : 's'} with feedback received`,
+    emptyPhrase: 'No design boards with feedback received.',
+  },
+  {
+    key: 'approved_pipeline',
+    label: 'Approved items for item schedule',
+    countPhrase: (count) => `${count} board${count === 1 ? '' : 's'} with approved items for the item schedule`,
+    emptyPhrase: 'No design boards with approved items for the item schedule.',
+  },
 ];
 
 function isBoardReactionStatus(value: string | null): value is BoardReactionStatus {
@@ -133,7 +153,7 @@ export function StudioBoardsView() {
   const filtered = activeStatus
     ? boards.filter((board) => board.reactionStatus === activeStatus)
     : boards;
-  const activeFilterLabel = STATUS_FILTERS.find((f) => f.key === activeStatus)?.label ?? null;
+  const activeFilter = STATUS_FILTERS.find((filter) => filter.key === activeStatus) ?? null;
 
   return (
     <main className="min-h-screen bg-[var(--doc-paper)] text-[var(--color-charcoal)]">
@@ -150,8 +170,8 @@ export function StudioBoardsView() {
             <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {overview.isLoading
                 ? 'Loading design boards…'
-                : activeFilterLabel
-                  ? `${filtered.length} ${activeFilterLabel.toLowerCase()}`
+                : activeFilter
+                  ? activeFilter.countPhrase(filtered.length)
                   : `${boards.length} active board${boards.length === 1 ? '' : 's'}`}
             </p>
           </div>
@@ -192,7 +212,7 @@ export function StudioBoardsView() {
           </p>
         ) : filtered.length === 0 ? (
           <p className="font-heading text-[1.05rem] italic text-[var(--text-muted)]">
-            {activeFilterLabel ? `No boards are ${activeFilterLabel.toLowerCase()}.` : 'No active design boards yet.'}
+            {activeFilter ? activeFilter.emptyPhrase : 'No active design boards yet.'}
           </p>
         ) : (
           <div className="border-t border-[var(--color-pearl)]">

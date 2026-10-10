@@ -114,7 +114,7 @@ describe('BoardShareDialog', () => {
     fireEvent.change(screen.getByPlaceholderText('Client review'), {
       target: { value: 'Design review' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Create and copy review link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create and copy share link' }));
 
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith({
@@ -159,7 +159,7 @@ describe('BoardShareDialog', () => {
     expect(toggle).not.toBeChecked();
 
     fireEvent.click(toggle);
-    fireEvent.click(screen.getByRole('button', { name: 'Create and copy review link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create and copy share link' }));
 
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith(
