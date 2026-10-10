@@ -468,3 +468,12 @@ head before pushing.
 
 Registration itself needs **no** migration: 00455 already accepts
 `media_kind = 'source_document'` and all four content types.
+
+### 00765 — US-25 W1 studio need states
+
+`00765_studio_need_states.sql` is reserved 2026-10-10 by SQ-741 (US-25 W1).
+At reservation, `git log --all -- 'supabase/migrations/00765*'` and the
+Sidequest worktree search found no use of 00765. Adds the own-row
+`public.studio_need_states` table and authenticated `set_need_state` RPC,
+which verifies active membership in the project's organization. Local only;
+not applied to production. Re-check the target branch before integration.

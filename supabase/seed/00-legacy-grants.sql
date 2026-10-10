@@ -21576,6 +21576,36 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00765_studio_need_states.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.studio_need_states FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00765_studio_need_states.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.studio_need_states TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00765_studio_need_states.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.studio_need_states TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00765_studio_need_states.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_need_state(text, uuid, text, text, date, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00765_studio_need_states.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_need_state(text, uuid, text, text, date, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

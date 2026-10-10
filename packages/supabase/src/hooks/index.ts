@@ -8,6 +8,8 @@ export {
   useUpdateProduct,
   useCreateDraftProduct,
 } from "./use-products";
+export { useNeedStates, useSetNeedState, mapNeedStateRows, type NeedKey, type NeedState, type NeedStateAction, type SetNeedStateInput } from './use-need-states';
+export { useProjectLeads, mapProjectLeadRows, type ProjectLead } from './use-project-leads';
 export {
   productConfigurationKeys,
   useProductConfigurationDefinition,

@@ -29397,6 +29397,81 @@ export type Database = {
           },
         ]
       }
+      studio_need_states: {
+        Row: {
+          acted_at: string | null
+          deferred_until: string | null
+          need_key: string
+          organization_id: string
+          project_id: string | null
+          set_aside_reason: string | null
+          set_aside_until: string | null
+          updated_at: string
+          user_id: string
+          waiting_on: string | null
+        }
+        Insert: {
+          acted_at?: string | null
+          deferred_until?: string | null
+          need_key: string
+          organization_id: string
+          project_id?: string | null
+          set_aside_reason?: string | null
+          set_aside_until?: string | null
+          updated_at?: string
+          user_id: string
+          waiting_on?: string | null
+        }
+        Update: {
+          acted_at?: string | null
+          deferred_until?: string | null
+          need_key?: string
+          organization_id?: string
+          project_id?: string | null
+          set_aside_reason?: string | null
+          set_aside_until?: string | null
+          updated_at?: string
+          user_id?: string
+          waiting_on?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_need_states_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_need_states_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_need_states_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_need_states_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "studio_need_states_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       studio_payment_methods: {
         Row: {
           archived_at: string | null
@@ -44497,6 +44572,17 @@ export type Database = {
       }
       set_my_member_title: {
         Args: { p_job_title: string; p_organization_id: string }
+        Returns: undefined
+      }
+      set_need_state: {
+        Args: {
+          p_action: string
+          p_need_key: string
+          p_project_id: string
+          p_reason?: string
+          p_until?: string
+          p_waiting_on?: string
+        }
         Returns: undefined
       }
       set_nomination_status: {
