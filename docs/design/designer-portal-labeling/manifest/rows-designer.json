@@ -32047,5 +32047,93 @@
     "verify": "apps/designer-portal/src/components/document/command-bar.test.tsx",
     "status": "implemented",
     "evidence": "components/document/command-bar.tsx:1898: changed rendered label; apps/designer-portal/src/components/document/command-bar.test.tsx"
+  },
+  {
+    "id": "C-20006",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview and navigation",
+      "route": "Document shell",
+      "element": "Fallback action when a Day Sheet need has no scoped act"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/day-sheet.tsx:66",
+    "current": "Open the job",
+    "proposed": "Open project file",
+    "meaning": "Fallback action when a Day Sheet need has no scoped act",
+    "owner": "D1",
+    "depends": [
+      "US-25 Day Sheet"
+    ],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/day-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/day-sheet.tsx:66 display copy changed; apps/designer-portal/src/components/document/day-sheet.test.tsx"
+  },
+  {
+    "id": "C-20007",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview and navigation",
+      "route": "Document shell",
+      "element": "No-note hand-off deep link retains project destination"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/desk-scope.ts:118",
+    "current": "Open the job",
+    "proposed": "Open project file",
+    "meaning": "No-note hand-off deep link retains project destination",
+    "owner": "D1",
+    "depends": [
+      "US-25 Day Sheet"
+    ],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/desk-scope.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/desk-scope.ts:118 display copy changed; apps/designer-portal/src/lib/document/__tests__/desk-scope.test.ts"
+  },
+  {
+    "id": "C-20008",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview and navigation",
+      "route": "Document shell",
+      "element": "Typed legacy-search stage group, flag-off branch"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/command-bar.tsx:1594",
+    "current": "Where the work stands",
+    "proposed": "Project stages",
+    "meaning": "Typed legacy-search stage group, flag-off branch",
+    "owner": "D1",
+    "depends": [
+      "US-25 Day Sheet"
+    ],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/command-bar.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/command-bar.tsx:1594 display copy changed; apps/designer-portal/src/components/document/command-bar.test.tsx"
+  },
+  {
+    "id": "C-20009",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview and navigation",
+      "route": "Document shell",
+      "element": "Typed empty-result stage group, flag-on branch"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/command-bar.tsx:1573",
+    "current": "Where the work stands",
+    "proposed": "Project stages",
+    "meaning": "Typed empty-result stage group, flag-on branch",
+    "owner": "D1",
+    "depends": [
+      "US-25 Day Sheet"
+    ],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/command-bar.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/command-bar.tsx:1573 display copy changed; apps/designer-portal/src/components/document/command-bar.test.tsx"
   }
 ]

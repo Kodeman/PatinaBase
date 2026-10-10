@@ -115,7 +115,7 @@ export function deriveHandoffNeeds(
       text: hasNote
         ? `${previous} handed you ${row.title} on ${date} · Read ${previous}'s note`
         : `${previous} handed you ${row.title} on ${date}`,
-      actionLabel: hasNote ? 'Read the note' : 'Open the job',
+      actionLabel: hasNote ? 'Read the note' : 'Open project file',
       stamp: { label: 'HAND-OFF', color: 'var(--color-dusty-blue)' },
       urgent: false,
       owner: 'designer',

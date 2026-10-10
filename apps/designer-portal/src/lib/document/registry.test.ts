@@ -65,12 +65,12 @@ describe('shortcutsForSurface', () => {
   it('prints ⌘K first and G·O for Orders', () => {
     const rows = shortcutsForSurface('designer-portal/document/orders');
     expect(rows[0]).toEqual({ label: 'Find anything', keys: ['⌘', 'K'] });
-    expect(rows).toContainEqual({ label: 'Orders', keys: ['G', 'O'] });
+    expect(rows).toContainEqual({ label: 'Purchase orders', keys: ['G', 'O'] });
   });
 
   it('carries the ledger chord down to a sub-page', () => {
     const rows = shortcutsForSurface('designer-portal/document/orders/receiving');
-    expect(rows).toContainEqual({ label: 'Orders', keys: ['G', 'O'] });
+    expect(rows).toContainEqual({ label: 'Purchase orders', keys: ['G', 'O'] });
   });
 
   it('prints only the universal row on a surface with no chord', () => {

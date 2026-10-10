@@ -63,7 +63,7 @@ function SheetLine({
   const when = timeWord(need.at, now);
   // A hand-off names its own act: one-voice's kind name ("Read the note")
   // would promise a note the hire's invite never carried.
-  const label = (handoff ? need.actionLabel : deskActionLabel(need, oneVoice)) ?? 'Open the job';
+  const label = (handoff ? need.actionLabel : deskActionLabel(need, oneVoice)) ?? 'Open project file';
   const href = need.deepLink ?? `/doc/${entry.projectId}`;
   const top = index === 0;
 

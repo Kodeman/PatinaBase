@@ -1570,7 +1570,7 @@ export function CommandBar() {
         // the ask, and one Help row.
         sections = [{ eyebrow: null, note: `No results for "${typed}". Refine your search.`, rows: [] }];
         if (stageRows.length) {
-          sections.push({ eyebrow: 'Where the work stands', rows: stageRows });
+          sections.push({ eyebrow: 'Project stages', rows: stageRows });
         }
         sections.push({ eyebrow: null, rows: [engineRow] });
         sections.push({ eyebrow: 'Help', rows: [openHelpRow] });
@@ -1591,7 +1591,7 @@ export function CommandBar() {
         list.push(engineRow);
         sections = typedStageRows.length
           ? [
-              { eyebrow: 'Where the work stands', rows: typedStageRows },
+              { eyebrow: 'Project stages', rows: typedStageRows },
               { eyebrow: null, rows: list },
             ]
           : [{ eyebrow: null, rows: list }];

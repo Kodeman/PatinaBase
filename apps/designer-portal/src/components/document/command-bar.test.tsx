@@ -6,7 +6,7 @@
  * intercept clicks on the underlying surface (Radix Popover content only, no
  * backdrop — "Never blocks the underlying interface", spec §4.7 rule 6). No
  * test exercised this exact circuit before (grep for 'find-anything' /
- * 'Find anything' across *.test.tsx returned zero hits), so this pins it: a
+ * 'Studio search' across *.test.tsx returned zero hits), so this pins it: a
  * real DOM click on the real DocumentAction opens the real CommandBar.
  */
 import {
@@ -153,11 +153,24 @@ describe('the Find anything → command bar circuit', () => {
       </>,
     );
 
-    expect(screen.queryByRole('dialog', { name: 'Command bar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Studio search' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
 
-    expect(screen.getByRole('dialog', { name: 'Command bar' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Studio search' })).toBeInTheDocument();
+  });
+
+  it('keeps Desk as one historical alias for Studio overview without duplicating its destination', () => {
+    render(<><FindAnythingButton /><CommandBar /></>);
+    fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
+      target: { value: 'Desk' },
+    });
+
+    const destination = screen.getAllByRole('option', { name: /Studio overview/i });
+    expect(destination).toHaveLength(1);
+    fireEvent.click(destination[0]);
+    expect(mockPush).toHaveBeenCalledWith('/desk');
   });
 });
 
@@ -174,8 +187,8 @@ describe('SP-07 — the palette drops the Engine framing', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
 
-    const input = screen.getByRole('combobox', { name: 'Find anything' });
-    expect(input).toHaveAttribute('placeholder', 'Find a document or a ledger…');
+    const input = screen.getByRole('combobox', { name: 'Studio search' });
+    expect(input).toHaveAttribute('placeholder', 'Search project files, contacts and tools…');
   });
 
   it('shows "No match" / "Try the Help Center" for a query with no hits', () => {
@@ -187,10 +200,10 @@ describe('SP-07 — the palette drops the Engine framing', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
 
-    const input = screen.getByRole('combobox', { name: 'Find anything' });
+    const input = screen.getByRole('combobox', { name: 'Studio search' });
     fireEvent.change(input, { target: { value: 'zzz-no-such-thing-zzz' } });
 
-    expect(screen.getByText('No match')).toBeInTheDocument();
+    expect(screen.getByText('No matching results')).toBeInTheDocument();
     expect(screen.getByText('Try the Help Center')).toBeInTheDocument();
   });
 
@@ -203,8 +216,8 @@ describe('SP-07 — the palette drops the Engine framing', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
 
-    const dialog = screen.getByRole('dialog', { name: 'Command bar' });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    const dialog = screen.getByRole('dialog', { name: 'Studio search' });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: 'anything' },
     });
 
@@ -227,7 +240,7 @@ describe('SP-16 — ⌘K typed search finds the plan room', () => {
       </>,
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
-    const input = screen.getByRole('combobox', { name: 'Find anything' });
+    const input = screen.getByRole('combobox', { name: 'Studio search' });
     fireEvent.change(input, { target: { value: query } });
   }
 
@@ -238,7 +251,7 @@ describe('SP-16 — ⌘K typed search finds the plan room', () => {
     await openPaletteAndType('plan');
 
     expect(screen.queryByText('Drawing sets')).not.toBeInTheDocument();
-    expect(screen.getByText('No match')).toBeInTheDocument();
+    expect(screen.getByText('No matching results')).toBeInTheDocument();
   });
 
   it('matches "plan", "plan room", "floor plan", "plans" and "drawings" with a document in hand', async () => {
@@ -253,7 +266,7 @@ describe('SP-16 — ⌘K typed search finds the plan room', () => {
         </>,
       );
       fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
-      fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+      fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
         target: { value: query },
       });
       expect(screen.getByText('Drawing sets')).toBeInTheDocument();
@@ -297,13 +310,13 @@ describe('F21 — ⌘K restores focus to the opener on close', () => {
     opener.focus();
     fireEvent.click(opener);
 
-    const input = await screen.findByRole('combobox', { name: 'Find anything' });
+    const input = await screen.findByRole('combobox', { name: 'Studio search' });
     await waitFor(() => expect(input).toHaveFocus());
 
     fireEvent.keyDown(window, { key: 'Escape' });
 
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: 'Command bar' })).not.toBeInTheDocument(),
+      expect(screen.queryByRole('dialog', { name: 'Studio search' })).not.toBeInTheDocument(),
     );
     await waitFor(() => expect(opener).toHaveFocus());
   });
@@ -319,7 +332,7 @@ describe('F21 — ⌘K restores focus to the opener on close', () => {
     opener.focus();
     fireEvent.click(opener);
     await waitFor(() =>
-      expect(screen.getByRole('combobox', { name: 'Find anything' })).toHaveFocus(),
+      expect(screen.getByRole('combobox', { name: 'Studio search' })).toHaveFocus(),
     );
 
     // A chosen ledger row closes the palette and opens a sheet in the same
@@ -337,7 +350,7 @@ describe('F21 — ⌘K restores focus to the opener on close', () => {
 
     await waitFor(() =>
       expect(
-        screen.queryByRole('dialog', { name: 'Command bar' }),
+        screen.queryByRole('dialog', { name: 'Studio search' }),
       ).not.toBeInTheDocument(),
     );
     await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
@@ -365,7 +378,7 @@ function openPalette() {
     </>,
   );
   fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
-  return screen.getByRole('dialog', { name: 'Command bar' });
+  return screen.getByRole('dialog', { name: 'Studio search' });
 }
 
 describe('F04 — the empty query leads with Where the work stands', () => {
@@ -409,7 +422,7 @@ describe('F04 — the empty query leads with Where the work stands', () => {
 
     const dialog = openPalette();
 
-    expect(screen.getByText('Where the work stands')).toBeInTheDocument();
+    expect(screen.getByText('Project stages')).toBeInTheDocument();
     expect(screen.getByText('In install · 1')).toBeInTheDocument();
     expect(screen.getByText('Okonkwo kitchen · punch list open')).toBeInTheDocument();
     expect(screen.getByText('In procurement · 1')).toBeInTheDocument();
@@ -420,8 +433,8 @@ describe('F04 — the empty query leads with Where the work stands', () => {
 
     // It is the FIRST group — it stands above "Rooms & ledgers".
     const text = dialog.textContent ?? '';
-    expect(text.indexOf('Where the work stands')).toBeLessThan(
-      text.indexOf('Rooms & ledgers'),
+    expect(text.indexOf('Project stages')).toBeLessThan(
+      text.indexOf('Studio resources & administration'),
     );
   });
 
@@ -438,26 +451,26 @@ describe('F04 — the empty query leads with Where the work stands', () => {
     mockDeskData.mockReturnValue(studio as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: 'install' },
     });
 
-    expect(screen.getByText('Where the work stands')).toBeInTheDocument();
+    expect(screen.getByText('Project stages')).toBeInTheDocument();
     expect(screen.getByText('In install · 1')).toBeInTheDocument();
     expect(screen.queryByText('In procurement · 1')).not.toBeInTheDocument();
-    expect(screen.queryByText('No match')).not.toBeInTheDocument();
+    expect(screen.queryByText('No matching results')).not.toBeInTheDocument();
   });
 
   it('filters to the proposal stage on "proposal"', () => {
     mockDeskData.mockReturnValue(studio as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: 'proposal' },
     });
 
     expect(screen.getByText('Out for signature · 1')).toBeInTheDocument();
-    expect(screen.queryByText('No match')).not.toBeInTheDocument();
+    expect(screen.queryByText('No matching results')).not.toBeInTheDocument();
   });
 
   it('counts every live document, not only the ones that derived a need or a motion', () => {
@@ -476,7 +489,7 @@ describe('F04 — the empty query leads with Where the work stands', () => {
 
     openPalette();
 
-    expect(screen.getByText('Where the work stands')).toBeInTheDocument();
+    expect(screen.getByText('Project stages')).toBeInTheDocument();
     expect(screen.getByText('In procurement · 2')).toBeInTheDocument();
     expect(screen.getByText('In care · 1')).toBeInTheDocument();
   });
@@ -499,8 +512,8 @@ describe('F39/F65 — a stage phrase opens the palette already typed', () => {
       new CustomEvent('document:open-command-bar', { detail: { query: 'install' } }),
     );
 
-    expect(screen.getByRole('combobox', { name: 'Find anything' })).toHaveValue('install');
-    expect(screen.getByText('Where the work stands')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Studio search' })).toHaveValue('install');
+    expect(screen.getByText('Project stages')).toBeInTheDocument();
     expect(screen.getByText('In install · 1')).toBeInTheDocument();
     expect(screen.queryByText('In procurement · 1')).not.toBeInTheDocument();
   });
@@ -510,7 +523,7 @@ describe('F39/F65 — a stage phrase opens the palette already typed', () => {
 
     fireEvent(window, new CustomEvent('document:open-command-bar'));
 
-    expect(screen.getByRole('combobox', { name: 'Find anything' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Studio search' })).toHaveValue('');
   });
 });
 
@@ -522,8 +535,8 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
 
     openPalette();
 
-    expect(screen.getByText('This surface')).toBeInTheDocument();
-    for (const label of ['Drawing sets', 'Spec book', 'Boards', 'Call sheet']) {
+    expect(screen.getByText('Current workspace')).toBeInTheDocument();
+    for (const label of ['Drawing sets', 'Specification book', 'Design boards', 'Project directory']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
     expect(screen.getAllByText('this project · the current set')).toHaveLength(1);
@@ -539,8 +552,8 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
 
     openPalette();
 
-    expect(screen.queryByText('This surface')).not.toBeInTheDocument();
-    for (const label of ['Drawing sets', 'Spec book', 'Boards', 'Call sheet']) {
+    expect(screen.queryByText('Current workspace')).not.toBeInTheDocument();
+    for (const label of ['Drawing sets', 'Specification book', 'Design boards', 'Project directory']) {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     }
   });
@@ -551,7 +564,7 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] } as never);
 
     openPalette();
-    fireEvent.click(screen.getByText('Spec book').closest('button')!);
+    fireEvent.click(screen.getByText('Specification book').closest('button')!);
 
     expect(mockPush).toHaveBeenCalledWith('/doc/proj-1/spec-book');
   });
@@ -566,10 +579,10 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
 
     openPalette();
 
-    expect(screen.getByText('Boards')).toBeInTheDocument();
+    expect(screen.getByText('Design boards')).toBeInTheDocument();
     expect(screen.queryByText('Mood boards')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Boards').closest('button')!);
+    fireEvent.click(screen.getByText('Design boards').closest('button')!);
     expect(mockPush).toHaveBeenCalledWith('/doc/eng-1/boards');
   });
 
@@ -579,11 +592,11 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] } as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: 'board' },
     });
 
-    expect(screen.getAllByText('Boards')).toHaveLength(1);
+    expect(screen.getAllByText('Design boards')).toHaveLength(1);
     expect(screen.queryByText('Contract Room')).not.toBeInTheDocument();
     expect(screen.queryByText('Mood boards')).not.toBeInTheDocument();
   });
@@ -606,13 +619,13 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     } as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: 'spec book' },
     });
 
-    expect(screen.getByText('Spec book · Vandersteen')).toBeInTheDocument();
+    expect(screen.getByText('Specification book · Vandersteen')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Spec book · Vandersteen').closest('button')!);
+    fireEvent.click(screen.getByText('Specification book · Vandersteen').closest('button')!);
     expect(mockPush).toHaveBeenCalledWith('/doc/proj-v/spec-book');
   });
 
@@ -640,10 +653,10 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     window.addEventListener('document:open-call-sheet', listener);
 
     openPalette();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: 'roster' },
     });
-    fireEvent.click(screen.getByText('Call sheet · Vandersteen').closest('button')!);
+    fireEvent.click(screen.getByText('Project directory · Vandersteen').closest('button')!);
     window.removeEventListener('document:open-call-sheet', listener);
 
     expect(dispatched).toHaveLength(0);
@@ -661,7 +674,7 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     window.addEventListener('document:open-call-sheet', listener);
 
     openPalette();
-    fireEvent.click(screen.getByText('Call sheet').closest('button')!);
+    fireEvent.click(screen.getByText('Project directory').closest('button')!);
     window.removeEventListener('document:open-call-sheet', listener);
 
     expect(dispatched).toHaveLength(1);
@@ -698,7 +711,7 @@ describe('D4\' — ⌘K offers a Start a board… command', () => {
     mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] } as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: 'new board' },
     });
 
@@ -722,7 +735,7 @@ describe('D4\' — ⌘K offers a Start a board… command', () => {
     } as never);
 
     openPalette();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: 'start a board' },
     });
 
@@ -747,8 +760,8 @@ describe('F37 / F13 / F17 — the order, the titles, and the renamed room', () =
     const dialog = openPalette();
     const text = dialog.textContent ?? '';
 
-    expect(text.indexOf('Rooms & ledgers')).toBeGreaterThan(-1);
-    expect(text.indexOf('Rooms & ledgers')).toBeLessThan(text.indexOf('Begin'));
+    expect(text.indexOf('Studio resources & administration')).toBeGreaterThan(-1);
+    expect(text.indexOf('Studio resources & administration')).toBeLessThan(text.indexOf('New work'));
   });
 
   it('prints a recent row by its full title, not its family tab', () => {
@@ -767,7 +780,7 @@ describe('F37 / F13 / F17 — the order, the titles, and the renamed room', () =
   it('names the scans, and the words "The Rooms" appear nowhere', () => {
     const dialog = openPalette();
 
-    expect(screen.getByText('The Scans')).toBeInTheDocument();
+    expect(screen.getByText('Measured rooms')).toBeInTheDocument();
     expect(screen.getByText('measured rooms, from the field')).toBeInTheDocument();
     expect(dialog.textContent).not.toContain('The Rooms');
   });
@@ -780,7 +793,7 @@ describe('F08 — the ⌘K invoice door names its scope', () => {
 
     openPalette();
 
-    expect(screen.getByText('Draw an invoice · Ellsworth')).toBeInTheDocument();
+    expect(screen.getByText('Draft an invoice · Ellsworth')).toBeInTheDocument();
   });
 });
 
@@ -795,7 +808,7 @@ describe('the "Leave a note" doorway follows the tester-notes flag', () => {
       </>,
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: 'leave a note' },
     });
   }
@@ -804,15 +817,15 @@ describe('the "Leave a note" doorway follows the tester-notes flag', () => {
     mockTesterNotesFlag = false;
     typeForTheNoteRow();
 
-    expect(screen.queryByText('Leave a note')).not.toBeInTheDocument();
+    expect(screen.queryByText('Share feedback')).not.toBeInTheDocument();
   });
 
   it('offers the note row with the flag on', () => {
     mockTesterNotesFlag = true;
     typeForTheNoteRow();
 
-    expect(screen.getByText('Leave a note')).toBeInTheDocument();
-    expect(screen.getByText('feedback on this screen')).toBeInTheDocument();
+    expect(screen.getByText('Share feedback')).toBeInTheDocument();
+    expect(screen.getByText('Feedback about this workspace')).toBeInTheDocument();
   });
 });
 
@@ -825,7 +838,7 @@ describe('R2-F2 — the "What changed" row follows the teaching-notes flag', () 
       </>,
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: 'what changed' },
     });
   }
@@ -834,15 +847,15 @@ describe('R2-F2 — the "What changed" row follows the teaching-notes flag', () 
     mockTeachingNotesFlag = false;
     typeForTheChangesRow();
 
-    expect(screen.queryByText('What changed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Release notes')).not.toBeInTheDocument();
   });
 
   it('offers the What changed row with the flag on', () => {
     mockTeachingNotesFlag = true;
     typeForTheChangesRow();
 
-    expect(screen.getByText('What changed')).toBeInTheDocument();
-    expect(screen.getByText('changes to the Document, newest first')).toBeInTheDocument();
+    expect(screen.getByText('Release notes')).toBeInTheDocument();
+    expect(screen.getByText('Portal release notes, newest first')).toBeInTheDocument();
   });
 });
 
@@ -855,7 +868,7 @@ describe('L5 — the two reference doorways in ⌘K', () => {
       </>,
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
       target: { value: query },
     });
   }
@@ -868,20 +881,20 @@ describe('L5 — the two reference doorways in ⌘K', () => {
     window.addEventListener(KEYS_SHEET_EVENT, handler);
 
     typeInPalette('shortcuts');
-    expect(screen.getByText('The keys')).toBeInTheDocument();
+    expect(screen.getByText('Keyboard shortcuts')).toBeInTheDocument();
     expect(screen.getByText('shortcuts, one page')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('The keys'));
+    fireEvent.click(screen.getByText('Keyboard shortcuts'));
     expect(heard).toEqual(['palette']);
     window.removeEventListener(KEYS_SHEET_EVENT, handler);
   });
 
   it('offers "The words" and routes to the Ideas & vocabulary shelf', () => {
     typeInPalette('glossary');
-    expect(screen.getByText('The words')).toBeInTheDocument();
-    expect(screen.getByText('what Patina calls things')).toBeInTheDocument();
+    expect(screen.getByText('Terminology guide')).toBeInTheDocument();
+    expect(screen.getByText('Studio terminology explained')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('The words'));
+    fireEvent.click(screen.getByText('Terminology guide'));
     expect(mockPush).toHaveBeenCalledWith(THE_WORDS_HREF);
   });
 });
@@ -905,12 +918,12 @@ describe('B03 — the palette a screen reader can drive', () => {
       </>,
     );
     fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
-    return screen.getByRole('dialog', { name: 'Command bar' });
+    return screen.getByRole('dialog', { name: 'Studio search' });
   }
 
   const options = () => screen.getAllByRole('option');
   const paletteInput = () =>
-    screen.getByRole('combobox', { name: 'Find anything' });
+    screen.getByRole('combobox', { name: 'Studio search' });
 
   it('opens a modal dialog, not a floating panel over a live page', () => {
     expect(openPalette()).toHaveAttribute('aria-modal', 'true');
@@ -1029,8 +1042,8 @@ describe('B03 — the palette a screen reader can drive', () => {
     // The palette still offers a way out — the Help Center row and the
     // Engine's ask — but neither is a match, and the status line must not
     // announce "2 results" over the word "No match".
-    expect(screen.getByText('No match')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Nothing matches.');
+    expect(screen.getByText('No matching results')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('No matching results.');
   });
 
   it('leaves the keyboard path itself unchanged — Enter still chooses', () => {
@@ -1038,7 +1051,7 @@ describe('B03 — the palette a screen reader can drive', () => {
     fireEvent.keyDown(paletteInput(), { key: 'ArrowDown' });
     fireEvent.keyDown(paletteInput(), { key: 'Enter' });
     expect(
-      screen.queryByRole('dialog', { name: 'Command bar' }),
+      screen.queryByRole('dialog', { name: 'Studio search' }),
     ).not.toBeInTheDocument();
   });
 });

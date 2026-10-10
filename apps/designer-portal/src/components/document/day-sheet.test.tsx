@@ -81,6 +81,12 @@ describe('DaySheet', () => {
     );
   });
 
+  it('names the unscoped fallback Open project file without changing its project link', () => {
+    const { container } = renderSheet([entry(1, { actionLabel: undefined })]);
+    expect(within(lines(container)[0]).getByRole('link', { name: 'Open project file — Job 1' }))
+      .toHaveAttribute('href', '/doc/p1#task-1');
+  });
+
   it('prints the time word only inside a day (Q5), with no dot', () => {
     const { container } = renderSheet([
       entry(1, { at: new Date(2026, 9, 9, 8, 0).toISOString() }),

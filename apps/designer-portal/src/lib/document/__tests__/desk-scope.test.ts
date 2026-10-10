@@ -98,7 +98,7 @@ describe('Desk scope and custody', () => {
     expect(unread[0].need.actionLabel).toBe('Read the note');
     const noNote = deriveHandoffNeeds(live, handoffLeads, 'u-me', new Map(), false);
     expect(noNote[0].need.text).not.toMatch(/note/);
-    expect(noNote[0].need.actionLabel).toBe('Open the job');
+    expect(noNote[0].need.actionLabel).toBe('Open project file');
     expect(deriveHandoffNeeds(
       live,
       handoffLeads,
