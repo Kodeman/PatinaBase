@@ -177,6 +177,18 @@ describe('Record a change at quiet on the project spread (F2-18)', () => {
     ).toHaveAttribute('data-action-variant', 'secondary');
   });
 
+  it('never offers Record the payment for a fully paid invoice', () => {
+    mockInvoices = [{
+      id: 'invoice-1',
+      status: 'paid',
+      total_cents: 920000,
+      amount_paid_cents: 920000,
+      due_date: '2026-10-17',
+    }];
+    render(<MoneyRegion projectId="project-1" />);
+    expect(document.querySelector('[data-action-key="record-client-payment"]')).toBeNull();
+  });
+
   it('prints plain beside Record the payment when a receivable is due (F3-7)', () => {
     mockInvoices = [{ id: 'invoice-1', status: 'sent', due_date: '2026-08-03' }];
     render(<MoneyRegion projectId="project-1" />);
