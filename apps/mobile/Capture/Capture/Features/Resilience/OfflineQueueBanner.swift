@@ -77,7 +77,7 @@ struct OfflineQueueBanner: View {
         .accessibilityIdentifier("r4.offlineBanner")
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No signal. Saving on device. \(queuedCount) queued.")
-        .accessibilityHint("Review the offline queue")
+        .accessibilityHint("Review queued captures")
     }
 }
 

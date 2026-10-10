@@ -1099,7 +1099,8 @@
     "status": "unchanged",
     "screens": [
       "screen.O2.connect"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Auth/ConnectWorkspaceScreen.swift#ConnectWorkspaceScreen; no behavior or state change. Simulator checks copy/layout only."
   },
   {
     "id": "FD-071",
@@ -1112,7 +1113,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Auth/PortalLoginScanSheet.swift#PortalLoginScanSheet; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-072",
@@ -1125,7 +1127,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/App/DeepLinking/PortalLoginController.swift#PortalLoginController display; no behavior or state change. Simulator checks copy/layout only."
   },
   {
     "id": "FD-073",
@@ -1141,7 +1144,8 @@
     "status": "unchanged",
     "screens": [
       "screen.O1.welcome"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Onboarding/WelcomeScreen.swift#WelcomeScreen; no behavior or state change. Simulator checks copy/layout only."
   },
   {
     "id": "FD-074",
@@ -1157,7 +1161,8 @@
     "status": "unchanged",
     "screens": [
       "screen.O3.camera-priming"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Onboarding/CameraPrimingScreen.swift#CameraPrimingScreen; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-075",
@@ -1173,7 +1178,8 @@
     "status": "unchanged",
     "screens": [
       "screen.O4.ready"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Onboarding/ReadyScreen.swift#ReadyScreen; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-076",
@@ -1186,7 +1192,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Onboarding/OnboardingSupport.swift#OnboardingSupport; no behavior or state change. Simulator checks copy/layout only."
   },
   {
     "id": "FD-077",
@@ -1203,7 +1210,8 @@
     "screens": [
       "screen.C1.viewfinder",
       "screen.C3.specimen-forms"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Capture/ViewfinderScreen.swift#ViewfinderScreen; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-078",
@@ -1221,7 +1229,8 @@
       "screen.C2.framing",
       "screen.C4.multi-shot",
       "screen.R1.low-light"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Capture/ViewfinderControls.swift#ViewfinderControls accessibility labels; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-079",
@@ -1234,7 +1243,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Capture/CaptureCardOverlay.swift#CaptureCardOverlay; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-080",
@@ -1247,7 +1257,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Capture/FieldAffirmationChip.swift#FieldAffirmationChip accessibility; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-081",
@@ -1260,7 +1271,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Capture/ViewfinderModel.swift#ViewfinderModel feedback; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-082",
@@ -1276,7 +1288,8 @@
     "status": "unchanged",
     "screens": [
       "screen.C6.voice"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Capture/C6VoiceScreen.swift#C6VoiceScreen.voiceControlLabel; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-083",
@@ -1292,7 +1305,8 @@
     "status": "unchanged",
     "screens": [
       "screen.N1.tag-ocr"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Recognition/Tag/TagOCRSheet.swift#TagOCRSheet; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-084",
@@ -1308,7 +1322,8 @@
     "status": "unchanged",
     "screens": [
       "screen.N2.scan"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Recognition/Code/CodeScanSheet.swift#CodeScanSheet; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-085",
@@ -1324,7 +1339,8 @@
     "status": "unchanged",
     "screens": [
       "screen.N3.measure"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Recognition/Measure/MeasureSheet.swift#MeasureSheet; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-086",
@@ -1340,7 +1356,8 @@
     "status": "unchanged",
     "screens": [
       "screen.N4.voice"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Recognition/Voice/VoiceNoteSheet.swift#VoiceNoteSheet; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-087",
@@ -1353,7 +1370,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/CaptureKit/CaptureKit/Recognition/FieldVoiceModeState.swift#FieldVoiceModeCopy; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-088",
@@ -1366,7 +1384,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/CaptureKit/CaptureKit/Recognition/VoiceNoteCopy.swift#VoiceNoteCopy.recognitionUnavailable; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-089",
@@ -1385,7 +1404,8 @@
       "screen.R3.denied",
       "screen.E3.share-sheet",
       "screen.E4.photo-library"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/Resilience/ResilienceScreens.swift#ResilienceScreens; no behavior or state change. Simulator checks copy/layout only."
   },
   {
     "id": "FD-090",
@@ -1398,7 +1418,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "OfflineQueueBanner accessibility hint now reads “Review queued captures”; local-save line and U1 route are unchanged. Simulator gate checks copy/layout only; offline-device pass owed."
   },
   {
     "id": "FD-091",
@@ -1414,7 +1435,8 @@
     "status": "unchanged",
     "screens": [
       "screen.Q1.qr-scan"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/QRApprove/QRScanScreen.swift#QRScanScreen; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-092",
@@ -1430,7 +1452,8 @@
     "status": "unchanged",
     "screens": [
       "screen.Q2.qr-approve"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/QRApprove/QRApproveScreen.swift#QRApproveScreen; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-093",
@@ -1443,7 +1466,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/QRApprove/SupabasePortalAuthApprovalService.swift#portal approval feedback; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-094",
@@ -1459,7 +1483,8 @@
     "status": "unchanged",
     "screens": [
       "screen.F1.scan-setup"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/SiteScan/SiteScanSetupScreen.swift#SiteScanSetupScreen; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-095",
@@ -1475,7 +1500,8 @@
     "status": "unchanged",
     "screens": [
       "screen.F2.site-scan"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/SiteScan/SiteScanHostScreen.swift#SiteScanHostScreen; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-096",
@@ -1491,7 +1517,8 @@
     "status": "unchanged",
     "screens": [
       "screen.F1.context"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/SiteScan/SiteScanContextCapture.swift#SiteScanContextCapture; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-097",
@@ -1508,7 +1535,8 @@
     "screens": [
       "screen.F3.scan-review",
       "screen.F4.scan-upload"
-    ]
+    ],
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/SiteScan/SiteScanReviewUploadViews.swift#SiteScanReviewUploadViews; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-098",
@@ -1521,7 +1549,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/SiteScan/SiteScanCoachViews.swift#SiteScanCoachViews; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-099",
@@ -1534,7 +1563,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/SiteScan/SiteScanAnchorViews.swift#SiteScanAnchorViews; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-100",
@@ -1547,7 +1577,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/SiteScan/SiteScanPlaceholders.swift#SiteScanPlaceholders; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-101",
@@ -1560,7 +1591,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/Capture/Features/SiteScan/RoomPlanScanSession.swift#RoomPlanScanSession status; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-102",
@@ -1573,7 +1605,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/CaptureKit/CaptureKit/SiteScan/CaptureSurface.swift#CaptureSurface.displayLabel; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-103",
@@ -1586,7 +1619,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/CaptureKit/CaptureKit/SiteScan/ScorecardEvaluator.swift#ScorecardEvaluator feedback; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-104",
@@ -1599,7 +1633,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/CaptureKit/CaptureKit/Work/FieldVisitRoomMerge.swift#FieldVisitRoomMerge display; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-105",
@@ -1612,7 +1647,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/CaptureKit/CaptureKit/Support/FieldCopyAudit.swift#FieldContextCaptureCopy; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-106",
@@ -1625,7 +1661,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged Direction C copy at apps/mobile/Capture/CaptureKit/CaptureKit/Domain/ScanUploadRecord.swift#ScanUploadRecord failure detail; no behavior or state change. Physical-device hardware/copy read-through owed to Kody; simulator checks copy/layout only."
   },
   {
     "id": "FD-107",
@@ -1638,7 +1675,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Physical-device permission prompt read-through by Kody; check request timing and actual fallback",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged usage description in scripts/generate_project.rb; the generated project comes from the gate, not a hand edit. Physical-device permission prompt and timing read-through owed to Kody."
   },
   {
     "id": "FD-108",
@@ -1651,7 +1689,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Physical-device permission prompt read-through by Kody; check request timing and actual fallback",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged usage description in scripts/generate_project.rb; the generated project comes from the gate, not a hand edit. Physical-device permission prompt and timing read-through owed to Kody."
   },
   {
     "id": "FD-109",
@@ -1664,7 +1703,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Physical-device permission prompt read-through by Kody; check request timing and actual fallback",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged usage description in scripts/generate_project.rb; the generated project comes from the gate, not a hand edit. Physical-device permission prompt and timing read-through owed to Kody."
   },
   {
     "id": "FD-110",
@@ -1677,7 +1717,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Physical-device permission prompt read-through by Kody; check request timing and actual fallback",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged usage description in scripts/generate_project.rb; the generated project comes from the gate, not a hand edit. Physical-device permission prompt and timing read-through owed to Kody."
   },
   {
     "id": "FD-111",
@@ -1690,7 +1731,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Physical-device permission prompt read-through by Kody; check request timing and actual fallback",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged usage description in scripts/generate_project.rb; the generated project comes from the gate, not a hand edit. Physical-device permission prompt and timing read-through owed to Kody."
   },
   {
     "id": "FD-112",
@@ -1703,7 +1745,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Physical-device permission prompt read-through by Kody; check request timing and actual fallback",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged usage description in scripts/generate_project.rb; the generated project comes from the gate, not a hand edit. Physical-device permission prompt and timing read-through owed to Kody."
   },
   {
     "id": "FD-113",
@@ -1716,7 +1759,8 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Physical-device permission prompt read-through by Kody; check request timing and actual fallback",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged usage description in scripts/generate_project.rb; the generated project comes from the gate, not a hand edit. Physical-device permission prompt and timing read-through owed to Kody."
   },
   {
     "id": "FD-114",
@@ -1729,6 +1773,7 @@
     "owner": "F2",
     "dependencies": [],
     "verify": "Physical-device permission prompt read-through by Kody; check request timing and actual fallback",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "Unchanged usage description in scripts/generate_project.rb; the generated project comes from the gate, not a hand edit. Physical-device permission prompt and timing read-through owed to Kody."
   }
 ]
