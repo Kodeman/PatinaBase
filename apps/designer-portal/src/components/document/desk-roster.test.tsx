@@ -112,14 +112,14 @@ function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
             name: 'Reinhardt lake house',
             stage: 'project',
             designerId: LEAH,
-            state: 'Reinhardt · Site Visit · quiet · nothing needs your hand',
+            state: 'Reinhardt · Site Visit · quiet · no current alert',
             overdueText: null,
             mark: null,
             needKind: null,
             overdue: { isOverdue: false, days: 0 },
             jobHref: '/doc/reinhardt',
             act: { label: 'Open the job', href: '/doc/reinhardt' },
-            custody: 'At rest',
+            custody: 'No current alert',
             needOwner: null,
             motionText: 'With client since 4 Aug',
             valueText: '4 Aug',
@@ -329,7 +329,7 @@ describe('DeskRoster — an empty desk', () => {
     );
 
     expect(
-      screen.getByText('Nothing needs your hand. The work is in motion.'),
+      screen.getByText('No current action alerts. The work is in motion.'),
     ).toBeInTheDocument();
     expect(
       container.querySelector('[data-tour-anchor="desk-folio"]'),
@@ -351,7 +351,7 @@ describe('DeskRoster — an empty desk', () => {
           mark: null,
           needKind: null,
           needOwner: null,
-          custody: 'At rest',
+          custody: 'No current alert',
           overdueText: null,
           overdue: { isOverdue: false, days: 0 },
         })),
@@ -789,7 +789,7 @@ describe('DeskRoster — the facets (IA-11 / IA-12)', () => {
     await toggle('Only what needs me');
 
     expect(
-      screen.getByText('Nothing needs your hand today.'),
+      screen.getByText('No current action alerts.'),
     ).toBeInTheDocument();
     expect(container.querySelectorAll('[data-claim-card]')).toHaveLength(0);
     expect(container.querySelectorAll('[data-ledger-row]')).toHaveLength(0);
@@ -942,7 +942,7 @@ describe('DeskRoster — R143, the Desk in two halves', () => {
   it('heads the ledger half with its count', () => {
     render(<DeskRoster roster={roster()} />);
 
-    expect(screen.getByText('At rest · 1 job')).toBeInTheDocument();
+    expect(screen.getByText('No current alert · 1 job')).toBeInTheDocument();
   });
 
   it('keeps the desk-folio tour anchor on the first card', () => {

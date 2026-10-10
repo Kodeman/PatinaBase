@@ -22,11 +22,13 @@ import { QueryClient, QueryClientProvider, useQuery, keepPreviousData } from '@t
 const mockFrom = jest.fn();
 const mockGetSession = jest.fn();
 
+const mockFetchHeld = jest.fn(async () => [] as unknown[]);
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: jest.fn(() => ({
     from: (...args: unknown[]) => mockFrom(...args),
     auth: { getSession: (...args: unknown[]) => mockGetSession(...args) },
   })),
+  fetchHeldPurchaseOrders: (...args: unknown[]) => mockFetchHeld(...(args as [])),
 }));
 
 // ---- analytics rail ------------------------------------------------------
@@ -54,6 +56,10 @@ jest.mock('@tanstack/react-query', () => {
 import { replaceEqualDeep } from '@tanstack/react-query';
 import {
   buildDeskExceptions,
+  buildDeskLandedPayments,
+  buildDeskLeads,
+  buildDeskProposalOutcomes,
+  buildDeskPurchaseOrders,
   buildDeskQuotes,
   buildDeskSamples,
   DESK_PHASE_LIMIT,
@@ -61,6 +67,7 @@ import {
   useDeskEngagements,
 } from '../use-desk-engagements';
 import { partitionDesk, type DocumentStateRow } from '@/lib/document/desk-derivation';
+import { deriveDeskRoster } from '@/lib/document/desk-roster-derivation';
 
 /** A chainable PostgrestFilterBuilder stand-in — every filter method returns
  *  itself, and `.then` resolves it as the Promise.all in the hook expects. */
@@ -132,7 +139,7 @@ describe('useDeskEngagements', () => {
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ folders: [], chips: [], live: [], composed: {} });
+    expect(result.current.data).toEqual({ folders: [], chips: [], live: [], composed: {}, unreadFeeds: [] });
     expect(result.current.isError).toBe(false);
     // A genuinely quiet desk on first load has nothing to compare against —
     // no breadcrumb.
@@ -182,7 +189,7 @@ describe('useDeskEngagements', () => {
       await result.current.refetch();
     });
 
-    await waitFor(() => expect(result.current.data).toEqual({ folders: [], chips: [], live: [], composed: {} }));
+    await waitFor(() => expect(result.current.data).toEqual({ folders: [], chips: [], live: [], composed: {}, unreadFeeds: [] }));
     expect(mockDeskZeroRowRead).toHaveBeenCalledWith({
       previous_folder_count: 1,
       previous_chip_count: 0,
@@ -546,5 +553,197 @@ describe('buildDeskSamples (C-35)', () => {
 
   it('is undefined (unknown, not empty) when the read failed', () => {
     expect(buildDeskSamples(null)).toBeUndefined();
+  });
+});
+
+// ─── US-25 W2 (SQ-744) ────────────────────────────────────────────────────────
+
+/** A live job with nothing open on its own row. */
+const QUIET_PROJECT_ROW = {
+  engagement_kind: 'project',
+  engagement_id: 'job-quiet',
+  project_id: 'p-quiet',
+  proposal_id: null,
+  lead_id: null,
+  title: 'Quiet House',
+  client_name: 'Greta Whitfield',
+  active_section: 'project',
+  current_phase: null,
+  is_archived: false,
+  is_paused: false,
+  unsent_pulse_count: 0,
+  draft_unsent_po_count: 0,
+  unacked_po_count: 0,
+  overdue_decision_count: 0,
+  open_claim_count: 0,
+  updated_at: new Date().toISOString(),
+};
+
+describe('useDeskEngagements — fix-now 6: at rest only when every feed answered', () => {
+  beforeEach(() => {
+    mockFrom.mockReset();
+    mockGetSession.mockReset();
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'tok' } }, error: null });
+  });
+
+  const rosterOf = (data: { folders: never[]; chips: never[]; live: never[]; unreadFeeds: string[] }) =>
+    deriveDeskRoster(
+      // one-voice: the empty schedule's setup need prints at rest (FR4 521).
+      { folders: data.folders, chips: data.chips, live: data.live, unreadFeeds: data.unreadFeeds, oneVoice: true },
+      new Date(),
+    );
+
+  it('an unanswered invoices read never prints at rest — it names what went unchecked', async () => {
+    mockFrom.mockImplementation((table: string) =>
+      chainResult(
+        table === 'document_state'
+          ? { data: [QUIET_PROJECT_ROW], error: null }
+          : table === 'invoices'
+            ? { data: null, error: { message: 'boom' } }
+            : { data: [], error: null },
+      ),
+    );
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.unreadFeeds).toEqual(['invoices']);
+    const roster = rosterOf(result.current.data as never);
+    expect(roster.notChecked).toBe('Not checked: invoices.');
+    const line = roster.groups.flatMap((g) => g.lines)[0];
+    expect(line.notChecked).toBe('Not checked: invoices.');
+    expect(line.custody).toBe('Not checked');
+  });
+
+  it('an empty invoices answer (an empty map) is the one state that prints at rest', async () => {
+    mockFrom.mockImplementation((table: string) =>
+      chainResult(table === 'document_state' ? { data: [QUIET_PROJECT_ROW], error: null } : { data: [], error: null }),
+    );
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.unreadFeeds).toEqual([]);
+    const roster = rosterOf(result.current.data as never);
+    expect(roster.notChecked).toBeNull();
+    const line = roster.groups.flatMap((g) => g.lines)[0];
+    expect(line.notChecked).toBeNull();
+    expect(line.custody).toBe('No current alert');
+  });
+
+  it('reads the live-job feeds desk-wide, once each, however many jobs there are (no N+1)', async () => {
+    mockFrom.mockImplementation((table: string) =>
+      chainResult(
+        table === 'document_state'
+          ? {
+              data: [
+                QUIET_PROJECT_ROW,
+                { ...QUIET_PROJECT_ROW, engagement_id: 'job-2', project_id: 'p-2' },
+                { ...QUIET_PROJECT_ROW, engagement_id: 'job-3', project_id: 'p-3' },
+              ],
+              error: null,
+            }
+          : { data: [], error: null },
+      ),
+    );
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const calls = mockFrom.mock.calls.map((c) => c[0]);
+    for (const table of ['proposals', 'po_payments', 'purchase_orders', 'leads']) {
+      expect(calls.filter((t) => t === table)).toHaveLength(1);
+    }
+    // The receivables read and the paid-invoices read.
+    expect(calls.filter((t) => t === 'invoices')).toHaveLength(2);
+  });
+
+  it('a signed proposal on a live job rises through the hook as its own need', async () => {
+    mockFrom.mockImplementation((table: string) =>
+      chainResult(
+        table === 'document_state'
+          ? { data: [QUIET_PROJECT_ROW], error: null }
+          : table === 'proposals'
+            ? {
+                data: [
+                  {
+                    id: 'prop-1',
+                    project_id: 'p-quiet',
+                    status: 'accepted',
+                    title: 'Living room',
+                    signed_at: new Date().toISOString(),
+                    items: [{ ffe: [{ purchase_order_id: null, removed_at: null }] }],
+                  },
+                ],
+                error: null,
+              }
+            : { data: [], error: null },
+      ),
+    );
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.folders.map((f) => f.need.key)).toEqual(['proposal_signed:prop-1']);
+  });
+});
+
+describe('the US-25 W2 live-job builders', () => {
+  it('buildDeskProposalOutcomes keeps the standing outcome of each chain and counts ordered lines', () => {
+    const map = buildDeskProposalOutcomes([
+      { id: 'v1', project_id: 'p1', status: 'declined', title: 'Kitchen', declined_at: '2026-06-01T00:00:00Z' },
+      { id: 'v2', project_id: 'p1', status: 'sent', title: 'Kitchen', parent_proposal_id: 'v1' },
+      {
+        id: 'b',
+        project_id: 'p1',
+        status: 'declined',
+        title: 'Bath',
+        declined_at: '2026-06-02T00:00:00Z',
+        decline_reason: null,
+        client_feedback: 'Too cold',
+      },
+      {
+        id: 's',
+        project_id: 'p2',
+        status: 'accepted',
+        title: 'Sofa',
+        accepted_at: '2026-06-03T00:00:00Z',
+        items: [
+          { ffe: [{ purchase_order_id: 'po-1', removed_at: null }] },
+          { ffe: [{ purchase_order_id: null, removed_at: null }, { purchase_order_id: null, removed_at: '2026-06-04' }] },
+        ],
+      },
+      { id: 'r', project_id: 'p2', status: 'declined', title: 'Rug', replacement_proposal_id: 'r2' },
+    ])!;
+    // v1 was revised by v2; the rug was replaced.
+    expect(map.get('p1')).toEqual([
+      { proposalId: 'b', title: 'Bath', status: 'declined', at: '2026-06-02T00:00:00Z', reason: 'Too cold', lineCount: 0, orderedCount: 0 },
+    ]);
+    expect(map.get('p2')).toEqual([
+      { proposalId: 's', title: 'Sofa', status: 'accepted', at: '2026-06-03T00:00:00Z', reason: null, lineCount: 2, orderedCount: 1 },
+    ]);
+    expect(buildDeskProposalOutcomes(null)).toBeUndefined();
+  });
+
+  it('buildDeskLandedPayments folds paid invoices and maker payments by job', () => {
+    const map = buildDeskLandedPayments(
+      [{ id: 'inv-1', project_id: 'p1', invoice_number: 'INV-1', amount_paid_cents: 5000, paid_at: '2026-06-10T00:00:00Z' }],
+      [{ id: 'pay-1', kind: 'deposit', amount_cents: 900, paid_date: '2026-06-09', purchase_order: { project_id: 'p1', po_number: 'PO-1', vendor: { name: 'Fenmoor Joinery' } } }],
+    )!;
+    expect(map.get('p1')).toEqual([
+      { id: 'inv-1', label: 'INV-1', amountCents: 5000, landedAt: '2026-06-10T00:00:00Z' },
+      { id: 'pay-1', label: 'Deposit to Fenmoor Joinery', amountCents: 900, landedAt: '2026-06-09' },
+    ]);
+    expect(buildDeskLandedPayments(null, null)).toBeUndefined();
+  });
+
+  it('buildDeskPurchaseOrders keys sent POs by job and treats a full page as no answer', () => {
+    const map = buildDeskPurchaseOrders([
+      { id: 'po-1', project_id: 'p1', po_number: null, vendor_po_number: 'V-9', sent_at: '2026-06-01T00:00:00Z', acknowledged_at: null },
+    ])!;
+    expect(map.get('p1')).toEqual([
+      { purchaseOrderId: 'po-1', poLabel: 'V-9', sentAt: '2026-06-01T00:00:00Z', acknowledgedAt: null },
+    ]);
+    const full = Array.from({ length: 500 }, (_, i) => ({ id: `po-${i}`, project_id: 'p1', sent_at: '2026-06-01T00:00:00Z' }));
+    expect(buildDeskPurchaseOrders(full)).toBeUndefined();
+  });
+
+  it('buildDeskLeads keys each lead’s arrival by lead id', () => {
+    expect(buildDeskLeads([{ id: 'l1', created_at: '2026-06-01T00:00:00Z', contact_name: 'Nora Hale' }])!.get('l1')).toEqual({
+      createdAt: '2026-06-01T00:00:00Z',
+      contactName: 'Nora Hale',
+    });
   });
 });

@@ -206,6 +206,7 @@ export default function DeskPage() {
           chips: data?.chips ?? [],
           live: data?.live ?? [],
           oneVoice,
+          unreadFeeds: data?.unreadFeeds,
         },
         new Date(),
       ),

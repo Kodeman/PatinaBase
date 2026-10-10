@@ -43,6 +43,11 @@ import {
   type DeskExceptionSignal,
   type DeskReturnSignal,
   type DeskDraftSignal,
+  type DeskLandedPaymentSignal,
+  type DeskLeadSignal,
+  type DeskProposalOutcomeSignal,
+  type DeskPurchaseOrderSignal,
+  LANDED_PAYMENT_DAYS,
   type DeskFolder,
   type DocumentStateRow,
   type MotionChip,
@@ -85,6 +90,10 @@ export interface DeskData {
    *  A plain object so React Query's replaceEqualDeep can structurally share it
    *  across the 60s tick (it does not recurse into Sets). */
   composed: Record<string, true>;
+  /** Fix-now 6 — the modelled feeds this read could not answer, in the words
+   *  the Desk prints ("Not checked: invoices, deliveries."). Empty only when
+   *  every feed answered, which is the one state that may say nothing is open. */
+  unreadFeeds: string[];
 }
 
 /**
@@ -453,6 +462,139 @@ async function loadDeskClaimWindows(
   }
 }
 
+/** N3: caps on the live-job reads. A proposals or purchase-order page that
+ *  comes back FULL is no answer (a missing job would read as "nothing open"). */
+const DESK_LIVE_PROPOSAL_LIMIT = 500;
+const DESK_SENT_PO_LIMIT = 500;
+const DESK_LANDED_LIMIT = 200;
+const DESK_LEAD_LIMIT = 500;
+
+/**
+ * N3: proposals on live jobs, folded to the signed and declined outcomes that
+ * still stand, keyed by project_id. A proposal some later version revised (it
+ * is another row's parent, or it carries a replacement) has been answered.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildDeskProposalOutcomes(rows: any): Map<string, DeskProposalOutcomeSignal[]> | undefined {
+  if (!Array.isArray(rows)) return undefined;
+  const revised = new Set(rows.map((r) => r?.parent_proposal_id).filter(Boolean));
+  const map = new Map<string, DeskProposalOutcomeSignal[]>();
+  for (const row of rows) {
+    if (!row?.id || !row.project_id || revised.has(row.id)) continue;
+    if (row.superseded_at || row.replacement_proposal_id) continue;
+    if (row.status !== 'accepted' && row.status !== 'declined') continue;
+    const live = (Array.isArray(row.items) ? row.items : [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .flatMap((item: any) => (Array.isArray(item?.ffe) ? item.ffe : item?.ffe ? [item.ffe] : []))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .filter((ffe: any) => ffe && !ffe.removed_at);
+    map.set(row.project_id, [
+      ...(map.get(row.project_id) ?? []),
+      {
+        proposalId: row.id,
+        title: row.title?.trim() || 'The proposal',
+        status: row.status,
+        at:
+          row.status === 'accepted'
+            ? (row.signed_at ?? row.accepted_at ?? null)
+            : (row.declined_at ?? null),
+        reason: row.decline_reason ?? row.client_feedback ?? null,
+        lineCount: live.length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        orderedCount: live.filter((ffe: any) => !!ffe.purchase_order_id).length,
+      },
+    ]);
+  }
+  return map;
+}
+
+const PAYMENT_WORD: Record<string, string> = {
+  deposit: 'Deposit',
+  balance: 'Balance',
+  milestone: 'Payment',
+  full_upfront: 'Payment in full',
+};
+
+/**
+ * N3: money landed on a live job — client invoices paid, and maker payments
+ * the records cover — keyed by project_id. Either read answering is an answer;
+ * the derivation decides whether it still stands (LANDED_PAYMENT_DAYS).
+ */
+export function buildDeskLandedPayments(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  invoices: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  poPayments: any,
+): Map<string, DeskLandedPaymentSignal[]> | undefined {
+  if (!Array.isArray(invoices) && !Array.isArray(poPayments)) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  const map = new Map<string, DeskLandedPaymentSignal[]>();
+  const add = (projectId: string, signal: DeskLandedPaymentSignal) =>
+    map.set(projectId, [...(map.get(projectId) ?? []), signal]);
+  for (const inv of Array.isArray(invoices) ? invoices : []) {
+    if (!inv?.id || !inv.project_id || !inv.paid_at) continue;
+    add(inv.project_id, {
+      id: inv.id,
+      label: inv.invoice_number ?? inv.title ?? 'An invoice',
+      amountCents:
+        typeof inv.amount_paid_cents === 'number'
+          ? inv.amount_paid_cents
+          : typeof inv.total_cents === 'number'
+            ? inv.total_cents
+            : null,
+      landedAt: inv.paid_at,
+    });
+  }
+  for (const payment of Array.isArray(poPayments) ? poPayments : []) {
+    const po = one(payment?.purchase_order);
+    if (!payment?.id || !po?.project_id || !payment.paid_date) continue;
+    const word = PAYMENT_WORD[String(payment.kind ?? '')] ?? 'Payment';
+    const vendor = one(po.vendor)?.name;
+    const poLabel = po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'a purchase order';
+    add(po.project_id, {
+      id: payment.id,
+      label: vendor ? `${word} to ${vendor}` : `${word} on ${poLabel}`,
+      amountCents: typeof payment.amount_cents === 'number' ? payment.amount_cents : null,
+      landedAt: payment.paid_date,
+    });
+  }
+  return map;
+}
+
+/** N3: sent purchase orders still in play, with their acknowledgment, keyed by
+ *  project_id. A full page is no answer (the row's aggregate stands). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildDeskPurchaseOrders(rows: any): Map<string, DeskPurchaseOrderSignal[]> | undefined {
+  if (!Array.isArray(rows) || rows.length >= DESK_SENT_PO_LIMIT) return undefined;
+  const map = new Map<string, DeskPurchaseOrderSignal[]>();
+  for (const row of rows) {
+    if (!row?.id || !row.project_id || !row.sent_at) continue;
+    map.set(row.project_id, [
+      ...(map.get(row.project_id) ?? []),
+      {
+        purchaseOrderId: row.id,
+        poLabel: row.po_number ?? row.vendor_po_number ?? row.sidemark ?? 'A purchase order',
+        sentAt: row.sent_at,
+        acknowledgedAt: row.acknowledged_at ?? null,
+      },
+    ]);
+  }
+  return map;
+}
+
+/** N6: each open lead's arrival and contact name, keyed by lead id. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildDeskLeads(rows: any): Map<string, DeskLeadSignal> | undefined {
+  if (!Array.isArray(rows)) return undefined;
+  const map = new Map<string, DeskLeadSignal>();
+  for (const row of rows) {
+    if (!row?.id || !row.created_at) continue;
+    map.set(row.id, { createdAt: row.created_at, contactName: row.contact_name ?? null });
+  }
+  return map;
+}
+
 /** Flatten the item_feedback→proposal_items→proposals embed into the flagged-row
  *  shape buildDeskFlaggedLines reads. Tolerant of PostgREST returning a to-one
  *  embed as either an object or a single-element array. */
@@ -535,6 +677,11 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: exceptionRows, error: exceptionRowsError },
         { data: heldRows, error: heldRowsError },
         { data: sampleRows, error: sampleRowsError },
+        { data: liveProposalRows, error: liveProposalsError },
+        { data: paidInvoices, error: paidInvoicesError },
+        { data: paidPoPayments, error: paidPoPaymentsError },
+        { data: sentPoRows, error: sentPoRowsError },
+        { data: leadRows, error: leadRowsError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -706,6 +853,56 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           .not('return_by', 'is', null)
           .order('return_by')
           .limit(DESK_SAMPLE_LIMIT),
+        // N3: proposals on live jobs, every status, so a revision proves its
+        // parent answered; each line's FF&E rows say whether it was ordered.
+        supabase
+          .from('proposals')
+          .select(
+            'id, project_id, status, title, version, parent_proposal_id, created_at, signed_at, accepted_at, declined_at, decline_reason, client_feedback, superseded_at, replacement_proposal_id, items:proposal_items!proposal_items_proposal_id_fkey(ffe:project_ffe_items!project_ffe_items_source_proposal_item_id_fkey(purchase_order_id, removed_at))',
+          )
+          .not('project_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(DESK_LIVE_PROPOSAL_LIMIT),
+        // N3: client invoices paid inside the landed window (a day of slack).
+        supabase
+          .from('invoices')
+          .select('id, project_id, invoice_number, title, total_cents, amount_paid_cents, paid_at')
+          .eq('status', 'paid')
+          .gte(
+            'paid_at',
+            new Date(Date.now() - (LANDED_PAYMENT_DAYS + 1) * 86_400_000).toISOString(),
+          )
+          .order('paid_at', { ascending: false })
+          .limit(DESK_LANDED_LIMIT),
+        // N3: maker payments recorded paid inside the same window.
+        supabase
+          .from('po_payments')
+          .select(
+            'id, kind, amount_cents, paid_date, purchase_order:purchase_orders!po_payments_purchase_order_id_fkey(project_id, po_number, vendor_po_number, sidemark, vendor:vendors!purchase_orders_vendor_id_fkey(name))',
+          )
+          .eq('state', 'paid')
+          .gte(
+            'paid_date',
+            new Date(Date.now() - (LANDED_PAYMENT_DAYS + 1) * 86_400_000).toISOString().slice(0, 10),
+          )
+          .order('paid_date', { ascending: false })
+          .limit(DESK_LANDED_LIMIT),
+        // N3: sent POs still in play, acknowledged or not, so a chase names
+        // its PO and an acknowledgment clears it.
+        supabase
+          .from('purchase_orders')
+          .select('id, project_id, po_number, vendor_po_number, sidemark, sent_at, acknowledged_at')
+          .not('sent_at', 'is', null)
+          .not('status', 'in', '(delivered,cancelled)')
+          .order('sent_at')
+          .limit(DESK_SENT_PO_LIMIT),
+        // N6: open leads' arrival times and contact names.
+        supabase
+          .from('leads')
+          .select('id, created_at, contact_name')
+          .in('status', ['new', 'viewed', 'contacted'])
+          .order('created_at')
+          .limit(DESK_LEAD_LIMIT),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -817,6 +1014,40 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
       const heldReleases = heldRowsError ? undefined : buildDeskHeldReleases(heldRows);
       const samples = sampleRowsError ? undefined : buildDeskSamples(sampleRows);
+      const liveProposalsTruncated =
+        Array.isArray(liveProposalRows) && liveProposalRows.length >= DESK_LIVE_PROPOSAL_LIMIT;
+      const proposalOutcomes =
+        liveProposalsError || liveProposalsTruncated
+          ? undefined
+          : buildDeskProposalOutcomes(liveProposalRows);
+      const landedPayments = buildDeskLandedPayments(
+        paidInvoicesError ? null : paidInvoices,
+        paidPoPaymentsError ? null : paidPoPayments,
+      );
+      // The per-PO and leads reads fall back to the row's own aggregate and
+      // wording, so their failure leaves nothing unchecked.
+      const purchaseOrders = sentPoRowsError ? undefined : buildDeskPurchaseOrders(sentPoRows);
+      const leads = leadRowsError ? undefined : buildDeskLeads(leadRows);
+
+      // Fix-now 6: name every modelled feed this read could not answer.
+      const unreadFeeds = [
+        ...(invoicesError || paidInvoicesError ? ['invoices'] : []),
+        ...(eventsError ? ['deliveries'] : []),
+        ...(flaggedError && boardFlaggedError ? ['flagged lines'] : []),
+        ...(ceremoniesError ? ['introductions'] : []),
+        ...(deskPhasesError || phasesTruncated || deskProposalsError || proposalsTruncated
+          ? ['schedules']
+          : []),
+        ...(liveProposalsError || liveProposalsTruncated ? ['proposals'] : []),
+        ...(claimNoticesError || !claimWindows ? ['claim windows'] : []),
+        ...(paymentNoticesError || paidPoPaymentsError ? ['maker payments'] : []),
+        ...(returnRowsError ? ['returns'] : []),
+        ...(draftRowsError ? ['letters'] : []),
+        ...(quoteRowsError ? ['quotes'] : []),
+        ...(exceptionRowsError ? ['exceptions'] : []),
+        ...(heldRowsError ? ['held orders'] : []),
+        ...(sampleRowsError ? ['samples'] : []),
+      ];
 
       const result = partitionDesk(
         rows,
@@ -835,9 +1066,14 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         exceptions,
         heldReleases,
         samples,
+        proposalOutcomes,
+        landedPayments,
+        purchaseOrders,
+        leads,
       );
-      previousResultRef.current = result;
-      return result;
+      const desk: DeskData = { ...result, unreadFeeds };
+      previousResultRef.current = desk;
+      return desk;
     },
   });
 }

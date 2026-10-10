@@ -362,7 +362,7 @@ export function DeskRoster({
               data-roster-facet-empty
               className="font-heading text-[15px] italic text-[var(--text-muted)]"
             >
-              {NOTHING_NEEDS_YOU}
+              {roster.notChecked ?? NOTHING_NEEDS_YOU}
             </p>
           ) : byPerson ? (
             <>
@@ -425,7 +425,7 @@ export function DeskRoster({
           data-part="headline settle"
           className="font-heading text-[15px] italic text-[var(--text-muted)]"
         >
-          Nothing needs your hand. The work is in motion.
+          {roster.notChecked ?? 'No current action alerts. The work is in motion.'}
         </p>
       )}
     </section>

@@ -162,14 +162,14 @@ function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
             name: 'Reinhardt lake house',
             stage: 'project',
             designerId: null,
-            state: 'Reinhardt · Site Visit · quiet · nothing needs your hand',
+            state: 'Reinhardt · Site Visit · quiet · no current alert',
             overdueText: null,
             mark: null,
             needKind: null,
             overdue: { isOverdue: false, days: 0 },
             jobHref: '/doc/reinhardt',
             act: { label: 'Open the job', href: '/doc/reinhardt' },
-            custody: 'At rest',
+            custody: 'No current alert',
             needOwner: null,
             motionText: 'With client since 4 Aug',
             valueText: '4 Aug',
@@ -326,7 +326,7 @@ describe('the Desk marks', () => {
     const headline = part(container, 'headline');
     expectPrinted(headline);
     expect(headline.textContent).toBe(
-      'Nothing needs your hand. The work is in motion.',
+      'No current action alerts. The work is in motion.',
     );
     expect(parts(container, 'settle')).toEqual([headline]);
     expect(parts(container, 'act')).toHaveLength(0);

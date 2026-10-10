@@ -17,7 +17,7 @@ import { openLedger } from './command-bar';
 import { RowWash, useRowWash, type RowWashTone } from './row-wash';
 import { rosterLineAnchorId } from './desk-claim-card';
 
-const AT_REST_SENTENCE = 'Nothing needs your hand.';
+const AT_REST_SENTENCE = 'No current action alerts.';
 
 export function DeskLedgerRow({
   line,
@@ -58,8 +58,8 @@ export function DeskLedgerRow({
           {line.name}
         </Link>
         {/* Person · phase, and never the body text: the sentence cell to the
-            right owns that, and printing it here too put "nothing needs your
-            hand" directly above "Nothing needs your hand." */}
+            right owns that, and printing it here too put the quiet state
+            directly above the at-rest sentence. */}
         {line.personLine && (
           <span
             data-register="person"
@@ -73,7 +73,7 @@ export function DeskLedgerRow({
         data-ledger-cell="sentence"
         className="min-w-0 text-[14px] leading-[1.5] text-[var(--text-muted)] [overflow-wrap:anywhere]"
       >
-        {line.motionText ?? AT_REST_SENTENCE}
+        {line.motionText ?? line.notChecked ?? AT_REST_SENTENCE}
       </span>
       {/* Tabular figures: the column exists so that the moment one row carries
           a date, it lines up with every other one that does. */}

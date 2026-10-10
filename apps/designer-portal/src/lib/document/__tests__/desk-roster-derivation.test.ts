@@ -227,7 +227,7 @@ describe('deriveDeskRoster — the line', () => {
 
     expect(roster.groups[0].lines[0].state).toBe('Family m · punch list open');
     expect(roster.groups[1].lines[0].state).toBe(
-      'quiet · nothing needs your hand',
+      'quiet · no current alert',
     );
   });
 
@@ -964,7 +964,7 @@ describe('facetHeading (IA-11 / IA-12)', () => {
 
 describe('the empty facet sentence', () => {
   it('is a sentence, not an empty list', () => {
-    expect(NOTHING_NEEDS_YOU).toBe('Nothing needs your hand today.');
+    expect(NOTHING_NEEDS_YOU).toBe('No current action alerts.');
   });
 });
 
@@ -1007,8 +1007,8 @@ describe('D6 · custodyWord — whose hand, in words', () => {
     );
   });
 
-  it('says At rest where there is no need at all', () => {
-    expect(custodyWord(null, row('a', 'project'))).toBe('At rest');
+  it('says No current alert where there is no need at all', () => {
+    expect(custodyWord(null, row('a', 'project'))).toBe('No current alert');
   });
 });
 
@@ -1031,7 +1031,7 @@ describe('D6 · deriveDeskRoster writes custody onto every line', () => {
     expect(lines.find((l) => l.engagementId === 'claimed')!.needOwner).toBe(
       'client',
     );
-    expect(lines.find((l) => l.engagementId === 'quiet')!.custody).toBe('At rest');
+    expect(lines.find((l) => l.engagementId === 'quiet')!.custody).toBe('No current alert');
     expect(lines.find((l) => l.engagementId === 'quiet')!.needOwner).toBeNull();
   });
 });
@@ -1225,13 +1225,13 @@ describe('D5 · a claim takes a card, a quiet job takes a line', () => {
     const result = claimsOf({ live: [claimed, quiet], folders: [folder(claimed)] });
 
     expect(result.heading).toBe('Every job · 2 live · 0 overdue');
-    expect(result.restHeading).toBe('At rest · 1 job');
+    expect(result.restHeading).toBe('No current alert · 1 job');
   });
 
   it('pluralises the ledger head, and says nothing over an empty ledger', () => {
     const a = row('a', 'project');
     const b = row('b', 'project');
-    expect(claimsOf({ live: [a, b] }).restHeading).toBe('At rest · 2 jobs');
+    expect(claimsOf({ live: [a, b] }).restHeading).toBe('No current alert · 2 jobs');
     expect(claimsOf({ live: [] }).restHeading).toBe('');
   });
 
@@ -1696,7 +1696,7 @@ describe('deriveDeskRoster — the lead need is the band’s Next (FR3 F3-4)', (
     expect(on.needKind).toBeNull();
     expect(on.needText).toBeNull();
     expect(on.mark).toBeNull();
-    expect(on.custody).toBe('At rest');
+    expect(on.custody).toBe('No current alert');
     expect(on.state).not.toContain('Name the phases for this project');
     expect(rosterLineNeedsAHand(on)).toBe(false);
     // Flag off, today's setup lead.
@@ -1857,5 +1857,69 @@ describe('sentProposalSignedLine (FR8 F8-4)', () => {
   it('falls back to the client with no usable name', () => {
     expect(sentProposalSignedLine(null)).toBe('Signed by the client.');
     expect(sentProposalSignedLine('  ')).toBe('Signed by the client.');
+  });
+});
+
+// ─── US-25 W2 (SQ-744) ────────────────────────────────────────────────────────
+
+describe('fix-now 6 — at rest only when every modelled feed answered', () => {
+  const quiet = row('q', 'project');
+  const busy = row('b', 'project');
+
+  it('names the unread feeds on the roster and on each job with no need', () => {
+    const roster = deriveDeskRoster(
+      input({ live: [quiet, busy], folders: [folder(busy)], unreadFeeds: ['invoices', 'deliveries'] }),
+      NOW,
+    );
+    expect(roster.unreadFeeds).toEqual(['invoices', 'deliveries']);
+    expect(roster.notChecked).toBe('Not checked: invoices, deliveries.');
+    const lines = roster.groups.flatMap((g) => g.lines);
+    const q = lines.find((l) => l.engagementId === 'q')!;
+    expect(q.notChecked).toBe('Not checked: invoices, deliveries.');
+    expect(q.custody).toBe('Not checked');
+    expect(q.state).toContain('not checked: invoices, deliveries');
+    expect(q.state).not.toContain('no current alert');
+    // A job with a need keeps its need.
+    expect(lines.find((l) => l.engagementId === 'b')!.notChecked).toBeNull();
+    expect(deriveDeskClaims({ roster, answeredNotes: [], now: NOW }).restHeading).toBe('Not checked · 1 job');
+  });
+
+  it('every feed answered (absent or empty) is the one state that may print at rest', () => {
+    for (const unreadFeeds of [undefined, []]) {
+      const roster = deriveDeskRoster(input({ live: [quiet], unreadFeeds }), NOW);
+      expect(roster.notChecked).toBeNull();
+      const [line] = roster.groups.flatMap((g) => g.lines);
+      expect(line.notChecked).toBeNull();
+      expect(line.custody).toBe('No current alert');
+      expect(line.state).toContain('quiet · no current alert');
+    }
+  });
+
+  it('a paused job says paused, never not checked', () => {
+    const paused = row('p', 'project', { is_paused: true });
+    const roster = deriveDeskRoster(input({ live: [paused], unreadFeeds: ['invoices'] }), NOW);
+    const [line] = roster.groups.flatMap((g) => g.lines);
+    expect(line.notChecked).toBeNull();
+    expect(line.state).toContain('paused');
+  });
+});
+
+describe('N6 — lead cards stand in the order they wrote in', () => {
+  it('within one deadline the earlier arrival leads, whatever the name order', () => {
+    const due = '2026-08-30T00:00:00Z';
+    const aaron = row('a', 'brief', { title: 'Aaron' });
+    const zelda = row('z', 'brief', { title: 'Zelda' });
+    const roster = deriveDeskRoster(
+      input({
+        live: [aaron, zelda],
+        folders: [
+          folder(aaron, need({ kind: 'new_lead', text: 'Aaron wrote — respond', dueOn: due, at: '2026-08-24T00:00:00Z', owner: 'designer' })),
+          folder(zelda, need({ kind: 'new_lead', text: 'Zelda wrote — respond', dueOn: due, at: '2026-08-20T00:00:00Z', owner: 'designer' })),
+        ],
+      }),
+      NOW,
+    );
+    const { cards } = deriveDeskClaims({ roster, answeredNotes: [], now: NOW });
+    expect(cards.map((c) => c.line.engagementId)).toEqual(['z', 'a']);
   });
 });

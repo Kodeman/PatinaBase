@@ -12,7 +12,7 @@ describe('pinnedProjectIdsFromRoster', () => {
         line('e2', 'With the client', 'p2'),
         line('e3', 'With Ada', 'p3'),
         line('e4', 'With the maker', 'p4'),
-        line('e5', 'At rest', 'p5'),
+        line('e5', 'No current alert', 'p5'),
         line('e6', 'Your pen', 'p6'),
       ]),
     ).toEqual(['p1', 'p6']);

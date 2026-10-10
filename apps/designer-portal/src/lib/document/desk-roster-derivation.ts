@@ -84,7 +84,7 @@ const URGENT_NEED_KINDS: ReadonlySet<NeedKind> = new Set([
  *  whole-string test lets it through as if it were a family name. */
 const PLACEHOLDER_CLIENT_NAMES: ReadonlySet<string> = new Set(['client', 'user']);
 
-const QUIET_STATE = 'quiet · nothing needs your hand';
+const QUIET_STATE = 'quiet · no current alert';
 
 /** `deriveDocumentGuide`'s rung 2 says "This project is paused" on the paper;
  *  the roster line says the same thing in its own register. */
@@ -162,6 +162,9 @@ export interface RosterLine {
   valueText?: string | null;
   /** The in-motion chip's own sentence, unconcatenated (MotionChip.text). */
   motionText?: string | null;
+  /** Fix-now 6 — on a job with no need while some feed went unread, the
+   *  honest sentence in place of the at-rest one: `Not checked: invoices.` */
+  notChecked?: string | null;
 }
 
 export interface RosterGroup {
@@ -179,6 +182,11 @@ export interface DeskRoster {
   heading: string;
   /** The one Inter line naming what is overdue. */
   overdueLine: string;
+  /** Fix-now 6 — the feeds this read could not answer (DeskData.unreadFeeds). */
+  unreadFeeds: string[];
+  /** `Not checked: invoices, deliveries.` while any feed went unread; null when
+   *  every feed answered — the only state that may print the at-rest line. */
+  notChecked: string | null;
 }
 
 export interface DeskRosterInput {
@@ -190,7 +198,13 @@ export interface DeskRosterInput {
    *  request's own sentence (`deskNeedText`) and no `Band` chip
    *  (`deskMotion`). Off or absent, today's strings. */
   oneVoice?: boolean;
+  /** Fix-now 6 — the modelled feeds the read could not answer. Absent = every
+   *  feed answered. */
+  unreadFeeds?: readonly string[];
 }
+
+/** Fix-now 6 — the custody word on a quiet job while a feed went unread. */
+const CUSTODY_NOT_CHECKED = 'Not checked';
 
 function prettyPhase(phase: string | null): string | null {
   if (!phase) return null;
@@ -216,7 +230,7 @@ function clientOf(row: DocumentStateRow, voice = false): string | null {
 const CUSTODY_YOUR_PEN = 'Your pen';
 const CUSTODY_THE_CLIENT = 'With the client';
 const CUSTODY_THE_MAKER = 'With the maker';
-const CUSTODY_AT_REST = 'At rest';
+const CUSTODY_AT_REST = 'No current alert';
 
 /**
  * D6 — whose hand the job is in, said in one of four ways.
@@ -460,6 +474,10 @@ export function deriveDeskRoster(
   );
 
   const voice = input.oneVoice === true;
+  // Fix-now 6: "at rest" is a claim about every feed, so it is sayable only
+  // when every feed answered; otherwise the quiet line names what went unread.
+  const unreadFeeds = [...(input.unreadFeeds ?? [])];
+  const notChecked = unreadFeeds.length > 0 ? `Not checked: ${unreadFeeds.join(', ')}.` : null;
   const entries: RosterEntry[] = input.live.map((row) => {
     const folder = folderByEngagement.get(row.engagement_id) ?? null;
     const chip = deskMotion(chipByEngagement.get(row.engagement_id) ?? null, voice);
@@ -499,7 +517,8 @@ export function deriveDeskRoster(
       ? PAUSED_STATE
       : overdue.isOverdue
         ? null
-        : (needText ?? chip?.text ?? QUIET_STATE);
+        : (needText ?? chip?.text ?? (notChecked ? notChecked.toLowerCase().replace(/\.$/, '') : QUIET_STATE));
+    const lineNotChecked = !need && !row.is_paused ? notChecked : null;
     // FR3 F3-12 (`one-voice`) — a workflow word never prints as the card's
     // stage word: where the phase printed (`Installation`), the stage's own
     // word does (`Install`). Label only; a phase-less card stays phase-less.
@@ -550,7 +569,7 @@ export function deriveDeskRoster(
         client,
         dueOn: need?.dueOn ?? null,
         needText,
-        custody: custodyWord(need, row),
+        custody: lineNotChecked ? CUSTODY_NOT_CHECKED : custodyWord(need, row),
         needOwner: need?.owner ?? null,
         needAt: need?.at ?? null,
         // The need's own date first — a deadline outranks a provenance stamp.
@@ -558,6 +577,7 @@ export function deriveDeskRoster(
           ledgerValueDate(need?.dueOn ?? null, now) ??
           ledgerValueDate(motionAnchorDate(chip), now),
         motionText: chip?.text ?? null,
+        notChecked: lineNotChecked,
       },
       stage: row.active_section,
       tab: folderTab(row),
@@ -612,6 +632,8 @@ export function deriveDeskRoster(
     overdueCount: overdueNames.length,
     heading: `Every job · ${liveCount} live · ${overdueNames.length} overdue`,
     overdueLine: overdueSentence(overdueNames),
+    unreadFeeds,
+    notChecked,
   };
 }
 
@@ -810,9 +832,23 @@ export interface DeskClaims {
   dayLine: DeskDayLine | null;
 }
 
-function restHeadingFor(count: number): string {
+function restHeadingFor(count: number, notChecked: boolean): string {
   if (count === 0) return '';
-  return `At rest · ${count} ${count === 1 ? 'job' : 'jobs'}`;
+  return `${notChecked ? CUSTODY_NOT_CHECKED : CUSTODY_AT_REST} · ${count} ${count === 1 ? 'job' : 'jobs'}`;
+}
+
+/** N6 — leads stand in the order they wrote in: the lead cards trade places
+ *  among their own slots by arrival, so every other card keeps its place. */
+function leadsByArrival(cards: ClaimCard[]): ClaimCard[] {
+  const slots = cards.flatMap((card, i) => (card.line.needKind === 'new_lead' ? [i] : []));
+  const arrival = (card: ClaimCard) =>
+    card.line.needAt ? new Date(card.line.needAt).getTime() : Number.POSITIVE_INFINITY;
+  const leads = slots.map((i) => cards[i]).sort((a, b) => arrival(a) - arrival(b));
+  const out = [...cards];
+  slots.forEach((slot, n) => {
+    out[slot] = leads[n];
+  });
+  return out;
 }
 
 /**
@@ -853,7 +889,9 @@ export function deriveDeskClaims(input: DeskClaimsInput): DeskClaims {
   // N2 — the cards stand in the band's Next order of the need each leads
   // with (class, deadline, age — `rankByNext`), never a second ranking by
   // owner. Ties keep the name order they are handed in.
-  const byName = [...cards].sort((a, b) => a.line.name.localeCompare(b.line.name));
+  const byName = leadsByArrival(
+    [...cards].sort((a, b) => a.line.name.localeCompare(b.line.name)),
+  );
   const ordered = [
     ...rankByNext(
       byName.filter((card) => card.line.needKind !== null),
@@ -874,7 +912,7 @@ export function deriveDeskClaims(input: DeskClaimsInput): DeskClaims {
     cards: ordered,
     ledger,
     heading: roster.heading,
-    restHeading: restHeadingFor(restCount),
+    restHeading: restHeadingFor(restCount, roster.notChecked != null),
     dayLine: deriveDeskDayLine(ordered, roster, answeredNotes, now),
   };
 }
@@ -922,7 +960,7 @@ export function groupClaimsByPerson(
    exactly the stage-grouped roster `deriveDeskRoster` returned. ───────────── */
 
 /** The empty result of "Only what needs me" — never an empty list. */
-export const NOTHING_NEEDS_YOU = 'Nothing needs your hand today.';
+export const NOTHING_NEEDS_YOU = 'No current action alerts.';
 
 /** A row needs a hand when it carries a mark. `deriveDeskRoster` already
  *  writes that mark from the need model (URGENT_NEED_KINDS above is its

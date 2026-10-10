@@ -159,7 +159,7 @@ describe('deriveDeskNeedList', () => {
     expect(list.map((n) => n.key)).toEqual([
       'overdue_invoice:inv-0721',
       'po_unacknowledged:project:p-holloway',
-      'pulse_due:project:p-pell',
+      'pulse_due:week:2026-09-14',
     ]);
     expect(list[0].projectId).toBe('p-holloway');
   });

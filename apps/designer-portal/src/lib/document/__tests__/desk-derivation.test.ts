@@ -29,8 +29,12 @@ import {
   type NeedKind,
   type NeedLine,
   type ReceivableSignal,
+  type DeskLandedPaymentSignal,
+  type DeskProposalOutcomeSignal,
+  type DeskPurchaseOrderSignal,
 } from '../desk-derivation';
 import type { DeskScheduleInput } from '../desk-schedule';
+import { deriveDeskNeedList } from '../desk-need-list';
 
 const NOW = new Date('2026-06-11T12:00:00Z');
 
@@ -2213,5 +2217,182 @@ describe('FR5 530-3: a held follow-up on the Desk', () => {
     expect(onLine.draft?.ffeItemId).toBe('ffe-ladder');
     expect(onLine.text).toBe('Arrival date request to the maker drafted');
     expect(needOf('maker_eta_request').draft).not.toHaveProperty('ffeItemId');
+  });
+});
+
+// ─── US-25 W2 (SQ-744): live-job events, leads by arrival, one Pulse line ────
+
+describe('N3 — live-job events become needs, above the seals', () => {
+  const live = mkRow({ engagement_id: 'job-1', project_id: 'p-live', title: 'Whitfield Residence' });
+  const outcome = (over: Partial<DeskProposalOutcomeSignal> = {}): DeskProposalOutcomeSignal => ({
+    proposalId: 'prop-1',
+    title: 'Living room',
+    status: 'accepted',
+    at: daysAgo(1),
+    reason: null,
+    lineCount: 3,
+    orderedCount: 0,
+    ...over,
+  });
+  const needsWith = (
+    row: DocumentStateRow,
+    signals: Parameters<typeof deriveNeeds>[15],
+    drafts: DeskDraftSignal[] | null = null,
+  ) =>
+    deriveNeeds(row, NOW, null, null, null, null, null, null, null, null, drafts, null, null, null, null, signals);
+
+  it('a proposal signed on a live job asks to order the pieces, first on the chain', () => {
+    const row = { ...live, draft_unsent_po_count: 1, oldest_draft_po_created_at: daysAgo(2), unsent_pulse_count: 1, pulse_week_of: '2026-06-01' };
+    const needs = needsWith(row, { proposalOutcomes: [outcome()] });
+    expect(needs[0]).toMatchObject({
+      kind: 'proposal_signed',
+      key: 'proposal_signed:prop-1',
+      at: daysAgo(1),
+      text: 'Living room signed — order the pieces',
+      owner: 'designer',
+    });
+    expect(deskActionLabel(needs[0], true)).toBe('Order the pieces');
+    // The job's other needs still stand behind it.
+    expect(needs.map((n) => n.kind)).toEqual(['proposal_signed', 'po_unsent', 'pulse_due']);
+  });
+
+  it('a signed proposal whose pieces are ordered, or that carried none, is a receipt', () => {
+    expect(needsWith(live, { proposalOutcomes: [outcome({ orderedCount: 1 })] })).toEqual([]);
+    expect(needsWith(live, { proposalOutcomes: [outcome({ lineCount: 0 })] })).toEqual([]);
+  });
+
+  it('a proposal declined on a live job asks to follow up, in the client’s words', () => {
+    const [need] = needsWith(live, {
+      proposalOutcomes: [outcome({ status: 'declined', reason: 'The sofa is too deep for the bay', at: daysAgo(2) })],
+    });
+    expect(need).toMatchObject({
+      kind: 'proposal_declined',
+      key: 'proposal_declined:prop-1',
+      at: daysAgo(2),
+      text: 'Living room declined — "The sofa is too deep for the bay"',
+    });
+  });
+
+  it('a payment landed while an order waits asks to release it; a bare receipt asks nothing', () => {
+    const paid: DeskLandedPaymentSignal = {
+      id: 'inv-9',
+      label: 'INV-0009',
+      amountCents: 250_000,
+      landedAt: daysAgo(2),
+    };
+    const [need] = needsWith(
+      { ...live, draft_unsent_po_count: 1, oldest_draft_po_created_at: daysAgo(5) },
+      { landedPayments: [paid] },
+    );
+    expect(need).toMatchObject({
+      kind: 'po_unsent',
+      key: 'po_unsent:inv-9',
+      at: daysAgo(2),
+      text: `INV-0009 · $2,500 paid ${dayMonth(daysAgo(2))} — 1 order is ready to release`,
+    });
+    expect(deskActionLabel(need, true)).toBe('Release the order');
+    // No order waiting: the payment is a receipt, not a need.
+    expect(needsWith(live, { landedPayments: [paid] })).toEqual([]);
+    // Landed more than a week ago: no longer an event.
+    expect(
+      needsWith(
+        { ...live, draft_unsent_po_count: 1, oldest_draft_po_created_at: daysAgo(5) },
+        { landedPayments: [{ ...paid, landedAt: daysAgo(9) }] },
+      ).map((n) => n.kind),
+    ).toEqual(['po_unsent']);
+  });
+
+  it('an acknowledged PO clears its unanswered chase, and the open one is keyed on its PO', () => {
+    const acked: DeskPurchaseOrderSignal = {
+      purchaseOrderId: 'po-1',
+      poLabel: 'PO-0001',
+      sentAt: daysAgo(4),
+      acknowledgedAt: daysAgo(1),
+    };
+    const chase: DeskDraftSignal = {
+      id: 'draft-1',
+      kind: 'ack_chase',
+      status: 'awaiting_review',
+      to_email: 'maker@example.com',
+      subject: 'PO-0001',
+      body: 'Checking in',
+      created_at: daysAgo(2),
+      purchaseOrderId: 'po-1',
+    };
+    // The row's aggregate is stale (still counts po-1); the per-PO read wins.
+    const stale = { ...live, unacked_po_count: 1, oldest_unacked_sent_at: daysAgo(4), unacked_po_label: 'PO-0001' };
+    expect(needsWith(stale, { purchaseOrders: [acked] }, [chase])).toEqual([]);
+    // Without the read, the chase and the aggregate stand as before.
+    expect(needsWith(stale, {}, [chase]).map((n) => n.kind)).toEqual(['po_unacknowledged', 'po_unacknowledged']);
+
+    const open = { ...acked, purchaseOrderId: 'po-2', poLabel: 'PO-0002', acknowledgedAt: null };
+    const [need] = needsWith(stale, { purchaseOrders: [acked, open] });
+    expect(need).toMatchObject({
+      kind: 'po_unacknowledged',
+      key: 'po_unacknowledged:po-2',
+      text: 'PO-0002 sent — no acknowledgment',
+      owner: 'maker',
+    });
+  });
+
+  it('partitionDesk hands each job its own outcomes, payments and POs', () => {
+    const { folders } = partitionDesk(
+      [live, mkRow({ engagement_id: 'job-2', project_id: 'p-other', title: 'Other' })],
+      NOW,
+      ...(Array(14).fill(undefined) as []),
+      new Map([['p-live', [outcome()]]]),
+      new Map(),
+      new Map(),
+      new Map(),
+    );
+    expect(folders.map((f) => [f.row.engagement_id, f.need.kind])).toEqual([['job-1', 'proposal_signed']]);
+  });
+});
+
+describe('N6 — a lead is named for the person, and leads stand by arrival', () => {
+  it('titles the need by the person and dates it by the lead’s arrival', () => {
+    const [need] = deriveNeeds(leadRow({ lead_response_deadline: daysAhead(5) }), NOW, ...(Array(13).fill(null) as []), {
+      lead: { createdAt: daysAgo(1), contactName: 'Elena V.' },
+    });
+    expect(need).toMatchObject({
+      kind: 'new_lead',
+      at: daysAgo(1),
+      text: `Elena Vasquez wrote — respond by ${dayMonth(daysAhead(5))}`,
+    });
+  });
+
+  it('falls back to the contact name while the view carries its placeholder', () => {
+    const [need] = deriveNeeds(leadRow({ client_name: 'New client' }), NOW, ...(Array(13).fill(null) as []), {
+      lead: { createdAt: daysAgo(1), contactName: 'Nora Hale' },
+    });
+    expect(need.text).toBe('Nora Hale wrote — respond');
+  });
+
+  it('orders leads due alike by when they wrote in', () => {
+    const deadline = daysAhead(5);
+    const rows = [
+      leadRow({ engagement_id: 'late', lead_id: 'late', client_name: 'Late Writer', lead_response_deadline: deadline }),
+      leadRow({ engagement_id: 'early', lead_id: 'early', client_name: 'Early Writer', lead_response_deadline: deadline }),
+    ];
+    const leads = new Map([
+      ['late', { createdAt: daysAgo(1), contactName: null }],
+      ['early', { createdAt: daysAgo(3), contactName: null }],
+    ]);
+    const { folders } = partitionDesk(rows, NOW, ...(Array(14).fill(undefined) as []), undefined, undefined, undefined, leads);
+    expect(folders.map((f) => f.row.engagement_id)).toEqual(['early', 'late']);
+  });
+});
+
+describe('N8 — one weekly Pulse need for the studio', () => {
+  it('ten jobs with unsent Pulses give one need, counted for the studio', () => {
+    const rows = Array.from({ length: 10 }, (_, i) =>
+      mkRow({ engagement_id: `job-${i}`, project_id: `p-${i}`, title: `Job ${i}`, unsent_pulse_count: 1, pulse_week_of: '2026-06-01' }),
+    );
+    const desk = partitionDesk(rows, NOW);
+    expect(desk.folders).toHaveLength(10);
+    const pulses = deriveDeskNeedList(desk, NOW).filter((n) => n.need.kind === 'pulse_due');
+    expect(pulses).toHaveLength(1);
+    expect(pulses[0].key).toBe('pulse_due:week:2026-06-01');
+    expect(pulses[0].need.text).toBe('Review and send 10 Pulses');
   });
 });

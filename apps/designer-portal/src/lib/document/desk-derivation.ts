@@ -209,6 +209,7 @@ export function deskActionLabel(
   // is never in its held form here.
   if (need.releaseHeld) return 'Release for authorization';
   if (need.draft) return OPEN_THE_HELD_DRAFT;
+  if (need.namedAct) return need.actionLabel;
   return needActLabel(need.kind, clientFirstName);
 }
 
@@ -541,6 +542,65 @@ export function memoReturnDue(signal: DeskSampleSignal, now: Date): boolean {
   return days <= MEMO_RETURN_LEAD_DAYS;
 }
 
+/** N3 (US-25, Q4) — a proposal on a LIVE job that the client signed or
+ *  declined: the newest version of its chain, built by use-desk-engagements
+ *  from `proposals` (project_id set) and keyed by project_id. */
+export interface DeskProposalOutcomeSignal {
+  proposalId: string;
+  title: string;
+  status: 'accepted' | 'declined';
+  /** When it happened: signed_at (else accepted_at), or declined_at. */
+  at: string | null;
+  /** The client's own words with a decline: decline_reason, else client_feedback. */
+  reason: string | null;
+  /** The live lines this proposal carried onto the job, and how many of them
+   *  are on a purchase order. */
+  lineCount: number;
+  orderedCount: number;
+}
+
+/** N3 — money that landed on a live job: a client invoice paid in full, or a
+ *  maker payment the records cover. Built by use-desk-engagements, keyed by
+ *  project_id. */
+export interface DeskLandedPaymentSignal {
+  /** The invoice id, or the po_payments id. */
+  id: string;
+  /** "INV-2026-0722", "Deposit to Fenmoor Joinery". */
+  label: string;
+  amountCents: number | null;
+  /** When it landed: an ISO time (invoices.paid_at) or a bare date
+   *  (po_payments.paid_date). */
+  landedAt: string;
+}
+
+/** N3 — a landed payment stands as an event for this many days. */
+export const LANDED_PAYMENT_DAYS = 7;
+
+/** N3 — one sent purchase order still in play (not delivered or cancelled),
+ *  with its acknowledgment, keyed by project_id. The PO is the record the
+ *  unanswered chase is about, so the need is keyed on it. */
+export interface DeskPurchaseOrderSignal {
+  purchaseOrderId: string;
+  poLabel: string;
+  sentAt: string;
+  acknowledgedAt: string | null;
+}
+
+/** N6 — a lead's arrival, from `leads`, keyed by lead id. */
+export interface DeskLeadSignal {
+  createdAt: string;
+  contactName: string | null;
+}
+
+/** N3/N6/N8 — the live-job reads one engagement's chain takes beyond its row. */
+export interface DeskLiveSignals {
+  proposalOutcomes?: readonly DeskProposalOutcomeSignal[] | null;
+  landedPayments?: readonly DeskLandedPaymentSignal[] | null;
+  purchaseOrders?: readonly DeskPurchaseOrderSignal[] | null;
+  lead?: DeskLeadSignal | null;
+  pulseCount?: number | null;
+}
+
 export interface NeedLine {
   /** N1 — the need's stable identity: `${kind}:${recordId}`, or
    *  `${kind}:project:${projectId}` for an aggregate (need-key.ts). Stamped by
@@ -615,6 +675,10 @@ export interface NeedLine {
   /** C-32: the need is an order held for this seat's release; its act lands
    *  on the release control (FR2 499-9). */
   releaseHeld?: true;
+  /** N3 — `actionLabel` is this need's one act name on the Desk. An event's
+   *  act is not its kind's: a signature on a live job orders the pieces, it
+   *  opens no project. */
+  namedAct?: true;
 }
 
 export interface DeskFolder {
@@ -939,6 +1003,13 @@ interface NeedContext {
   exceptions?: readonly DeskExceptionSignal[] | null;
   heldReleases?: readonly DeskHeldReleaseSignal[] | null;
   samples?: readonly DeskSampleSignal[] | null;
+  proposalOutcomes?: readonly DeskProposalOutcomeSignal[] | null;
+  landedPayments?: readonly DeskLandedPaymentSignal[] | null;
+  /** Null = the per-PO read did not answer, so the row's aggregate stands. */
+  purchaseOrders?: readonly DeskPurchaseOrderSignal[] | null;
+  lead?: DeskLeadSignal | null;
+  /** N8 — the studio's unsent Pulses for this row's week, across every job. */
+  pulseCount?: number | null;
 }
 
 /** A rule that owns its engagement kind outright. The original deriveNeed
@@ -1022,6 +1093,111 @@ const needOverdueInvoice: NeedRule = ({ receivable }) => {
     };
   }
   return null;
+};
+
+// ─── N3 (US-25, Q4): live-job events become needs ───────────────────────────
+//
+// A signature, a decline or a landed payment on a job that already exists asks
+// for an act, so it is a need on that job — and these rules sit above every
+// sealing rule (`needProposal`, `needLead`), so no seal can hide them. A
+// receipt that asks for nothing is not a need: each rule fires only while its
+// act is still open, and clears with it.
+
+const isLiveJob = (row: DocumentStateRow) => row.engagement_kind === 'project';
+
+const byOutcomeAt = (a: DeskProposalOutcomeSignal, b: DeskProposalOutcomeSignal) =>
+  (a.at ?? '').localeCompare(b.at ?? '');
+
+// Signed on a live job: the act is ordering what it carried. It clears with the
+// first of those lines on a purchase order; a proposal with no pieces is a
+// receipt.
+const needLiveProposalSigned: NeedRule = ({ row, proposalOutcomes }) => {
+  if (!isLiveJob(row)) return null;
+  const open = (proposalOutcomes ?? [])
+    .filter((p) => p.status === 'accepted' && p.lineCount > 0 && p.orderedCount === 0)
+    .sort(byOutcomeAt);
+  const first = open[0];
+  if (!first) return null;
+  return {
+    kind: 'proposal_signed',
+    recordId: first.proposalId,
+    ...(first.at ? { at: first.at } : {}),
+    text:
+      open.length > 1
+        ? `${open.length} proposals signed — order the pieces`
+        : `${first.title} signed — order the pieces`,
+    actionLabel: 'Order the pieces',
+    namedAct: true,
+    stamp: { label: 'SIGNED', ...STAMP.mocha },
+    urgent: false,
+    owner: 'designer',
+  };
+};
+
+// Declined on a live job: follow up, in the client's own words. It clears when
+// a newer version of the proposal replaces it.
+const needLiveProposalDeclined: NeedRule = ({ row, proposalOutcomes }) => {
+  if (!isLiveJob(row)) return null;
+  const open = (proposalOutcomes ?? [])
+    .filter((p) => p.status === 'declined')
+    .sort(byOutcomeAt);
+  const first = open[0];
+  if (!first) return null;
+  const reason = first.reason?.trim();
+  return {
+    kind: 'proposal_declined',
+    recordId: first.proposalId,
+    ...(first.at ? { at: first.at } : {}),
+    text:
+      open.length > 1
+        ? `${open.length} proposals declined — follow up`
+        : reason
+          ? `${first.title} declined — "${truncateWords(reason, 120)}"`
+          : `${first.title} declined — follow up`,
+    actionLabel: NEED_ACTION_LABELS.proposal_declined,
+    stamp: { label: 'DECLINED', ...STAMP.terracotta },
+    urgent: false,
+    owner: 'designer',
+  };
+};
+
+/** Whole days since a payment landed: a bare date by the local calendar, a
+ *  timestamp by elapsed time. */
+const landedDaysAgo = (at: string, now: Date) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(at) ? -calendarDaysTo(at, now) : daysBetween(at, now);
+
+// Money landed on a live job in the last week while its orders wait to go out:
+// release them. With no order waiting the payment is a receipt, not a need.
+const needPaymentLanded: NeedRule = ({ row, now, landedPayments, heldReleases }) => {
+  if (!isLiveJob(row)) return null;
+  const waiting = (row.draft_unsent_po_count ?? 0) + (heldReleases?.length ?? 0);
+  if (waiting === 0) return null;
+  const landed = (landedPayments ?? [])
+    .filter((p) => {
+      const days = landedDaysAgo(p.landedAt, now);
+      return days >= 0 && days <= LANDED_PAYMENT_DAYS;
+    })
+    .sort((a, b) => b.landedAt.localeCompare(a.landedAt));
+  const first = landed[0];
+  if (!first) return null;
+  const figure =
+    first.amountCents && first.amountCents > 0 ? ` · ${fmtMoney(first.amountCents)}` : '';
+  return {
+    kind: 'po_unsent',
+    recordId: first.id,
+    at: first.landedAt,
+    text: `${first.label}${figure} paid ${fmtDay(first.landedAt)} — ${
+      waiting === 1 ? '1 order is' : `${waiting} orders are`
+    } ready to release`,
+    actionLabel: 'Release the order',
+    namedAct: true,
+    stamp: { label: 'PAID', ...STAMP.clay },
+    urgent: false,
+    ...(row.project_id
+      ? { ledger: { name: 'orders', context: { page: 'ledger', projectId: row.project_id } } }
+      : {}),
+    owner: 'designer',
+  };
 };
 
 const needProposal: NeedRule = ({ row, now, flagged }) => {
@@ -1132,7 +1308,16 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
   return null;
 };
 
-const needLead: NeedRule = ({ row, now, ceremony }) => {
+/** N6: who wrote — the client's name, or the lead's own contact name while the
+ *  view still carries its placeholder. */
+const leadPerson = (row: DocumentStateRow, lead: DeskLeadSignal) => {
+  const name = (row.client_name ?? '').trim();
+  const last = name.split(/\s+/).pop()?.toLowerCase() ?? '';
+  if (name && last !== 'client' && last !== 'user') return name;
+  return lead.contactName?.trim() || 'A new lead';
+};
+
+const needLead: NeedRule = ({ row, now, ceremony, lead }) => {
   if (row.engagement_kind === 'lead') {
     // R106 §3: a claimed lead whose ceremony was put down mid-draft is
     // "Introduce yourself to {first name}" — the act available is WRITING
@@ -1192,8 +1377,16 @@ const needLead: NeedRule = ({ row, now, ceremony }) => {
       ? new Date(deadline).getTime() - now.getTime()
       : null;
     const closing = msLeft !== null && msLeft < LEAD_URGENT_WINDOW_MS;
-    const text =
-      deadline === null
+    const person = lead ? leadPerson(row, lead) : null;
+    const text = person
+      ? deadline === null
+        ? `${person} wrote — respond`
+        : msLeft! < 0
+          ? `${person} wrote — the response window passed; reply anyway`
+          : closing
+            ? `${person} wrote — respond by ${fmtDay(deadline)}, closing soon`
+            : `${person} wrote — respond by ${fmtDay(deadline)}`
+      : deadline === null
         ? 'New lead — respond'
         : msLeft! < 0
           ? 'Response window passed — reply anyway'
@@ -1203,6 +1396,7 @@ const needLead: NeedRule = ({ row, now, ceremony }) => {
     return seal({
       kind: 'new_lead',
       ...recordOf(row.lead_id),
+      ...(lead?.createdAt ? { at: lead.createdAt } : {}),
       text,
       actionLabel: NEED_ACTION_LABELS.new_lead,
       stamp: { label: 'NEW LEAD', ...STAMP.clay },
@@ -1427,9 +1621,14 @@ const needHeldForRelease: NeedRule = ({ row, heldReleases }) => {
 // The need carries the oldest draft, and the folder face mounts its review;
 // it clears when the draft is sent or discarded (the read is awaiting_review
 // only). Nothing here sends: the member's Send is the only way out.
-const needDraftReview: NeedRule = ({ drafts }) => {
+const needDraftReview: NeedRule = ({ drafts, purchaseOrders }) => {
+  // N3: a chase for a PO the maker has since acknowledged asks for nothing.
+  const acked = new Set(
+    (purchaseOrders ?? []).filter((po) => po.acknowledgedAt).map((po) => po.purchaseOrderId),
+  );
   const open = (drafts ?? [])
     .filter((d) => d.status === 'awaiting_review' && DRAFT_NEED[d.kind])
+    .filter((d) => !(d.kind === 'ack_chase' && d.purchaseOrderId && acked.has(d.purchaseOrderId)))
     .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
   const first = open[0];
   if (!first) return null;
@@ -1685,7 +1884,33 @@ const needPoUnsent: NeedRule = ({ row, now }) => {
   return null;
 };
 
-const needPoUnacknowledged: NeedRule = ({ row, now }) => {
+// N3: with the per-PO read, the chase names one PO (its own key), and a PO the
+// maker acknowledged is gone from it. Without the read, the row's aggregate.
+const needPoUnacknowledged: NeedRule = ({ row, now, purchaseOrders }) => {
+  if (purchaseOrders) {
+    const open = purchaseOrders
+      .filter(
+        (po) =>
+          !po.acknowledgedAt && daysBetween(po.sentAt, now) >= PO_SENT_UNACKED_DAYS,
+      )
+      .sort((a, b) => a.sentAt.localeCompare(b.sentAt));
+    const first = open[0];
+    if (!first) return null;
+    return {
+      kind: 'po_unacknowledged',
+      recordId: first.purchaseOrderId,
+      text:
+        open.length === 1
+          ? `${first.poLabel ?? 'A purchase order'} sent — no acknowledgment`
+          : `${open.length} POs sent — no acknowledgment`,
+      actionLabel: NEED_ACTION_LABELS.po_unacknowledged,
+      stamp: { label: 'NO ACK', ...STAMP.dustyBlue },
+      at: first.sentAt,
+      urgent: false,
+      dueOn: first.sentAt,
+      owner: 'maker',
+    };
+  }
   if (row.unacked_po_count > 0 && row.oldest_unacked_sent_at) {
     const days = daysBetween(row.oldest_unacked_sent_at, now);
     if (days >= PO_SENT_UNACKED_DAYS) {
@@ -1709,14 +1934,20 @@ const needPoUnacknowledged: NeedRule = ({ row, now }) => {
 };
 
 // D5: Friday unsent Pulses rise on the Desk — never earlier in the week.
-const needPulseDue: NeedRule = ({ row, now }) => {
+//
+// N8 (US-25): the Pulse is one studio errand a week, not one per job — the
+// key names the week, so every job's line collapses into one need, and the
+// count is the studio's (`pulseCount`, summed by partitionDesk) where known.
+const needPulseDue: NeedRule = ({ row, now, pulseCount }) => {
   if (row.unsent_pulse_count > 0 && row.pulse_week_of) {
     const monday = new Date(`${row.pulse_week_of}T00:00:00`);
     const friday = monday.getTime() + 4 * DAY_MS;
     if (now.getTime() >= friday) {
+      const n = Math.max(pulseCount ?? 0, row.unsent_pulse_count);
       return {
         kind: 'pulse_due',
-        text: 'Friday Pulse drafted — review & send',
+        recordId: `week:${row.pulse_week_of}`,
+        text: n === 1 ? 'Review and send 1 Pulse' : `Review and send ${n} Pulses`,
         actionLabel: NEED_ACTION_LABELS.pulse_due,
         stamp: { label: 'PULSE', ...STAMP.sage },
         urgent: false,
@@ -1732,6 +1963,10 @@ const needPulseDue: NeedRule = ({ row, now }) => {
 const NEED_RULES: readonly NeedRule[] = [
   needOverdueDecision,
   needOverdueInvoice,
+  // N3: live-job events, above every seal.
+  needLiveProposalSigned,
+  needLiveProposalDeclined,
+  needPaymentLanded,
   needProposal,
   needLead,
   needPaymentFailed,
@@ -1775,6 +2010,7 @@ export function deriveNeeds(
   exceptions?: readonly DeskExceptionSignal[] | null,
   heldReleases?: readonly DeskHeldReleaseSignal[] | null,
   samples?: readonly DeskSampleSignal[] | null,
+  live?: DeskLiveSignals | null,
 ): NeedLine[] {
   if (row.is_archived || row.is_paused) return [];
   const ctx: NeedContext = {
@@ -1793,6 +2029,7 @@ export function deriveNeeds(
     exceptions,
     heldReleases,
     samples,
+    ...live,
   };
   // N1 — one need, one line: a second rule restating a key already on the
   // chain (the three schedule-conflict readings of one project) is dropped,
@@ -1835,6 +2072,7 @@ export function deriveNeed(
   exceptions?: readonly DeskExceptionSignal[] | null,
   heldReleases?: readonly DeskHeldReleaseSignal[] | null,
   samples?: readonly DeskSampleSignal[] | null,
+  live?: DeskLiveSignals | null,
 ): NeedLine | null {
   return (
     deriveNeeds(
@@ -1853,6 +2091,7 @@ export function deriveNeed(
       exceptions,
       heldReleases,
       samples,
+      live,
     )[0] ?? null
   );
 }
@@ -2013,7 +2252,7 @@ function inFlightMotion(row: DocumentStateRow): { kind: MotionKind; text: string
   return { kind: 'in_flight', text: n === 1 ? '1 piece on the way' : `${n} pieces on the way` };
 }
 
-function needSortKey(folder: DeskFolder): [number, number, number] {
+function needSortKey(folder: DeskFolder): [number, number, number, number] {
   const { row, need } = folder;
   const date =
     need.kind === 'overdue_decision' && row.earliest_overdue_due
@@ -2041,7 +2280,9 @@ function needSortKey(folder: DeskFolder): [number, number, number] {
   // leading overdue tier was measurably inert here — and actively harmful when
   // `earliest_overdue_due` is null, since it demoted a real need below
   // non-overdue folios.
-  return [need.urgent ? 0 : 1, NEED_RANK[need.kind], date];
+  // N6: leads due alike stand in the order they wrote in.
+  const arrival = need.kind === 'new_lead' && need.at ? new Date(need.at).getTime() : 0;
+  return [need.urgent ? 0 : 1, NEED_RANK[need.kind], date, arrival];
 }
 
 /** Split rows into the needs-your-hand stack and the in-motion chips.
@@ -2077,6 +2318,14 @@ export function partitionDesk(
   heldReleases?: ReadonlyMap<string, readonly DeskHeldReleaseSignal[]>,
   /** C-35 — project_id → live samples with a return-by date. */
   samples?: ReadonlyMap<string, readonly DeskSampleSignal[]>,
+  /** N3 — project_id → signed/declined proposals on a live job. */
+  proposalOutcomes?: ReadonlyMap<string, readonly DeskProposalOutcomeSignal[]>,
+  /** N3 — project_id → payments landed in the last LANDED_PAYMENT_DAYS. */
+  landedPayments?: ReadonlyMap<string, readonly DeskLandedPaymentSignal[]>,
+  /** N3 — project_id → sent purchase orders and their acknowledgment. */
+  purchaseOrders?: ReadonlyMap<string, readonly DeskPurchaseOrderSignal[]>,
+  /** N6 — lead_id → the lead's arrival and contact name. */
+  leads?: ReadonlyMap<string, DeskLeadSignal>,
 ): {
   folders: DeskFolder[];
   chips: MotionChip[];
@@ -2100,6 +2349,18 @@ export function partitionDesk(
   // into Sets, so a Set here would make every 60s tick return a fresh result
   // object and re-render every consumer of this query portal-wide.
   const composed: Record<string, true> = {};
+  // N8: the studio's unsent Pulses, summed per week across every live job.
+  const pulsesByWeek = new Map<string, number>();
+  for (const row of rows) {
+    if (row.is_archived || row.is_paused || !row.pulse_week_of) continue;
+    pulsesByWeek.set(
+      row.pulse_week_of,
+      (pulsesByWeek.get(row.pulse_week_of) ?? 0) + row.unsent_pulse_count,
+    );
+  }
+  // A present map with no entry for this job is a read that answered "none".
+  const perProject = <T>(map: ReadonlyMap<string, readonly T[]> | undefined, id: string | null) =>
+    map && id ? (map.get(id) ?? []) : null;
 
   for (const row of rows) {
     if (row.is_archived) continue;
@@ -2168,6 +2429,13 @@ export function partitionDesk(
       exceptionSignals,
       heldReleaseSignals,
       sampleSignals,
+      {
+        proposalOutcomes: perProject(proposalOutcomes, row.project_id),
+        landedPayments: perProject(landedPayments, row.project_id),
+        purchaseOrders: perProject(purchaseOrders, row.project_id),
+        lead: row.lead_id ? (leads?.get(row.lead_id) ?? null) : null,
+        pulseCount: row.pulse_week_of ? (pulsesByWeek.get(row.pulse_week_of) ?? null) : null,
+      },
     );
     const need = needs[0] ?? null;
     if (need) {
@@ -2198,7 +2466,7 @@ export function partitionDesk(
   folders.sort((a, b) => {
     const ka = needSortKey(a);
     const kb = needSortKey(b);
-    return ka[0] - kb[0] || ka[1] - kb[1] || ka[2] - kb[2];
+    return ka[0] - kb[0] || ka[1] - kb[1] || ka[2] - kb[2] || ka[3] - kb[3];
   });
 
   return { folders, chips: chips.slice(0, MAX_MOTION_CHIPS), live, composed };

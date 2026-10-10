@@ -16,7 +16,7 @@ function line(over: Partial<RosterLine> = {}): RosterLine {
     name: 'Reinhardt lake house',
     stage: 'discovery',
     designerId: null,
-    state: 'Reinhardt · Site Visit · quiet · nothing needs your hand',
+    state: 'Reinhardt · Site Visit · quiet · no current alert',
     personLine: 'Reinhardt · Site Visit',
     overdueText: null,
     mark: null,
@@ -25,7 +25,7 @@ function line(over: Partial<RosterLine> = {}): RosterLine {
     jobHref: '/doc/reinhardt',
     act: { label: 'Open the job', href: '/doc/reinhardt' },
     client: 'Reinhardt',
-    custody: 'At rest',
+    custody: 'No current alert',
     needOwner: null,
     dueOn: null,
     valueText: null,
@@ -59,7 +59,7 @@ describe('DeskLedgerRow — the at-rest row', () => {
     const { container } = render(<DeskLedgerRow line={line()} tone="discovery" />);
     const nameCell = container.querySelector('[data-ledger-cell="name"]')!;
 
-    expect(nameCell).toHaveTextContent('At rest');
+    expect(nameCell).toHaveTextContent('No current alert');
     expect(nameCell).toHaveTextContent('Reinhardt lake house');
     expect(nameCell).toHaveTextContent('Site Visit');
   });
@@ -90,7 +90,7 @@ describe('DeskLedgerRow — the at-rest row', () => {
     const nameCell = container.querySelector('[data-ledger-cell="name"]')!;
     const sentence = container.querySelector('[data-ledger-cell="sentence"]')!;
 
-    expect(sentence).toHaveTextContent('Nothing needs your hand.');
+    expect(sentence).toHaveTextContent('No current action alerts.');
     expect(nameCell.textContent?.toLowerCase()).not.toContain(
       'nothing needs your hand',
     );
@@ -113,7 +113,7 @@ describe('DeskLedgerRow — the at-rest row', () => {
     const { container } = render(<DeskLedgerRow line={line()} tone="discovery" />);
 
     expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
-      'Nothing needs your hand.',
+      'No current action alerts.',
     );
   });
 
