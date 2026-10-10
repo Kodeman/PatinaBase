@@ -444,7 +444,7 @@ describe('the doors', () => {
     mount();
     expect(screen.getByText('Filed with this job')).toBeInTheDocument();
     expect(doorRows().map((door) => door.textContent)).toEqual([
-      'Plan room',
+      'Drawing sets',
       'Spec book',
       // D-B8/F62 — one name for one thing; the key stays `moodboards`.
       'Boards',
@@ -531,7 +531,7 @@ describe('the doors', () => {
       expect(svg).toHaveAttribute('stroke-width', '1.5');
       expect(svg).toHaveAttribute('stroke', 'currentColor');
       expect(row).toHaveClass('gap-[8px]');
-      // The icon adds nothing to the name: `Plan room` is still `Plan room`.
+      // The icon adds nothing to the name: `Drawing sets` is still `Drawing sets`.
       const label = doors.find(
         (door) => door.key === row.getAttribute('data-ladder-door'),
       )?.label as string;
@@ -559,7 +559,7 @@ describe('the doors', () => {
         doors={[
           {
             key: 'planroom',
-            label: 'Plan room',
+            label: 'Drawing sets',
             href: '/doc/p1/plans',
             onOpen: jest.fn(),
           },
@@ -569,7 +569,7 @@ describe('the doors', () => {
         onJump={jest.fn()}
       />,
     );
-    expect(screen.getByRole('link', { name: 'Plan room' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Drawing sets' })).toHaveAttribute(
       'href',
       '/doc/p1/plans',
     );
@@ -994,7 +994,7 @@ describe('the rail around the ladder', () => {
       'Closing the book',
       'The record',
       'Filed with this job',
-      'Plan room',
+      'Drawing sets',
       'Spec book',
       'Boards',
       'Call sheet',

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 let mockRooms: Record<string, unknown>[] = [];
@@ -26,6 +26,8 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManifest: () => null }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
+  useProjectPalettes: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
@@ -102,8 +104,16 @@ afterEach(() => {
 import { FFESection } from '../../ffe-section';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 
-const renderSection = () =>
-  render(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
+// US-21 Q14 — the project spread opens on room rows; Living, where the trade
+// line stands, unfolds to its lines.
+const renderSection = () => {
+  const view = render(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
+  const room = view.container.querySelector<HTMLButtonElement>(
+    '[data-pieces-room="room-2"] button[aria-expanded="false"]',
+  );
+  if (room) fireEvent.click(room);
+  return view;
+};
 
 /** A furnishing the studio still has to release. */
 const furnishing = {
@@ -216,9 +226,10 @@ describe('trade presence lines on the schedule', () => {
     expect(screen.getByText('On trade scope')).toBeInTheDocument();
   });
 
-  it('counts the trade line as committed work in its room', () => {
-    renderSection();
-    expect(screen.getByText(/1 of 1 underway/)).toBeInTheDocument();
+  it('counts the trade line as a line in its room, never a placeholder', () => {
+    const { container } = renderSection();
+    const living = container.querySelector<HTMLElement>('[data-pieces-room="room-2"]')!;
+    expect(within(living).getByText('1 line · 0 placeholders')).toBeInTheDocument();
   });
 
   // The bug this fences: while the trade query is still loading, the old

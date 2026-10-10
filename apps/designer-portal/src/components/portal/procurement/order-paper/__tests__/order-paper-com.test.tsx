@@ -20,6 +20,7 @@ const mockSubmittals: { data: Record<string, unknown>[] } = { data: [] };
 
 jest.mock('@patina/supabase', () => ({
   useVendorQuotes: () => ({ data: [] }),
+  useProjectRoomPlacements: () => ({ data: [] }),
   useCreatePurchaseOrder: () => ({ mutateAsync: mockCreate, isPending: false }),
   useSetPurchaseOrderHeader: () => ({ mutateAsync: mockSetHeader, isPending: false }),
   useSendPurchaseOrder: () => ({ mutateAsync: mockSend, isPending: false }),
@@ -96,7 +97,7 @@ jest.mock('@/lib/analytics/procurement-events', () => ({
 }));
 
 import { OrderPaper } from '..';
-import { comLineFacts, suppliesLinks, workroomFirst } from '../com-slot';
+import { comLineFacts, fabricLines, suppliesLinks, workroomFirst } from '../com-slot';
 
 const KESSLER = { id: 'vendor-kessler', name: 'Kessler', default_payment_terms: null, orders_email: 'o@k.example' };
 const HALE = { id: 'vendor-hale', name: 'Hale Upholstery Works', default_payment_terms: null, orders_email: 'o@h.example' };
@@ -111,6 +112,7 @@ const line = (over: Partial<FfePairLine>): FfePairLine => ({
   vendor_name: null,
   purchase_order_id: null,
   parent_ffe_item_id: null,
+  link_kind: null,
   purchase_order: null,
   ...over,
 });
@@ -135,6 +137,7 @@ const FABRIC_LINE = line({
   vendor_id: KESSLER.id,
   vendor_name: KESSLER.name,
   parent_ffe_item_id: 'line-sofa',
+  link_kind: 'com',
 });
 
 const FABRIC_ITEM = {
@@ -173,7 +176,7 @@ describe('the fabric PO ship-to', () => {
   });
 
   it('keeps the receivers first on a paper with no COM pair', () => {
-    mockPairLines.data = [line({ ...FABRIC_LINE, parent_ffe_item_id: null })];
+    mockPairLines.data = [line({ ...FABRIC_LINE, parent_ffe_item_id: null, link_kind: null })];
     renderFabricPaper();
     const radios = within(shipToGroup()).getAllByRole('radio');
     expect(radios[0]).toHaveAccessibleName(/Cedar Lake Receiving/);
@@ -260,6 +263,23 @@ describe('the COM slot model', () => {
     ]);
     // Nothing to link while the piece is unordered, or once already linked.
     expect(suppliesLinks('po-1043', ['line-fabric'], [sofaUnordered, FABRIC_LINE])).toEqual([]);
+  });
+
+  it('never reads a labor child as COM: no pair sentence, no fabric paper, no supplies link', () => {
+    const install = line({
+      id: 'line-install',
+      name: 'Install, wallpaper hanger',
+      vendor_name: 'Hang Right',
+      parent_ffe_item_id: 'line-sofa',
+      link_kind: 'labor',
+      purchase_order_id: 'po-2001',
+    });
+    const lines = [SOFA_LINE, install];
+    expect(comLineFacts(['line-sofa'], lines, [], 'Hale').size).toBe(0);
+    expect(comLineFacts(['line-install'], lines, [], 'Hang Right').size).toBe(0);
+    expect(fabricLines(['line-install'], lines)).toEqual([]);
+    expect(suppliesLinks('po-1042', ['line-sofa'], lines)).toEqual([]);
+    expect(suppliesLinks('po-2001', ['line-install'], lines)).toEqual([]);
   });
 
   it('never warns while the submittals are unknown', () => {

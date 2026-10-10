@@ -867,6 +867,7 @@ $$;
 DO $$
 DECLARE
   v_share record;
+  v_feedback_id uuid;
   v_meta jsonb;
 BEGIN
   PERFORM pg_temp.assume_share_actor('a5430000-0000-4000-8000-000000000001');
@@ -885,12 +886,16 @@ BEGIN
   );
   RESET ROLE;
 
+  SELECT id INTO v_feedback_id
+  FROM public.item_feedback
+  WHERE guest_share_id = v_share.id
+    AND board_item_id = 'a5433000-0000-4000-8000-000000000021';
+
   SELECT metadata INTO v_meta
   FROM public.notification_log
   WHERE type = 'client_feedback'
     AND user_id = 'a5430000-0000-4000-8000-000000000001'
-    AND metadata->>'source' = 'guest_link'
-  ORDER BY created_at DESC LIMIT 1;
+    AND metadata->>'feedbackId' = v_feedback_id::text;
   ASSERT v_meta IS NOT NULL,
     'a guest reaction must notify the owning designer';
   ASSERT v_meta->>'headline' = 'A guest approved Proposal board note',
@@ -903,6 +908,7 @@ $$;
 DO $$
 DECLARE
   v_share record;
+  v_feedback_id uuid;
   v_meta jsonb;
 BEGIN
   PERFORM pg_temp.assume_share_actor('a5430000-0000-4000-8000-000000000001');
@@ -921,12 +927,16 @@ BEGIN
   );
   RESET ROLE;
 
+  SELECT id INTO v_feedback_id
+  FROM public.item_feedback
+  WHERE guest_share_id = v_share.id
+    AND board_item_id = 'a5433000-0000-4000-8000-000000000001';
+
   SELECT metadata INTO v_meta
   FROM public.notification_log
   WHERE type = 'client_feedback'
     AND user_id = 'a5430000-0000-4000-8000-000000000001'
-    AND metadata->>'boardId' = 'a5432000-0000-4000-8000-000000000001'
-  ORDER BY created_at DESC LIMIT 1;
+    AND metadata->>'feedbackId' = v_feedback_id::text;
   ASSERT v_meta IS NOT NULL,
     'a project-owned board must notify its own designer';
   ASSERT v_meta->>'headline' = 'A guest flagged Shared note',

@@ -66,6 +66,8 @@ jest.mock('@/components/document/overlays/ask-maker-sheet', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
+  useProjectPalettes: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useProjectV2: () => ({ data: null }),
   useStudioPurchases: () => ({ data: [] }),
@@ -190,13 +192,20 @@ const noPO = {
 const renderRouter = () =>
   render(<RecordAChangeSheet projectId="project-1" clientName="Halloran" />);
 
-const renderPaper = () =>
-  render(
+// US-21 Q14 — the paper opens on room rows; Throughout unfolds to the lines.
+const renderPaper = () => {
+  const view = render(
     <>
       <FFESection projectId="project-1" projectName="Halloran House" mode="project" />
       <RecordAChangeSheet projectId="project-1" clientName="Halloran" />
     </>,
   );
+  const room = view.container.querySelector<HTMLButtonElement>(
+    '[data-pieces-room="throughout"] button[aria-expanded="false"]',
+  );
+  if (room) fireEvent.click(room);
+  return view;
+};
 
 const continueAct = () => screen.getByRole('button', { name: /Continue/ });
 
@@ -211,13 +220,22 @@ afterEach(() => {
 });
 
 describe('Record a change — the router (D5)', () => {
-  it('mounts nothing and hears nothing with ask-the-paper off', () => {
+  it('with both flags off, hears only the Pieces head (T-61 F6)', () => {
     mockAskThePaper = false;
+    const heard = jest.fn();
+    window.addEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
     const { container } = renderRouter();
     expect(container).toBeEmptyDOMElement();
 
-    act(() => openRecordAChange({ origin: 'pieces-head' }));
+    act(() => openRecordAChange({ origin: 'money-head' }));
+    act(() => openRecordAChange({ origin: 'cmdk' }));
+    act(() => openRecordAChange({ origin: 'line', itemId: 'line-sofa' }));
     expect(screen.queryByText('What changed?')).not.toBeInTheDocument();
+    expect(heard).not.toHaveBeenCalled();
+
+    act(() => openRecordAChange({ origin: 'pieces-head' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('What changed?');
+    window.removeEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, heard);
   });
 
   it('asks one question with two native radio options and their helpers', () => {
@@ -315,20 +333,26 @@ describe('Record a change — the router (D5)', () => {
 describe('Record a change from the Pieces head (rulings §3, 1-3)', () => {
   const headAct = () => screen.getByRole('button', { name: 'Record a change' });
 
-  it('prints as the head\'s second act, and not at all with the flag off', () => {
-    const { unmount } = renderPaper();
+  it('prints in the head after Build the item list and Add to the job (US-21 Q14)', () => {
+    renderPaper();
     // The head's ledger, links and buttons alike: index 0 is the leader.
-    const acts = Array.from(
-      (document.getElementById('project-ffe') as HTMLElement).querySelectorAll(
-        '[data-action-key]',
-      ),
+    const head = document.querySelector('[data-region-head="ffe"]') as HTMLElement;
+    const keys = Array.from(head.querySelectorAll('[data-action-key]')).map((act) =>
+      act.getAttribute('data-action-key'),
     );
-    expect(acts[1]).toHaveAttribute('data-action-key', 'record-a-change-pieces-head');
-    unmount();
+    expect(keys.slice(0, 2)).toEqual(['work-the-pieces', 'open-add-to-project']);
+    expect(keys).toContain('record-a-change-pieces-head');
+  });
 
+  it('with both flags off, the head\'s act still opens the sheet (T-61 F6)', () => {
     mockAskThePaper = false;
     renderPaper();
-    expect(screen.queryByRole('button', { name: 'Record a change' })).not.toBeInTheDocument();
+    fireEvent.click(headAct());
+    expect(screen.getByRole('dialog')).toHaveTextContent('What changed?');
+
+    fireEvent.click(screen.getByRole('radio', { name: /On a piece/ }));
+    fireEvent.click(continueAct());
+    expect(screen.getByText('Choose the piece')).toBeInTheDocument();
   });
 
   it('On the agreement opens the amendment sheet', () => {

@@ -12,6 +12,7 @@ import {
   dollarsToCents,
   partitionFfeBillable,
   unbilledMilestones,
+  unfilledAllowanceText,
   type ComposerFfeItem,
   type ComposerMilestone,
   type ComposerStudio,
@@ -234,6 +235,60 @@ describe("partitionFfeBillable", () => {
       f1: { coverage: "paid" },
     });
     expect(covered.map((i) => i.id)).toEqual(["f1"]);
+  });
+
+  // T-7a (F8): the column defaults to 0 (00066), so a $0 line with no product
+  // that is not an allowance prints `Not priced` and has nothing to bill.
+  it("holds a $0 line with no product and no allowance out of billable", () => {
+    const rough: ComposerFfeItem = {
+      ...FFE_NO_ROOM,
+      id: "f4",
+      unit_price_cents: 0,
+      product_id: null,
+      item_type: "fixed",
+    };
+    const productAtZero: ComposerFfeItem = {
+      ...rough,
+      id: "f5",
+      product_id: "p-1",
+    };
+    const { billable, unpriced } = partitionFfeBillable(
+      [rough, productAtZero],
+      undefined,
+    );
+    expect(unpriced.map((i) => i.id)).toEqual(["f4"]);
+    expect(billable.map((i) => i.id)).toEqual(["f5"]);
+  });
+
+  // F21: an allowance with no price yet is listed but never billable, and it
+  // does not count as billed. Once filled, it bills at its real price.
+  it("holds an unfilled allowance apart: unselectable, not billed", () => {
+    const rug: ComposerFfeItem = {
+      id: "rug",
+      name: "Area rug, 9 × 12",
+      quantity: 1,
+      unit_price_cents: 0,
+      product_id: null,
+      item_type: "allowance",
+      budget_max_cents: 450_000,
+      room: { name: "Living Room" },
+    };
+    const nullPrice: ComposerFfeItem = { ...rug, id: "rug-null", unit_price_cents: null };
+    const filled: ComposerFfeItem = {
+      ...rug,
+      id: "rug-filled",
+      unit_price_cents: 410_000,
+      product_id: "p-rug",
+    };
+    const { billable, covered, unpriced, unfilled } = partitionFfeBillable(
+      [rug, nullPrice, filled],
+      undefined,
+    );
+    expect(unfilled.map((i) => i.id)).toEqual(["rug", "rug-null"]);
+    expect(billable.map((i) => i.id)).toEqual(["rug-filled"]);
+    expect(covered).toEqual([]);
+    expect(unpriced).toEqual([]);
+    expect(unfilledAllowanceText(rug)).toBe("Up to $4,500 · bills once it's filled");
   });
 });
 

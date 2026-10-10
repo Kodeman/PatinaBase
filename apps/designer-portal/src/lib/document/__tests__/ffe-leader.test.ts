@@ -154,7 +154,7 @@ describe('scanFfeExceptions — the head’s second line', () => {
     expect(exceptions.map((e) => e.text)).toEqual([
       '2 open damage claims',
       '1 PO unanswered',
-      '2 unspecified',
+      '2 placeholders',
       '3 uninvoiced',
     ]);
   });

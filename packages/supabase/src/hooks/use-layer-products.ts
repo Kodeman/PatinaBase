@@ -39,6 +39,8 @@ export interface LayerProductRow {
   id: string;
   name: string;
   brand: string | null;
+  /** Surface finish (00015), e.g. `satin brass`; the inline search prints it. */
+  finish: string | null;
   price_retail: number | null;
   /** Trade (vendor) unit cost in cents — 00185 dual pricing. null = unknown. */
   price_trade: number | null;
@@ -91,7 +93,7 @@ export function useLayerProducts(opts: UseLayerProductsOptions) {
       let query = supabase
         .from("products")
         .select(
-          "id, name, brand, price_retail, price_trade, images, source_url, status, category, configuration_mode, configuration_summary, layer, owner_user_id, studio_id, created_at, capture_source, captured_at, field_capture_id",
+          "id, name, brand, finish, price_retail, price_trade, images, source_url, status, category, configuration_mode, configuration_summary, layer, owner_user_id, studio_id, created_at, capture_source, captured_at, field_capture_id",
         )
         .eq("layer", layer)
         .limit(limit);

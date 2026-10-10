@@ -210,16 +210,20 @@ describe('DocumentTimeProvider — A3 queue hardening', () => {
     </QueryClientProvider>
   );
 
+  // SQ-714 — the automatic timer is off (AUTOSTART_ENABLED), so every case
+  // that needs a running clock starts it by hand, through the same queue.
   it('stops the outgoing project before starting the incoming one, awaiting a runningTimer invalidation after each mutation', async () => {
     const { result } = renderHook(() => useDocumentTime(), { wrapper });
 
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
 
     act(() => {
       result.current.hold({ projectId: 'project-b', projectName: 'B', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(stopTimerMutateAsync).toHaveBeenCalledTimes(1));
@@ -243,6 +247,7 @@ describe('DocumentTimeProvider — A3 queue hardening', () => {
 
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
 
@@ -263,12 +268,8 @@ describe('DocumentTimeProvider — A3 queue hardening', () => {
       ),
     );
 
-    // Known, still-open gap this hardening does NOT close (reported, not
-    // fixed): because the throw happens inside the SAME queued operation
-    // that would go on to start B, a failed stop for A also skips B's
-    // start entirely for this navigation — the queue survives (the test
-    // above's ordering still holds on a LATER hold), but this one
-    // navigation silently never starts B's timer either.
+    // Holding B starts nothing (SQ-714), and the failed operation started
+    // nothing either.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(startTimerMutateAsync).toHaveBeenCalledTimes(1);
 
@@ -280,17 +281,20 @@ describe('DocumentTimeProvider — A3 queue hardening', () => {
 
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
 
     // A designer who glances at a document for under a minute: mark the row
     // auto-started and elapsed stays near-zero, so closeOutTimer rules
     // 'discard_silently' (source === 'timer_auto' && elapsed < 60) instead of
-    // 'offer' — this is the branch stopTimer's hardening did NOT reach.
+    // 'offer' — this is the branch stopTimer's hardening did NOT reach. (With
+    // auto-start off, such a row is one opened before the switch.)
     if (runningTimerRow) runningTimerRow.source = 'timer_auto';
 
     act(() => {
       result.current.hold({ projectId: 'project-b', projectName: 'B', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(discardTimerMutateAsync).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(2));
@@ -355,6 +359,7 @@ describe('DocumentTimeProvider — who owns the thumb edge (D-B54)', () => {
 
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
 
@@ -370,6 +375,7 @@ describe('DocumentTimeProvider — who owns the thumb edge (D-B54)', () => {
 
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
 
@@ -389,6 +395,7 @@ describe('DocumentTimeProvider — who owns the thumb edge (D-B54)', () => {
 
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
 
@@ -407,6 +414,7 @@ describe('DocumentTimeProvider — who owns the thumb edge (D-B54)', () => {
 
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
 
@@ -420,7 +428,7 @@ describe('DocumentTimeProvider — who owns the thumb edge (D-B54)', () => {
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
     });
-    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.heldProjectId).toBe('project-a'));
 
     expect(result.current.offer?.projectId).toBe('project-a');
     expect(result.current.heldProjectId).toBe('project-a');
@@ -466,6 +474,7 @@ describe('DocumentTimeProvider — W3 capture', () => {
 
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
 
@@ -485,6 +494,7 @@ describe('DocumentTimeProvider — W3 capture', () => {
 
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
 
@@ -515,6 +525,7 @@ describe('DocumentTimeProvider — W3 capture', () => {
 
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
 
     await waitFor(() => expect(result.current.offer).not.toBeNull());
@@ -568,6 +579,7 @@ describe('DocumentTimeProvider — W3 capture', () => {
 
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(timerStartedCalls).toHaveLength(1));
 
@@ -577,7 +589,7 @@ describe('DocumentTimeProvider — W3 capture', () => {
     await waitFor(() => expect(timerStoppedCalls).toHaveLength(1));
 
     expect(timerStartedCalls[0]).toEqual(
-      expect.objectContaining({ surface: 'document', source: 'timer_auto', billable: false }),
+      expect.objectContaining({ surface: 'document', source: 'timer_manual', billable: false }),
     );
     // The cumulative-idle ratio is REPORTED. Nothing acts on it.
     expect(timerStoppedCalls[0]).toEqual(
@@ -588,10 +600,12 @@ describe('DocumentTimeProvider — W3 capture', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// HT-35 — the automatic timer is disclosed once, and a member may decline it.
-// "Off" is never "no timer": the same clock, waiting for her hand.
+// SQ-714 — the automatic timer is off for every member (Kody, 2026-10-09;
+// `AUTOSTART_ENABLED`). Holding a document starts nothing, whatever her stored
+// preference, and neither HT-35 band renders: no disclosure, no "Start the
+// clock". The clock under her own hand is untouched.
 // ═══════════════════════════════════════════════════════════════════════════
-describe('DocumentTimeProvider — HT-35, the clock she was told about', () => {
+describe('DocumentTimeProvider — the automatic timer is off (SQ-714)', () => {
   let qc: QueryClient;
 
   beforeEach(() => {
@@ -600,6 +614,7 @@ describe('DocumentTimeProvider — HT-35, the clock she was told about', () => {
     concurrentIncumbent = null;
     startTimerMutateAsync.mockClear();
     stopTimerMutateAsync.mockClear();
+    discardTimerMutateAsync.mockClear();
     markDisclosedMutate.mockReset();
     autostartDisclosedCalls.length = 0;
     autostartReadFailed = false;
@@ -616,33 +631,74 @@ describe('DocumentTimeProvider — HT-35, the clock she was told about', () => {
     </QueryClientProvider>
   );
 
-  it('starts the clock for a member who never touched the setting', async () => {
-    const { result } = renderHook(() => useDocumentTime(), { wrapper });
-    act(() => {
-      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
-    });
-    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
-    expect(result.current.autostartOptedOut).toBe(false);
-  });
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
 
-  it('opens NO timer for a member who declined it', async () => {
-    autostartPreference = { optedOut: true, disclosedAt: '2026-01-01T00:00:00.000Z' };
+  it.each([
+    ['a member who never touched the setting', { optedOut: false, disclosedAt: '2026-01-01T00:00:00.000Z' }, false],
+    ['a member never told about it', { optedOut: false, disclosedAt: null }, false],
+    ['a member who declined it', { optedOut: true, disclosedAt: '2026-01-01T00:00:00.000Z' }, false],
+    ['a member whose preference read failed', { optedOut: false, disclosedAt: null }, true],
+  ])('holding a document starts no timer for %s', async (_who, preference, readFailed) => {
+    autostartPreference = preference;
+    autostartReadFailed = readFailed;
     const { result } = renderHook(() => useDocumentTime(), { wrapper });
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
     });
-    await waitFor(() => expect(result.current.autostartOptedOut).toBe(true));
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await settle();
+    expect(result.current.heldProjectId).toBe('project-a');
     expect(startTimerMutateAsync).not.toHaveBeenCalled();
   });
 
-  it('leaves her the same clock under her own thumb — never "no timer"', async () => {
+  it('putting the document down writes no entry and raises no strip', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await settle();
+    act(() => {
+      result.current.release();
+    });
+    await settle();
+    expect(startTimerMutateAsync).not.toHaveBeenCalled();
+    expect(stopTimerMutateAsync).not.toHaveBeenCalled();
+    expect(discardTimerMutateAsync).not.toHaveBeenCalled();
+    expect(result.current.offer).toBeNull();
+  });
+
+  it('shows no disclosure, and stamps none, to a member never told', async () => {
+    autostartPreference = { optedOut: false, disclosedAt: null };
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await settle();
+    expect(screen.queryByText(/Patina keeps the time for you/)).not.toBeInTheDocument();
+    expect(markDisclosedMutate).not.toHaveBeenCalled();
+    expect(autostartDisclosedCalls).toEqual([]);
+  });
+
+  it('offers no "Start the clock" band to a member who declined it', async () => {
     autostartPreference = { optedOut: true, disclosedAt: '2026-01-01T00:00:00.000Z' };
     const { result } = renderHook(() => useDocumentTime(), { wrapper });
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
     });
     await waitFor(() => expect(result.current.autostartOptedOut).toBe(true));
+    await settle();
+    expect(
+      screen.queryByText('The clock is yours to start on this document.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start the clock' })).not.toBeInTheDocument();
+  });
+
+  it('a clock she starts by hand still runs, as timer_manual', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await settle();
+    expect(startTimerMutateAsync).not.toHaveBeenCalled();
 
     act(() => {
       result.current.startManually();
@@ -655,204 +711,25 @@ describe('DocumentTimeProvider — HT-35, the clock she was told about', () => {
     );
   });
 
-  it('and the one-tap start is offered on the page while she holds a document', async () => {
-    autostartPreference = { optedOut: true, disclosedAt: '2026-01-01T00:00:00.000Z' };
+  it('and a hand-started clock she stops by leaving still offers its strip', async () => {
     const { result } = renderHook(() => useDocumentTime(), { wrapper });
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
-    await waitFor(() =>
-      expect(screen.getByText('Start the clock')).toBeInTheDocument(),
-    );
-  });
-
-  it('discloses the automatic timer once, stamping it as it renders', async () => {
-    autostartPreference = { optedOut: false, disclosedAt: null };
-    const { result } = renderHook(() => useDocumentTime(), { wrapper });
-    act(() => {
-      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
-    });
-    await waitFor(() =>
-      expect(screen.getByText(/Patina keeps the time for you/)).toBeInTheDocument(),
-    );
-    expect(markDisclosedMutate).toHaveBeenCalledTimes(1);
-    expect(autostartDisclosedCalls).toEqual([{ surface: 'document' }]);
-  });
-
-  it('holds the sentence up while its own stamp round-trips back', async () => {
-    autostartPreference = { optedOut: false, disclosedAt: null };
-    // The real `useMarkTimeAutostartDisclosed` invalidates the preference
-    // query, so the stamp it just wrote comes straight back as a non-null
-    // `disclosed_at`. Before the latch that round trip unmounted the band on
-    // the very next render: "once and never again", with the once spent on a
-    // flash nobody could read and `Understood` never reachable.
-    markDisclosedMutate.mockImplementation(() => {
-      autostartPreference = {
-        optedOut: false,
-        disclosedAt: '2026-09-13T12:00:00.000Z',
-      };
-    });
-    const { result, rerender } = renderHook(() => useDocumentTime(), { wrapper });
-    act(() => {
-      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
-    });
-    await waitFor(() =>
-      expect(screen.getByText(/Patina keeps the time for you/)).toBeInTheDocument(),
-    );
-    expect(markDisclosedMutate).toHaveBeenCalledTimes(1);
-
-    // The stamp has landed and the preference now reads disclosed. The
-    // sentence stays until she says so.
-    act(() => {
-      rerender();
-    });
-    expect(
-      screen.getByText(/Patina keeps the time for you/),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Understood' }));
-    await waitFor(() =>
-      expect(
-        screen.queryByText(/Patina keeps the time for you/),
-      ).not.toBeInTheDocument(),
-    );
-    // Her hand took it down, and the profile carries exactly one stamp.
-    expect(markDisclosedMutate).toHaveBeenCalledTimes(1);
-  });
-
-  it('stops asserting the automatic clock the moment she declines it, and offers her the manual one instead', async () => {
-    // She follows the sentence's own instruction. The Account sheet is an
-    // always-mounted overlay in the (document) layout, not a route, so the
-    // document is still held and the band is still latched when the preference
-    // comes back opted out.
-    autostartPreference = { optedOut: false, disclosedAt: null };
-    markDisclosedMutate.mockImplementation(() => {
-      autostartPreference = {
-        optedOut: false,
-        disclosedAt: '2026-09-13T12:00:00.000Z',
-      };
-    });
-    const { result, rerender } = renderHook(() => useDocumentTime(), { wrapper });
-    act(() => {
-      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
-    });
-    await waitFor(() =>
-      expect(screen.getByText(/Patina keeps the time for you/)).toBeInTheDocument(),
-    );
-
-    act(() => {
-      autostartPreference = {
-        optedOut: true,
-        disclosedAt: '2026-09-13T12:00:00.000Z',
-      };
-      rerender();
-    });
-
-    expect(
-      screen.queryByText(/Patina keeps the time for you/),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText('The clock is yours to start on this document.'))
-      .toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Start the clock' }),
-    ).toBeInTheDocument();
-  });
-
-  it('does not follow her onto the next document if she never dismissed it', async () => {
-    autostartPreference = { optedOut: false, disclosedAt: null };
-    markDisclosedMutate.mockImplementation(() => {
-      autostartPreference = {
-        optedOut: false,
-        disclosedAt: '2026-09-13T12:00:00.000Z',
-      };
-    });
-    const { result } = renderHook(() => useDocumentTime(), { wrapper });
-    act(() => {
-      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
-    });
-    await waitFor(() =>
-      expect(screen.getByText(/Patina keeps the time for you/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
 
     act(() => {
       result.current.release();
     });
-    await waitFor(() =>
-      expect(
-        screen.queryByText(/Patina keeps the time for you/),
-      ).not.toBeInTheDocument(),
-    );
-
-    act(() => {
-      result.current.hold({ projectId: 'project-b', projectName: 'B', phaseKey: null });
-    });
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(
-      screen.queryByText(/Patina keeps the time for you/),
-    ).not.toBeInTheDocument();
-    expect(markDisclosedMutate).toHaveBeenCalledTimes(1);
-  });
-
-  it('and never again once the stamp is on her profile', async () => {
-    const { result } = renderHook(() => useDocumentTime(), { wrapper });
-    act(() => {
-      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
-    });
-    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
-    expect(
-      screen.queryByText(/Patina keeps the time for you/),
-    ).not.toBeInTheDocument();
-    expect(markDisclosedMutate).not.toHaveBeenCalled();
-  });
-
-  it('says nothing at all on the Desk, where no document is held', async () => {
-    autostartPreference = { optedOut: false, disclosedAt: null };
-    renderHook(() => useDocumentTime(), { wrapper });
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(
-      screen.queryByText(/Patina keeps the time for you/),
-    ).not.toBeInTheDocument();
-    expect(markDisclosedMutate).not.toHaveBeenCalled();
-  });
-
-  it('does not re-serve the one-time sentence on a read that FAILED (W7-R4-09)', async () => {
-    // A failed read settles and falls back to `{ optedOut: false,
-    // disclosedAt: null }` — which is byte-for-byte what a member who has
-    // genuinely never been told looks like. Reading the failure as "never
-    // disclosed" spends HT-35's once on every failing load, and stamps a
-    // profile the browser could not read.
-    autostartReadFailed = true;
-    const { result } = renderHook(() => useDocumentTime(), { wrapper });
-    act(() => {
-      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
-    });
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(
-      screen.queryByText(/Patina keeps the time for you/),
-    ).not.toBeInTheDocument();
-    expect(markDisclosedMutate).not.toHaveBeenCalled();
-    expect(autostartDisclosedCalls).toEqual([]);
-  });
-
-  it('still opens the clock a failed read cannot speak for (W7-R4-09)', async () => {
-    // The other half of failing closed: the sentence is withheld, the CLOCK is
-    // not. A read that could not answer leaves auto-start exactly as it ships.
-    autostartReadFailed = true;
-    const { result } = renderHook(() => useDocumentTime(), { wrapper });
-    act(() => {
-      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
-    });
-    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
-    expect(
-      screen.queryByText('The clock is yours to start on this document.'),
-    ).not.toBeInTheDocument();
+    await waitFor(() => expect(result.current.offer).not.toBeNull());
+    expect(result.current.offer?.projectId).toBe('project-a');
+    expect(stopTimerMutateAsync).toHaveBeenCalledTimes(1);
   });
 
   it('does not hand back the automatic clock on resume to a member who declined it (W7-R4-10)', async () => {
-    // Reachable: she declined auto-start, started the clock by hand from the
-    // fallback band, then held it with the colophon's pause act. Before this,
-    // `resume` opened a fresh `timer_auto` row with no question asked — the
-    // preference honoured at one door and ignored at the next.
+    // She started the clock by hand, then held it with the pause act. `resume`
+    // opens a `timer_auto` row, so it owes her preference the same question.
     autostartPreference = { optedOut: true, disclosedAt: '2026-01-01T00:00:00.000Z' };
     const { result } = renderHook(() => useDocumentTime(), { wrapper });
     act(() => {
@@ -873,18 +750,16 @@ describe('DocumentTimeProvider — HT-35, the clock she was told about', () => {
     act(() => {
       result.current.resume();
     });
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await settle();
     expect(startTimerMutateAsync).not.toHaveBeenCalled();
-    // And she is not left without one — the same one tap is back on the page.
-    await waitFor(() =>
-      expect(screen.getByText('Start the clock')).toBeInTheDocument(),
-    );
+    expect(screen.queryByRole('button', { name: 'Start the clock' })).not.toBeInTheDocument();
   });
 
-  it('resumes for a member who never declined it', async () => {
+  it('resumes a paused clock for a member who never declined it', async () => {
     const { result } = renderHook(() => useDocumentTime(), { wrapper });
     act(() => {
       result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+      result.current.startManually();
     });
     await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
     act(() => {

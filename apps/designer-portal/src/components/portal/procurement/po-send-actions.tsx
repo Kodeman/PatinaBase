@@ -44,10 +44,23 @@ export const SENT_NOT_RECORDED_MESSAGE =
   'The email reached the vendor, but this order could not be marked sent — it may now be ' +
   'held for release. Check the order before sending it again.';
 
+/** po-send's upload_failed: the PDF couldn't be stored, so nothing was sent. */
+export const UPLOAD_FAILED_MESSAGE =
+  "We couldn't prepare the PO document. Nothing went to the maker. Try again in a moment.";
+
+/**
+ * F24: the sheet speaks in a sentence, never a raw error code, whether the
+ * send itself failed or the manual "Released by phone / portal — mark as
+ * sent" stamp did (both modes land in po-preview's one `stamp()` catch and
+ * share this mapping).
+ */
+export const PO_SEND_GENERIC_FAILURE_MESSAGE =
+  "The PO didn't go out. Nothing went to the maker. Try again in a moment.";
+
 /**
  * Map a po-send failure (the hook rejects with the response's `error` code)
- * to designer-readable copy. Unknown codes fall through with the raw text so
- * infra failures stay debuggable.
+ * to designer-readable copy (F24). Never print the raw code — an unmapped
+ * code falls back to the generic failure sentence.
  */
 export function poSendErrorMessage(raw: string): string {
   if (raw.includes('sent_not_recorded')) {
@@ -68,5 +81,8 @@ export function poSendErrorMessage(raw: string): string {
   if (raw.includes('no_items')) {
     return 'This purchase order has no linked FF&E items to print.';
   }
-  return `Couldn't prepare the PO document — ${raw}`;
+  if (raw.includes('upload_failed')) {
+    return UPLOAD_FAILED_MESSAGE;
+  }
+  return PO_SEND_GENERIC_FAILURE_MESSAGE;
 }

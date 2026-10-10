@@ -203,8 +203,8 @@ describe('Chen — the five surfaces agree (2-2)', () => {
     ).toBe('Record payment');
   });
 
-  it('leads the Pieces head with the stage’s own act, Spec the 3 unspecified', () => {
-    expect(chenSurfaces().piecesHead.label).toBe('Spec the 3 unspecified');
+  it('leads the Pieces head with the stage’s own act, Fill the 3 placeholders', () => {
+    expect(chenSurfaces().piecesHead.label).toBe('Fill the 3 placeholders');
   });
 
   it('prints the stage word ⌘K’s stage rows print, never the workflow’s', () => {
@@ -231,7 +231,7 @@ describe('Chen — weight by role (2-5)', () => {
     ]);
   });
 
-  it('leaves Draw an invoice and Spec the 3 unspecified scored or plain', () => {
+  it('leaves Draw an invoice and Fill the 3 placeholders scored or plain', () => {
     expect(['scored', 'plain']).toContain(ACT_TIER['Draw an invoice']);
     expect(['scored', 'plain']).toContain(chenSurfaces().piecesHead.tier);
     expect(['scored', 'plain']).toContain(ACT_TIER['Open the record']);

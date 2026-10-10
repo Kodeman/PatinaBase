@@ -159,6 +159,47 @@ export function frozenSnapshot(
   };
 }
 
+// The D7 oak floor in 00735's shape: 913 sq ft bought, 830 placed over four
+// rooms (Living Room primary), a need label kept above the product name after
+// the fill, and the hanger's labor line on the same piece.
+export function piecesItems(): Array<Record<string, unknown>> {
+  return [
+    {
+      ffeItemId: "item-oak",
+      documentCode: "LR-110",
+      name: "White oak floor, satin Bona finish",
+      needLabel: "Main floor",
+      itemType: "fixed",
+      room: { id: "room-living", name: "Living Room" },
+      quantity: 913,
+      unit: "sq_ft",
+      placements: [
+        { roomName: "Hall", quantity: 120 },
+        { roomName: "Living Room", quantity: 320 },
+        { roomName: "Dining", quantity: 210, areaNote: "to the bay" },
+        { roomName: "Kitchen", quantity: 180 },
+      ],
+      selectedMedia: [],
+      selection: { finish: { value: "Satin Bona" } },
+      pricing: { clientPriceCents: 1150 },
+      contentHash: "hash-oak",
+    },
+    {
+      ffeItemId: "item-oak-install",
+      documentCode: "LR-111",
+      name: "Floor install",
+      itemType: "fixed",
+      room: { id: "room-living", name: "Living Room" },
+      quantity: 913,
+      unit: "sq_ft",
+      lineKind: "labor",
+      parentFfeItemId: "item-oak",
+      selectedMedia: [],
+      contentHash: "hash-oak-install",
+    },
+  ];
+}
+
 // A frozen configuration envelope in the shape 00403 emits: labels, variant,
 // components and dimensions alongside pricing the client must never see.
 export function configuredFurniture(

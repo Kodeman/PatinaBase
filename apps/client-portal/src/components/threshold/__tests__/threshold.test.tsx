@@ -2076,6 +2076,61 @@ describe('Threshold — updatedAt off the raw payload', () => {
   });
 });
 
+describe('Threshold — a line in several rooms (00745)', () => {
+  it('stands the line in its primary room and never prints rough, need label or internal fields', () => {
+    selectionsMock.mockReturnValue(
+      settled(
+        adaptClientSelections({
+          origin: 'commercial',
+          selections: [
+            {
+              id: 'sel-oak',
+              kind: 'furnishings',
+              name: 'White oak floor',
+              roomId: LIBRARY,
+              roomName: 'Library & lounge',
+              quantity: 913,
+              unit: 'sq_ft',
+              rooms: [
+                { name: 'Library & lounge', quantity: 500, unit: 'sq_ft' },
+                { name: 'Entry & stair hall', quantity: 330, unit: 'sq_ft' },
+              ],
+              clientUnitPriceCents: 1_150,
+              clientLineTotalCents: 1_049_950,
+              itemType: 'flooring',
+              logisticsStatus: 'in_production',
+              tradeJourney: null,
+              allowance: null,
+              instrument: {
+                documentId: 'doc-7',
+                proposalId: 'prop-7',
+                name: 'Furnishings authorization No. 7',
+                executedAt: null,
+              },
+              productId: null,
+              imageUrl: null,
+              docCode: 'FA-7',
+              rough_cents: 950_000,
+              need_label: 'Flooring through the ground floor',
+              line_kind: 'goods',
+              link_kind: 'labor',
+              parent_ffe_item_id: 'line-parent',
+            },
+          ],
+        }),
+      ),
+    );
+
+    const { container } = renderThreshold();
+
+    expect(container.querySelector(`#room-${LIBRARY}`)).toHaveTextContent('White oak floor');
+    expect(container.querySelector(`#room-${ENTRY}`)).not.toHaveTextContent('White oak floor');
+    expect(container).not.toHaveTextContent('Flooring through the ground floor');
+    expect(container).not.toHaveTextContent('line-parent');
+    expect(container).not.toHaveTextContent('$9,500');
+  });
+});
+
 describe('Threshold — L6, the review and scope-change asks mounted in place', () => {
   it('stands the studio review request on the doorstep, naming this project', () => {
     pendingReviewMock.mockReturnValue({

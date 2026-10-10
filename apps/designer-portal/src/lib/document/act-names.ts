@@ -101,7 +101,7 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   'Write the proposal': 'scored',
   'Nudge {first name}': 'scored',
   'Open the project': 'scored',
-  'Spec the {N} unspecified': 'scored',
+  'Fill the {N} placeholders': 'scored',
   'Open the pieces': 'scored',
   'Hold a window': 'scored',
   // FR6 F6-10 — the held `Ask the maker for a date`'s repair, as the act.
@@ -277,7 +277,7 @@ export const ACT_LANDING_EVENTS = {
  * (F3-2, FR4 Fixes 3, 4, 6, 8). `claim`: the damaged line's claim act, or the
  * Receiving claim card's at PO grain. `follow-up`: the maker composer for the
  * oldest unanswered PO. `send`: the drafted PO's send act. `spec`: the first
- * unspecified line's spec act. `open`: the first line's unfold control.
+ * placeholder line's spec act. `open`: the first line's unfold control.
  * `release`: the Pieces head's own `Release for authorization` entry, held or
  * not (FR5 F5-1).
  */
@@ -290,7 +290,21 @@ export type FfeActLanding = 'claim' | 'follow-up' | 'send' | 'spec' | 'open' | '
  */
 export type FfeActLandingDetail = FfeActLanding | { act: FfeActLanding; itemId: string };
 
-const SPEC_THE_UNSPECIFIED = /^Spec the \d+ unspecified$/;
+/**
+ * US-21 T-3 — the count of lines with no product yet, as every surface prints
+ * it (ticket, region head, band, letterhead strip). The band parses it back
+ * (`lens-band-derivation.ts`), so the word lives here once.
+ */
+export function placeholderCount(n: number): string {
+  return `${n} ${n === 1 ? 'placeholder' : 'placeholders'}`;
+}
+
+/** The Pieces own act and the band row's act for those lines. */
+function fillThePlaceholders(n: number): string {
+  return `Fill the ${placeholderCount(n)}`;
+}
+
+const FILL_THE_PLACEHOLDERS = /^Fill the \d+ placeholders?$/;
 
 /**
  * FR4 522-3 — the Pieces landing an act's printed name asks for, so a
@@ -303,7 +317,7 @@ export function ffeActLandingOf(label: string): FfeActLanding | null {
   if (label === NEED_ACT_LABELS.po_unsent) return 'send';
   if (label === 'Open the pieces') return 'open';
   if (label === 'Release for authorization') return 'release';
-  return SPEC_THE_UNSPECIFIED.test(label) ? 'spec' : null;
+  return FILL_THE_PLACEHOLDERS.test(label) ? 'spec' : null;
 }
 
 // ── The stage's own act (D1) ─────────────────────────────────────────────────
@@ -463,9 +477,9 @@ export function ownAct(stage: SectionKey, facts: OwnActFacts): OwnAct | null {
     case 'project':
       if (facts.unspecifiedCount > 0) {
         return act(
-          `Spec the ${facts.unspecifiedCount} unspecified`,
+          fillThePlaceholders(facts.unspecifiedCount),
           ACT_TARGET_IDS.piecesHead,
-          'Spec the {N} unspecified',
+          'Fill the {N} placeholders',
         );
       }
       if (facts.releaseEligible) {
@@ -575,7 +589,7 @@ export const STANDING_ROW_ACTS: Readonly<
   owed: { label: 'Nudge {first name}', targetId: null },
   install_passed: { label: 'Set dates', targetId: ACT_TARGET_IDS.installWindow },
   blocked: { label: 'Open the pieces', targetId: ACT_TARGET_IDS.piecesHead },
-  unspecified: { label: 'Spec the {N} unspecified', targetId: ACT_TARGET_IDS.piecesHead },
+  unspecified: { label: 'Fill the {N} placeholders', targetId: ACT_TARGET_IDS.piecesHead },
   po_silence: { label: NEED_ACT_LABELS.po_unacknowledged, targetId: ACT_TARGET_IDS.piecesHead },
 };
 
@@ -585,6 +599,8 @@ export function standingRowActLabel(
   kind: StandingRowKind,
   { firstName = null, count = 0 }: { firstName?: string | null; count?: number } = {},
 ): string {
+  // `{N} placeholders` agrees with its count, as the own act prints it.
+  if (kind === 'unspecified') return fillThePlaceholders(count);
   const first = firstName?.trim();
   return STANDING_ROW_ACTS[kind].label
     .replace('{first name}', first || 'the client')

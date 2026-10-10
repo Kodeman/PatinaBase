@@ -67,6 +67,12 @@ export async function POST(req: NextRequest) {
           .in('id', productIds)
           .select('id');
 
+        // One product a line names refuses the whole statement
+        // (guard_products_referenced_delete, 00758, check_violation), so
+        // nothing is deleted: say the guard's sentence (T-61 F10).
+        if (error?.code === '23514') {
+          return NextResponse.json({ error: error.message }, { status: 409 });
+        }
         if (error) return serverError(error.message);
 
         const successIds = new Set((data ?? []).map((r: { id: string }) => r.id));

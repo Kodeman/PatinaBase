@@ -13,7 +13,7 @@ const getSupabase = () => createBrowserClient();
  * a mode, so every consumer read a configured piece as `standard`.
  */
 const PRODUCT_FIELDS =
-  'id, name, brand, price_retail, price_trade, images, source_url, status, category, configuration_mode, configuration_summary, layer, owner_user_id, studio_id, created_at';
+  'id, name, brand, finish, price_retail, price_trade, images, source_url, status, category, configuration_mode, configuration_summary, layer, owner_user_id, studio_id, created_at';
 
 /**
  * The columns field-grain search can match on (R88). `brand` IS the maker

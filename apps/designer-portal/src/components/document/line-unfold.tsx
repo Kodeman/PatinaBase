@@ -15,8 +15,12 @@
  * and changing it means voiding the instrument and superseding it.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { useVendor, type StudioPurchaseRow } from '@patina/supabase';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useArchiveProjectSelection,
+  useVendor,
+  type StudioPurchaseRow,
+} from '@patina/supabase';
 import { OrderPaper } from '@/components/portal/procurement/order-paper';
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
@@ -27,7 +31,7 @@ import {
   useAssignLineRoom,
   useDocumentRooms,
 } from '@/hooks/use-document-rooms';
-import { deriveLineStamp } from '@/lib/document/stamp-derivation';
+import { deriveLineStamp, lineStageInputFromRow } from '@/lib/document/stamp-derivation';
 import { deriveProcurementLifecycle } from '@/lib/document/procurement-lifecycle';
 import { ProcurementTrail } from './procurement-trail';
 import {
@@ -42,7 +46,7 @@ import {
   type DocumentActionVariant,
 } from './document-action';
 import { PieceArtifactPlate } from './piece-artifact-plate';
-import { LABEL_CLS } from './line-unfold/cell';
+import { FIELD_CLS, LABEL_CLS } from './line-unfold/cell';
 import { TheBuyCell } from './line-unfold/the-buy-cell';
 import { QuoteCell } from './line-unfold/quote-cell';
 import { OrderCell } from './line-unfold/order-cell';
@@ -65,6 +69,103 @@ const softLockSentence = (auth: LineAuthorization) =>
   auth.track === 'none'
     ? null
     : `on authorization № ${auth.number} — void & supersede to change`;
+
+/** R1-F29 / a8: a line on an instrument or a PO is not removed; it changes. */
+const RELEASED_REMOVE_REFUSAL =
+  'Released lines change through Record a change.';
+/** A line on an unsent draft is not released yet; it comes off the draft. */
+const DRAFT_REMOVE_REFUSAL =
+  'This line is on a draft authorization. Take it off the draft first.';
+/** archive_project_selection's floor (00435:530). */
+const MIN_REMOVE_REASON = 5;
+/** The RPC's refusal for an authorized or ordered line, before and after D8. */
+const RELEASED_REFUSAL_RE = /authorized or ordered|released lines change/i;
+
+/**
+ * Remove one line, with a reason. Mounted only while asking, so the archive
+ * hook is not called by every unfold. The line leaves the paper on success
+ * (the FF&E queries refetch); undo arrives with D8.
+ */
+function RemoveLineForm({
+  itemId,
+  projectId,
+  onCancel,
+  onRefused,
+}: {
+  itemId: string;
+  projectId: string;
+  onCancel: () => void;
+  onRefused: () => void;
+}) {
+  const archive = useArchiveProjectSelection();
+  const reasonRef = useRef<HTMLInputElement>(null);
+  useEffect(() => reasonRef.current?.focus(), []);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const trimmed = reason.trim();
+  const enough = trimmed.length >= MIN_REMOVE_REASON;
+
+  const submit = () => {
+    if (!enough || archive.isPending) return;
+    setError(null);
+    archive
+      .mutateAsync({ selectionId: itemId, projectId, reason: trimmed })
+      .catch((e: unknown) => {
+        const message = (e as { message?: string } | null)?.message ?? '';
+        if (RELEASED_REFUSAL_RE.test(message)) onRefused();
+        else setError(message || 'The line could not be removed.');
+      });
+  };
+
+  return (
+    <div
+      data-testid="line-remove-form"
+      className="mt-1 flex flex-wrap items-center gap-x-2 border-l border-[var(--color-pearl)] pl-2.5"
+    >
+      <input
+        ref={reasonRef}
+        aria-label="Why remove this line"
+        placeholder="why this line goes"
+        value={reason}
+        disabled={archive.isPending}
+        onChange={(e) => setReason(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') submit();
+          if (e.key === 'Escape') onCancel();
+        }}
+        className={`${FIELD_CLS} min-w-0 flex-1 border-b border-[var(--color-pearl)]`}
+      />
+      <DocumentAction
+        actionKey="confirm-remove-ffe-line"
+        surfaceKey="project"
+        regionKey="ffe-line-remove"
+        variant="secondary"
+        disabled={!enough}
+        title={enough ? undefined : `A reason of ${MIN_REMOVE_REASON} characters or more`}
+        loading={archive.isPending}
+        loadingLabel="Removing…"
+        onClick={submit}
+      >
+        Remove
+      </DocumentAction>
+      <DocumentAction
+        actionKey="cancel-remove-ffe-line"
+        surfaceKey="project"
+        regionKey="ffe-line-remove"
+        variant="tertiary"
+        disabled={archive.isPending}
+        onClick={onCancel}
+      >
+        Keep it
+      </DocumentAction>
+      {error && (
+        <p role="alert" className="w-full text-[11px] text-[var(--color-terracotta-ink)]">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function LineUnfold({
   item,
@@ -95,7 +196,9 @@ export function LineUnfold({
   canEditSelection?: boolean;
   showArtifactPlate?: boolean;
 }) {
-  const stamp = deriveLineStamp(item);
+  // The unfold reads only the trade and receiving stamps, which no piece
+  // changes, so a labor line's piece is not looked up here.
+  const stamp = deriveLineStamp({ ...item, stage: lineStageInputFromRow(item) });
   const po = item.purchase_order ?? null;
   // R7: one derivation, read by the trail here and by the orders book.
   const lifecycle = useMemo(() => deriveProcurementLifecycle(item), [item]);
@@ -116,6 +219,13 @@ export function LineUnfold({
   const [paperOpen, setPaperOpen] = useState(false);
   const [inspectionOpen, setInspectionOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // R1-F29: removing asks for a reason; a line on an instrument or a PO is
+  // refused in place (a8), the same sentence the RPC's refusal maps to.
+  const [removing, setRemoving] = useState<'asking' | 'refused' | null>(null);
+  const onOrder = Boolean(item.purchase_order_id ?? po);
+  const removeGated = auth.track !== 'none' || onOrder;
+  const removeRefusal =
+    auth.track === 'draft' && !onOrder ? DRAFT_REMOVE_REFUSAL : RELEASED_REMOVE_REFUSAL;
 
   // C-03: once a status move lands, the next act stands in at once rather
   // than waiting on the refetch; the PO's own status takes over when it
@@ -338,8 +448,9 @@ export function LineUnfold({
         <ClaimActs claims={openClaims as { id: string; state: string }[]} />
       )}
 
-      {/* C-30: the line's exceptions — clock, path, substitution — and
-          "Something's wrong". Goods only; trade work runs its own journey. */}
+      {/* C-30: the line's exceptions — clock, path, substitution — and, once
+          ordered, "Something's wrong". Goods only; trade work runs its own
+          journey. */}
       {!isTradeLine && <LineExceptions item={item} projectId={projectId} auth={auth} />}
 
       {/* R25: room assignment, in the unfold's quiet grammar. */}
@@ -365,7 +476,7 @@ export function LineUnfold({
             aria-label="Assign to room"
             className="bg-transparent text-[11px] text-[var(--color-charcoal)] outline-none disabled:opacity-60"
           >
-            <option value="unassigned">Unsorted</option>
+            <option value="unassigned">Not in a room yet</option>
             <option value="throughout">Throughout</option>
             {(rooms ?? []).map((r) => (
               <option key={r.id} value={`room:${r.id}`}>
@@ -418,6 +529,17 @@ export function LineUnfold({
         >
           Add note
         </DocumentAction>
+        {/* A Trade Scope presence line belongs to its scope document; it
+            leaves with the scope, never from here. */}
+        {canEditSelection && !isTradeLine && (
+          <DocumentAction
+            actionKey="remove-ffe-line"
+            variant="tertiary"
+            onClick={() => setRemoving(removeGated ? 'refused' : 'asking')}
+          >
+            Remove this line
+          </DocumentAction>
+        )}
         <DocumentAction
           actionKey="fold-ffe-line"
           variant="tertiary"
@@ -426,6 +548,20 @@ export function LineUnfold({
           Fold
         </DocumentAction>
       </DocumentActionGroup>
+
+      {removing === 'refused' && (
+        <p role="status" className="mt-1 text-[11px] text-[var(--color-charcoal)]">
+          {removeRefusal}
+        </p>
+      )}
+      {removing === 'asking' && (
+        <RemoveLineForm
+          itemId={item.id}
+          projectId={projectId}
+          onCancel={() => setRemoving(null)}
+          onRefused={() => setRemoving('refused')}
+        />
+      )}
 
       {/* D4 inside the paper: the shared procurement panels carry shadow-xl
           in the old zones — strip it here without touching them (R3). */}
@@ -436,7 +572,8 @@ export function LineUnfold({
             onClose={() => setPaperOpen(false)}
             vendor={vendor}
             project={{ id: projectId, name: projectName }}
-            ffeItems={[item]}
+            // The paper's room is a name; the row's is the {id, name} join.
+            ffeItems={[{ ...item, room: item.room?.name ?? undefined }]}
           />
         )}
         {po && (

@@ -50,7 +50,6 @@ import {
   type PhaseStatus,
 } from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
-import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { useMarginSheet } from '@/hooks/use-margin-sheet';
 import {
@@ -162,6 +161,7 @@ import {
   ffeActLandingOf,
   householdDisplayName,
   ownAct,
+  placeholderCount,
 } from '@/lib/document/act-names';
 import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending, landRecordPayment } from '@/lib/document/registry';
 import {
@@ -233,10 +233,10 @@ import { money } from '@/lib/document/project-commerce';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { selectUndrawnVendorPayments } from '@/lib/document/vendor-payouts';
 import {
-  deriveLineStamp,
   OPEN_DAMAGE_CLAIM_STATES,
-  type LineStampInput,
+  type LineStampRow,
 } from '@/lib/document/stamp-derivation';
+import { buildRoomTicketLines } from '@/lib/document/pieces/live-lines';
 import { deriveTableComposition } from '@/lib/document/table-derivation';
 import { useTablePin } from '@/components/document/worktable/use-table-pin';
 import { ReleaseLift } from '@/components/document/worktable/release-lift';
@@ -299,19 +299,19 @@ interface ProjectVitalsRecord {
 }
 
 /**
- * The FF&E columns the ticket counts: the stamp machine's own input, plus the
- * two fields the ticket reads directly — which room a line belongs to, and
- * whether it carries a product yet.
+ * The FF&E columns the ticket counts: the stamp machine's own row (D1's
+ * columns included), plus which room a line belongs to.
  */
-interface TicketFFERow extends LineStampInput {
+type TicketFFERow = LineStampRow & {
+  id: string;
   project_room_id?: string | null;
-  product_id?: string | null;
   removed_at?: string | null;
+  design_disposition?: string | null;
   /** `damage_claims!ffe_item_id(id, state, created_at)` — the embed
-   *  `use-project-v2.ts:192` already selects. `LineStampInput` reads only the
+   *  `use-project-v2.ts:192` already selects. The stamp reads only the
    *  state; the rail's Pieces value reads the date beside it. */
   item_claims?: { state: string; created_at?: string | null }[] | null;
-}
+};
 
 /**
  * R108 — the header speaks the resolver's selection and its target in the
@@ -638,18 +638,11 @@ function ProjectTicketFacts({
   const purchaseOrdersQuery = usePurchaseOrders({ projectId });
   const moneyRead = useMoneyLadder(projectId);
 
+  // US-21 D1: the stamp itself, so the ticket and the stamps can never count
+  // different lines. T-61 F7: the Build room's live lines, and only a piece
+  // counts as a placeholder, as on the overview head and its rooms.
   const lines = useMemo<TicketLine[]>(
-    () =>
-      (ffeQuery.data ?? [])
-        .filter((item) => item.removed_at == null)
-        .map((item) => ({
-          stamp: deriveLineStamp(item).kind,
-          roomId: item.project_room_id ?? null,
-          // The same test the FF&E ledger's own "Spec the N unspecified"
-          // leader runs, so the ticket's numerator and the region's act can
-          // never count different lines.
-          specified: Boolean(item.product_id),
-        })),
+    () => buildRoomTicketLines(ffeQuery.data),
     [ffeQuery.data],
   );
 
@@ -1172,18 +1165,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     );
   }, [proposalFeedback, liveProposal?.items?.length]);
 
-  // D11 (ratified R19): picking up the document starts the timer (chaining out any running
-  // one); putting down releases it through the log strip. Projects only —
-  // time attaches to project rows (00177 FK).
-  useHoldDocument(
-    row?.project_id
-      ? {
-          projectId: row.project_id,
-          projectName: row.title,
-          phaseKey: row.current_phase ?? null,
-        }
-      : null,
-  );
+  // The time hold (D11) lives in ./layout.tsx (US-21 D14), so the spec book,
+  // boards, plans and pieces under this document keep it held.
 
   // Which settled phase is unfolded (R66 review) — generalizes the old
   // proposal-only unfold so ANY completed phase can be clicked open.
@@ -2559,7 +2542,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     withLifecycle: true,
   }) as {
     data:
-      | (InstallReadingPiece & { product_id?: string | null; removed_at?: string | null })[]
+      | (InstallReadingPiece & TicketFFERow)[]
       | undefined;
   };
   const ownActWindow = useInstallWindow(ownActProjectId || undefined);
@@ -2616,7 +2599,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     }
     if (bandSection === 'proposal' && !liveProposalStatus) return undefined;
     const family = familyLabel(bandHousehold);
-    const unspecified = (ownActPieces ?? []).filter((item) => !item.product_id).length;
+    // US-21 D1: the lines the paper stamps PLACEHOLDER, and only those.
+    // T-61 F7: live pieces only, as the ticket and the overview count them.
+    const unspecified = buildRoomTicketLines(ownActPieces).filter(
+      (line) => !line.specified,
+    ).length;
     const act = ownAct(bandSection, {
       inquiryOpen: bandLeadStatus === 'new' || bandLeadStatus === 'viewed',
       firstMissingEssential: null,
@@ -2657,7 +2644,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       tier: act.tier,
       sentence:
         bandSection === 'project' && unspecified > 0
-          ? `${unspecified} ${unspecified === 1 ? 'line' : 'lines'} unspecified.`
+          ? `${placeholderCount(unspecified)}.`
           : act.targetId === ACT_TARGET_IDS.countersign
             ? sentProposalSignedLine(family === 'the client' ? null : clientShortName(family))
             : (repair?.sentence ??
@@ -3040,6 +3027,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     spreadSection === 'project' ||
     spreadSection === 'install' ||
     spreadSection === 'care';
+  // R24 — a file dropped on the section lands in its folio strip, which only
+  // the install and care spreads print. Anywhere else the drop is refused
+  // rather than held for a strip that is not there (T-33d).
+  const sectionTakesFiles =
+    !!row.project_id && (spreadSection === 'install' || spreadSection === 'care');
   // W4a — the Finalize table: the LEGACY proposal in the client's hands. Its
   // head, its leader, its Offer facets and its one shelf stand only here.
   //
@@ -3528,13 +3520,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             tabIndex={-1}
             className="scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             onDragOver={(e) => {
-              if (!row.project_id || !e.dataTransfer?.types?.includes('Files')) return;
+              if (!sectionTakesFiles || !e.dataTransfer?.types?.includes('Files')) return;
               e.preventDefault();
               setSectionDrag(true);
             }}
             onDragLeave={() => setSectionDrag(false)}
             onDrop={(e) => {
-              if (!row.project_id) return;
+              if (!sectionTakesFiles) return;
               e.preventDefault();
               setSectionDrag(false);
               const files = Array.from(e.dataTransfer.files ?? []);
@@ -3716,6 +3708,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   <VisitsBlock projectId={row.project_id} />
                   <FFESection
                     projectId={row.project_id}
+                    docId={id}
                     projectName={row.title}
                     mode="project"
                     projectStatus={row.project_status}
@@ -3727,9 +3720,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     sectionKey="project"
                     clientUserId={row.client_profile_id}
                     clientName={row.client_name}
-                    folioDrop={folioDrop}
-                    onFolioDropConsumed={() => setFolioDrop(null)}
-                    sectionDragOver={sectionDrag}
                     releaseLeaderElsewhere={deliveryProcurement}
                     onReleaseOffered={
                       deliveryProcurement || oneVoice ? setReleaseOffered : undefined
@@ -4018,7 +4008,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {/* D5 (US-19): Record a change — the router every doorway dispatches
-          `document:open-record-a-change` to. Self-gated on `ask-the-paper`. */}
+          `document:open-record-a-change` to. Self-gated on `ask-the-paper` or
+          `one-voice`, except the Pieces head's door (T-61 F6). */}
       {row.engagement_kind === 'project' && row.project_id && (
         <RecordAChangeSheet projectId={row.project_id} clientName={row.client_name} />
       )}

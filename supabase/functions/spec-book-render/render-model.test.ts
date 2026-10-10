@@ -5,14 +5,20 @@ import {
   assertRejects,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
+  alsoInText,
   buildAudienceRenderModel,
   canonicalStringify,
   MAX_RENDER_ITEMS,
+  quantityText,
   RenderModelError,
   sha256Hex,
   SPEC_BOOK_AUDIENCES,
 } from "./render-model.ts";
-import { configuredFurniture, frozenSnapshot } from "./test-fixtures.ts";
+import {
+  configuredFurniture,
+  frozenSnapshot,
+  piecesItems,
+} from "./test-fixtures.ts";
 
 const context = {
   revisionNumber: 1,
@@ -644,4 +650,126 @@ Deno.test("snapshot limits and requested-audience boundary fail closed", async (
     RenderModelError,
     "was not frozen",
   );
+});
+
+// ── US-21 T-32: unit, need label, labor and rooms (00735's keys) ────────────
+
+function piecesBook() {
+  const base = frozenSnapshot();
+  return frozenSnapshot({ items: [...base.items, ...piecesItems()] });
+}
+
+Deno.test("a placed line prints its unit, need label and also-in line; labor is marked", async () => {
+  const model = await buildAudienceRenderModel(
+    piecesBook(),
+    "internal",
+    context,
+  );
+  const oak = model.items.find((item) => item.id === "item-oak")!;
+  const labor = model.items.find((item) => item.id === "item-oak-install")!;
+
+  assertEquals(oak.quantity, 913);
+  assertEquals(oak.unit, "sq_ft");
+  assertEquals(quantityText(oak.quantity!, oak.unit), "913 sq ft");
+  assertEquals(oak.needLabel, "Main floor");
+  assertEquals(oak.name, "White oak floor, satin Bona finish");
+  assertEquals(oak.lineKind, undefined);
+  assertEquals(oak.roomName, "Living Room");
+  assertEquals(oak.placements, [
+    { roomName: "Hall", quantity: 120 },
+    { roomName: "Living Room", quantity: 320 },
+    { roomName: "Dining", quantity: 210, areaNote: "to the bay" },
+    { roomName: "Kitchen", quantity: 180 },
+  ]);
+  assertEquals(
+    alsoInText(oak),
+    "ALSO IN HALL · DINING · KITCHEN · 320 SQ FT HERE",
+  );
+  // Read from another room, the share and that room's area note follow.
+  assertEquals(
+    alsoInText({ ...oak, roomName: "Dining" }),
+    "ALSO IN HALL · LIVING ROOM · KITCHEN · 210 SQ FT HERE · TO THE BAY",
+  );
+
+  assertEquals(labor.lineKind, "labor");
+  assertEquals(quantityText(labor.quantity!, labor.unit), "913 sq ft");
+  assertEquals(labor.placements, undefined);
+  assertEquals(alsoInText(labor), null);
+});
+
+// ── T-60b: counted units (roll, box, hour, lot) read plural for any
+// quantity but 1 ────────────────────────────────────────────────────────
+
+Deno.test("quantityText pluralizes counted units but leaves measures alone", () => {
+  assertEquals(quantityText(9, "roll"), "9 rolls");
+  assertEquals(quantityText(1, "roll"), "1 roll");
+  assertEquals(quantityText(913, "sq_ft"), "913 sq ft");
+});
+
+Deno.test("each edition carries only the piece keys its allow-list admits", async () => {
+  const snapshot = piecesBook();
+  const read = async (audience: (typeof SPEC_BOOK_AUDIENCES)[number]) => {
+    const model = await buildAudienceRenderModel(snapshot, audience, context);
+    return {
+      oak: model.items.find((item) => item.id === "item-oak")!,
+      labor: model.items.find((item) => item.id === "item-oak-install")!,
+    };
+  };
+
+  const client = await read("client");
+  assertEquals(client.oak.unit, "sq_ft");
+  assertEquals(client.oak.placements?.length, 4);
+  assertEquals(client.oak.needLabel, undefined);
+  assertEquals(client.labor.lineKind, "labor");
+
+  const vendor = await read("vendor");
+  assertEquals(vendor.oak.unit, "sq_ft");
+  assertEquals(vendor.oak.needLabel, undefined);
+
+  const installer = await read("installer");
+  assertEquals(installer.oak.needLabel, "Main floor");
+  assertEquals(installer.oak.placements?.length, 4);
+
+  // The care edition prints no quantity, so no unit and no room shares.
+  const care = await read("care");
+  assertEquals(care.oak.quantity, null);
+  assertEquals(care.oak.unit, undefined);
+  assertEquals(care.oak.placements, undefined);
+  assertEquals(care.oak.needLabel, undefined);
+  assertEquals(care.labor.lineKind, "labor");
+
+  // A parent id never reaches an external edition.
+  for (const audience of ["client", "vendor", "installer", "care"] as const) {
+    const model = await buildAudienceRenderModel(snapshot, audience, context);
+    assertEquals(JSON.stringify(model).includes("parentFfeItemId"), false);
+  }
+});
+
+Deno.test("default-valued piece keys leave every edition exactly as before", async () => {
+  const base = frozenSnapshot();
+  // A line as it would read if 00735's NULLIFs let its defaults through.
+  const spelledOut = frozenSnapshot({
+    items: base.items.map((item) => ({
+      ...item,
+      unit: "each",
+      lineKind: "goods",
+      needLabel: item.name,
+      placements: [{
+        roomName: (item.room as { name: string }).name,
+        quantity: item.quantity,
+      }],
+    })),
+  });
+  for (const audience of SPEC_BOOK_AUDIENCES) {
+    const before = await buildAudienceRenderModel(base, audience, context);
+    const after = await buildAudienceRenderModel(spelledOut, audience, context);
+    for (const item of after.items) {
+      for (const key of ["unit", "needLabel", "lineKind", "placements"]) {
+        assertEquals(key in item, false, `${audience} ${item.id} has ${key}`);
+      }
+      assertEquals(alsoInText(item), null);
+    }
+    if (audience === "internal") continue; // internal keeps the raw item
+    assertEquals(canonicalStringify(after), canonicalStringify(before));
+  }
 });

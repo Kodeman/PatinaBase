@@ -192,7 +192,7 @@ export function MobileBar() {
       ? [
           {
             key: 'planroom',
-            label: 'Plan room',
+            label: 'Drawing sets',
             href: `/doc/${documentProjectId}/plans`,
           },
           {

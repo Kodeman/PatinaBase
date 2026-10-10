@@ -387,6 +387,8 @@ export interface ProcurementItemRow {
   item_type: 'fixed' | 'allowance' | 'tbd';
   status: FFEItemStatus;
   quantity: number;
+  /** The line's unit (00729): `each`, `sq_ft`, … */
+  unit?: string | null;
   unit_price_cents: number | null;
   line_total_cents: number | null;
   vendor_name: string | null;
@@ -1481,6 +1483,12 @@ export interface ReceivingInspectionItemInput {
   condition?: ReceivingInspectionLineCondition;
   /** Whether the damage or shortage was noted on the bill of lading. */
   notedOnBol?: boolean;
+  /**
+   * The rooms this delivery covers, for a line placed in several rooms
+   * (00754/00756, D7 case 2). They add up to this delivery's receipt, or to
+   * all the rooms still lack. Absent: the server fills the rooms in order.
+   */
+  placements?: Array<{ placementId: string; quantity: number }>;
 }
 
 export type ReceivingInspectionLineCondition = 'good' | 'damaged' | 'short' | 'wrong';
@@ -1556,6 +1564,32 @@ export function autoDraftDamageClaimDescription(
 }
 
 // ─── QUERY HOOKS ───────────────────────────────────────────────────────────
+
+/**
+ * How much each room placement has already received over every earlier
+ * delivery (project_ffe_placement_receipts, 00754), keyed by placement id.
+ * Receiving pre-fills a delivery's rooms with what each still lacks.
+ * Query key: `['ffe-placement-receipts', placementIds]`.
+ */
+export function useFfePlacementReceipts(placementIds: string[]) {
+  return useQuery({
+    queryKey: ['ffe-placement-receipts', placementIds],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('project_ffe_placement_receipts')
+        .select('placement_id, quantity')
+        .in('placement_id', placementIds);
+      if (error) throw error;
+      const received: Record<string, number> = {};
+      for (const row of (data ?? []) as Array<{ placement_id: string; quantity: number }>) {
+        received[row.placement_id] = (received[row.placement_id] ?? 0) + row.quantity;
+      }
+      return received;
+    },
+    enabled: placementIds.length > 0,
+  });
+}
 
 /**
  * Fetches receiving_inspections for the authenticated designer. Joins the
@@ -1865,6 +1899,7 @@ export function useCreateReceivingInspection() {
             ...(perLine
               ? { condition: item.condition, notedOnBol: item.notedOnBol ?? false }
               : {}),
+            ...(item.placements ? { placements: item.placements } : {}),
           })),
           p_outcome: input.outcome,
           p_notes: input.notes ?? null,
@@ -1979,6 +2014,7 @@ export function useCreateReceivingInspection() {
         queryKey: ['po-payments', result.inspection.purchase_order_id],
       });
       queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['ffe-placement-receipts'] });
       // Clean inspections advance linked FF&E rows server-side (status +
       // received_quantity) — refresh both FF&E namespaces when the caller
       // told us which project the PO belongs to.

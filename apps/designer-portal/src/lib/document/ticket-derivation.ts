@@ -26,6 +26,7 @@
  * that cannot move, then everything else.
  */
 
+import { placeholderCount } from './act-names';
 import type { SectionKey } from './desk-derivation';
 import { DAY_MONTH_FORMAT, WEEKDAY_FORMAT } from './dates';
 import { paperRegionsForSection, type DocumentIndexKey } from './document-index';
@@ -141,7 +142,8 @@ export interface TicketLine {
   stamp: LineStampKind;
   roomId: string | null;
   /** Whether the line carries its spec. The Spec row's numerator, and the
-   *  Pieces row's `unspecified` count. */
+   *  Pieces row's `unspecified` count. US-21 D1: false exactly when `stamp`
+   *  is `placeholder`, so the placeholder count and the stamps agree. */
   specified: boolean;
 }
 
@@ -408,6 +410,9 @@ function countPieces(lines: readonly TicketLine[]): PieceCounts {
       case 'trade_pending':
         counts.ordered += 1;
         break;
+      case 'specced':
+      case 'ready':
+      case 'released':
       case 'specified':
       case 'quoted':
       case 'approved':
@@ -485,7 +490,7 @@ function piecesRow(input: TicketInput): TicketRow {
     parts.push(`${counts.awaiting} awaiting a decision`);
   }
   if (counts.notOrdered > 0) parts.push(`${counts.notOrdered} not ordered yet`);
-  if (counts.unspecified > 0) parts.push(`${counts.unspecified} unspecified`);
+  if (counts.unspecified > 0) parts.push(placeholderCount(counts.unspecified));
   // §3.3's project specimen puts the unanswered PO on this row, so the row
   // prints it: a guide sentence quoting a clause the map does not carry is the
   // exact failure `deriveTicketLeader` exists to make impossible.
@@ -561,7 +566,7 @@ function specRow(input: TicketInput): TicketRow {
     input.pieces.settled && counts.unspecified > 0
       ? {
           rank: 'piece-stuck',
-          phrase: `${counts.unspecified} unspecified`,
+          phrase: placeholderCount(counts.unspecified),
           standingSince: null,
         }
       : null;

@@ -1534,17 +1534,27 @@ BEGIN
   FROM public.proposal_board_items
   WHERE id = 'e83e0000-0000-4000-8000-000000000003';
 
-  DELETE FROM public.products
-  WHERE id = 'e8230000-0000-4000-8000-000000000002';
-  ASSERT (SELECT product_id IS NULL
+  -- US-21 D11 (00758) replaced "deletion nulls product_id" with "a referenced
+  -- product cannot be hard-deleted"; the issued copy stays immutable either way.
+  v_error := NULL;
+  BEGIN
+    DELETE FROM public.products
+    WHERE id = 'e8230000-0000-4000-8000-000000000002';
+  EXCEPTION WHEN check_violation THEN
+    v_error := SQLERRM;
+  END;
+  ASSERT v_error = 'A product on a line can''t be deleted. Merge it into the one you keep.',
+    format('catalog deletion of an issued board product must be refused, got %L', v_error);
+  ASSERT (SELECT product_id = 'e8230000-0000-4000-8000-000000000002'
                  AND client_product_snapshot = v_snapshot
           FROM public.proposal_items
           WHERE id = 'e8330000-0000-4000-8000-000000000001'),
-    'catalog deletion must detach the live item pointer and preserve its copy';
-  ASSERT (SELECT product_id IS NULL AND data = v_board_product_data
+    'a refused catalog deletion must keep the item pointer and its copy';
+  ASSERT (SELECT product_id = 'e8230000-0000-4000-8000-000000000002'
+                 AND data = v_board_product_data
           FROM public.proposal_board_items
           WHERE id = 'e83e0000-0000-4000-8000-000000000002'),
-    'catalog deletion must preserve issued board product data';
+    'a refused catalog deletion must keep issued board product data';
 
   DELETE FROM public.vendors
   WHERE id = 'e8220000-0000-4000-8000-000000000001';

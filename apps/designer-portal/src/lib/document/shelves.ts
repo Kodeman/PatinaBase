@@ -46,8 +46,8 @@ export interface ShelfDefinition {
 const ALL_SHELVES: readonly ShelfDefinition[] = [
   {
     key: 'planroom',
-    title: 'Plan room',
-    eyebrow: 'Plan room · Drawing set',
+    title: 'Drawing sets',
+    eyebrow: 'Drawing sets · Drawing set',
     kind: 'leaf',
     subject: 'project',
     routeSegment: 'plans',

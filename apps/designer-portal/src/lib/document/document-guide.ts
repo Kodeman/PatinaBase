@@ -288,6 +288,21 @@ export function isRestState(
   }
 }
 
+/**
+ * Fix-now #12 — `Everything ordered is moving.` is a vacuous truth over zero
+ * lines. The Pieces row of the ticket says which case holds: a read that has
+ * not answered prints nothing, and no pieces prints `Nothing ordered yet.`
+ * `null` keeps the rest sentence (no ticket, or the job has lines). The two
+ * values are `piecesRow`'s own words in ticket-derivation.ts.
+ */
+function projectRestHeadline(ticketRows: readonly TicketRow[] | null | undefined): string | null {
+  const pieces = ticketRows?.find((r) => r.key === 'pieces');
+  if (!pieces) return null;
+  if (pieces.value === 'Reading…') return '';
+  if (pieces.value === 'No pieces yet') return 'Nothing ordered yet.';
+  return null;
+}
+
 /** `ffe-section.tsx` — the FF&E region heading, the project act's landing. */
 const ffeRegionAnchorId = (projectId: string) => `ffe-region-heading-${projectId}`;
 
@@ -1120,7 +1135,9 @@ function deriveGuide(
       headline:
         stage === 'install'
           ? installHeadline!
-          : (leader?.headline ?? rest.headline),
+          : ((stage === 'project' ? projectRestHeadline(ticketRows) : null) ??
+            leader?.headline ??
+            rest.headline),
       action: restAction,
     }, inputFacts, row.client_name);
   }

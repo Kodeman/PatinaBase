@@ -19,6 +19,10 @@
  * from the lines: a damaged or wrong line suggests Damaged, a short count or
  * short line suggests Partial, otherwise Clean.
  *
+ * US-21 T-54: a line placed in two or more rooms asks which rooms the
+ * delivery covers, pre-filled in placement order; the split rides the
+ * receipt as `placements` (00754/00756). A single-room line asks nothing.
+ *
  * Mirrors the slide-from-right pattern used by the Sprint 1 OrderAssistant.
  */
 
@@ -28,13 +32,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import {
   useCreateReceivingInspection,
+  useFfePlacementReceipts,
   useProcurementItems,
+  useProjectRoomPlacements,
+  useProjectRooms,
   type ReceivingInspectionItemInput,
   type ReceivingInspectionOutcome,
 } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
 import { Button, IconButton, Input, Select, Textarea } from '@/components/ui/controls';
+import { unitWord } from '@/components/document/pieces/placement-chips';
+import type { FfeRoomPlacement } from '@patina/types';
 
 type LineCondition = NonNullable<ReceivingInspectionItemInput['condition']>;
 
@@ -67,6 +76,146 @@ export async function uploadInspectionPhoto(file: File, projectId: string): Prom
     throw new Error(body?.error?.message ?? `${file.name} could not be uploaded.`);
   }
   return assetId;
+}
+
+// ─── Receiving by room (US-21 T-54; D7 phase 3, case 2) ─────────────────────
+
+/** One room a placed line is in, in placement order. */
+export interface ReceiptRoom {
+  placementId: string;
+  roomName: string;
+  /** The room's share of the line. */
+  placed: number;
+  /** What earlier deliveries already brought the room. */
+  received: number;
+}
+
+const roomLacks = (room: ReceiptRoom) => Math.max(room.placed - room.received, 0);
+
+/**
+ * What the rooms must add up to: this delivery, or all the rooms still lack
+ * when the delivery is larger (the waste, 913 over 830, is in no room).
+ */
+export function receiptRoomsTarget(rooms: ReceiptRoom[], receipt: number): number {
+  return Math.min(
+    Math.max(receipt, 0),
+    rooms.reduce((sum, room) => sum + roomLacks(room), 0),
+  );
+}
+
+/**
+ * The delivery spread over the rooms in placement order, each up to what it
+ * still lacks (00754's default): 500 of the oak floor → Hall 120, Living 320,
+ * Dining 60.
+ */
+export function fillReceiptRooms(rooms: ReceiptRoom[], receipt: number): Record<string, number> {
+  let left = Math.max(receipt, 0);
+  const split: Record<string, number> = {};
+  for (const room of rooms) {
+    const take = Math.min(left, roomLacks(room));
+    split[room.placementId] = take;
+    left -= take;
+  }
+  return split;
+}
+
+/** Why an edited split cannot be recorded, or null when it can. */
+export function receiptRoomsProblem(
+  rooms: ReceiptRoom[],
+  receipt: number,
+  split: Record<string, number>,
+): string | null {
+  const over = rooms.find((room) => (split[room.placementId] ?? 0) > roomLacks(room));
+  if (over) return `${over.roomName} can take ${roomLacks(over)} more.`;
+  const total = rooms.reduce((sum, room) => sum + (split[room.placementId] ?? 0), 0);
+  const target = receiptRoomsTarget(rooms, receipt);
+  if (total !== target) {
+    return `The rooms add up to ${total}; this delivery brought ${target} to place.`;
+  }
+  return null;
+}
+
+/**
+ * Which rooms a delivery covers, for a line placed in two or more rooms.
+ * Pre-filled in placement order, each room editable; the rooms add up to the
+ * delivery. A single-room line asks nothing (it shows no prompt).
+ */
+export function ReceiptRoomsPrompt({
+  lineName,
+  unit,
+  rooms,
+  receipt,
+  split,
+  disabled,
+  onChange,
+}: {
+  lineName: string;
+  unit: string | null | undefined;
+  rooms: ReceiptRoom[];
+  /** This delivery's count for the line (the received count less earlier ones). */
+  receipt: number;
+  split: Record<string, number>;
+  disabled?: boolean;
+  onChange: (split: Record<string, number>) => void;
+}) {
+  if (rooms.length < 2 || receipt <= 0) return null;
+  const word = unitWord(unit);
+  const total = rooms.reduce((sum, room) => sum + (split[room.placementId] ?? 0), 0);
+  const target = receiptRoomsTarget(rooms, receipt);
+  const problem = receiptRoomsProblem(rooms, receipt, split);
+  return (
+    <fieldset className="mt-2 border-t border-[var(--border-default)] pt-2">
+      <legend
+        className="text-[var(--text-muted)]"
+        style={{
+          fontFamily: 'var(--font-meta)',
+          fontSize: '0.6rem',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}
+      >
+        Which rooms does it cover?
+      </legend>
+      <div className="mt-1 flex flex-col gap-1.5">
+        {rooms.map((room) => (
+          <div key={room.placementId} className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[0.78rem] text-[var(--text-primary)]">
+                {room.roomName}
+              </div>
+              <div className="text-[0.65rem] text-[var(--text-muted)]">
+                {roomLacks(room)} {word} to come
+              </div>
+            </div>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={roomLacks(room)}
+              value={split[room.placementId] ?? 0}
+              disabled={disabled}
+              aria-label={`${room.roomName} share of ${lineName}`}
+              onChange={(e) => {
+                const raw = Number.parseInt(e.target.value, 10);
+                onChange({
+                  ...split,
+                  [room.placementId]: Number.isNaN(raw) ? 0 : Math.max(0, raw),
+                });
+              }}
+              className="w-[76px] text-right"
+            />
+          </div>
+        ))}
+      </div>
+      <p
+        aria-live="polite"
+        className="mt-1.5 text-[0.65rem]"
+        style={{ color: problem ? 'var(--color-terracotta-ink)' : 'var(--text-muted)' }}
+      >
+        {problem ?? `${total} of ${target} ${word} in rooms`}
+      </p>
+    </fieldset>
+  );
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -142,6 +291,9 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   // Sparse: untouched lines are good and not noted.
   const [conditions, setConditions] = useState<Record<string, LineCondition>>({});
   const [notedOnBol, setNotedOnBol] = useState<Record<string, boolean>>({});
+  // T-54 — edited room splits, keyed like `received`. Sparse: an untouched
+  // line spreads its delivery over its rooms in placement order.
+  const [roomSplits, setRoomSplits] = useState<Record<string, Record<string, number>>>({});
   const [photos, setPhotos] = useState<InspectionPhoto[]>([]);
   const photosRef = useRef<InspectionPhoto[]>([]);
   photosRef.current = photos;
@@ -165,6 +317,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     setSubmitError(null);
     setConditions({});
     setNotedOnBol({});
+    setRoomSplits({});
     photosRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl));
     setPhotos([]);
     setPhotoError(null);
@@ -213,6 +366,51 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   // The PO's project: its lines name it; the caller's stands in while they load.
   const poProjectId = items[0]?.project_id ?? projectId;
 
+  // T-54 — the rooms each placed line is in, in placement order, with what
+  // earlier deliveries already brought them (00754).
+  const placementsQuery = useProjectRoomPlacements(poProjectId ?? null);
+  const projectRoomsQuery = useProjectRooms(poProjectId ?? '');
+  const placementsByLine = useMemo(() => {
+    const onPo = new Set(items.map((it) => it.id));
+    const byLine = new Map<string, FfeRoomPlacement[]>();
+    for (const placement of placementsQuery.data ?? []) {
+      if (!onPo.has(placement.ffeItemId)) continue;
+      byLine.set(placement.ffeItemId, [...(byLine.get(placement.ffeItemId) ?? []), placement]);
+    }
+    for (const [lineId, placements] of byLine) {
+      if (placements.length < 2) byLine.delete(lineId);
+      else placements.sort((a, b) => a.sortOrder - b.sortOrder);
+    }
+    return byLine;
+  }, [items, placementsQuery.data]);
+  const roomedPlacementIds = useMemo(
+    () => [...placementsByLine.values()].flat().map((placement) => placement.id),
+    [placementsByLine],
+  );
+  const earlierReceipts = useFfePlacementReceipts(roomedPlacementIds);
+  const roomsFor = (itemId: string): ReceiptRoom[] => {
+    const placements = placementsByLine.get(itemId);
+    // Until the earlier receipts are read, ask nothing: the server fills.
+    if (!placements || !earlierReceipts.data) return [];
+    const roomNames = new Map<string, string>(
+      ((projectRoomsQuery.data ?? []) as Array<{ id: string; name: string }>).map((room) => [
+        room.id,
+        room.name,
+      ]),
+    );
+    return placements.map((placement) => ({
+      placementId: placement.id,
+      roomName: roomNames.get(placement.projectRoomId) ?? 'Room',
+      placed: placement.quantity,
+      received: earlierReceipts.data?.[placement.id] ?? 0,
+    }));
+  };
+  // This delivery's count for a line: the received count less earlier ones.
+  const receiptFor = (it: { id: string; quantity: number; received_quantity?: number | null }) =>
+    receivedFor(it.id, it.quantity) - (it.received_quantity ?? 0);
+  const splitFor = (it: { id: string; quantity: number; received_quantity?: number | null }) =>
+    roomSplits[it.id] ?? fillReceiptRooms(roomsFor(it.id), receiptFor(it));
+
   const addPhotos = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     if (!poProjectId) {
@@ -247,6 +445,25 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
       setSubmitError('A clean receipt needs every line in good condition.');
       return;
     }
+    // T-54 — a placed line's rooms add up to its delivery.
+    const roomedLines = items
+      .map((it) => ({ it, rooms: roomsFor(it.id), receipt: receiptFor(it) }))
+      .filter(({ rooms, receipt }) => rooms.length >= 2 && receipt > 0);
+    for (const { it, rooms, receipt } of roomedLines) {
+      const problem = receiptRoomsProblem(rooms, receipt, splitFor(it));
+      if (problem) {
+        setSubmitError(`${it.name}: ${problem}`);
+        return;
+      }
+    }
+    const placementsFor = (itemId: string) => {
+      const line = roomedLines.find(({ it }) => it.id === itemId);
+      if (!line) return undefined;
+      const split = splitFor(line.it);
+      return line.rooms
+        .filter((room) => (split[room.placementId] ?? 0) > 0)
+        .map((room) => ({ placementId: room.placementId, quantity: split[room.placementId] }));
+    };
     try {
       const photoAssetIds = photos.map((p) => p.assetId);
       const result = await createInspection.mutateAsync({
@@ -259,13 +476,18 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
         // the hook records the check-in through record_project_ffe_inspection.
         items:
           items.length > 0
-            ? items.map((it) => ({
-                ffeItemId: it.id,
-                receivedQuantity: receivedFor(it.id, it.quantity),
-                orderedQuantity: it.quantity,
-                condition: conditionFor(it.id),
-                notedOnBol: notedOnBol[it.id] ?? false,
-              }))
+            ? items.map((it) => {
+                const placements = placementsFor(it.id);
+                return {
+                  ffeItemId: it.id,
+                  receivedQuantity: receivedFor(it.id, it.quantity),
+                  orderedQuantity: it.quantity,
+                  condition: conditionFor(it.id),
+                  notedOnBol: notedOnBol[it.id] ?? false,
+                  // T-54 — the rooms this delivery covers (00756).
+                  ...(placements ? { placements } : {}),
+                };
+              })
             : undefined,
         // R7 (The Document) — item-grain claim attribution: one drafted
         // claim per line not in good condition; those lines carry the stamp.
@@ -478,6 +700,8 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                                   ? 0
                                   : Math.max(0, Math.min(it.quantity, raw));
                                 setReceived((prev) => ({ ...prev, [it.id]: next }));
+                                // A new count re-spreads the rooms in order.
+                                setRoomSplits(({ [it.id]: _dropped, ...rest }) => rest);
                               }}
                               className="w-[76px] text-right"
                             />
@@ -521,6 +745,18 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                               </label>
                             )}
                           </div>
+                          {/* T-54 — a line in two or more rooms names them. */}
+                          <ReceiptRoomsPrompt
+                            lineName={it.name}
+                            unit={it.unit}
+                            rooms={roomsFor(it.id)}
+                            receipt={receiptFor(it)}
+                            split={splitFor(it)}
+                            disabled={createInspection.isPending}
+                            onChange={(split) =>
+                              setRoomSplits((prev) => ({ ...prev, [it.id]: split }))
+                            }
+                          />
                         </div>
                       );
                     })}

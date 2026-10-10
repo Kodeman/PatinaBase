@@ -22,7 +22,8 @@ import { hideDevOverlays } from "../helpers/hide-dev-overlays";
  *       group-total sentence on its new paper before save;
  *   R6  a held order's preview prints "Draft order" and takes no number;
  *   G5  a letter stuck in `sending` for 11 minutes offers Send again, and sends;
- *   G6  a shipped line with an open damage exception reads "Claim open".
+ *   G6  a shipped line with an open damage exception lists it in its unfold
+ *       (the next-act reading's "Claim open" was retired by US-21 T-31).
  *
  * LOCAL STACK ONLY: psql.ts refuses a non-local Postgres. Preconditions and the
  * run line are in playwright.buying.config.ts (supabase reset; po-send and
@@ -1149,7 +1150,7 @@ COMMIT;`);
     );
   });
 
-  test("G6 · a shipped line with an open damage exception reads Claim open", async ({
+  test("G6 · a shipped line with an open damage exception carries it in its unfold", async ({
     page,
   }, testInfo) => {
     test.setTimeout(300_000);
@@ -1158,15 +1159,14 @@ COMMIT;`);
     await hideDevOverlays(page);
     await signIn(page, MEMBER_EMAIL);
 
-    await openDocument(page, G6, G6_LINE.name);
-    await page.getByRole("button", { name: "Read by next act" }).click();
-    const reading = page.locator('[data-ffe-reading-body="next"]');
-    await expect(reading).toBeVisible({ timeout: 30_000 });
-    const headId = await reading
-      .locator(`#ffe-selection-${G6_LINE.id} td`)
-      .first()
-      .getAttribute("headers");
-    await expect(reading.locator(`th#${headId}`)).toHaveText("Claim open · 1");
+    // The next-act reading that printed "Claim open" was retired with the
+    // US-21 T-31 overview; the line's own unfold still lists the exception.
+    await openLine(page, G6, G6_LINE.name);
+    const damageRow = page
+      .getByTestId("line-exceptions")
+      .getByTestId("exception-row")
+      .filter({ hasText: /^Damage/ });
+    await expect(damageRow).toHaveCount(1, { timeout: 30_000 });
     await shot(page, testInfo, "g6-claim-open");
 
     expect(failures, "edge-function / RPC failures seen by the page").toEqual(

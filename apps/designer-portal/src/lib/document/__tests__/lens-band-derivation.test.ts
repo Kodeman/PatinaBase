@@ -25,7 +25,8 @@ import {
   LENS_LINE2_PX_PER_CHAR,
   LENS_MONO_PX_PER_CHAR,
 } from '../lens-constants';
-import type { TicketRow } from '../ticket-derivation';
+import type { MoneyLadder } from '../money-ladder';
+import { deriveTicket, type TicketInput, type TicketRow } from '../ticket-derivation';
 
 /**
  * The Vandersteen specimen (`artifacts/document-lens-proposal-2026-08-28/
@@ -365,7 +366,7 @@ describe('rankStanding · every exception, worst first (OD-8)', () => {
       }),
       ticketRow('spec', {
         rank: 'piece-stuck',
-        phrase: '2 unspecified',
+        phrase: '2 placeholders',
         standingSince: null,
       }),
     ];
@@ -766,7 +767,7 @@ describe('the seeded paper fits its measure at both ends (D-B24 twin)', () => {
       standingSince: '2026-08-22',
     }),
     ticketRow('pieces', { rank: 'piece-stuck', phrase: '1 damaged', standingSince: null }),
-    ticketRow('spec', { rank: 'piece-stuck', phrase: '2 unspecified', standingSince: null }),
+    ticketRow('spec', { rank: 'piece-stuck', phrase: '2 placeholders', standingSince: null }),
   ];
 
   const ranked = rankStanding(SEEDED_TICKET, SEEDED);
@@ -1301,7 +1302,7 @@ const chen = (over: Partial<LensBandInput> = {}) =>
 
 const OWN: LensOwnAct = {
   key: 'own',
-  label: 'Spec the 3 unspecified',
+  label: 'Fill the 3 placeholders',
   targetId: 'document-act-pieces-head',
   tier: 'scored',
   sentence: 'Three pieces still need a spec before they can be ordered.',
@@ -1350,7 +1351,7 @@ describe('deriveNext · D2’s order', () => {
     );
     const next = deriveNext({ standing: [], setup, ownAct: OWN, clientFirstName: null, closed: false });
     expect(next?.rowKey).toBeNull();
-    expect(next?.act.label).toBe('Spec the 3 unspecified');
+    expect(next?.act.label).toBe('Fill the 3 placeholders');
     expect(next?.act.targetId).toBe('document-act-pieces-head');
     expect(next?.sentence).toBe(OWN.sentence);
     expect(next?.shortSentence).toBe(OWN.shortSentence);
@@ -1594,11 +1595,11 @@ describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
 
   it('498-c — prints the region’s status sentence beside the own act where it states one', () => {
     const { voice } = deriveLensBand(
-      input({ ownAct: { ...OWN, sentence: '3 lines unspecified.', shortSentence: null } }),
+      input({ ownAct: { ...OWN, sentence: '3 placeholders.', shortSentence: null } }),
     );
     expect(voice.lead).toBe('Next ─');
-    expect(voice.sentence).toBe('3 lines unspecified.');
-    expect(voice.next?.act.label).toBe('Spec the 3 unspecified');
+    expect(voice.sentence).toBe('3 placeholders.');
+    expect(voice.next?.act.label).toBe('Fill the 3 placeholders');
   });
 
   it('500-5 — while the own act is not known, line 2 prints the NEXT eyebrow and nothing else', () => {
@@ -1684,7 +1685,7 @@ describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
         clientFirstName: 'Mei',
         ownAct: OWN,
         ticket: [
-          ticketRow('spec', { rank: 'piece-stuck', phrase: '3 unspecified', standingSince: null }),
+          ticketRow('spec', { rank: 'piece-stuck', phrase: '3 placeholders', standingSince: null }),
           ticketRow('pieces', {
             rank: 'piece-stuck',
             phrase: 'NA-2026-077 unanswered, 6 days',
@@ -1703,7 +1704,7 @@ describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
       }),
     );
     const act = (key: string) => voice.standing.find((item) => item.key === key)?.act?.label;
-    expect(act('ticket:spec')).toBe('Spec the 3 unspecified');
+    expect(act('ticket:spec')).toBe('Fill the 3 placeholders');
     expect(act('ticket:pieces')).toBe('Follow up with the maker');
     expect(voice.inputs[0].act?.label).toBe('Nudge Mei');
     // Borrowed acts never choose Next.
@@ -1898,14 +1899,14 @@ describe('deriveLensBand · FR3: every row carries its act (F3-8, 512-6)', () =>
     expect(landOn).toHaveBeenCalledWith('document-act-pieces-head');
   });
 
-  it('`N unspecified` carries `Spec the N unspecified` on an install paper, where the own act is another', () => {
-    const { voice, landOn } = rowsOf([ticketRow('spec', stuck('2 unspecified'))], {
+  it('`N placeholders` carries `Fill the N placeholders` on an install paper, where the own act is another', () => {
+    const { voice, landOn } = rowsOf([ticketRow('spec', stuck('2 placeholders'))], {
       spreadKind: 'install',
       ownAct: ASK,
     });
     expect(voice.next?.act.label).toBe('Ask the maker for a date');
     const spec = voice.standing.find((item) => item.key === 'ticket:spec');
-    expect(spec?.act?.label).toBe('Spec the 2 unspecified');
+    expect(spec?.act?.label).toBe('Fill the 2 placeholders');
     spec?.act?.onAct();
     expect(landOn).toHaveBeenCalledWith('document-act-pieces-head');
     // A row's act never chooses Next.
@@ -2010,11 +2011,11 @@ describe('deriveLensBand · FR3: one need, one row (F3-9, 512-7)', () => {
       input({
         now: NOW,
         ownAct: OWN,
-        ticket: [ticketRow('spec', { rank: 'piece-stuck', phrase: '3 unspecified', standingSince: null })],
+        ticket: [ticketRow('spec', { rank: 'piece-stuck', phrase: '3 placeholders', standingSince: null })],
         setup: [{ kind: 'target_date_unset', onAct: jest.fn() }],
       }),
     );
-    expect(voice.next?.act.label).toBe('Spec the 3 unspecified');
+    expect(voice.next?.act.label).toBe('Fill the 3 placeholders');
     expect(voice.next?.rowKey).toBe('ticket:spec');
     expect(voice.next?.sentence).toBe(OWN.sentence);
     expect(voice.standingCount).toBe(1);
@@ -2026,7 +2027,7 @@ describe('deriveLensBand · FR3: one need, one row (F3-9, 512-7)', () => {
         needs: [CHEN_NEEDS[1], SCHEDULE_NEED],
         ownAct: OWN,
         landOn: jest.fn(),
-        ticket: [ticketRow('spec', { rank: 'piece-stuck', phrase: '3 unspecified', standingSince: null })],
+        ticket: [ticketRow('spec', { rank: 'piece-stuck', phrase: '3 placeholders', standingSince: null })],
         setup: [
           { kind: 'no_client_linked', onAct: jest.fn() },
           { kind: 'target_date_unset', onAct: jest.fn() },
@@ -2036,7 +2037,7 @@ describe('deriveLensBand · FR3: one need, one row (F3-9, 512-7)', () => {
     );
     expect(voice.next?.rowKey).toBe('need:pay-0');
     expect(voice.standing.find((item) => item.key === 'ticket:spec')?.act?.label).toBe(
-      'Spec the 3 unspecified',
+      'Fill the 3 placeholders',
     );
     expect(standingDoorLabel(voice.standingCount)).toBe('Standing · 5');
   });
@@ -2090,7 +2091,7 @@ describe('deriveLensBand · FR3: Cedar’s band sentence is D6’s reading (F3-1
       needs: [
         need('sched-0', 'schedule_unconfigured', 'Name the phases for this project', 'Open the schedule'),
       ],
-      ticket: [ticketRow('spec', { rank: 'piece-stuck', phrase: '2 unspecified', standingSince: null })],
+      ticket: [ticketRow('spec', { rank: 'piece-stuck', phrase: '2 placeholders', standingSince: null })],
       setup: [
         { kind: 'target_date_unset', onAct: jest.fn() },
         { kind: 'budget_band_unset', onAct: jest.fn() },
@@ -2847,5 +2848,110 @@ describe('deriveLensBand · FR7 F7-2 / F7-3: a sent proposal with no act prints 
     expect(voice.next).toBeNull();
     expect(voice.lead).toBeNull();
     expect(voice.sentence).toBe('Sent today — waiting on Mei');
+  });
+});
+
+// US-21 T-3 (CONTRACT §1.1 #4, §3.8 rule 3) — the Spec clause is printed by
+// `ticket-derivation` and parsed back by the band. The word and the regex move
+// together, or the band's Standing row drops in silence. These rows come from
+// `deriveTicket` itself, never a retyped phrase.
+describe('deriveLensBand · the Spec row survives `placeholders` (one-voice)', () => {
+  const rung = (word: string) => ({ cents: null, note: `no ${word} yet`, word });
+  const ladder: MoneyLadder = {
+    budget: rung('budget'),
+    plan: rung('plan'),
+    authorized: rung('authorized'),
+    moved: rung('moved'),
+    owed: rung('owed'),
+    notDrawn: rung('not drawn'),
+  };
+  const ticketOf = (placeholders: number, specced: number): TicketRow[] => {
+    const ticket: TicketInput = {
+      section: 'project',
+      phase: null,
+      project: true,
+      rooms: { settled: true, list: [{ id: 'dining', name: 'Dining' }] },
+      pieces: {
+        settled: true,
+        lines: [
+          ...Array.from({ length: placeholders }, () => ({
+            stamp: 'specified' as const,
+            roomId: 'dining',
+            specified: false,
+          })),
+          ...Array.from({ length: specced }, () => ({
+            stamp: 'specified' as const,
+            roomId: 'dining',
+            specified: true,
+          })),
+        ],
+      },
+      drawings: { settled: true, sheetCount: 0 },
+      boards: { settled: true, count: 0 },
+      money: {
+        settled: true,
+        failed: false,
+        ladder,
+        owedDays: null,
+        undrawnKind: null,
+        owedSince: null,
+      },
+      dates: { settled: true, schedule: null },
+      people: { settled: true, callSheetEnabled: true, rosterCount: 0 },
+      now: NOW,
+    };
+    return deriveTicket(ticket);
+  };
+  // The page's one-voice own act: `ownAct` from act-names, as page.tsx passes it.
+  const projectOwnAct = (count: number): LensOwnAct => {
+    const own = ownAct('project', {
+      inquiryOpen: false,
+      firstMissingEssential: null,
+      proposalState: null,
+      clientFirstName: null,
+      unspecifiedCount: count,
+      releaseEligible: false,
+      install: null,
+    });
+    return { key: `own:${own!.targetId}`, ...own!, sentence: null, onAct: jest.fn() };
+  };
+
+  it.each([
+    [2, '2 placeholders', 'Fill the 2 placeholders'],
+    [1, '1 placeholder', 'Fill the 1 placeholder'],
+  ] as const)(
+    '%i: the ticket prints `%s`, the own act and the Standing row both read `%s`',
+    (count, phrase, label) => {
+      const ticket = ticketOf(count, 3);
+      expect(ticket.find((row) => row.key === 'spec')?.exception?.phrase).toBe(phrase);
+      expect(ticket.find((row) => row.key === 'pieces')?.value).toBe(`3 not ordered yet · ${phrase}`);
+
+      const own = projectOwnAct(count);
+      expect(own.label).toBe(label);
+      const { voice } = deriveLensBand(input({ now: NOW, ticket, ownAct: own, landOn: jest.fn() }));
+      const spec = voice.standing.find((item) => item.key === 'ticket:spec');
+      expect(spec?.act?.label).toBe(label);
+      // 512-7: the row carrying the own act is Next's row.
+      expect(voice.next?.rowKey).toBe('ticket:spec');
+      expect(voice.next?.act.label).toBe(label);
+    },
+  );
+
+  it('derives {kind, count} from the sentence alone where the own act is another', () => {
+    const landOn = jest.fn();
+    const { voice } = deriveLensBand(
+      input({
+        spreadKind: 'install',
+        now: NOW,
+        ticket: ticketOf(4, 0),
+        ownAct: { key: 'own:open', label: 'Open the pieces', targetId: 'document-act-pieces-head', tier: 'scored', sentence: null, onAct: jest.fn() },
+        landOn,
+      }),
+    );
+    const spec = voice.standing.find((item) => item.key === 'ticket:spec');
+    // Count 4 is read back out of `4 placeholders`, not taken from the own act.
+    expect(spec?.act?.label).toBe('Fill the 4 placeholders');
+    spec?.act?.onAct();
+    expect(landOn).toHaveBeenCalledWith('document-act-pieces-head');
   });
 });

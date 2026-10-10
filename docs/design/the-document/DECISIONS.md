@@ -11361,3 +11361,35 @@ This retires the ambient-motion ban and every restatement of it: **R15**'s "noth
 **Slice 0b** is its own unflagged slice between 0a and 1 — after 0a because it depends on R157 and R158, before 1 because the install reading assumes setup is already off the band. Its two repairs: `No client linked — attach one` leaves the letterhead and becomes one `SETUP` row in the standing sheet on live jobs, suppressed on `completed` and `on_hold`, its words repeated once as Message's reason; and setup paints clay ink, plain tier, under `SETUP` at the sheet's foot — never terracotta, never Next while any other act is open, the `NEEDS SETUP · 1` chip deleted. **Deferred**, named so they are not re-proposed blind: the handoff line and any ownership sentence naming a person (needs a record); Desk prose; verbs on the folded seam (`FoldSeam` is one button with no sibling slot); `ack_ship_date` in the reading; the strata mark's V11 status; the I114 mapping. The full dissent table is `delivery/rulings.md` §6.
 
 *Entries add: R164 · last id = R164*
+
+### R165 · I25 reopened — drag plus `Move to room…` — Q8 — 2026-10-09
+
+**Ruled by Kody (US-21, the Build room; `artifacts/pieces-building-room-2026-10-08/synthesis/direction.md` §"Rulings" Q8, CONTRACT §6 step 7).** I25 ("Dissolve Track 1 — in-document parity", 2026-06-12, above) is **reopened**: a piece line can move between rooms.
+
+**Ruling.** Yes, with `Move to room…` as the visible act — for keyboard, touch and locked lines (R3) — and drag as the extra gesture on top of it, never the only path. Placements lock at Released and change through Record a change (V15 Q4).
+
+*Entries add: R165 · last id = R165*
+
+---
+
+## Open — needs design ruling (2026-10-09, the Build room QA wave)
+
+Four findings from the T-60 QA wave that Kody has not yet ruled on. Recorded here per `artifacts/pieces-building-room-2026-10-08/build/CONTRACT.md` §6 step 7 and story log #28; none is a ruling, so none takes an R-id.
+
+### O10 · F23 — the admin can't open a studio-layer product (RLS) — 2026-10-09
+
+**Finding (T-60, QA wave).** The admin portal cannot open a studio-layer product because RLS refuses the read. Not yet ruled whether admin needs a read path here or the product should route through a different surface.
+
+### O11 · F25 — a draft PO stamps the line `ordered` / RELEASED TO MAKER — 2026-10-09
+
+**Finding (T-60, QA wave).** Pre-existing, from 00703/00709/00718: a PO that is still a draft already moves the line's stamp to `ordered` and prints `RELEASED TO MAKER`, ahead of the PO actually being sent. Not yet ruled whether the stamp should wait for send.
+
+### O12 · F26 — `po-send` numbers a PO before uploading it — 2026-10-09
+
+**Finding (T-60, QA wave).** `po-send` assigns the PO number before the upload step completes, so a failed upload can leave a numbered PO with no file. Not yet ruled whether numbering should move after a successful upload.
+
+### O13 · F27 — the invoice picker offers a Specced line the release held out — 2026-10-09
+
+**Finding (T-60, QA wave).** The invoice picker lists a line that is Specced but was left out of the release. This may be intended for studio-direct buys, where no release is expected before billing — not yet ruled.
+
+*Entries add: O10 · O11 · O12 · O13 · last id = O13 (this section)*

@@ -27,9 +27,9 @@ export function PlanRoomLeaf({
   const bundle = room.data;
 
   if (room.isError) {
-    return <ShelfNote>Plan room could not be read.</ShelfNote>;
+    return <ShelfNote>Drawing sets could not be read.</ShelfNote>;
   }
-  if (!bundle) return <ShelfNote>Reading the plan room…</ShelfNote>;
+  if (!bundle) return <ShelfNote>Reading the drawing sets…</ShelfNote>;
 
   const lastFiledAt = bundle.prints.reduce<string | null>(
     (latest, print) =>
@@ -80,7 +80,7 @@ export function PlanRoomLeaf({
 
       <ShelfDoor>
         <Link href={`/doc/${routeId}/plans`} className="block">
-          Open the plan room →
+          Open the drawing sets →
         </Link>
       </ShelfDoor>
     </>

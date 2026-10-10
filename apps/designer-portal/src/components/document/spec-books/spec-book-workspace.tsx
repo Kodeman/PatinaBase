@@ -29,6 +29,7 @@ import {
   type SpecBookIssueType,
   type SpecBookWorkItem,
 } from "@patina/supabase";
+import type { FfeAssignmentScope } from "@patina/types";
 import {
   Button,
   FilterPill,
@@ -37,6 +38,7 @@ import {
   Textarea,
 } from "@/components/ui/controls";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useAssignLineRoom, useDocumentRooms } from "@/hooks/use-document-rooms";
 import { useCanSeeMargin } from "@/hooks/use-can-see-margin";
 import { specBookEvents } from "@/lib/analytics/spec-book-events";
 import { resolveClientPortalOrigin } from "@/lib/client-portal-url";
@@ -62,7 +64,7 @@ const AUDIENCES: Array<{
   {
     id: "client",
     label: "Client",
-    description: "Selection, client pricing, care",
+    description: "Line, client pricing, care",
   },
   { id: "vendor", label: "Vendor", description: "Order-facing facts" },
   {
@@ -251,16 +253,95 @@ function isDimensionsObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+// The workbench selects `*` from project_ffe_items, so the line's scope is on
+// the row even though SpecBookWorkItem does not name it.
+function roomChoiceOf(item: SpecBookWorkItem): string {
+  const scope = (item as SpecBookWorkItem & {
+    assignment_scope?: FfeAssignmentScope | null;
+  }).assignment_scope;
+  if (scope === "room" && item.project_room_id) {
+    return `room:${item.project_room_id}`;
+  }
+  return scope === "throughout" ? "throughout" : "unassigned";
+}
+
+/** The line's room, in the same three choices as the paper's unfold (R25). */
+function LineRoomSelect({
+  item,
+  onAssigned,
+}: {
+  item: SpecBookWorkItem;
+  onAssigned?: () => void;
+}) {
+  const { data: rooms } = useDocumentRooms(item.project_id);
+  const assignRoom = useAssignLineRoom(item.project_id);
+  const current = roomChoiceOf(item);
+  const [chosen, setChosen] = useState<string | null>(null);
+
+  // A refreshed row or a refused write both hand the select back to the row.
+  // Only the turn into a refusal resets: a retry clears isError while its own
+  // write is pending, and the select must keep the new choice until it lands.
+  useEffect(() => setChosen(null), [current]);
+  useEffect(() => {
+    if (assignRoom.isError) setChosen(null);
+  }, [assignRoom.isError]);
+  useEffect(() => {
+    if (assignRoom.isSuccess) onAssigned?.();
+  }, [assignRoom.isSuccess, assignRoom.submittedAt, onAssigned]);
+
+  return (
+    <div className="mb-5">
+      <label className="text-[11px] text-[var(--text-muted)]">
+        Room
+        <Select
+          className="mt-1"
+          value={chosen ?? current}
+          disabled={assignRoom.isPending}
+          onChange={(event) => {
+            const value = event.target.value;
+            const inRoom = value.startsWith("room:");
+            setChosen(value);
+            assignRoom.mutate({
+              itemId: item.id,
+              roomId: inRoom ? value.slice("room:".length) : null,
+              assignmentScope: inRoom
+                ? "room"
+                : (value as "throughout" | "unassigned"),
+            });
+          }}
+        >
+          <option value="unassigned">Not in a room yet</option>
+          <option value="throughout">Throughout</option>
+          {(rooms ?? []).map((room) => (
+            <option key={room.id} value={`room:${room.id}`}>
+              {room.name}
+            </option>
+          ))}
+        </Select>
+      </label>
+      {assignRoom.isError && (
+        <p className="mt-1 text-[11px] text-[var(--color-terracotta-ink)]">
+          {assignRoom.error instanceof Error
+            ? assignRoom.error.message
+            : "The room could not be changed."}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function SelectionEditor({
   item,
   readiness = "checking",
   missingFields = [],
   onSaved,
+  onRoomAssigned,
 }: {
   item: SpecBookWorkItem;
   readiness?: DerivedReadiness;
   missingFields?: readonly string[];
   onSaved?: () => void;
+  onRoomAssigned?: () => void;
 }) {
   const updateSpec = useUpdateProjectFfeSpec();
   const [draft, setDraft] = useState<Record<string, string>>(
@@ -295,7 +376,9 @@ export function SelectionEditor({
       setRawDimensionsText(JSON.stringify(raw, null, 2));
     }
     setFeedback(null);
-  }, [item]);
+    // Keyed on the line and its spec, not the row: a room change refetches
+    // the row and must not wipe a draft the designer has not saved.
+  }, [item.id, item.spec]);
 
   const set = (field: string, value: string) =>
     setDraft((current) => ({ ...current, [field]: value }));
@@ -372,13 +455,13 @@ export function SelectionEditor({
           warranty_notes: draft.warranty_notes?.trim() || null,
         },
       });
-      setFeedback("Selection saved.");
+      setFeedback("Line saved.");
       onSaved?.();
     } catch (error) {
       setFeedback(
         error instanceof Error
           ? error.message
-          : "Selection could not be saved.",
+          : "Line could not be saved.",
       );
     }
   };
@@ -414,7 +497,7 @@ export function SelectionEditor({
   if (!item.spec) {
     return (
       <div className="border border-[var(--color-terracotta)] p-4 text-sm text-[var(--color-terracotta-ink)]">
-        This schedule line has no project selection record. Route or repair it
+        This schedule line has no project line record. Route or repair it
         before editing; the product itself remains safe.
       </div>
     );
@@ -448,7 +531,7 @@ export function SelectionEditor({
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            Project selection · v{item.spec.row_version}
+            Project line · v{item.spec.row_version}
           </p>
           <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
             {item.name}
@@ -456,6 +539,8 @@ export function SelectionEditor({
         </div>
         <ReadinessMark status={readiness} missingFields={missingFields} />
       </div>
+
+      <LineRoomSelect key={item.id} item={item} onAssigned={onRoomAssigned} />
 
       {configuration && (
         <div className="mb-5 border-y border-[var(--color-pearl)] py-3">
@@ -617,7 +702,7 @@ export function SelectionEditor({
       )}
       <div className="mt-5 flex justify-end">
         <Button loading={updateSpec.isPending} onClick={() => void save()}>
-          Save selection
+          Save line
         </Button>
       </div>
     </div>
@@ -1093,7 +1178,11 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
       <header className="sticky top-0 z-20 border-b border-[var(--color-pearl)] bg-[var(--doc-paper)]/95 px-4 py-3 backdrop-blur md:px-8">
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-4">
           <Link
-            href={`/doc/${projectId}`}
+            href={
+              requestedItemId
+                ? `/doc/${projectId}#line-${requestedItemId}`
+                : `/doc/${projectId}`
+            }
             className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             ← {projectName}
@@ -1101,7 +1190,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-heading text-xl">{data.book.title}</h1>
             <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-              Working book · {data.items.length} selections ·{" "}
+              Working book · {data.items.length} lines ·{" "}
               {data.revisions.length} revisions
             </p>
           </div>
@@ -1194,7 +1283,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
           </aside>
 
           <section
-            aria-label="Spec book selections"
+            aria-label="Spec book lines"
             className="border-r border-[var(--color-pearl)]"
           >
             {groups.map((group) => (
@@ -1294,11 +1383,12 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                   item={selectedItem}
                   readiness={derivedReadiness(selectedItem.id)}
                   missingFields={missingReadinessFields(selectedItem.id)}
+                  onRoomAssigned={workbench.refetch}
                 />
               </>
             ) : (
               <p className="py-16 text-center italic text-[var(--text-muted)]">
-                Choose a selection.
+                Choose a line.
               </p>
             )}
           </aside>
@@ -1373,7 +1463,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                 </h2>
                 <p className="mt-1 text-[12px] text-[var(--text-muted)]">
                   {preflight.warnings.length} warnings · {data.items.length}{" "}
-                  selections checked
+                  lines checked
                 </p>
               </div>
             </div>

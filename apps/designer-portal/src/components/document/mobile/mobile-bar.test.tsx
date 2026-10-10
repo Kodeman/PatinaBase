@@ -180,13 +180,13 @@ describe('the More menu · In this document (F49)', () => {
       Array.from(group.querySelectorAll('a, button')).map((row) =>
         row.textContent?.replace('→', ''),
       ),
-    ).toEqual(['Plan room', 'Spec book', 'Boards', 'Call sheet']);
+    ).toEqual(['Drawing sets', 'Spec book', 'Boards', 'Call sheet']);
 
     const labels = Array.from(menu.querySelectorAll('a, button')).map((row) =>
       row.textContent?.replace('→', ''),
     );
     expect(labels.slice(0, 5)).toEqual([
-      'Plan room',
+      'Drawing sets',
       'Spec book',
       'Boards',
       'Call sheet',
@@ -198,7 +198,7 @@ describe('the More menu · In this document (F49)', () => {
     mountBar();
     const menu = openMore();
 
-    expect(menu.getByRole('link', { name: 'Plan room' })).toHaveAttribute(
+    expect(menu.getByRole('link', { name: 'Drawing sets' })).toHaveAttribute(
       'href',
       '/doc/proj-1/plans',
     );
@@ -246,7 +246,7 @@ describe('the Margin door (D-B30)', () => {
     mockCallSheetOn = true;
   });
 
-  it('leads "In this document" with "Margin · N" from activeDoc.marginCount, above Plan room', () => {
+  it('leads "In this document" with "Margin · N" from activeDoc.marginCount, above Drawing sets', () => {
     mountBar({ doc: { ...heldDocument, marginCount: 3 } });
     const menu = openMore();
     const group = menu.getByRole('group', { name: 'In this document' });
@@ -254,7 +254,7 @@ describe('the Margin door (D-B30)', () => {
       row.textContent?.replace('→', ''),
     );
     expect(labels[0]).toBe('Margin · 3');
-    expect(labels.indexOf('Margin · 3')).toBeLessThan(labels.indexOf('Plan room'));
+    expect(labels.indexOf('Margin · 3')).toBeLessThan(labels.indexOf('Drawing sets'));
   });
 
   it('stands even off a project — margin items are not project-keyed like the four doors', () => {
@@ -263,7 +263,7 @@ describe('the Margin door (D-B30)', () => {
     });
     const menu = openMore();
     expect(menu.getByRole('button', { name: 'Margin · 1' })).toBeInTheDocument();
-    expect(menu.queryByRole('link', { name: 'Plan room' })).toBeNull();
+    expect(menu.queryByRole('link', { name: 'Drawing sets' })).toBeNull();
   });
 
   it('is absent when marginCount is unknown (null) — never printed as "Margin · null"', () => {
@@ -578,13 +578,13 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     const panel = sectionsPanel();
     expect(within(panel).getByText('Filed with this job')).toBeInTheDocument();
     // D-B8/F62 — one name for one thing: the sheet's third door says `Boards`.
-    ['Plan room', 'Spec book', 'Boards', 'Call sheet'].forEach((label) => {
+    ['Drawing sets', 'Spec book', 'Boards', 'Call sheet'].forEach((label) => {
       expect(
         within(panel).getByRole('button', { name: label }),
       ).toHaveClass('min-h-11');
     });
 
-    fireEvent.click(within(panel).getByRole('button', { name: 'Plan room' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Drawing sets' }));
     expect(mockRouterPush).toHaveBeenCalledWith('/doc/proj-1/plans');
   });
 
@@ -594,7 +594,7 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     mountBarAndSheets();
     openSections();
     const panel = sectionsPanel();
-    for (const label of ['Plan room', 'Spec book', 'Boards', 'Call sheet']) {
+    for (const label of ['Drawing sets', 'Spec book', 'Boards', 'Call sheet']) {
       const row = within(panel).getByRole('button', { name: label });
       const svg = row.querySelector('svg');
       expect(svg).not.toBeNull();

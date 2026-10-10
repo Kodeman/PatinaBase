@@ -24,6 +24,7 @@ const mockCanRelease: { data: boolean } = { data: false };
 
 jest.mock('@patina/supabase', () => ({
   useVendorQuotes: () => ({ data: [] }),
+  useProjectRoomPlacements: () => ({ data: [] }),
   useCreatePurchaseOrder: () => ({ mutateAsync: mockCreate, isPending: false }),
   useSetPurchaseOrderHeader: () => ({ mutateAsync: mockSetHeader, isPending: false }),
   useSendPurchaseOrder: () => ({ mutateAsync: mockSend, isPending: false }),

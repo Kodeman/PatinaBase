@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,9 +8,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 
 interface AdminDeleteDialogProps {
   open: boolean;
@@ -26,30 +26,49 @@ export function AdminDeleteDialog({
   productName,
 }: AdminDeleteDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleConfirm = async () => {
     setIsSubmitting(true);
+    setError(null);
     try {
       await onConfirm();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete product.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleOpenChange = (next: boolean) => {
+    if (!next) setError(null);
+    onOpenChange(next);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Delete "{productName}"?</DialogTitle>
           <DialogDescription>
-            This action cannot be undone. The product will be permanently removed from the catalog.
+            This action cannot be undone. The product will be permanently
+            removed from the catalog.
           </DialogDescription>
         </DialogHeader>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={handleConfirm} disabled={isSubmitting}>
+          <Button
+            variant="destructive"
+            onClick={handleConfirm}
+            disabled={isSubmitting}
+          >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Delete product
           </Button>

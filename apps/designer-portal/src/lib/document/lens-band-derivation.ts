@@ -1094,8 +1094,8 @@ function paymentProse(
 
 /** F2-7 — the ticket's Pieces clause for a maker's silence. */
 const UNANSWERED_PO = / unanswered, \d+ days?$/;
-/** F2-7 — the ticket's Spec clause. */
-const UNSPECIFIED = /^(\d+) unspecified$/;
+/** F2-7 — the ticket's Spec clause, as `placeholderCount` prints it (US-21 T-3). */
+const PLACEHOLDERS = /^(\d+) placeholders?$/;
 /** FR3 512-6 — the ticket's other clauses, and the guide's blocked input. */
 const DAMAGED = /^\d+ damaged$/;
 const AWAITING = /^\d+ awaiting a decision$/;
@@ -1115,8 +1115,8 @@ function standingRowOf(
     return null;
   }
   if (key === 'ticket:spec') {
-    const unspecified = UNSPECIFIED.exec(sentence);
-    return unspecified ? { kind: 'unspecified', count: Number(unspecified[1]) } : null;
+    const placeholders = PLACEHOLDERS.exec(sentence);
+    return placeholders ? { kind: 'unspecified', count: Number(placeholders[1]) } : null;
   }
   if (key === 'ticket:money') return OWED.test(sentence) ? { kind: 'owed', count: 0 } : null;
   if (key === 'ticket:dates') {
@@ -1136,7 +1136,7 @@ const LENDING_NEED: Partial<Record<StandingRowKind, NeedKind>> = {
  * the one table (`STANDING_ROW_ACTS`). A ticket exception may not mint one
  * (A-11), so the act it carries is the paper's: a need's that already holds
  * the same act (a PO's silence the `po_unacknowledged` need's), the stage's
- * own act where it is the same act (`Spec the 3 unspecified`), else the
+ * own act where it is the same act (`Fill the 3 placeholders`), else the
  * table's, landing through the caller's `landOn`. An input that counts a need
  * carries that need's act. Next is chosen before this and never from a row's
  * act.

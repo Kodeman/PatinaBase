@@ -787,3 +787,22 @@ describe('ProductPickerModal — Quick-create draft URL unfurl (D9)', () => {
     expect(onPick).toHaveBeenCalled();
   });
 });
+
+describe('ProductPickerModal — showPrice (US-21 T-55b, F18)', () => {
+  it('prints the retail price by default, as the proposal callers have it', () => {
+    openLibraryPicker();
+    expect(screen.getByTestId('product-picker-result')).toHaveTextContent('$4,000');
+  });
+
+  it('prints no money when the Spec lens mounts it with showPrice={false}', () => {
+    openLibraryPicker({ showPrice: false, initialTab: 'library' });
+    const dialog = screen.getByTestId('product-picker-modal');
+    expect(screen.getByTestId('product-picker-result')).toBeVisible();
+    expect(dialog.textContent).not.toContain('$');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Quick-create draft' }));
+    expect(screen.queryByTestId('draft-price-input')).not.toBeInTheDocument();
+    expect(screen.queryByText('Retail Price')).not.toBeInTheDocument();
+    expect(dialog.textContent).not.toContain('$');
+  });
+});

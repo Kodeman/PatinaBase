@@ -80,6 +80,8 @@ import {
   numberPurchaseOrder,
   persistSidemarkDefault,
   PO_OUT_OF_SYNC_DETAIL,
+  poLineRoomLabel,
+  type PoLinePlacement,
   type SupplyingLine,
   type SupplyingPurchaseOrder,
   parsePoSendBody,
@@ -149,11 +151,19 @@ interface FfeItemRow {
   id: string;
   name: string;
   quantity: number | null;
+  /** What the quantity counts (00729): each, sq_ft, lin_ft, roll, yard, box, hour, lot. */
+  unit: string | null;
   trade_price_cents: number | null;
   unit_price_cents: number | null;
   notes: string | null;
   ffe_category: string | null;
+  /** 00729: distinguishes a labor line from goods (C-24 COM fallback). */
+  line_kind?: string | null;
+  /** project_ffe_items.link_kind: 'com' pairs a line to its piece (C-24). */
+  link_kind?: string | null;
   room: { id: string; name: string } | null;
+  /** Room placements (00734); two or more name every room on the line. */
+  placements: PoLinePlacement[] | null;
   /** project_ffe_specs embed (UNIQUE ffe_item_id → object, not array). */
   spec: VendorConfigurationSpec | null;
   /** products embed via product_id: the spec fields' fallback (C-06). */
@@ -295,9 +305,12 @@ Deno.serve(async (req: Request) => {
     .from('project_ffe_items')
     .select(
       `
-      id, name, quantity, trade_price_cents, unit_price_cents, notes,
-      ffe_category,
+      id, name, quantity, unit, trade_price_cents, unit_price_cents, notes,
+      ffe_category, line_kind, link_kind,
       room:project_rooms!project_room_id(id, name),
+      placements:project_ffe_placements!ffe_item_id(
+        quantity, sort_order, room:project_rooms!project_room_id(name)
+      ),
       spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
         configuration_id, configuration_snapshot,
         configuration_snapshot_hash, configuration_locked_at,
@@ -352,7 +365,7 @@ Deno.serve(async (req: Request) => {
     supplyingOrders = supplyingData as unknown as SupplyingPurchaseOrder[];
     const { data: linesData, error: linesError } = await admin
       .from('project_ffe_items')
-      .select('purchase_order_id, parent_ffe_item_id')
+      .select('purchase_order_id, parent_ffe_item_id, link_kind')
       .in('purchase_order_id', supplyingOrders.map((order) => order.id))
       .is('removed_at', null);
     if (linesError) console.warn('po-send: supplying lines lookup failed', linesError);
@@ -479,8 +492,9 @@ Deno.serve(async (req: Request) => {
     ];
     return {
       name: item.name,
-      room: item.room?.name ?? null,
+      room: poLineRoomLabel(item.room?.name ?? null, item.placements, item.unit),
       quantity,
+      unit: item.unit,
       unitTradeCents,
       lineTotalCents: unitTradeCents * quantity,
       specNotes: vendorSafeSpecNotes(item.notes),

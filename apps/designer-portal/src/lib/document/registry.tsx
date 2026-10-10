@@ -387,9 +387,9 @@ export const ALL_STUDIO_SURFACES: StudioSurface[] = [
 export const PLAN_ROOM_SURFACE: StudioSurface = {
   key: 'plan-room',
   kind: 'room',
-  label: 'Plan room',
+  label: 'Drawing sets',
   subLabel: 'this project · the current set',
-  aliases: ['plan', 'plan room', 'floor plan', 'plans', 'drawings'],
+  aliases: ['plan', 'plan room', 'floor plan', 'plans', 'drawings', 'drawing sets', 'drawing set'],
   icon: Ruler,
   weight: 'room',
   scope: 'document',

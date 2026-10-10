@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 /**
  * F58 — the paper and the spine's spec-book shelf over ONE row, at one moment.
@@ -7,6 +7,7 @@ import { render, screen } from '@testing-library/react';
  */
 
 let mockItems: Record<string, unknown>[] = [];
+let mockPlacements: Record<string, unknown>[] = [];
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -24,6 +25,8 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
+  useProjectPalettes: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
@@ -40,6 +43,7 @@ jest.mock('@patina/supabase', () => ({
       missingFields: [],
     })),
   }),
+  useProjectRoomPlacements: () => ({ data: mockPlacements }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
   useUnresolvedProcurementExceptions: () => ({ data: [] }),
@@ -126,6 +130,7 @@ import { SpecBookLeaf } from '../spec-book-leaf';
 import { FFESection } from '../../ffe-section';
 import {
   deriveLineStamp,
+  lineStageInputFromRow,
   lineStampLabel,
 } from '@/lib/document/stamp-derivation';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
@@ -153,10 +158,17 @@ const line = (over: Record<string, unknown> = {}) => ({
 const renderLeaf = () =>
   render(<SpecBookLeaf projectId="project-1" rooms={rooms} />);
 
-const renderPaper = () =>
-  render(
+// US-21 Q14 — the paper opens on room rows; Living unfolds to its lines.
+const renderPaper = () => {
+  const view = render(
     <FFESection projectId="project-1" projectName="Chen" mode="project" />,
   );
+  const room = view.container.querySelector<HTMLButtonElement>(
+    '[data-pieces-room="room-1"] button[aria-expanded="false"]',
+  );
+  if (room) fireEvent.click(room);
+  return view;
+};
 
 /** One row per lifecycle state, with the word the ruling gives it. */
 const STATES: { state: string; row: Record<string, unknown>; word: string }[] =
@@ -196,10 +208,27 @@ const STATES: { state: string; row: Record<string, unknown>; word: string }[] =
       row: { status: 'ordered', received_quantity: null },
       word: 'Released to maker',
     },
+    // US-21 D1: before an order the word is the stage (a3, a4). SPECIFIED
+    // never prints.
     {
-      state: 'unspecified',
+      state: 'a name with no product and no maker (a3)',
       row: { status: 'specified', received_quantity: null },
-      word: 'Specified',
+      word: 'Placeholder',
+    },
+    {
+      state: 'a custom piece with a maker and no price (a4)',
+      row: {
+        status: 'specified',
+        received_quantity: null,
+        vendor_name: 'Hollis Millwork',
+        unit_price_cents: 0,
+      },
+      word: 'Specced',
+    },
+    {
+      state: 'a product, a quantity and a client price (a3)',
+      row: { status: 'specified', received_quantity: null, product_id: 'product-1' },
+      word: 'Ready',
     },
     {
       state: 'blocked on a pending decision',
@@ -249,11 +278,92 @@ describe('F58 — one line, one word, on the paper and on the shelf', () => {
   it.each(STATES)(
     '$state prints exactly what the shared derivation says',
     ({ row, word }) => {
-      expect(lineStampLabel(deriveLineStamp(line(row) as never, null).kind)).toBe(
-        word,
-      );
+      const r = line(row);
+      expect(
+        lineStampLabel(
+          deriveLineStamp({ ...r, stage: lineStageInputFromRow(r) } as never, null).kind,
+        ),
+      ).toBe(word);
     },
   );
+
+  it('SPECIFIED never prints on either surface', () => {
+    mockItems = [line({ status: 'specified', received_quantity: null })];
+    const leaf = renderLeaf();
+    expect(screen.queryByText('Specified')).not.toBeInTheDocument();
+    leaf.unmount();
+    renderPaper();
+    expect(screen.queryByText('Specified')).not.toBeInTheDocument();
+  });
+});
+
+describe('US-21 D1 — labor, and the placeholder count', () => {
+  const piece = line({
+    id: 'piece-1',
+    name: 'Manila Hemp wallpaper',
+    status: 'specified',
+    received_quantity: null,
+    product_id: 'product-1',
+    vendor_id: 'vendor-1',
+    quantity: 9,
+    unit_price_cents: 23_000,
+  });
+  const install = line({
+    id: 'labor-1',
+    name: 'Install, wallpaper hanger',
+    status: 'specified',
+    received_quantity: null,
+    vendor_id: 'vendor-2',
+    quantity: 9,
+    unit_price_cents: 8_500,
+    line_kind: 'labor',
+    link_kind: 'labor',
+    parent_ffe_item_id: 'piece-1',
+  });
+
+  it('a labor line reads LABOR beside its stage word, ready with its ready piece', () => {
+    mockItems = [piece, install];
+    const leaf = renderLeaf();
+    expect(screen.getByText('Labor · Ready')).toBeInTheDocument();
+    leaf.unmount();
+
+    renderPaper();
+    // One LABOR stamp, beside the labor line's READY; the piece reads READY alone.
+    expect(screen.getAllByText('Labor')).toHaveLength(1);
+    expect(screen.getAllByText('Ready')).toHaveLength(2);
+  });
+
+  it('a labor line under a piece with no price stays specced', () => {
+    mockItems = [{ ...piece, unit_price_cents: 0 }, install];
+    renderLeaf();
+    expect(screen.getByText('Labor · Specced')).toBeInTheDocument();
+  });
+
+  it('counts exactly the lines it stamps PLACEHOLDER — not a custom line with a maker, not a trade line', () => {
+    mockItems = [
+      line({ id: 'ph-1', name: 'Countertop', status: 'specified', received_quantity: null }),
+      line({
+        id: 'cab-1',
+        name: 'Custom cabinet',
+        status: 'specified',
+        received_quantity: null,
+        vendor_name: 'Hollis Millwork',
+        unit_price_cents: 0,
+      }),
+      line({
+        id: 'trade-1',
+        name: 'Tile setting',
+        status: 'specified',
+        received_quantity: null,
+        trade_scope_document_id: 'pcd-1',
+      }),
+      piece,
+    ];
+    renderPaper();
+    expect(screen.getAllByText('Placeholder')).toHaveLength(1);
+    expect(screen.getAllByText(/\b1 placeholder\b/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\b[2-9] placeholders\b/)).not.toBeInTheDocument();
+  });
 });
 
 describe('the shelf leaf stopped printing the raw column', () => {
@@ -303,5 +413,65 @@ describe('the shelf leaf stopped printing the raw column', () => {
 
     expect(screen.getByText('Released to maker')).toBeInTheDocument();
     expect(screen.queryByText(/STAGE_CONFIG:/)).not.toBeInTheDocument();
+  });
+});
+
+describe('US-21 T-32 — the unit and the also-in line on the shelf', () => {
+  const fourRooms = [
+    { id: 'room-hall', name: 'Hall', budget_cents: 0 },
+    { id: 'room-1', name: 'Living Room', budget_cents: 0 },
+    { id: 'room-dining', name: 'Dining', budget_cents: 0 },
+    { id: 'room-kitchen', name: 'Kitchen', budget_cents: 0 },
+  ];
+  const placed = (roomId: string, quantity: number, sortOrder: number) => ({
+    id: `pl-${roomId}`,
+    ffeItemId: 'oak-1',
+    projectRoomId: roomId,
+    quantity,
+    areaNote: null,
+    sortOrder,
+  });
+
+  afterEach(() => {
+    mockPlacements = [];
+  });
+
+  it('prints the oak floor once, in its primary room, with its unit and the others named under it', () => {
+    mockItems = [
+      line({
+        id: 'oak-1',
+        name: 'White oak floor, satin Bona finish',
+        status: 'specified',
+        received_quantity: null,
+        quantity: 913,
+        unit: 'sq_ft',
+        line_total_cents: 1_049_500,
+      }),
+    ];
+    mockPlacements = [
+      placed('room-hall', 120, 0),
+      placed('room-1', 320, 1),
+      placed('room-dining', 210, 2),
+      placed('room-kitchen', 180, 3),
+    ];
+    render(<SpecBookLeaf projectId="project-1" rooms={fourRooms} />);
+
+    expect(screen.getAllByText('White oak floor, satin Bona finish')).toHaveLength(1);
+    expect(
+      screen.getByText('ALSO IN HALL · DINING · KITCHEN · 320 SQ FT HERE'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/913 sq ft · \$10,495$/)).toBeInTheDocument();
+  });
+
+  it('a line in one room and counted in each prints exactly as before', () => {
+    mockItems = [line({ status: 'ordered', received_quantity: null, line_total_cents: 680_000 })];
+    mockPlacements = [{ ...placed('room-1', 1, 0), ffeItemId: 'line-1' }];
+    renderLeaf();
+
+    expect(screen.queryByText(/ALSO IN/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ each/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Released to maker/).textContent).toBe(
+      'Released to maker$6,800',
+    );
   });
 });

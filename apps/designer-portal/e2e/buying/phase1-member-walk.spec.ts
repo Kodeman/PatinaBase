@@ -12,7 +12,8 @@ import { hideDevOverlays } from "../helpers/hide-dev-overlays";
 
 /**
  * US-16 Phase 1 (SQ-417) — the buying walk as a NON-OWNER studio member:
- * read by maker (margin shown: the studio default is `everyone`) → the six-cell
+ * the Pieces overview (US-21 T-31: Build the item list, Add to the job, Release,
+ * Record a change; the margin default is `everyone`) → the six-cell
  * unfold → Order → the order paper (the studio account's terms and 50% deposit
  * prefilled; the default receiver listed first, nothing preselected) → "Send
  * to <vendor> · $X" (po-send served locally, to the account's orders inbox) →
@@ -21,7 +22,8 @@ import { hideDevOverlays } from "../helpers/hide-dev-overlays";
  * → receive one line damaged, noted on the BOL, with a photo → the claim
  * clock sentence → record a partial deposit (stays due), then the remainder
  * (the balance falls due) → the Desk's payment_due act → the owner restricts
- * margin and the member's maker reading drops the margin columns.
+ * margin; the member cannot. (The by-maker reading that printed the margin
+ * columns was retired with the T-31 overview, which prints no margin.)
  *
  * LOCAL STACK ONLY: psql.ts refuses a non-local Postgres and the config pins
  * the dev server to 127.0.0.1:54321. Preconditions and the run line are in
@@ -293,12 +295,26 @@ async function openDocument(page: Page): Promise<void> {
   await expect(lineName).toBeVisible({ timeout: 30_000 });
 }
 
-/** Switch the Project section to "read by maker"; returns its body. */
-async function readByMaker(page: Page): Promise<Locator> {
-  await page.getByRole("button", { name: "Read by maker" }).click();
-  const body = page.locator('[data-ffe-reading-body="maker"]');
-  await expect(body).toBeVisible({ timeout: 30_000 });
-  return body;
+/**
+ * The Pieces overview's head (US-21 T-31): Build the item list (the door into
+ * this Document's Build room), Add to the job and Record a change. Release is
+ * not asserted: with `delivery-procurement` on and a release offered, it
+ * moves to the Delivery table head (`releaseInHead`).
+ */
+async function expectPiecesHead(page: Page): Promise<void> {
+  const head = page.locator('[data-region-head="ffe"]').first();
+  await head.scrollIntoViewIfNeeded({ timeout: 30_000 });
+  await expect(
+    head.locator('[data-action-key="work-the-pieces"]'),
+  ).toHaveAttribute("href", `/doc/${PROJECT_ID}/pieces?lens=rough`, {
+    timeout: 30_000,
+  });
+  await expect(
+    head.locator('[data-action-key="open-add-to-project"]'),
+  ).toContainText("Add to the job");
+  await expect(
+    head.locator('[data-action-key="record-a-change-pieces-head"]'),
+  ).toContainText("Record a change");
 }
 
 /** Open the Document and unfold line A (room reading). */
@@ -378,7 +394,7 @@ test.describe("Studio buying Phase 1 — the non-owner member walk", () => {
     ).toBe("everyone");
   });
 
-  test("by maker → order (account terms, receiver) → send → tracking → receive damaged → claim clock → pay → margin restricted", async ({
+  test("pieces overview → order (account terms, receiver) → send → tracking → receive damaged → claim clock → pay → margin restricted", async ({
     page,
   }, testInfo) => {
     test.setTimeout(600_000);
@@ -433,29 +449,13 @@ ON CONFLICT (id) DO NOTHING;`);
     await hideDevOverlays(page);
     await signIn(page, MEMBER_EMAIL);
 
-    // 1. Read by maker: vendor A, vendor B, "No maker yet"; margin shows.
+    // 1. The Pieces overview: its head's acts (US-21 T-31).
     await openDocument(page);
-    let maker = await readByMaker(page);
-    const groupHeads = maker.getByRole("rowheader");
-    await expect(groupHeads.filter({ hasText: VENDOR_A })).toHaveCount(1);
-    await expect(groupHeads.filter({ hasText: VENDOR_B })).toHaveCount(1);
-    await expect(
-      groupHeads.filter({ hasText: /^No maker yet · 1$/ }),
-    ).toHaveCount(1);
-    await expect(
-      maker.getByRole("columnheader", { name: "Client price" }),
-    ).toBeVisible({ timeout: 30_000 });
-    await expect(
-      maker.getByRole("columnheader", { name: "Markup" }),
-    ).toBeVisible();
-    // Line A: trade $1,200, client $1,800, markup 50%.
-    const groupA = maker.locator(`[data-maker-group="${VENDOR_A_ID}"]`);
-    await expect(groupA).toContainText("$1,800");
-    await expect(groupA).toContainText("50%");
-    await shot(page, testInfo, "01-read-by-maker-margin");
+    await expectPiecesHead(page);
+    await shot(page, testInfo, "01-pieces-overview");
 
-    // 2. The unfold, opened from the maker reading: six cells.
-    await maker.getByRole("button", { name: LINE_A, exact: true }).click();
+    // 2. The unfold, opened from the overview: six cells.
+    await page.getByText(LINE_A, { exact: true }).first().click();
     for (const cell of [
       "line-buy-cell",
       "line-quote-cell",
@@ -471,8 +471,8 @@ ON CONFLICT (id) DO NOTHING;`);
     await shot(page, testInfo, "02-unfold-six-cells");
 
     // 3. Order → the order paper: the account's terms and deposit; the
-    // receiver first in the ship-to list, nothing preselected. From the room
-    // reading; the maker-reading order path has its own test below (SQ-444).
+    // receiver first in the ship-to list, nothing preselected. Vendor B's
+    // line is ordered from the overview in its own test below (SQ-444).
     await openLine(page);
     const order = page.getByRole("button", { name: "Order", exact: true }).first();
     await expect(order).toBeEnabled({ timeout: 30_000 });
@@ -814,38 +814,24 @@ WHERE i.purchase_order_id = ${q(poId)} AND c.state = 'drafted'`),
       ),
     ).toBe("owners_admins");
 
-    await openDocument(page);
-    maker = await readByMaker(page);
-    await expect(
-      maker.getByRole("columnheader", { name: "Trade cost" }),
-    ).toBeVisible();
-    await expect(
-      maker.getByRole("columnheader", { name: "Client price" }),
-    ).toHaveCount(0);
-    await expect(
-      maker.getByRole("columnheader", { name: "Markup" }),
-    ).toHaveCount(0);
-    await expect(
-      maker.locator(`[data-maker-group="${VENDOR_A_ID}"]`),
-    ).not.toContainText("$1,800");
-    await shot(page, testInfo, "12-margin-hidden-for-member");
-
     expect(failures, "edge-function / RPC failures seen by the page").toEqual(
       [],
     );
   });
 
-  // SQ-444 regression: in the maker reading a line moves onto its new PO when
-  // the PO is created; the unfold (and the order paper in it) must stay
-  // mounted through the send. Vendor B's line, which the walk above never
-  // orders.
-  test("orders from the by-maker reading through Send", async ({ page }) => {
+  // SQ-444 regression: the line takes its new PO when the PO is created; the
+  // unfold (and the order paper in it) must stay mounted through the send.
+  // Vendor B's line, which the walk above never orders. The by-maker reading
+  // this was first written against was retired with the T-31 overview, so the
+  // line is opened from its room on the overview.
+  test("orders vendor B's line from the Pieces overview through Send", async ({
+    page,
+  }) => {
     test.setTimeout(300_000);
     await hideDevOverlays(page);
     await signIn(page, MEMBER_EMAIL);
     await openDocument(page);
-    const maker = await readByMaker(page);
-    await maker.getByRole("button", { name: LINE_B, exact: true }).click();
+    await page.getByText(LINE_B, { exact: true }).first().click();
     const order = page.getByRole("button", { name: "Order", exact: true }).first();
     await expect(order).toBeEnabled({ timeout: 30_000 });
     await order.click();

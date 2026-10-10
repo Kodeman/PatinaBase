@@ -1204,6 +1204,7 @@ export function ScheduleSpine({
           projectId={projectId}
           roomId={null}
           roomName="Throughout"
+          assignmentScope="throughout"
           onClose={closeSheet}
         />
       )}

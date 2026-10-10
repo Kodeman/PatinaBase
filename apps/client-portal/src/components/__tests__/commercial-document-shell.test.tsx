@@ -386,6 +386,22 @@ describe('CommercialDocumentShell', () => {
     expect(screen.getByText('Authorized furnishings').parentElement).toHaveTextContent('$20,000');
   });
 
+  // US-21 T-55b (F8): an allowance line prints "Up to" its ceiling, everywhere.
+  it('prints an allowance line as Up to its ceiling, and a fixed line bare', () => {
+    const base = furnishingsBundle();
+    render(<CommercialDocumentShell bundle={{
+      ...base,
+      furnishings: {
+        ...base.furnishings!,
+        items: base.furnishings!.items.map((item) =>
+          item.description === 'Room rug' ? { ...item, allowance: true } : item),
+      },
+    }} />);
+    expect(screen.getByText('Up to $2,000')).toBeInTheDocument();
+    expect(screen.getByText('$14,800')).toBeInTheDocument();
+    expect(screen.queryByText('Up to $14,800')).not.toBeInTheDocument();
+  });
+
   it('files a line with no room under a General heading rather than dropping it', () => {
     const base = furnishingsBundle();
     render(<CommercialDocumentShell bundle={{
@@ -397,6 +413,88 @@ describe('CommercialDocumentShell', () => {
     }} />);
     expect(screen.getByTestId('authorization-room-heading')).toHaveTextContent('General');
     expect(screen.getByText('Meadow linen sectional')).toBeInTheDocument();
+  });
+
+  // D7 phase 2 (00745): one released line in four rooms prints once, under its
+  // primary room, naming every room it is in — never four rows.
+  it('prints a line released in several rooms once, with its unit and every room', () => {
+    const adapted = adaptCommercialDocumentBundle({
+      document: {
+        id: 'fa-9',
+        projectId: 'p1',
+        documentKind: 'furnishings_authorization',
+        commercialState: 'executed',
+        title: 'Floors',
+      },
+      furnishings: {
+        depositRequiredCents: 0,
+        depositPaidCents: 0,
+        items: [
+          {
+            description: 'White oak floor',
+            roomName: 'Hall',
+            quantity: 913,
+            unit: 'sq_ft',
+            rooms: [
+              { name: 'Hall', quantity: 120, unit: 'sq_ft' },
+              { name: 'Living Room', quantity: 320, unit: 'sq_ft' },
+              { name: 'Dining', quantity: 60, unit: 'sq_ft' },
+              { name: 'Kitchen', quantity: 330, unit: 'sq_ft' },
+            ],
+            clientUnitPriceCents: 1_150,
+            clientLineTotalCents: 1_049_950,
+            currency: 'USD',
+            rough_cents: 950_000,
+            roughCents: 950_000,
+            needLabel: 'Flooring through the ground floor',
+            need_label: 'Flooring through the ground floor',
+          },
+          {
+            description: 'Writing desk',
+            roomName: 'Study',
+            quantity: 1,
+            unit: 'each',
+            rooms: [{ name: 'Study', quantity: 1, unit: 'each' }],
+            clientUnitPriceCents: 320_000,
+            clientLineTotalCents: 320_000,
+            currency: 'USD',
+          },
+        ],
+      },
+    });
+    expect(adapted).not.toBeNull();
+
+    const { container } = render(<CommercialDocumentShell bundle={adapted!} />);
+    const headings = screen.getAllByTestId('authorization-room-heading').map((h) => h.textContent);
+    expect(headings).toEqual(['Hall', 'Study']);
+    expect(
+      screen.getByText('White oak floor · 913 sq ft · Hall · Living Room · Dining · Kitchen'),
+    ).toBeInTheDocument();
+    // The one-room line reads exactly as it always has.
+    expect(screen.getByText('Writing desk')).toBeInTheDocument();
+    expect(screen.getByText('Quantity 1')).toBeInTheDocument();
+    expect(screen.queryByText('Quantity 913')).not.toBeInTheDocument();
+    expect(container).not.toHaveTextContent('Flooring through the ground floor');
+    expect(container).not.toHaveTextContent('$9,500');
+  });
+
+  // T-43d (F-E8): a released line in one room still used clientRoomsLine's
+  // null fallback, which printed the bare quantity with no unit at all. The
+  // fallback now reuses clientQuantityLabel, the same formatter the
+  // multi-room rooms list already prints with.
+  it('prints the unit on a single-room line whose unit is not each', () => {
+    const base = furnishingsBundle();
+    render(<CommercialDocumentShell bundle={{
+      ...base,
+      furnishings: {
+        ...base.furnishings!,
+        items: [
+          { ...base.furnishings!.items[0], description: 'Wallpaper roll', quantity: 9, unit: 'roll' },
+        ],
+      },
+    }} />);
+    expect(screen.getByText('Quantity 9 roll')).toBeInTheDocument();
+    expect(screen.queryByText('Quantity 9')).not.toBeInTheDocument();
   });
 
   it('labels a trade scope, states who performs it, and never shows a countersignature wait', () => {

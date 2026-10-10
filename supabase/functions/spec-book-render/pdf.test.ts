@@ -7,7 +7,11 @@ import {
 import { getDocument } from "npm:pdfjs-dist@4.10.38/legacy/build/pdf.mjs";
 import { buildAudienceRenderModel, sha256Hex } from "./render-model.ts";
 import { buildPagePlan, renderSpecBookPdf } from "./pdf.ts";
-import { configuredFurniture, frozenSnapshot } from "./test-fixtures.ts";
+import {
+  configuredFurniture,
+  frozenSnapshot,
+  piecesItems,
+} from "./test-fixtures.ts";
 
 const context = {
   revisionNumber: 1,
@@ -250,4 +254,53 @@ Deno.test("a frozen non-USD client price prints in its own currency", async () =
   assertEquals(text.includes("$123.45"), false);
   // The currency rides with the price; it is not printed as its own row.
   assertEquals(text.includes("currency"), false);
+});
+
+Deno.test("the item page prints the unit, the need label above the name, LABOR and ALSO IN (T-32)", async () => {
+  const base = frozenSnapshot();
+  const snapshot = frozenSnapshot({
+    items: [...base.items, ...piecesItems()],
+  });
+  const model = await buildAudienceRenderModel(snapshot, "installer", context);
+  const pages = (await extractedText(await renderSpecBookPdf(model))).split(
+    "\n",
+  );
+  const oakPage = pages.find((page) => page.includes("LR-110"))!;
+  assert(oakPage, "the oak floor has its page");
+  const need = oakPage.indexOf("Main floor");
+  const name = oakPage.indexOf("White oak floor, satin Bona finish");
+  const alsoIn = oakPage.indexOf(
+    "ALSO IN HALL · DINING · KITCHEN · 320 SQ FT HERE",
+  );
+  assert(need >= 0 && name > need, oakPage);
+  assert(alsoIn > name, oakPage);
+  assert(oakPage.includes("Quantity 913 sq ft"), oakPage);
+
+  const laborPage = pages.find((page) => page.includes("LR-111"))!;
+  assert(laborPage.includes("LABOR"), laborPage);
+  assert(laborPage.includes("Quantity 913 sq ft"), laborPage);
+
+  // A line in its default state prints as it always has.
+  const chairPage = pages.find((page) => page.includes("LR-101"))!;
+  assert(chairPage.includes("Quantity 2"), chairPage);
+  assertEquals(chairPage.includes("ALSO IN"), false);
+  assertEquals(chairPage.includes("LABOR"), false);
+});
+
+// ─── T-60g: primes (follow-up from T-60c F13) ────────────────────────────────
+
+Deno.test("T-60g: a prime in an item name reaches the PDF as feet and inches, not 2/3", async () => {
+  const source = frozenSnapshot();
+  const name = "Runner, 2′6″ × 10′";
+  const snapshot = frozenSnapshot({
+    items: [{ ...source.items[0], name }, source.items[1]],
+  });
+  const model = await buildAudienceRenderModel(snapshot, "client", context);
+  const pages = (await extractedText(await renderSpecBookPdf(model))).split(
+    "\n",
+  );
+  const page = pages.find((p) => p.includes("PB-201"))!;
+  assert(page, "the runner has its page");
+  assert(page.includes(`Runner, 2'6" × 10'`), page);
+  assertEquals(page.includes("Runner, 2263"), false);
 });

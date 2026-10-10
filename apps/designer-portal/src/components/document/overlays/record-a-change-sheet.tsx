@@ -76,24 +76,27 @@ const CHOICES = [
 type Choice = (typeof CHOICES)[number]['value'];
 
 /** Behind `ask-the-paper` or `one-voice` (FR2 508-1: the Money head's door is
- *  `Record a change` under one-voice whatever ask-the-paper says): with both
- *  off nothing mounts and nothing listens. */
+ *  `Record a change` under one-voice whatever ask-the-paper says), except the
+ *  Pieces head's door: the overview prints it whatever the flags say (CONTRACT
+ *  §3.8 rule 2; T-61 F6), so it opens the router with both flags off too. */
 export function RecordAChangeSheet(props: {
   projectId: string;
   clientName: string | null;
 }) {
   const askThePaper = useFeatureFlag('ask-the-paper').value;
   const oneVoice = useFeatureFlag('one-voice').value === true;
-  if (!askThePaper && !oneVoice) return null;
-  return <RecordAChangeRouter {...props} />;
+  return <RecordAChangeRouter {...props} flagged={Boolean(askThePaper) || oneVoice} />;
 }
 
 function RecordAChangeRouter({
   projectId,
   clientName,
+  flagged,
 }: {
   projectId: string;
   clientName: string | null;
+  /** Either flag on: every doorway is heard. Off: only the Pieces head. */
+  flagged: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [choice, setChoice] = useState<Choice | null>(null);
@@ -119,6 +122,7 @@ function RecordAChangeRouter({
   useEffect(() => {
     const onOpen = (event: Event) => {
       const detail = (event as CustomEvent<RecordAChangeDetail | undefined>).detail;
+      if (!flagged && detail?.origin !== 'pieces-head') return;
       if (detail?.itemId) {
         toPiece(detail.itemId);
         return;
@@ -131,7 +135,7 @@ function RecordAChangeRouter({
     };
     window.addEventListener(RECORD_A_CHANGE_EVENT, onOpen);
     return () => window.removeEventListener(RECORD_A_CHANGE_EVENT, onOpen);
-  }, []);
+  }, [flagged]);
 
   const proceed = () => {
     if (!choice) return;

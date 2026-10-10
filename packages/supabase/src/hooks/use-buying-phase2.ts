@@ -206,7 +206,11 @@ export function useSetPurchaseOrderHeader(options?: ErrorSurfaceOptions) {
 
 // ─── The COM pair (00702) ───────────────────────────────────────────────────
 
-/** Pair a supplying line (the COM fabric) with its piece; parentId null unlinks. */
+/**
+ * Pair a supplying line with its piece; parentId null unlinks. The link's
+ * kind is 'com' (the COM fabric, the default) or 'accessory'; labor is never
+ * linked here, it is added through add_labor_line (00732).
+ */
 export function useLinkFfePair(options?: ErrorSurfaceOptions) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -214,14 +218,17 @@ export function useLinkFfePair(options?: ErrorSurfaceOptions) {
     mutationFn: async ({
       childId,
       parentId,
+      kind = 'com',
     }: {
       childId: string;
       parentId: string | null;
+      kind?: 'com' | 'accessory';
     }): Promise<ProjectFfeItemRow> => {
       const { data, error } = await getSupabase().rpc('link_ffe_pair', {
         p_child: childId,
         // The RPC accepts NULL (unlink); the generated arg type is non-null.
         p_parent: parentId as string,
+        p_kind: kind,
       });
       if (error) throw error;
       return data as ProjectFfeItemRow;
@@ -1210,6 +1217,11 @@ export interface FfePairLine {
   vendor_name: string | null;
   purchase_order_id: string | null;
   parent_ffe_item_id: string | null;
+  /**
+   * Why the line points at its piece: 'com', 'labor' or 'accessory' (00729);
+   * NULL exactly when parent_ffe_item_id is NULL. Only 'com' is the COM pair.
+   */
+  link_kind: string | null;
   purchase_order: {
     id: string;
     po_number: string | null;
@@ -1220,8 +1232,8 @@ export interface FfePairLine {
 }
 
 /**
- * The project's live lines with their pair facts (parent_ffe_item_id, the PO
- * and the PO it supplies). Under the project-ffe-items prefix, so every FF&E
+ * The project's live lines with their pair facts (parent_ffe_item_id and its
+ * link_kind, the PO and the PO it supplies). Under the project-ffe-items prefix, so every FF&E
  * write that invalidates the project's lines refreshes it.
  */
 export function useFfePairLines(projectId: string | null | undefined) {
@@ -1231,7 +1243,7 @@ export function useFfePairLines(projectId: string | null | undefined) {
       const { data, error } = await getSupabase()
         .from('project_ffe_items')
         .select(
-          'id, name, project_room_id, assignment_scope, vendor_id, vendor_name, purchase_order_id, parent_ffe_item_id, purchase_order:purchase_orders!purchase_order_id(id, po_number, status, vendor_id, supplies_purchase_order_id)',
+          'id, name, project_room_id, assignment_scope, vendor_id, vendor_name, purchase_order_id, parent_ffe_item_id, link_kind, purchase_order:purchase_orders!purchase_order_id(id, po_number, status, vendor_id, supplies_purchase_order_id)',
         )
         .eq('project_id', projectId as string)
         .is('removed_at', null)

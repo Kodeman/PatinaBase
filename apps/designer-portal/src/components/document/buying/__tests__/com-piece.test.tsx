@@ -41,6 +41,7 @@ const line = (over: Partial<FfePairLine>): FfePairLine => ({
   vendor_name: null,
   purchase_order_id: null,
   parent_ffe_item_id: null,
+  link_kind: null,
   purchase_order: null,
   ...over,
 });
@@ -51,6 +52,14 @@ const FABRIC = line({
   name: 'Sofa — COM fabric',
   vendor_name: 'Kessler',
   parent_ffe_item_id: 'line-sofa',
+  link_kind: 'com',
+});
+const INSTALL = line({
+  id: 'line-install',
+  name: 'Install, upholstery',
+  vendor_name: 'Hang Right',
+  parent_ffe_item_id: 'line-sofa',
+  link_kind: 'labor',
 });
 const RUG = line({ id: 'line-rug', name: 'Brae linen, 19 yd' });
 
@@ -86,6 +95,18 @@ describe('readPair', () => {
     // Neither a fabric already linked nor a piece that takes COM is linkable.
     expect(readPair({ id: 'line-rug' }, lines).candidates).toEqual([]);
     expect(readPair({ id: 'line-sofa' }, [SOFA, RUG]).candidates.map((l) => l.id)).toEqual(['line-rug']);
+  });
+
+  it('never reads a labor child as COM, on either side of the link', () => {
+    const lines = [SOFA, INSTALL, RUG];
+    const install = readPair({ id: 'line-install' }, lines);
+    expect(install.parent).toBeNull();
+    expect(install.onPiece).toBe(true);
+    const sofa = readPair({ id: 'line-sofa' }, lines);
+    expect(sofa.children).toEqual([]);
+    expect(sofa.onPiece).toBe(false);
+    // One level of any kind: the install is not linkable, the rug still is.
+    expect(sofa.candidates.map((l) => l.id)).toEqual(['line-rug']);
   });
 });
 

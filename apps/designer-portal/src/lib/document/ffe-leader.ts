@@ -21,6 +21,7 @@
  * Pure: no React, no DOM. Exactly one leader comes back, always (C7).
  */
 
+import { placeholderCount } from './act-names';
 import type { NeedLine } from './desk-derivation';
 
 export type FfeExceptionKind = 'claim' | 'po' | 'spec' | 'bill';
@@ -95,7 +96,7 @@ export function scanFfeExceptions(
   if (unspecified.length > 0) {
     exceptions.push({
       kind: 'spec',
-      text: `${unspecified.length} unspecified`,
+      text: placeholderCount(unspecified.length),
       lineId: unspecified[0] ?? null,
     });
   }

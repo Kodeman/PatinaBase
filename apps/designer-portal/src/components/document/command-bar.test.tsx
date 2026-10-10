@@ -237,7 +237,7 @@ describe('SP-16 — ⌘K typed search finds the plan room', () => {
 
     await openPaletteAndType('plan');
 
-    expect(screen.queryByText('Plan room')).not.toBeInTheDocument();
+    expect(screen.queryByText('Drawing sets')).not.toBeInTheDocument();
     expect(screen.getByText('No match')).toBeInTheDocument();
   });
 
@@ -256,7 +256,7 @@ describe('SP-16 — ⌘K typed search finds the plan room', () => {
       fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
         target: { value: query },
       });
-      expect(screen.getByText('Plan room')).toBeInTheDocument();
+      expect(screen.getByText('Drawing sets')).toBeInTheDocument();
       unmount();
     }
   });
@@ -267,7 +267,7 @@ describe('SP-16 — ⌘K typed search finds the plan room', () => {
 
     await openPaletteAndType('plan room');
 
-    fireEvent.click(screen.getByText('Plan room').closest('button')!);
+    fireEvent.click(screen.getByText('Drawing sets').closest('button')!);
 
     expect(mockPush).toHaveBeenCalledWith('/doc/eng-1/plans');
   });
@@ -523,7 +523,7 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     openPalette();
 
     expect(screen.getByText('This surface')).toBeInTheDocument();
-    for (const label of ['Plan room', 'Spec book', 'Boards', 'Call sheet']) {
+    for (const label of ['Drawing sets', 'Spec book', 'Boards', 'Call sheet']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
     expect(screen.getAllByText('this project · the current set')).toHaveLength(1);
@@ -540,7 +540,7 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     openPalette();
 
     expect(screen.queryByText('This surface')).not.toBeInTheDocument();
-    for (const label of ['Plan room', 'Spec book', 'Boards', 'Call sheet']) {
+    for (const label of ['Drawing sets', 'Spec book', 'Boards', 'Call sheet']) {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     }
   });

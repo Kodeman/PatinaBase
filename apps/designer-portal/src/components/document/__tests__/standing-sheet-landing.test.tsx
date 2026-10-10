@@ -1,7 +1,7 @@
 /**
  * US-19 FR4 522-3 (Fix 4, `one-voice`) — every Standing-sheet row lands on a
  * control, as the band's acts do. The sheet goes back first; then a Pieces act
- * goes to Pieces by its name (`Spec the N unspecified`, `Send the purchase
+ * goes to Pieces by its name (`Fill the N placeholders`, `Send the purchase
  * order`, `File the claim`, `Follow up with the maker`, `Open the pieces`) and
  * a `Nudge` row the table names no control for opens the Message composer.
  * Where no region takes it, the act keeps its own landing. Off, the row's act
@@ -73,12 +73,12 @@ function Band({ items, grouped = true }: { items: LensStandingItem[]; grouped?: 
 }
 
 describe('a Standing-sheet row lands on a control (FR4 522-3)', () => {
-  it('Spec the 3 unspecified: the sheet goes back and Pieces takes the act, focus on its control', async () => {
-    const spec = row('ticket:spec', 'own:document-act-pieces-head', 'Spec the 3 unspecified');
+  it('Fill the 3 placeholders: the sheet goes back and Pieces takes the act, focus on its control', async () => {
+    const spec = row('ticket:spec', 'own:document-act-pieces-head', 'Fill the 3 placeholders');
     const pieces = listen(ACT_LANDING_EVENTS.ffeAct);
     render(<Band items={[spec]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Spec the 3 unspecified' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fill the 3 placeholders' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByRole('button', { name: 'The region’s control' })),
@@ -163,12 +163,12 @@ describe('a Standing-sheet row lands on a control (FR4 522-3)', () => {
   });
 
   it('flag off: the row’s act runs at once, the sheet stays, and nothing is dispatched', () => {
-    const spec = row('ticket:spec', 'own:document-act-pieces-head', 'Spec the 3 unspecified');
+    const spec = row('ticket:spec', 'own:document-act-pieces-head', 'Fill the 3 placeholders');
     const pieces = listen(ACT_LANDING_EVENTS.ffeAct);
     render(<Band items={[spec]} grouped={false} />);
 
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Spec the 3 unspecified' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Fill the 3 placeholders' }));
     });
     expect(spec.act!.onAct).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('dialog')).toBeInTheDocument();

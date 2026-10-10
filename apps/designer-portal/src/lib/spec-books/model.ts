@@ -490,6 +490,63 @@ export function hasIssuedDrift(
   return Math.max(itemUpdated, specUpdated) > issued;
 }
 
+/* ── US-21 T-32: the piece facts a spec-book line prints ─────────────────────
+ * The same words the issued book prints (supabase/functions/spec-book-render,
+ * `quantityText` and `alsoInText`, over 00735's snapshot keys). Each fact is
+ * absent in a line's default state, and an absent fact prints nothing. */
+
+/** One room a line is placed in (D7 phase 1), by name. */
+export interface SpecRoomPlacement {
+  roomName: string;
+  quantity: number;
+  areaNote?: string | null;
+}
+
+/**
+ * Units that are counted, so any quantity but 1 reads plural (T-60a F8,
+ * mirrored from `document/pieces/placement-chips.tsx` COUNTED_PLURAL).
+ * Measures (sq ft, lin ft, yard) stay as they are.
+ */
+const COUNTED_PLURAL: Partial<Record<string, string>> = {
+  roll: 'rolls',
+  box: 'boxes',
+  hour: 'hours',
+  lot: 'lots',
+};
+
+/** A quantity and the unit it counts: `913 sq ft`, `9 rolls`, `1 roll`, or
+ *  the bare number for `each` and for a line with no unit (D3, 00729 codes,
+ *  `_` read as a space). */
+export function specQuantityLabel(quantity: number, unit?: string | null): string {
+  if (!unit || unit === 'each') return String(quantity);
+  const plural = COUNTED_PLURAL[unit];
+  const word = plural && quantity !== 1 ? plural : unit.replace(/_/g, ' ');
+  return `${quantity} ${word}`;
+}
+
+/** The also-in line under a placed line's name: the other rooms, then this
+ *  room's share and its area note,
+ *  `ALSO IN HALL · DINING · KITCHEN · 320 SQ FT HERE`. Null for a line in one
+ *  room or none. */
+export function specAlsoInLine(
+  placements: readonly SpecRoomPlacement[] | null | undefined,
+  hereRoomName: string | null,
+  unit?: string | null,
+): string | null {
+  if (!placements || placements.length < 2) return null;
+  const others = placements.filter((entry) => entry.roomName !== hereRoomName);
+  if (others.length === 0) return null;
+  const here = placements.find((entry) => entry.roomName === hereRoomName);
+  return [
+    `Also in ${others.map((entry) => entry.roomName).join(' · ')}`,
+    here ? `${specQuantityLabel(here.quantity, unit)} here` : null,
+    here?.areaNote?.trim() || null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+    .toLocaleUpperCase('en-US');
+}
+
 export function editableSpecSeed(spec: ProjectFfeSpec): Record<string, string> {
   return {
     sku: spec.sku ?? "",

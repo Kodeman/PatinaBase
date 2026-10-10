@@ -11,6 +11,7 @@ import {
   type DesignServiceRate,
   type DesignServiceTerms,
   type FFEStageKey,
+  type FfeLineUnit,
   type FurnishingsAuthorizationItem as CanonicalFurnishingsAuthorizationItem,
   type ProjectBillingAuthoritySummary,
   type TradeScopeProgressState,
@@ -110,9 +111,12 @@ export type DesignServicesTerms = Omit<
   terms: string | null;
 };
 
+/** One room a line is in, and that room's share of it (00745 `rooms`). */
+export type ClientLineRoom = NonNullable<CanonicalFurnishingsAuthorizationItem['rooms']>[number];
+
 export type FurnishingsAuthorizationItem = Pick<
   CanonicalFurnishingsAuthorizationItem,
-  'description' | 'quantity' | 'clientUnitPriceCents' | 'currency'
+  'description' | 'quantity' | 'clientUnitPriceCents' | 'currency' | 'unit' | 'rooms'
 > & {
   /**
    * The room the line files under. The RPC has always projected it
@@ -130,6 +134,11 @@ export type FurnishingsAuthorizationItem = Pick<
    * totalAmountCents; the product does not.
    */
   clientLineTotalCents: number;
+  /**
+   * An allowance line (the RPC's `itemType`): its line total is a ceiling, so
+   * it prints as `Up to $X` (US-21 T-55b, F8). Absent on a legacy payload.
+   */
+  allowance?: boolean;
 };
 
 export interface FurnishingsAuthorization {
@@ -431,6 +440,48 @@ function oneOf<T extends string>(value: unknown, values: readonly T[], fallback:
   return typeof value === 'string' && (values as readonly string[]).includes(value)
     ? (value as T)
     : fallback;
+}
+
+/** `project_ffe_items.unit` (00729 CHECK). */
+const LINE_UNITS: readonly FfeLineUnit[] = ['each', 'sq_ft', 'lin_ft', 'roll', 'yard', 'box', 'hour', 'lot'];
+
+/** 00745 `unit`; null or absent means `each`. */
+function lineUnit(value: unknown): FfeLineUnit {
+  return oneOf(value, LINE_UNITS, 'each');
+}
+
+/**
+ * 00745 `rooms`, read through its own allow-list: name, quantity and unit,
+ * nothing else a placement or snapshot might carry.
+ */
+function lineRooms(value: unknown, unit: FfeLineUnit): ClientLineRoom[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const row = record(item);
+    const name = nullableText(row.name);
+    return name ? [{ name, quantity: number(row.quantity), unit: oneOf(row.unit, LINE_UNITS, unit) }] : [];
+  });
+}
+
+/** `913 sq ft`; an `each` line prints its bare count. `sq_ft` prints `sq ft`. */
+export function clientQuantityLabel(quantity: number, unit: FfeLineUnit = 'each'): string {
+  const count = quantity.toLocaleString('en-US');
+  return unit === 'each' ? count : `${count} ${unit.replace('_', ' ')}`;
+}
+
+/**
+ * A line in more than one room, as the client reads it:
+ * `White oak floor · 913 sq ft · Hall · Living Room · Dining · Kitchen` — the
+ * line's whole quantity (waste included), then its rooms in placement order.
+ * Null for a line in one room or none: that line prints as it always has.
+ */
+export function clientRoomsLine(
+  name: string,
+  line: { quantity: number; unit?: FfeLineUnit; rooms?: ClientLineRoom[] },
+): string | null {
+  const rooms = line.rooms ?? [];
+  if (rooms.length < 2) return null;
+  return [name, clientQuantityLabel(line.quantity, line.unit), ...rooms.map((room) => room.name)].join(' · ');
 }
 
 export function legacyStatusToCommercialState(status: Proposal['status']): CommercialDocumentState {
@@ -923,16 +974,21 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
         const quantity = number(first(row, 'quantity'));
         const clientUnitPriceCents = number(first(row, 'clientUnitPriceCents', 'client_unit_price_cents'));
         const lineTotal = first(row, 'clientLineTotalCents', 'client_line_total_cents');
+        const unit = lineUnit(row.unit);
         return {
           description: text(first(row, 'description', 'name')),
           roomName: text(first(row, 'roomName', 'room_name'), 'General'),
           quantity,
+          unit,
+          rooms: lineRooms(row.rooms, unit),
           clientUnitPriceCents,
           // Fall back to the product only when the RPC sent no line total at
           // all (a legacy payload). Where both exist the line total wins.
           clientLineTotalCents: lineTotal === undefined || lineTotal === null
             ? quantity * clientUnitPriceCents
             : number(lineTotal),
+          // Only an allowance carries the flag; a fixed line keeps its shape.
+          ...(first(row, 'itemType', 'item_type') === 'allowance' ? { allowance: true } : {}),
           currency: text(first(row, 'currency'), 'USD'),
         };
       }) : [],
@@ -1098,6 +1154,10 @@ export interface ClientSelection {
   roomId: string | null;
   roomName: string;
   quantity: number;
+  /** 00745; `each` when the payload is silent. */
+  unit?: FfeLineUnit;
+  /** Every room the line is in, in placement order (00745); roomName stays the primary. */
+  rooms?: ClientLineRoom[];
   clientUnitPriceCents: number;
   clientLineTotalCents: number;
   itemType: string;
@@ -1162,6 +1222,7 @@ export function adaptClientSelections(value: unknown): ClientProjectSelections {
         const id = text(row.id);
         if (!id) return null;
         const tradeJourneyRaw = first(row, 'tradeJourney', 'trade_journey');
+        const unit = lineUnit(row.unit);
         return {
           id,
           kind: oneOf(row.kind, ['furnishings', 'trade'] as const, 'furnishings'),
@@ -1169,6 +1230,8 @@ export function adaptClientSelections(value: unknown): ClientProjectSelections {
           roomId: nullableText(first(row, 'roomId', 'room_id')),
           roomName: text(first(row, 'roomName', 'room_name'), 'General'),
           quantity: number(row.quantity, 1),
+          unit,
+          rooms: lineRooms(row.rooms, unit),
           clientUnitPriceCents: number(first(row, 'clientUnitPriceCents', 'client_unit_price_cents')),
           clientLineTotalCents: number(first(row, 'clientLineTotalCents', 'client_line_total_cents')),
           itemType: text(first(row, 'itemType', 'item_type')),

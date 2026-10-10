@@ -696,7 +696,7 @@ const PROJECT_DOORS: readonly {
   key: 'planroom' | 'specbook' | 'moodboards';
   label: string;
 }[] = [
-  { key: 'planroom', label: 'Plan room' },
+  { key: 'planroom', label: 'Drawing sets' },
   { key: 'specbook', label: 'Spec book' },
   // F62 / D-B8 — one name for one thing. The shelf registry, the leaf, the
   // page and ⌘K all read `Boards`; the key stays `moodboards` (it is an

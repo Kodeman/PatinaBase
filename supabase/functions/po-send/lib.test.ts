@@ -1,0 +1,107 @@
+// Deno test for the labor gate on the maker's PO (US-21 T-20; S4, a7, Q5).
+// Run: deno test supabase/functions/po-send/lib.test.ts
+//
+// The wallpaper: 9 rolls of grasscloth from Phillip Jeffries, with its
+// install as a labor line on the piece (link_kind 'labor', 00732). The
+// maker's PO prints `9 roll` in the Qty cell, and the labor child never
+// prints "COM arriving separately": only a 'com' link is the COM pair.
+
+import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { comArrivingSeparately, poLineRoomLabel } from "./lib.ts";
+import { poQuantityLabel } from "../_shared/po-pdf.ts";
+
+const WALLPAPER = { id: "line-wallpaper", spec: {} };
+const INSTALLER_PO = { id: "po-2001", po_number: "PO-2001", vendor: { name: "Hang Right" } };
+const KESSLER_PO = { id: "po-1043", po_number: "PO-1043", vendor: { name: "Kessler" } };
+const INSTALL = {
+  purchase_order_id: "po-2001",
+  parent_ffe_item_id: "line-wallpaper",
+  link_kind: "labor",
+};
+
+Deno.test("a labor child on a supplying PO never prints COM arriving separately", () => {
+  const notes = comArrivingSeparately([WALLPAPER], [INSTALLER_PO], [INSTALL]);
+  assertEquals(notes.size, 0);
+});
+
+Deno.test("a labor-only supplying PO does not fall back to the first line", () => {
+  const notes = comArrivingSeparately(
+    [{ id: "line-chair" }, WALLPAPER],
+    [INSTALLER_PO],
+    [INSTALL, { purchase_order_id: "po-2001", parent_ffe_item_id: "line-elsewhere", link_kind: "accessory" }],
+  );
+  assertEquals(notes.size, 0);
+});
+
+Deno.test("a COM link beside a labor link still prints, on its own piece only", () => {
+  const notes = comArrivingSeparately(
+    [{ id: "line-sofa", spec: { com_spec: { yardage: "19" } } }, WALLPAPER],
+    [KESSLER_PO, INSTALLER_PO],
+    [{ purchase_order_id: "po-1043", parent_ffe_item_id: "line-sofa", link_kind: "com" }, INSTALL],
+  );
+  assertEquals(notes.get("line-sofa"), ["COM arriving separately — Kessler PO-1043, 19 yd"]);
+  assertEquals(notes.get("line-wallpaper"), undefined);
+});
+
+Deno.test("F12: the first-item fallback skips a labor line and attaches to the next item", () => {
+  const LABOR_ITEM = { id: "line-labor", link_kind: "labor", line_kind: "labor" };
+  const SOFA = { id: "line-sofa", spec: { com_spec: { yardage: "19" } } };
+  const notes = comArrivingSeparately([LABOR_ITEM, SOFA], [KESSLER_PO], []);
+  assertEquals(notes.get("line-labor"), undefined);
+  assertEquals(notes.get("line-sofa"), ["COM arriving separately — Kessler PO-1043, 19 yd"]);
+});
+
+Deno.test("F12: when every item is labor, the fallback attaches to no item", () => {
+  const LABOR_ITEM = { id: "line-labor", link_kind: "labor", line_kind: "labor" };
+  const notes = comArrivingSeparately([LABOR_ITEM], [KESSLER_PO], []);
+  assertEquals(notes.size, 0);
+});
+
+Deno.test("the maker's PO line prints the unit: 9 roll", () => {
+  assertEquals(poQuantityLabel(9, "roll"), "9 roll");
+  assertEquals(poQuantityLabel(320, "sq_ft"), "320 sq ft");
+  assertEquals(poQuantityLabel(12, "lin_ft"), "12 lin ft");
+});
+
+Deno.test("each, or no unit, prints the bare quantity as before", () => {
+  assertEquals(poQuantityLabel(2, "each"), "2");
+  assertEquals(poQuantityLabel(1, null), "1");
+  assertEquals(poQuantityLabel(3), "3");
+});
+
+// T-51 (D7 phase 3): the oak floor, 913 sq ft ordered over 830 measured in
+// four rooms. The embed arrives in any order; the room cell reads in
+// placement order, the unit once, and the 83 sq ft of waste is no room.
+const OAK_PLACEMENTS = [
+  { quantity: 210, sort_order: 3, room: { name: "Kitchen" } },
+  { quantity: 120, sort_order: 0, room: { name: "Hall" } },
+  { quantity: 180, sort_order: 2, room: { name: "Dining" } },
+  { quantity: 320, sort_order: 1, room: { name: "Living Room" } },
+];
+
+Deno.test("the oak floor's PO line names every room with its share", () => {
+  assertEquals(
+    poLineRoomLabel("Hall", OAK_PLACEMENTS, "sq_ft"),
+    "Hall 120 · Living Room 320 · Dining 180 · Kitchen 210 sq ft",
+  );
+});
+
+Deno.test("a multi-room line counted each prints the shares without a unit", () => {
+  assertEquals(
+    poLineRoomLabel("Hall", [
+      { quantity: 2, sort_order: 0, room: { name: "Hall" } },
+      { quantity: 1, sort_order: 1, room: { name: "Dining" } },
+    ], "each"),
+    "Hall 2 · Dining 1",
+  );
+});
+
+Deno.test("a single-room line prints its primary room, as before", () => {
+  assertEquals(poLineRoomLabel("Kitchen", [], "sq_ft"), "Kitchen");
+  assertEquals(poLineRoomLabel("Kitchen", null, "sq_ft"), "Kitchen");
+  assertEquals(
+    poLineRoomLabel("Kitchen", [{ quantity: 210, sort_order: 0, room: { name: "Kitchen" } }], "sq_ft"),
+    "Kitchen",
+  );
+  assertEquals(poLineRoomLabel(null, undefined, null), null);
+});

@@ -5,6 +5,8 @@
  * These complement the base Project type in project.ts with scope-aware fields.
  */
 
+import type { FfeLineKind, FfeLineUnit, FfeLinkKind, FfeRoomPlacement } from './ffe';
+
 // ============================================================================
 // FF&E PIPELINE STATUS
 // ============================================================================
@@ -93,8 +95,16 @@ export interface ProjectFFEItem {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  unit: FfeLineUnit;
+  lineKind: FfeLineKind;
+  linkKind: FfeLinkKind | null;
+  /** Internal Rough $ (Q7). Never on a client payload. */
+  roughCents: number | null;
+  needLabel?: string | null;
   // Joined data
   room?: Pick<ProjectRoom, 'id' | 'name'>;
+  /** Every room the line is placed in; `projectRoomId` stays the primary. */
+  roomPlacements?: FfeRoomPlacement[];
   product?: {
     id: string;
     name: string;

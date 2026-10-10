@@ -1234,6 +1234,60 @@ describe('the sixth rung derives from the ticket (B2-L3)', () => {
     ).toBe('Everything ordered is moving.');
   });
 
+  // Fix-now #12 — `Everything ordered is moving.` over zero lines is a
+  // vacuous truth (walk step1-project-1440.jpg).
+  const withPieces = (value: string) =>
+    ticketRows().map((r) => (r.key === 'pieces' ? { ...r, value } : r));
+
+  it('says nothing is ordered yet when the job has no pieces', () => {
+    for (const oneVoice of [false, true]) {
+      const guide = deriveDocumentGuide({
+        row: row('project'),
+        now: NOW,
+        oneVoice,
+        ticketRows: withPieces('No pieces yet'),
+      });
+      expect(guide.headline).toBe('Nothing ordered yet.');
+    }
+  });
+
+  it('prints no sentence while the Pieces row is still reading', () => {
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      ticketRows: withPieces('Reading…'),
+    });
+    expect(guide.headline).toBe('');
+  });
+
+  // T-7a (F7): the empty-state sentence and a pending read never cover an
+  // exception the ticket prints. Rung six elects the exception before the rest
+  // branch (where `Nothing ordered yet.` lives) is reached; this pins that order.
+  it('leads with a ticket exception over the zero-pieces and reading sentences', () => {
+    for (const value of ['No pieces yet', 'Reading…']) {
+      for (const oneVoice of [false, true]) {
+        const guide = deriveDocumentGuide({
+          row: row('project'),
+          now: NOW,
+          oneVoice,
+          ticketRows: ticketRows({ money: OWED }).map((r) =>
+            r.key === 'pieces' ? { ...r, value } : r,
+          ),
+        });
+        expect(guide.headline).toBe('Money · $17,500 owed you');
+      }
+    }
+  });
+
+  it('keeps the rest sentence once the job has lines', () => {
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      ticketRows: withPieces('3 ordered · 1 not ordered yet'),
+    });
+    expect(guide.headline).toBe('Everything ordered is moving.');
+  });
+
   it('leaves the care spread’s closure gate to the branch that holds it', () => {
     const guide = deriveDocumentGuide({
       row: row('care'),

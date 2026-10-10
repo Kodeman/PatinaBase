@@ -332,7 +332,7 @@ describe('deriveLadderDoors', () => {
   it('files the project’s four under this job', () => {
     const doors = deriveLadderDoors({ ticket: ticket(), held: false });
     expect(doors.map((door) => door.label)).toEqual([
-      'Plan room',
+      'Drawing sets',
       'Spec book',
       // D-B8/F62 — one name for one thing; the key stays `moodboards`.
       'Boards',

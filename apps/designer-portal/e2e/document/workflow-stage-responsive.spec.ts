@@ -60,8 +60,8 @@ test('the project document holds its measure at 320px', async ({
 const PROPOSAL_SPREAD_ORDER = ['proposal', 'scope', 'vision', 'investment', 'record'];
 /** `DOCUMENT_INDEX_LABELS` (`document-index.ts`), restated — e2e cannot
  *  import the app's TS module (the same rule `lens-density.spec.ts` states
- *  for `LENS_LOOKAHEAD_PX`). Read by the mobile Sections sheet's own rows,
- *  which print the label, never the key. */
+ *  for `LENS_LOOKAHEAD_PX`). The mobile Sections sheet's own rows print the
+ *  label, never the key, so the test reads them there. */
 const PROPOSAL_SPREAD_LABELS = [
   'The proposal',
   'Scope & engagement',

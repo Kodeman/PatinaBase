@@ -912,19 +912,30 @@ export interface SupplyingPurchaseOrder {
   vendor: { name: string | null } | null;
 }
 
-/** A line on a supplying PO, with the piece it supplies. */
+/** A line on a supplying PO, with the piece it supplies and why (00729). */
 export interface SupplyingLine {
   purchase_order_id: string | null;
   parent_ffe_item_id: string | null;
+  /** 'com', 'labor' or 'accessory'; NULL exactly when the parent is NULL. */
+  link_kind: string | null;
 }
 
 /**
  * The "COM arriving separately" line for each of this PO's items, keyed by
- * item id. A supplying PO whose lines name no item here attaches to the
- * first item, so the vendor still reads it once.
+ * item id. Only a COM link (link_kind 'com') names a piece: a labor or
+ * accessory child is never COM. A supplying PO whose lines name no item here
+ * attaches to the first non-labor item (by `link_kind`/`line_kind`), so the
+ * vendor still reads it once without it landing on a labor line; if every
+ * item is labor, the note goes on no item. Its lines being all labor or
+ * accessory children also means that PO supplies no COM.
  */
 export function comArrivingSeparately(
-  items: readonly { id: string; spec?: unknown }[],
+  items: readonly {
+    id: string;
+    spec?: unknown;
+    link_kind?: string | null;
+    line_kind?: string | null;
+  }[],
   supplyingOrders: readonly SupplyingPurchaseOrder[],
   supplyingLines: readonly SupplyingLine[],
 ): Map<string, string[]> {
@@ -932,17 +943,24 @@ export function comArrivingSeparately(
   if (items.length === 0) return notes;
   const itemIds = new Set(items.map((item) => item.id));
   const specOf = new Map(items.map((item) => [item.id, item.spec]));
+  const fallbackItem = items.find(
+    (item) => item.link_kind !== 'labor' && item.line_kind !== 'labor',
+  );
 
   for (const order of supplyingOrders) {
+    const linked = supplyingLines.filter(
+      (line) => line.purchase_order_id === order.id && line.parent_ffe_item_id,
+    );
+    const com = linked.filter((line) => line.link_kind === 'com');
+    if (linked.length > 0 && com.length === 0) continue;
     const pieces = Array.from(
       new Set(
-        supplyingLines
-          .filter((line) => line.purchase_order_id === order.id && line.parent_ffe_item_id)
+        com
           .map((line) => line.parent_ffe_item_id as string)
           .filter((id) => itemIds.has(id)),
       ),
     );
-    const targets = pieces.length > 0 ? pieces : [items[0].id];
+    const targets = pieces.length > 0 ? pieces : fallbackItem ? [fallbackItem.id] : [];
     for (const itemId of targets) {
       const rawSpec = specOf.get(itemId);
       const spec = readRecord(Array.isArray(rawSpec) ? rawSpec[0] : rawSpec);
@@ -963,4 +981,33 @@ export function comArrivingSeparately(
     }
   }
   return notes;
+}
+
+// ─── The room cell names every room (US-21 T-51, D7 phase 3) ────────────────
+// A line placed in more than one room (project_ffe_placements, 00734) prints
+// each room with its share, in placement order, and the unit once at the end:
+// `Hall 120 · Living Room 320 · Dining 180 · Kitchen 210 sq ft`. Waste (the
+// line's quantity past the placed sum) is not a room and never prints here.
+// A line with one placement or none prints its primary room, as before.
+
+/** One room placement of a PO line, as the items select embeds it. */
+export interface PoLinePlacement {
+  quantity: number;
+  sort_order: number;
+  room: { name: string | null } | null;
+}
+
+export function poLineRoomLabel(
+  primaryRoom: string | null,
+  placements: readonly PoLinePlacement[] | null | undefined,
+  unit: string | null | undefined,
+): string | null {
+  if (!placements || placements.length < 2) return primaryRoom;
+  // The unit word follows the Qty cell's rule (_shared/po-pdf.ts poQuantityLabel).
+  const unitWord = unit && unit !== 'each' ? ` ${unit.replace(/_/g, ' ')}` : '';
+  const rooms = [...placements]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((p) => `${p.room?.name?.trim() || 'Room'} ${p.quantity}`)
+    .join(' · ');
+  return `${rooms}${unitWord}`;
 }

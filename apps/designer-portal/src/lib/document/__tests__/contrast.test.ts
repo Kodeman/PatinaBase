@@ -102,7 +102,16 @@ function contrastRatio(a: string, b: string): number {
 
 const css = readFileSync(GLOBALS_CSS, 'utf8');
 const tokens = parseTokens(css);
-const inkTokens = [...tokens.entries()].filter(([name]) => name.endsWith('-ink'));
+/** T-22's drafting-stock inks pair with THEIR OWN grounds (`--sheet`,
+ *  `--sheet-head`, `--sheet-toast`), not the paper's LIGHT_GROUNDS map.
+ *  `--sheet-toast-ink` is a literal white, meant to sit on the dark
+ *  `--sheet-toast` pill — folding it into the generic sweep below would fail
+ *  it against paper for the wrong reason. The "T-22" describe block near the
+ *  end of this file gates it against its real ground instead. */
+const SHEET_GROUND_INKS = ['--sheet-toast-ink'];
+const inkTokens = [...tokens.entries()].filter(
+  ([name]) => name.endsWith('-ink') && !SHEET_GROUND_INKS.includes(name),
+);
 /** `--color-quiet-ink` and `--doc-*-ink*` are not pigment companions; the
  *  companions are the ones named for a base pigment this guard also holds. */
 const PIGMENT_INKS = [
@@ -741,5 +750,75 @@ describe('D4 · --color-card-edge is the one boundary grey', () => {
     );
     const failing = Object.entries(measured).filter(([, ratio]) => ratio < 3);
     expect(failing).toEqual([]);
+  });
+});
+
+/**
+ * T-22 — the drafting stock's own inks.
+ *
+ * The Build room's working sheet is a second stock (SPEC §2.1 of
+ * `artifacts/pieces-building-room-2026-10-08/specimens/SPEC.md`), scoped to
+ * `[data-drafting-stock]` and never read by the Document paper. Its inks pair
+ * with ITS OWN grounds (`--sheet`, `--sheet-head`, `--sheet-toast`), not the
+ * paper's LIGHT_GROUNDS map, so they are gated here rather than folded into
+ * the generic sweep above.
+ */
+describe('T-22 · the drafting stock inks clear AA on their own grounds', () => {
+  const SHEET_GROUNDS = {
+    '--sheet': tokens.get('--sheet')!,
+    '--sheet-head': tokens.get('--sheet-head')!,
+  };
+
+  it('declares every drafting-stock token, each as a hex', () => {
+    const names = [
+      '--sheet',
+      '--sheet-head',
+      '--sheet-ink',
+      '--sheet-ink-muted',
+      '--sheet-ink-faint',
+      '--sheet-rule',
+      '--sheet-rule-strong',
+      '--sheet-row-hover',
+      '--sheet-toast',
+      '--sheet-toast-ink',
+    ];
+    for (const name of names) expect(tokens.get(name)).toBeDefined();
+  });
+
+  it('holds --sheet-ink-faint at 4.5:1 on --sheet and --sheet-head', () => {
+    const faint = tokens.get('--sheet-ink-faint')!;
+    const pairs = Object.entries(SHEET_GROUNDS).map(
+      ([ground, hex]) =>
+        [`--sheet-ink-faint on ${ground} (${hex})`, faint, hex] as [
+          string,
+          string,
+          string,
+        ],
+    );
+    expect(failuresBelowAA(pairs)).toEqual([]);
+  });
+
+  it('holds --sheet-ink and --sheet-ink-muted at 4.5:1 on --sheet and --sheet-head', () => {
+    const pairs = (['--sheet-ink', '--sheet-ink-muted'] as const).flatMap((ink) =>
+      Object.entries(SHEET_GROUNDS).map(
+        ([ground, hex]) =>
+          [`${ink} on ${ground} (${hex})`, tokens.get(ink)!, hex] as [
+            string,
+            string,
+            string,
+          ],
+      ),
+    );
+    expect(failuresBelowAA(pairs)).toEqual([]);
+  });
+
+  it('holds --sheet-toast-ink at 4.5:1 on its own --sheet-toast ground, not the paper', () => {
+    // Excluded from the generic LIGHT_GROUNDS sweep above for exactly this
+    // reason: it is a literal white, meant to be read on the dark toast pill.
+    const toastInk = tokens.get('--sheet-toast-ink')!;
+    const toastGround = tokens.get('--sheet-toast')!;
+    expect(contrastRatio(toastInk, toastGround)).toBeGreaterThanOrEqual(
+      AA_NORMAL_TEXT,
+    );
   });
 });

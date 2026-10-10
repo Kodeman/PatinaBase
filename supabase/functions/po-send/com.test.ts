@@ -27,7 +27,7 @@ Deno.test("comArrivingSeparately prints the mill PO under the piece it supplies"
       },
     ],
     [KESSLER_PO],
-    [{ purchase_order_id: "po-1043", parent_ffe_item_id: "line-sofa" }],
+    [{ purchase_order_id: "po-1043", parent_ffe_item_id: "line-sofa", link_kind: "com" }],
   );
   assertEquals(notes.get("line-chair"), undefined);
   assertEquals(notes.get("line-sofa"), [
@@ -39,7 +39,7 @@ Deno.test("comArrivingSeparately reads an unnumbered fabric PO and a bare spec",
   const notes = comArrivingSeparately(
     [{ id: "line-sofa", spec: [{ com_spec: null }] }],
     [{ id: "po-9", po_number: null, vendor: null }],
-    [{ purchase_order_id: "po-9", parent_ffe_item_id: "line-sofa" }],
+    [{ purchase_order_id: "po-9", parent_ffe_item_id: "line-sofa", link_kind: "com" }],
   );
   assertEquals(notes.get("line-sofa"), ["COM arriving separately — the mill PO to follow"]);
 });
@@ -48,7 +48,7 @@ Deno.test("comArrivingSeparately attaches an unmatched supplying PO to the first
   const notes = comArrivingSeparately(
     [{ id: "line-a" }, { id: "line-b" }],
     [KESSLER_PO],
-    [{ purchase_order_id: "po-1043", parent_ffe_item_id: "line-elsewhere" }],
+    [{ purchase_order_id: "po-1043", parent_ffe_item_id: "line-elsewhere", link_kind: "com" }],
   );
   assertEquals(notes.get("line-a"), ["COM arriving separately — Kessler PO-1043"]);
   assertEquals(notes.get("line-b"), undefined);

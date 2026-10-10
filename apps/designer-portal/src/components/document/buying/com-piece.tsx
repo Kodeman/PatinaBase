@@ -36,20 +36,34 @@ export interface PairReading {
   children: FfePairLine[];
   /** Lines that could be linked as this piece's fabric. */
   candidates: FfePairLine[];
+  /** The line is itself on a piece (COM, labor or accessory), so takes no COM. */
+  onPiece: boolean;
 }
+
+type LinkFacts = { parent_ffe_item_id?: string | null; link_kind?: string | null };
+
+/**
+ * The piece a line's COM fabric supplies. A labor or accessory child also
+ * points at its piece (link_kind, 00729), but only a 'com' link is the pair.
+ */
+const comParentId = (line: LinkFacts): string | null =>
+  line.link_kind === 'com' ? (line.parent_ffe_item_id ?? null) : null;
 
 /** Where a line sits in a pair, from the project's live lines. */
 export function readPair(
-  item: { id: string; parent_ffe_item_id?: string | null },
+  item: { id: string } & LinkFacts,
   lines: readonly FfePairLine[],
 ): PairReading {
-  const self = lines.find((l) => l.id === item.id);
-  const parentId = self ? self.parent_ffe_item_id : (item.parent_ffe_item_id ?? null);
+  const self = lines.find((l) => l.id === item.id) ?? item;
+  const parentId = comParentId(self);
+  // Linkability is one level of any kind, as link_ffe_pair checks it: a line
+  // already on a piece, or a piece with any child, is not linkable.
   const isParent = (id: string) => lines.some((l) => l.parent_ffe_item_id === id);
   return {
     parent: parentId ? (lines.find((l) => l.id === parentId) ?? null) : null,
-    children: lines.filter((l) => l.parent_ffe_item_id === item.id),
+    children: lines.filter((l) => comParentId(l) === item.id),
     candidates: lines.filter((l) => l.id !== item.id && !l.parent_ffe_item_id && !isParent(l.id)),
+    onPiece: !!self.parent_ffe_item_id,
   };
 }
 
@@ -512,7 +526,7 @@ export function ComPiece({
             {unlinkAct(child.id)}
           </p>
         ))}
-      {!pair.parent && !takesCom && canEdit && lines && !linking && (
+      {!pair.onPiece && !takesCom && canEdit && lines && !linking && (
         <DocumentAction
           actionKey="piece-takes-com"
           surfaceKey="project"

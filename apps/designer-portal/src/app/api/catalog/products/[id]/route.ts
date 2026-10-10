@@ -3,6 +3,11 @@ import { createServerClient } from '@patina/supabase/server';
 
 const TIER_VALUES = ['maker_piece', 'designers_pick', 'sourced'] as const;
 
+/** The merge sentence, as REFERENCED_PRODUCT_DELETE_REFUSAL (hooks/use-products.ts)
+ *  says it; copied so this route does not import the client hooks module. */
+const REFERENCED_PRODUCT_DELETE_REFUSAL =
+  "A product on a line can't be deleted. Merge it into the one you keep.";
+
 function snakeToCamel(product: Record<string, unknown>) {
   const tags = (product.tags ?? []) as string[];
   const tier = tags.find((t) => (TIER_VALUES as readonly string[]).includes(t)) ?? null;
@@ -163,13 +168,27 @@ export async function DELETE(
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const { error } = await supabase
+    // A refused delete never reports success (US-21 T-55b, F6). The narrowed
+    // products_studio_delete policy (00753) matches no row for a product a
+    // line names, so RLS deletes nothing and says nothing: count the rows.
+    // A DB guard that refuses outright says its own sentence; print it as-is.
+    const { data: deleted, error } = await supabase
       .from('products')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select('id');
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json(
+        { error: error.message || REFERENCED_PRODUCT_DELETE_REFUSAL },
+        { status: 409 },
+      );
+    }
+    if (!deleted || deleted.length === 0) {
+      return NextResponse.json(
+        { error: REFERENCED_PRODUCT_DELETE_REFUSAL },
+        { status: 409 },
+      );
     }
 
     return NextResponse.json({ success: true });

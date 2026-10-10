@@ -113,6 +113,8 @@ export function useProjectPalettes(projectId: string) {
       return (data ?? []) as ProjectPalette[];
     },
     enabled: !!projectId,
+    // R83: the readers show their own empty state; a failed read never toasts.
+    meta: { errorSurface: 'silent' as const },
   });
 }
 
@@ -189,6 +191,8 @@ export function useProjectFFEItems(
         .from('project_ffe_items')
         .select(`
           *,
+          ffe_line_stage,
+          ffe_line_authorization,
           room:project_rooms!project_room_id(id, name),
           product:products!product_id(id, name, images, brand),
           blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),

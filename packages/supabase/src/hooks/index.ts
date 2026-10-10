@@ -1760,6 +1760,8 @@ export {
   useStartPoCheckout,
   // Sprint 2 — Receiving, damage claims, calendar
   useReceivingInspections,
+  // US-21 T-54 — earlier room receipts, for receiving by room (00754)
+  useFfePlacementReceipts,
   useDamageClaims,
   useDeliveryCalendar,
   useTodayProcurementCounts,
@@ -2571,3 +2573,6 @@ export {
 
 // US-16 C-16: Add to the job — line card prefill, spec fields, document import.
 export * from "./use-add-to-the-job";
+
+// US-21 W2: the pieces primitives — room placements, batch needs, build fields, restore, labor lines.
+export * from "./use-pieces";

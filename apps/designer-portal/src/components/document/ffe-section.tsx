@@ -55,7 +55,7 @@ import {
   unbilledRiders,
 } from '@/lib/document/invoice-composer';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
-import type { FFEStageKey } from '@patina/types';
+import type { FfeAssignmentScope, FFEStageKey } from '@patina/types';
 import {
   useCallback,
   useEffect,
@@ -66,7 +66,12 @@ import {
 } from 'react';
 import {
   deriveLineStamp,
+  isLaborLine,
+  LABOR_STAMP_LABEL,
+  laborPiece,
+  lineStageInputFromRow,
   lineStampLabel,
+  priceWord,
   type LineStamp,
   type TradeLineProgress,
 } from '@/lib/document/stamp-derivation';
@@ -74,7 +79,6 @@ import {
   buildInstrumentIndex,
   buildTradeScopeIndex,
   deriveLineAuthorization,
-  deriveOrderReadiness,
   deriveTradeLineHold,
   eligibility,
   releaseSummary,
@@ -112,11 +116,8 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
   ACT_LANDING_EVENTS,
   NAMED_ACTS,
-  needActLabel,
-  ownAct,
   type FfeActLanding,
   type FfeActLandingDetail,
-  type OwnActFacts,
 } from '@/lib/document/act-names';
 import { isUnansweredPo } from '@/lib/document/po-silences';
 import { StrataMark } from './strata-mark';
@@ -138,10 +139,8 @@ import {
   useTradeScopes,
 } from '@/hooks/use-commercial-documents';
 import { AuthorizationStamp } from './schedule/authorization-stamp';
-import { GuidedEmptyState } from './guided-empty-state';
 import { AddLineSheet } from './schedule/add-line-sheet';
 import { AddToProjectSheet, openAddToProject } from './schedule/add-to-project-sheet';
-import { ConceptRenderUpload } from './rooms/concept-render-upload';
 import { CompositionBar } from './schedule/composition-bar';
 import { ReviewReleaseSheet } from './schedule/review-release-sheet';
 import {
@@ -149,10 +148,7 @@ import {
   useReleaseCeremony,
 } from './schedule/release-ceremony-context';
 import type { NeedLine, SectionKey } from '@/lib/document/desk-derivation';
-import {
-  electFfeLeader,
-  type FfeLeaderKind,
-} from '@/lib/document/ffe-leader';
+import { scanFfeExceptions } from '@/lib/document/ffe-leader';
 import { DocumentAction } from './document-action';
 import { SectionLoadingLine } from './section-loading-line';
 import { RegionHead, type RegionLedgerEntry } from './region/region-head';
@@ -165,12 +161,19 @@ import {
   roomStateRowFromStamp,
 } from '@/lib/document/room-state';
 import { useRoomLens } from './room-lens-context';
-import { MakerReading, ReadingLens } from './buying/maker-reading';
-import { NextActReading } from './buying/next-act-reading';
 import { InstallManifest } from './buying/install-manifest';
+import { PiecesOverview } from './pieces/pieces-overview';
+import {
+  buildRoomHref,
+  piecesRoomAnchorId,
+} from '@/lib/document/pieces/build-room-url';
+import {
+  deriveOverviewJob,
+  overviewHeadStages,
+  overviewHeadStatus,
+} from '@/lib/document/pieces/overview-derivation';
 import { AskMakerSheet, InstallReadingLine } from './overlays/ask-maker-sheet';
 import { CareClosedLine } from './quiet-sections';
-import type { BuyingReading } from '@/lib/document/buying-readings';
 import {
   STATE_WORDS,
   isPieceHere,
@@ -240,6 +243,13 @@ function stampProps(stamp: LineStamp): {
     // 'trade_pending' entry and would throw).
     case 'trade_pending':
       return { label, color: 'var(--color-aged-oak)' };
+    // US-21 D1 (Q3): not machine stages, so not in STAGE_CONFIG. They keep
+    // the pre-order outline of the word they replace.
+    case 'placeholder':
+    case 'specced':
+    case 'ready':
+    case 'released':
+      return { label, color: STAGE_CONFIG.specified.color };
     case 'decision_due':
       return {
         label: stamp.dueDate ? `${label} · ${fmtDay(stamp.dueDate)}` : label,
@@ -342,17 +352,6 @@ function livePurchaseOrder(item: FFERow) {
   const po = item.purchase_order ?? null;
   return po && po.status !== 'cancelled' ? po : null;
 }
-
-/** What `ownAct` reads where the head supplies only its own count. */
-const OWN_ACT_NO_FACTS: OwnActFacts = {
-  inquiryOpen: false,
-  firstMissingEssential: null,
-  proposalState: null,
-  clientFirstName: null,
-  unspecifiedCount: 0,
-  releaseEligible: false,
-  install: null,
-};
 
 /** D5 (US-19): the Pieces head's `Record a change` ledger key. */
 const PIECES_RECORD_A_CHANGE_KEY = 'record-a-change-pieces-head';
@@ -556,10 +555,20 @@ function FFELine({
     installState && stamp.kind !== 'trade_pending' && !damageIsTheStamp ? sp.label : null,
   );
   const billing = coverageNote(item, coverage);
+  // US-21 fix-now #5: a rough line reads `Not priced`, never `$0`, and an
+  // allowance with no figure of its own prints its ceiling, the figure it
+  // signs at (signableCents), rather than `$0`.
+  const allowanceCents =
+    item.item_type === 'allowance' && !(item.line_total_cents > 0)
+      ? signableCents(item)
+      : null;
   const price =
-    item.line_total_cents != null
-      ? formatMoney(item.line_total_cents, rowCurrency(item))
-      : '—';
+    priceWord(item) ??
+    (allowanceCents != null
+      ? formatMoney(allowanceCents, rowCurrency(item))
+      : item.line_total_cents != null
+        ? formatMoney(item.line_total_cents, rowCurrency(item))
+        : '—');
   const thumbSrc = ffeThumbSrc(item);
   const washTone = ffeWashTone(stamp.kind);
   const tone = ffeStampTone(stamp.kind);
@@ -638,7 +647,19 @@ function FFELine({
         // The status moved into the detail line; the empty cell keeps the
         // grid's stamp track so the price stays in its column.
         <span aria-hidden />
-      ) : stamp.kind === 'trade_pending' ? null : (
+      ) : stamp.kind === 'trade_pending' ? null : isLaborLine(item) ? (
+        // US-21 D1: LABOR beside the stage word, never instead of it; one
+        // cell, so the price keeps its column.
+        <span className="inline-flex items-center gap-1.5">
+          <Stamp label={LABOR_STAMP_LABEL} color={STAGE_CONFIG.specified.color} />
+          <Stamp
+            label={sp.label}
+            color={sp.color}
+            ink={sp.ink}
+            {...(tone ? ({ variant: 'filled', tone } as const) : {})}
+          />
+        </span>
+      ) : (
         <Stamp
           label={sp.label}
           color={sp.color}
@@ -1038,6 +1059,9 @@ function InstallSelectionBar({
 
 interface FFESectionProps {
   projectId: string;
+  /** The id the Document was opened with (`/doc/<id>`), so a Build room door
+   *  holds and returns to the same Document. Falls back to `projectId`. */
+  docId?: string;
   projectName?: string;
   mode: 'project' | 'install';
   /** Line hovered in the margin (§13 Slice 3 anchored highlight). */
@@ -1072,8 +1096,8 @@ interface FFESectionProps {
    *  outside it. Reported, never asked for: `canRelease` and per-line
    *  eligibility are derived here and nowhere else. Pass a stable callback. */
   onReleaseOffered?: (offered: boolean) => void;
-  /** US-19 FR3 F3-10 — the project's status (`on_hold` holds the head's
-   *  leader to the own act). Undefined keeps today's head. */
+  /** US-19 FR3 F3-10 — the project's status. Unread since US-21 Q14: the
+   *  overview's head leads with `Work the pieces` on a held job too. */
   projectStatus?: string | null;
 }
 
@@ -1162,6 +1186,7 @@ export function FFESection(props: FFESectionProps) {
 
 function FFESectionBody({
   projectId,
+  docId = projectId,
   projectName = '',
   mode,
   highlightId = null,
@@ -1177,7 +1202,6 @@ function FFESectionBody({
   releaseLeaderElsewhere = false,
   needs = [],
   onReleaseOffered,
-  projectStatus = null,
   instruments,
 }: FFESectionProps & { instruments: InstrumentLike[] }) {
   const { heldRoomId, toggleRoom } = useRoomLens();
@@ -1211,6 +1235,7 @@ function FFESectionBody({
   const [addLineRoom, setAddLineRoom] = useState<{
     id: string | null;
     name: string;
+    scope: FfeAssignmentScope;
   } | null>(null);
   // withLifecycle: the line unfold draws R7's trail, which needs the PO's
   // delivered_date and payment rows. Opt-in so no other portal pays for it.
@@ -1261,12 +1286,15 @@ function FFESectionBody({
   // carry the default `staleTime: 0`, so a fresh observer refetches on mount
   // even against a warm cache, and a promotion that fetches is what
   // `lens-contrast.spec.ts:183` forbids. The block reads them as props.
-  const sectionTasksQuery = useSectionTasks(sectionKey ? projectId : null);
-  const sectionGatesQuery = useSectionGates(sectionKey ? projectId : null);
+  // US-21 Q14: the project spread's overview prints no work block, so only
+  // the install and care spreads read them.
+  const workProjectId = sectionKey && mode === 'install' ? projectId : null;
+  const sectionTasksQuery = useSectionTasks(workProjectId);
+  const sectionGatesQuery = useSectionGates(workProjectId);
   const sectionTasks = sectionTasksQuery.data;
   const sectionGates = sectionGatesQuery.data;
   const { data: sectionLoggedMinutes } = useSectionLoggedMinutes(
-    sectionKey ? projectId : null,
+    workProjectId,
     sectionKey ?? 'project',
   );
   // Whether a trade line's REAL progress is actually known right now.
@@ -1307,18 +1335,6 @@ function FFESectionBody({
     () => new Set(),
   );
   const installSelecting = installing && !selecting;
-  // C-15 / C-33: the project's lines read by room (R25), by maker or by next
-  // act. Ticks belong to the room reading, so a selection in hand holds it there.
-  const [reading, setReading] = useState<BuyingReading>('room');
-  const readingLockedReason = selecting
-    ? 'finish the release first'
-    : installSelecting
-      ? 'finish choosing what’s installed first'
-      : null;
-  const shownReading: BuyingReading =
-    mode === 'project' && readingLockedReason === null ? reading : 'room';
-  const byMaker = shownReading === 'maker';
-  const byNextAct = shownReading === 'next';
   const endInstalling = () => {
     setInstalling(false);
     setInstallPicks(new Set());
@@ -1339,7 +1355,7 @@ function FFESectionBody({
     return {
       item,
       stamp: deriveLineStamp(
-        item,
+        { ...item, stage: lineStageInputFromRow(item, laborPiece(item, items)) },
         tradeHold.onTradeScope
           ? tradeProgressKnown
             ? (tradeHold.progressState as TradeLineProgress)
@@ -1390,21 +1406,20 @@ function FFESectionBody({
   useEffect(() => {
     onReleaseOffered?.(releaseOffered);
   }, [onReleaseOffered, releaseOffered]);
-  // The head's leader is the release only while no other head has taken it —
-  // and a head that is not printing it has not taken it. In the window where
-  // an authority stands behind the project but no line can currently go, the
-  // lift outside does not render (it is gated on `releaseOffered`), so the
-  // entry stays here in the disabled form it has always worn, carrying its
-  // "No lines are currently eligible" reason. Deleting it outright left the
-  // verb — and the only account of why it cannot be pressed — nowhere.
+  // US-21 a1: the Pieces head always carries Release for authorization, held
+  // with its reason while nothing can go — unless the Delivery table's lift
+  // has taken a release that is on offer.
   const releaseInHead =
-    canRelease && (!releaseLeaderElsewhere || !releaseOffered);
+    mode === 'project' && !(releaseLeaderElsewhere && releaseOffered);
 
   // R76 — what the section-level Bill act would carry: priced lines not yet
   // on a live invoice (the composer re-partitions; this is the offer).
+  // US-21 fix-now #5: the column defaults to 0 (00066), so a line that prints
+  // `Not priced` is not priced, and there is nothing on it to bill.
   const billableUninvoiced = (items ?? []).filter((it) => {
     if (it.unit_price_cents === null || it.unit_price_cents === undefined)
       return false;
+    if (priceWord(it) === 'Not priced') return false;
     const cov = coverage?.[it.id];
     return !cov || cov.coverage === 'uninvoiced';
   });
@@ -1462,9 +1477,8 @@ function FFESectionBody({
     ...row,
     projectId,
     projectName,
-    // C-AF-03 — the margin's hover wins; otherwise the head's elected leader
-    // points at the line it acts on.
-    highlightId: highlightId ?? ffeLeader.highlightLineId,
+    // C-AF-03 — the margin's hover.
+    highlightId,
     unfolded: openLineId === row.item.id,
     onToggle: () =>
       choosingPiece
@@ -1501,33 +1515,6 @@ function FFESectionBody({
     installState: mode === 'install' ? pieceInstallState(row.item) : undefined,
     damageStamp: oneVoice,
   });
-
-  // The maker and next-act readings open the same unfold the room reading does.
-  const toggleReadingLine = (lineId: string) =>
-    choosingPiece
-      ? recordChangeOnLine(String(lineId))
-      : setOpenLineId(openLineId === lineId ? null : lineId);
-  const renderReadingUnfold = (row: LineRow) => {
-    const props = lineProps(row);
-    return (
-      <>
-      {props.recordChange && <RecordChangeLineAct itemId={String(row.item.id)} />}
-      <LineUnfold
-        item={row.item}
-        projectId={projectId}
-        projectName={projectName}
-        onAddNote={onAddNote}
-        onFold={props.onToggle}
-        auth={row.auth}
-        isCommercialOrigin={isCommercialOrigin}
-        onIncludeInRelease={props.onIncludeInRelease}
-        canEditSelection={props.canEditSelection}
-        showArtifactPlate={props.showArtifactPlate}
-        purchase={props.purchase}
-      />
-      </>
-    );
-  };
 
   const roomHeadingProps = (group: LineRow[]) => {
     const ids = eligibleIds(group);
@@ -1567,11 +1554,13 @@ function FFESectionBody({
   const unassigned = groupByRoom
     ? rows.filter((r) => r.item.assignment_scope === 'unassigned')
     : [];
+  // US-21 Q14: outside the release ceremony the project spread prints the
+  // room overview; the room headings and their lines print only while ticking.
+  const overview = mode === 'project' && !selecting;
   // FR6 F6-5 (D12): `Choose the piece` heads the list that holds the first
-  // line row. The maker and next-act readings print their lines in a table of
-  // their own, so there (and with no line) it stands just above the reading.
+  // line row. On the overview (and with no line) it stands above the rows.
   const firstRoomWithLines = roomGroups.find((group) => group.rows.length > 0);
-  const chooseListKey: string | null = !choosingPiece || byMaker || byNextAct
+  const chooseListKey: string | null = !choosingPiece || overview
     ? null
     : !groupByRoom
       ? rows.length > 0 ? 'movement' : null
@@ -1622,6 +1611,67 @@ function FFESectionBody({
     ffeSetFolded(false);
     onRequestedLineConsumed();
   }, [ffeSetFolded, items, mode, onRequestedLineConsumed, requestedLineId]);
+  // US-21 fix-now #8 — the spec book's way back (`#line-<id>`) lands on its
+  // line once the schedule has settled: Pieces and the line unfold, and the
+  // row (`ffe-selection-<id>`) comes into view. The hash is read, never
+  // cleared; the arrival gate reads it too, and a hash means no arrival plays.
+  // Honoured once per hash, for the same reason as the request above.
+  const honouredHashRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (mode !== 'project' || !ffeItemsSettled) return;
+    const hashLineId = /^#line-(.+)$/.exec(window.location.hash)?.[1];
+    if (!hashLineId || honouredHashRef.current === hashLineId) return;
+    if (!(items ?? []).some((item) => String(item.id) === hashLineId)) return;
+    honouredHashRef.current = hashLineId;
+    setOpenLineId(hashLineId);
+    ffeSetFolded(false);
+    // The unfold above is a state change, so a folded or quiet region mounts
+    // the row on a later paint: wait for it, up to a second, as the ⌘K
+    // landing below does.
+    let waited = 0;
+    const land = () => {
+      const row = document.getElementById(`ffe-selection-${hashLineId}`);
+      if (!row) {
+        if (waited++ < 60) requestAnimationFrame(land);
+        return;
+      }
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      row.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+    };
+    requestAnimationFrame(() => requestAnimationFrame(land));
+  }, [ffeItemsSettled, ffeSetFolded, items, mode]);
+  // US-21 a10 — back from the Build room (`#pieces-room-<roomId>`): Pieces
+  // unfolds, the room's row comes to the top and carries the 3px bar. The
+  // region is brought into view first, so a lens that has not reached it
+  // promotes it and the row mounts. Honoured once per hash.
+  const [returnedRoomId, setReturnedRoomId] = useState<string | null>(null);
+  const honouredRoomHashRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (mode !== 'project' || !ffeItemsSettled) return;
+    const readHash = () => {
+      const roomId = /^#pieces-room-(.+)$/.exec(window.location.hash)?.[1] ?? null;
+      if (!roomId || honouredRoomHashRef.current === roomId) return;
+      if (!(rooms ?? []).some((room) => room.id === roomId)) return;
+      honouredRoomHashRef.current = roomId;
+      setReturnedRoomId(roomId);
+      ffeSetFolded(false);
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      let waited = 0;
+      const land = () => {
+        const row = document.getElementById(piecesRoomAnchorId(roomId));
+        if (!row) {
+          if (waited === 0) document.getElementById('project-ffe')?.scrollIntoView?.({ block: 'start' });
+          if (waited++ < 60) requestAnimationFrame(land);
+          return;
+        }
+        row.scrollIntoView?.({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+      };
+      requestAnimationFrame(() => requestAnimationFrame(land));
+    };
+    readHash();
+    window.addEventListener('hashchange', readHash);
+    return () => window.removeEventListener('hashchange', readHash);
+  }, [ffeItemsSettled, ffeSetFolded, mode, rooms]);
   const openFfeRegion = useCallback(() => {
     if (mode !== 'project') return;
     ffeSetFolded(false);
@@ -1651,7 +1701,9 @@ function FFESectionBody({
     if (opener?.isConnected) opener.focus({ preventScroll: true });
   }, []);
   useEffect(() => {
-    if (!recordChangeAtHead) return;
+    // The overview's head carries Record a change whatever the flags say
+    // (CONTRACT §3.8 rule 2), so its `On a piece` always lands here.
+    if (!recordChangeAtHead && mode !== 'project') return;
     const onPiece = (event: Event) => {
       const itemId = (event as CustomEvent<RecordAChangeOnPieceDetail | undefined>)
         .detail?.itemId;
@@ -1670,7 +1722,7 @@ function FFESectionBody({
     };
     window.addEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, onPiece);
     return () => window.removeEventListener(RECORD_A_CHANGE_ON_PIECE_EVENT, onPiece);
-  }, [recordChangeAtHead, openFfeRegion, recordChangeOnLine]);
+  }, [recordChangeAtHead, mode, openFfeRegion, recordChangeOnLine]);
   // R34: while she chooses, Esc puts the choosing back and never reaches the
   // shell's Put down (page.tsx listens on the document, bubbling). Captured on
   // the document so it holds wherever focus is in the paper; a sheet opened
@@ -1840,16 +1892,19 @@ function FFESectionBody({
     ffeAwaitingCount > 0
       ? `${ffeAwaitingCount} awaiting authorization`
       : null;
-  // C20 — the head's identity line carries the trade word the studio word
-  // leaves out, then the counts. Line one never elides (RegionHead).
-  // US-19 D1 (`one-voice`) — `FF&E schedule` retires as a printed name; the
-  // region is Pieces, which the head's name already prints.
-  const ffeTradeWord = oneVoice ? '' : 'the FF&E schedule, ';
-  const ffeStatus = byMaker
-    ? `${ffeTradeWord}by maker · ${ffeLineCount}`
-    : byNextAct
-      ? `${ffeTradeWord}by next act · ${ffeLineCount}`
-      : `${ffeTradeWord}by room · ${ffeCounts}`;
+  // US-21 a1 — the overview's head: `by room · 7 rooms · 26 lines`, then
+  // `21 placeholders · 4 specced · nothing released`. It never branches on
+  // `one-voice` or `ask-the-paper` (CONTRACT §3.8 rule 1).
+  const overviewLines = useMemo(
+    () => (items ?? []).map((item) => ({ ...item, id: String(item.id) })),
+    [items],
+  );
+  const overviewRooms = useMemo(
+    () => (rooms ?? []).map((room) => ({ id: room.id, name: room.name })),
+    [rooms],
+  );
+  const overviewJob = useMemo(() => deriveOverviewJob(overviewLines), [overviewLines]);
+  const ffeStatus = overviewHeadStatus(overviewRooms.length, overviewJob);
   const ffeSeamSummary =
     total === 0
       ? `${ffeGroupCount} ${ffeGroupWord} · no lines yet`
@@ -1857,49 +1912,38 @@ function FFESectionBody({
         ? `${ffeCounts} · ${ffeAwaiting}`
         : ffeCounts;
 
-  // A line with no piece behind it is a line nobody has specified — the same
-  // set the Add-to-project sheet already offers as placeholders.
-  const unspecifiedLineIds = (items ?? [])
-    .filter((it) => !it.product_id && it.removed_at == null)
-    .map((it) => String(it.id));
-  const uninvoicedLineIds = billableUninvoiced.map((it) => String(it.id));
-  const ffeLeader = electFfeLeader({
-    releaseLift: releaseInHead,
-    needs,
-    unspecifiedLineIds,
-    uninvoicedLineIds,
-  });
+  // The standing exceptions a damage claim or an unanswered PO make still
+  // print beside the stage sentence; their acts live on the band and the line.
+  const ffeNeedExceptions = scanFfeExceptions({ releaseLift: false, needs });
 
+  // US-21 fix-now #3: the head adds to the job (the Add-to-project sheet);
+  // each room's own act stays `Add a line`.
   const ffeAddToProjectEntry: RegionLedgerEntry = {
     key: 'open-add-to-project',
-    label: 'Add a line',
+    label: 'Add to the job',
     onClick: () => openAddToProject('section'),
   };
   // 0a-8 / D3 Gated — held, not natively disabled: the act stays in tab order
   // and its reason prints beneath the ledger. Per-row reasons remain reachable
-  // via each row's own unfold.
+  // via each row's own unfold. US-21 Q14: the head always prints it on the
+  // project spread. Nothing ready holds it only once the schedule and its
+  // readiness have been read; an unread readiness leaves it pressable, so the
+  // ceremony can say per line why nothing can go.
+  const nothingReady =
+    ffeItemsSettled &&
+    !readinessQuery.isLoading &&
+    !readinessQuery.isError &&
+    !anyEligible;
   const ffeReleaseEntry: RegionLedgerEntry = {
     key: 'release-for-authorization',
     label: 'Release for authorization',
     onClick: () => ceremony?.begin(),
-    disabled:
-      !isLoading &&
-      !isError &&
-      total > 0 &&
-      !anyEligible &&
-      !readinessQuery.isLoading &&
-      !readinessQuery.isError,
-    reason: 'No lines are currently eligible for release.',
-  };
-  // The one opener, reached at press time rather than at import time: a static
-  // `./command-bar` import drags @patina/help-system's @portabletext ESM into
-  // every suite that renders this section, which the jest transform cannot
-  // load. A1 fixed the destinations: a claim carrying no line id lands on
-  // receiving, an unanswered PO on the orders ledger.
-  const openOrdersLedger = (page: 'receiving' | 'ledger') => {
-    void import('./command-bar').then(({ openLedger }) =>
-      openLedger('orders', { page, projectId }),
-    );
+    disabled: nothingReady || !canRelease,
+    reason: nothingReady
+      ? 'Nothing is ready to release yet.'
+      : !canRelease && ffeItemsSettled
+        ? 'No signed agreement stands behind the job yet.'
+        : undefined,
   };
   // US-19 F3-2 / FR4 (P-2) — every Pieces act lands with focus on Pieces' own
   // control: the claim, the send and the spec on their line, `Follow up with
@@ -1915,13 +1959,15 @@ function FFESectionBody({
     };
     if (act === 'open') {
       // 523-1 — the first line's unfold control, or the heading with none.
+      // US-21 Q14: on the overview, the first room's.
       const hasLine = (items ?? []).some((item) => item.removed_at == null);
+      const firstControl = overview
+        ? '[data-pieces-room] button[aria-expanded]'
+        : '[id^="ffe-selection-"] button[aria-expanded]';
       openRegion();
       landOnControl(() =>
         hasLine
-          ? document
-              .getElementById(ffeBodyId)
-              ?.querySelector<HTMLElement>('[id^="ffe-selection-"] button[aria-expanded]')
+          ? document.getElementById(ffeBodyId)?.querySelector<HTMLElement>(firstControl)
           : document.getElementById(ffeHeadingId),
       );
       return true;
@@ -2029,42 +2075,6 @@ function FFESectionBody({
     followUpLineId !== null
       ? ((items ?? []).find((item) => String(item.id) === followUpLineId) ?? null)
       : null;
-  const ffeClaimEntry: RegionLedgerEntry = {
-    key: 'file-ffe-claim',
-    label: 'File the claim',
-    onClick: () => {
-      if (oneVoice && landFfeAct('claim')) return;
-      openOrdersLedger('receiving');
-    },
-  };
-  const ffePoEntry: RegionLedgerEntry = {
-    key: 'chase-ffe-po',
-    // US-19 D1 — never "Chase …"; an unanswered PO's act has one name.
-    label: oneVoice ? needActLabel('po_unacknowledged') : 'Chase the PO',
-    onClick: () => {
-      if (oneVoice && landFfeAct('follow-up')) return;
-      openOrdersLedger('ledger');
-    },
-  };
-  const ffeBillEntry: RegionLedgerEntry | null =
-    billableUninvoiced.length > 0
-      ? {
-          key: 'bill-project-ffe',
-          // F08 — every invoice door but the Money region's names its scope.
-          label: `Bill ${billableUninvoiced.length} uninvoiced ${
-            billableUninvoiced.length === 1 ? 'line' : 'lines'
-          }`,
-          variant: 'secondary',
-          trailing: '→',
-          onClick: () =>
-            openInvoiceComposer({
-              projectId,
-              initialFfeItemIds: billableUninvoiced.map(
-                (it) => it.id as string,
-              ),
-            }),
-        }
-      : null;
   // C-25: purchases recorded on a card or on the spot, owed a client line.
   // The composer reads them; each bills at cost on its own line (R-PB7).
   const unbilled = unbilledPurchases(purchases);
@@ -2100,95 +2110,35 @@ function FFESectionBody({
           onClick: openRidersBill,
         }
       : null;
-  const ffeSpecBookEntry: RegionLedgerEntry = {
-    key: 'open-spec-book',
-    // F48's sibling: one spec-book door, naming its scope when it has one.
-    // FR2 499-10 — the name is the own-act table's, never a hand template.
-    label:
-      unspecifiedLineIds.length > 0
-        ? ownAct('project', {
-            ...OWN_ACT_NO_FACTS,
-            unspecifiedCount: unspecifiedLineIds.length,
-          })!.label
-        : 'Spec book',
-    href: `/doc/${projectId}/spec-book`,
-    variant: 'tertiary',
-    trailing: '→',
-  };
-
-  const ffeEntryByKind: Record<FfeLeaderKind, RegionLedgerEntry | null> = {
-    release: releaseInHead ? ffeReleaseEntry : null,
-    claim: ffeLeader.exceptions.some((e) => e.kind === 'claim')
-      ? ffeClaimEntry
-      : null,
-    po: ffeLeader.exceptions.some((e) => e.kind === 'po') ? ffePoEntry : null,
-    spec: ffeSpecBookEntry,
-    bill: ffeBillEntry,
-    'add-line': ffeAddToProjectEntry,
-  };
-  // The ledger's ORDER is its hierarchy, and index 0 is the elected leader.
-  const FFE_LEDGER_ORDER: readonly FfeLeaderKind[] = [
-    'release',
-    'claim',
-    'po',
-    'add-line',
-    'bill',
-    'spec',
+  // US-21 a1 — the overview's acts, in this order whatever the spread holds:
+  // the one door into the Build room (inked), Add to the job, Release for
+  // authorization (held with its reason while nothing can go), Record a
+  // change, then Fold (the head's own). The purchases and riders doors stand
+  // last, only while something is owed a client line.
+  const ffeLedger: RegionLedgerEntry[] = [
+    {
+      key: 'work-the-pieces',
+      label: 'Build the item list',
+      href: buildRoomHref(docId, { lens: 'rough', room: null }),
+      trailing: '→',
+    },
+    ffeAddToProjectEntry,
+    ...(releaseInHead ? [ffeReleaseEntry] : []),
+    {
+      key: PIECES_RECORD_A_CHANGE_KEY,
+      label: NAMED_ACTS.recordChange,
+      onClick: () => openRecordAChange({ origin: 'pieces-head' }),
+    },
+    ...[ffeBillPurchasesEntry, ffeBillRidersEntry].filter(
+      (entry): entry is RegionLedgerEntry => entry !== null,
+    ),
   ];
-  const ffeLedgerByKind: RegionLedgerEntry[] = [
-    ffeEntryByKind[ffeLeader.kind] ?? ffeAddToProjectEntry,
-    ...FFE_LEDGER_ORDER.filter((kind) => kind !== ffeLeader.kind)
-      .map((kind) => ffeEntryByKind[kind])
-      .filter((entry): entry is RegionLedgerEntry => entry !== null),
-  ];
-  // The purchases and riders doors never lead; they stand beside "Bill N
-  // uninvoiced", or last when there is no uninvoiced line.
-  const billAt = ffeLedgerByKind.findIndex((entry) => entry.key === 'bill-project-ffe');
-  const atCostDoors = [ffeBillPurchasesEntry, ffeBillRidersEntry].filter(
-    (entry): entry is RegionLedgerEntry => entry !== null,
-  );
-  const ffeLedgerDoors: RegionLedgerEntry[] =
-    atCostDoors.length > 0
-      ? billAt >= 0
-        ? [
-            ...ffeLedgerByKind.slice(0, billAt + 1),
-            ...atCostDoors,
-            ...ffeLedgerByKind.slice(billAt + 1),
-          ]
-        : [...ffeLedgerByKind, ...atCostDoors]
-      : ffeLedgerByKind;
-  // US-19 FR3 F3-10 (`one-voice`) — a held job moves nothing, so its Pieces
-  // head leads with the own act `Open the pieces`, never an exception or a
-  // Bill door; those stand plain behind it.
-  const ffeHeld = oneVoice && mode === 'project' && projectStatus === 'on_hold';
-  const ffeLeaderDoors: RegionLedgerEntry[] = ffeHeld
-    ? [
-        {
-          key: 'open-the-pieces',
-          label: ownAct('project', OWN_ACT_NO_FACTS)!.label,
-          // 523-1 — lands on the first line's unfold control, in view.
-          onClick: () => landFfeAct('open'),
-        },
-        ...ffeLedgerDoors,
-      ]
-    : ffeLedgerDoors;
-  // D5 (US-19): Record a change is the head's second act, after the leader.
-  const ffeLedger: RegionLedgerEntry[] = recordChangeAtHead
-    ? [
-        ...ffeLeaderDoors.slice(0, 1),
-        {
-          key: PIECES_RECORD_A_CHANGE_KEY,
-          label: NAMED_ACTS.recordChange,
-          onClick: () => openRecordAChange({ origin: 'pieces-head' }),
-        },
-        ...ffeLeaderDoors.slice(1),
-      ]
-    : ffeLeaderDoors;
   const changeOrderLine = changeOrderLineId
     ? (rows.find((row) => String(row.item.id) === changeOrderLineId) ?? null)
     : null;
   const ffeExceptions = [
-    ...ffeLeader.exceptions.map((exception) => exception.text),
+    overviewHeadStages(overviewJob),
+    ...ffeNeedExceptions.map((exception) => exception.text),
     ...(ffeAwaiting ? [ffeAwaiting] : []),
   ];
 
@@ -2390,16 +2340,16 @@ function FFESectionBody({
                 exceptions={ffeExceptions}
                 surfaceKey="project"
                 regionKey="ffe"
-                // F2-18 (`one-voice`): at quiet the named act prints beside
-                // the leader, as it does on the install and care heads.
+                // F2-18: at quiet the named act prints beside the leader, as
+                // it does on the install and care heads.
                 actions={
-                  ffeQuiet && oneVoice
+                  ffeQuiet
                     ? ffeLedger.filter(
                         (entry, i) => i === 0 || entry.key === PIECES_RECORD_A_CHANGE_KEY,
                       )
                     : ffeLedger
                 }
-                actsAtQuiet={ffeQuiet && !oneVoice ? 'leader' : 'all'}
+                actsAtQuiet="all"
                 bodyId={ffeBodyId}
                 onFold={() => ffeFold.setFolded(true)}
               />
@@ -2473,8 +2423,9 @@ function FFESectionBody({
         </p>
       )}
 
-      {/* R23: the quiet work block under the section head. */}
-      {sectionKey && !selecting && (
+      {/* R23: the quiet work block under the section head. US-21 Q14: the
+          project spread's overview carries no tasks. */}
+      {sectionKey && mode === 'install' && !selecting && (
         <WorkBlock
           projectId={projectId}
           sectionKey={sectionKey}
@@ -2513,8 +2464,9 @@ function FFESectionBody({
         />
       )}
 
-      {/* R24: the section's folio strip — drops on the section land here. */}
-      {sectionKey && !selecting && (
+      {/* R24: the section's folio strip — drops on the section land here.
+          US-21 Q14: the project spread's folio preamble is gone. */}
+      {sectionKey && mode === 'install' && !selecting && (
         <FolioStrip
           projectId={projectId}
           anchor={{ kind: 'section', sectionKey }}
@@ -2542,23 +2494,14 @@ function FFESectionBody({
         </div>
       )}
 
-      {!isLoading && !isError && total === 0 && (
-        mode === 'project' ? (
-          <GuidedEmptyState
-            // FR2 499-7 (`one-voice`): `FF&E schedule` retires as a printed
-            // name; the act beneath keeps its label verbatim.
-            title={oneVoice ? 'No pieces yet.' : 'Build the FF&E schedule'}
-            description="Add the pieces and allowances the studio will specify, price, authorize, procure, and install."
-            inputs={['Room', 'Piece or allowance', 'Budget']}
-            action={{ key: 'start-ffe-schedule', label: 'Open the spec book', href: `/doc/${projectId}/spec-book` }}
-          />
-        ) : (
-          <p className="border-t border-[var(--color-pearl)] py-3 text-[11.5px] text-[var(--text-muted)]">
-            {sectionKey === 'care'
-              ? 'No FF&E lines remain open for care.'
-              : 'No FF&E lines are scheduled for installation.'}
-          </p>
-        )
+      {/* US-21 Q14: an empty job's overview is its room rows and the head's
+          door in; only install and care print an empty sentence. */}
+      {!isLoading && !isError && total === 0 && mode === 'install' && (
+        <p className="border-t border-[var(--color-pearl)] py-3 text-[11.5px] text-[var(--text-muted)]">
+          {sectionKey === 'care'
+            ? 'No FF&E lines remain open for care.'
+            : 'No FF&E lines are scheduled for installation.'}
+        </p>
       )}
 
       {/* C-04: install day — offered only once a delivered line exists. */}
@@ -2587,42 +2530,56 @@ function FFESectionBody({
         </p>
       )}
 
-      {groupByRoom && total > 0 && (
-        <ReadingLens
-          reading={shownReading}
-          onChange={(next) => {
-            setOpenLineId(null);
-            setReading(next);
-          }}
-          lockedReason={readingLockedReason}
-        />
-      )}
-
-      {chooseListKey === null && choosePiecePrompt}
-      {byMaker ? (
-        <MakerReading
+      {overview ? (
+        // US-21 Q14 (a1): the room overview. A room row unfolds to its lines;
+        // a line unfolds as it always has (a released one to the buyer's
+        // instrument).
+        <PiecesOverview
           projectId={projectId}
-          rows={rows}
-          wordFor={(row) => stampProps(row.stamp).label}
+          docId={docId}
+          lines={overviewLines}
+          rooms={overviewRooms}
+          job={overviewJob}
           openLineId={openLineId}
-          onToggleLine={toggleReadingLine}
-          renderUnfold={renderReadingUnfold}
-        />
-      ) : byNextAct ? (
-        <NextActReading
-          rows={rows}
-          reasonsFor={(row) =>
-            deriveOrderReadiness(row.item, {
-              isCommercialOrigin,
-              lineAuth: row.auth,
-            }).reasons
+          allOpen={choosingPiece || installSelecting}
+          returnedRoomId={returnedRoomId}
+          heldRoomId={heldRoomId}
+          onRoomFolded={(lineIds) => {
+            if (openLineId != null && lineIds.includes(String(openLineId))) {
+              setOpenLineId(null);
+            }
+          }}
+          onAddLine={(row) =>
+            setAddLineRoom(
+              row.roomId
+                ? { id: row.roomId, name: row.name, scope: 'room' }
+                : {
+                    id: null,
+                    name: row.name,
+                    scope: row.key === 'unassigned' ? 'unassigned' : 'throughout',
+                  },
+            )
           }
-          wordFor={(row) => stampProps(row.stamp).label}
-          openLineId={openLineId}
-          onToggleLine={toggleReadingLine}
-          renderUnfold={renderReadingUnfold}
-        />
-      ) : groupByRoom ? (
+          renderLines={(_row, lineIds) => {
+            const ids = new Set(lineIds);
+            return (
+              <ul>
+                {rows
+                  .filter((row) => ids.has(String(row.item.id)))
+                  .map((row) => (
+                    <FFELine key={row.item.id} {...lineProps(row)} />
+                  ))}
+              </ul>
+            );
+          }}
+          lead={choosePiecePrompt}
+        >
+          <AddRoomInline projectId={projectId} />
+        </PiecesOverview>
+      ) : (
+        <>
+      {chooseListKey === null && choosePiecePrompt}
+      {groupByRoom ? (
         <>
           {roomGroups.map(({ room, rows: roomRows }) => (
             <div
@@ -2635,17 +2592,10 @@ function FFESectionBody({
                 budgetCents={room.budget_cents}
                 rows={roomRows}
                 onAddLine={() =>
-                  setAddLineRoom({ id: room.id, name: room.name })
+                  setAddLineRoom({ id: room.id, name: room.name, scope: 'room' })
                 }
                 {...roomHeadingProps(roomRows)}
               />
-              {!selecting && (
-                <ConceptRenderUpload
-                  projectId={projectId}
-                  roomId={room.id}
-                  roomName={room.name}
-                />
-              )}
               <ul>
                 {choosePieceItem(`room:${room.id}`)}
                 {roomRows.map((row) => (
@@ -2661,7 +2611,7 @@ function FFESectionBody({
                 budgetCents={0}
                 rows={throughout}
                 onAddLine={() =>
-                  setAddLineRoom({ id: null, name: 'Throughout' })
+                  setAddLineRoom({ id: null, name: 'Throughout', scope: 'throughout' })
                 }
                 {...roomHeadingProps(throughout)}
               />
@@ -2680,7 +2630,7 @@ function FFESectionBody({
                 budgetCents={0}
                 rows={unassigned}
                 onAddLine={() =>
-                  setAddLineRoom({ id: null, name: 'Not in a room yet' })
+                  setAddLineRoom({ id: null, name: 'Not in a room yet', scope: 'unassigned' })
                 }
                 {...roomHeadingProps(unassigned)}
               />
@@ -2692,7 +2642,6 @@ function FFESectionBody({
               </ul>
             </div>
           )}
-          {!selecting && <AddRoomInline projectId={projectId} />}
         </>
       ) : (
         <>
@@ -2704,6 +2653,8 @@ function FFESectionBody({
               <FFELine key={row.item.id} {...lineProps(row)} />
             ))}
           </ul>
+        </>
+      )}
         </>
       )}
       {installSelecting && (
@@ -2788,6 +2739,7 @@ function FFESectionBody({
           projectId={projectId}
           roomId={addLineRoom.id}
           roomName={addLineRoom.name}
+          assignmentScope={addLineRoom.scope}
           onClose={() => setAddLineRoom(null)}
         />
       )}

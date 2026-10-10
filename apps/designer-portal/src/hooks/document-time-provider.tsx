@@ -63,6 +63,15 @@ import { automaticTimeBillingIntent } from '@/lib/document/authority-hours';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { queryKeys } from '@/lib/react-query';
 
+/**
+ * The automatic timer (D11 pick-up = start), off for every member whatever her
+ * stored preference — Kody's ruling, 2026-10-09: "The automatic time logging
+ * bar should be disabled. It is popping up too often and getting in the way."
+ * Holding a document starts nothing, and neither HT-35 band renders. Flip to
+ * `true` to restore auto-start, the disclosure and the opt-out band.
+ */
+export const AUTOSTART_ENABLED = false;
+
 // R64 — grace added past the last activity ping when bounding an abandoned
 // timer's end, so a normal trailing pause near the threshold isn't shaved.
 const RUNAWAY_END_GRACE_SECONDS = 60;
@@ -466,6 +475,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
           await closeOut(timer, { offerStrip: true });
         }
         if (pausedRef.current === doc.projectId) return;
+        if (!AUTOSTART_ENABLED) return;
         // HT-35 — a member who declined the automatic timer gets no timer HERE.
         // She is not left without one: `startManually` below is the same clock
         // under her thumb. Awaited rather than read off a render, so the first
@@ -771,16 +781,18 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
           ride above the page rather than in the thumb-edge chrome: the strip's
           edge belongs to a stopped timer's offer (D-B54), and a sentence that
           displaces an offer would cost the zero-tap path §0.22 protects. */}
-      <AutostartBand
-        held={Boolean(held)}
-        running={Boolean(heldTimer)}
-        optedOut={autostartOptedOut}
-        disclosedAt={autostart.disclosedAt}
-        settled={autostart.isSettled}
-        stampKnown={autostart.disclosureRead}
-        onDisclose={() => markDisclosed.mutate()}
-        onStart={startManually}
-      />
+      {AUTOSTART_ENABLED && (
+        <AutostartBand
+          held={Boolean(held)}
+          running={Boolean(heldTimer)}
+          optedOut={autostartOptedOut}
+          disclosedAt={autostart.disclosedAt}
+          settled={autostart.isSettled}
+          stampKnown={autostart.disclosureRead}
+          onDisclose={() => markDisclosed.mutate()}
+          onStart={startManually}
+        />
+      )}
       {children}
     </DocumentTimeContext.Provider>
   );

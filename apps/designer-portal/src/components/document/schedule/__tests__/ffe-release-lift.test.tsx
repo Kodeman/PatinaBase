@@ -33,6 +33,8 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomPlacements: () => ({ data: [] }),
+  useProjectPalettes: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
@@ -178,11 +180,10 @@ describe('the release lift — the schedule’s half', () => {
       />,
     );
 
-    // F34: with the release lifted away, the head elects the sharpest
-    // exception standing on the spread — here, the one unspecified line.
+    // US-21 Q14: the head's leader is Build the item list, release lifted or not.
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Spec the 1 unspecified');
+    expect(inked[0]).toHaveTextContent('Build the item list');
     expect(
       screen.queryByRole('button', { name: 'Release for authorization' }),
     ).toBeNull();
@@ -273,7 +274,7 @@ describe('the release lift — the schedule’s half', () => {
     const reasonId = entry.getAttribute('aria-describedby');
     expect(reasonId).toBeTruthy();
     expect(document.getElementById(reasonId!)).toHaveTextContent(
-      'No lines are currently eligible for release.',
+      'Nothing is ready to release yet.',
     );
     fireEvent.click(entry);
     expect(screen.queryByText('Choose what to release')).not.toBeInTheDocument();
@@ -284,8 +285,12 @@ describe('the release lift — the schedule’s half', () => {
       <FFESection projectId="project-1" projectName="Ellsworth" mode="project" />,
     );
 
+    // US-21 Q14: Build the item list leads; the release stands in the head's ledger.
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Release for authorization');
+    expect(inked[0]).toHaveTextContent('Build the item list');
+    expect(
+      screen.getByRole('button', { name: 'Release for authorization' }),
+    ).not.toHaveAttribute('aria-disabled', 'true');
   });
 });
