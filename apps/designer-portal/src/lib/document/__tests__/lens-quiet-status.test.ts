@@ -122,13 +122,22 @@ describe('W4-R1 quiet status lines', () => {
           notDrawnCents: 2_808_000,
           money,
         }),
-      ).toBe('$17,500 out · $28,080 not drawn');
+      ).toBe('$17,500 receivable · $28,080 undisbursed');
+    });
+
+    it('drops the undisbursed figure whole when the pair runs over the 40-character line (SQ-764 F28)', () => {
+      expect(
+        moneyQuietStatus({ outCents: 11_750_000, notDrawnCents: 2_808_000, money }),
+      ).toBe('$117,500 receivable');
+      expect(moneyQuietStatus({ outCents: 0, notDrawnCents: 2_808_000, money })).toBe(
+        '$28,080 undisbursed',
+      );
     });
 
     it('drops a figure it does not hold, and says Nothing yet with neither', () => {
       expect(
         moneyQuietStatus({ outCents: 175_000, notDrawnCents: 0, money }),
-      ).toBe('$1,750 out');
+      ).toBe('$1,750 receivable');
       expect(
         moneyQuietStatus({ outCents: null, notDrawnCents: null, money }),
       ).toBe('No recorded activity');

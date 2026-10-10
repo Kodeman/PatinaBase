@@ -324,21 +324,34 @@ describe('Follow up this proposal', () => {
   });
 });
 
-describe('Release this order', () => {
+describe("Approve this order's release", () => {
   it('opens on the held order with a separate named release control', () => {
     openSheet(RELEASE_NEED);
     expect(opened).toBe(true);
+    expect(screen.getByText("Approve this order's release")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve release' })).toBeInTheDocument();
     expect(screen.getByText("Release Ana's order to Fenmoor Joinery · $4,800")).toBeInTheDocument();
     expect(mockRelease).not.toHaveBeenCalled();
   });
 
   it('releases through the release hook, then marks acted', async () => {
     openSheet(RELEASE_NEED);
-    fireEvent.click(screen.getByRole('button', { name: 'Release the order to Fenmoor Joinery' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve release' }));
     await waitFor(() => expect(mockSetNeedState).toHaveBeenCalled());
     expect(mockRelease).toHaveBeenCalledWith('po-1');
     expect(mockSetNeedState).toHaveBeenCalledWith(
       expect.objectContaining({ needKey: 'po_unsent:po-1', action: 'acted', waitingOn: 'Fenmoor Joinery' }),
     );
+  });
+
+  it('says the release only readies the order to send, and stays open on that line (SQ-764 F22)', async () => {
+    openSheet(RELEASE_NEED);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve release' }));
+    expect(
+      await screen.findByText(
+        'Release approved. The order is ready to send to Fenmoor Joinery from its purchase order.',
+      ),
+    ).toHaveAttribute('role', 'status');
+    expect(screen.queryByRole('button', { name: 'Approve release' })).toBeNull();
   });
 });

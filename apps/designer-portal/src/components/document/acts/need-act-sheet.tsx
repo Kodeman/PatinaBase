@@ -40,7 +40,7 @@ const SHEETS: Record<
   'po-chase': { title: 'Chase this PO', icon: Send, Body: PoChaseSheet },
   'invoice-reminder': { title: 'Remind this invoice', icon: Receipt, Body: InvoiceReminderSheet },
   'proposal-follow-up': { title: 'Follow up this proposal', icon: MessageSquare, Body: ProposalFollowUpSheet },
-  'release-order': { title: 'Release this order', icon: PackageCheck, Body: ReleaseOrderSheet },
+  'release-order': { title: "Approve this order's release", icon: PackageCheck, Body: ReleaseOrderSheet },
 };
 
 export function NeedActSheetProvider({ children }: { children: ReactNode }) {

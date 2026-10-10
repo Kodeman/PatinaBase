@@ -208,8 +208,9 @@ export function deskActionLabel(
   if (!oneVoice || need.actionLabel === null) return need.actionLabel;
   // FR2 499-9 — the Desk names the control the act lands on, not the need's
   // kind. Only a seat that can release sees a held order, so the release act
-  // is never in its held form here.
-  if (need.releaseHeld) return 'Release for authorization';
+  // is never in its held form here. SQ-764 F22: release_purchase_order (00710)
+  // only returns the held order to draft; nothing is sent.
+  if (need.releaseHeld) return 'Approve release';
   if (need.draft) return OPEN_THE_HELD_DRAFT;
   if (need.namedAct) return need.actionLabel;
   return needActLabel(need.kind, clientFirstName);

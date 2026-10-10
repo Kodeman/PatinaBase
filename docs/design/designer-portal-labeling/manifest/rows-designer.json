@@ -31794,6 +31794,186 @@
     "evidence": "apps/designer-portal/src/components/document/roster/call-sheet.tsx:287 display copy changed (uninventoried string, renamed for consistency with its surface's D2 rows); no unit assertion covers this string; verified in source"
   },
   {
+    "id": "C-21010",
+    "audience": "designer",
+    "surface": {
+      "area": "Day Sheet",
+      "route": "/desk (one-voice)",
+      "element": "Need action (held order)"
+    },
+    "state": "flag-on",
+    "source": "apps/designer-portal/src/lib/document/desk-derivation.ts:213",
+    "current": "Release for authorization",
+    "proposed": "Approve release",
+    "meaning": "Owner/admin act on a held purchase order. release_purchase_order (00710) only returns the held order to draft; nothing is sent. Action id and NeedKind unchanged. Coordinator ruling on SQ-764 F22.",
+    "owner": "D2",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/desk-held-release.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/desk-derivation.ts:213 display copy changed; asserted by desk-held-release.test.ts (\"C-32 ... names the release control, Approve release\") and desk-roster-derivation.test.ts (\"one voice (FR2 F2-2) labels a held order by its landing control, Approve release\")"
+  },
+  {
+    "id": "C-21011",
+    "audience": "designer",
+    "surface": {
+      "area": "Project overview",
+      "route": "/doc/[id] → Pieces stage",
+      "element": "Own act"
+    },
+    "state": "conditional",
+    "source": "apps/designer-portal/src/lib/document/act-names.ts:499",
+    "current": "Release for authorization",
+    "proposed": "Prepare purchasing authorization",
+    "meaning": "The Pieces stage's own act when a line is eligible; it lands on the Pieces head entry renamed by C-1288, which opens preparation/review without sending. Takes the C-0347/C-0363/C-1288 replacement (SQ-764 F22 ruling). ACT_TIER (act-names.ts:87) and ffeActLandingOf (act-names.ts:330) keep the old name beside the new one.",
+    "owner": "D2",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/act-names.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/act-names.ts:499 display copy changed; act-names.test.ts own-act table and \"resolves each renamed act, by its new name and its old one, to the same tier and landing (SQ-764 F22/F27)\"; act-label-agreement.test.ts:379 \"10 · Project at rest names the real control, Prepare purchasing authorization\""
+  },
+  {
+    "id": "C-21012",
+    "audience": "designer",
+    "surface": {
+      "area": "Day Sheet",
+      "route": "/desk → held order",
+      "element": "Sheet title"
+    },
+    "state": "conditional",
+    "source": "apps/designer-portal/src/components/document/acts/need-act-sheet.tsx:43",
+    "current": "Release this order",
+    "proposed": "Approve this order's release",
+    "meaning": "Title of the owner/admin sheet for a held purchase order. Approving returns the order to draft (00710); it does not send it. Coordinator ruling on SQ-764 F22.",
+    "owner": "D2",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/need-act-sheet.tsx:43 display copy changed; need-act-sheet.test.tsx \"Approve this order's release says the release only readies the order to send, and stays open on that line (SQ-764 F22)\""
+  },
+  {
+    "id": "C-21013",
+    "audience": "designer",
+    "surface": {
+      "area": "Day Sheet",
+      "route": "/desk → held order sheet",
+      "element": "Send control"
+    },
+    "state": "conditional",
+    "source": "apps/designer-portal/src/components/document/acts/act-sheets.tsx:263",
+    "current": "Release the order to {maker}",
+    "proposed": "Approve release",
+    "meaning": "Control that calls release_purchase_order (00710), which returns the held order to draft. Nothing reaches the maker from this press. Coordinator ruling on SQ-764 F22.",
+    "owner": "D2",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-sheets.tsx:263 display copy changed; need-act-sheet.test.tsx presses the \"Approve release\" control and asserts the release call"
+  },
+  {
+    "id": "C-21014",
+    "audience": "designer",
+    "surface": {
+      "area": "Day Sheet",
+      "route": "/desk → held order sheet",
+      "element": "After line (role=status)"
+    },
+    "state": "success",
+    "source": "apps/designer-portal/src/components/document/acts/act-sheets.tsx:247",
+    "current": "none (the sheet closed with no after line)",
+    "proposed": "Release approved. The order is ready to send to {maker} from its purchase order.",
+    "meaning": "Confirms only the approval: the order is back in draft and is sent from its purchase order. The sheet stays open on this line until put back. Coordinator ruling on SQ-764 F22.",
+    "owner": "D2",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-sheets.tsx:247 new after line; need-act-sheet.test.tsx \"says the release only readies the order to send, and stays open on that line (SQ-764 F22)\" asserts the role=status line once the release resolves, with the Approve release control gone"
+  },
+  {
+    "id": "C-21015",
+    "audience": "designer",
+    "surface": {
+      "area": "Day Sheet",
+      "route": "/desk, band and ⌘K (one-voice)",
+      "element": "Need action (unsent PO)"
+    },
+    "state": "flag-on",
+    "source": "apps/designer-portal/src/lib/document/act-names.ts:556",
+    "current": "Send the purchase order",
+    "proposed": "Open the purchase order",
+    "meaning": "Pointer act for an unsent purchase order; it only navigates to the order, where the send control lives. Scored tier (act-names.ts:95). SQ-764 F27, as revised by the coordinator: \"Open\", not \"Review\". ffeActLandingOf keeps the old name. Flag-off desk-derivation.ts:182 stays \"Review the purchase order\". NeedKind unchanged.",
+    "owner": "D2",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/act-names.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/act-names.ts:556 display copy changed; act-names.test.ts needActLabel po_unsent, ACT_TIER['Open the purchase order'] and \"resolves each renamed act, by its new name and its old one ... (SQ-764 F22/F27)\"; the FR1 assertion at act-names.test.ts:334 is unchanged (toEqual([]))"
+  },
+  {
+    "id": "C-21016",
+    "audience": "designer",
+    "surface": {
+      "area": "Project finances",
+      "route": "/doc/[id] → Money (quiet)",
+      "element": "Quiet status line"
+    },
+    "state": "conditional",
+    "source": "apps/designer-portal/src/lib/document/lens-quiet-status.ts:155",
+    "current": "{amount} out · {amount} not drawn",
+    "proposed": "{amount} receivable · {amount} undisbursed",
+    "meaning": "The Money head's quiet figures, in the words of its Client receivables (C-0332) and Undisbursed vendor payments (C-0333) rungs. Over 40 characters statusLine drops the trailing part whole. SQ-764 F28 ruling.",
+    "owner": "D2",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/lens-quiet-status.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/lens-quiet-status.ts:155-156 display copy changed; lens-quiet-status.test.ts fits case and \"Money drops the undisbursed figure whole when the pair runs over the 40-character line (SQ-764 F28)\"; money-region.test.tsx quiet-line assertions"
+  },
+  {
+    "id": "C-21017",
+    "audience": "designer",
+    "surface": {
+      "area": "Project lens ladder",
+      "route": "/doc/[id] → lens rail, Money",
+      "element": "Value"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:420",
+    "current": "{amount} OUT · {amount} UNDRAWN",
+    "proposed": "{amount} RECEIVABLE · {amount} UNDISBURSED",
+    "meaning": "The rail value for Money, in the C-0332/C-0333 rung words. Capped at 30 characters by dropping the trailing figure whole, never mid-word. SQ-764 F28 ruling (lens-ladder-derivation.ts:401-418 authorization).",
+    "owner": "D2",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/lens-ladder-derivation.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:420,424 display copy changed; lens-ladder-derivation.test.ts \"the Vandersteen specimen says receivable and undisbursed, and drops the trailing figure whole over its cap (SQ-764 F28)\"; lens-ladder.test.tsx '$17,500 RECEIVABLE'"
+  },
+  {
+    "id": "C-21018",
+    "audience": "designer",
+    "surface": {
+      "area": "Project lens ladder",
+      "route": "/doc/[id] → lens rail, Money",
+      "element": "Count line"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:421",
+    "current": "{amount} out · {amount} not drawn",
+    "proposed": "{amount} receivable · {amount} undisbursed",
+    "meaning": "The rail count line for Money, in the C-0332/C-0333 rung words. Capped at 40 characters by dropping the trailing figure whole, never mid-word. SQ-764 F28 ruling.",
+    "owner": "D2",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/lens-ladder-derivation.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:421,425 display copy changed; lens-ladder-derivation.test.ts countLine '$17,500 receivable · $12,300 undisbursed' and the fits/drops case ($5/$3 fits; $117,500 drops)"
+  },
+  {
     "id": "C-10171",
     "audience": "designer",
     "surface": {

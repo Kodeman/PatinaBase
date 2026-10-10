@@ -130,7 +130,9 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
     expect(segments.approvals.value).toBe('2 AWAITING · 1 OVERDUE 6D');
     expect(segments.schedule.value).toBe('INSTALL SEP 15 · 3 WEEKS');
     expect(segments.ffe.value).toBe('36 LINES · 1 DAMAGED AUG 26');
-    expect(segments.money.value).toBe('$17,500 OUT · $12,300 UNDRAWN');
+    // SQ-764 F28 — the pair runs past the 30-character value, so the
+    // undisbursed figure drops whole.
+    expect(segments.money.value).toBe('$17,500 RECEIVABLE');
     // R13 — nothing closed out yet is `NOTHING YET`, never `0 OF 6`.
     expect(segments.care.value).toBeNull();
     expect(segments.care.fallback).toBe('NOTHING YET');
@@ -190,8 +192,24 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
     expect(segments.approvals.countLine).toBe(
       '2 awaiting the client · 1 overdue 6d',
     );
-    expect(segments.money.countLine).toBe('$17,500 out · $12,300 not drawn');
+    expect(segments.money.countLine).toBe('$17,500 receivable · $12,300 undisbursed');
     expect(segments.care.countLine).toBe('Nothing yet');
+  });
+
+  it('says receivable and undisbursed, and drops the trailing figure whole over its cap (SQ-764 F28)', () => {
+    const moneyFor = (owed: number, notDrawn: number) => {
+      const base = ticket();
+      return byKey(input({ ticket: { ...base, money: { ...base.money, ladder: ladder(owed, notDrawn) } } }))
+        .money;
+    };
+    // Fits: both figures, at the value's 30 and the count line's 40.
+    const fits = moneyFor(500, 300);
+    expect(fits.value).toBe('$5 RECEIVABLE · $3 UNDISBURSED');
+    expect(fits.countLine).toBe('$5 receivable · $3 undisbursed');
+    // Over: the undisbursed figure drops whole, never a mid-word slice.
+    const over = moneyFor(11_750_000, 1_230_000);
+    expect(over.value).toBe('$117,500 RECEIVABLE');
+    expect(over.countLine).toBe('$117,500 receivable');
   });
 
   // D-B52 (W7-R1 §2) — the model carries NO geometry any more. OD-14's floor

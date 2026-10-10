@@ -592,7 +592,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     // W4-R1: the two figures the rail's value line prints, on the head's own
     // status line. The PO count belongs to the ledger, not to this line.
     const head = document.querySelector('[data-region-head="money-head"]')!;
-    expect(head).toHaveTextContent('$1,750 out');
+    expect(head).toHaveTextContent('$1,750 receivable');
     expect(head).not.toHaveTextContent(/PO/);
     expect(
       document.querySelectorAll('[data-region-count-line]'),
@@ -603,7 +603,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        '$1,750 out · not yet on the paper · press Money on the index to open',
+        '$1,750 receivable · not yet on the paper · press Money on the index to open',
       ),
     ).toHaveClass('sr-only');
 
@@ -645,7 +645,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
     const head = document.querySelector('[data-region-head="money-head"]')!;
     expect(head).toHaveTextContent('No recorded activity');
-    expect(head).not.toHaveTextContent(/out|not drawn/);
+    expect(head).not.toHaveTextContent(/receivable|undisbursed/);
     expect(screen.getByText('No recorded activity', { selector: '.sr-only' })).toBeInTheDocument();
   });
 

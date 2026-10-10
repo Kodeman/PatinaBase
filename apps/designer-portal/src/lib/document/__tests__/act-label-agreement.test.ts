@@ -376,7 +376,7 @@ describe('the 13 cross-device contradictions, under one-voice', () => {
     });
   });
 
-  it('10 · Project at rest names the real control, Release for authorization', () => {
+  it('10 · Project at rest names the real control, Prepare purchasing authorization', () => {
     expect(deriveDocumentGuide({ row: row('project') }).action?.label).toBe('Release the next room');
     expect(deriveDocumentGuide({ row: row('project'), oneVoice: true }).action?.label).toBe(
       ownAct('project', facts({ releaseEligible: true }))!.label,

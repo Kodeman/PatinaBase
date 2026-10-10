@@ -1135,11 +1135,11 @@ describe('deriveDeskRoster — one voice (FR2 F2-2)', () => {
     }
   });
 
-  it('labels a held order by its landing control, Release for authorization', () => {
+  it('labels a held order by its landing control, Approve release', () => {
     const r = row('held', 'project');
     const held = need({ kind: 'po_unsent', actionLabel: 'Release', releaseHeld: true });
     expect(unvoiced(r, held).act.label).toBe('Release');
-    expect(voiced(r, held).act.label).toBe('Release for authorization');
+    expect(voiced(r, held).act.label).toBe('Approve release');
   });
 
   it('labels a held draft Open the held draft, and a date request names its maker', () => {

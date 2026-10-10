@@ -78,11 +78,11 @@ const derive = (...signals: DeskHeldReleaseSignal[]) =>
 
 describe('C-32 — the held-for-release need', () => {
   // US-19 FR2 499-9 — the Desk labels the act by the control it lands on.
-  it('under one-voice names the release control, Release for authorization', () => {
+  it('under one-voice names the release control, Approve release', () => {
     const need = derive(held())!;
     expect(need.releaseHeld).toBe(true);
     expect(deskActionLabel(need, false)).toBe('Release');
-    expect(deskActionLabel(need, true)).toBe('Release for authorization');
+    expect(deskActionLabel(need, true)).toBe('Approve release');
   });
 
   it("asks the releasing seat to release Maya's order to Hewn, with the total", () => {

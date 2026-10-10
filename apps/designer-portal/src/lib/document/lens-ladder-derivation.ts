@@ -408,19 +408,27 @@ function moneyRegister(input: TicketInput): Register {
   }
   const parts: string[] = [];
   const words: string[] = [];
+  // SQ-764 F28 — the Owed (C-0332) and Not drawn (C-0333) rungs, in the head's
+  // words. Over its cap the pair drops its trailing figure whole, as the
+  // head's statusLine does; it never slices mid-word.
+  const wholeParts = (kept: readonly string[], max: number) => {
+    const shown = [...kept];
+    while (shown.length > 1 && shown.join(' · ').length > max) shown.pop();
+    return shown.join(' · ');
+  };
   if (out > 0) {
-    parts.push(`${money(out)} OUT`);
-    words.push(`${money(out)} out`);
+    parts.push(`${money(out)} RECEIVABLE`);
+    words.push(`${money(out)} receivable`);
   }
   if (undrawn > 0) {
-    parts.push(`${money(undrawn)} UNDRAWN`);
-    words.push(`${money(undrawn)} not drawn`);
+    parts.push(`${money(undrawn)} UNDISBURSED`);
+    words.push(`${money(undrawn)} undisbursed`);
   }
-  const value = cap(parts.join(' · '), LENS_VALUE_MAX_CHARS);
+  const value = wholeParts(parts, LENS_VALUE_MAX_CHARS);
   return {
     value,
     narrowValue: value,
-    countLine: cap(words.join(' · '), LENS_COUNT_MAX_CHARS),
+    countLine: wholeParts(words, LENS_COUNT_MAX_CHARS),
     fallback: null,
   };
 }

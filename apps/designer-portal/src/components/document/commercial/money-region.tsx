@@ -258,8 +258,9 @@ export function MoneyRegion({
       : `no budget yet · ${money(committedCents)} authorized`;
 
   // R127 OD-12/OD-13 + W4-R1 — the quiet form is the HEAD and nothing else.
-  // The two figures are the same two the rail's value line prints (`$X out ·
-  // $Y not drawn`); the PO count belongs to the ledger, not to this line.
+  // The two figures are the same two the rail's value line prints (`$X
+  // receivable · $Y undisbursed`); the PO count belongs to the ledger, not to
+  // this line.
   const quiet = density === 'quiet';
   const quietStatus = moneyQuietStatus({
     outCents: ladder.owed.cents,

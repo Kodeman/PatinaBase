@@ -82,12 +82,17 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   // Filled
   'Record the payment': 'filled',
   'Release for authorization': 'filled',
+  // C-1288 (SQ-764 F22) — the Pieces head entry's Direction C name; the old
+  // name still classifies.
+  'Prepare purchasing authorization': 'filled',
   'Send the proposal': 'filled',
   'Send the invoice': 'filled',
   // FR2 P-1 — the filled set is D3's four, worn by the landing control only.
   // These two print only as pointers (band, Desk, ⌘K), and a pointer is
   // scored; FR1 R4/R7's fill belongs to the control each lands on.
   'Send the purchase order': 'scored',
+  // SQ-764 F27 — po_unsent's act only navigates; the old name still classifies.
+  'Open the purchase order': 'scored',
   'Pay again': 'scored',
 
   // Scored — the four named acts
@@ -284,8 +289,8 @@ export const ACT_LANDING_EVENTS = {
  * Receiving claim card's at PO grain. `follow-up`: the maker composer for the
  * oldest unanswered PO. `send`: the drafted PO's send act. `spec`: the first
  * placeholder line's spec act. `open`: the first line's unfold control.
- * `release`: the Pieces head's own `Release for authorization` entry, held or
- * not (FR5 F5-1).
+ * `release`: the Pieces head's own `Prepare purchasing authorization` entry
+ * (formerly `Release for authorization`), held or not (FR5 F5-1).
  */
 export type FfeActLanding = 'claim' | 'follow-up' | 'send' | 'spec' | 'open' | 'release';
 
@@ -320,9 +325,11 @@ const FILL_THE_PLACEHOLDERS = /^Fill the \d+ placeholders?$/;
 export function ffeActLandingOf(label: string): FfeActLanding | null {
   if (label === NAMED_ACTS.fileClaim) return 'claim';
   if (label === NEED_ACT_LABELS.po_unacknowledged) return 'follow-up';
-  if (label === NEED_ACT_LABELS.po_unsent) return 'send';
+  if (label === NEED_ACT_LABELS.po_unsent || label === 'Send the purchase order') return 'send';
   if (label === 'Open the pieces') return 'open';
-  if (label === 'Release for authorization') return 'release';
+  if (label === 'Prepare purchasing authorization' || label === 'Release for authorization') {
+    return 'release';
+  }
   return FILL_THE_PLACEHOLDERS.test(label) ? 'spec' : null;
 }
 
@@ -489,7 +496,7 @@ export function ownAct(stage: SectionKey, facts: OwnActFacts): OwnAct | null {
         );
       }
       if (facts.releaseEligible) {
-        return act('Release for authorization', ACT_TARGET_IDS.piecesHead);
+        return act('Prepare purchasing authorization', ACT_TARGET_IDS.piecesHead);
       }
       return act('Open the pieces', ACT_TARGET_IDS.piecesHead);
     case 'install': {
@@ -546,7 +553,7 @@ export const NEED_ACT_LABELS: Record<NeedKind, string> = {
   schedule_proposal: 'Open the proposed date',
   task_due: 'Open the task',
   schedule_unconfigured: 'Open the schedule',
-  po_unsent: 'Send the purchase order',
+  po_unsent: 'Open the purchase order',
   po_unacknowledged: 'Follow up with the maker',
   pulse_due: 'Send the pulse',
   payment_due: 'Record the payment',

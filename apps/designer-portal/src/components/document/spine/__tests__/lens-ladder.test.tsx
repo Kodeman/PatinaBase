@@ -296,7 +296,7 @@ describe('the ladder’s stops', () => {
       (row) => row.getAttribute('data-index-region') === 'money',
     ) as HTMLElement;
     expect(money).not.toHaveAttribute('data-region-head-in-frame');
-    expect(money).toHaveTextContent('$17,500 OUT · $12,300 UNDRAWN');
+    expect(money).toHaveTextContent('$17,500 RECEIVABLE');
     const moneyValue = money.querySelector<HTMLElement>('[data-ladder-value]')!;
     expect(moneyValue).not.toHaveClass('invisible');
     expect(moneyValue).not.toHaveAttribute('aria-hidden');

@@ -121,7 +121,7 @@ describe('ownAct (D1 own-act table)', () => {
     ['Project, unspecified lines', 'project', { unspecifiedCount: 3, releaseEligible: true },
       { label: 'Fill the 3 placeholders', targetId: ACT_TARGET_IDS.piecesHead, tier: 'scored' }],
     ['Project, eligible to release', 'project', { releaseEligible: true },
-      { label: 'Release for authorization', targetId: ACT_TARGET_IDS.piecesHead, tier: 'filled' }],
+      { label: 'Prepare purchasing authorization', targetId: ACT_TARGET_IDS.piecesHead, tier: 'filled' }],
     ['Project, otherwise', 'project', {},
       { label: 'Open the pieces', targetId: ACT_TARGET_IDS.piecesHead, tier: 'scored' }],
     ['Install, no arrival date', 'install', { install: { state: 'not_here_undated', windowHeld: false } },
@@ -327,7 +327,7 @@ describe('needActLabel (D1 rule of names)', () => {
   });
 
   it('names the FR1 acts (R4, R7) and retires the Review and Reach out synonyms', () => {
-    expect(needActLabel('po_unsent')).toBe('Send the purchase order');
+    expect(needActLabel('po_unsent')).toBe('Open the purchase order');
     expect(needActLabel('lines_flagged')).toBe('Open the flagged lines');
     expect(needActLabel('schedule_proposal')).toBe('Open the proposed date');
     expect(needActLabel('pulse_due')).toBe('Send the pulse');
@@ -390,6 +390,7 @@ describe('every act string', () => {
     for (const label of [
       'Record the payment',
       'Release for authorization',
+      'Prepare purchasing authorization',
       'Send the proposal',
       'Send the invoice',
     ]) {
@@ -399,6 +400,7 @@ describe('every act string', () => {
     // only as pointers, and a pointer is scored.
     expect(Object.keys(ACT_TIER).filter((label) => ACT_TIER[label] === 'filled').sort()).toEqual(
       [
+        'Prepare purchasing authorization',
         'Record the payment',
         'Release for authorization',
         'Send the invoice',
@@ -406,6 +408,7 @@ describe('every act string', () => {
       ],
     );
     expect(ACT_TIER['Send the purchase order']).toBe('scored');
+    expect(ACT_TIER['Open the purchase order']).toBe('scored');
     expect(ACT_TIER['Pay again']).toBe('scored');
     for (const label of [
       'Record a change',
@@ -419,10 +422,22 @@ describe('every act string', () => {
 });
 
 describe('ffeActLandingOf (FR4 522-3, FR5 F5-1)', () => {
-  it('maps the project own act Release for authorization to its Pieces landing', () => {
+  it('maps the project own act Prepare purchasing authorization to its Pieces landing', () => {
     const release = ownAct('project', facts({ releaseEligible: true }));
-    expect(release?.label).toBe('Release for authorization');
+    expect(release?.label).toBe('Prepare purchasing authorization');
     expect(ffeActLandingOf(release!.label)).toBe('release');
+  });
+
+  it('resolves each renamed act, by its new name and its old one, to the same tier and landing (SQ-764 F22/F27)', () => {
+    for (const label of ['Prepare purchasing authorization', 'Release for authorization']) {
+      expect(ACT_TIER[label]).toBe('filled');
+      expect(ffeActLandingOf(label)).toBe('release');
+    }
+    expect(NEED_ACT_LABELS.po_unsent).toBe('Open the purchase order');
+    for (const label of [NEED_ACT_LABELS.po_unsent, 'Send the purchase order']) {
+      expect(ACT_TIER[label]).toBe('scored');
+      expect(ffeActLandingOf(label)).toBe('send');
+    }
   });
 
   it('keeps the other Pieces landings and leaves unowned acts null', () => {

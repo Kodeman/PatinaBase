@@ -9,7 +9,8 @@
  *   Remind this invoice      invoice-send type 'reminder' + chase_invoice (00209),
  *                            as the Receivables page's dunning act
  *   Follow up this proposal  the letterhead composer's note send
- *   Release this order       release_purchase_order (00710)
+ *   Approve this order's     release_purchase_order (00710): returns the held
+ *   release                  order to draft; nothing is sent
  *
  * SQ-746 ruling (b): a non-lead's PO chase is saved as an ack_chase draft for
  * the lead; her invoice reminder and proposal follow-up are read-only, since
@@ -17,6 +18,7 @@
  * release: only a seat that can release ever sees a held order.
  */
 
+import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useChaseInvoice,
@@ -227,13 +229,25 @@ export function ProposalFollowUpSheet({ need, onDone }: SheetProps) {
   );
 }
 
-export function ReleaseOrderSheet({ need, onDone }: SheetProps) {
+export function ReleaseOrderSheet({ need }: SheetProps) {
   const purchaseOrderId = need.need.recordId!;
   const lead = useActViewer(need.projectId);
   const order = useOrder(need.projectId, purchaseOrderId);
   const queryClient = useQueryClient();
   const release = useReleasePurchaseOrder({ errorSurface: 'inline' });
+  const [approved, setApproved] = useState(false);
   if (!order.loaded) return <Reading />;
+  const maker = order.maker ?? 'the maker';
+
+  // SQ-764 F22 — the release only returns the held order to draft; it is sent
+  // from its purchase order. The sheet says so, and stays until put back.
+  if (approved) {
+    return (
+      <p role="status" className="text-[14px] text-[var(--color-charcoal)]">
+        {`Release approved. The order is ready to send to ${maker} from its purchase order.`}
+      </p>
+    );
+  }
 
   // Q11 does not apply: the held order rose only for a seat that can release.
   const viewer: ActViewer = { ...lead, ready: true, canSend: true, leadFirstName: null };
@@ -246,12 +260,12 @@ export function ReleaseOrderSheet({ need, onDone }: SheetProps) {
       counterpart={order.maker}
       record={need.need.text}
       initial={null}
-      sendLabel={`Release the order to ${order.maker ?? 'the maker'}`}
+      sendLabel="Approve release"
       onSend={async () => {
         await release.mutateAsync(purchaseOrderId);
         void queryClient.invalidateQueries({ queryKey: ['document-state'] });
       }}
-      onDone={onDone}
+      onDone={() => setApproved(true)}
     />
   );
 }

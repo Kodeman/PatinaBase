@@ -151,8 +151,9 @@ export function moneyQuietStatus({
   const out = outCents ?? 0;
   const notDrawn = notDrawnCents ?? 0;
   return statusLine([
-    out > 0 ? `${money(out)} out` : null,
-    notDrawn > 0 ? `${money(notDrawn)} not drawn` : null,
+    // SQ-764 F28 — the ladder's Owed (C-0332) and Not drawn (C-0333) rungs.
+    out > 0 ? `${money(out)} receivable` : null,
+    notDrawn > 0 ? `${money(notDrawn)} undisbursed` : null,
   ]);
 }
 
