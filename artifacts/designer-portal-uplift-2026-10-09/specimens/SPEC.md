@@ -32,7 +32,7 @@ Frame `xN` means `frame-aN`, `frame-bN` and `frame-cN`. Every direction draws th
 | x3 | 1440 | S3 | `s3-step3-follow-up-with-maker-1440.jpg` | Fenmoor Joinery has not answered PO-HD-0412; Leah opens the chase |
 | x4 | 1440 | S4 | `s2-step6-pell-court-doc-1440.jpg` | Pell Court's deposit landed at 6:10 am; Leah releases the order |
 | x5 | 1440 | S6 | `doc-holloway-fold-1440.jpg` | Leah opens Holloway Den: what is the next step on this job? |
-| x6 | 1440 | S5 | `s5-step1-hire-desk-1440.jpg` | Jordan Reyes, the hire, opens his Desk |
+| x6 | 1440 | S5 | `s5-step1-hire-desk-1440.jpg` | Jordan Reyes, the hire, opens the Desk |
 | x7 | 1440 | S8 | `s8-step1-desk-bottom-1440.jpg` | 5:50 pm: is the day done? |
 | x8 | 390 | S1 | `desk-fold-390.jpg` | x1 on Leah's phone, between appointments |
 | x9 | 390 | S6 | `s6-step1-holloway-next-band-390.jpg` | x5 on the phone |
@@ -47,7 +47,7 @@ Wording on a frame is the panel's guess, pending Leah's words (direction.md §7)
 - **A:** Today's roster of cards, re-ranked by the D2 class table.
   - Chen Residence leads, because A has no defer memory. This is the honest weakness from direction.md §3 A S1; draw it, do not hide it.
   - Holloway Den carries two need lines, the invoice and the PO, each with the 3px need rule.
-  - Ines Calder's lead card is titled by her name: "wrote 2 hours ago".
+  - Ines Calder's lead card is titled by name: "wrote 2 hours ago".
   - Pell Court reads "Deposit in · 2 hours ago · Release the order".
   - Stage plates become ink words. The day line names the first three cards.
   - At 390: the first three cards.
@@ -107,14 +107,18 @@ Wording on a frame is the panel's guess, pending Leah's words (direction.md §7)
 - **At 390:** the act sits beside its reason in the sticky head, not in a bottom bar.
 
 **x6 / x11, the hire's Desk (S5).**
-- **A:** The By person facet is defaulted to Jordan. The Marsh Street card reads "Handed to you by Leah · Wed 7 Oct" and opens her note. The Desk counts only his job.
-- **B:** Jordan's Day Sheet has two lines:
-  - "Leah handed you Marsh Street Kitchen on Wednesday 7 October · Read her note";
-  - "Ninebark Lighting has not answered PO-MS-0388 in 4 days · Chase the maker".
+- **A:** The By person facet is defaulted to Jordan. The Marsh Street card reads "Handed to you by Leah · Wed 7 Oct" and opens Leah's note. The Desk counts only Jordan's job. The PO act is "Draft the chase for Leah", never a ready send.
+- **B:** Jordan's Day Sheet has two lines, the hand-off first:
+  - "Leah handed you Marsh Street Kitchen on Wednesday 7 October · Read Leah's note";
+  - "Marsh Street Kitchen — Ninebark Lighting has not answered PO-MS-0388 in 4 days. Leah's note asks to see anything in writing before it goes. · Draft the chase for Leah".
+
+  The note's rule sits on the chase's own line, not on a parallel one.
 
   Then "The rest of the studio's jobs are Leah's" with "The studio's" one press away.
-- **C:** Jordan's lanes hold Marsh only, and Leah's note sits at the top of its Now panel.
-- **All directions:** no studio money totals (direction.md Q10).
+- **C:** Jordan's lanes hold Marsh only, and Leah's note sits at the top of its Now panel, above "Draft the chase for Leah".
+- **All directions:**
+  - The Marsh Street chase is "Draft the chase for Leah". It opens a draft that lands with Leah for a look before anything goes to Ninebark Lighting, as the hand-off note asks (direction.md Q11).
+  - No studio money totals on the hire's Desk or Day Sheet. Behind them, a hire's Accounts and Orders hide studio-wide revenue and A/R only once the money-visibility rule ships: slice 2 under B and C, slice 3 under A (direction.md Q10). Until then Accounts still prints them to every viewer (`accounts-book.tsx:87-88`).
 
 **x7, close the day (S8).**
 - **A:** The roster in the evening, in honest custody groups. Owed cards remain, and there is no stated end. Draw A's "partly" honestly.
@@ -163,7 +167,9 @@ The Fenmoor chase and the Holloway reminder are on one job. In A they are two li
 
 **Jordan's job:** Marsh Street Kitchen, for the Brannigans.
 - PO-MS-0388 to Ninebark Lighting, sent Thu 8 Oct, with no answer in 4 days.
-- Leah's hand-off note, an invented fixture line: "Marsh Street is yours. The Brannigans like a call before anything is ordered; ask me before anything goes to them in writing."
+- Leah's hand-off note, an **illustrative fixture line** invented for the specimens: "Marsh Street is yours. The Brannigans like a call before anything is ordered; ask me before anything goes out in writing."
+- It is not the walk's note. The walk seeded a different line ("…ask me before anything goes to the client.", `walk/seed_uplift_walk.sql:63-66`), and that note never showed on Jordan's Desk (`walk/WALK.md:116`).
+- Because the fixture note covers anything in writing, the PO chase on Marsh Street is a draft for Leah in every direction, never a ready send.
 
 **The rest.** Aldous Lane, Brierley Mews, Copperfield Terrace, Dunmore Road, Elm Quay and Fairlight Close are in progress, with nothing owed by Leah today. Their Friday Pulses become one line on Friday ("Review and send 6 Pulses") and do not appear on Monday. Greaves Court Bath is at rest, with everything read and nothing open.
 
@@ -179,7 +185,7 @@ The Fenmoor chase and the Holloway reminder are on one job. In A they are two li
   - Calloway & Brandt Upholstery and Ninebark Lighting, since Mon 12 Oct;
   - Mae Halloran, the samples, since Tue 6 Oct.
 
-**Money shown on Leah's frames:** only the amounts above. The hire's frames show no studio revenue, A/R or margin.
+**Money shown on Leah's frames:** only the amounts above. The hire's frames show no studio revenue, A/R or margin. A hire's Accounts and Orders hide them only once the money-visibility rule ships (§2.2 x6, direction.md Q10).
 
 ## 4. Visual latitude
 
