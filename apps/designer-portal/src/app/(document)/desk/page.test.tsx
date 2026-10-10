@@ -44,6 +44,8 @@ jest.mock('@patina/supabase', () => ({
       : mockPendingRead === 'members'
         ? { data: undefined, isLoading: true, isPending: true }
         : { data: mockMembers(), isLoading: false, isPending: false },
+  useProjectLeads: () => ({ data: [] }),
+  useNeedStates: () => ({ data: [] }),
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
   useRecentBoards: (...args: unknown[]) =>
