@@ -49,6 +49,12 @@ describe('project lead reassignment authority', () => {
     expect(from).not.toHaveBeenCalled();
     expect(getUser).not.toHaveBeenCalled();
     expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-team', 'project-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-leads'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['project-permissions', 'project-1'],
     });
     expect(invalidateQueries).toHaveBeenCalledWith({

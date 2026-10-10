@@ -67,11 +67,8 @@ BEGIN
   SELECT p.studio_id INTO v_org_id
   FROM public.projects p
   WHERE p.id = p_project_id;
-  IF v_org_id IS NULL THEN
-    RAISE EXCEPTION 'project organization not found' USING ERRCODE = '22023';
-  END IF;
-  IF NOT public.is_active_org_member(v_org_id) THEN
-    RAISE EXCEPTION 'active organization member required' USING ERRCODE = '42501';
+  IF v_org_id IS NULL OR NOT public.is_active_org_member(v_org_id) THEN
+    RAISE EXCEPTION 'not permitted' USING ERRCODE = '42501';
   END IF;
 
   IF p_action = 'clear' THEN

@@ -14,6 +14,7 @@ interface ProjectLeadRow {
   user_id: string;
   role: 'lead_designer' | 'previous_lead';
   assigned_at: string;
+  updated_at: string;
   removed_at: string | null;
   user?: { full_name: string | null } | null;
 }
@@ -31,7 +32,7 @@ export function mapProjectLeadRows(rows: ProjectLeadRow[]): Map<string, ProjectL
     const lead = projectRows.find((row) => row.role === 'lead_designer' && row.removed_at === null);
     if (!lead) continue;
     const previous = projectRows
-      .filter((row) => row.role === 'previous_lead')
+      .filter((row) => row.role === 'previous_lead' && row.user_id !== lead.user_id)
       .sort((a, b) => b.assigned_at.localeCompare(a.assigned_at))[0];
     leads.set(projectId, {
       leadUserId: lead.user_id,
@@ -40,7 +41,8 @@ export function mapProjectLeadRows(rows: ProjectLeadRow[]): Map<string, ProjectL
         previousLeadUserId: previous.user_id,
         previousLeadName: previous.user?.full_name ?? '',
       } : {}),
-      assignedAt: lead.assigned_at,
+      // Reassignments reactivate an existing role row; updated_at records that hand-off.
+      assignedAt: Date.parse(lead.updated_at) > Date.parse(lead.assigned_at) ? lead.updated_at : lead.assigned_at,
     });
   }
   return leads;
@@ -63,7 +65,7 @@ export function useProjectLeads(organizationId: string) {
 
       const { data, error } = await client
         .from('project_team_members')
-        .select('project_id, user_id, role, assigned_at, removed_at, user:profiles!user_id(full_name)')
+        .select('project_id, user_id, role, assigned_at, updated_at, removed_at, user:profiles!user_id(full_name)')
         .in('project_id', projectIds)
         .in('role', ['lead_designer', 'previous_lead'])
         .order('assigned_at', { ascending: false });

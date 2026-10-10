@@ -72,18 +72,32 @@ END $$;
 DO $$
 DECLARE
   v_state text;
+  v_message text;
   v_row public.studio_need_states%ROWTYPE;
 BEGIN
-  -- An unrelated organization member cannot write state for the fixture project.
+  -- An unrelated organization member cannot distinguish a missing project from a foreign one.
   PERFORM pg_temp.assume_user('cf100000-0000-4000-8000-000000000001');
   BEGIN
-    PERFORM public.set_need_state('fixture:nonmember', 'e6590000-0000-4000-8000-000000000001', 'acted');
-  EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE;
+    PERFORM public.set_need_state('fixture:foreign', 'e6590000-0000-4000-8000-000000000001', 'acted');
+  EXCEPTION WHEN OTHERS THEN
+    v_state := SQLSTATE;
+    v_message := SQLERRM;
   END;
-  ASSERT v_state = '42501', 'RPC must refuse a non-member';
-  PERFORM pg_temp.reset_role();
+  ASSERT v_state = '42501' AND v_message = 'not permitted',
+    'RPC must refuse a project outside the caller''s organization';
 
   v_state := NULL;
+  v_message := NULL;
+  BEGIN
+    PERFORM public.set_need_state('fixture:absent', 'ffffffff-ffff-4fff-8fff-ffffffffffff', 'acted');
+  EXCEPTION WHEN OTHERS THEN
+    v_state := SQLSTATE;
+    v_message := SQLERRM;
+  END;
+  ASSERT v_state = '42501' AND v_message = 'not permitted',
+    'RPC must return the same denial for an absent project and a foreign project';
+  PERFORM pg_temp.reset_role();
+
   PERFORM pg_temp.assume_user('e7650000-0000-4000-8000-000000000001');
   BEGIN
     PERFORM public.set_need_state('fixture:guest', 'e6590000-0000-4000-8000-000000000001', 'acted');

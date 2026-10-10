@@ -79,6 +79,7 @@ export function useAddProjectTeamMember() {
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['project-team', vars.projectId] });
+      qc.invalidateQueries({ queryKey: ['project-leads'] });
     },
   });
 }
@@ -98,6 +99,7 @@ export function useRemoveProjectTeamMember() {
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['project-team', vars.projectId] });
+      qc.invalidateQueries({ queryKey: ['project-leads'] });
     },
   });
 }
@@ -262,6 +264,7 @@ export function useReassignLead() {
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['project', vars.projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-team', vars.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-leads'] });
       queryClient.invalidateQueries({ queryKey: ['project-permissions', vars.projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-activity-from-log', vars.projectId] });
       queryClient.invalidateQueries({ queryKey: ['client-activity'] });
