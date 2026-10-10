@@ -70,6 +70,9 @@ From `packages/patina-design-system/src/tokens/typography.ts`.
 - **Generated images are illustrations.** Never caption a Midjourney or FLUX image as a real
   project, a real client's home, a real maker's piece or a real studio. Never generate a likeness
   of a real person or a real maker's product.
+- **No hero furniture in generated images (Kody, 2026-10-10).** Chairs, legs and joinery are where
+  Midjourney fails, and they were the tell on the first Living Study site. A generated frame may hold
+  furniture in the background, never as its subject. Show finished pieces with rights-owned photographs.
 - **No screenshots of the product** as hero images. If the Document appears, it is on paper or a
   screen seen in a room, with real-looking work on it.
 
@@ -97,16 +100,22 @@ Sizes and formats are in `marketing/canon/channels.json`; these are the layout h
 
 ## 5. Midjourney house style
 
-Midjourney is a human step. Kody pastes prompts from `mj/prompts.md` into midjourney.com and drops
-the results into `mj/inbox/<J>/`. Nothing automates Midjourney.
+Kody pastes prompts from `mj/prompts.md` into midjourney.com and drops the results into
+`mj/inbox/<J>/`. Midjourney may also be driven through the Chrome extension on Kody's account
+(signed off 2026-10-10); every pick still passes the believability gate by eye, and nothing is
+picked unseen.
 
 SREF: {{SREF}}
 
-(Kody replaces `{{SREF}}` with the house style-reference code. Until then, `mj-pack` leaves the
-placeholder in and warns.)
+(No numeric style reference is set. The house look is carried by the moodboard profile code below,
+"Patina house style 2026-10": the 11 approved stills from the 2026-10-10 website batch. `mj-pack`
+still warns that no `--sref` is set; that warning is expected. Replace `{{SREF}}` only if a numeric
+style code is adopted later.)
 
-**Default parameters:** `--v 8.1 --style raw`, plus `--ar` from the piece's channel and
-`--sref {{SREF}}`. Example full tail: `--ar 4:5 --style raw --v 8.1 --sref {{SREF}}`.
+**House style code:** `--p m7507783415631638492`
+
+**Default parameters:** `--v 8.2 --style raw --s 40 --p m7507783415631638492`, plus `--ar` from the
+piece's channel. Example full tail: `--ar 4:5 --style raw --v 8.2 --s 40 --p m7507783415631638492`.
 Prompts in `plan.json` carry the prompt text only; `mj-pack` adds the parameters.
 
 **Prompt grammar:** subject · material · light · lens · mood · Midwest place cue. One clause each,
@@ -154,6 +163,11 @@ unreadable, which is what we want.
 - **Clips are ≤ 10 s.** A 30 s 9:16 piece is three or four clips cut together in the hyperframes
   composition, not one long extension.
 - Reject any clip where faces, hands or materials warp, text appears, or the light flickers.
+- **Motion gate:** a handled object keeps its shape and material from first frame to last (a swatch
+  that morphs as it moves fails); no face turns to the camera (looking up at a colleague is fine);
+  luminance drift under 5 levels; first/last-frame SSIM ≥ 0.94 for a clean seam.
+- **The HD setting resets after every submission.** Re-select HD (and the batch size) in the prompt
+  bar settings right before each HD render.
 
 ## 7. FLUX (local placeholders only)
 
