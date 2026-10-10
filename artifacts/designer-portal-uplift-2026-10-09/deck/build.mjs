@@ -4,8 +4,11 @@
  * founder deck. Adapted from artifacts/pieces-building-room-2026-10-08/deck/build.mjs.
  *
  * Reads deck/src/index.html and writes deck/index.html, one self-contained page:
- *   - every {{WALK:<file>.jpg}} becomes a data:image/jpeg;base64 URI read from
- *     ../walk/<file>.jpg. A missing file stops the build.
+ *   - every <img src="{{WALK:<file>.jpg}}"> is inlined from ../walk/<file>.jpg,
+ *     once per file: the first use carries the data:image/jpeg;base64 URI, and
+ *     every later use carries only data-walk="<file>.jpg", which the deck's
+ *     script fills from the first. A missing file, or a token outside an img
+ *     src, stops the build.
  *   - every {{SPECIMEN_*}} token becomes the HTML-escaped specimen, for a
  *     double-quoted srcdoc attribute. Each token must appear exactly as many times
  *     as SPECIMENS below says, and every iframe that uses it must be named for a
@@ -59,6 +62,7 @@ const SPECIMENS = [
 ];
 
 const WALK_TOKEN = /\{\{WALK:([A-Za-z0-9._-]+\.jpg)\}\}/g;
+const WALK_SRC = /(<img\s[^>]*?)src="\{\{WALK:([A-Za-z0-9._-]+\.jpg)\}\}"/g;
 const IFRAME = /<iframe\b[^>]*>/g;
 
 const BOOTSTRAP = '<style>.bar,#bar{display:none !important}</style>'
@@ -169,10 +173,21 @@ async function main() {
   for (const name of names) {
     uris.set(name, `data:image/jpeg;base64,${(await readFile(join(WALK, name))).toString('base64')}`);
   }
+  // Each screenshot is inlined once. Its first <img> carries the data URI; every
+  // later use carries only data-walk="<file>", and the deck's script copies the
+  // src across, so a screenshot shown on four sheets costs its bytes once.
+  const uses = (src.match(WALK_TOKEN) || []).length;
+  const srcUses = (src.match(WALK_SRC) || []).length;
+  if (srcUses !== uses) fail(`${uses - srcUses} {{WALK:*}} token(s) sit outside an <img src="...">; the build inlines screenshots only as an img src.`);
+  const seen = new Set();
   let out = src
     .replace(/[^\x00-\x7f]/gu, (c) => `&#${c.codePointAt(0)};`)
-    .replace(WALK_TOKEN, (_, name) => uris.get(name));
-  console.log(`{{WALK:*}} -> ${names.length} screenshot(s) inlined, ${(src.match(WALK_TOKEN) || []).length} use(s)`);
+    .replace(WALK_SRC, (_, head, name) => {
+      if (seen.has(name)) return `${head}data-walk="${name}"`;
+      seen.add(name);
+      return `${head}src="${uris.get(name)}" data-walk="${name}"`;
+    });
+  console.log(`{{WALK:*}} -> ${names.length} screenshot(s) inlined once each, ${uses} use(s)`);
 
   for (const spec of SPECIMENS) {
     const body = wrap(bodies.get(spec.token));

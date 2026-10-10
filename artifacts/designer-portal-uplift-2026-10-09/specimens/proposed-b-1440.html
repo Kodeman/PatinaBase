@@ -44,8 +44,9 @@ kbd{font:400 12px/1 var(--font-meta);border:1px solid var(--hair-strong);border-
 .lbl{font:500 12px/1.4 var(--font-meta);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);padding:0 24px 8px}
 .today{margin-top:28px}
 .today img{display:block;height:auto;max-width:100%;border-top:1px solid var(--hair-strong);border-bottom:1px solid var(--hair-strong)}
-.notes{padding:20px 24px 0;max-width:900px}
+.notes{padding:20px 24px 24px;max-width:900px}
 .notes li{display:grid;grid-template-columns:24px 1fr;gap:12px;margin:0 0 10px;font:400 14px/1.5 var(--font-body);color:var(--ink)}
+.notes li:last-child{margin-bottom:0}
 .notes li .pin{position:static}
 .notes .fid{font:400 12px/1.5 var(--font-meta);color:var(--ink-muted);white-space:nowrap}
 body.nobar #bar{display:none}
@@ -386,7 +387,7 @@ textarea.note::placeholder{color:var(--ink-faint);opacity:1}
 <div class="order"><div class="order-top"><span class="ochip">PO-PC-0432</span><span class="help">Not sent</span></div>
 <p class="order-maker">Ninebark Lighting</p><p class="order-state">The pieces, finishes and delivery as signed on Sunday.</p>
 <div class="order-acts"><button type="button" class="act act--small">Review the order</button><button type="button" class="btn-ink">Send to Ninebark Lighting</button></div></div>
-<p class="help" style="margin-top:14px">Each order goes on its own send. Nothing leaves until you press it.</p><span class="pin" aria-hidden="true" style="left:-40px;top:6px">3</span>
+<p class="help" style="margin-top:14px">Each order goes on its own send. Nothing leaves until you press it.</p><span class="pin" aria-hidden="true" style="left:-40px;bottom:-2px">3</span>
 </div>
 </div>
 <div class="as-foot"><button type="button" class="act act--quiet">Not today</button><a class="act act--small" href="#">Open the job</a></div>

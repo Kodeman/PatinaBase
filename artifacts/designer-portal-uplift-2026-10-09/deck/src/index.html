@@ -181,6 +181,17 @@ table.sheet tbody th { font-weight: 500; }
 figure.shot, figure.spec { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .shot__stage { border: 1px solid var(--rule-strong); border-radius: var(--radius); overflow: hidden; background: var(--frame-ground); }
 .shot__stage img { display: block; width: 100%; height: auto; }
+/* Today screenshots open full size: the script wraps each in an .enlarge button
+   and shows it in one shared <dialog>, reusing the same inlined image. */
+.enlarge { display: block; width: 100%; margin: 0; padding: 0; border: 0; background: none; color: inherit; cursor: zoom-in; }
+.enlarge:focus-visible { outline-offset: -3px; }
+.shot__hint { margin: 0; }
+.lightbox { width: fit-content; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); padding: 0; overflow: auto; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--paper); color: var(--ink); cursor: zoom-out; }
+.lightbox::backdrop { background: rgba(31, 28, 25, .72); }
+.lightbox__bar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 4px 4px 16px; background: var(--rail); border-bottom: 1px solid var(--rule-strong); }
+.lightbox__close { min-width: 44px; min-height: 44px; padding: 0 14px; background: transparent; border: 1px solid transparent; border-radius: var(--radius); color: var(--ink); font-family: var(--font-meta); font-size: 13px; letter-spacing: .04em; cursor: pointer; }
+.lightbox__close:hover { border-color: var(--rule-strong); }
+.lightbox img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-size: 14px; line-height: 1.5; max-width: 80ch; }
 .pair-label { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .pair-label .src { color: var(--ink-faint); text-transform: none; letter-spacing: .02em; font-weight: 400; overflow-wrap: anywhere; }
@@ -214,6 +225,12 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
 .kv dd { margin: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .box { border: 1px solid var(--rule-strong); border-radius: var(--radius); padding: 18px 22px; display: flex; flex-direction: column; gap: 10px; min-width: 0; background: var(--paper-2); }
 .box--quiet { background: transparent; border-color: var(--rule); }
+.key { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 40px; border-top: 1px solid var(--rule-strong); }
+.key div { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--rule); min-width: 0; }
+.key dt { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .04em; padding-top: 1px; }
+.key dd { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink-muted); }
+@media (max-width: 860px) { .key { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 761px) { table.sheet.sheet--room td:last-child { padding-right: 24px; } }
 
 /* ---------- slices ---------- */
 .slices { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-top: 1px solid var(--rule-strong); }
@@ -270,7 +287,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
   }
   body { overflow: visible; }
   #deck { height: auto; overflow: visible; scroll-snap-type: none; }
-  .pager, .skip { display: none !important; }
+  .pager, .skip, .shot__hint, .lightbox { display: none !important; }
   .slide { min-height: 0; border-bottom: 0; break-after: page; page-break-after: always; }
   .inner { max-width: none; padding: 20px 24px 24px; }
   figure.shot, figure.spec, .finds li, .qcards li, table.sheet tr { break-inside: avoid; }
@@ -292,7 +309,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
   <div class="inner">
     <p class="kicker">Designer portal uplift · US-24 · 9 October 2026</p>
     <h1 class="t-d0">Calm, and findable.</h1>
-    <p class="t-lede">The designer portal is calm. It is not yet easy to act in. A review panel walked it, measured it and drew three ways forward: <strong>A</strong>, light-touch; <strong>B</strong>, a bounded day sheet; <strong>C</strong>, structural. We recommend <strong>B, the Day Sheet</strong>, and we need your answers to fourteen questions, the first four before anything is built.</p>
+    <p class="t-lede">The designer portal is calm. It is not yet easy to act in. A review panel of model seats, from two model families, walked it, measured it and drew three ways forward: <strong>A</strong>, light-touch; <strong>B</strong>, a bounded day sheet; <strong>C</strong>, structural. We recommend <strong>B, the Day Sheet</strong>, and we need your answers to fourteen questions, the first four before anything is built.</p>
     <div class="howto" role="list">
       <div role="listitem"><p class="t-head"><span class="tag tag--today">Today</span></p><p>A screenshot from the walk: the portal as it runs on <code>main</code>, against a local studio, on Friday 9 October.</p></div>
       <div role="listitem"><p class="t-head"><span class="tag tag--prop">Proposed</span></p><p>A live, static mockup on an illustrative fixture: Hartwell Studio, Monday 12 October. Not a real studio.</p></div>
@@ -341,7 +358,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
     <h2 class="t-d1">A panel of seats, each with one lens, working apart</h2>
     <p class="t-lede">Every seat is a model working from the same brief and the same walk. The five reviewers did not read each other. Two model families took part, so the panel does not only hear itself.</p>
     <div class="scroller stackable">
-      <table class="sheet">
+      <table class="sheet sheet--room">
         <thead><tr><th scope="col">Seat</th><th scope="col">Role</th><th scope="col">Model family</th><th scope="col">Output</th></tr></thead>
         <tbody>
           <tr><td class="id" data-label="Seat">Briefing</td><td data-label="Role">Map of the portal as built, from the code</td><td data-label="Model family">GPT-6 (Codex)</td><td data-label="Output"><code>briefing/current-state.md</code></td></tr>
@@ -384,6 +401,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
         <figcaption>Pell Court: a deposit paid three hours earlier reads "$9,200 OUT". Nothing on the Desk mentions it.</figcaption>
       </figure>
     </div>
+    <p class="t-sm faint">The small &lsquo;N&rsquo; badge on today's screenshots is the development build's indicator, not part of the product.</p>
     <div class="stack">
       <p class="t-hint">Where the walk got lost</p>
       <ul class="look">
@@ -481,7 +499,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
     </div>
     <div class="box box--quiet">
       <p class="t-head">Two fixtures, said plainly</p>
-      <p class="t-sm muted"><strong>Today</strong> is the walk's local studio on Friday 9 October: 43 live jobs, the PO 9 days unanswered, the invoice 11 to 12 days overdue. <strong>Proposed</strong> is an invented fixture, Hartwell Studio with 16 live jobs, carrying the same names to Monday 12 October, so the ages read three days older (PO 12 days, invoice 14). Direction figures are estimates from the synthesis, to be recounted on the specimens at render check.</p>
+      <p class="t-sm muted"><strong>Today</strong> is the walk's local studio on Friday 9 October: 43 live jobs, the PO 9 days unanswered, the invoice 11 to 12 days overdue. <strong>Proposed</strong> is an invented fixture, Hartwell Studio with 16 live jobs, carrying the same names to Monday 12 October, so the ages read three days older (PO 12 days, invoice 14). Direction figures are the panel's estimates on the illustrated fixture, not measurements.</p>
     </div>
   </div>
 </section>
@@ -514,6 +532,21 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
         <dl class="kv"><dt>Moves</dt><dd>The Document becomes three columns; the Desk becomes two lanes and a door.</dd><dt>Answers</dt><dd>7 of 8 found; S1 partial, misses the under-10 s target; S8 costs minutes</dd><dt>Build</dt><dd>9 slices, large</dd></dl>
         <p><a href="#s-c">See C &rarr;</a></p>
       </article>
+    </div>
+    <div class="stack">
+      <p class="t-hint">Key &middot; the shared model, synthesis &sect;3.4</p>
+      <dl class="key">
+        <div><dt>N1</dt><dd>One key per need, the record it is about, so the same PO never shows twice.</dd></div>
+        <div><dt>N2</dt><dd>One ranking: the Desk orders needs by consequence, as the Document does, and a job can show more than one.</dd></div>
+        <div><dt>N3</dt><dd>Live-job events become needs: a proposal signed or declined, a payment landed, a PO acknowledged.</dd></div>
+        <div><dt>N4</dt><dd>"Mine" names a person: the jobs you lead, and the hand-off line when a job is handed to you.</dd></div>
+        <div><dt>N5</dt><dd>A memory per person of what was handled, set aside for a day, or is waiting on someone (B and C only).</dd></div>
+        <div><dt>N6</dt><dd>Lead arrival: the person's name and when they wrote, on the Desk and the brief.</dd></div>
+        <div><dt>N7</dt><dd>One money reading: one overdue count and one paid-or-owed status on every surface.</dd></div>
+        <div><dt>N8</dt><dd>One weekly line for unsent Pulses, not one card per job.</dd></div>
+        <div><dt>S1-severity</dt><dd>The panel's highest finding severity, S1 of S1&ndash;S4: a scenario fails because of it. Not the scenario S1.</dd></div>
+        <div><dt>Pulses</dt><dd>The Friday update drafted on each job, which the studio reviews and sends.</dd></div>
+      </dl>
     </div>
   </div>
 </section>
@@ -1233,6 +1266,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
   <div class="inner">
     <h2 class="t-d1">Fourteen questions for the partners</h2>
     <p class="t-lede">Q1&ndash;Q4 gate slice 1 under any direction, so they come first. Each shows the panel's recommended answer and what follows if you decline it. Answer yes, no, or with your own words.</p>
+    <p class="t-sm faint">Bracketed codes (V7&middot;D1, US-19 D8, R143) are references to earlier rulings, listed in synthesis &sect;6 for anyone who wants the trail.</p>
     <ol class="qcards">
       <li class="first"><div class="qhead"><span class="qno">Q1</span><span class="qtag">Decide first</span></div><p class="qtext">Is a five-line cross-job Day Sheet a "task manager"?</p><p class="qrec"><b>Recommended</b>No, under five binding guards: at most five lines, no overflow count, no dots or badges, no "cleared today" or streak, never pushed. Its rows are the jobs' own Next. Log it as a V-entry with the guards as its text.</p><p class="qelse"><b>If declined</b>Ship A, plus B's line roster as the Desk. S1 and S8 stay partly answered.</p></li>
       <li class="first"><div class="qhead"><span class="qno">Q2</span><span class="qtag">Decide first</span></div><p class="qtext">May "mine" name a person? (US-19 D8 says the studio's pen, never a named person.)</p><p class="qrec"><b>Recommended</b>Yes: the signed-in person's jobs, from the project team; "The studio's" one press away. Custody names whoever holds a job. Need-level assignment waits.</p><p class="qelse"><b>If declined</b>The hire's Desk stays studio-wide; S5 stays hard on the Desk.</p></li>
@@ -1291,6 +1325,11 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
 
 </div>
 
+<dialog class="lightbox" id="lightbox" aria-label="Today's screenshot, full size">
+  <div class="lightbox__bar"><p class="t-meta" id="lightbox-src"></p><button type="button" class="lightbox__close">Close</button></div>
+  <img id="lightbox-img" alt="">
+</dialog>
+
 <nav class="pager" aria-label="Sheets">
   <button type="button" id="pg-prev" aria-label="Previous sheet">&larr;<span class="lbl"> Previous</span></button>
   <span class="where" id="pg-where" aria-live="polite">01 / 27 &middot; Cover</span>
@@ -1302,6 +1341,15 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
   var deck = document.getElementById('deck');
   var slides = Array.prototype.slice.call(document.querySelectorAll('section.slide'));
   var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* The build inlines each walk screenshot once: its first <img> carries the
+     data URI, and later uses of the same file name it in data-walk alone. */
+  var walkSrc = {};
+  Array.prototype.forEach.call(document.querySelectorAll('img[data-walk]'), function (img) {
+    var name = img.getAttribute('data-walk');
+    if (img.hasAttribute('src')) { if (!walkSrc[name]) { walkSrc[name] = img.getAttribute('src'); } }
+    else if (walkSrc[name]) { img.setAttribute('src', walkSrc[name]); }
+  });
 
   /* ---------- specimen frames ----------
      Each iframe's name carries a frame token; the build's bootstrap turns it into
@@ -1415,6 +1463,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
   function ownsKeys(el) {
     if (!el || el === deck || el === document.body || el === document.documentElement) return false;
     if (/^(INPUT|TEXTAREA|SELECT|IFRAME|SUMMARY)$/.test(el.tagName) || el.isContentEditable) return true;
+    if (el.closest && el.closest('dialog')) return true;
     for (var n = el; n && n !== deck; n = n.parentElement) {
       var cs = getComputedStyle(n);
       if ((/(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1)) return true;
@@ -1478,6 +1527,50 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
     e.preventDefault();
     go(i);
   });
+
+  /* ---------- Today screenshots, full size ----------
+     Each inlined screenshot becomes a button (Enter, Space or a click) that opens
+     one shared dialog showing the same image at its own size. Esc, a click
+     anywhere on it, or Close shuts it, and focus returns to the screenshot. */
+  var box = document.getElementById('lightbox');
+  var boxImg = document.getElementById('lightbox-img');
+  var boxSrc = document.getElementById('lightbox-src');
+  var opener = null;
+  if (box && typeof box.showModal === 'function') {
+    Array.prototype.forEach.call(document.querySelectorAll('figure.shot .shot__stage img'), function (img) {
+      var stage = img.parentNode;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'enlarge';
+      btn.setAttribute('aria-haspopup', 'dialog');
+      stage.insertBefore(btn, img);
+      btn.appendChild(img);
+      var hint = document.createElement('p');
+      hint.className = 't-meta shot__hint';
+      hint.textContent = 'Click to enlarge';
+      stage.parentNode.insertBefore(hint, stage.nextSibling);
+    });
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('button.enlarge');
+      if (!btn) return;
+      var img = btn.querySelector('img');
+      var src = btn.closest('figure') && btn.closest('figure').querySelector('.pair-label .src');
+      opener = btn;
+      boxImg.setAttribute('width', img.getAttribute('width') || '');
+      boxImg.setAttribute('height', img.getAttribute('height') || '');
+      boxImg.alt = img.alt;
+      boxImg.src = img.currentSrc || img.src;
+      boxSrc.textContent = src ? src.textContent : '';
+      box.showModal();
+      box.scrollTop = 0;
+    });
+    box.addEventListener('click', function () { box.close(); });
+    box.addEventListener('close', function () {
+      boxImg.removeAttribute('src');
+      if (opener) { try { opener.focus({ preventScroll: true }); } catch (err) { opener.focus(); } }
+      opener = null;
+    });
+  }
 
   function place() {
     var el = hashSlide();

@@ -9,7 +9,7 @@ The founder deck for US-24. This file is the sheet-by-sheet contract that `src/i
   - It has one `<style>` and one `<script>`, both ASCII only.
   - The markup is readable UTF-8. The build turns every non-ASCII character in it into a numeric reference.
 - **Build:** `node deck/build.mjs` (from the repo root or anywhere; paths resolve from the script) writes `deck/index.html`, one self-contained file. **`deck/index.html` is a build output and is not committed.**
-  - `{{WALK:<file>.jpg}}` becomes a base64 data URI read from `walk/`.
+  - `<img src="{{WALK:<file>.jpg}}">` is inlined from `walk/` once per file: the first use carries the base64 data URI, and every later use carries only `data-walk="<file>.jpg"`, which the deck's script fills from the first. A `{{WALK:…}}` token outside an img `src` fails the build.
   - `{{SPECIMEN_<X>_<W>}}` becomes the escaped specimen in an iframe `srcdoc`, with a bootstrap that:
     - turns the iframe's `name="frame-…"` into `#frame-…&nobar&nobefore`, so the specimen shows one frame and its "What changed and why" notes, without its own bar and without its own Today figure (the deck shows Today itself);
     - posts the content height to the deck, which sizes the frame to it.
@@ -36,7 +36,7 @@ The founder deck for US-24. This file is the sheet-by-sheet contract that `src/i
   | `SPECIMEN_C_1440` | 3 | c1, c5, c7 |
   | `SPECIMEN_C_390` | 1 | c9 |
 
-  Ten walk screenshots, 21 uses. Built size about 4.5 MB.
+  Ten walk screenshots, 21 uses, each screenshot's bytes inlined once.
 
 ## 1. Shell
 
@@ -49,6 +49,7 @@ The founder deck for US-24. This file is the sheet-by-sheet contract that `src/i
   - keys are left alone while focus sits in something that uses them (a scroller, a frame, a field), and Space is left alone on a button or link.
 - **Pager:** a fixed foot with Previous, the counter (`NN / 27 · label`) and Next, visible at every width. Previous is disabled on the first sheet, Next on the last.
 - **Scroll:** sheets snap; a sheet taller than the window gets `.tall` and stops snapping so it can be read through. A deep link (`#s-questions`) is held while frames above it settle, until the reader scrolls, taps or presses a key. In-deck links (`See B →`) move the deck.
+- **Today screenshots:** every inlined walk screenshot opens full size. The script wraps each in a button (click, Enter or Space) with a small "Click to enlarge" line under it, and one shared `<dialog>` shows the same image at its own size with its alt text and file name. Esc, a click anywhere on it, or Close shuts it, and focus returns to the screenshot. Sheet 4 notes once that the small "N" badge on the screenshots is the development build's indicator.
 - **Frames:** each `figure.spec` carries `data-w` (1440 or 390) and `data-h` (updated from the posted height). The frame is drawn at its native width and scaled to its column. At 390 a 1440 frame carries a narrow note: "A 1440 frame, scaled to fit. Open the deck on a wider screen to read it."
 - **Print:** light tokens, no pager, one sheet per page. Chrome prints a transformed or zoomed mockup frame blank or offset, and a lazy frame or image that never loaded prints blank, so:
   - every lazy frame and image is switched to eager 1.5 s after load (and again on `beforeprint`);
@@ -69,7 +70,7 @@ Today = the walk's local studio, Friday 9 October (43 live jobs). Proposed = the
 | 05 | `s-baseline` | The S1–S8 baseline | The eight scenarios with today's verdict and time | walk §3 |
 | 06 | `s-found` | What the panel found | Headline findings with ids (A1…, R1-…, R2-…) | direction.md §1, §2 |
 | 07 | `s-principle` | The principle | Calm and findable; the marks-at-rest measure | brief §5, walk §1 |
-| 08 | `s-directions` | Three directions | One shared need model (N1–N8); A, B, C side by side; B marked Recommended | direction.md §3 |
+| 08 | `s-directions` | Three directions | One shared need model (N1–N8); A, B, C side by side; B marked Recommended; a key glossing N1–N8, S1-severity and Pulses | direction.md §3 |
 | 09 | `s-a` | A · Quiet marks | Concept; what changes per surface; model used | direction.md §3 A |
 | 10 | `s-a-desk` | A · The Desk | Today `desk-fold-1440` vs frame a1; Today `desk-fold-390` vs a8 | S1, S7 |
 | 11 | `s-a-act` | A · Acting on it | Today `s3-step3…` vs a3; Today `doc-holloway-fold-1440` vs a5 | S3, S6 |
@@ -87,7 +88,7 @@ Today = the walk's local studio, Friday 9 October (43 live jobs). Proposed = the
 | 23 | `s-compare` | Side by side | S1–S8 for Today, A, B, C; marks at rest; what to learn; build size; hardest ruling | walk §3, direction.md §3 |
 | 24 | `s-rec` | The recommendation | B, why, and the strongest argument against it | direction.md §4 |
 | 25 | `s-fixnow` | The fix-now track | The fixes that ship under any direction | direction.md §5 |
-| 26 | `s-questions` | Founder questions | Q1–Q14 with recommended answers; Q1–Q4 before anything is built | direction.md §6 |
+| 26 | `s-questions` | Founder questions | Q1–Q14 with recommended answers; Q1–Q4 before anything is built; a note that bracketed codes point to earlier rulings in direction.md §6 | direction.md §6 |
 | 27 | `s-next` | Next steps and asks for Leah | Slices; what to ask Leah | direction.md §4, §7 |
 
 ## 3. Cut, and why
