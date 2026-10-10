@@ -59,6 +59,7 @@ jest.mock('@patina/supabase', () => ({
      runs the ladder against an empty read. */
   computeArAging: jest.requireActual('@patina/supabase').computeArAging,
   invoiceDaysOverdue: jest.requireActual('@patina/supabase').invoiceDaysOverdue,
+  calendarDaysPast: jest.requireActual('@patina/supabase').calendarDaysPast,
   useProjectRoomScans: () => ({ data: [] }),
   useGeneratedRoomFilesByScan: () => ({ data: new Map() }),
   /* the page's own reads */

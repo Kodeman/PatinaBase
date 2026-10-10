@@ -12,6 +12,7 @@ const registerRevealHandlerMock = jest.fn();
 const armEditMock = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
+  calendarDaysPast: jest.requireActual("@patina/supabase").calendarDaysPast,
   // D-B49 — the revision ledger's read moved to the schedule region ROOT.
   useScheduleRevisions: () => ({ data: [] }),
   excludeProjectArtifactApprovals: (items: unknown[]) => items,

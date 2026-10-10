@@ -52,6 +52,7 @@ jest.mock('@patina/supabase', () => ({
   usePurchaseOrders: () => ({ isLoading: false, error: null, data: [] }),
   computeArAging: jest.requireActual('@patina/supabase').computeArAging,
   invoiceDaysOverdue: jest.requireActual('@patina/supabase').invoiceDaysOverdue,
+  calendarDaysPast: jest.requireActual('@patina/supabase').calendarDaysPast,
   useProjectRoomScans: () => ({ data: [] }),
   useGeneratedRoomFilesByScan: () => ({ data: new Map() }),
   // The Visits block (FC W4) mounts on every project spread; both of its

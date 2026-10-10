@@ -19,6 +19,7 @@ const mockClose = jest.fn();
 const mockDetailQuery = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
+  calendarDaysPast: jest.requireActual('@patina/supabase').calendarDaysPast,
   useProjectContextualHandoffs: (projectId: string | null) =>
     mockHandoffsQuery(projectId),
   useSiteRequestActionDetail: (projectId: string, requestId?: string) =>

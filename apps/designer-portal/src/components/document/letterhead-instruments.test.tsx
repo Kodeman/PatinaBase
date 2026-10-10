@@ -49,6 +49,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  calendarDaysPast: jest.requireActual('@patina/supabase').calendarDaysPast,
   createBrowserClient: () => ({
     from: () => ({
       select: () => ({
