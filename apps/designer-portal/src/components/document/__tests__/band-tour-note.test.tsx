@@ -59,10 +59,20 @@ describe('the one-note tour (D8, 2-7)', () => {
     expect(screen.queryByRole('note')).toBeNull();
   });
 
-  it('shows again on a later open until it is understood', () => {
+  // US-25 fix-now 8 — once per person, then gone for good: the first showing
+  // retires it, pressed or not, so it never waits on every later Document.
+  it('shows once per person: a later open never shows it again, unpressed', () => {
     const first = render(<BandTourNote hasAct />);
+    expect(screen.getByRole('note')).toHaveTextContent(SENTENCE);
+    expect(window.localStorage.getItem(STORED)).not.toBeNull();
     first.unmount();
     render(<BandTourNote hasAct />);
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
+  it('stays on screen for the Document that first showed it', () => {
+    const { rerender } = render(<BandTourNote hasAct />);
+    rerender(<BandTourNote hasAct />);
     expect(screen.getByRole('note')).toHaveTextContent(SENTENCE);
   });
 

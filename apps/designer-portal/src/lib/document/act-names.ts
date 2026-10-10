@@ -270,6 +270,8 @@ export const ACT_LANDING_EVENTS = {
   askTheMaker: 'document:ask-the-maker',
   ffeAct: 'document:land-ffe-act',
   composeMessage: 'document:compose-message',
+  // US-25 fix-now 14 — `Respond to the inquiry` opens the Brief's reply draft.
+  inquiryReply: 'document:land-inquiry-reply',
 } as const;
 
 /**

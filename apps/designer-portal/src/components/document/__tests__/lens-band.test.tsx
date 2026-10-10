@@ -1039,7 +1039,9 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(screen.getByRole('dialog')).toHaveAttribute('data-doc-sheet-kind', 'standing');
   });
 
-  it('FR6 F6-6 — at 390 the sentence rung prints the short sentence with no act; the dock carries it', () => {
+  // US-25 fix-now 13 — the act sits beside its reason at 390: the sentence
+  // rung prints the act on line 2, never only in the dock.
+  it('fix-now 13 — at 390 the sentence rung prints the short sentence with its act beside it', () => {
     const phone = chen({ tier: 'mobile' });
     expect(phone.voice.form).toBe('sentence');
     render(<LensBand model={phone} docId="doc-1" />);
@@ -1049,8 +1051,11 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     const sentence = line('2').querySelector('[data-lens-sentence]');
     expect(sentence).toHaveTextContent(phone.voice.next!.shortSentence);
     expect(sentence).toHaveAttribute('data-arr-long', phone.voice.next!.sentence);
-    expect(line('2').querySelector('[data-part="act"]')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Record the payment' })).toBeNull();
+    const act = line('2').querySelector('[data-part="act"]');
+    expect(act).toHaveTextContent('Record the payment');
+    // Beside the reason: the act follows the sentence on the same line.
+    expect(sentence!.compareDocumentPosition(act!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(act).toHaveAttribute('data-action-variant', 'primary');
   });
 
   it('FR6 F6-6 — the act rung below it still prints the act', () => {
@@ -1164,10 +1169,20 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         expect(line('2')).toHaveAttribute('data-lens-line2-form', 'sentence');
         expect(rung()).toBe('long');
         expect(sentence()).toHaveTextContent(OLSEN_CLAIM);
-        expect(screen.queryByRole('button', { name: 'File the claim' })).toBeNull();
+        // fix-now 13 — and its act beside it.
+        expect(screen.getByRole('button', { name: 'File the claim' })).toBeInTheDocument();
       });
 
-      it('Wren held: the phone form alone; no Open the held draft in the band', () => {
+      it('fix-now 13 — when every sentence clips, the phone form keeps its act rather than yielding to the act alone', () => {
+        clips = (text) => text.length > 0;
+        const phone = chen({ tier: 'mobile' });
+        render(<LensBand model={phone} docId="doc-1" />);
+        expect(line('2')).toHaveAttribute('data-lens-line2-form', 'sentence');
+        expect(sentence().textContent).not.toBe('');
+        expect(screen.getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
+      });
+
+      it('Wren held: the phone form, with Open the held draft beside it (fix-now 13)', () => {
         clips = () => false;
         const reading = installReading(
           [
@@ -1209,10 +1224,10 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         expect(line('2')).toHaveAttribute('data-lens-line2-form', 'sentence');
         expect(rung()).toBe('phone');
         expect(sentence()).toHaveTextContent("Library ladder and rail isn't here.");
-        expect(screen.queryByRole('button', { name: 'Open the held draft' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Open the held draft' })).toBeInTheDocument();
       });
 
-      it('Cedar: the repair’s phone form alone; no Add the maker in the band', () => {
+      it('Cedar: the repair’s phone form, with Add the maker beside it (fix-now 13)', () => {
         clips = () => false;
         const reading = installReading(
           [{ id: 'ffe-1', name: 'Side table, walnut', status: 'ordered', purchase_order: null }],
@@ -1244,7 +1259,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         );
         expect(rung()).toBe('phone');
         expect(sentence()).toHaveTextContent("Side table isn't here.");
-        expect(screen.queryByRole('button', { name: 'Add the maker' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Add the maker' })).toBeInTheDocument();
       });
 
       it('a rung that prints the act carries no sentence-rung mark', () => {

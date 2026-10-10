@@ -11,6 +11,7 @@ import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 let mockOneVoice = true;
 let authority: Record<string, unknown> | null = null;
+let proposals: Array<Record<string, unknown>> = [];
 
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (flag: string) => ({
@@ -24,6 +25,7 @@ jest.mock('@patina/supabase', () => ({
   useProjectApprovals: () => ({ data: [], isLoading: false, isFetching: false, isError: false }),
   useProjectApprovalArtifactCandidates: () => ({ data: [], isLoading: false, isError: false }),
   useProjectDecisionAuthority: () => ({ data: authority, isLoading: false, isError: false }),
+  useProposals: () => ({ data: proposals, isLoading: false, isError: false }),
   useSetProjectDecisionAuthority: () => idle,
   useCreateProjectApproval: () => idle,
   usePublishProjectApproval: () => idle,
@@ -53,6 +55,7 @@ beforeEach(() => {
   window.localStorage.clear();
   mockOneVoice = true;
   authority = null;
+  proposals = [];
   __setDensityForTest('full');
 });
 afterEach(() => {
@@ -83,5 +86,27 @@ describe('No decision lead named (F2-26)', () => {
     renderCedar();
     expect(screen.queryByText('No decision lead named yet.')).not.toBeInTheDocument();
     expect(screen.getByText('0 decided · Nora Cedar')).toBeInTheDocument();
+  });
+});
+
+// US-25 fix-now 15 — a job whose client has already decided the proposal reads
+// that decision, never `No decision lead named yet.`; the assign act stays.
+describe('the proposal’s outcome on a job with a client and a decision', () => {
+  it('reads the accepted proposal, not the missing lead', () => {
+    proposals = [
+      { id: 'p-1', status: 'accepted', responded_at: '2026-10-08T12:00:00Z', updated_at: '2026-10-08T12:00:00Z' },
+    ];
+    renderCedar();
+    expect(screen.getByText('Nora Cedar accepted the proposal · 8 October')).toBeInTheDocument();
+    expect(screen.queryByText('No decision lead named yet.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /assign project client/i })).toBeInTheDocument();
+  });
+
+  it('reads a declined proposal as declined', () => {
+    proposals = [
+      { id: 'p-1', status: 'declined', responded_at: '2026-10-06T12:00:00Z', updated_at: '2026-10-07T12:00:00Z' },
+    ];
+    renderCedar();
+    expect(screen.getByText('Nora Cedar declined the proposal · 6 October')).toBeInTheDocument();
   });
 });

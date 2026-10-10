@@ -6,8 +6,9 @@
  * reports up into that head's eyebrow via `onEyebrow`, rather than standing
  * beside a second heading.
  */
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { BriefSection } from "./brief-section";
+import { ACT_LANDING_EVENTS } from "@/lib/document/act-names";
 
 let mockLead: Record<string, unknown> | undefined;
 
@@ -136,5 +137,44 @@ describe("BriefSection — the captured contact line (00583)", () => {
     };
     render(<BriefSection leadId="lead-1" />);
     expect(screen.getByText("(555) 990-0001")).toBeInTheDocument();
+  });
+});
+
+// US-25 fix-now 14 — `Respond to the inquiry` opens a reply draft to the
+// lead's contact, not just a scroll; nothing sends without a second named
+// control, and that control hands the draft to her own mail.
+describe("BriefSection — the inquiry reply draft (fix-now 14)", () => {
+  const land = () => {
+    let taken = false;
+    act(() => {
+      taken = !window.dispatchEvent(
+        new CustomEvent(ACT_LANDING_EVENTS.inquiryReply, { cancelable: true }),
+      );
+    });
+    return taken;
+  };
+
+  it("opens a draft addressed to the lead's contact, with a named send control", () => {
+    mockLead = { ...BASE_LEAD, contact_name: "Ada Park", contact_email: "ada@example.com" };
+    render(<BriefSection leadId="lead-1" />);
+    expect(screen.queryByRole("group", { name: "Reply to Ada Park" })).toBeNull();
+    expect(land()).toBe(true);
+    const draft = screen.getByRole("group", { name: "Reply to Ada Park" });
+    expect(draft).toHaveTextContent("To Ada Park · ada@example.com");
+    fireEvent.change(screen.getByRole("textbox", { name: "Your reply to Ada Park" }), {
+      target: { value: "Thanks for writing." },
+    });
+    const send = screen.getByRole("link", { name: "Open in your mail to send" });
+    expect(send.getAttribute("href")).toBe(
+      "mailto:ada%40example.com?subject=Your%20inquiry&body=Thanks%20for%20writing.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("group", { name: "Reply to Ada Park" })).toBeNull();
+  });
+
+  it("does not take the press when there is no address to reply to", () => {
+    mockLead = { ...BASE_LEAD, contact_name: "Ada Park" };
+    render(<BriefSection leadId="lead-1" />);
+    expect(land()).toBe(false);
   });
 });

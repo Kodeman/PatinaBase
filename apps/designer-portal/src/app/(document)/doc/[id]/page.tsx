@@ -199,6 +199,7 @@ import {
 } from '@/components/document/room-lens-context';
 import { LensBand } from '@/components/document/lens-band';
 import { BandTourNote } from '@/components/document/margin-note';
+import { BandLeadsContext } from '@/components/document/region/region-head';
 import {
   deriveLensBand,
   type LensBandModel,
@@ -1982,6 +1983,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               ? () => landAct(ACT_LANDING_EVENTS.ffeAct, 'send')
             : need.kind === 'overdue_decision' || need.kind === 'hesitating_proposal'
               ? () => landAct(ACT_LANDING_EVENTS.composeMessage, { named: nudgeNamed(), act: action.label })
+            // US-25 fix-now 14 — `Follow up` opens the composer with her
+            // decline reason quoted; only `Send` writes to her.
+            : need.kind === 'proposal_declined'
+              ? () =>
+                  landAct(ACT_LANDING_EVENTS.composeMessage, {
+                    act: action.label,
+                    declined: { reason: liveProposal?.decline_reason ?? null },
+                  })
               : null;
       return {
         key: `${need.kind}-${index}`,
@@ -2003,7 +2012,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         ...(oneVoice && need.draft ? { draft: need.draft } : {}),
       };
     });
-  }, [row, rankedOperationalNeeds, silenceLines, activateDestination, oneVoice, nudgeNamed]);
+  }, [row, rankedOperationalNeeds, silenceLines, activateDestination, oneVoice, nudgeNamed, liveProposal?.decline_reason]);
 
   // NF4-01 — the ranked need's act, elected from the rows that already carry
   // each need's kind beside the destination the guide offers, so the approvals
@@ -2666,6 +2675,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         // own act: the row takes it and opens its sheet on the first field,
         // rather than the band pointing at the row's copy of the act.
         if (act.targetId === ACT_TARGET_IDS.installReading && landAct(ACT_LANDING_EVENTS.askTheMaker)) return;
+        // US-25 fix-now 14 — `Respond to the inquiry` opens the Brief's reply
+        // draft to the lead's contact; with no address it lands as before.
+        if (act.targetId === ACT_TARGET_IDS.inquiryReply && landAct(ACT_LANDING_EVENTS.inquiryReply)) return;
         // FR4 522-3 — a Pieces own act (`Spec the N unspecified`, `Open the
         // pieces`) lands on Pieces' own control.
         const pieces = ffeActLandingOf(act.label);
@@ -3349,6 +3361,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           procurement panels (inspection drawer, Order Assistant) mounted in
           line unfolds beneath the aside rail and the drawer strip. The z-0
           grain painting over content is imperceptible at 1% alpha. */}
+      {/* US-25 Q8 — one filled act per view: while the band prints its Next,
+          that act is the only filled control and every region head under it
+          prints its leader as a text act. */}
+      <BandLeadsContext.Provider value={oneVoice && Boolean(bandModel?.voice.next)}>
       <main
         ref={mainRef}
         data-document-paper
@@ -3929,6 +3945,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           />
         )}
       </main>
+      </BandLeadsContext.Provider>
 
       {/* Margin rail (D12; D2: the margin IS the notification model).
           Below 1180px the margin lives as anchored chips + the mobile spine

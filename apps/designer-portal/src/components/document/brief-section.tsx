@@ -10,8 +10,9 @@
  * accepted or declined leads read as a terminal record.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLead } from '@patina/supabase';
+import { ACT_LANDING_EVENTS } from '@/lib/document/act-names';
 import { fmtDay } from '@/lib/document/format';
 import { formatBudgetRange, formatTimeline } from '@/lib/document/brief-chips';
 import { TriageBar } from './triage-bar';
@@ -58,6 +59,34 @@ export function BriefSection({
   useEffect(() => {
     onEyebrow?.(eyebrow);
   }, [eyebrow, onEyebrow]);
+
+  // US-25 fix-now 14 — `Respond to the inquiry` opens a reply draft to the
+  // lead's contact, here on the paper. Nothing is sent from Patina: the draft's
+  // second named control hands it to her own mail, where she presses send.
+  const replyEmail: string | null =
+    lead?.homeowner?.email ?? lead?.contact_email ?? null;
+  const replyName: string | null =
+    lead?.homeowner?.full_name ?? lead?.contact_name ?? null;
+  const replyOpenable =
+    Boolean(replyEmail) &&
+    (lead?.status === 'new' || lead?.status === 'viewed' || lead?.status === 'contacted');
+  const [replying, setReplying] = useState(false);
+  const [replyBody, setReplyBody] = useState('');
+  const replyRef = useRef<HTMLTextAreaElement | null>(null);
+  const draftRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!replyOpenable) return;
+    const onLand = (event: Event) => {
+      event.preventDefault();
+      setReplying(true);
+      requestAnimationFrame(() => {
+        draftRef.current?.scrollIntoView?.({ block: 'center' });
+        replyRef.current?.focus({ preventScroll: true });
+      });
+    };
+    window.addEventListener(ACT_LANDING_EVENTS.inquiryReply, onLand);
+    return () => window.removeEventListener(ACT_LANDING_EVENTS.inquiryReply, onLand);
+  }, [replyOpenable]);
 
   if (isLoading) {
     return <SectionLoadingLine label="Opening the brief" className="py-3" />;
@@ -113,6 +142,55 @@ export function BriefSection({
           <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             {source}
           </span>
+        </div>
+      )}
+
+      {replying && replyOpenable && replyEmail && (
+        <div
+          ref={draftRef}
+          role="group"
+          aria-label={`Reply to ${replyName ?? replyEmail}`}
+          data-inquiry-reply-draft
+          className="mb-3.5 rounded-[4px] border border-[var(--color-pearl)] px-3 py-2.5"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation();
+              setReplying(false);
+            }
+          }}
+        >
+          <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            Respond to the inquiry
+          </p>
+          <p className="mb-1.5 text-[12px] text-[var(--color-charcoal)]">
+            {`To ${replyName ? `${replyName} · ` : ''}${replyEmail}`}
+          </p>
+          <textarea
+            ref={replyRef}
+            value={replyBody}
+            onChange={(event) => setReplyBody(event.target.value)}
+            rows={4}
+            aria-label={`Your reply to ${replyName ?? replyEmail}`}
+            placeholder={`A reply to ${replyName?.split(' ')[0] ?? replyEmail}…`}
+            className="w-full resize-y bg-transparent text-[12px] text-[var(--color-charcoal)] outline-none placeholder:italic placeholder:text-[var(--text-muted)]"
+          />
+          <div className="mt-1 flex flex-wrap items-center gap-4">
+            <a
+              href={`mailto:${encodeURIComponent(replyEmail)}?subject=${encodeURIComponent(
+                'Your inquiry',
+              )}&body=${encodeURIComponent(replyBody)}`}
+              className="inline-flex min-h-11 items-center text-[12px] font-medium text-[var(--color-charcoal)]"
+            >
+              <span className="da-score-hover">Open in your mail to send</span>
+            </a>
+            <button
+              type="button"
+              onClick={() => setReplying(false)}
+              className="inline-flex min-h-11 items-center text-[12px] text-[var(--text-muted)]"
+            >
+              <span className="da-score-hover">Cancel</span>
+            </button>
+          </div>
         </div>
       )}
 

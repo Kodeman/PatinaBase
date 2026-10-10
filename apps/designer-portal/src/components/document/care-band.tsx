@@ -224,7 +224,15 @@ export function CareBand({
       : item,
   );
   const ready = closureReady(effectiveItems, operational);
-  const done = effectiveItems.filter((i) => i.completed).length;
+  // US-25 fix-now 15 — "no balance due" on a job that has billed nothing is
+  // not something closed out: the count only takes payment once billing exists,
+  // so an unstarted job's head says nothing rather than `1 closed out`.
+  const billed =
+    (milestoneQuery.data?.length ?? 0) > 0 ||
+    (invoiceQuery.data?.length ?? 0) > 0;
+  const done = effectiveItems.filter((i) =>
+    i.key === 'payment' ? i.completed && billed : i.completed,
+  ).length;
 
   const total = effectiveItems.length;
   useEffect(() => {

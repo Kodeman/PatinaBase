@@ -20,7 +20,6 @@ import {
   useArAging,
   useEarningsStats,
   useInvoices,
-  useDesignerTeachingStats,
 } from '@patina/supabase';
 import { LedgerFrontMatter } from '../ledger-front-matter';
 import { useStudioMargin } from '@/hooks/use-studio-accounts';
@@ -28,7 +27,7 @@ import { useCanSeeMargin } from '@/hooks/use-can-see-margin';
 import { mixedCurrenciesText } from '@/lib/currency-totals';
 import { collectedCents } from '@/lib/document/account-summary';
 import { fmtUsd } from '@/lib/document/format';
-import { openLedger, type OpenLedgerContext } from '../command-bar';
+import type { OpenLedgerContext } from '../command-bar';
 import { AccountsLedgerPage } from './accounts-ledger-page';
 import { AccountsReceivablesPage } from './accounts-receivables-page';
 import { AccountsEarningsPage } from './accounts-earnings-page';
@@ -64,10 +63,6 @@ export function AccountsBook({
   const { data: earnings } = useEarningsStats();
   const margin = useStudioMargin();
   const canSeeMargin = useCanSeeMargin();
-  // R37 — teaching stats feed the front-matter lens.
-  const { data: teaching } = useDesignerTeachingStats();
-
-  const taughtCount = (teaching as { products_taught?: number } | null)?.products_taught ?? 0;
 
   // page is a free string on the shared context — narrow it to this book.
   const [page, setPage] = useState<BookPage>(
@@ -160,17 +155,6 @@ export function AccountsBook({
       ) : (
         <>
           <LedgerFrontMatter caption="the studio" stats={stats} />
-          {/* R37: the teaching lens — one quiet pair beside the money, linking
-              into the Library for the progress detail. Never a dashboard. */}
-          <button
-            type="button"
-            onClick={() => openLedger('Library')}
-            className="-mt-2 mb-4 flex items-baseline gap-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay-ink)]"
-          >
-            <span className="text-[var(--color-clay-ink)]">teaching</span>
-            <span className="text-[var(--color-charcoal)]">{taughtCount} taught</span>
-            <span className="text-[var(--color-clay-ink)] opacity-70">→ Library ↗</span>
-          </button>
 
           {page === 'ledger' && (
             <AccountsLedgerPage

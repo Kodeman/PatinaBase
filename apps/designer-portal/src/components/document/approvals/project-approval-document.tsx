@@ -21,6 +21,7 @@ import {
   useProjectApprovalArtifactCandidates,
   useProjectApprovals,
   useProjectDecisionAuthority,
+  useProposals,
   usePublishProjectApproval,
   useSetProjectDecisionAuthority,
   useSupersedeProjectApproval,
@@ -224,6 +225,12 @@ export function ProjectApprovalDocument({
   const approvalsQuery = useProjectApprovals(projectId);
   const candidatesQuery = useProjectApprovalArtifactCandidates(projectId);
   const authorityQuery = useProjectDecisionAuthority(projectId);
+  // US-25 fix-now 15 — the job's settled proposal, newest first, so a head with
+  // nothing authored reads the decision the client already made.
+  const settledProposalQuery = useProposals({
+    projectId,
+    status: ['accepted', 'declined'],
+  });
   const setAuthority = useSetProjectDecisionAuthority();
   const createApproval = useCreateProjectApproval();
   const publishApproval = usePublishProjectApproval();
@@ -533,7 +540,21 @@ export function ProjectApprovalDocument({
     openCount === 0 &&
     authority === null &&
     !authorityQuery.isLoading;
-  const headStatus = noLeadSentence
+  // US-25 fix-now 15 — with no approval authored, the client's decision on the
+  // proposal is the region's truth: `Nora Cedar accepted the proposal · 8 October`,
+  // never `No decision lead named yet.` over a job that has a decision.
+  const settledProposal = settledProposalQuery.data?.[0] ?? null;
+  const proposalOutcome =
+    approvals.length === 0 &&
+    (settledProposal?.status === 'accepted' ||
+      settledProposal?.status === 'declined')
+      ? `${clientName?.trim() || 'The client'} ${settledProposal.status} the proposal · ${fmtDay(
+          settledProposal.responded_at ?? settledProposal.updated_at,
+        )}`
+      : null;
+  const headStatus = proposalOutcome
+    ? proposalOutcome
+    : noLeadSentence
     ? 'No decision lead named yet.'
     : openCount > 0
       ? `${openCount} awaiting decision · ${leadName ?? 'no decision lead'}`
@@ -657,7 +678,7 @@ export function ProjectApprovalDocument({
       : 'No decision lead';
     const authoredPhrase =
       approvals.length === 0
-        ? 'no approvals authored'
+        ? (proposalOutcome ?? 'no approvals authored')
         : `${approvals.length} approval${approvals.length === 1 ? '' : 's'} authored`;
     return (
       <div

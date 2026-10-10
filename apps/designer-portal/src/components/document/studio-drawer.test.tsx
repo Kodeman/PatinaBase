@@ -204,7 +204,18 @@ describe('StudioDrawer', () => {
     ).not.toBeInTheDocument();
   });
 
+  // US-25 fix-now 12 — the Desk header prints its own `Find anything`, so
+  // the drawer does not print a second one there.
+  it('prints no second Find anything on the Desk', () => {
+    mockPathname = '/desk';
+    render(<StudioDrawer />);
+    expect(
+      screen.queryByRole('button', { name: 'Find anything (⌘K), from the studio drawer' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('C-AP-05 — prints Find anything ⌘K as a door of its own', () => {
+    mockPathname = '/doc/doc-1';
     const opened = jest.fn();
     window.addEventListener('document:open-command-bar', opened);
     render(<StudioDrawer />);

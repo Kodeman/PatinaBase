@@ -45,6 +45,7 @@ afterEach(() => {
 });
 
 jest.mock('@patina/supabase', () => ({
+  useProposals: () => ({ data: [], isLoading: false, isError: false }),
   useProjectApprovals: () => ({
     data: approvals,
     isLoading: approvalsLoading,

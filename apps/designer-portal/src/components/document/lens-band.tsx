@@ -236,13 +236,25 @@ export function LensBand({
   const rung = spoken
     ? (spoken.rungs[Math.min(dropped, spoken.rungs.length - 1)] ?? spoken)
     : null;
+  // US-25 fix-now 13 — at 390 the act sits beside its reason, so the measure
+  // stops on the last sentence rung (the phone form, clipped if it must)
+  // rather than giving the reason up for the act alone.
+  const lastRung = spoken
+    ? spoken.rungs.length -
+      1 -
+      (spoken.rungs.length > 1 &&
+      spoken.rungs[spoken.rungs.length - 1]?.form === 'act' &&
+      spoken.rungs[spoken.rungs.length - 2]?.form === 'sentence'
+        ? 1
+        : 0)
+    : 0;
   useLayoutEffect(() => {
     const sentence = sentenceRef.current;
-    if (!spoken || !sentence || dropped >= spoken.rungs.length - 1) return;
+    if (!spoken || !sentence || dropped >= lastRung) return;
     if (sentence.scrollWidth > sentence.clientWidth) {
       setYielded({ key: rungKey, by: dropped + 1 });
     }
-  }, [spoken, rungKey, dropped]);
+  }, [spoken, rungKey, dropped, lastRung]);
 
   const [announcement, setAnnouncement] = useState('');
   const lastAnnouncedKey = useRef<string | null>(null);
@@ -381,8 +393,9 @@ export function LensBand({
         {/* The clip lives on the SENTENCE, never on this flex line: the act's
             44px control is inset by -12px into the 19.5px line, so an
             `overflow: hidden` here would cut 12px off its box for painting and
-            for hit-testing. At 390 under `one-voice` the dock's centre prints
-            the act (D7), so the `sentence` rung (F6-6) prints no act here. */}
+            for hit-testing. US-25 fix-now 13 — at 390 the act prints here
+            beside its reason on every rung, the `sentence` rungs (F6-6)
+            included: the dock's centre is never the only place it lives. */}
         {spoken && rung ? (
           <p
             data-lens-line="2"
@@ -424,7 +437,7 @@ export function LensBand({
             >
               {rung.sentence}
             </span>
-            {spoken.next && rung.form !== 'sentence' && (
+            {spoken.next && (
               <DocumentAction
                 ref={actRef}
                 actionKey="lens-band-next"

@@ -25,7 +25,7 @@
  */
 
 import type { ReactNode } from 'react';
-import { useEffect, useId } from 'react';
+import { createContext, useContext, useEffect, useId } from 'react';
 import {
   DocumentAction,
   DocumentActionGroup,
@@ -128,6 +128,15 @@ export interface RegionHeadProps {
   leaderless?: boolean;
 }
 
+/**
+ * US-25 Q8 — one filled act per view. True while the Document's band prints
+ * its Next act: that act is the view's one filled control, so every region
+ * head under it prints its leader as a text act (its declared weight, or
+ * `secondary`) rather than a second inked one. The count of acts a quiet head
+ * prints does not change; only their weight does.
+ */
+export const BandLeadsContext = createContext(false);
+
 export function RegionHead({
   headingId,
   name,
@@ -148,10 +157,13 @@ export function RegionHead({
 }: RegionHeadProps) {
   // SQ-514 `leader` (no receivable due) and SQ-518 `leaderless` (a create act
   // at index 0) both leave entry 0 its declared variant.
-  const leader = leaderProp && !leaderless;
+  const leads = leaderProp && !leaderless;
+  // Q8 — the band elected its own act; this head's leader drops to text.
+  const bandLeads = useContext(BandLeadsContext);
+  const leader = leads && !bandLeads;
   const showFold = Boolean(bodyId && onFold);
   const printedActions =
-    actsAtQuiet === 'leader' ? actions.slice(0, leader ? 1 : 0) : actions;
+    actsAtQuiet === 'leader' ? actions.slice(0, leads ? 1 : 0) : actions;
   const printedExceptions = silent ? [] : exceptions.slice(0, 2);
   const reasonIdBase = useId();
   const reasonId = (entry: RegionLedgerEntry) => `${reasonIdBase}-${entry.key}-reason`;

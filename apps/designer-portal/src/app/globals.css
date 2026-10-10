@@ -2065,7 +2065,7 @@ html:has([data-document-shell]) {
 .t-body    { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; }
 .t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; }
 .t-meta    { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
-.t-head    { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.t-head    { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
 .t-money   { font-family: var(--font-meta); font-size: 15px; line-height: 1.50; font-weight: 400; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
 .t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-style: italic; font-weight: 400; }
 .t-d1 .t-authorship { font-size: inherit; line-height: inherit; }
@@ -2076,14 +2076,15 @@ html:has([data-document-shell]) {
 .field           { display: block; margin: 0 0 var(--module); }
 .field:last-child{ margin-bottom: 0; }
 
-/* The label — .t-head, exactly. 11px is the floor and there is nothing below
-   it. The label is always present and always above the field. A placeholder
-   is not a label: no field carries a `placeholder` attribute (A13). */
+/* The label — .t-head, exactly. 12px (--type-metadata-min) is the floor and
+   there is nothing below it. The label is always present and always above the
+   field. A placeholder is not a label: no field carries a `placeholder`
+   attribute (A13). */
 .field > .label {
   display: block;
   margin: 0 0 12px;
   font-family: var(--font-meta);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
   font-weight: 500;
   letter-spacing: .08em;

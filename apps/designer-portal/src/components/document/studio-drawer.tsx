@@ -454,6 +454,10 @@ export function StudioDrawer() {
             data-drawer-find-stack
             className={askThePaperOn ? 'flex items-center gap-0.5' : 'contents'}
           >
+          {/* US-25 fix-now 12 — on the Desk the header prints its own
+              `Find anything`; the drawer's copy was a second door to the same
+              bar on the same view, so the Desk keeps only its own. */}
+          {pathname !== '/desk' && (
           <button
             type="button"
             onClick={() => openCommandBar()}
@@ -474,6 +478,7 @@ export function StudioDrawer() {
               ⌘K
             </span>
           </button>
+          )}
           {/* US-19 D4 — `?` printed: its own act beside `Find anything ⌘K`,
               on the same line and at the same 44px height. Like Find, the
               word goes first below 1440 (a held clock and a presence line
@@ -483,7 +488,7 @@ export function StudioDrawer() {
               type="button"
               onClick={() => openKeys('drawer')}
               aria-label="Keys (?)"
-              className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+              className="relative inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
             >
               <span className="hidden min-[1440px]:inline">Keys</span>
               <kbd className="rounded-[3px] border border-[var(--border-default)] px-1.5 py-px font-mono text-[12px] leading-none text-[var(--text-muted)]">

@@ -62,6 +62,12 @@ import { __setDensityForTest } from '@/hooks/use-lens-density';
 import { regionBoxSignature } from './region/region-box-signature';
 
 const settled = (data: unknown) => ({ data, isError: false });
+// A job that has billed and been paid: payment counts toward the closed-out
+// count only once billing exists (US-25 fix-now 15).
+const billedAndPaid = () =>
+  useProjectInvoices.mockReturnValue(
+    settled([{ id: 'inv-1', status: 'paid', total_cents: 100000, amount_paid_cents: 100000 }]),
+  );
 
 beforeEach(() => {
   __setDensityForTest(null);
@@ -150,6 +156,7 @@ describe('CareBand closeout authority', () => {
   // `N OF M CLOSED OUT` off this one report, because nothing else on the page
   // can state the pair without repeating the eight closeout reads.
   it("publishes its closure answer, and its count, to the page", () => {
+    billedAndPaid();
     const onCloseoutReady = jest.fn();
 
     render(<CareBand projectId="project-1" onCloseoutReady={onCloseoutReady} />);
@@ -170,6 +177,18 @@ describe('CareBand closeout authority', () => {
       closed: 2,
       total: 6,
     });
+  });
+
+  // US-25 fix-now 15 — an unstarted job has billed nothing, so nothing is
+  // closed out and the head says nothing: never `1 closed out`.
+  it('says nothing on an unstarted job: nothing billed is nothing closed out', () => {
+    const onCloseoutReady = jest.fn();
+
+    render(<CareBand projectId="project-1" onCloseoutReady={onCloseoutReady} />);
+
+    expect(onCloseoutReady).toHaveBeenLastCalledWith({ ready: false, closed: 0, total: 6 });
+    const head = document.querySelector('[data-region-head="closure"]')!;
+    expect(head.textContent).not.toMatch(/closed out/);
   });
 
   it('prints the checklist anchor the guide\'s care act names', () => {
@@ -224,6 +243,7 @@ describe('CareBand fold', () => {
 
   it('forces the band open on install phases even with a remembered fold', () => {
     window.localStorage.setItem('patina:doc-fold:project-1:care', '1');
+    billedAndPaid();
 
     render(<CareBand projectId="project-1" />);
 
@@ -298,6 +318,7 @@ describe('CareBand fold', () => {
       }),
     );
     window.localStorage.setItem('patina:doc-fold:project-1:care', '1');
+    billedAndPaid();
 
     render(<CareBand projectId="project-1" />);
 
@@ -513,6 +534,7 @@ describe('CareBand quiet body (W4)', () => {
 
   it('prints head, count line, leader and the sr-only state line — and no checklist', () => {
     nonInstall();
+    billedAndPaid();
 
     const { container } = render(<CareBand projectId="project-1" indexRoot />);
 

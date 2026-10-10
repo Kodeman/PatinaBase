@@ -224,6 +224,10 @@ export interface MarginNoteProps {
    *  of this primitive's call sites put a <button> inside the body. */
   clamp?: boolean;
   seen?: boolean;
+  /** US-25 fix-now 8 — the first showing IS the once: the marker is written
+   *  the moment the note appears, so it stays for this mount and never
+   *  returns on a later open, pressed or not. */
+  retireOnShow?: boolean;
   /** Called when the note recedes: 'dismissed' for the ×, 'acted' for a named
    *  action or the `act`. The primitive never sends 'closed'; that is a
    *  caller's word for a show that ended with neither. */
@@ -252,6 +256,7 @@ export function MarginNote({
   suppressed = false,
   clamp = false,
   seen,
+  retireOnShow = false,
   onSeen,
   className,
 }: MarginNoteProps) {
@@ -263,6 +268,9 @@ export function MarginNote({
   const [expanded, setExpanded] = useState(false);
   // 'shown' fires at most once per mount even as `suppressed` toggles.
   const shownRef = useRef(false);
+  // A note retired on show is held up by `shownRef`; this lets its act still
+  // take it down for good.
+  const recededRef = useRef(false);
   // Changes when the cross-device backend is installed, hydrates, or clears.
   const backendState = useSyncExternalStore(subscribeBackend, getBackendRevision, getBackendRevision);
 
@@ -272,6 +280,12 @@ export function MarginNote({
   // hydrates so a note held for the record re-decides. SSR and the first client
   // paint agree (nothing → nothing) because the effect runs after mount.
   useEffect(() => {
+    // A note retired on show keeps this mount's showing: the marker it wrote
+    // must not take it down under the reader on the next re-decide.
+    if (retireOnShow && shownRef.current) {
+      setVisible(!suppressed && !recededRef.current);
+      return;
+    }
     if (suppressed || (seen ?? hasSeen(noteKey))) {
       setVisible(false);
       return;
@@ -279,9 +293,10 @@ export function MarginNote({
     setVisible(true);
     if (!shownRef.current) {
       shownRef.current = true;
+      if (retireOnShow && seen === undefined) markMarginNoteSeen(noteKey);
       if (captureEvents) documentEvents.wayfinding.marginNote({ key: noteKey, action: 'shown' });
     }
-  }, [noteKey, suppressed, seen, captureEvents, backendState]);
+  }, [noteKey, suppressed, seen, retireOnShow, captureEvents, backendState]);
 
   // Once shown, the first named action recedes the note forever. Listeners are
   // only bound while the note is on screen (and not suppressed), so a note that
@@ -291,6 +306,7 @@ export function MarginNote({
     const recede = () => {
       if (seen === undefined) markMarginNoteSeen(noteKey);
       onSeen?.('acted');
+      recededRef.current = true;
       setVisible(false);
       if (captureEvents) documentEvents.wayfinding.marginNote({ key: noteKey, action: 'acted' });
     };
@@ -320,6 +336,7 @@ export function MarginNote({
   const recedeAs = (how: 'dismissed' | 'acted') => {
     if (seen === undefined) markMarginNoteSeen(noteKey);
     onSeen?.(how);
+    recededRef.current = true;
     setVisible(false);
     if (captureEvents) documentEvents.wayfinding.marginNote({ key: noteKey, action: how });
   };
@@ -428,6 +445,10 @@ export const BAND_TOUR_NOTE_KEY = 'band-tour-v1';
  *
  * FR3 F3-16 — and absent on a band with no act to press: a held or closed
  * paper (no Next), or one whose own act is not known yet.
+ *
+ * US-25 fix-now 8 — once per person, then gone for good: the first Document
+ * that shows it retires it, whether or not `Understood` is pressed, so it
+ * never waits at rest on every later Document.
  */
 export function BandTourNote({ hasAct }: { hasAct: boolean }) {
   const oneVoice = useFeatureFlag('one-voice').value === true;
@@ -437,6 +458,7 @@ export function BandTourNote({ hasAct }: { hasAct: boolean }) {
       noteKey={BAND_TOUR_NOTE_KEY}
       caption={null}
       dismissible={false}
+      retireOnShow
       act={{ label: 'Understood', scoreOnLabel: true }}
       className="mt-2"
     >

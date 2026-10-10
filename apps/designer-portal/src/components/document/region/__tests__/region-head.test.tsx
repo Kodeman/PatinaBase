@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { RegionHead, type RegionLedgerEntry } from '../region-head';
+import { BandLeadsContext, RegionHead, type RegionLedgerEntry } from '../region-head';
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -289,5 +289,49 @@ describe('RegionHead', () => {
     const plain = screen.getByRole('button', { name: 'Revise' });
     expect(plain).toBeDisabled();
     expect(plain).not.toHaveAttribute('aria-describedby');
+  });
+});
+
+// US-25 Q8 — one filled act per view: while the band prints its Next, a
+// region head's leader drops to a text act, and a quiet head still prints it.
+describe('RegionHead under the band’s elected act (Q8)', () => {
+  const underBand = (props: Partial<Parameters<typeof RegionHead>[0]> = {}) =>
+    render(
+      <BandLeadsContext.Provider value>
+        <RegionHead
+          headingId="region-approvals-heading"
+          name="Approvals"
+          status="Two decisions waiting"
+          surfaceKey="document"
+          regionKey="approvals"
+          actions={ledger}
+          {...props}
+        />
+      </BandLeadsContext.Provider>,
+    );
+
+  it('prints no filled act: the leader is a text act at its declared weight', () => {
+    underBand();
+    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAttribute(
+      'data-action-variant',
+      'secondary',
+    );
+    expect(document.querySelectorAll('[data-action-variant="inked"], [data-action-variant="primary"]')).toHaveLength(0);
+  });
+
+  it('a quiet head still prints its one act, as text', () => {
+    underBand({ actsAtQuiet: 'leader' });
+    const acts = document.querySelectorAll('[data-action-key]');
+    expect(acts).toHaveLength(1);
+    expect(acts[0]).toHaveTextContent('Approve');
+    expect(acts[0]).toHaveAttribute('data-action-variant', 'secondary');
+  });
+
+  it('with no band act, the head keeps its inked leader', () => {
+    renderHead();
+    expect(screen.getByRole('button', { name: 'Approve' })).toHaveAttribute(
+      'data-action-variant',
+      'inked',
+    );
   });
 });

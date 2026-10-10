@@ -161,8 +161,9 @@ function EngineNudge({
       className="group mt-5 flex min-h-11 w-full flex-col justify-center border-t border-[var(--border-subtle)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
       <span className="doc-type-meta font-semibold uppercase tracking-[0.1em]">
-        The Engine · {nudge.count}{" "}
-        {nudge.count === 1 ? "person drifting" : "people drifting"}
+        {/* US-25 fix-now 9 — no drifting count: the studio surface is never
+            scored. The nudge names the one tie, not a tally. */}
+        The Engine
       </span>
       <span className="doc-type-body mt-1 text-[var(--color-quiet-ink)]">
         <span className="font-heading italic text-[var(--text-primary)]">

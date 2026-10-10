@@ -62,11 +62,11 @@ export function AccountNameplate() {
         />
       </span>
       <span className="min-w-0 text-left leading-tight">
-        <span className="block max-w-[120px] truncate font-heading text-[11px] font-medium text-[var(--text-primary)]">
+        <span className="block whitespace-nowrap font-heading text-[11px] font-medium text-[var(--text-primary)]">
           {name ?? email ?? 'Account'}
         </span>
         {studio && (
-          <span className="block max-w-[120px] truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <span className="block whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             {studio.name}
           </span>
         )}

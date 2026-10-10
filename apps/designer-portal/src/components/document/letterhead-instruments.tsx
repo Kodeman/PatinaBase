@@ -418,12 +418,16 @@ export function LetterheadInstruments({
   // FR6 F6-1 (D1-c) — the act a landing was pressed as; null when the
   // letterhead's own Message opened the composer.
   const [landedAct, setLandedAct] = useState<string | null>(null);
+  // US-25 fix-now 14 — `Follow up` on a declined proposal opens the composer
+  // with what she said: null when the landing is not a declined follow-up.
+  const [declined, setDeclined] = useState<{ reason: string | null } | null>(null);
   const noteRef = useRef<HTMLTextAreaElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!composing) {
       setNamed([]);
       setLandedAct(null);
+      setDeclined(null);
     }
   }, [composing]);
   // FR4 Fix 2 (`one-voice`, design-review-3 §4) — the act that opened the
@@ -455,9 +459,21 @@ export function LetterheadInstruments({
     const onCompose = (event: Event) => {
       event.preventDefault();
       const detail = (
-        event as CustomEvent<{ named?: readonly string[]; act?: string } | undefined>
+        event as CustomEvent<
+          | {
+              named?: readonly string[];
+              act?: string;
+              declined?: { reason?: string | null };
+            }
+          | undefined
+        >
       ).detail;
       setNamed(detail?.named ?? []);
+      setDeclined(
+        detail?.declined
+          ? { reason: detail.declined.reason?.trim() || null }
+          : null,
+      );
       // Every landing that names no act is a `Nudge` row (the sheet's).
       setLandedAct(detail?.act ?? needActLabel('overdue_decision', firstName));
       openerRef.current = composerOpener(composerRef.current, true);
@@ -748,6 +764,13 @@ export function LetterheadInstruments({
             <p className="mb-1.5 text-[11px] italic text-[var(--text-muted)]">
               The Pulse handles Fridays; this is for now. It lands in {clientName}
               &rsquo;s portal messages.
+            </p>
+          )}
+          {declined && (
+            <p data-message-declined className="mb-1.5 text-[12px] text-[var(--color-charcoal)]">
+              {`${spokenName.charAt(0).toUpperCase()}${spokenName.slice(1)} declined the proposal${
+                declined.reason ? `: “${declined.reason}”` : '.'
+              }`}
             </p>
           )}
           {named.length > 0 && (

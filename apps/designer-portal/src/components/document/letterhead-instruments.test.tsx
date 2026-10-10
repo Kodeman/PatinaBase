@@ -25,6 +25,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { RedLetterRow } from './red-letter-zone';
 import { LetterheadInstruments } from './letterhead-instruments';
+import { ACT_LANDING_EVENTS } from '@/lib/document/act-names';
 import {
   useMobilePrimaryAction,
   useMobileSecondaryAction,
@@ -885,5 +886,52 @@ describe('a Brief paper’s letterhead under one-voice (FR4 524-d)', () => {
     renderBrief('profile-1');
     expect(more()).toEqual([]);
     expect(screen.getByRole('button', { name: 'Message Nora Chen' })).toBeInTheDocument();
+  });
+});
+
+// US-25 fix-now 14 — `Follow up` on a declined proposal visibly opens the
+// composer with the client named and her decline reason quoted; nothing sends
+// until `Send` is pressed.
+describe('Follow up on a declined proposal opens the composer (fix-now 14)', () => {
+  beforeEach(() => {
+    mockOneVoice = true;
+  });
+  afterEach(() => {
+    mockOneVoice = false;
+  });
+
+  function renderNora() {
+    return render(
+      <QueryClientProvider client={new QueryClient()}>
+        <LetterheadInstruments projectId="proj-1" clientProfileId="client-1" clientName="Nora Chen" />
+      </QueryClientProvider>,
+    );
+  }
+  function followUp(reason: string | null): boolean {
+    let taken = false;
+    act(() => {
+      taken = !window.dispatchEvent(
+        new CustomEvent(ACT_LANDING_EVENTS.composeMessage, {
+          detail: { act: 'Follow up', declined: { reason } },
+          cancelable: true,
+        }),
+      );
+    });
+    return taken;
+  }
+
+  it('names the client and quotes the reason; Send is the second named control', () => {
+    renderNora();
+    expect(followUp('The budget is too high for this year.')).toBe(true);
+    expect(screen.getByPlaceholderText('A quick note to Nora…')).toBeInTheDocument();
+    expect(screen.getByText('Nora declined the proposal: “The budget is too high for this year.”')).toBeInTheDocument();
+    expect(screen.getByText('Follow up')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+  });
+
+  it('with no reason given, still says she declined', () => {
+    renderNora();
+    followUp(null);
+    expect(screen.getByText('Nora declined the proposal.')).toBeInTheDocument();
   });
 });

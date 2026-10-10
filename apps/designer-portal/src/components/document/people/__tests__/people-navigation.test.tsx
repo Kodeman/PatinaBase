@@ -73,7 +73,10 @@ describe('People Room navigation', () => {
     const nudge = rail!.querySelector<HTMLButtonElement>(
       '[data-people-engine-nudge]',
     );
-    expect(nudge).toHaveTextContent('2 people drifting');
+    // US-25 fix-now 9 — no scoreboard: the nudge names the tie, never a count.
+    expect(nudge).toHaveTextContent(/^The Engine/);
+    expect(nudge).not.toHaveTextContent(/drifting/);
+    expect(nudge!.textContent).not.toMatch(/\b2\b/);
     expect(nudge).toHaveTextContent(
       'Leah Morgan is the strongest dormant tie · 8 months.',
     );

@@ -19,7 +19,9 @@ jest.mock('@/hooks/use-teaching-note', () => ({
 }));
 
 jest.mock('next/navigation', () => ({
-  usePathname: () => '/desk',
+  // US-25 fix-now 12 — a Document view: on the Desk the drawer prints no
+  // Find of its own (the header has one).
+  usePathname: () => '/doc/doc-1',
   useRouter: () => ({ push: jest.fn() }),
 }));
 
