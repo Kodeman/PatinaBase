@@ -19,9 +19,8 @@ const DESK_DIR = join(__dirname, '../../../components/document');
  *  scan exists to close. */
 const DESK_FILES = [
   'desk-roster.tsx',
-  'desk-claim-card.tsx',
   'desk-ledger-row.tsx',
-  'desk-claims.tsx',
+  'day-sheet.tsx',
 ] as const;
 
 // An empty table would make the `it.each` below pass vacuously. Guarded here,

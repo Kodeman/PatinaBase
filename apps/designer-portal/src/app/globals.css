@@ -566,157 +566,88 @@
   }
 }
 
-/* ── R143 · The Claim card and the at-rest ledger ────────────────────────────
-   A card is a treatment for NEED, not a container for a job. Structure lives
-   here rather than in arbitrary Tailwind because four of these rules cannot be
-   written as utilities: the :has() focus wrap, the 899px collapse (a container
-   query, which Tailwind 3 cannot write), the forced-colors block, and pointer-events on the
-   link zone. Colour and spacing stay on the components as classes. ────────── */
+/* ── US-25 · The Day Sheet and the line roster ──────────────────────────────
+   Monochrome by rule (Q1, Q7): ink, hairlines and type only — no pigment, no
+   wash, no mark, no plate. Layout lives here because the 899px collapse is a
+   container query, which Tailwind 3 cannot write; type and colour stay on the
+   components as classes. ───────────────────────────────────────────────────── */
 
-.desk-claims-grid {
-  display: grid;
-  gap: 24px;
-  align-items: start;             /* a quiet card IS shorter, and says so */
-  grid-template-columns: minmax(0, 1fr);
-}
-@media (min-width: 640px) {
-  .desk-claims-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (min-width: 1024px) {
-  .desk-claims-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
-.desk-claim-card {
-  position: relative;
-  background: var(--doc-paper);
-  /* D4/R144 — the one boundary grey, 3.21:1 on this face. D4a: cards only. */
-  border: 1px solid var(--color-card-edge);
-  border-radius: 2px;
-  /* 4px at the bottom, not 0 — the act's own 2px outline + 2px offset needs
-     that room, or `overflow: hidden` below clips its focus ring on every
-     card. `overflow: hidden` itself stays: the wash still needs it. */
-  padding: 20px 20px 4px;
-  overflow: hidden;               /* clips the wash's circle to the card */
-}
-.desk-claim-card > *:not(.row-wash) { position: relative; }
-
-/* D10 — the WHOLE upper block is the link, not the name inside it: the
-   roster's name link was the Desk's one sub-44px target. The overlay is the
-   name link's own ::before; an absolutely positioned pseudo-element's
-   containing block is its nearest POSITIONED ancestor, so the link itself
-   must stay `position: static` (never `.row-wash-score`, which sets
-   `position: relative`) — otherwise the overlay is the WORD's own box, not
-   this 88px block. `.row-wash-score` rides a nested span instead (see the
-   name register below), which keeps the underline visual without touching
-   the link's own containing-block chain. `display: block` keeps the link's
-   own box a single rectangle rather than one line box per wrapped line.
-
-   The stage plate, the custody row and the person line take pointer-events:
-   none, so a click anywhere in the block reaches that overlay. They are
-   therefore NOT selectable — the deliberate cost recorded in R143. Raising
-   them with z-index instead would make the middle of a single target dead,
-   which is a failure a user can neither see nor explain. The need sentence
-   below the block keeps pointer events and stays selectable, as does every
-   word of the at-rest ledger row. */
-.desk-claim-upper { position: relative; min-height: 88px; }
-.desk-claim-upper [data-claim-inert] { pointer-events: none; }
-.desk-claim-upper [data-roster-name] {
-  position: static;
-  display: block;
-}
-.desk-claim-upper [data-roster-name]::before {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border-radius: 2px;
-}
-
-.desk-claim-sentence,
-.desk-claim-band { position: relative; z-index: 2; }
-.desk-claim-band {
-  margin-top: 16px;
-  /* The LIGHTER rule (the specimen's --hairline). --rule-hair is a full
-     shorthand value, so it is spent whole, never `1px solid var(--rule-hair)`. */
-  border-top: var(--rule-hair);
-  min-height: 44px;
+.day-sheet-head {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--text-primary);
 }
-.desk-claim-band .da-act { width: 100%; justify-content: flex-start; }
-/* Phone: no hover, so the act's own box carries the whole affordance. */
+.day-sheet-scope {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--text-muted);
+}
+.day-sheet-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 40px;
+  padding: 16px 0 15px;
+  border-bottom: 1px solid var(--doc-ink-border);
+}
+.day-sheet-line > p { max-width: 64ch; }
+.day-sheet-acts {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 16px;
+}
+.day-sheet-block { margin-top: 28px; }
+.day-sheet-waiting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 24px;
+  padding: 11px 0 10px;
+  border-bottom: 1px solid var(--doc-ink-border);
+  overflow-wrap: anywhere;
+}
+/* 390 — the sheet stacks: each act is a full-width row under its sentence. */
 @media (max-width: 639px) {
-  .desk-claim-band { min-height: 48px; }
+  .day-sheet-line { grid-template-columns: minmax(0, 1fr); }
+  .day-sheet-acts { flex-direction: column; align-items: stretch; gap: 0; }
+  .day-sheet-acts .da-act { width: 100%; justify-content: flex-start; }
+  .day-sheet-waiting { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* The ring is drawn around the whole zone, so focus REVEALS the click area
-   rather than outlining a word inside it. */
-@supports selector(:has(*)) {
-  .desk-claim-upper:has([data-roster-name]:focus-visible) {
-    outline: 2px solid var(--color-clay-ink);
-    outline-offset: 2px;
-    border-radius: 2px;
-  }
-  .desk-claim-upper:has([data-roster-name]:focus-visible)
-    [data-roster-name]:focus-visible { outline: none; }
-  /* .row-wash-score fires on CARD hover, so hovering the act would also light
-     the name. Two lit targets is a lie about where the click will land. */
-  .desk-claim-card:has(.da-act:hover) .row-wash-score::after {
-    background: var(--color-aged-oak);
-  }
-}
-
-/* The ledger measures ITSELF, not the window. The roster is not always the
-   width of the page — it has sat in a page-level column before — and a
-   viewport media query let a 662px roster keep asking for the five-track grid,
-   which resolved the sentence track to 0px and broke the sentence one
-   character to a line. The list is the query container, so the collapse below
-   fires on the width the row actually has. */
+/* The roster measures ITSELF, not the window: the list is the query
+   container, so the collapse below fires on the width the row actually has. */
 .desk-ledger-list {
   container-type: inline-size;
 }
 .desk-ledger-row {
-  position: relative;
   display: grid;
-  /* The sentence track has a floor rather than minmax(0,1fr): below it the row
-     collapses (the @container rule) instead of degrading into a column of
-     single characters. The act track is a flat 120px — "Open the job" is
-     113px, and the old fixed 96px clipped it to "OPEN THE J" under this row's
-     own overflow:hidden. Flat, not max-content: a max-content act track is
-     as wide as the longest label in ITS OWN row, so the value column would
-     stop lining up the moment two rows carried different acts, and a value
-     column that does not line up is not a ledger.
-     Minimum width = 24+320+200+132+120 + 4×24 gaps = 892px, which is under
-     the 899px container threshold below — so the row always has room for the
-     five tracks before the collapse takes over, and never clips. */
-  grid-template-columns: 24px 320px minmax(200px, 1fr) 132px 120px;
+  /* Name · phase · sentence · date · act. The sentence track has a floor:
+     below it the row collapses (the @container rule) instead of degrading
+     into a column of single characters. Minimum width = 220+96+200+132+170 +
+     4×20 gaps = 898px, under the 899px threshold, so it never clips. */
+  grid-template-columns: 220px 96px minmax(200px, 1fr) 132px 170px;
   align-items: baseline;
-  column-gap: 24px;
-  padding: 24px 0;
-  border-top: 1px solid var(--doc-ink-border);
-  background: transparent;   /* D4a — a row is not a component boundary */
-  overflow: hidden;          /* clips the wash's circle to the row */
+  column-gap: 20px;
+  padding: 11px 0 10px;
+  border-bottom: 1px solid var(--doc-ink-border);
 }
-/* The wash sits at z-index:-1 inside the row's own stacking context; giving
-   the cells a position keeps them painting above it at every browser, and is
-   what the specimen does. */
-.desk-ledger-row > *:not(.row-wash) { position: relative; }
-.desk-ledger-row [data-ledger-cell='sentence'] { max-width: 44ch; }
 .desk-ledger-row [data-ledger-cell='value'],
 .desk-ledger-row [data-ledger-cell='act'] { text-align: right; }
-.desk-ledger-row [data-ledger-cell='mark'] { align-self: start; margin-top: 9px; }
 
-/* The ledger degrades back into the roster row it came from — measured on the
-   list's own inline size (see .desk-ledger-list), never on the viewport. */
 @container (max-width: 899px) {
   .desk-ledger-row {
-    grid-template-columns: 16px minmax(0, 1fr);
-    row-gap: 12px;
-    column-gap: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
   }
-  .desk-ledger-row > *:not(.row-wash) { grid-column: 2; }
-  .desk-ledger-row [data-ledger-cell='mark'] { grid-column: 1; }
-  .desk-ledger-row [data-ledger-cell='sentence'] { max-width: none; }
-  .desk-ledger-row [data-ledger-cell='value'] { text-align: left; }
+  .desk-ledger-row [data-ledger-cell='value'],
+  .desk-ledger-row [data-ledger-cell='act'] { text-align: left; }
+  .desk-ledger-row [data-ledger-cell='value']:empty { display: none; }
 }
 
 /* F9 — the portal's first forced-colors block. In High Contrast a mark drawn
@@ -729,10 +660,7 @@
     border: 3.5px solid currentColor;
   }
   .row-wash { display: none; }
-  .desk-claim-card, .desk-ledger-row { border-color: CanvasText; }
-  .desk-claim-upper:has([data-roster-name]:focus-visible) {
-    outline-color: Highlight;
-  }
+  .desk-ledger-row { border-color: CanvasText; }
 }
 
 /* The Scored Ink (I107) — DocumentAction grammar. Proof Sheet No 001 Proof VI.

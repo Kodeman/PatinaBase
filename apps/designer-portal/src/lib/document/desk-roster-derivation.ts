@@ -133,6 +133,8 @@ export interface RosterLine {
   overdueText: string | null;
   mark: RosterMark;
   needKind: NeedKind | null;
+  /** The head need's key — the same key the Day Sheet and the band read. */
+  needKey?: string | null;
   overdue: OverdueCondition;
   /** Opening the job is act one — the line's own name carries this. */
   jobHref: string;
@@ -561,6 +563,7 @@ export function deriveDeskRoster(
             : null,
         mark,
         needKind: need?.kind ?? null,
+        needKey: need?.key ?? null,
         overdue,
         jobHref,
         act,
@@ -638,164 +641,17 @@ export function deriveDeskRoster(
   };
 }
 
-/* ── The day's line (IA-05) ─────────────────────────────────────────────────
- *
- * At most three lines under the roster head, and nothing at all when nothing
- * needs her. Every line is a VIEW of a roster row already on the page — it
- * links into the roster and never introduces a job the roster does not list.
- * That is what keeps it from becoming a second queue.
- */
 
-/** A note this studio's client answered — `project_notes.answered_at` (00565),
- *  keyed by project. RLS scopes the read; this module only shapes what it is
- *  handed. */
+/** A note this studio's client answered — `project_notes.answered_at`
+ *  (00565). Read only by `use-answered-notes.ts`, whose Desk consumer (the
+ *  day's line) the Day Sheet retired; continuation decides its fate. */
 export interface AnsweredClientNote {
   projectId: string;
   answeredAt: string;
 }
 
-/** `overdue` is the clause after the dash, which the roster prints in
- *  terracotta ink; `job` is the inline act into the row. */
-export type DayLinePart =
-  | { kind: 'text'; text: string }
-  | { kind: 'job'; text: string; engagementId: string }
-  | { kind: 'overdue'; text: string };
-
-/** The id the `more` link lands on — the claims grid's own element. The grid
- *  has no stage, so the old `#roster-stage-{key}` target is gone with the
- *  stage-first grid it pointed into. */
-export const CLAIMS_ANCHOR_ID = 'desk-claims';
-
-export interface DayLine {
-  /** `card-${engagementId}` for a quoted card, `answered` for the note. */
-  key: string;
-  /** The row this line is a view of. */
-  engagementId: string;
-  parts: DayLinePart[];
-}
-
-export interface DeskDayLine {
-  lines: DayLine[];
-  /** `and N more below`, pointing at the claims grid. */
-  more: { count: number; anchorId: string } | null;
-}
-
-/** D7 — the line quotes the top THREE cards. The answered note is a fourth
- *  line on top of that, not one of the three. */
-export const MAX_DAY_LINES = 3;
-
 /** "Replied last night" is only true inside a day. */
 export const ANSWERED_NOTE_WINDOW_MS = 86_400_000;
-
-interface FlatLine {
-  line: RosterLine;
-  stageLabel: string;
-}
-
-function flatten(roster: DeskRoster): FlatLine[] {
-  const flat: FlatLine[] = [];
-  for (const group of roster.groups) {
-    for (const line of group.lines) {
-      flat.push({ line, stageLabel: group.label });
-    }
-  }
-  return flat;
-}
-
-/**
- * D7 — the day's line, now a view of the grid it sits above.
- *
- * Before this it selected by its own rule (oldest overdue → newest lead →
- * client-answered) while the roster ordered by another. That was tolerable
- * under stage plates, where the line was a shortcut into a list; in a grid,
- * where POSITION is the message, a line contradicting the first card means
- * neither is trusted.
- *
- * The card lines quote the grid. The answered note does NOT: it searches the
- * whole roster, because a client answering is news whether or not the job
- * claims her hand, and a quiet job is exactly the one she would otherwise not
- * look at today. The `taken` set spans both, so no job is ever named twice.
- */
-export function deriveDeskDayLine(
-  cards: readonly ClaimCard[],
-  roster: DeskRoster,
-  answeredNotes: readonly AnsweredClientNote[],
-  now: Date,
-): DeskDayLine | null {
-  const lines: DayLine[] = [];
-  const taken = new Set<string>();
-
-  for (const card of cards.slice(0, MAX_DAY_LINES)) {
-    const { line } = card;
-    taken.add(line.engagementId);
-    const elapsed = overdueElapsedPhrase(line.overdue);
-    lines.push({
-      key: `card-${line.engagementId}`,
-      engagementId: line.engagementId,
-      parts: [
-        { kind: 'job', text: line.name, engagementId: line.engagementId },
-        elapsed
-          ? { kind: 'overdue', text: ` — overdue ${elapsed}` }
-          : {
-              // The card's own reason, not a second sentence about it: a line
-              // that paraphrases the card is a second queue in miniature.
-              kind: 'text',
-              text: ` — ${line.needText ?? line.act.label.toLowerCase()}`,
-            },
-      ],
-    });
-  }
-
-  const floor = now.getTime() - ANSWERED_NOTE_WINDOW_MS;
-  const answered = answeredNotes
-    .map((note) => ({ note, at: Date.parse(note.answeredAt) }))
-    .filter(
-      (entry) =>
-        Number.isFinite(entry.at) &&
-        entry.at >= floor &&
-        entry.at <= now.getTime(),
-    )
-    .sort((a, b) => b.at - a.at);
-  const flat = flatten(roster);
-  for (const { note } of answered) {
-    const match = flat.find(
-      (entry) =>
-        entry.line.projectId === note.projectId &&
-        !!entry.line.client &&
-        !taken.has(entry.line.engagementId),
-    );
-    if (!match) continue;
-    taken.add(match.line.engagementId);
-    lines.push({
-      key: 'answered',
-      engagementId: match.line.engagementId,
-      parts: [
-        { kind: 'text', text: `${match.line.client} replied last night — ` },
-        {
-          kind: 'job',
-          text: match.line.name,
-          engagementId: match.line.engagementId,
-        },
-      ],
-    });
-    break;
-  }
-
-  // Nothing claims her hand: the band does not render. A "nothing needs you"
-  // banner over sixteen live jobs is itself a second queue.
-  if (lines.length === 0) return null;
-
-  // Every card the line already spoke, by either route: the answered note can
-  // name a card below the top three, and "and 1 more below" must not then
-  // point at the job just named.
-  const remaining = cards.filter(
-    (card) => !taken.has(card.line.engagementId),
-  ).length;
-  return {
-    lines,
-    more: remaining > 0 ? { count: remaining, anchorId: CLAIMS_ANCHOR_ID } : null,
-  };
-}
 
 /* ── The claims split (D5, D3, D8) ──────────────────────────────────────────
  *
@@ -812,17 +668,18 @@ export interface ClaimCard {
   custody: string;
 }
 
-export interface ClaimPersonGroup {
-  key: string;
-  label: string;
-  count: number;
-  cards: ClaimCard[];
-}
-
 export interface DeskClaimsInput {
   roster: DeskRoster;
-  answeredNotes: readonly AnsweredClientNote[];
   now: Date;
+}
+
+/** US-25 slice 4 — the line roster's three groups, in this order. */
+export type CustodyGroupKey = 'owed' | 'waiting' | 'rest';
+
+export interface CustodyGroup {
+  key: CustodyGroupKey;
+  label: string;
+  lines: RosterLine[];
 }
 
 export interface DeskClaims {
@@ -830,12 +687,40 @@ export interface DeskClaims {
   ledger: RosterGroup[];
   heading: string;
   restHeading: string;
-  dayLine: DeskDayLine | null;
+  /** Owed by you · Waiting on others · at rest — empty groups dropped. */
+  groups: CustodyGroup[];
 }
 
 function restHeadingFor(count: number, notChecked: boolean): string {
   if (count === 0) return '';
   return `${notChecked ? CUSTODY_NOT_CHECKED : CUSTODY_AT_REST} · ${count} ${count === 1 ? 'job' : 'jobs'}`;
+}
+
+/** The ranked claims split by whose hand the head need is in; the at-rest
+ *  half keeps its stage order and takes the honest word (fix-now 6). */
+function custodyGroups(
+  cards: readonly ClaimCard[],
+  ledger: readonly RosterGroup[],
+  notChecked: boolean,
+): CustodyGroup[] {
+  const groups: CustodyGroup[] = [
+    {
+      key: 'owed',
+      label: 'Owed by you',
+      lines: cards.filter((c) => c.line.needOwner === 'designer').map((c) => c.line),
+    },
+    {
+      key: 'waiting',
+      label: 'Waiting on others',
+      lines: cards.filter((c) => c.line.needOwner !== 'designer').map((c) => c.line),
+    },
+    {
+      key: 'rest',
+      label: notChecked ? CUSTODY_NOT_CHECKED : CUSTODY_AT_REST,
+      lines: ledger.flatMap((group) => group.lines),
+    },
+  ];
+  return groups.filter((group) => group.lines.length > 0);
 }
 
 /** N6 — leads stand in the order they wrote in: the lead cards trade places
@@ -863,7 +748,7 @@ function leadsByArrival(cards: ClaimCard[]): ClaimCard[] {
  * a grid does not.
  */
 export function deriveDeskClaims(input: DeskClaimsInput): DeskClaims {
-  const { roster, answeredNotes, now } = input;
+  const { roster, now } = input;
 
   const cards: ClaimCard[] = [];
   const ledger: RosterGroup[] = [];
@@ -914,45 +799,10 @@ export function deriveDeskClaims(input: DeskClaimsInput): DeskClaims {
     ledger,
     heading: roster.heading,
     restHeading: restHeadingFor(restCount, roster.notChecked != null),
-    dayLine: deriveDeskDayLine(ordered, roster, answeredNotes, now),
+    groups: custodyGroups(ordered, ledger, roster.notChecked != null),
   };
 }
 
-/**
- * Regroups the CARD half by the person who carries the job, on exactly the
- * rule `groupRosterByPerson` uses for the ledger half: a card with no
- * `designerId`, or one naming nobody on the list, groups under the principal
- * rather than vanishing.
- */
-export function groupClaimsByPerson(
-  cards: readonly ClaimCard[],
-  people: readonly RosterPerson[],
-): ClaimPersonGroup[] {
-  if (people.length === 0) return [];
-
-  const principal = people.find((person) => person.isPrincipal) ?? people[0];
-  const known = new Set(people.map((person) => person.id));
-  const cardsByPerson = new Map<string, ClaimCard[]>(
-    people.map((person) => [person.id, []]),
-  );
-
-  for (const card of cards) {
-    const id =
-      card.line.designerId && known.has(card.line.designerId)
-        ? card.line.designerId
-        : principal.id;
-    cardsByPerson.get(id)!.push(card);
-  }
-
-  return people
-    .map((person) => ({
-      key: `person-${person.id}`,
-      label: person.name,
-      count: cardsByPerson.get(person.id)!.length,
-      cards: cardsByPerson.get(person.id)!,
-    }))
-    .filter((group) => group.count > 0);
-}
 
 /* ── The two facets (IA-11 / IA-12) ─────────────────────────────────────────
    Facets, not a density toggle: neither one changes what a row looks like or
@@ -971,17 +821,6 @@ export function rosterLineNeedsAHand(line: RosterLine): boolean {
   return line.mark !== null;
 }
 
-/** Narrows every group to its marked rows and drops the groups left empty. */
-export function filterRosterToNeeds(
-  groups: readonly RosterGroup[],
-): RosterGroup[] {
-  return groups
-    .map((group) => {
-      const lines = group.lines.filter(rosterLineNeedsAHand);
-      return { ...group, count: lines.length, lines };
-    })
-    .filter((group) => group.count > 0);
-}
 
 /** A member of the studio, as the roster needs them: an id to match
  *  `designer_id` against and a name to print. */
@@ -1093,16 +932,4 @@ export function groupRosterByPerson(
       lines: linesByPerson.get(person.id)!,
     }))
     .filter((group) => group.count > 0);
-}
-
-/** The head sentence says which facets are on, in words. The count clauses in
- *  front of it are the whole roster's, not the filtered view's. */
-export function facetHeading(
-  heading: string,
-  facets: { needsMe: boolean; byPerson: boolean },
-): string {
-  let sentence = heading;
-  if (facets.needsMe) sentence += ' · showing what needs you';
-  if (facets.byPerson) sentence += ' · by person';
-  return sentence;
 }

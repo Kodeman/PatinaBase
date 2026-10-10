@@ -8,7 +8,6 @@
  */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import {
   useProfile,
   useOrganizations,
@@ -21,7 +20,6 @@ import {
 } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useViewerStudio } from '@/hooks/use-viewer-studio';
-import { useAnsweredNotes } from '@/hooks/use-answered-notes';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -45,10 +43,8 @@ import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
 import { DeskBoardsReactionRollup } from '@/components/document/desk-boards-reaction-rollup';
 import { MarginNote } from '@/components/document/margin-note';
 import { useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
-import {
-  StudioSetupWhisper,
-  useStudioSetupWhisperEligible,
-} from '@/components/document/account/studio-setup-whisper';
+import { DaySheet } from '@/components/document/day-sheet';
+import { deriveDaySheet } from '@/lib/document/day-sheet';
 import {
   START_DESK_WALKTHROUGH_EVENT,
   clearDeskWalkthroughLater,
@@ -90,8 +86,6 @@ export default function DeskPage() {
   const [captureOpen, setCaptureOpen] = useState(false);
   const [openProjectOpen, setOpenProjectOpen] = useState(false);
 
-  // U7 — the setup whisper's render predicate, over the reads it renders from.
-  const setupWhisperEligible = useStudioSetupWhisperEligible();
   // US-19 FR2 F2-2 — the roster prints each act by its one name.
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const { data: orgs, isLoading: orgsLoading } = useOrganizations();
@@ -103,7 +97,27 @@ export default function DeskPage() {
   } = useOrganizationMembers(studio?.id ?? '');
   const { data: projectLeads } = useProjectLeads(studio?.id ?? '');
   const { data: needStates } = useNeedStates(studio?.id ?? '');
-  const [deskScope, setDeskScope] = useState<DeskScope>('studio');
+  // N4 — Mine by default, held per person in this browser.
+  const [deskScope, setDeskScopeState] = useState<DeskScope>('mine');
+  const scopeStoreKey = user?.id ? `patina.desk.scope.${user.id}` : null;
+  useEffect(() => {
+    if (!scopeStoreKey) return;
+    try {
+      const held = window.localStorage.getItem(scopeStoreKey);
+      if (held === 'mine' || held === 'studio') setDeskScopeState(held);
+    } catch {
+      /* storage disabled — Mine stands */
+    }
+  }, [scopeStoreKey]);
+  const setDeskScope = (scope: DeskScope) => {
+    setDeskScopeState(scope);
+    if (!scopeStoreKey) return;
+    try {
+      window.localStorage.setItem(scopeStoreKey, scope);
+    } catch {
+      /* storage disabled — the choice lasts this visit */
+    }
+  };
 
   // A9: no mobile primary action is registered here — the header's
   // "Capture a lead" (below) is the one on-screen CTA at every viewport, and
@@ -214,7 +228,10 @@ export default function DeskPage() {
   const myHandoffNote = studioMembers
     ?.find((m) => m.user_id === user?.id)
     ?.handoff_note?.trim();
-  const handoffNeeds = useMemo(() => {
+  // The Day Sheet (slice 4): the top five of the one ranked need list, the
+  // hand-offs riding it like any other need.
+  const sheet = useMemo(() => {
+    const at = new Date();
     const handoffs = deriveHandoffNeeds(
       data?.live ?? [],
       projectLeads ?? new Map(),
@@ -222,16 +239,25 @@ export default function DeskPage() {
       needStates,
       Boolean(myHandoffNote),
     );
-    return deriveDeskNeedList(
+    const needs = deriveDeskNeedList(
       {
         folders: data?.folders ?? [],
         chips: data?.chips ?? [],
         live: data?.live ?? [],
       },
-      new Date(),
+      at,
       handoffs,
-    ).filter((entry) => entry.need.kind === 'handoff');
-  }, [data, projectLeads, user?.id, needStates, myHandoffNote]);
+    );
+    return deriveDaySheet({
+      needs,
+      states: needStates ?? new Map(),
+      leads: projectLeads ?? new Map(),
+      meUserId: user?.id,
+      scope: deskScope,
+      unreadFeeds: data?.unreadFeeds ?? [],
+      now: at,
+    });
+  }, [data, projectLeads, user?.id, needStates, myHandoffNote, deskScope]);
 
   // The Desk arbiter (return-teaching §2): these four lines keep their own
   // conditions, and at most one of them, or the teaching note, renders per
@@ -305,15 +331,9 @@ export default function DeskPage() {
           </MarginNote>
         ),
       },
-      // U7 — the setup whisper, MarginNote's visual idiom (Playfair italic,
-      // en-dash lead) with a live derivation for visibility instead of
-      // MarginNote's once-only localStorage contract, so it rides the same
-      // `studio-workspaces` flag the Account sheet's Studio page already
-      // gates behind. `when` is its real render predicate (R3 N1).
-      'setup-whisper': {
-        when: setupWhisperEligible,
-        node: <StudioSetupWhisper className="mb-10" />,
-      },
+      // US-25 slice 4 — the setup whisper left the Desk; the Account sheet's
+      // Studio page carries the setup checklist it pointed to.
+      'setup-whisper': { when: false, node: null },
     },
   });
 
@@ -332,7 +352,6 @@ export default function DeskPage() {
   // TanStack v5, so it counts as settled only once there is a studio to read.
   // While the organizations read is out, `viewerStudio.isSettled` holds ready.
   const studioMembersSettled = !studio || !studioMembersPending;
-  const answeredNotesRead = useAnsweredNotes();
   const reactionRollupRead = useBoardsReactionRollup();
   const recentBoardsRead = useRecentBoards(8);
   const viewerStudio = useViewerStudio();
@@ -343,7 +362,6 @@ export default function DeskPage() {
     hydrated &&
     isSuccess &&
     !isPlaceholderData &&
-    !answeredNotesRead.isPending &&
     !reactionRollupRead.isPending &&
     !recentBoardsRead.isPending &&
     viewerStudio.isSettled &&
@@ -379,41 +397,18 @@ export default function DeskPage() {
       </div>
     ) : (
       <>
-        <nav aria-label="Desk scope" className="mb-3 flex gap-4 border-b border-[var(--border-subtle)] pb-2">
-          {([
-            ['mine', 'Mine'],
-            ['studio', "The studio's"],
-          ] as const).map(([scope, label]) => (
-            <button
-              key={scope}
-              type="button"
-              aria-pressed={deskScope === scope}
-              onClick={() => setDeskScope(scope)}
-              className={`doc-type-meta min-h-11 uppercase tracking-[0.06em] ${deskScope === scope ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+        <DaySheet
+          sheet={sheet}
+          scope={deskScope}
+          onScope={setDeskScope}
+          oneVoice={oneVoice}
+          now={now}
+        />
         <DeskRoster
           roster={roster}
           studioMembers={studioMembers}
           belowHead={deskLine}
         />
-        {handoffNeeds.length > 0 && (
-          <ul aria-label="Unread hand-offs" className="mt-4 border-t border-[var(--border-subtle)]">
-            {handoffNeeds.map((entry) => (
-              <li key={entry.key} className="border-b border-[var(--border-subtle)] py-3">
-                <Link
-                  href={entry.need.deepLink ?? `/doc/${entry.projectId}`}
-                  className="doc-type-body text-[var(--text-primary)] underline decoration-[var(--border-default)] underline-offset-2"
-                >
-                  {entry.need.text}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
       </>
     );
 

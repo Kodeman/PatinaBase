@@ -1,85 +1,86 @@
 'use client';
 
 /**
- * The at-rest ledger row (R143 · D8).
+ * The roster line (R143 · D8 · US-25 slice 4).
  *
- * The roster row given an internal grid. Its win over the row it replaces is
- * that dates align down the page across forty rows — the one thing a wrapping
- * row could never do. It takes no card edge (D4a): a row is not a component
- * boundary, and it keeps the hairline it always had. Every word in it stays
- * selectable — nothing overlays anything here.
+ * One dense line per job, in every group of the line roster: the job, the
+ * phase as an ink word (Q7 — the stage plates are gone), the head need's
+ * sentence, its date and its one act. Monochrome: no wash, no mark, no
+ * pigment. Every word stays selectable — nothing overlays anything here.
  */
 
 import Link from 'next/link';
+import type { Landing } from '@/lib/arrival/types';
+import { STAGE_WORD } from '@/lib/document/act-names';
+import { paperRegionsForSection } from '@/lib/document/document-index';
 import type { RosterLine } from '@/lib/document/desk-roster-derivation';
 import { DocumentAction } from './document-action';
 import { openLedger } from './command-bar';
-import { RowWash, useRowWash, type RowWashTone } from './row-wash';
-import { rosterLineAnchorId } from './desk-claim-card';
 
 const AT_REST_SENTENCE = 'No current action alerts.';
 
-export function DeskLedgerRow({
-  line,
-  tone,
-}: {
-  line: RosterLine;
-  tone: RowWashTone;
-}) {
-  const wash = useRowWash();
+/** The id a link lands on — the put-down row lands on it after a return. */
+export function rosterLineAnchorId(engagementId: string): string {
+  return `roster-line-${engagementId}`;
+}
+
+/** US-14 R-DM21 A — where the act lands when it opens the job's own
+ *  Document: where the Document's own act for the same need lands
+ *  (needGuideAction, document-guide.ts), in the arrival token's shape. A
+ *  purchase order lands on the FF&E region; every other need on its stage's
+ *  section. An act that opens a sheet or another room carries none. */
+export function actLanding(line: RosterLine): Landing | null {
+  if (line.act.ledger || line.act.href !== line.jobHref) return null;
+  const po = line.needKind === 'po_unsent' || line.needKind === 'po_unacknowledged';
+  if (po && line.projectId && paperRegionsForSection(line.stage).some((r) => r.key === 'ffe')) {
+    return { kind: 'region', region: 'ffe' };
+  }
+  return { kind: 'section', sectionKey: line.stage };
+}
+
+export function DeskLedgerRow({ line }: { line: RosterLine }) {
   const actionKey = `roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`;
   const ariaLabel = `${line.act.label} — ${line.name}`;
+  const landing = line.needKind ? actLanding(line) : null;
+  const sentence = line.needKind
+    ? (line.overdueText ?? line.needText)
+    : (line.motionText ?? line.notChecked ?? AT_REST_SENTENCE);
 
   return (
     <li
-      {...wash}
       id={rosterLineAnchorId(line.engagementId)}
       data-ledger-row={line.engagementId}
-      className="desk-ledger-row has-wash"
+      className="desk-ledger-row"
     >
-      <RowWash tone={tone} />
-      {/* A job at rest wears a ring, never a filled mark: the two marks are
-          two registers, and a third would be a third urgency tier (C4/D8). */}
-      <span
-        aria-hidden="true"
-        data-roster-mark
-        data-ledger-cell="mark"
-        className="inline-block h-[7px] w-[7px] shrink-0 rounded-full border border-[color:var(--text-faint)]"
-      />
       <span data-ledger-cell="name" className="min-w-0">
-        <span className="block font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--text-subtle)]">
-          {line.custody}
-        </span>
         <Link
           href={line.jobHref}
           data-roster-name
-          className="row-wash-score mt-1 block min-w-0 font-heading text-[20px] font-medium leading-[1.3] text-[var(--text-primary)] no-underline transition-colors [overflow-wrap:anywhere] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)] motion-reduce:transition-none"
+          className="block min-w-0 font-heading text-[18px] leading-[1.3] text-[var(--text-primary)] no-underline [overflow-wrap:anywhere] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--text-primary)]"
         >
           {line.name}
         </Link>
-        {/* Person · phase, and never the body text: the sentence cell to the
-            right owns that, and printing it here too put the quiet state
-            directly above the at-rest sentence. */}
-        {line.personLine && (
-          <span
-            data-register="person"
-            className="mt-1 block text-[14px] leading-[1.5] text-[var(--text-muted)] [overflow-wrap:anywhere]"
-          >
-            {line.personLine}
-          </span>
-        )}
+        <span className="mt-1 block font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--text-subtle)]">
+          {line.custody}
+        </span>
+      </span>
+      <span
+        data-ledger-cell="phase"
+        className="font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)]"
+      >
+        {STAGE_WORD[line.stage]}
       </span>
       <span
         data-ledger-cell="sentence"
-        className="min-w-0 text-[14px] leading-[1.5] text-[var(--text-muted)] [overflow-wrap:anywhere]"
+        className="min-w-0 text-[15px] leading-[1.45] text-[var(--text-muted)] [overflow-wrap:anywhere]"
       >
-        {line.motionText ?? line.notChecked ?? AT_REST_SENTENCE}
+        {sentence}
       </span>
       {/* Tabular figures: the column exists so that the moment one row carries
           a date, it lines up with every other one that does. */}
       <span
         data-ledger-cell="value"
-        className="font-mono text-[15px] leading-[1.5] tracking-[0.02em] tabular-nums text-[var(--text-primary)]"
+        className="font-mono text-[14px] leading-[1.5] tracking-[0.02em] tabular-nums text-[var(--text-primary)]"
       >
         {line.valueText ?? ''}
       </span>
@@ -100,6 +101,7 @@ export function DeskLedgerRow({
             actionKey={actionKey}
             aria-label={ariaLabel}
             variant="tertiary"
+            data-landing={landing ? JSON.stringify(landing) : undefined}
             href={line.act.href}
           >
             {line.act.label}
