@@ -1,0 +1,1492 @@
+<title>Designer Portal Uplift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Designer Portal Uplift - founder deck, 9 October 2026 (US-24, SQ-731).
+   Machinery: artifacts/pieces-building-room-2026-10-08/deck.
+   Ground: today's reading paper and inks (apps/designer-portal globals.css,
+   as listed in specimens/SPEC.md section 4). Specimen frames keep their
+   own light paper in both themes.
+   ============================================================ */
+:root {
+  color-scheme: light dark;
+  --paper:        #FAF7F2;
+  --paper-2:      #FCFAF6;
+  --rail:         #E8E3DB;
+  --frame-ground: #E4DED5;
+  --ink:          #2C2926;
+  --ink-muted:    #4E4339;
+  --ink-faint:    #65594E;
+  --rule:         #DCD5CA;
+  --rule-strong:  rgba(44, 41, 38, .30);
+  --clay-ink:     #7C5E30;
+  --terra-ink:    #9C5340;
+  --pager-h:      52px;
+  --head:         48px;
+  --radius:       3px;
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper:        #1F1C19;
+    --paper-2:      #26221E;
+    --rail:         #2E2A26;
+    --frame-ground: #3A3530;
+    --ink:          #F2EDE6;
+    --ink-muted:    #D6CEC4;
+    --ink-faint:    #B8AEA2;
+    --rule:         rgba(242, 237, 230, .14);
+    --rule-strong:  rgba(242, 237, 230, .32);
+    --clay-ink:     #D8B98A;
+    --terra-ink:    #E2A895;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper:        #1F1C19;
+  --paper-2:      #26221E;
+  --rail:         #2E2A26;
+  --frame-ground: #3A3530;
+  --ink:          #F2EDE6;
+  --ink-muted:    #D6CEC4;
+  --ink-faint:    #B8AEA2;
+  --rule:         rgba(242, 237, 230, .14);
+  --rule-strong:  rgba(242, 237, 230, .32);
+  --clay-ink:     #D8B98A;
+  --terra-ink:    #E2A895;
+}
+:root[data-theme="light"] { color-scheme: light; }
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.55; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration-color: var(--ink-faint); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* ---------- type ---------- */
+.t-d0 { font-family: var(--font-display); font-size: clamp(44px, 7vw, 92px); line-height: 1.02; font-weight: 500; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.t-d1 { font-family: var(--font-display); font-size: 38px; line-height: 1.14; font-weight: 500; margin: 0; text-wrap: balance; overflow-wrap: break-word; }
+.t-d2 { font-family: var(--font-display); font-size: 24px; line-height: 1.22; font-weight: 400; margin: 0; overflow-wrap: break-word; }
+.t-d3 { font-family: var(--font-display); font-style: italic; font-size: 21px; line-height: 1.35; font-weight: 400; margin: 0; overflow-wrap: break-word; }
+.t-lede { font-size: 19px; line-height: 1.55; margin: 0; max-width: 62ch; color: var(--ink-muted); }
+.t-body { font-size: 16px; line-height: 1.55; margin: 0; }
+.t-sm { font-size: 14px; line-height: 1.5; margin: 0; }
+.t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.5; letter-spacing: .03em; margin: 0; color: var(--ink-faint); }
+.t-head { font-family: var(--font-meta); font-size: 12px; line-height: 1.4; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; margin: 0; }
+.t-hint { font-family: var(--font-meta); font-size: 12px; line-height: 1.4; letter-spacing: .06em; text-transform: uppercase; margin: 0; color: var(--ink-faint); }
+@media (max-width: 760px) { .t-d1 { font-size: 29px; } .t-d2 { font-size: 21px; } .t-lede { font-size: 17px; } }
+.muted { color: var(--ink-muted); }
+.faint { color: var(--ink-faint); }
+.prose { max-width: 68ch; }
+code, .cite { font-family: var(--font-meta); font-size: 12px; letter-spacing: .02em; color: var(--ink-faint); overflow-wrap: anywhere; }
+p code, li code { font-size: 13px; }
+strong { font-weight: 600; }
+
+/* ---------- deck shell ---------- */
+#deck { height: calc(100dvh - var(--pager-h)); overflow-y: auto; overflow-x: hidden; scroll-snap-type: y proximity; }
+#deck:focus { outline: none; }
+#deck:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: -2px; }
+.slide { min-height: calc(100dvh - var(--pager-h)); scroll-snap-align: start; display: flex; flex-direction: column; border-bottom: 1px solid var(--rule-strong); background: var(--paper); position: relative; }
+.slide.tall { scroll-snap-align: none; }
+.shead { min-height: var(--head); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 24px; padding: 0 clamp(16px, 4vw, 64px); background: var(--rail); border-bottom: 1px solid var(--rule-strong); }
+.shead .no { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+.shead .ch { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.shead .job { margin-left: auto; font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-faint); }
+@media (max-width: 760px) { .shead { padding: 8px 16px; } .shead .job { display: none; } }
+.inner { flex: 1; width: 100%; max-width: 1240px; margin: 0 auto; padding: 48px clamp(16px, 4vw, 64px) 96px; display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+.slide.center .inner { justify-content: center; }
+@media (max-width: 760px) { .inner { padding: 32px 16px 64px; gap: 24px; } }
+
+.stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cols-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 48px; }
+.cols-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 36px; }
+.split { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px 56px; align-items: start; }
+@media (max-width: 980px) { .cols-3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 860px) { .cols-2, .split { grid-template-columns: minmax(0, 1fr); } }
+.rule { height: 1px; background: var(--rule); border: 0; margin: 0; }
+ul.look, ol.look { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 72ch; }
+ul.look li, ol.look li { font-size: 15px; line-height: 1.5; }
+ul.look li::marker, ol.look li::marker { color: var(--ink-faint); font-family: var(--font-meta); font-size: 12px; }
+
+/* ---------- cover and ask ---------- */
+.kicker { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin: 0; }
+.howto { border-top: 1px solid var(--rule-strong); padding-top: 16px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px 32px; }
+.howto div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.howto p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+@media (max-width: 980px) { .howto { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .howto { grid-template-columns: minmax(0, 1fr); } }
+.said { margin: 0; padding: 4px 0 4px 20px; border-left: 2px solid var(--clay-ink); display: flex; flex-direction: column; gap: 10px; }
+.said p { margin: 0; font-family: var(--font-display); font-style: italic; font-size: clamp(21px, 2.4vw, 28px); line-height: 1.35; max-width: 46ch; }
+.said footer { font-family: var(--font-meta); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.thesis { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: clamp(25px, 3vw, 38px); line-height: 1.22; text-wrap: balance; max-width: 36ch; }
+.lanes { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule-strong); }
+.lanes li { display: grid; grid-template-columns: 9em minmax(0, 1fr); gap: 4px 16px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: 15px; line-height: 1.45; }
+.lanes li b { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+@media (max-width: 560px) { .lanes li { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- tables ---------- */
+.scroller { overflow-x: auto; overflow-y: hidden; max-width: 100%; }
+table.sheet { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+table.sheet th, table.sheet td { text-align: left; vertical-align: top; padding: 9px 16px 9px 0; border-top: 1px solid var(--rule); }
+table.sheet thead th { border-top: 0; border-bottom: 1px solid var(--rule-strong); font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+table.sheet tbody tr:last-child td, table.sheet tbody tr:last-child th { border-bottom: 1px solid var(--rule); }
+table.sheet td:last-child, table.sheet th:last-child { padding-right: 0; }
+table.sheet .id { white-space: nowrap; font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .04em; }
+table.sheet td .cite { display: block; margin-top: 3px; }
+table.sheet tr.hot td, table.sheet tr.hot th { background: var(--paper-2); }
+table.sheet tbody th { font-weight: 500; }
+@media (max-width: 760px) {
+  .stackable table.sheet { display: block; }
+  .stackable table.sheet thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .stackable table.sheet tbody, .stackable table.sheet tr, .stackable table.sheet td, .stackable table.sheet tbody th { display: block; width: 100%; }
+  .stackable table.sheet tr { border-top: 1px solid var(--rule); padding: 12px 0; }
+  .stackable table.sheet td, .stackable table.sheet tbody th { border: 0; padding: 0 0 6px; }
+  .stackable table.sheet td[data-label]::before { content: attr(data-label); display: block; font-family: var(--font-meta); font-size: 12px; line-height: 1.5; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+  .stackable table.sheet .id { white-space: normal; }
+}
+/* verdict marks: a word in every cell, never a shape alone */
+.m { white-space: nowrap; font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+.m small { display: block; text-transform: none; letter-spacing: .01em; font-weight: 400; color: var(--ink-faint); white-space: normal; }
+.mk { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--ink); border-radius: 50%; }
+.mk--yes { background: var(--ink); }
+.mk--part { background: linear-gradient(90deg, var(--ink) 50%, transparent 50%); }
+.mk--no { border-style: dashed; border-color: var(--ink-faint); }
+.m--no { color: var(--ink-faint); }
+@media (max-width: 760px) { .m { white-space: normal; } }
+
+/* ---------- numbers ---------- */
+.figs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--rule-strong); }
+.figs li { padding: 14px 16px 14px 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; border-bottom: 1px solid var(--rule); }
+.figs b { font-family: var(--font-display); font-size: 44px; line-height: 1; font-weight: 500; font-variant-numeric: tabular-nums; }
+.figs span { font-size: 14px; line-height: 1.4; color: var(--ink-muted); }
+@media (max-width: 980px) { .figs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .figs { grid-template-columns: repeat(2, minmax(0, 1fr)); } .figs b { font-size: 36px; } }
+
+/* ---------- findings ---------- */
+.finds { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.finds li { display: grid; grid-template-columns: 4.5em minmax(0, 1fr) minmax(0, 15em); gap: 6px 24px; padding: 16px 0; border-top: 1px solid var(--rule); align-items: baseline; }
+.finds li:last-child { border-bottom: 1px solid var(--rule); }
+.finds .fid { font-family: var(--font-meta); font-size: 20px; font-weight: 500; }
+.finds h3 { margin: 0 0 4px; font-size: 17px; line-height: 1.4; font-weight: 600; }
+.finds p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink-muted); }
+.finds .src { font-family: var(--font-meta); font-size: 12px; line-height: 1.5; color: var(--ink-faint); overflow-wrap: anywhere; }
+@media (max-width: 860px) { .finds li { grid-template-columns: 3.5em minmax(0, 1fr); } .finds .src { grid-column: 2; } }
+
+/* ---------- screenshots and specimen frames ---------- */
+figure.shot, figure.spec { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.shot__stage { border: 1px solid var(--rule-strong); border-radius: var(--radius); overflow: hidden; background: var(--frame-ground); }
+.shot__stage img { display: block; width: 100%; height: auto; }
+figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-size: 14px; line-height: 1.5; max-width: 80ch; }
+.pair-label { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.pair-label .src { color: var(--ink-faint); text-transform: none; letter-spacing: .02em; font-weight: 400; overflow-wrap: anywhere; }
+.tag { padding: 2px 7px; border: 1px solid var(--rule-strong); border-radius: 2px; }
+.tag--today { border-color: var(--terra-ink); color: var(--terra-ink); }
+.tag--prop { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.tag--rec { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.today { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px 40px; align-items: start; }
+@media (max-width: 900px) { .today { grid-template-columns: minmax(0, 1fr); } }
+.gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 28px; }
+@media (max-width: 980px) { .gallery { grid-template-columns: minmax(0, 1fr); } }
+.phones { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 320px) minmax(0, 1fr); gap: 24px 32px; align-items: start; }
+@media (max-width: 900px) { .phones { grid-template-columns: repeat(2, minmax(0, 1fr)); } .phones > .stack { grid-column: 1 / -1; } }
+@media (max-width: 560px) { .phones { grid-template-columns: minmax(0, 1fr); } }
+.frame-block { display: flex; flex-direction: column; gap: 20px; padding-top: 8px; }
+.frame-block + .frame-block { border-top: 1px solid var(--rule); padding-top: 32px; }
+.moment { display: flex; flex-direction: column; gap: 4px; }
+.spec__stage { overflow: hidden; max-width: 100%; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: #FAF7F2; }
+.spec__scaler { transform-origin: top left; width: max-content; }
+.spec-frame { border: 0; background: #FAF7F2; display: block; width: 1440px; height: 1150px; color-scheme: light; }
+.est { font-family: var(--font-meta); font-size: 12px; letter-spacing: .02em; color: var(--ink-faint); }
+.narrow-note { display: none; }
+@media (max-width: 760px) { figure.spec.wide .narrow-note { display: block; } }
+
+/* ---------- direction cards ---------- */
+.dir { border-top: 1px solid var(--rule-strong); padding-top: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dir.dir--rec { border-top: 3px solid var(--ink); }
+.dir-letter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.kv { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: 6px 12px; margin: 0; }
+.kv dt { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); padding-top: 2px; }
+.kv dd { margin: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.box { border: 1px solid var(--rule-strong); border-radius: var(--radius); padding: 18px 22px; display: flex; flex-direction: column; gap: 10px; min-width: 0; background: var(--paper-2); }
+.box--quiet { background: transparent; border-color: var(--rule); }
+
+/* ---------- slices ---------- */
+.slices { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-top: 1px solid var(--rule-strong); }
+.slices li { padding: 12px 12px 12px 0; border-right: 1px solid var(--rule); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.slices li + li { padding-left: 12px; }
+.slices li:last-child { border-right: 0; }
+.slices .sn { font-family: var(--font-meta); font-size: 26px; font-weight: 500; line-height: 1; }
+.slices .sw { font-size: 14px; line-height: 1.4; font-weight: 600; }
+.slices p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-muted); }
+@media (max-width: 980px) { .slices { grid-template-columns: repeat(2, minmax(0, 1fr)); } .slices li { border-right: 0; border-bottom: 1px solid var(--rule); padding-left: 0 !important; } }
+@media (max-width: 520px) { .slices { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- questions ---------- */
+.qcards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 48px; }
+@media (max-width: 860px) { .qcards { grid-template-columns: minmax(0, 1fr); } }
+.qcards li { border-top: 1px solid var(--rule-strong); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.qcards li.first { border-top: 3px solid var(--ink); }
+.qhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.qno { font-family: var(--font-meta); font-size: 20px; font-weight: 500; line-height: 1.2; }
+.qtag { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.qtext { margin: 0; font-size: 16px; line-height: 1.45; font-weight: 500; }
+.qrec, .qelse { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+.qrec b, .qelse b { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); margin-right: 6px; }
+.qelse b { color: var(--ink-faint); }
+.qans { margin-top: 2px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-faint); }
+
+/* ---------- the pager ---------- */
+.pager { position: fixed; left: 0; right: 0; bottom: 0; height: var(--pager-h); z-index: 60; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--rail); border-top: 1px solid var(--rule-strong); padding: 4px 16px; }
+.pager button { min-width: 44px; min-height: 44px; padding: 0 14px; background: transparent; border: 1px solid transparent; color: var(--ink); cursor: pointer; font-family: var(--font-meta); font-size: 13px; letter-spacing: .04em; border-radius: var(--radius); }
+.pager button:hover { border-color: var(--rule-strong); }
+.pager button:disabled { color: var(--ink-faint); cursor: default; border-color: transparent; }
+.pager .where { font-family: var(--font-meta); font-size: 13px; letter-spacing: .04em; color: var(--ink-muted); padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: clip; min-width: 0; flex: 0 1 auto; max-width: 52vw; }
+@media (max-width: 560px) { .pager .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } .pager .where { max-width: 60vw; font-size: 12px; } }
+.slide h1:focus, .slide h2:focus { outline: none; }
+.slide h1:focus-visible, .slide h2:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 4px; }
+.skip { position: absolute; left: -9999px; top: 0; }
+.skip:focus { left: 12px; top: 12px; z-index: 70; background: var(--rail); color: var(--ink); padding: 12px; border: 1px solid var(--rule-strong); border-radius: var(--radius); font-family: var(--font-meta); font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+@media (forced-colors: active) {
+  .tag, .spec__stage, .shot__stage, .pager, .box, .mk { border-color: CanvasText; }
+  .mk--yes, .tag--prop, .tag--rec { background: CanvasText; color: Canvas; forced-color-adjust: none; }
+  a:focus-visible, button:focus-visible, .slide h1:focus-visible, .slide h2:focus-visible { outline-color: Highlight; }
+}
+@media print {
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"] {
+    color-scheme: light;
+    --paper: #FFFFFF; --paper-2: #FAF7F2; --rail: #F1EDE6; --frame-ground: #E4DED5;
+    --ink: #2C2926; --ink-muted: #4E4339; --ink-faint: #65594E;
+    --rule: #DCD5CA; --rule-strong: rgba(44, 41, 38, .30); --clay-ink: #7C5E30; --terra-ink: #9C5340;
+    --pager-h: 0px;
+  }
+  body { overflow: visible; }
+  #deck { height: auto; overflow: visible; scroll-snap-type: none; }
+  .pager, .skip { display: none !important; }
+  .slide { min-height: 0; border-bottom: 0; break-after: page; page-break-after: always; }
+  .inner { max-width: none; padding: 20px 24px 24px; }
+  figure.shot, figure.spec, .finds li, .qcards li, table.sheet tr { break-inside: avoid; }
+  .spec__scaler { transform: none !important; }
+  .phones { grid-template-columns: 392px 392px minmax(0, 1fr); }
+}
+/* Chrome prints a scaled or zoomed mockup frame blank or offset, so print uses
+   a page wide enough for a 1440 frame at full size and tall enough to hold one
+   whole; the print dialog's fit-to-page shrinks it to paper. */
+@page { size: 1560px 1760px; margin: 20px; }
+</style>
+
+<a class="skip" href="#s-questions">Skip to the founder questions</a>
+<div id="deck" tabindex="0" role="region" aria-label="Designer Portal Uplift, twenty-seven sheets. Left and right arrow keys move between sheets.">
+
+<!-- ============ 01 COVER ============ -->
+<section class="slide center" id="s-cover" data-label="Cover">
+  <header class="shead"><span class="no">01 / 27</span><span class="ch">Designer portal uplift</span><span class="job">US-24 · for the founding partners</span></header>
+  <div class="inner">
+    <p class="kicker">Designer portal uplift · US-24 · 9 October 2026</p>
+    <h1 class="t-d0">Calm, and findable.</h1>
+    <p class="t-lede">The designer portal is calm. It is not yet easy to act in. A review panel walked it, measured it and drew three ways forward: <strong>A</strong>, light-touch; <strong>B</strong>, a bounded day sheet; <strong>C</strong>, structural. We recommend <strong>B, the Day Sheet</strong>, and we need your answers to fourteen questions, the first four before anything is built.</p>
+    <div class="howto" role="list">
+      <div role="listitem"><p class="t-head"><span class="tag tag--today">Today</span></p><p>A screenshot from the walk: the portal as it runs on <code>main</code>, against a local studio, on Friday 9 October.</p></div>
+      <div role="listitem"><p class="t-head"><span class="tag tag--prop">Proposed</span></p><p>A live, static mockup on an illustrative fixture: Hartwell Studio, Monday 12 October. Not a real studio.</p></div>
+      <div role="listitem"><p class="t-head">est.</p><p>Every click and second figure for a proposal is an estimate against the walk's measured baseline. Nothing here is user-tested yet.</p></div>
+      <div role="listitem"><p class="t-head">Keys</p><p>&larr; &rarr; move between sheets; &darr; &uarr; read down a tall sheet. Previous and Next sit at the foot. The deck prints one sheet per page.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 THE ASK ============ -->
+<section class="slide" id="s-ask" data-label="The ask">
+  <header class="shead"><span class="no">02 / 27</span><span class="ch">1 · The ask</span><span class="job">US-24 BRIEF §1, §2</span></header>
+  <div class="inner">
+    <h2 class="t-d1">The ask</h2>
+    <blockquote class="said">
+      <p>Assemble a team to review the designer portal design elements and overall UI and UX. Ignoring all of the design rules and constraints, have them craft a proposed UI uplift to make the designer portal more user friendly so that designers still feel the calm but can also easily find actionable moments in their projects. Present a proposal of a UI uplift in an HTML presentation including mockups for the founding partners to bring in their opinion.</p>
+      <footer>Kody, 9 October 2026, as recorded in the US-24 BRIEF §1</footer>
+    </blockquote>
+    <ul class="lanes">
+      <li><b>Scope</b><span>The whole designer portal is reviewed. The uplift centres on the daily path: Desk &rarr; a project (the Document) &rarr; acting on what needs you. Other rooms appear only where a direction changes them.</span></li>
+      <li><b>Directions</b><span>Three, A to C, from light-touch to structural. One is recommended, with founder questions.</span></li>
+      <li><b>Mockups</b><span>Static HTML at 1440 and 390 wide, shown as Today and Proposed pairs.</span></li>
+    </ul>
+    <div class="cols-2">
+      <div class="box box--quiet">
+        <p class="t-head">Waived</p>
+        <p class="t-sm muted">The design canon: paper stocks and beige, the type system, motion doctrine, the lexicon and voice rules, the canon rulings in VISION-DECISIONS, "never a lens on the paper". Where a direction departs from canon, it names the ruling it would need. Canon does not veto an idea.</p>
+      </div>
+      <div class="box">
+        <p class="t-head">Not waived</p>
+        <ul class="look">
+          <li><strong>The promise:</strong> the studio won't notice Patina. Never optimised for engagement: no streaks, no badges for their own sake, no red-dot anxiety, no gamification.</li>
+          <li><strong>The words:</strong> Designer-Taught Intelligence, in all visible copy.</li>
+          <li><strong>Accessibility:</strong> contrast, keyboard and screen-reader basics.</li>
+          <li><strong>Honesty:</strong> no invented statistics, no quotes attributed to real people.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 WHO REVIEWED ============ -->
+<section class="slide" id="s-team" data-label="Who reviewed">
+  <header class="shead"><span class="no">03 / 27</span><span class="ch">2 · Who reviewed</span><span class="job">R/review/ · SQ-720 to SQ-731</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A panel of seats, each with one lens, working apart</h2>
+    <p class="t-lede">Every seat is a model working from the same brief and the same walk. The five reviewers did not read each other. Two model families took part, so the panel does not only hear itself.</p>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">Seat</th><th scope="col">Role</th><th scope="col">Model family</th><th scope="col">Output</th></tr></thead>
+        <tbody>
+          <tr><td class="id" data-label="Seat">Briefing</td><td data-label="Role">Map of the portal as built, from the code</td><td data-label="Model family">GPT-6 (Codex)</td><td data-label="Output"><code>briefing/current-state.md</code></td></tr>
+          <tr><td class="id" data-label="Seat">Walk</td><td data-label="Role">The measured baseline: S1&ndash;S8 walked at 1440 and 390 on local data</td><td data-label="Model family">Claude Opus</td><td data-label="Output"><code>walk/WALK.md</code>, 56 screenshots</td></tr>
+          <tr><td class="id" data-label="Seat">R1</td><td data-label="Role">Visual craft and design system</td><td data-label="Model family">Claude Opus</td><td data-label="Output">R1-01 &hellip; R1-26</td></tr>
+          <tr><td class="id" data-label="Seat">R2</td><td data-label="Role">Information architecture and actionable moments</td><td data-label="Model family">Claude Opus</td><td data-label="Output">R2-01 &hellip; R2-23</td></tr>
+          <tr><td class="id" data-label="Seat">R3</td><td data-label="Role">Heuristic evaluation and cognitive walkthrough</td><td data-label="Model family">GPT-6 (Codex)</td><td data-label="Output">R3-01 &hellip; R3-09</td></tr>
+          <tr><td class="id" data-label="Seat">R4</td><td data-label="Role">Outside patterns: how other calm tools surface what needs you (web research, every claim with its URL)</td><td data-label="Model family">Claude Sonnet</td><td data-label="Output">P-01 &hellip; P-20</td></tr>
+          <tr><td class="id" data-label="Seat">R5</td><td data-label="Role">Studio seats: a principal and a week-two hire, <strong>simulated personas</strong> reacting to the screenshots</td><td data-label="Model family">Claude Opus</td><td data-label="Output"><code>review/r5-studio-seats.md</code></td></tr>
+          <tr><td class="id" data-label="Seat">Synthesis</td><td data-label="Role">Agreements, splits and rulings; three directions; the recommendation</td><td data-label="Model family">Claude Opus</td><td data-label="Output"><code>synthesis/direction.md</code></td></tr>
+          <tr><td class="id" data-label="Seat">Specimens</td><td data-label="Role">Eleven frames per direction, 1440 and 390</td><td data-label="Model family">Claude Opus</td><td data-label="Output"><code>specimens/proposed-*.html</code></td></tr>
+          <tr><td class="id" data-label="Seat">Adversarial</td><td data-label="Role">Review of this deck and the specimens, next</td><td data-label="Model family">GPT-6 (Codex)</td><td data-label="Output">follows this deck</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-sm muted prose"><strong>About R5.</strong> The studio seats are simulated. Their reactions are a reviewer's reading of the screenshots. Nothing in this deck is a quote from Leah or anyone in her studio. <strong>Evidence boundary.</strong> Local Supabase only; production was never read. Code claims cite <code>path:line</code>; walk claims cite a screenshot in <code>walk/</code>.</p>
+  </div>
+</section>
+
+<!-- ============ 04 TODAY, WALKED ============ -->
+<section class="slide" id="s-walk" data-label="What a designer sees today">
+  <header class="shead"><span class="no">04 / 27</span><span class="ch">3 · What a designer sees today</span><span class="job">walk/WALK.md §1, §3</span></header>
+  <div class="inner">
+    <h2 class="t-d1">What a designer sees today</h2>
+    <p class="t-lede">The walk ran <code>main</code> at <code>48de7545a</code> against local Supabase, signed in as Leah and then as her first hire, Jordan Reyes, at 1440&times;900 and 390&times;844. Nothing was sent. Her local studio carried 43 live jobs, built up by earlier seeds; the brief puts the real studio at about 16.</p>
+    <div class="gallery">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today &middot; Desk</span><span class="src">walk/desk-fold-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:desk-fold-1440.jpg}}" alt="Today's Desk at 1440: Good evening, Leah; the line Six things are overdue, Chen, Holloway, Halloran and 3 more; the setup whisper; a three-line day line led by Chen Residence overdue 150 days and two Full Room leads; then job cards with saturated PROJECT and BRIEF plates and YOUR PEN on every card." width="1440" height="900" loading="lazy" decoding="async"></div>
+        <figcaption>The Desk at rest: about 36 marks in the first screen, about 10 of them something to act on.</figcaption>
+      </figure>
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today &middot; a job</span><span class="src">walk/doc-holloway-fold-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:doc-holloway-fold-1440.jpg}}" alt="Today's Holloway Den Document: the rail reads Pieces, NOTHING YET and Money, $3,800 OUT; the band prints NEXT OVERDUE 11D, INV-2026-0721 with an underlined SEND REMINDER link and Standing, 6; then the coaching line The band says what's next on this job. Press it. with UNDERSTOOD." width="1440" height="900" loading="lazy" decoding="async"></div>
+        <figcaption>Holloway Den: the NEXT band names one step. About 47 marks; the rail says "nothing yet" over an unanswered PO.</figcaption>
+      </figure>
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today &middot; money</span><span class="src">walk/s2-step6-pell-court-doc-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:s2-step6-pell-court-doc-1440.jpg}}" alt="Today's Pell Court Dining Document: the rail reads Money, $9,200 OUT for a deposit already paid, the band says NEXT, OPEN THE PIECES, and nothing on the first screen says the deposit landed or that orders can be released." width="1440" height="900" loading="lazy" decoding="async"></div>
+        <figcaption>Pell Court: a deposit paid three hours earlier reads "$9,200 OUT". Nothing on the Desk mentions it.</figcaption>
+      </figure>
+    </div>
+    <div class="stack">
+      <p class="t-hint">Where the walk got lost</p>
+      <ul class="look">
+        <li><strong>S1.</strong> "Only what needs me" adds "Showing what needs you" to the header; the 32 cards stay the same.</li>
+        <li><strong>S2.</strong> A signature and a decline on live jobs land under "At rest &middot; Nothing needs your hand".</li>
+        <li><strong>S3.</strong> Holloway's card carries only its invoice. The 9-day PO appears only inside the job.</li>
+        <li><strong>S4.</strong> The paid deposit reads "$9,200 OUT" beside "Record the payment". The cause is not yet diagnosed.</li>
+        <li><strong>S5.</strong> On the hire's Desk every card says "Your pen", Leah's jobs included, and the count stays the studio's 43.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 BASELINE ============ -->
+<section class="slide" id="s-baseline" data-label="The S1-S8 baseline">
+  <header class="shead"><span class="no">05 / 27</span><span class="ch">3 · What a designer sees today</span><span class="job">walk/WALK.md §3</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Eight moments, one found outright</h2>
+    <p class="t-lede">Each scenario is an actionable moment from the brief. Seconds are a human estimate for a first-week reader: "notice" runs from landing to seeing the moment, "done" from the moment to the act.</p>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">#</th><th scope="col">Moment</th><th scope="col">Today's path</th><th scope="col">Clicks</th><th scope="col">Notice / done (s)</th><th scope="col">Verdict</th></tr></thead>
+        <tbody>
+          <tr><td class="id" data-label="#">S1</td><td data-label="Moment">Monday "what needs me"</td><td data-label="Path">Read the overdue sentence and day line; "Only what needs me" changes nothing</td><td data-label="Clicks">0&ndash;1</td><td data-label="Notice / done">5 to read; the 3&ndash;5 never stated, 60+ to triage</td><td class="m" data-label="Verdict"><span class="mk mk--part" aria-hidden="true"></span>Hard</td></tr>
+          <tr><td class="id" data-label="#">S2</td><td data-label="Moment">Client moved</td><td data-label="Path">Pre-project cards ~6 rows down; on a live job, nothing on the Desk</td><td data-label="Clicks">1&ndash;2; live: none</td><td data-label="Notice / done">25&ndash;40 / 5; live: never</td><td class="m" data-label="Verdict"><span class="mk mk--no" aria-hidden="true"></span>Hard / not found<small>not found on a live job</small></td></tr>
+          <tr><td class="id" data-label="#">S3</td><td data-label="Moment">Vendor quiet</td><td data-label="Path">The PO is hidden behind the job's invoice; open the job, scroll to Pieces, open the studio Orders ledger</td><td data-label="Clicks">3 + 2 scrolls</td><td data-label="Notice / done">45&ndash;60 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--part" aria-hidden="true"></span>Hard</td></tr>
+          <tr><td class="id" data-label="#">S4</td><td data-label="Moment">Money</td><td data-label="Path">Reminder: card, then the Accounts sheet. Deposit landed: nothing</td><td data-label="Clicks">2; deposit: none</td><td data-label="Notice / done">20&ndash;30 / 5; deposit: never</td><td class="m" data-label="Verdict"><span class="mk mk--no" aria-hidden="true"></span>Hard / not found<small>the deposit is never noticed</small></td></tr>
+          <tr><td class="id" data-label="#">S5</td><td data-label="Moment">Hand-off, as the hire</td><td data-label="Path">Hunt for Marsh Street near the bottom; inside the job the band is clear</td><td data-label="Clicks">1 + scrolls</td><td data-label="Notice / done">Desk 30&ndash;60 / doc 3</td><td class="m" data-label="Verdict"><span class="mk mk--part" aria-hidden="true"></span>Hard<small>found once inside the job</small></td></tr>
+          <tr class="hot"><td class="id" data-label="#">S6</td><td data-label="Moment">What's next on this job</td><td data-label="Path">The NEXT band names one step</td><td data-label="Clicks">0 (1 to act)</td><td data-label="Notice / done">3 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S7</td><td data-label="Moment">New lead</td><td data-label="Path">Five identical "Full Room" cards; the 2-hour-old inquiry is the nameless second</td><td data-label="Clicks">1&ndash;2</td><td data-label="Notice / done">10&ndash;20 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--part" aria-hidden="true"></span>Hard</td></tr>
+          <tr><td class="id" data-label="#">S8</td><td data-label="Moment">Close the day</td><td data-label="Path">"At rest &middot; 11 jobs" under 32 open cards, 10 of them Friday Pulses</td><td data-label="Clicks">0</td><td data-label="Notice / done">no end state</td><td class="m m--no" data-label="Verdict"><span class="mk mk--no" aria-hidden="true"></span>Not found</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="stack">
+      <p class="t-hint">Marks at rest today: buttons, links, colour accents and numbers in the first screen (WALK §1)</p>
+      <ul class="figs">
+        <li><b>36</b><span>Desk, 1440<br>about 10 actionable</span></li>
+        <li><b>17</b><span>Desk, 390</span></li>
+        <li><b>47</b><span>Document, 1440<br>about 3 actionable</span></li>
+        <li><b>15</b><span>Document, 390</span></li>
+        <li><b>38</b><span>The hire's Desk, 1440</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 WHAT THE PANEL FOUND ============ -->
+<section class="slide" id="s-found" data-label="What the panel found">
+  <header class="shead"><span class="no">06 / 27</span><span class="ch">4 · What the panel found</span><span class="job">synthesis/direction.md §1, §2</span></header>
+  <div class="inner">
+    <h2 class="t-d1">What the panel found</h2>
+    <p class="thesis">The portal is calm because it is uniform, not because it chooses. Because it never chooses, the moments that need the studio sink into the same quiet as everything else.</p>
+    <p class="t-sm faint">The synthesis thesis, direction.md §1. Each finding below was raised by at least three seats; all five are severity S1.</p>
+    <ol class="finds">
+      <li><span class="fid">A1</span><div><h3>The Desk never states today's three to five.</h3><p>An overdue sentence and a three-line day line, chosen by two different rules, sit above 32 equal cards.</p></div><span class="src">R1-03 &middot; R2-13 &middot; R3-01 &middot; P-01, P-06 &middot; R5 &sect;1.2</span></li>
+      <li><span class="fid">A3 A4</span><div><h3>One need per job hides the second, and the Desk ranks by whose hand.</h3><p>Holloway's 9-day PO never reaches the Desk because the invoice took the card, and maker silences always sort last.</p></div><span class="src"><code>need-class.ts:143</code> &middot; <code>desk-roster-derivation.ts:811-868</code> &middot; R2-01, R2-02, R3-03</span></li>
+      <li><span class="fid">A5</span><div><h3>A client's move or a landed payment on a live job is never a Desk need.</h3><p>The proposal rule fires only before a project exists; the payment read takes due and failed kinds only.</p></div><span class="src"><code>use-desk-engagements.ts:149</code> &middot; R1-09 &middot; R2-04, R2-05 &middot; R3-02</span></li>
+      <li><span class="fid">A6</span><div><h3>Money and status disagree with themselves.</h3><p>Pell Court's paid deposit reads "$9,200 OUT" beside Record the payment. Holloway is 11 days overdue on the band and 12 in Accounts. The rail says "Pieces &middot; nothing yet" over "1 PO unanswered".</p></div><span class="src">R1-06, R1-07 &middot; R2-08 &middot; R3-04 &middot; walk/s2-step6</span></li>
+      <li><span class="fid">A10</span><div><h3>The day has no honest end.</h3><p>"At rest" sits under 32 open cards and over a signed, paid job. Nothing is remembered as handled, waiting or deferred.</p></div><span class="src">R1-03 &middot; R2-11 &middot; R3-07 &middot; P-11, P-17</span></li>
+    </ol>
+    <div class="box box--quiet">
+      <p class="t-head">What every seat protects (A15)</p>
+      <p class="t-sm muted">The NEXT band. Sentences that name people ("Six things are overdue: Chen, Holloway, Halloran and 3 more"). Acts that open a sheet for review instead of sending. No counts or dots on the way to the work. Stillness.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 THE PRINCIPLE ============ -->
+<section class="slide" id="s-principle" data-label="The principle">
+  <header class="shead"><span class="no">07 / 27</span><span class="ch">5 · The principle</span><span class="job">US-24 BRIEF §5 · walk §1</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Calm, measured. Findable, measured.</h2>
+    <div class="cols-2">
+      <div class="stack">
+        <p class="t-head">Calm</p>
+        <p class="t-d3">Count what competes for attention on first paint.</p>
+        <p class="t-sm muted">Marks at rest: buttons, links, colour accents and numbers in the first screen. The goal is lower or equal to today, unless the extra mark is an actionable moment. Fewer marks is not the point. The marks that remain should be the ones that need you.</p>
+      </div>
+      <div class="stack">
+        <p class="t-head">Findable</p>
+        <p class="t-d3">Count the clicks and seconds to the moment, then to done.</p>
+        <p class="t-sm muted">Per scenario, S1 to S8: from landing to noticing the moment, and from the moment to the act. Every direction states both numbers against the walk's baseline.</p>
+      </div>
+    </div>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">Desk at 1440</th><th scope="col">Today</th><th scope="col">A &middot; Quiet marks</th><th scope="col">B &middot; The Day Sheet</th><th scope="col">C &middot; The job workspace</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Marks at rest</th><td data-label="Today">&asymp; 36</td><td data-label="A">&asymp; 30 est.</td><td data-label="B">&asymp; 30 est.</td><td data-label="C">&asymp; 34 est.</td></tr>
+          <tr><th scope="row">Of them, actionable</th><td data-label="Today">&asymp; 10, about a quarter</td><td data-label="A">&asymp; 12</td><td data-label="B">&asymp; 15, about half</td><td data-label="C">&asymp; 16</td></tr>
+          <tr><th scope="row">Coloured marks</th><td data-label="Today">six stage plates, terracotta on every overdue line</td><td data-label="A">one need rule, graded by age</td><td data-label="B">none</td><td data-label="C">none on the lanes</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box box--quiet">
+      <p class="t-head">Two fixtures, said plainly</p>
+      <p class="t-sm muted"><strong>Today</strong> is the walk's local studio on Friday 9 October: 43 live jobs, the PO 9 days unanswered, the invoice 11 to 12 days overdue. <strong>Proposed</strong> is an invented fixture, Hartwell Studio with 16 live jobs, carrying the same names to Monday 12 October, so the ages read three days older (PO 12 days, invoice 14). Direction figures are estimates from the synthesis, to be recounted on the specimens at render check.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 THREE DIRECTIONS ============ -->
+<section class="slide" id="s-directions" data-label="Three directions">
+  <header class="shead"><span class="no">08 / 27</span><span class="ch">6 · Three directions</span><span class="job">synthesis/direction.md §3</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Three directions, one model underneath</h2>
+    <p class="t-lede">The S1-severity findings are gaps in the need model, not in the surface. So all three directions ride on one shared repair, N1&ndash;N8: a keyed need list, one ranking, live-job events, a person's "mine", lead arrival, one money reading, batched Pulses, and (for B and C) a memory of what was handled. They differ in where that model is read.</p>
+    <div class="cols-3">
+      <article class="dir">
+        <div class="dir-letter"><span class="t-head">Direction A</span><span class="t-hint">Light-touch</span></div>
+        <h3 class="t-d2">Quiet marks</h3>
+        <p class="t-sm muted">Keep every surface; make the marks on it tell the truth, and reserve one quiet mark for "this is yours, now".</p>
+        <dl class="kv"><dt>Moves</dt><dd>Nothing moves. Cards re-rank; one need rule; one filled act per view.</dd><dt>Answers</dt><dd>6 of 8 found; S1 and S8 partly</dd><dt>Build</dt><dd>3 slices, small</dd></dl>
+        <p><a href="#s-a">See A &rarr;</a></p>
+      </article>
+      <article class="dir dir--rec">
+        <div class="dir-letter"><span class="t-head">Direction B</span><span class="t-head tag tag--rec">Recommended</span></div>
+        <h3 class="t-d2">The Day Sheet</h3>
+        <p class="t-sm muted">One need list for the whole studio, read at three depths: five lines at the top of the Desk, the job's Next on its paper, and everything open one press away.</p>
+        <dl class="kv"><dt>Moves</dt><dd>The Desk top becomes a typeset sheet; the card grid becomes a line roster.</dd><dt>Answers</dt><dd>8 of 8 found</dd><dt>Build</dt><dd>6 slices, medium</dd></dl>
+        <p><a href="#s-b">See B &rarr;</a></p>
+      </article>
+      <article class="dir">
+        <div class="dir-letter"><span class="t-head">Direction C</span><span class="t-hint">Structural</span></div>
+        <h3 class="t-d2">The job workspace</h3>
+        <p class="t-sm muted">Act inside the job, not from the Desk: the Document opens on the job's current step with its work in place, and the Desk becomes who holds the ball.</p>
+        <dl class="kv"><dt>Moves</dt><dd>The Document becomes three columns; the Desk becomes two lanes and a door.</dd><dt>Answers</dt><dd>8 of 8 found; S1 unbounded, S8 costs minutes</dd><dt>Build</dt><dd>9 slices, large</dd></dl>
+        <p><a href="#s-c">See C &rarr;</a></p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 A IDEA ============ -->
+<section class="slide" id="s-a" data-label="A &middot; Quiet marks">
+  <header class="shead"><span class="no">09 / 27</span><span class="ch">6 · Direction A · Quiet marks</span><span class="job">direction.md §3 A</span></header>
+  <div class="inner">
+    <p class="kicker">Direction A &middot; light-touch</p>
+    <h2 class="t-d1">Quiet marks: the same rooms, telling the truth</h2>
+    <div class="split">
+      <div class="stack">
+        <p class="t-body">The portal's calm is uniformity. A turns it into restraint without moving anything. The Desk stays a roster of job cards, re-ranked by consequence instead of by custody, and a card can carry a second need, so Holloway's silent PO prints under its invoice.</p>
+        <p class="t-body">Colour leaves orientation. The six stage plates become ink words, and colour is spent in one place: a 3px terracotta rule beside a need that is class 1 or at least seven days old. Newer needs get weight only, so 150 days and 1 day stop looking alike. Events print with a time word. Leads are titled by the person. On the Document, the NEXT act becomes the only filled control.</p>
+      </div>
+      <div class="scroller stackable">
+        <table class="sheet">
+          <thead><tr><th scope="col">Surface</th><th scope="col">What changes</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Desk</th><td data-label="Change">Ranked by class, then deadline, then age. A second need line per card. Plates become words. One need rule, graded by age. A time word on events. Custody only when the move is someone else's. Leads by name with arrival time. The day line names the first three cards.</td></tr>
+            <tr><th scope="row">Document</th><td data-label="Change">The NEXT act is the only filled control; region acts become text. The rail reads from the need list, with &darr; received and &uarr; owed on Money. At 390 the act sits beside its reason.</td></tr>
+            <tr><th scope="row">Elsewhere</th><td data-label="Change">A Desk act that opens a ledger opens it filtered to its record. Nothing else moves.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="t-sm muted"><strong>Model:</strong> N1&ndash;N3, N4 read-only, N6&ndash;N8. <strong>Not N5</strong>: A has no memory of handled or deferred items, which is why its S8 stays partly answered.</p>
+  </div>
+</section>
+
+<!-- ============ 10 A DESK ============ -->
+<section class="slide" id="s-a-desk" data-label="A &middot; The Desk">
+  <header class="shead"><span class="no">10 / 27</span><span class="ch">6 · Direction A · Quiet marks</span><span class="job">frames a1, a8 · S1, S7</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A &middot; Monday, 8:40 am: the same cards, ranked by consequence</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/desk-fold-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:desk-fold-1440.jpg}}" alt="Today's Desk at 1440: the overdue sentence, the setup whisper, a three-line day line led by Chen Residence overdue 150 days and two Full Room leads, then job cards with saturated stage plates and YOUR PEN on every card." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <div class="stack">
+        <p class="t-hint">What you see today</p>
+        <ul class="look">
+          <li>The saturated stage plates are the loudest marks on the Desk (R1-01).</li>
+          <li>Terracotta prints on every overdue line, from 1 day to 150 (R1-02).</li>
+          <li>Five leads read "Full Room"; the new inquiry is the nameless second card (A9).</li>
+          <li>&asymp; 36 marks at rest, &asymp; 10 of them actionable.</li>
+        </ul>
+      </div>
+    </div>
+    <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-a1">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; A</span><span class="src">frame a1 &middot; specimens/proposed-a-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a1" title="Proposed, frame a1: Direction A's Desk, cards ranked by consequence with one need rule and plates as words" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>Chen Residence still leads, because A remembers nothing as deferred: the honest weakness, drawn, not hidden. Holloway carries two need lines. <span class="est">S1 est. 0 clicks (1 to act), 10&ndash;15 s / 5 s, partly. S7 est. 1 click, 5 s / 5 s, found. Marks &asymp; 30.</span></figcaption>
+      <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+    </figure>
+    <div class="phones">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today &middot; 390</span><span class="src">walk/desk-fold-390.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:desk-fold-390.jpg}}" alt="Today's Desk on the phone: the greeting, the studio-wide live and overdue count, the overdue sentence and the day line led by Chen Residence, above cards with coloured stage plates." width="390" height="844" loading="lazy" decoding="async"></div>
+      </figure>
+      <figure class="spec" data-w="390" data-h="1300" data-s="frame-a8">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; 390</span><span class="src">frame a8</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a8" title="Proposed, frame a8: Direction A's Desk on the phone, the first three cards" srcdoc="{{SPECIMEN_A_390}}"></iframe>
+        </div></div>
+      </figure>
+      <div class="stack">
+        <p class="t-hint">Between appointments</p>
+        <p class="t-sm muted">The first three cards, ranked by consequence, under a day line that names them.</p>
+        <p class="est">S1 est. 0 clicks (1 to act), 10&ndash;15 s / 5 s, partly. Marks &asymp; 15 (today &asymp; 17).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 A ACT ============ -->
+<section class="slide" id="s-a-act" data-label="A &middot; Acting on it">
+  <header class="shead"><span class="no">11 / 27</span><span class="ch">6 · Direction A · Quiet marks</span><span class="job">frames a3, a5 · S3, S6</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A &middot; The quiet PO surfaces, and each job has one leader</h2>
+    <div class="frame-block">
+      <div class="today">
+        <figure class="shot">
+          <p class="t-head pair-label"><span class="tag tag--today">Today &middot; S3</span><span class="src">walk/s3-step3-follow-up-with-maker-1440.jpg</span></p>
+          <div class="shot__stage"><img src="{{WALK:s3-step3-follow-up-with-maker-1440.jpg}}" alt="Today's chase: the Holloway Den Document with the Orders ledger open as a modal, filtered by project chips across the studio, counts 15 OPEN, 2 UNSENT, 5 NO ACK, and the row PO-HD-0412 RELEASED TO MAKER, SENT 30 SEPTEMBER, NO ACK, with LOG ACK and RESEND." width="1440" height="900" loading="lazy" decoding="async"></div>
+        </figure>
+        <div class="stack">
+          <p class="t-hint">What you see today</p>
+          <ul class="look">
+            <li>The PO is not on the Desk; it was found only after opening the job (A3).</li>
+            <li>Its act opens the studio-wide Orders ledger, every project's POs (R2-15).</li>
+            <li>3 clicks and 2 scrolls, 45&ndash;60 s to notice.</li>
+          </ul>
+        </div>
+      </div>
+      <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-a3">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; A</span><span class="src">frame a3 &middot; specimens/proposed-a-1440.html</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a3" title="Proposed, frame a3: Orders filtered to PO-HD-0412 with Fenmoor Joinery's contact and a follow-up draft" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+        </div></div>
+        <figcaption>Holloway's card prints the PO as its second line; Chase the maker opens Orders filtered to the one record, with All orders a text act away. <span class="est">S3 est. 1 click, 10&ndash;15 s / 5 s, found.</span></figcaption>
+        <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+      </figure>
+    </div>
+    <div class="frame-block">
+      <div class="today">
+        <figure class="shot">
+          <p class="t-head pair-label"><span class="tag tag--today">Today &middot; S6</span><span class="src">walk/doc-holloway-fold-1440.jpg</span></p>
+          <div class="shot__stage"><img src="{{WALK:doc-holloway-fold-1440.jpg}}" alt="Today's Holloway Den Document: the rail reads Pieces, NOTHING YET and Money, $3,800 OUT; the band prints NEXT OVERDUE 11D, INV-2026-0721 with an underlined SEND REMINDER link and Standing, 6, then a coaching line with UNDERSTOOD." width="1440" height="900" loading="lazy" decoding="async"></div>
+        </figure>
+        <div class="stack">
+          <p class="t-hint">What you see today</p>
+          <ul class="look">
+            <li>The band's act is a link; filled buttons sit lower, under it (A11, R1-05).</li>
+            <li>The rail says "Pieces &middot; nothing yet" over an unanswered PO (A6).</li>
+            <li>Coaching copy stays at rest on every Document (A12).</li>
+          </ul>
+        </div>
+      </div>
+      <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-a5">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; A</span><span class="src">frame a5 &middot; specimens/proposed-a-1440.html</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a5" title="Proposed, frame a5: Holloway Den with NEXT as the only filled act and a truthful rail" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+        </div></div>
+        <figcaption>NEXT is the one filled act and the rail agrees: "Pieces &middot; 1 PO unanswered, 12 days", "Money &middot; &uarr; owed $3,800". No coaching line. <span class="est">S6 est. 0 clicks (1 to act), 2 s / 5 s, found. Marks &asymp; 44 (today &asymp; 47), re-weighted rather than reduced.</span></figcaption>
+        <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 A SCORE ============ -->
+<section class="slide" id="s-a-score" data-label="A &middot; Scores, risks, canon">
+  <header class="shead"><span class="no">12 / 27</span><span class="ch">6 · Direction A · Quiet marks</span><span class="job">frame a7 · direction.md §3 A</span></header>
+  <div class="inner">
+    <h2 class="t-d1">A &middot; 5:50 pm, and the scores</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today &middot; S8</span><span class="src">walk/s8-step1-desk-bottom-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:s8-step1-desk-bottom-1440.jpg}}" alt="Today at the bottom of the Desk: more job cards with Overdue 1 day, Overdue 6 days and Overdue 4 days, PO-MS-0388, in terracotta, then AT REST, 11 JOBS and a row reading Nothing needs your hand. There is no end-of-day statement and nothing lists what waits on others." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <div class="stack">
+        <p class="t-hint">What you see today</p>
+        <ul class="look">
+          <li>"At rest" sits under open cards; the day has no stated end (A10).</li>
+          <li>Nothing lists what waits on clients or makers.</li>
+        </ul>
+      </div>
+    </div>
+    <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-a7">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; A</span><span class="src">frame a7 &middot; specimens/proposed-a-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a7" title="Proposed, frame a7: the end of Direction A's roster in the evening, in honest custody groups, with owed cards remaining" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+      </div></div>
+      <figcaption>Honest custody groups, and the owed cards remain. No stated end, no waiting-on dates, no defer. <span class="est">S8 est. 0 clicks, 20&ndash;30 s to scan, no done state: partly.</span></figcaption>
+      <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+    </figure>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">#</th><th scope="col">Path under A</th><th scope="col">Clicks</th><th scope="col">Notice / done (s)</th><th scope="col">Verdict, est.</th></tr></thead>
+        <tbody>
+          <tr><td class="id" data-label="#">S1</td><td data-label="Path">The day line names the top three cards; the cards below agree</td><td data-label="Clicks">0 (1 to act)</td><td data-label="Notice / done">10&ndash;15 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--part" aria-hidden="true"></span>Partly<small>ranked, still unbounded; a stale item still leads</small></td></tr>
+          <tr><td class="id" data-label="#">S2</td><td data-label="Path">Linden's card rises, "declined yesterday"; Follow up opens Client approvals with the reason</td><td data-label="Clicks">1</td><td data-label="Notice / done">10&ndash;15 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S3</td><td data-label="Path">The PO is Holloway's second line; Orders opens filtered to PO-HD-0412</td><td data-label="Clicks">1</td><td data-label="Notice / done">10&ndash;15 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S4</td><td data-label="Path">"Deposit in &middot; 2 hours ago"; the band says Release the order; Money reads &darr; received</td><td data-label="Clicks">1&ndash;2</td><td data-label="Notice / done">15&ndash;20 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>often a scroll: the fourth card</small></td></tr>
+          <tr><td class="id" data-label="#">S5</td><td data-label="Path">The hire's Desk opens on his jobs: "Handed to you by Leah &middot; Wed 7 Oct"</td><td data-label="Clicks">0</td><td data-label="Notice / done">5&ndash;10 / 3</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S6</td><td data-label="Path">NEXT is the one filled act; the rail agrees</td><td data-label="Clicks">0 (1 to act)</td><td data-label="Notice / done">2 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S7</td><td data-label="Path">"Ines Calder &middot; wrote 2 hours ago"</td><td data-label="Clicks">1</td><td data-label="Notice / done">5 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S8</td><td data-label="Path">The roster ends in honest custody groups; the owed cards remain</td><td data-label="Clicks">0</td><td data-label="Notice / done">20&ndash;30 to scan / &mdash;</td><td class="m" data-label="Verdict"><span class="mk mk--part" aria-hidden="true"></span>Partly</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols-3">
+      <div class="stack"><p class="t-head">Marks at rest, est.</p><p class="t-sm muted">Desk 1440 &asymp; 30 (&asymp; 12 actionable); Desk 390 &asymp; 15; Document 1440 &asymp; 44; the hire's Desk &asymp; 22.</p><p class="t-head">Build</p><p class="t-sm muted">3 slices, small: the model; the mark grammar; person grain read-only and filtered ledgers.</p></div>
+      <div class="stack"><p class="t-head">Risks</p><ul class="look"><li>The grid stays a catalogue at 16&ndash;43 jobs; S1's ten seconds is approached, not met.</li><li>With no defer, the same stale item leads every morning.</li><li>The seven-day threshold is a guess to test.</li><li>A reserved colour drifts toward meaning everything if a later feature borrows it.</li></ul></div>
+      <div class="stack"><p class="t-head">Canon rulings it needs</p><ul class="look"><li>R126, the six stage plates (Q7)</li><li>V9 "no status dots" and caps-mono controls (Q5, Q9)</li><li>The A5 "held" leading rule, reused as a need signal (Q7)</li><li>US-19 D8, "Yours is the studio's pen" (Q2)</li><li>R143 custody-band ordering (Q3)</li><li>One-voice region-head leader election (Q8)</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 B IDEA ============ -->
+<section class="slide" id="s-b" data-label="B &middot; The Day Sheet">
+  <header class="shead"><span class="no">13 / 27</span><span class="ch">6 · Direction B · The Day Sheet</span><span class="job">Recommended · direction.md §3 B</span></header>
+  <div class="inner">
+    <p class="kicker">Direction B &middot; <span class="tag tag--rec">Recommended</span></p>
+    <h2 class="t-d1">The Day Sheet: five sentences, then the rest are on their jobs</h2>
+    <div class="split">
+      <div class="stack">
+        <p class="t-body">Every job keeps one keyed, ranked list of what it needs, under the ranking US-19 already ratified. The top of the Desk becomes a <strong>Day Sheet</strong>: at most five sentences across all the signed-in person's jobs. Each starts with a person or a job and states the fact and its age, with its act beside it and one quiet "Not today". There is no overflow count. Under the five: "The rest are on their jobs."</p>
+        <p class="t-body">Events enter as needs. Doing the act moves the line to <em>waiting on &lt;who&gt;, since &lt;date&gt;</em>. When the sheet is empty it says so once, plainly, then lists what waits on others. That is the close of the day.</p>
+        <p class="t-body">Below the sheet, the card grid becomes a dense line roster in three groups: owed by you, waiting on others, at rest. The Document keeps its look; its band reads the head of the same list, so the Desk and the band can never disagree. The sheet is typeset and monochrome: order and words carry urgency, never colour.</p>
+      </div>
+      <div class="stack">
+        <div class="scroller stackable">
+          <table class="sheet">
+            <thead><tr><th scope="col">Surface</th><th scope="col">What changes</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Desk</th><td data-label="Change">The Day Sheet replaces the overdue sentence, the day line and the setup whisper. A scope switch, "Mine &middot; The studio's". The grid becomes the line roster; plates gone; one batched line for the week's Pulses; leads by name.</td></tr>
+              <tr><th scope="row">Document</th><td data-label="Change">The band is the head of the same list. Standing is de-duplicated and renamed "Everything open on this job". The hand-off note shows on its job until read.</td></tr>
+              <tr><th scope="row">Elsewhere</th><td data-label="Change">Each act opens a sheet scoped to its record, with a draft to review and a named send. The Post keeps letters and receipts.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="box">
+          <p class="t-head">Five binding guards (Q1)</p>
+          <p class="t-sm muted">At most five lines. No overflow count. No dots or badges. No "cleared today" or streak. Never pushed. "Not today" lasts one working day and is never counted.</p>
+        </div>
+      </div>
+    </div>
+    <p class="t-sm muted"><strong>Model:</strong> all of N1&ndash;N8. The genuinely new storage is N1's need key and N5's per-person need-state row; the rest is rules over reads that exist.</p>
+  </div>
+</section>
+
+<!-- ============ 14 B DESK ============ -->
+<section class="slide" id="s-b-desk" data-label="B &middot; The Desk">
+  <header class="shead"><span class="no">14 / 27</span><span class="ch">6 · Direction B · The Day Sheet</span><span class="job">frames b1, b8 · S1, S7</span></header>
+  <div class="inner">
+    <h2 class="t-d1">B &middot; Monday, 8:40 am: what needs you, in five sentences</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/desk-fold-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:desk-fold-1440.jpg}}" alt="Today's Desk at 1440: the overdue sentence, the setup whisper, a three-line day line led by Chen Residence overdue 150 days and two Full Room leads, then job cards with saturated stage plates and YOUR PEN on every card." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <div class="stack">
+        <p class="t-hint">What you see today</p>
+        <ul class="look">
+          <li>The three to five for today are never stated; triaging 32 cards takes 60 s or more (A1).</li>
+          <li>The overdue sentence and the day line are chosen by two different rules.</li>
+          <li>The deposit, the decline and the quiet PO are not on the Desk at all (A3, A5).</li>
+        </ul>
+      </div>
+    </div>
+    <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-b1">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; B</span><span class="src">frame b1 &middot; specimens/proposed-b-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b1" title="Proposed, frame b1: the Day Sheet, five sentences with their acts and Not today, then the line roster" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
+      </div></div>
+      <figcaption>Holloway's invoice, Ines Calder's inquiry, Pell Court's deposit, Fenmoor's silence, Linden's decline: each a sentence with its act. Then "Owed by you", where Thornfield appears. <span class="est">S1 est. 0 clicks (1 to act), &le; 8 s / 5 s, found. S7 est. 0 clicks (1 to act), 5 s / 5 s, found. Marks &asymp; 30, about 15 actionable.</span></figcaption>
+      <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+    </figure>
+    <div class="phones">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today &middot; 390</span><span class="src">walk/desk-fold-390.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:desk-fold-390.jpg}}" alt="Today's Desk on the phone: the greeting, the studio-wide live and overdue count, the overdue sentence and the day line led by Chen Residence, above cards with coloured stage plates." width="390" height="844" loading="lazy" decoding="async"></div>
+      </figure>
+      <figure class="spec" data-w="390" data-h="1300" data-s="frame-b8">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; 390</span><span class="src">frame b8</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b8" title="Proposed, frame b8: the Day Sheet on the phone, five lines then Every job" srcdoc="{{SPECIMEN_B_390}}"></iframe>
+        </div></div>
+      </figure>
+      <div class="stack">
+        <p class="t-hint">Between appointments</p>
+        <p class="t-sm muted">The five lines only, then a single text act, "Every job".</p>
+        <p class="est">S1 est. 0 clicks (1 to act), &le; 8 s / 5 s. Marks &asymp; 14, about 6 actionable (today &asymp; 17).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 B CLIENT AND MAKER ============ -->
+<section class="slide" id="s-b-moves" data-label="B &middot; A client moved, a maker went quiet">
+  <header class="shead"><span class="no">15 / 27</span><span class="ch">6 · Direction B · The Day Sheet</span><span class="job">frames b2, b3 · S2, S3</span></header>
+  <div class="inner">
+    <h2 class="t-d1">B &middot; A client moved; a maker went quiet</h2>
+    <div class="frame-block">
+      <div class="today">
+        <figure class="shot">
+          <p class="t-head pair-label"><span class="tag tag--today">Today &middot; S2</span><span class="src">walk/s2-step5-linden-doc-1440.jpg</span></p>
+          <div class="shot__stage"><img src="{{WALK:s2-step5-linden-doc-1440.jpg}}" alt="Today's Linden Place Living Room Document: the band reads NEXT, OPEN THE PIECES with Standing, 3, a coaching line and UNDERSTOOD, and Client approvals says No decision lead named yet. Nothing on the first screen mentions the decline." width="1440" height="900" loading="lazy" decoding="async"></div>
+        </figure>
+        <div class="stack">
+          <p class="t-hint">What you see today</p>
+          <ul class="look">
+            <li>The decline on a live job never reaches the Desk (A5).</li>
+            <li>Inside the job the band says "Open the pieces"; Client approvals says "No decision lead named yet".</li>
+            <li>Not found.</li>
+          </ul>
+        </div>
+      </div>
+      <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-b2">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; B</span><span class="src">frame b2 &middot; specimens/proposed-b-1440.html</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b2" title="Proposed, frame b2: the follow-up sheet scoped to Linden Place's proposal, with the reason and an empty note" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
+        </div></div>
+        <figcaption>The follow-up opens over the Desk, scoped to Linden's proposal: the reason in the client's words, an empty note to Tom and Ellery Vance, and a named "Send to Tom and Ellery". Nothing is sent yet. <span class="est">S2 est. 1 click, 5 s / 5 s, found.</span></figcaption>
+        <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+      </figure>
+    </div>
+    <div class="frame-block">
+      <div class="today">
+        <figure class="shot">
+          <p class="t-head pair-label"><span class="tag tag--today">Today &middot; S3</span><span class="src">walk/s3-step3-follow-up-with-maker-1440.jpg</span></p>
+          <div class="shot__stage"><img src="{{WALK:s3-step3-follow-up-with-maker-1440.jpg}}" alt="Today's chase: the Holloway Den Document with the Orders ledger open as a modal across the studio, counts 15 OPEN, 2 UNSENT, 5 NO ACK, and the row PO-HD-0412, SENT 30 SEPTEMBER, NO ACK, with LOG ACK and RESEND." width="1440" height="900" loading="lazy" decoding="async"></div>
+        </figure>
+        <div class="stack">
+          <p class="t-hint">What you see today</p>
+          <ul class="look">
+            <li>The silence is found only inside the job, then in a studio-wide ledger.</li>
+            <li>3 clicks and 2 scrolls; 45&ndash;60 s to notice.</li>
+          </ul>
+        </div>
+      </div>
+      <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-b3">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; B</span><span class="src">frame b3 &middot; specimens/proposed-b-1440.html</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b3" title="Proposed, frame b3: a sheet scoped to PO-HD-0412 with Fenmoor Joinery's contact and a follow-up to review" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
+        </div></div>
+        <figcaption>A sheet scoped to PO-HD-0412: sent 30 September, no answer in 12 days, Fenmoor's contact, the follow-up to review, and "Send to Fenmoor Joinery". <span class="est">S3 est. 1 click, 5 s / 5 s, found.</span></figcaption>
+        <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 16 B MONEY ============ -->
+<section class="slide" id="s-b-money" data-label="B &middot; Money">
+  <header class="shead"><span class="no">16 / 27</span><span class="ch">6 · Direction B · The Day Sheet</span><span class="job">frames b4, b10 · S4</span></header>
+  <div class="inner">
+    <h2 class="t-d1">B &middot; A deposit landed; an invoice is overdue</h2>
+    <div class="frame-block">
+      <div class="today">
+        <figure class="shot">
+          <p class="t-head pair-label"><span class="tag tag--today">Today &middot; S4</span><span class="src">walk/s2-step6-pell-court-doc-1440.jpg</span></p>
+          <div class="shot__stage"><img src="{{WALK:s2-step6-pell-court-doc-1440.jpg}}" alt="Today's Pell Court Dining Document: the rail reads Money, $9,200 OUT for a deposit already paid, the band says NEXT, OPEN THE PIECES, and nothing on the first screen says the deposit landed or that orders can be released." width="1440" height="900" loading="lazy" decoding="async"></div>
+        </figure>
+        <div class="stack">
+          <p class="t-hint">What you see today</p>
+          <ul class="look">
+            <li>The paid deposit reads "$9,200 OUT" beside Record the payment (A6).</li>
+            <li>Nothing on the Desk or the job says the orders can now be released. Not found.</li>
+          </ul>
+        </div>
+      </div>
+      <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-b4">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; B</span><span class="src">frame b4 &middot; specimens/proposed-b-1440.html</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b4" title="Proposed, frame b4: the release sheet for Pell Court, two orders each to review with one named send per maker" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
+        </div></div>
+        <figcaption>The release sheet: PO-PC-0431 to Calloway &amp; Brandt Upholstery and PO-PC-0432 to Ninebark Lighting, each reviewed, one named send per maker. <span class="est">S4 est. 1 click, 5 s / 5 s per maker, found.</span></figcaption>
+        <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+      </figure>
+    </div>
+    <div class="phones">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today &middot; 390</span><span class="src">walk/doc-holloway-fold-390.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:doc-holloway-fold-390.jpg}}" alt="Today's Holloway Den on the phone: the sticky head reads NEXT OVERDUE 11D, INV-2026-0721 above Client approvals and Schedule, and SEND REMINDER is in the dark bottom bar beside MORE." width="390" height="844" loading="lazy" decoding="async"></div>
+      </figure>
+      <figure class="spec" data-w="390" data-h="1300" data-s="frame-b10">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; 390</span><span class="src">frame b10</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b10" title="Proposed, frame b10: Holloway's invoice reminder opened from the phone, the act beside its reason" srcdoc="{{SPECIMEN_B_390}}"></iframe>
+        </div></div>
+      </figure>
+      <div class="stack">
+        <p class="t-hint">From the phone</p>
+        <p class="t-sm muted">Today the reason sits in the sticky head and its act about 750px away in the bottom bar (R1-17). Proposed: "Overdue 14 days &middot; INV-2026-0721 &middot; $3,800" with Send reminder beside it, opening the reminder to review.</p>
+        <p class="est">S4 est. 1 click, 5 s / 5 s. Today 2 clicks, 20&ndash;30 s to notice.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 17 B JOB AND HIRE ============ -->
+<section class="slide" id="s-b-job" data-label="B &middot; The job and the hire">
+  <header class="shead"><span class="no">17 / 27</span><span class="ch">6 · Direction B · The Day Sheet</span><span class="job">frames b5, b6 · S6, S5</span></header>
+  <div class="inner">
+    <h2 class="t-d1">B &middot; The job agrees with the Desk; the hire sees his own</h2>
+    <div class="frame-block">
+      <div class="today">
+        <figure class="shot">
+          <p class="t-head pair-label"><span class="tag tag--today">Today &middot; S6</span><span class="src">walk/doc-holloway-fold-1440.jpg</span></p>
+          <div class="shot__stage"><img src="{{WALK:doc-holloway-fold-1440.jpg}}" alt="Today's Holloway Den Document: the band prints NEXT OVERDUE 11D, INV-2026-0721 with SEND REMINDER and Standing, 6; the rail reads Pieces, NOTHING YET; a coaching line with UNDERSTOOD." width="1440" height="900" loading="lazy" decoding="async"></div>
+        </figure>
+        <div class="stack">
+          <p class="t-hint">What you see today</p>
+          <ul class="look">
+            <li>S6 is the one scenario found: the band names one step.</li>
+            <li>"Standing &middot; 6" lists PO-HD-0412 twice and mixes setup with $3,800 owed (R2-07).</li>
+          </ul>
+        </div>
+      </div>
+      <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-b5">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; B</span><span class="src">frame b5 &middot; specimens/proposed-b-1440.html</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b5" title="Proposed, frame b5: Holloway Den with the band as the head of the job's list and Everything open on this job, 2" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
+        </div></div>
+        <figcaption>The band is the head of the job's list; "Everything open on this job &middot; 2" replaces "Standing &middot; 6". <span class="est">S6 est. 0 clicks (1 to act), 3 s / 5 s, found, now agreeing with the Desk. Marks &asymp; 44.</span></figcaption>
+        <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+      </figure>
+    </div>
+    <div class="frame-block">
+      <div class="today">
+        <figure class="shot">
+          <p class="t-head pair-label"><span class="tag tag--today">Today &middot; S5</span><span class="src">walk/s5-step1-hire-desk-1440.jpg</span></p>
+          <div class="shot__stage"><img src="{{WALK:s5-step1-hire-desk-1440.jpg}}" alt="Today's Desk for the hire, Jordan: the same studio-wide view as Leah's, 43 LIVE, 6 OVERDUE, the overdue sentence, Chen Residence leading the day line, and YOUR PEN on every card, with nothing marking Marsh Street as handed to him." width="1440" height="900" loading="lazy" decoding="async"></div>
+        </figure>
+        <div class="stack">
+          <p class="t-hint">What you see today</p>
+          <ul class="look">
+            <li>"Your pen" means the studio, so the hire's Desk claims all 43 jobs (A7).</li>
+            <li>The hand-off is recorded and invisible (A8). 30&ndash;60 s to find Marsh Street.</li>
+          </ul>
+        </div>
+      </div>
+      <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-b6">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; B</span><span class="src">frame b6 &middot; specimens/proposed-b-1440.html</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b6" title="Proposed, frame b6: Jordan's Day Sheet with two lines, the hand-off and his PO chase" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
+        </div></div>
+        <figcaption>Two lines: "Leah handed you Marsh Street Kitchen on Wednesday 7 October &middot; Read her note", then Ninebark's 4-day silence on PO-MS-0388. The rest of the studio's jobs are Leah's, one press away. No studio money totals. <span class="est">S5 est. 0 clicks (1 to act), 5 s / 2 s, found. Marks &asymp; 20 (today &asymp; 38).</span></figcaption>
+        <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 18 B SCORE ============ -->
+<section class="slide" id="s-b-score" data-label="B &middot; Scores, risks, canon">
+  <header class="shead"><span class="no">18 / 27</span><span class="ch">6 · Direction B · The Day Sheet</span><span class="job">frame b7 · direction.md §3 B</span></header>
+  <div class="inner">
+    <h2 class="t-d1">B &middot; 5:50 pm: "Nothing needs you tonight."</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today &middot; S8</span><span class="src">walk/s8-step1-desk-bottom-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:s8-step1-desk-bottom-1440.jpg}}" alt="Today at the bottom of the Desk: more overdue job cards in terracotta, then AT REST, 11 JOBS and a row reading Nothing needs your hand. There is no end-of-day statement and nothing lists what waits on others." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <div class="stack">
+        <p class="t-hint">What you see today</p>
+        <ul class="look">
+          <li>No end state: 32 cards stay open, 10 of them Friday Pulses (A10, A13).</li>
+        </ul>
+      </div>
+    </div>
+    <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-b7">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; B</span><span class="src">frame b7 &middot; specimens/proposed-b-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b7" title="Proposed, frame b7: the empty Day Sheet, what comes back and when, and who holds the rest, with dates" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
+      </div></div>
+      <figcaption>Said once, and only when true. Coming back: Garnet Hill on Tuesday; Chen Residence on Friday 16 October, with its reason. Waiting on, each with its date. No tally of what was handled. <span class="est">S8 est. 0 clicks, 5&ndash;10 s to read, found.</span></figcaption>
+      <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+    </figure>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">#</th><th scope="col">Path under B</th><th scope="col">Clicks</th><th scope="col">Notice / done (s)</th><th scope="col">Verdict, est.</th></tr></thead>
+        <tbody>
+          <tr><td class="id" data-label="#">S1</td><td data-label="Path">Read five sentences</td><td data-label="Clicks">0 (1 to act)</td><td data-label="Notice / done">&le; 8 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S2</td><td data-label="Path">Line 5, Linden's decline with its reason &rarr; Follow up</td><td data-label="Clicks">1</td><td data-label="Notice / done">5 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S3</td><td data-label="Path">Line 4 &rarr; a sheet scoped to PO-HD-0412</td><td data-label="Clicks">1</td><td data-label="Notice / done">5 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S4</td><td data-label="Path">Line 1, the overdue invoice; line 3, the deposit &rarr; Release the order</td><td data-label="Clicks">1</td><td data-label="Notice / done">5 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S5</td><td data-label="Path">Jordan's sheet: the hand-off, then his PO chase</td><td data-label="Clicks">0 (1 to act)</td><td data-label="Notice / done">5 / 2</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S6</td><td data-label="Path">The band; "Everything open on this job &middot; 2"</td><td data-label="Clicks">0 (1 to act)</td><td data-label="Notice / done">3 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S7</td><td data-label="Path">Line 2: Ines Calder wrote two hours ago &rarr; Reply</td><td data-label="Clicks">0 (1 to act)</td><td data-label="Notice / done">5 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S8</td><td data-label="Path">The empty sheet, what comes back, who holds the rest</td><td data-label="Clicks">0</td><td data-label="Notice / done">5&ndash;10 / &mdash;</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols-3">
+      <div class="stack"><p class="t-head">Marks at rest, est.</p><p class="t-sm muted">Desk 1440 &asymp; 30 (&asymp; 15 actionable: five acts and five "Not today"); Desk 390 &asymp; 14; Document 1440 &asymp; 44; the hire's Desk &asymp; 20. The total barely falls; the actionable share goes from about a quarter to about a half, and every coloured mark on the Desk is gone.</p><p class="t-head">Build</p><p class="t-sm muted">6 slices, medium. Most of it reuses machinery that exists.</p></div>
+      <div class="stack"><p class="t-head">Risks</p><ul class="look"><li>It is a cross-job ranked list: the shape VISION &sect;5 refuses ("no task manager"). Its guards must be structural (Q1).</li><li>Its value is the ranking's truth every morning. One false "nothing needs you" costs more trust than the grid ever did.</li><li>Sheet, band and "everything open" must never diverge in copy.</li><li>"Not today" can become snooze anxiety; it lasts one working day and is never counted.</li></ul></div>
+      <div class="stack"><p class="t-head">Canon rulings it needs</p><ul class="look"><li>VISION &sect;5 "no task manager", V11, US-19 Q6/Q9 "a task list: cut" (Q1)</li><li>US-19 D8 (Q2)</li><li>R143 D3, D5, D6, D7: the claim-card grid, custody words, the day line (Q3, Q7)</li><li>R82, The Post as the home of events (Q4)</li><li>V9 "no status dots", satisfied (Q5)</li><li>The lexicon, for the renames (Q9)</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 19 C IDEA ============ -->
+<section class="slide" id="s-c" data-label="C &middot; The job workspace">
+  <header class="shead"><span class="no">19 / 27</span><span class="ch">6 · Direction C · The job workspace</span><span class="job">direction.md §3 C</span></header>
+  <div class="inner">
+    <p class="kicker">Direction C &middot; structural</p>
+    <h2 class="t-d1">The job workspace: act inside the job, not from the Desk</h2>
+    <div class="split">
+      <div class="stack">
+        <p class="t-body">C takes seriously the other half of Leah's Build-room feedback: that a project sheet should be more of an overview, with specific screens you go into for one lens at a time (<code>pieces-building-room-2026-10-08/TRANSCRIPT.md:57,59</code>, the only real first-person source the panel cites).</p>
+        <p class="t-body">The Document becomes three columns. A <strong>stage lens</strong> replaces the rail (Brief &middot; Proposal &middot; Buying &middot; Money &middot; Closing) and folds the other stages to a line each. The reading paper sits in the centre. A <strong>Now panel</strong> on white working stock holds the elected need's whole function in place: the facts, the contact, a draft to review, the act, and what happens next.</p>
+        <p class="t-body">The Desk becomes two lanes: <strong>Your move</strong>, ranked by consequence and uncapped, and <strong>Their move</strong>, everything waiting on a client or maker, oldest first. A door line above them holds a new inquiry. For the close of the day, an <strong>evening round</strong> walks each job with a move left, one at a time, to "The round is done".</p>
+      </div>
+      <div class="scroller stackable">
+        <table class="sheet">
+          <thead><tr><th scope="col">Surface</th><th scope="col">What changes</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Desk</th><td data-label="Change">A door line; Your move and Their move as tables (job &middot; what &middot; since &middot; act), no cards, no plates; set-aside items in one line; "Begin the evening round".</td></tr>
+            <tr><th scope="row">Document</th><td data-label="Change">The stage lens instead of the rail. Regions outside the stage fold. The Now panel replaces the margin rail and the NEXT band. Need flags inline on their records.</td></tr>
+            <tr><th scope="row">Elsewhere</th><td data-label="Change">The Round, a full-width working sheet. Orders and Accounts stay as studio ledgers, but no job act opens them.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="t-sm muted"><strong>Model:</strong> N1&ndash;N8, plus N9, a region-and-row anchor on every need, and N10, a Now panel per need kind (at least six). <strong>Look:</strong> beige for reading, white for working, the rule the Build room work set.</p>
+  </div>
+</section>
+
+<!-- ============ 20 C DESK ============ -->
+<section class="slide" id="s-c-desk" data-label="C &middot; The Desk as lanes">
+  <header class="shead"><span class="no">20 / 27</span><span class="ch">6 · Direction C · The job workspace</span><span class="job">frame c1 · S1, S7</span></header>
+  <div class="inner">
+    <h2 class="t-d1">C &middot; Monday, 8:40 am: who holds the ball</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today</span><span class="src">walk/desk-fold-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:desk-fold-1440.jpg}}" alt="Today's Desk at 1440: the overdue sentence, the setup whisper, a three-line day line led by Chen Residence and two Full Room leads, then job cards with saturated stage plates and YOUR PEN on every card." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <div class="stack">
+        <p class="t-hint">What you see today</p>
+        <ul class="look">
+          <li>Custody words group the cards, but maker silences always sort last (A4).</li>
+          <li>A two-hour-old inquiry is the second of five "Full Room" cards (A9).</li>
+        </ul>
+      </div>
+    </div>
+    <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-c1">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; C</span><span class="src">frame c1 &middot; specimens/proposed-c-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-c1" title="Proposed, frame c1: the Desk as a door line, a Your move table and a Their move table" srcdoc="{{SPECIMEN_C_1440}}"></iframe>
+      </div></div>
+      <figcaption>The door line: Ines Calder wrote 2 hours ago about a living room. Your move, ranked and uncapped. Their move, oldest first: Fenmoor Joinery 12 days, the Halloran samples 6 days. <span class="est">S1 est. 0 clicks (1 to act), 10&ndash;15 s / 5 s, found but unbounded. S7 est. 1 click, 5 s / 5 s. Marks &asymp; 34.</span></figcaption>
+      <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ 21 C JOB ============ -->
+<section class="slide" id="s-c-job" data-label="C &middot; The workspace">
+  <header class="shead"><span class="no">21 / 27</span><span class="ch">6 · Direction C · The job workspace</span><span class="job">frames c5, c9 · S6</span></header>
+  <div class="inner">
+    <h2 class="t-d1">C &middot; The job opens on its step, with the work in place</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today &middot; S6</span><span class="src">walk/doc-holloway-fold-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:doc-holloway-fold-1440.jpg}}" alt="Today's Holloway Den Document: the rail, the band NEXT OVERDUE 11D, INV-2026-0721 with SEND REMINDER and Standing, 6, then a coaching line and the job's regions." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <div class="stack">
+        <p class="t-hint">What you see today</p>
+        <ul class="look">
+          <li>Found, but the band's act is a link under two filled region acts (A11).</li>
+          <li>Acting opens a studio-wide sheet, away from the job.</li>
+          <li>&asymp; 47 marks at rest.</li>
+        </ul>
+      </div>
+    </div>
+    <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-c5">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; C</span><span class="src">frame c5 &middot; specimens/proposed-c-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-c5" title="Proposed, frame c5: Holloway Den as a workspace at the Buying stage, with stage lens, paper and Now panel" srcdoc="{{SPECIMEN_C_1440}}"></iframe>
+      </div></div>
+      <figcaption>The stage lens on the left, the paper in the centre, the Now panel on white holding the invoice reminder, and "Also open on this job: PO-HD-0412". <span class="est">S6 est. 0 clicks (act in place), 2 s / 3 s, found, the strongest of the three. Marks &asymp; 30.</span></figcaption>
+      <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+    </figure>
+    <div class="phones">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today &middot; 390</span><span class="src">walk/s6-step1-holloway-next-band-390.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:s6-step1-holloway-next-band-390.jpg}}" alt="Today's Holloway Den on the phone: the sticky head reads NEXT OVERDUE 11D, INV-2026-0721, the Document's regions scroll below it, and SEND REMINDER sits in the dark bottom bar at the foot of the screen." width="390" height="844" loading="lazy" decoding="async"></div>
+      </figure>
+      <figure class="spec" data-w="390" data-h="1300" data-s="frame-c9">
+        <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; 390</span><span class="src">frame c9</span></p>
+        <div class="spec__stage"><div class="spec__scaler">
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-c9" title="Proposed, frame c9: the workspace on the phone, the Now panel stacked under the sticky head" srcdoc="{{SPECIMEN_C_390}}"></iframe>
+        </div></div>
+      </figure>
+      <div class="stack">
+        <p class="t-hint">Three columns, on a phone</p>
+        <p class="t-sm muted">The act sits beside its reason in the sticky head; the Now panel stacks full width under it, then the stage, then the paper. Making a three-column job work at 390 is a slice of its own.</p>
+        <p class="est">S6 est. 0 clicks (act in place), 2 s / 3 s.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 22 C SCORE ============ -->
+<section class="slide" id="s-c-score" data-label="C &middot; Scores, risks, canon">
+  <header class="shead"><span class="no">22 / 27</span><span class="ch">6 · Direction C · The job workspace</span><span class="job">frame c7 · direction.md §3 C</span></header>
+  <div class="inner">
+    <h2 class="t-d1">C &middot; 5:50 pm: "The round is done."</h2>
+    <div class="today">
+      <figure class="shot">
+        <p class="t-head pair-label"><span class="tag tag--today">Today &middot; S8</span><span class="src">walk/s8-step1-desk-bottom-1440.jpg</span></p>
+        <div class="shot__stage"><img src="{{WALK:s8-step1-desk-bottom-1440.jpg}}" alt="Today at the bottom of the Desk: overdue job cards in terracotta, then AT REST, 11 JOBS and a row reading Nothing needs your hand. There is no end-of-day statement." width="1440" height="900" loading="lazy" decoding="async"></div>
+      </figure>
+      <div class="stack">
+        <p class="t-hint">What you see today</p>
+        <ul class="look"><li>No end state; "at rest" under open cards (A10).</li></ul>
+      </div>
+    </div>
+    <figure class="spec wide" data-w="1440" data-h="1150" data-s="frame-c7">
+      <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; C</span><span class="src">frame c7 &middot; specimens/proposed-c-1440.html</span></p>
+      <div class="spec__stage"><div class="spec__scaler">
+        <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-c7" title="Proposed, frame c7: the end of the evening round, with what comes back and what waits on others" srcdoc="{{SPECIMEN_C_1440}}"></iframe>
+      </div></div>
+      <figcaption>The end of the evening round, with the same coming-back and waiting-on lines as B. Position words only, no progress bar. <span class="est">S8 est. 1 click to start, 60&ndash;180 s to walk: found, at the cost of minutes.</span></figcaption>
+      <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
+    </figure>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">#</th><th scope="col">Path under C</th><th scope="col">Clicks</th><th scope="col">Notice / done (s)</th><th scope="col">Verdict, est.</th></tr></thead>
+        <tbody>
+          <tr><td class="id" data-label="#">S1</td><td data-label="Path">Read the top of Your move (ranked, uncapped)</td><td data-label="Clicks">0 (1 to act)</td><td data-label="Notice / done">10&ndash;15 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--part" aria-hidden="true"></span>Found, unbounded<small>seven rows at the fold, the five that matter first</small></td></tr>
+          <tr><td class="id" data-label="#">S2</td><td data-label="Path">Linden &rarr; its workspace at Proposal, the Now panel quoting the reason</td><td data-label="Clicks">1</td><td data-label="Notice / done">10 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S3</td><td data-label="Path">Their move: Fenmoor, 12 days; the Now panel is the chase</td><td data-label="Clicks">1</td><td data-label="Notice / done">10 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>done in place, no ledger</small></td></tr>
+          <tr><td class="id" data-label="#">S4</td><td data-label="Path">Pell Court &rarr; "Deposit received &middot; $9,200 &middot; Release 2 orders"</td><td data-label="Clicks">1</td><td data-label="Notice / done">10 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S5</td><td data-label="Path">Jordan's lanes hold Marsh only; Leah's note tops its Now panel</td><td data-label="Clicks">1</td><td data-label="Notice / done">5 / 2</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S6</td><td data-label="Path">The workspace opens at Buying, Now panel first</td><td data-label="Clicks">0 (act in place)</td><td data-label="Notice / done">2 / 3</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>strongest of the three</small></td></tr>
+          <tr><td class="id" data-label="#">S7</td><td data-label="Path">The door line above the lanes</td><td data-label="Clicks">1</td><td data-label="Notice / done">5 / 5</td><td class="m" data-label="Verdict"><span class="mk mk--yes" aria-hidden="true"></span>Found</td></tr>
+          <tr><td class="id" data-label="#">S8</td><td data-label="Path">Begin the evening round &rarr; three jobs in turn &rarr; "The round is done"</td><td data-label="Clicks">1 to start</td><td data-label="Notice / done">60&ndash;180 to walk</td><td class="m" data-label="Verdict"><span class="mk mk--part" aria-hidden="true"></span>Found, costs minutes</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols-3">
+      <div class="stack"><p class="t-head">Marks at rest, est.</p><p class="t-sm muted">Desk 1440 &asymp; 34 (&asymp; 16 actionable); Desk 390 &asymp; 14; Document 1440 &asymp; 30 (&asymp; 5 actionable); the hire's Desk &asymp; 20.</p><p class="t-head">Build</p><p class="t-sm muted">9 slices, large: B's model slices, the workspace and stage lens, two slices of Now panels, the lanes and door, the Round, and the 390 job.</p></div>
+      <div class="stack"><p class="t-head">Risks</p><ul class="look"><li>It asks the studio to learn a new system now, the thing VISION &sect;2 says she cannot afford.</li><li>It rewrites the Document US-19 and US-21 shipped in the last ten days, and moves the NEXT band every seat protects.</li><li>The stage lens is tabs in all but name: the hardest canon break of the three.</li><li>Your move is uncapped; the Round can read as a chore or as surveillance of the day.</li></ul></div>
+      <div class="stack"><p class="t-head">Canon rulings it needs</p><ul class="look"><li>VISION &sect;5, &sect;6 "no tab bars" and V7&middot;D1 (Q13)</li><li>"Never a lens on the paper"</li><li>US-19 D2, the band as the single door</li><li>V9 P5, three stocks, for the white working stock</li><li>VISION &sect;6 badges (the inline flags)</li><li>V11, the Round's position words</li><li>US-19 D8 (Q2) and R143 (Q3)</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 23 COMPARISON ============ -->
+<section class="slide" id="s-compare" data-label="Side by side">
+  <header class="shead"><span class="no">23 / 27</span><span class="ch">7 · Side by side</span><span class="job">walk §3 · direction.md §3</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Side by side</h2>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">Moment</th><th scope="col">Today, walked</th><th scope="col">A &middot; Quiet marks</th><th scope="col">B &middot; The Day Sheet</th><th scope="col">C &middot; The job workspace</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">S1 What needs me</th><td class="m" data-label="Today"><span class="mk mk--part" aria-hidden="true"></span>Hard<small>60+ s to triage</small></td><td class="m" data-label="A"><span class="mk mk--part" aria-hidden="true"></span>Partly<small>10&ndash;15 s</small></td><td class="m" data-label="B"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>&le; 8 s</small></td><td class="m" data-label="C"><span class="mk mk--part" aria-hidden="true"></span>Found, unbounded<small>10&ndash;15 s</small></td></tr>
+          <tr><th scope="row">S2 Client moved</th><td class="m m--no" data-label="Today"><span class="mk mk--no" aria-hidden="true"></span>Not found<small>on a live job</small></td><td class="m" data-label="A"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>1 click, 10&ndash;15 s</small></td><td class="m" data-label="B"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>1 click, 5 s</small></td><td class="m" data-label="C"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>1 click, 10 s</small></td></tr>
+          <tr><th scope="row">S3 Vendor quiet</th><td class="m" data-label="Today"><span class="mk mk--part" aria-hidden="true"></span>Hard<small>3 clicks + 2 scrolls, 45&ndash;60 s</small></td><td class="m" data-label="A"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>1 click, 10&ndash;15 s</small></td><td class="m" data-label="B"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>1 click, 5 s</small></td><td class="m" data-label="C"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>1 click, 10 s, in place</small></td></tr>
+          <tr><th scope="row">S4 Money</th><td class="m m--no" data-label="Today"><span class="mk mk--no" aria-hidden="true"></span>Hard / not found<small>the deposit, never</small></td><td class="m" data-label="A"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>1&ndash;2 clicks, 15&ndash;20 s</small></td><td class="m" data-label="B"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>1 click, 5 s</small></td><td class="m" data-label="C"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>1 click, 10 s</small></td></tr>
+          <tr><th scope="row">S5 Hand-off</th><td class="m" data-label="Today"><span class="mk mk--part" aria-hidden="true"></span>Hard<small>30&ndash;60 s on the Desk</small></td><td class="m" data-label="A"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>5&ndash;10 s</small></td><td class="m" data-label="B"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>5 s</small></td><td class="m" data-label="C"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>5 s</small></td></tr>
+          <tr><th scope="row">S6 Next on this job</th><td class="m" data-label="Today"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>3 s</small></td><td class="m" data-label="A"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>2 s, one leader</small></td><td class="m" data-label="B"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>3 s, agrees with the Desk</small></td><td class="m" data-label="C"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>2 s, act in place</small></td></tr>
+          <tr><th scope="row">S7 New lead</th><td class="m" data-label="Today"><span class="mk mk--part" aria-hidden="true"></span>Hard<small>10&ndash;20 s</small></td><td class="m" data-label="A"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>5 s</small></td><td class="m" data-label="B"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>5 s</small></td><td class="m" data-label="C"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>5 s</small></td></tr>
+          <tr><th scope="row">S8 Close the day</th><td class="m m--no" data-label="Today"><span class="mk mk--no" aria-hidden="true"></span>Not found</td><td class="m" data-label="A"><span class="mk mk--part" aria-hidden="true"></span>Partly<small>no stated end</small></td><td class="m" data-label="B"><span class="mk mk--yes" aria-hidden="true"></span>Found<small>5&ndash;10 s</small></td><td class="m" data-label="C"><span class="mk mk--part" aria-hidden="true"></span>Found, costs minutes<small>60&ndash;180 s</small></td></tr>
+          <tr class="hot"><th scope="row">Desk marks at rest, 1440</th><td data-label="Today">&asymp; 36 (&asymp; 10 actionable)</td><td data-label="A">&asymp; 30 (&asymp; 12)</td><td data-label="B">&asymp; 30 (&asymp; 15)</td><td data-label="C">&asymp; 34 (&asymp; 16)</td></tr>
+          <tr class="hot"><th scope="row">Document marks, 1440</th><td data-label="Today">&asymp; 47</td><td data-label="A">&asymp; 44</td><td data-label="B">&asymp; 44</td><td data-label="C">&asymp; 30</td></tr>
+          <tr class="hot"><th scope="row">The hire's Desk</th><td data-label="Today">&asymp; 38</td><td data-label="A">&asymp; 22</td><td data-label="B">&asymp; 20</td><td data-label="C">&asymp; 20</td></tr>
+          <tr><th scope="row">New to learn</th><td data-label="Today">&mdash;</td><td data-label="A">almost nothing</td><td data-label="B">one sheet, one roster</td><td data-label="C">a new Document and Desk</td></tr>
+          <tr><th scope="row">Build</th><td data-label="Today">&mdash;</td><td data-label="A">3 slices, small</td><td data-label="B">6 slices, medium</td><td data-label="C">9 slices, large</td></tr>
+          <tr><th scope="row">Hardest ruling</th><td data-label="Today">&mdash;</td><td data-label="A">plates and colour (Q7)</td><td data-label="B">"no task manager" (Q1)</td><td data-label="C">tabs on the paper (Q13)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="t-sm faint">Every direction figure is an estimate (est.) from direction.md §3, illustrated by the specimens and verified by nothing yet. Today's figures are the walk's.</p>
+  </div>
+</section>
+
+<!-- ============ 24 RECOMMENDATION ============ -->
+<section class="slide" id="s-rec" data-label="The recommendation">
+  <header class="shead"><span class="no">24 / 27</span><span class="ch">8 · The recommendation</span><span class="job">direction.md §4</span></header>
+  <div class="inner">
+    <h2 class="t-d1">We recommend B, built from the model up</h2>
+    <div class="cols-2">
+      <div class="stack">
+        <p class="t-head">Why it beats A</p>
+        <p class="t-sm muted">A is the cheapest and keeps everything familiar, but it cannot answer S1 or S8. A ranked, truthful grid is still a grid: Leah still reads cards to find her morning, and with no memory the oldest item leads every day. S1 and S8 need a bounded list and a remembered "handled", which A has neither of by design. A's mark grammar is not lost: Q7 and Q8 can be adopted under B.</p>
+      </div>
+      <div class="stack">
+        <p class="t-head">Why it beats C</p>
+        <p class="t-sm muted">C is the strongest answer to S6 and acts in place, but it spends the studio's scarcest thing, attention to a new system, at exactly the moment the vision says she cannot afford it. It rewrites the Document that just shipped, takes the most canon-sensitive step, and leaves S1 uncapped. B reaches the same S2&ndash;S5 and S7 numbers with the Document's look unchanged, at about two-thirds the slices. C's best idea, acting on the record, is B's slice 5 in a narrower form.</p>
+      </div>
+    </div>
+    <div class="box">
+      <p class="t-head">The strongest argument against B</p>
+      <p class="t-d3">It is the only direction that builds a cross-job ranked list: the "task manager" VISION §5 refuses, and the shape every engagement inbox started as.</p>
+      <p class="t-sm muted">Its whole value rests on the ranking being right every single morning. The day it says "Nothing needs you tonight" over a signed proposal, it has done more damage than 32 equal cards ever did. The answer is not to deny the risk: make the guards structural and binding (Q1), ship the honesty fixes first (slice 0), and test the ranking against Leah's own five before the sheet ships.</p>
+    </div>
+    <ol class="slices" aria-label="Slices, in order">
+      <li><span class="sn">0</span><span class="sw">Fix-now</span><p>Days. Honesty first: nothing in B is trustworthy over a lying "at rest" or a paid deposit that reads unpaid.</p></li>
+      <li><span class="sn">1</span><span class="sw">The model</span><p>N1 key, N2 ranking, N3 live-job events, N6 leads, N7 money, N8 Pulses. Q3, Q4.</p></li>
+      <li><span class="sn">2</span><span class="sw">Person grain</span><p>N4: Mine / The studio's; the hand-off line; the hire's counts scoped to him. Q2, Q10.</p></li>
+      <li><span class="sn">3</span><span class="sw">Memory</span><p>N5: "Not today", automatic waiting-on, an empty state that is true. Q6.</p></li>
+      <li><span class="sn">4</span><span class="sw">The Day Sheet</span><p>Five lines, the line roster in three groups, plates gone, renames. Q1, Q5, Q7, Q9.</p></li>
+      <li><span class="sn">5</span><span class="sw">Scoped act sheets</span><p>Chase this PO, remind this invoice, follow up, release: each a draft and a named send. Q8, Q11.</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 25 FIX-NOW ============ -->
+<section class="slide" id="s-fixnow" data-label="The fix-now track">
+  <header class="shead"><span class="no">25 / 27</span><span class="ch">9 · The fix-now track</span><span class="job">direction.md §5 · ships under any direction</span></header>
+  <div class="inner">
+    <h2 class="t-d1">The fix-now track, under any direction</h2>
+    <p class="t-lede">Items 1&ndash;16 need no ruling and no migration beyond a read change. Items 17&ndash;19 wait on the question named; they are the model's first slice in all but name.</p>
+    <div class="scroller stackable">
+      <table class="sheet">
+        <thead><tr><th scope="col">#</th><th scope="col">Today</th><th scope="col">Fix</th><th scope="col">Where</th></tr></thead>
+        <tbody>
+          <tr><td class="id" data-label="#">1</td><td data-label="Today">"Only what needs me" changes nothing, then says it did</td><td data-label="Fix">Retire the facet until N4 can make it mean the person</td><td data-label="Where"><code>desk-roster.tsx:235-253</code></td></tr>
+          <tr><td class="id" data-label="#">2</td><td data-label="Today">A paid deposit reads "$9,200 OUT" beside Record the payment</td><td data-label="Fix">Diagnose first; never offer Record on a paid invoice; &darr; received / &uarr; owed in words</td><td data-label="Where"><code>doc/[id]/page.tsx:673-729</code></td></tr>
+          <tr><td class="id" data-label="#">3</td><td data-label="Today">One invoice: 11 days overdue on the band, 12 in Accounts</td><td data-label="Fix">One overdue-days function for every surface</td><td data-label="Where">walk/s6-step1, s4-step2</td></tr>
+          <tr><td class="id" data-label="#">4</td><td data-label="Today">The rail says "Pieces &middot; nothing yet" over "1 PO unanswered"</td><td data-label="Fix">Rail status reads from the job's need list</td><td data-label="Where">walk/doc-holloway-fold</td></tr>
+          <tr><td class="id" data-label="#">5</td><td data-label="Today">Standing lists PO-HD-0412 twice</td><td data-label="Fix">N1's key and de-dup; setup folds under its own heading</td><td data-label="Where"><code>desk-derivation.ts:543-575</code></td></tr>
+          <tr><td class="id" data-label="#">6</td><td data-label="Today">"At rest &middot; Nothing needs your hand" over a signed, paid job</td><td data-label="Fix">Say "at rest" only when every modelled need was read and none is open</td><td data-label="Where"><code>desk-roster.tsx:422-429</code></td></tr>
+          <tr><td class="id" data-label="#">7</td><td data-label="Today">Leads titled "Full Room", with no arrival time</td><td data-label="Fix">Title by the person; "wrote 2 hours ago" on card and brief</td><td data-label="Where"><code>desk-derivation.ts:1150-1179</code></td></tr>
+          <tr><td class="id" data-label="#">8</td><td data-label="Today">Coaching copy left at rest on every Document and the Desk</td><td data-label="Fix">Once per person, then gone; setup moves to Account</td><td data-label="Where"><code>desk/page.tsx:231-254</code></td></tr>
+          <tr><td class="id" data-label="#">9</td><td data-label="Today">Scoreboard counters: "0 taught today", "10 people drifting"</td><td data-label="Fix">Remove: the studio surface is never optimised for engagement</td><td data-label="Where">walk/library-fold, people-fold</td></tr>
+          <tr><td class="id" data-label="#">10</td><td data-label="Today">Ten Friday Pulse cards for one weekly task</td><td data-label="Fix">N8: one weekly line, "Review and send 6 Pulses"</td><td data-label="Where"><code>desk-derivation.ts:1664-1677</code></td></tr>
+          <tr><td class="id" data-label="#">11</td><td data-label="Today">The caps label behind most controls is 11px, under the 12px floor</td><td data-label="Fix">12px</td><td data-label="Where"><code>globals.css:2045</code></td></tr>
+          <tr><td class="id" data-label="#">12</td><td data-label="Today">The dock covers the first card's act at 1440</td><td data-label="Fix">Reserve the dock's height; drop the duplicate "Find anything"</td><td data-label="Where"><code>globals.css:241-262</code></td></tr>
+          <tr><td class="id" data-label="#">13</td><td data-label="Today">At 390 the NEXT act is ~750px from its reason</td><td data-label="Fix">The act sits beside its reason</td><td data-label="Where">walk/doc-holloway-fold-390</td></tr>
+          <tr><td class="id" data-label="#">14</td><td data-label="Today">Follow up showed no change; Respond to the inquiry drafts nothing</td><td data-label="Fix">Verify what each opens; every act shows what opened or changed</td><td data-label="Where">walk/s2-step3, s7-step3</td></tr>
+          <tr><td class="id" data-label="#">15</td><td data-label="Today">"No decision lead named yet" on jobs with a client and a decision</td><td data-label="Fix">Read the proposal's outcome; say nothing on an unstarted job</td><td data-label="Where">walk/s2-step5, s2-step6</td></tr>
+          <tr><td class="id" data-label="#">16</td><td data-label="Today">The hire's hand-off note never showed</td><td data-label="Fix">Trace the suppressing condition; show it on its job until read</td><td data-label="Where"><code>desk/page.tsx:231-254</code></td></tr>
+          <tr class="hot"><td class="id" data-label="#">17 &middot; Q3</td><td data-label="Today">The Desk ranks by custody, so maker silences sort last</td><td data-label="Fix">N2: rank by the D2 class table</td><td data-label="Where"><code>desk-roster-derivation.ts:811-868</code></td></tr>
+          <tr class="hot"><td class="id" data-label="#">18 &middot; Q4</td><td data-label="Today">Signed, declined and paid on a live job never reach the Desk</td><td data-label="Fix">N3, above the seals</td><td data-label="Where"><code>use-desk-engagements.ts:149</code></td></tr>
+          <tr class="hot"><td class="id" data-label="#">19 &middot; Q2</td><td data-label="Today">"Your pen" on every card of the hire's Desk</td><td data-label="Fix">Custody names the holder; counts follow the scope</td><td data-label="Where"><code>desk-roster-derivation.ts:210-241</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 26 FOUNDER QUESTIONS ============ -->
+<section class="slide" id="s-questions" data-label="Founder questions">
+  <header class="shead"><span class="no">26 / 27</span><span class="ch">10 · Founder questions</span><span class="job">direction.md §6 · decide Q1&ndash;Q4 first</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Fourteen questions for the partners</h2>
+    <p class="t-lede">Q1&ndash;Q4 gate slice 1 under any direction, so they come first. Each shows the panel's recommended answer and what follows if you decline it. Answer yes, no, or with your own words.</p>
+    <ol class="qcards">
+      <li class="first"><div class="qhead"><span class="qno">Q1</span><span class="qtag">Decide first</span></div><p class="qtext">Is a five-line cross-job Day Sheet a "task manager"?</p><p class="qrec"><b>Recommended</b>No, under five binding guards: at most five lines, no overflow count, no dots or badges, no "cleared today" or streak, never pushed. Its rows are the jobs' own Next. Log it as a V-entry with the guards as its text.</p><p class="qelse"><b>If declined</b>Ship A, plus B's line roster as the Desk. S1 and S8 stay partly answered.</p></li>
+      <li class="first"><div class="qhead"><span class="qno">Q2</span><span class="qtag">Decide first</span></div><p class="qtext">May "mine" name a person? (US-19 D8 says the studio's pen, never a named person.)</p><p class="qrec"><b>Recommended</b>Yes: the signed-in person's jobs, from the project team; "The studio's" one press away. Custody names whoever holds a job. Need-level assignment waits.</p><p class="qelse"><b>If declined</b>The hire's Desk stays studio-wide; S5 stays hard on the Desk.</p></li>
+      <li class="first"><div class="qhead"><span class="qno">Q3</span><span class="qtag">Decide first</span></div><p class="qtext">Rank the Desk by consequence, not by whose hand?</p><p class="qrec"><b>Recommended</b>Yes. The Document already ranks this way; the Desk and the paper must agree, or neither is trusted.</p><p class="qelse"><b>If declined</b>Maker silences keep sorting last; S3 stays hard everywhere.</p></li>
+      <li class="first"><div class="qhead"><span class="qno">Q4</span><span class="qtag">Decide first</span></div><p class="qtext">Events become needs; The Post keeps letters and receipts only?</p><p class="qrec"><b>Recommended</b>Yes. A signature, decline, landed payment or acknowledgment that asks for an act becomes a need on its job. A receipt with no act stays a fact.</p><p class="qelse"><b>If declined</b>S2 on a live job and the landed deposit stay not found.</p></li>
+      <li><div class="qhead"><span class="qno">Q5</span></div><p class="qtext">Freshness as a time word ("2 hours ago"), with no dot?</p><p class="qrec"><b>Recommended</b>The word only, printed with the need, gone once the job is opened.</p><p class="qelse"><b>If declined</b>A dot adds a mark per event and a V9 exception; nothing leaves S7 on the name alone.</p></li>
+      <li><div class="qhead"><span class="qno">Q6</span></div><p class="qtext">May the studio say "Not today", and may an act move a line to "waiting on"?</p><p class="qrec"><b>Recommended</b>Yes, both, never counted. "Not today" lasts one working day. A held item takes a dated "set aside until" with its reason.</p><p class="qelse"><b>If declined</b>No end state for S8; the oldest item leads every morning.</p></li>
+      <li><div class="qhead"><span class="qno">Q7</span></div><p class="qtext">Spend colour on need, not phase: demote the six stage plates to ink words?</p><p class="qrec"><b>Recommended</b>Yes, in every direction. The graded need rule is A's; B carries urgency in order and words.</p><p class="qelse"><b>If declined</b>The plates stay the loudest marks on the Desk.</p></li>
+      <li><div class="qhead"><span class="qno">Q8</span></div><p class="qtext">One filled act per view: the NEXT act alone on the Document?</p><p class="qrec"><b>Recommended</b>Yes, in every direction; region heads drop to text acts.</p><p class="qelse"><b>If declined</b>Three leaders per job remain; S6 depends on reading order.</p></li>
+      <li><div class="qhead"><span class="qno">Q9</span></div><p class="qtext">Plain words: Put down &rarr; Back to the Desk; Hands free &rarr; No timer; The Scans &rarr; Rooms; Ledgers &rarr; Orders and accounts; Standing &rarr; Everything open on this job; acts in sentence case.</p><p class="qrec"><b>Recommended</b>Yes, with Leah's own words where she has better ones; caps mono for metadata only.</p><p class="qelse"><b>If declined</b>The hire learns the map by asking Leah.</p></li>
+      <li><div class="qhead"><span class="qno">Q10</span></div><p class="qtext">Should a non-owner seat see studio revenue, receivables and margin?</p><p class="qrec"><b>Recommended</b>Not by default. A hire sees receivables on the jobs they lead; Leah can grant more.</p><p class="qelse"><b>If declined</b>The hire sees the studio's margin on day ten.</p></li>
+      <li><div class="qhead"><span class="qno">Q11</span></div><p class="qtext">A hire's act on a client- or maker-facing step of a job they do not lead?</p><p class="qrec"><b>Recommended</b>It produces a draft for Leah, marked "Leah sees this first", and never sends. On their own jobs they send as Leah does.</p><p class="qelse"><b>If declined</b>The simulated hire's reaction is to avoid acting at all.</p></li>
+      <li><div class="qhead"><span class="qno">Q12</span></div><p class="qtext">The hire's end-of-day hand-back note to Leah?</p><p class="qrec"><b>Recommended</b>Park it as a side journey. B's waiting-on list covers most of it.</p><p class="qelse"><b>If declined</b>One more slice, under "never an automatic report".</p></li>
+      <li><div class="qhead"><span class="qno">Q13</span></div><p class="qtext">C's structural moves: a stage lens on the Document and acting in a Now panel?</p><p class="qrec"><b>Recommended</b>Not now. Revisit after B ships, with the Build room as the precedent.</p><p class="qelse"><b>If declined</b>C's nine slices replace B's slices 4&ndash;5, with a tab ruling (V7&middot;D1).</p></li>
+      <li><div class="qhead"><span class="qno">Q14</span></div><p class="qtext">Does anything push: a Monday summary email, a phone notice?</p><p class="qrec"><b>Recommended</b>No push in this uplift. The sheet is read when she opens the portal.</p><p class="qelse"><b>If declined</b>A capped, reviewed interrupt list, each push ruled on one by one.</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 27 NEXT STEPS ============ -->
+<section class="slide" id="s-next" data-label="Next steps and asks for Leah">
+  <header class="shead"><span class="no">27 / 27</span><span class="ch">11 · Next steps</span><span class="job">direction.md §4, §7</span></header>
+  <div class="inner">
+    <h2 class="t-d1">Next steps, and what only Leah can tell us</h2>
+    <div class="split">
+      <div class="stack">
+        <p class="t-head">Next steps</p>
+        <ol class="look">
+          <li>This deck and its specimens get an adversarial review from a different model family, then fixes and a render check at 1440 and 390.</li>
+          <li>The partners answer Q1&ndash;Q4; the rest can follow the fix-now track.</li>
+          <li>Slice 0, the fix-now items 1&ndash;16, ships under any direction, in days.</li>
+          <li>The asks on the right go to Leah in person, before slice 4 builds the sheet.</li>
+          <li>Then slices 1&ndash;5 in order. Each pays off alone.</li>
+        </ol>
+        <p class="t-sm muted">Nothing in the specimens is evidence of time or trust. They are static illustrations; the asks are how we find out.</p>
+      </div>
+      <div class="stack">
+        <p class="t-head">Asks for Leah</p>
+        <ul class="lanes">
+          <li><b>Her five</b><span>On a real Monday, before she opens Patina, she writes the five things she would do first. Then we show the sheet the model ranked from her real jobs. Every disagreement is a ranking rule to fix.</span></li>
+          <li><b>Time S1</b><span>Today's Desk against a working prototype, on her real 16 jobs, between two appointments.</span></li>
+          <li><b>False all-clear</b><span>Hide one signed proposal under "Nothing needs you tonight" and ask what she would do. If the answer is "stop trusting it", fix-now 2, 3 and 6 are the release gate.</span></li>
+          <li><b>Her words</b><span>For mine or yours, not today, waiting on, the top of the Desk, the job's step, Put down, The Scans, Ledgers.</span></li>
+          <li><b>The hire</b><span>Whoever sits closest to the first-hire seat: time S5 and S6 today and on the prototype. Does "Leah sees this first" make them more willing to act, or less?</span></li>
+          <li><b>Money</b><span>Should her hire see revenue and margin (Q10)? Can the hire send a reminder on her client?</span></li>
+          <li><b>"Two hours ago"</b><span>Calm information, or a nudge?</span></li>
+          <li><b>The Pulses</b><span>One batched weekly line, or each on its job's own morning?</span></li>
+          <li><b>The Round</b><span>Would she walk her jobs one at a time at the end of the day, or close the laptop?</span></li>
+          <li><b>The deposit</b><span>When a deposit lands, release the orders, or wait for a call with the client? This sets the act's word.</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="t-meta">artifacts/designer-portal-uplift-2026-10-09/ &middot; walk, review, synthesis, specimens, deck &middot; US-24</p>
+  </div>
+</section>
+
+</div>
+
+<nav class="pager" aria-label="Sheets">
+  <button type="button" id="pg-prev" aria-label="Previous sheet">&larr;<span class="lbl"> Previous</span></button>
+  <span class="where" id="pg-where" aria-live="polite">01 / 27 &middot; Cover</span>
+  <button type="button" id="pg-next" aria-label="Next sheet"><span class="lbl">Next </span>&rarr;</button>
+</nav>
+
+<script>
+(function () {
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(document.querySelectorAll('section.slide'));
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- specimen frames ----------
+     Each iframe's name carries a frame token; the build's bootstrap turns it into
+     "#frame-x&nobar&nobefore" inside the specimen and posts the specimen's content
+     height back, so each frame shows its canvas and its notes at full height. */
+  var figs = Array.prototype.slice.call(document.querySelectorAll('figure.spec'));
+  function num(fig, attr, d) { var v = parseInt(fig.getAttribute(attr), 10); return isNaN(v) ? d : v; }
+  /* printW: the width a frame gets on paper (see @page in the print CSS). */
+  function fit(fig, printW) {
+    var frame = fig.querySelector('.spec-frame');
+    var stage = fig.querySelector('.spec__stage');
+    var scaler = fig.querySelector('.spec__scaler');
+    if (!frame || !stage || !scaler) return;
+    var w = num(fig, 'data-w', 1440), h = num(fig, 'data-h', 1150);
+    frame.style.width = w + 'px';
+    frame.style.height = h + 'px';
+    stage.style.maxWidth = w + 2 + 'px';
+    var avail = printW || stage.clientWidth || w;
+    var k = Math.min(1, avail / w);
+    scaler.style.transform = 'scale(' + k + ')';
+    stage.style.height = Math.round(h * k) + 'px';
+  }
+  function post(fig) {
+    var frame = fig.querySelector('.spec-frame');
+    if (!frame || !frame.contentWindow) return;
+    try { frame.contentWindow.postMessage({ frame: fig.getAttribute('data-s') }, '*'); } catch (e) {}
+  }
+  figs.forEach(function (fig) {
+    var frame = fig.querySelector('.spec-frame');
+    if (frame) { frame.addEventListener('load', function () { post(fig); fit(fig); }); }
+    fit(fig);
+  });
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || typeof d !== 'object' || typeof d.deckSpecH !== 'number') return;
+    for (var i = 0; i < figs.length; i++) {
+      var frame = figs[i].querySelector('.spec-frame');
+      if (frame && frame.contentWindow === e.source) {
+        var h = Math.max(320, Math.min(6000, Math.ceil(d.deckSpecH)));
+        if (Math.abs(h - num(figs[i], 'data-h', 0)) > 2) { var a = anchor(); figs[i].setAttribute('data-h', String(h)); fit(figs[i]); talls(); restore(a); }
+        break;
+      }
+    }
+  });
+
+  /* A sheet taller than the viewport stops snapping, so it can be read through. */
+  function talls() {
+    var view = deck.clientHeight;
+    slides.forEach(function (s) { s.classList.toggle('tall', s.offsetHeight > view + 8); });
+  }
+  var t = null;
+  function refit() { var a = anchor(); figs.forEach(function (f) { fit(f); }); talls(); restore(a); }
+
+  /* A deep link (#s-questions) is held while the frames above it settle, until the
+     reader scrolls, taps or presses a key. After that, any height change or resize
+     keeps the reader at the same point of the same sheet. */
+  function hashSlide() {
+    var id = (location.hash || '').slice(1);
+    if (!/^s-[a-z0-9-]+$/.test(id)) return null;
+    var el = document.getElementById(id);
+    return el && (' ' + el.className + ' ').indexOf(' slide ') >= 0 ? el : null;
+  }
+  var settle = hashSlide();
+  function holding() { return !!settle; }
+  function hold() { if (holding() && Math.abs(deck.scrollTop - settle.offsetTop) > 1) { deck.scrollTop = settle.offsetTop; } }
+  function anchor() {
+    if (holding()) return null;
+    var i = current();
+    return { el: slides[i], d: deck.scrollTop - slides[i].offsetTop };
+  }
+  function restore(a) {
+    if (!a) { hold(); return; }
+    var top = a.el.offsetTop + a.d;
+    if (Math.abs(deck.scrollTop - top) > 1) { deck.scrollTop = top; }
+  }
+  function letGo() { settle = null; }
+  ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function (ev) {
+    window.addEventListener(ev, letGo, { passive: true, capture: true });
+  });
+  window.addEventListener('resize', function () { if (t) { clearTimeout(t); } t = setTimeout(refit, 120); });
+  window.addEventListener('load', refit);
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(refit); }
+  refit();
+
+  /* Printing: a lazy frame or image that never loaded prints blank, so all of
+     them load shortly after the deck does; on paper each frame is full size. */
+  function eager() { document.querySelectorAll('[loading="lazy"]').forEach(function (f) { f.setAttribute('loading', 'eager'); }); }
+  window.addEventListener('load', function () { setTimeout(eager, 1500); });
+  window.addEventListener('beforeprint', function () {
+    eager();
+    figs.forEach(function (f) { fit(f, 100000); });
+  });
+  window.addEventListener('afterprint', refit);
+
+  /* ---------- navigation: keys, pager, hash ---------- */
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function current() {
+    var top = deck.scrollTop + 2, idx = 0;
+    for (var i = 0; i < slides.length; i++) { if (slides[i].offsetTop <= top) { idx = i; } }
+    return idx;
+  }
+  slides.forEach(function (s) { var h = s.querySelector('h1, h2'); if (h) { h.setAttribute('tabindex', '-1'); } });
+  function go(i) {
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    letGo();
+    deck.scrollTo({ top: slides[i].offsetTop, behavior: reduce ? 'auto' : 'smooth' });
+    var h = slides[i].querySelector('h1, h2');
+    if (h) { try { h.focus({ preventScroll: true }); } catch (e) { h.focus(); } }
+  }
+  /* Keys belong to whatever holds focus when it can use them. */
+  function ownsKeys(el) {
+    if (!el || el === deck || el === document.body || el === document.documentElement) return false;
+    if (/^(INPUT|TEXTAREA|SELECT|IFRAME|SUMMARY)$/.test(el.tagName) || el.isContentEditable) return true;
+    for (var n = el; n && n !== deck; n = n.parentElement) {
+      var cs = getComputedStyle(n);
+      if ((/(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1)) return true;
+    }
+    return false;
+  }
+  /* Down moves within a tall sheet first, then to the next sheet. */
+  function step(dir) {
+    var i = current(), s = slides[i], view = deck.clientHeight;
+    if (dir > 0) {
+      var bottom = s.offsetTop + s.offsetHeight;
+      if (bottom - (deck.scrollTop + view) > 8) { deck.scrollBy({ top: Math.round(view * 0.85), behavior: reduce ? 'auto' : 'smooth' }); return; }
+      go(i + 1);
+    } else {
+      if (deck.scrollTop - s.offsetTop > 8) {
+        deck.scrollTo({ top: Math.max(s.offsetTop, deck.scrollTop - Math.round(view * 0.85)), behavior: reduce ? 'auto' : 'smooth' });
+        return;
+      }
+      go(i - 1);
+    }
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (ownsKeys(e.target)) return;
+    var onButton = e.target && (e.target.tagName === 'BUTTON' || e.target.tagName === 'A');
+    switch (e.key) {
+      case 'ArrowDown': case 'PageDown': step(1); e.preventDefault(); break;
+      case 'ArrowUp': case 'PageUp': step(-1); e.preventDefault(); break;
+      case ' ': if (onButton) return; step(e.shiftKey ? -1 : 1); e.preventDefault(); break;
+      case 'ArrowRight': case 'j': go(current() + 1); e.preventDefault(); break;
+      case 'ArrowLeft': case 'k': go(current() - 1); e.preventDefault(); break;
+      case 'Home': go(0); e.preventDefault(); break;
+      case 'End': go(slides.length - 1); e.preventDefault(); break;
+    }
+  });
+  var prev = document.getElementById('pg-prev'), next = document.getElementById('pg-next');
+  prev.addEventListener('click', function () { go(current() - 1); });
+  next.addEventListener('click', function () { go(current() + 1); });
+
+  var where = document.getElementById('pg-where'), last = -1, raf = 0;
+  function mark() {
+    raf = 0;
+    var i = current();
+    if (i === last) return;
+    last = i;
+    where.textContent = pad(i + 1) + ' / ' + slides.length + ' ' + String.fromCharCode(183) + ' ' + slides[i].getAttribute('data-label');
+    prev.disabled = i === 0;
+    next.disabled = i === slides.length - 1;
+    if (holding()) return;
+    if (history.replaceState) { try { history.replaceState(null, '', '#' + slides[i].id); } catch (e) {} }
+  }
+  deck.addEventListener('scroll', function () { if (!raf) { raf = requestAnimationFrame(mark); } }, { passive: true });
+
+  /* In-deck links (#s-b) move the deck, not the window. */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href^="#s-"]');
+    if (!a) return;
+    var el = document.getElementById(a.getAttribute('href').slice(1));
+    var i = slides.indexOf(el);
+    if (i < 0) return;
+    e.preventDefault();
+    go(i);
+  });
+
+  function place() {
+    var el = hashSlide();
+    if (el) { deck.scrollTop = el.offsetTop; }
+  }
+  window.addEventListener('hashchange', function () { settle = hashSlide(); place(); });
+  try { deck.focus({ preventScroll: true }); } catch (e) { deck.focus(); }
+  place();
+  setTimeout(function () { hold(); mark(); }, 400);
+  mark();
+})();
+</script>
