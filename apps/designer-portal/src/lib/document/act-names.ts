@@ -125,6 +125,7 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   // Plain — the need acts D3 does not raise
   'Send reminder': 'plain',
   'Notify the maker': 'plain',
+  'Read the note': 'plain',
   // FR6 F6-1b — the proposal's reminder email, named for what it does.
   'Send a reminder': 'plain',
   'Follow up': 'plain',

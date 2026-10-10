@@ -33,6 +33,7 @@ describe('Desk need action labels', () => {
       memo_return: 'Mark returned',
       return_by: 'Return it or keep it',
       exception_open: 'Choose a path',
+      handoff: 'Read the note',
     } satisfies Record<NeedKind, string | null>;
 
     expect(NEED_ACTION_LABELS).toEqual(expected);

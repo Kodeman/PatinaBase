@@ -17,7 +17,14 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
+jest.mock('@/hooks/use-can-see-margin', () => ({ useCanSeeMargin: () => false }));
+
 jest.mock('@patina/supabase', () => ({
+  useSession: () => ({ session: null, isLoading: false }),
+  useProfile: () => ({ data: undefined }),
+  useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
+  useProjectLeads: () => ({ data: [] }),
+  useNeedStates: () => ({ data: [] }),
   usePurchaseOrders: () => ({
     data: [
       {
