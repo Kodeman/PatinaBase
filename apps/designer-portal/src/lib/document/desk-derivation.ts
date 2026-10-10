@@ -32,6 +32,7 @@ import {
 // dates.ts imports nothing either, so the one date idiom costs this module no
 // dependency (PP-2 / R140).
 import { dayMonth } from './dates';
+import { needKeyOf, type NeedKey } from './need-key';
 // Type-only, so it is erased at compile time and buys no runtime dependency:
 // the filled-stamp tones are the Stamp component's contract, not a second
 // vocabulary declared here.
@@ -541,6 +542,19 @@ export function memoReturnDue(signal: DeskSampleSignal, now: Date): boolean {
 }
 
 export interface NeedLine {
+  /** N1 — the need's stable identity: `${kind}:${recordId}`, or
+   *  `${kind}:project:${projectId}` for an aggregate (need-key.ts). Stamped by
+   *  `deriveNeeds`; never derived from the text or the clock. */
+  key: NeedKey;
+  /** N1 — the one record this need is about (an invoice, a PO, a proposal),
+   *  where the rule names one. Absent on an aggregate need — "2 decisions
+   *  overdue", "3 POs drafted" — whose identity is the project. */
+  recordId?: string;
+  /** N1 — the ISO time the event behind this need happened (a PO sent, a
+   *  proposal opened, a draft written), where the rule has one. Provenance,
+   *  not a deadline: it orders an undated need by age (W3-R1's standingSince)
+   *  and is what a time word reads. */
+  at?: string;
   kind: NeedKind;
   text: string;
   /** Explicit, non-PII next-act copy printed on the whole-card folio footer.
@@ -933,12 +947,19 @@ interface NeedContext {
  *  early exit survives being cut into a list. */
 interface SealedNeed {
   sealed: true;
-  need: NeedLine | null;
+  need: UnkeyedNeed | null;
 }
 
-const seal = (need: NeedLine | null): SealedNeed => ({ sealed: true, need });
+/** A rule's line before `deriveNeeds` stamps its key. */
+type UnkeyedNeed = Omit<NeedLine, 'key'>;
 
-type NeedRule = (ctx: NeedContext) => NeedLine | SealedNeed | null;
+const seal = (need: UnkeyedNeed | null): SealedNeed => ({ sealed: true, need });
+
+type NeedRule = (ctx: NeedContext) => UnkeyedNeed | SealedNeed | null;
+
+/** N1 — the record a need is about, when the row has one. */
+const recordOf = (id: string | null | undefined): { recordId?: string } =>
+  id ? { recordId: id } : {};
 
 const needOverdueDecision: NeedRule = ({ row }) => {
   if (row.overdue_decision_count > 0) {
@@ -997,6 +1018,7 @@ const needOverdueInvoice: NeedRule = ({ receivable }) => {
       },
       dueOn: receivable.oldestDue,
       owner: 'client',
+      recordId: receivable.invoiceId,
     };
   }
   return null;
@@ -1009,6 +1031,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
     if (row.proposal_status === 'accepted') {
       return seal({
         kind: 'proposal_signed',
+        ...recordOf(row.proposal_id),
         text: 'Signed — open the project',
         actionLabel: NEED_ACTION_LABELS.proposal_signed,
         stamp: { label: 'SIGNED', ...STAMP.mocha },
@@ -1019,6 +1042,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
     if (row.proposal_status === 'declined') {
       return seal({
         kind: 'proposal_declined',
+        ...recordOf(row.proposal_id),
         text: 'Proposal declined — follow up',
         actionLabel: NEED_ACTION_LABELS.proposal_declined,
         stamp: { label: 'DECLINED', ...STAMP.terracotta },
@@ -1029,6 +1053,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
     if (row.proposal_status === 'expired') {
       return seal({
         kind: 'proposal_expired',
+        ...recordOf(row.proposal_id),
         text: 'Proposal expired — revise or follow up',
         actionLabel: NEED_ACTION_LABELS.proposal_expired,
         stamp: { label: 'EXPIRED', ...STAMP.terracotta },
@@ -1045,6 +1070,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
       const n = flagged.count;
       return seal({
         kind: 'lines_flagged',
+        ...recordOf(row.proposal_id ?? flagged.proposalId),
         text:
           n === 1
             ? `1 line flagged on ${flagged.docTitle}`
@@ -1070,6 +1096,8 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
           text: `Sent ${fmtDay(row.proposal_sent_at)} — not yet opened`,
           actionLabel: NEED_ACTION_LABELS.hesitating_proposal,
           stamp: { label: 'SENT', ...STAMP.dustyBlue },
+          ...recordOf(row.proposal_id),
+          at: row.proposal_sent_at,
           urgent: false,
           owner: 'client',
         });
@@ -1092,6 +1120,8 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
           text,
           actionLabel: NEED_ACTION_LABELS.hesitating_proposal,
           stamp: { label: 'VIEWED', ...STAMP.dustyBlue },
+          ...recordOf(row.proposal_id),
+          at: lastOpen,
           urgent: false,
           owner: 'client',
         });
@@ -1114,6 +1144,7 @@ const needLead: NeedRule = ({ row, now, ceremony }) => {
       const draftText = (ceremony.introText ?? '').trim();
       return seal({
         kind: 'ceremony_pending',
+        ...recordOf(row.lead_id),
         text: `Introduce yourself to ${firstName(row.client_name)}`,
         actionLabel: NEED_ACTION_LABELS.ceremony_pending,
         stamp: { label: 'CLAIMED · CEREMONY WAITING', ...STAMP.clay },
@@ -1137,6 +1168,7 @@ const needLead: NeedRule = ({ row, now, ceremony }) => {
       if (reconnectAt && new Date(reconnectAt).getTime() <= now.getTime()) {
         return seal({
           kind: 'reconnect_due',
+        ...recordOf(row.lead_id),
           text: `Reconnect — touchpoint due ${fmtDay(reconnectAt)}`,
           actionLabel: NEED_ACTION_LABELS.reconnect_due,
           stamp: { label: 'RECONNECT', ...STAMP.dustyBlue },
@@ -1170,6 +1202,7 @@ const needLead: NeedRule = ({ row, now, ceremony }) => {
             : `New lead — respond by ${fmtDay(deadline)}`;
     return seal({
       kind: 'new_lead',
+      ...recordOf(row.lead_id),
       text,
       actionLabel: NEED_ACTION_LABELS.new_lead,
       stamp: { label: 'NEW LEAD', ...STAMP.clay },
@@ -1214,6 +1247,7 @@ const needPaymentFailed: NeedRule = ({ row, payments }) => {
   if (!first) return null;
   return {
     kind: 'payment_failed',
+    recordId: first.poPaymentId,
     text:
       open.length > 1
         ? `${open.length} catalog payments didn't go through`
@@ -1246,6 +1280,7 @@ const needPaymentDue: NeedRule = ({ row, payments }) => {
   const due = first.dueDate ? ` due ${fmtDay(first.dueDate)}` : ' due';
   return {
     kind: 'payment_due',
+    recordId: first.poPaymentId,
     text:
       open.length > 1
         ? `${open.length} payments to makers due${first.dueDate ? ` — first ${fmtDay(first.dueDate)}` : ''}`
@@ -1286,6 +1321,7 @@ const needClaimWindow: NeedRule = ({ claimWindows, now }) => {
   const closed = calendarDaysTo(first.deadline, now) < 0;
   return {
     kind: 'claim_window',
+    recordId: first.purchaseOrderId,
     text:
       open.length > 1
         ? `${open.length} claim windows closing — first ${fmtDay(first.deadline)}`
@@ -1336,6 +1372,7 @@ const needExceptionOpen: NeedRule = ({ exceptions }) => {
   const label = EXCEPTION_NEED_LABEL[first.type]!;
   return {
     kind: 'exception_open',
+    recordId: first.id,
     text:
       open.length > 1
         ? `${open.length} exceptions open — first, ${label.toLowerCase()} on ${subject}`
@@ -1373,6 +1410,10 @@ const needHeldForRelease: NeedRule = ({ row, heldReleases }) => {
     text,
     actionLabel: 'Release',
     releaseHeld: true,
+    // Keyed on the held order, never the project: a held order and the
+    // drafted-unsent aggregate are two needs that share the `po_unsent` kind.
+    recordId: first.purchaseOrderId,
+    ...(first.heldAt ? { at: first.heldAt } : {}),
     stamp: { label: 'HELD', ...STAMP.clay },
     urgent: false,
     ...(row.project_id
@@ -1395,6 +1436,8 @@ const needDraftReview: NeedRule = ({ drafts }) => {
   const shape = DRAFT_NEED[first.kind]!;
   return {
     kind: shape.kind,
+    recordId: first.id,
+    at: first.created_at,
     text: open.length > 1 ? `${open.length} letters drafted — review and send` : shape.text,
     actionLabel: 'Review and send',
     stamp: { label: 'DRAFTED', ...STAMP.dustyBlue },
@@ -1416,6 +1459,7 @@ const needReturnBy: NeedRule = ({ returns, now }) => {
   if (!first) return null;
   return {
     kind: 'return_by',
+    recordId: first.purchaseId,
     text:
       open.length > 1
         ? `${open.length} returns closing — first ${fmtDay(first.returnBy)}`
@@ -1441,6 +1485,7 @@ const needQuoteExpiring: NeedRule = ({ quotes, now }) => {
   const ref = first.quoteRef?.trim() ? ` ${first.quoteRef.trim()}` : '';
   return {
     kind: 'quote_expiring',
+    recordId: first.quoteId,
     text:
       open.length > 1
         ? `${open.length} quotes to reconfirm — first good through ${fmtDay(first.validUntil)}`
@@ -1467,6 +1512,7 @@ const needMemoReturn: NeedRule = ({ samples, now }) => {
   const whose = first.vendorName ? `${kind} from ${first.vendorName}` : kind;
   return {
     kind: 'memo_return',
+    recordId: first.id,
     text:
       open.length > 1
         ? `${open.length} samples due back — first ${whose.toLowerCase()}, return by ${fmtDay(first.returnBy!)}`
@@ -1630,6 +1676,7 @@ const needPoUnsent: NeedRule = ({ row, now }) => {
             : `${n} POs drafted — not yet sent`,
         actionLabel: NEED_ACTION_LABELS.po_unsent,
         stamp: { label: 'UNSENT', ...STAMP.clay },
+        at: row.oldest_draft_po_created_at,
         urgent: false,
         owner: 'designer',
       };
@@ -1651,6 +1698,7 @@ const needPoUnacknowledged: NeedRule = ({ row, now }) => {
             : `${n} POs sent — no acknowledgment`,
         actionLabel: NEED_ACTION_LABELS.po_unacknowledged,
         stamp: { label: 'NO ACK', ...STAMP.dustyBlue },
+        at: row.oldest_unacked_sent_at,
         urgent: false,
         dueOn: row.oldest_unacked_sent_at,
         owner: 'maker',
@@ -1746,15 +1794,26 @@ export function deriveNeeds(
     heldReleases,
     samples,
   };
+  // N1 — one need, one line: a second rule restating a key already on the
+  // chain (the three schedule-conflict readings of one project) is dropped,
+  // and the first, higher-priority line stands.
+  const projectId = row.project_id ?? row.engagement_id;
   const needs: NeedLine[] = [];
+  const seen = new Set<NeedKey>();
+  const push = (need: UnkeyedNeed) => {
+    const key = needKeyOf(need, projectId);
+    if (seen.has(key)) return;
+    seen.add(key);
+    needs.push({ ...need, key });
+  };
   for (const rule of NEED_RULES) {
     const result = rule(ctx);
     if (result === null) continue;
     if ('sealed' in result) {
-      if (result.need) needs.push(result.need);
+      if (result.need) push(result.need);
       break;
     }
-    needs.push(result);
+    push(result);
   }
   return needs;
 }

@@ -153,6 +153,8 @@ export function deskLeadNeed<N extends NeedLine>(needs: readonly N[], now: Date)
       urgent: need.urgent,
       dueOn: need.dueOn ?? null,
       owner: need.owner,
+      // N2 — an undated need ranks by age, as the band ranks it.
+      at: need.at ?? null,
     })),
     now,
   );

@@ -379,4 +379,89 @@ describe('StandingSheet · one voice (US-19 FR2)', () => {
     );
     expect(behind).toHaveLength(voice.standingCount);
   });
+
+  it('US-25 fix-now 5 — Holloway: the money group holds the invoice alone, PO-HD-0412 stands once, setup under its own heading', () => {
+    const { voice } = deriveLensBand({
+      spreadKind: 'project',
+      ticket: [
+        {
+          key: 'money',
+          label: 'Money',
+          value: '$3,800 owed you, 19 days',
+          emphasis: null,
+          door: { kind: 'none' },
+          exception: { rank: 'promise-past-due', phrase: '$3,800 owed you', standingSince: '2026-09-18' },
+        },
+        {
+          key: 'pieces',
+          label: 'Pieces',
+          value: '4 ordered · PO-HD-0412 unanswered, 9 days',
+          emphasis: null,
+          door: { kind: 'none' },
+          exception: { rank: 'piece-stuck', phrase: 'PO-HD-0412 unanswered, 9 days', standingSince: '2026-09-28' },
+        },
+      ],
+      needs: [
+        {
+          key: 'inv-0',
+          kind: 'overdue_invoice',
+          text: 'INV-2026-0721 · $3,800 overdue — oldest due 18 Sep — send a reminder',
+          actionLabel: 'Send a reminder',
+          onAct: jest.fn(),
+          urgent: false,
+          dueOn: '2026-09-18',
+          owner: 'client',
+        },
+        {
+          key: 'po-0',
+          kind: 'po_unacknowledged',
+          text: 'PO-HD-0412 sent — no acknowledgment',
+          actionLabel: 'Follow up with the maker',
+          onAct: jest.fn(),
+          urgent: false,
+          dueOn: '2026-09-28',
+          owner: 'maker',
+        },
+      ],
+      guide: null,
+      tier: 'full',
+      now: new Date('2026-10-07T12:00:00'),
+      household: 'Mei Holloway',
+      jobName: 'Holloway Residence',
+      stageWord: 'Project',
+      stageIndex: null,
+      installDate: null,
+      moneyFigure: null,
+      proposalInvestment: null,
+      sentDate: null,
+      ownAct: null,
+      landOn: jest.fn(),
+      setup: [
+        { kind: 'no_client_linked', onAct: jest.fn() },
+        { kind: 'target_date_unset', onAct: jest.fn() },
+        { kind: 'budget_band_unset', onAct: jest.fn() },
+      ],
+    });
+    render(
+      <StandingSheet
+        open
+        onClose={jest.fn()}
+        items={voice.standing}
+        inputs={voice.inputs}
+        setup={voice.setup}
+        grouped
+        count={voice.standingCount}
+        nextKey={voice.next?.rowKey ?? null}
+      />,
+    );
+    const group = (key: string) => document.querySelector(`[data-standing-group="${key}"]`) as HTMLElement;
+    const money = within(group('money')).getAllByRole('listitem');
+    expect(money).toHaveLength(1);
+    expect(money[0]).toHaveTextContent('INV-2026-0721');
+    expect(screen.getAllByText(/\$3,800/)).toHaveLength(1);
+    expect(screen.getAllByText(/PO-HD-0412/)).toHaveLength(1);
+    expect(within(group('needs-you')).getByText(/PO-HD-0412/)).toBeInTheDocument();
+    expect(within(group('setup')).getAllByRole('listitem')).toHaveLength(voice.setup.length);
+    expect(within(group('setup')).getByText('SETUP')).toBeInTheDocument();
+  });
 });

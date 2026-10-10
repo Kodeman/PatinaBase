@@ -92,6 +92,10 @@ export type LensNeedOwner = NeedLine['owner'];
  *  carries it (D8 custody). */
 export interface LensNeedRow extends RedLetterRow {
   owner?: LensNeedOwner;
+  /** N1 — when the event behind the need happened (`NeedLine.at`), where the
+   *  caller hands it over. An undated need ranks by it as a ticket exception
+   *  ranks by its `standingSince`. */
+  at?: string | null;
   /** FR5 F5-2 — the procurement draft the need carries (`NeedLine.draft`, the
    *  same drafts the Desk reads), where the caller hands it over. A held maker
    *  note renames the line's act `Open the held draft`; FR7 F7-1 — and the
@@ -787,6 +791,7 @@ export function rankStanding(
 ): LensStandingItem[] {
   const items: { item: LensStandingItem; tieBreak: number }[] = [];
   const seen = new Set<string>();
+  const restated = restatedNeeds(needs);
 
   const compose = (
     parts: Omit<LensStandingItem, 'sense' | 'distance' | 'short'>,
@@ -831,7 +836,7 @@ export function rankStanding(
         tier: NEED_TIER[need.kind],
         days: statedDays(need.text),
         deadline: need.dueOn ?? null,
-        standingSince: null,
+        standingSince: need.at ?? null,
         namesMoney: need.kind === 'overdue_invoice',
         needKind: need.kind,
         owner: need.owner,
@@ -854,6 +859,7 @@ export function rankStanding(
     if (!exception) return;
     const fingerprint = normalise(exception.phrase);
     if (seen.has(fingerprint)) return;
+    if (restatesNeed(`ticket:${row.key}`, exception.phrase, restated)) return;
     seen.add(fingerprint);
     items.push({
       // A ticket exception carries no NeedKind, so it has no desk rank; it
@@ -892,6 +898,45 @@ export function rankStanding(
       return a.order - b.order;
     })
     .map((entry) => entry.item);
+}
+
+/**
+ * US-25 fix-now 5 — the ticket's exceptions say in their own words what a
+ * standing need may already say: `PO-HD-0412 unanswered, 9 days` is the
+ * `PO-HD-0412 sent — no acknowledgment` silence, `$3,800 owed you` is the
+ * overdue `$3,800` invoice. Different sentences, so the fingerprint misses
+ * them; the PO code and the figure are what make them one thing. These are
+ * the needs a ticket row could restate, as `kind:token`. A held draft is a
+ * letter about the need, never the need, so it restates nothing.
+ */
+function restatedNeeds(needs: readonly LensNeedRow[]): Set<string> {
+  const tokens = new Set<string>();
+  for (const need of needs) {
+    if (need.draft) continue;
+    const token =
+      need.kind === 'po_unacknowledged'
+        ? CODE_TOKEN.exec(need.text)?.[0]
+        : need.kind === 'overdue_invoice'
+          ? MONEY_TOKEN.exec(need.text)?.[0]
+          : undefined;
+    if (token) tokens.add(`${need.kind}:${token}`);
+  }
+  return tokens;
+}
+
+/** Whether a ticket row's exception is a standing need said again — the
+ *  need's copy wins, because it is the one holding an act. An aggregate
+ *  (`2 purchase orders unanswered`) names no one PO, so it stands. */
+function restatesNeed(key: string, phrase: string, restated: ReadonlySet<string>): boolean {
+  const kind = standingRowOf(key, phrase)?.kind;
+  const token =
+    kind === 'po_silence'
+      ? CODE_TOKEN.exec(phrase)?.[0]
+      : kind === 'owed'
+        ? MONEY_TOKEN.exec(phrase)?.[0]
+        : undefined;
+  if (!token) return false;
+  return restated.has(`${kind === 'owed' ? 'overdue_invoice' : 'po_unacknowledged'}:${token}`);
 }
 
 /**

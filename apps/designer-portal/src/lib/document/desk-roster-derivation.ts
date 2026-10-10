@@ -29,6 +29,7 @@ import { STAGE_WORD, householdDisplayName, ownAct, type OwnActFacts } from './ac
 import { dayMonth, legalDate, parseSourceDate } from './dates';
 import { voiceFirstName } from './document-guide';
 import { classOfNeed, deskLeadNeed } from './need-class';
+import { rankByNext } from './desk-need-list';
 import {
   deriveOverdue,
   overdueElapsedPhrase,
@@ -148,8 +149,11 @@ export interface RosterLine {
   needText?: string | null;
   /** D6 — the custody word. Always written. */
   custody: string;
-  /** The need's own owner, for D3's ranking. Null where there is no need. */
+  /** The need's own owner (D6 custody). Null where there is no need. */
   needOwner: 'designer' | 'client' | 'maker' | null;
+  /** N1 — when the event behind the need happened (NeedLine.at), so the
+   *  claim cards rank an undated need by age, as the band does. */
+  needAt?: string | null;
   /** D8 — the ledger's value column, in the house's year-aware idiom
    *  (`12 August`, or `12 August 2025` once the year is not this one —
    *  dates.ts's rule): the need's own date where the line has a need, else
@@ -548,6 +552,7 @@ export function deriveDeskRoster(
         needText,
         custody: custodyWord(need, row),
         needOwner: need?.owner ?? null,
+        needAt: need?.at ?? null,
         // The need's own date first — a deadline outranks a provenance stamp.
         valueText:
           ledgerValueDate(need?.dueOn ?? null, now) ??
@@ -777,14 +782,11 @@ export function deriveDeskDayLine(
  * reads the same fact the margin does rather than deriving a second one.
  * ─────────────────────────────────────────────────────────────────────────── */
 
-export type ClaimBand = 0 | 1 | 2 | 3;
-
 export interface ClaimCard {
   line: RosterLine;
   stage: SectionKey;
   stageLabel: string;
   custody: string;
-  band: ClaimBand;
 }
 
 export interface ClaimPersonGroup {
@@ -806,13 +808,6 @@ export interface DeskClaims {
   heading: string;
   restHeading: string;
   dayLine: DeskDayLine | null;
-}
-
-function claimBand(line: RosterLine): ClaimBand {
-  if (line.needOwner === 'maker') return 3;
-  if (line.needOwner === 'client') return 2;
-  // 'designer', and the D6 default for a need whose rule stated no owner.
-  return line.overdue.isOverdue ? 0 : 1;
 }
 
 function restHeadingFor(count: number): string {
@@ -845,7 +840,6 @@ export function deriveDeskClaims(input: DeskClaimsInput): DeskClaims {
           stage: line.stage,
           stageLabel: STAGE_LABEL[line.stage],
           custody: line.custody,
-          band: claimBand(line),
         });
       } else {
         rest.push(line);
@@ -856,25 +850,32 @@ export function deriveDeskClaims(input: DeskClaimsInput): DeskClaims {
     }
   }
 
-  // Band, then oldest need date, then name. Two undated cards give
-  // +Infinity − +Infinity = NaN, which is falsy, so `||` falls through to the
-  // name — deliberate, and pinned by test. An undated card sorts BEHIND a
-  // dated one, because +Infinity − finite is +Infinity.
-  cards.sort(
-    (a, b) =>
-      a.band - b.band ||
-      anchorTime(a.line.dueOn) - anchorTime(b.line.dueOn) ||
-      a.line.name.localeCompare(b.line.name),
-  );
+  // N2 — the cards stand in the band's Next order of the need each leads
+  // with (class, deadline, age — `rankByNext`), never a second ranking by
+  // owner. Ties keep the name order they are handed in.
+  const byName = [...cards].sort((a, b) => a.line.name.localeCompare(b.line.name));
+  const ordered = [
+    ...rankByNext(
+      byName.filter((card) => card.line.needKind !== null),
+      ({ line }) => ({
+        kind: line.needKind!,
+        text: line.needText ?? '',
+        dueOn: line.dueOn ?? null,
+        at: line.needAt ?? null,
+      }),
+      now,
+    ),
+    ...byName.filter((card) => card.line.needKind === null),
+  ];
 
   const restCount = ledger.reduce((total, group) => total + group.count, 0);
 
   return {
-    cards,
+    cards: ordered,
     ledger,
     heading: roster.heading,
     restHeading: restHeadingFor(restCount),
-    dayLine: deriveDeskDayLine(cards, roster, answeredNotes, now),
+    dayLine: deriveDeskDayLine(ordered, roster, answeredNotes, now),
   };
 }
 

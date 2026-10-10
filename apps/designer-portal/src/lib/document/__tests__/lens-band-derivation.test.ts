@@ -1943,6 +1943,73 @@ describe('deriveLensBand · FR3: every row carries its act (F3-8, 512-6)', () =>
   });
 });
 
+// US-25 fix-now 5 (R2-07) — Holloway's sheet printed PO-HD-0412 twice and the
+// $3,800 twice: once as the need, once as the ticket's own clause.
+describe('rankStanding · fix-now 5: a ticket row that restates a need prints once', () => {
+  const INVOICE = {
+    ...need(
+      'inv-0',
+      'overdue_invoice',
+      'INV-2026-0721 · $3,800 overdue — oldest due 12 Aug — send a reminder',
+      'Send a reminder',
+      '2026-08-12',
+    ),
+    owner: 'client' as const,
+  };
+  const SILENCE_0412 = {
+    ...need('po-0', 'po_unacknowledged', 'PO-HD-0412 sent — no acknowledgment', 'Follow up with the maker'),
+    owner: 'maker' as const,
+  };
+  const PIECES = ticketRow('pieces', {
+    rank: 'piece-stuck',
+    phrase: 'PO-HD-0412 unanswered, 9 days',
+    standingSince: '2026-08-20',
+  });
+  const MONEY = (phrase: string) =>
+    ticketRow('money', { rank: 'promise-past-due', phrase, standingSince: '2026-08-12' });
+
+  it('Holloway: the invoice is Next, PO-HD-0412 stands once, and the $3,800 is not said again', () => {
+    const { voice, standing } = deriveLensBand(
+      input({
+        now: NOW,
+        ownAct: null,
+        landOn: jest.fn(),
+        needs: [INVOICE, SILENCE_0412],
+        ticket: [PIECES, MONEY('$3,800 owed you')],
+      }),
+    );
+    expect(standing.map((item) => item.key)).toEqual(['need:inv-0', 'need:po-0']);
+    expect(voice.next?.rowKey).toBe('need:inv-0');
+    // Next's own row leads the sheet, uncounted; nothing else says it again.
+    expect(voice.standing.map((item) => item.key)).toEqual(['need:inv-0', 'need:po-0']);
+    expect(voice.standingCount).toBe(1);
+    expect(voice.standing.filter((item) => item.sentence.includes('PO-HD-0412'))).toHaveLength(1);
+  });
+
+  it('keeps an owed clause whose figure is not the invoice’s', () => {
+    const ranked = rankStanding([MONEY('$5,200 owed you')], [INVOICE], NOW);
+    expect(ranked.map((item) => item.key).sort()).toEqual(['need:inv-0', 'ticket:money']);
+  });
+
+  it('a held draft about the PO is a letter, not the silence — the ticket row stands', () => {
+    const note = {
+      ...need('draft-0', 'po_unacknowledged', 'PO-HD-0412 follow-up drafted', 'Review and send'),
+      draft: { kind: 'maker_follow_up', status: 'awaiting_review', ffeItemId: null, poNumber: 'PO-HD-0412', studioPoNumber: null },
+    } as LensNeedRow;
+    const ranked = rankStanding([PIECES], [note], NOW);
+    expect(ranked.map((item) => item.key)).toContain('ticket:pieces');
+  });
+
+  it('an undated need ranks by when it began, as a ticket exception does', () => {
+    const older = { ...SILENCE_0412, key: 'po-old', text: 'PO-HD-0398 sent — no acknowledgment', at: '2026-08-10T09:00:00Z' };
+    const newer = { ...SILENCE_0412, key: 'po-new', at: '2026-08-24T09:00:00Z' };
+    expect(rankStanding([], [newer, older], NOW).map((item) => item.key)).toEqual([
+      'need:po-old',
+      'need:po-new',
+    ]);
+  });
+});
+
 describe('deriveLensBand · FR3: one need, one row (F3-9, 512-7)', () => {
   const PO_NEED = {
     ...need('po-0', 'po_unacknowledged', 'NA-2026-077 sent — no acknowledgment', 'Follow up with the maker'),

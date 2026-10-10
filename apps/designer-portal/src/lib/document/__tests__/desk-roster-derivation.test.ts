@@ -585,9 +585,9 @@ describe('deriveDeskDayLine — the answered client note (D7’s fourth line)', 
       {
         live: [a, b, c, claimed],
         folders: [
-          folder(a, need({ owner: 'designer' })),
-          folder(b, need({ owner: 'designer' })),
-          folder(c, need({ owner: 'designer' })),
+          folder(a, need({ owner: 'designer', dueOn: '2026-09-01' })),
+          folder(b, need({ owner: 'designer', dueOn: '2026-09-01' })),
+          folder(c, need({ owner: 'designer', dueOn: '2026-09-01' })),
           folder(claimed, need({ owner: 'maker' })),
         ],
       },
@@ -1244,7 +1244,7 @@ describe('D5 · a claim takes a card, a quiet job takes a line', () => {
   });
 });
 
-describe('D3 · the cards rank by band, then oldest, then name', () => {
+describe('N2 · the cards rank by the band’s Next order, then name', () => {
   function claimsOf(over: Partial<DeskRosterInput> = {}) {
     return deriveDeskClaims({
       roster: deriveDeskRoster(input(over), NOW),
@@ -1253,31 +1253,59 @@ describe('D3 · the cards rank by band, then oldest, then name', () => {
     });
   }
 
-  it('bands designer+overdue, designer, client, maker — in that order', () => {
-    const late = row('z-late', 'project', { title: 'Z overdue' });
-    const mine = row('m-mine', 'project', { title: 'M owned' });
-    const theirs = row('client-held', 'project', { title: 'Client held' });
-    const maker = row('maker-held', 'project', { title: 'Maker held' });
+  it('ranks class, then deadline, then age — never by whose hand the need is in', () => {
+    // claimBand put the designer's own lines first and the maker's last. The
+    // band's order puts the client's overdue invoice (class 1) first, and a
+    // maker silence 12 days old above an undated Pulse and the setup chore
+    // the designer holds (class 3).
+    const setup = row('a-setup', 'project', { title: 'A setup' });
+    const pulse = row('b-pulse', 'project', { title: 'B pulse' });
+    const maker = row('c-maker', 'project', { title: 'C maker silence' });
+    const late = row('d-late', 'project', { title: 'D overdue task' });
+    const invoice = row('e-invoice', 'project', { title: 'E invoice' });
     const result = claimsOf({
-      live: [maker, theirs, mine, late],
+      live: [setup, pulse, maker, late, invoice],
       folders: [
-        folder(maker, need({ owner: 'maker' })),
-        folder(theirs, need({ owner: 'client' })),
-        folder(mine, need({ owner: 'designer' })),
+        folder(setup, need({ kind: 'schedule_unconfigured', owner: 'designer' })),
+        folder(pulse, need({ kind: 'pulse_due', owner: 'designer' })),
+        folder(
+          maker,
+          need({
+            kind: 'po_unacknowledged',
+            owner: 'maker',
+            text: 'PO-HD-0412 sent — no acknowledgment',
+            dueOn: '2026-08-13T10:00:00Z',
+            at: '2026-08-13T10:00:00Z',
+          }),
+        ),
         folder(late, need({ owner: 'designer', dueOn: '2026-08-01' })),
+        folder(invoice, need({ kind: 'overdue_invoice', owner: 'client', dueOn: '2026-08-15' })),
       ],
     });
 
-    expect(result.cards.map((c) => c.band)).toEqual([0, 1, 2, 3]);
     expect(result.cards.map((c) => c.line.engagementId)).toEqual([
-      'z-late',
-      'm-mine',
-      'client-held',
-      'maker-held',
+      'e-invoice',
+      'd-late',
+      'c-maker',
+      'b-pulse',
+      'a-setup',
     ]);
   });
 
-  it('puts the oldest need date first inside a band', () => {
+  it('puts the older of two silences first', () => {
+    const fresh = row('a-fresh', 'project', { title: 'A fresh' });
+    const stale = row('b-stale', 'project', { title: 'B stale' });
+    const silence = (at: string) =>
+      need({ kind: 'po_unacknowledged', owner: 'maker', text: 'A purchase order sent — no acknowledgment', dueOn: at, at });
+    const result = claimsOf({
+      live: [fresh, stale],
+      folders: [folder(fresh, silence('2026-08-21')), folder(stale, silence('2026-08-13'))],
+    });
+
+    expect(result.cards.map((c) => c.line.engagementId)).toEqual(['b-stale', 'a-fresh']);
+  });
+
+  it('puts the nearer deadline first inside a class', () => {
     const soon = row('m-soon', 'project', { title: 'M soon' });
     const older = row('a-older', 'project', { title: 'A older' });
     const result = claimsOf({
@@ -1312,12 +1340,9 @@ describe('D3 · the cards rank by band, then oldest, then name', () => {
     ]);
   });
 
-  it('orders two UNDATED same-band cards by name', () => {
-    // Both dueOn are absent, so both anchor times are +Infinity and the date
-    // comparison yields NaN, not 0. NaN is falsy, so `||` falls through to the
-    // name comparison — the behaviour this test pins, because a subtraction
-    // that returns NaN silently is exactly the kind of thing a refactor
-    // "simplifies" into a broken sort.
+  it('orders two UNDATED same-class cards by name', () => {
+    // Both read `none` with no age, so the comparator ties and the name order
+    // the cards were handed in stands.
     const zed = row('aaa', 'project', { title: 'Zeta house' });
     const ash = row('zzz', 'project', { title: 'Ash house' });
     const result = claimsOf({
@@ -1334,7 +1359,7 @@ describe('D3 · the cards rank by band, then oldest, then name', () => {
     ]);
   });
 
-  it('sorts a dated card ahead of an undated one in the same band', () => {
+  it('sorts a dated card ahead of an undated one in the same class', () => {
     const dated = row('dated', 'project', { title: 'Zeta house' });
     const undated = row('undated', 'project', { title: 'Ash house' });
     const result = claimsOf({
