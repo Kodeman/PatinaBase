@@ -97,6 +97,9 @@ function line(id: string, name: string, scopeRoomId: string | null, position: nu
 
 jest.mock('@patina/supabase', () => ({
   useInstallWindow: () => ({ data: null, isSuccess: true }),
+  useProjectLeads: () => ({ data: new Map() }),
+  useNeedStates: () => ({ data: new Map() }),
+  useSetNeedState: () => ({ mutate: jest.fn() }),
   /* B1 — the job ticket's own reads. The ticket is mounted by every
      project-kind document now, so every suite that renders one pays for
      these; none of them is this suite's subject. */

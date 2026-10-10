@@ -1,18 +1,18 @@
 /**
- * The hire-handoff margin note (L8, 00561): the owner's optional line,
- * written on the invite, rendered once on the new hire's Desk as
- * `MarginNote noteKey="hire-handoff"` — "From {owner first name}: {note}".
- * Reads the signed-in member's OWN organization_members row for the note,
- * and resolves the owner's first name against that row's `invited_by`
- * within the same studioMembers roster. Behind `onboarding-teammate-persona`
- * (W2) — flag off (or loading) must never render it.
+ * The hire's hand-off on the Desk (US-25 fix-now 16, N4). The invite note
+ * (00560/00561) no longer prints once as a Desk margin line; it lives on the
+ * job it is about until read. The Desk lists each unread hand-off — a job the
+ * signed-in seat now leads that someone else led before — linking to that job.
  *
- * Everything else the Desk mounts is stubbed — this file is about the one
- * note's gating and inputs, not the Desk's composition.
+ * Everything else the Desk mounts is stubbed — this file is about the hand-off
+ * list's gating and wording, not the Desk's composition.
  */
 import { render, screen } from '@testing-library/react';
 
 let mockTeammatePersonaFlag = { value: true, isLoading: false };
+const mockLeads = jest.fn();
+const mockNeedStates = jest.fn();
+const mockLive = jest.fn();
 const mockOrgs = jest.fn();
 const mockMembers = jest.fn();
 const mockProjects = jest.fn();
@@ -23,8 +23,8 @@ jest.mock('@patina/supabase', () => ({
   useProfile: () => ({ data: { display_name: 'Leah Warner' } }),
   useOrganizations: () => ({ data: mockOrgs() }),
   useOrganizationMembers: () => ({ data: mockMembers() }),
-  useProjectLeads: () => ({ data: [] }),
-  useNeedStates: () => ({ data: [] }),
+  useProjectLeads: () => ({ data: mockLeads() }),
+  useNeedStates: () => ({ data: mockNeedStates() }),
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
   useRecentBoards: (...args: unknown[]) => mockRecentBoards(...args),
@@ -38,7 +38,7 @@ jest.mock('@patina/supabase', () => ({
 
 jest.mock('@/hooks/use-desk-engagements', () => ({
   useDeskEngagements: () => ({
-    data: { folders: [], chips: [], live: [] },
+    data: { folders: [], chips: [], live: mockLive() },
     isLoading: false,
     isError: false,
     refetch: jest.fn(),
@@ -166,6 +166,16 @@ const HIRE_NO_NOTE = {
   handoff_note: null,
 };
 
+const HANDED_OFF = new Map([
+  ['project-olsen', {
+    leadUserId: 'hire-1',
+    leadName: 'Jamie Rivera',
+    previousLeadUserId: 'owner-1',
+    previousLeadName: 'Leah',
+    assignedAt: '2026-10-05T15:00:00.000Z',
+  }],
+]);
+
 beforeEach(() => {
   // Each test is a fresh Desk visit for the arbiter.
   resetDeskVisit();
@@ -175,38 +185,44 @@ beforeEach(() => {
   mockProjects.mockReturnValue([]);
   mockContacts.mockReturnValue([]);
   mockRecentBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
+  mockLeads.mockReturnValue(HANDED_OFF);
+  mockNeedStates.mockReturnValue(new Map());
+  mockLive.mockReturnValue([
+    { engagement_id: 'eng-olsen', project_id: 'project-olsen', title: 'Olsen Lake House' },
+  ]);
 });
 
-describe('Desk — hire-handoff margin note (L8)', () => {
-  it('renders "From {owner first name}: {note}" for a hire whose own row carries a note', () => {
+describe('Desk — the hire\'s hand-off', () => {
+  it('no longer prints the invite note as a Desk margin line', () => {
     render(<DeskPage />);
-    const note = screen.getByTestId('margin-note-hire-handoff');
-    expect(note).toHaveTextContent(
-      "From Leah: start with the Olsen lake house — the brief's written",
-    );
+    expect(screen.queryByTestId('margin-note-hire-handoff')).not.toBeInTheDocument();
   });
 
-  it('renders nothing when the signed-in member has no handoff note', () => {
+  it('lists an unread hand-off that links to the job and names the note', () => {
+    render(<DeskPage />);
+    const link = screen.getByRole('link', { name: /Leah handed you Olsen Lake House/ });
+    expect(link).toHaveAttribute('href', '/doc/project-olsen');
+    expect(link).toHaveTextContent("Read Leah's note");
+  });
+
+  it('does not promise a note when the hire\'s invite carried none', () => {
     mockMembers.mockReturnValue([OWNER, HIRE_NO_NOTE]);
     render(<DeskPage />);
-    expect(
-      screen.queryByTestId('margin-note-hire-handoff'),
-    ).not.toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /Leah handed you Olsen Lake House/ });
+    expect(link).not.toHaveTextContent('note');
   });
 
-  it('renders nothing behind the flag when off', () => {
-    mockTeammatePersonaFlag = { value: false, isLoading: false };
+  it('drops the hand-off once it is marked read', () => {
+    mockNeedStates.mockReturnValue(
+      new Map([['handoff:project-olsen', { actedAt: '2026-10-06T12:00:00.000Z' }]]),
+    );
     render(<DeskPage />);
-    expect(
-      screen.queryByTestId('margin-note-hire-handoff'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Unread hand-offs' })).not.toBeInTheDocument();
   });
 
-  it('renders nothing while the flag is still loading', () => {
-    mockTeammatePersonaFlag = { value: false, isLoading: true };
+  it('lists nothing for a seat that leads no handed-off job', () => {
+    mockLeads.mockReturnValue(new Map());
     render(<DeskPage />);
-    expect(
-      screen.queryByTestId('margin-note-hire-handoff'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Unread hand-offs' })).not.toBeInTheDocument();
   });
 });

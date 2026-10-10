@@ -68,6 +68,9 @@ describe('Desk scope and custody', () => {
     expect(unread).toHaveLength(1);
     expect(unread[0].need.text).toMatch(/Nina Park handed you Oak House/);
     expect(unread[0].need.actionLabel).toBe('Read the note');
+    const noNote = deriveHandoffNeeds(live, handoffLeads, 'u-me', new Map(), false);
+    expect(noNote[0].need.text).not.toMatch(/note/);
+    expect(noNote[0].need.actionLabel).toBe('Open the job');
     expect(deriveHandoffNeeds(
       live,
       handoffLeads,

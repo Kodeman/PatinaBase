@@ -55,6 +55,7 @@ export function deriveHandoffNeeds(
   leads: DeskLeads,
   meUserId: string | null | undefined,
   states: ReadonlyMap<string, NeedState> = new Map(),
+  hasNote = true,
 ): DeskNeed[] {
   if (!meUserId) return [];
   const rowsByProject = new Map(
@@ -80,8 +81,10 @@ export function deriveHandoffNeeds(
     const need: NeedLine = {
       key,
       kind: 'handoff',
-      text: `${previous} handed you ${row.title} on ${date} · Read ${previous}'s note`,
-      actionLabel: 'Read the note',
+      text: hasNote
+        ? `${previous} handed you ${row.title} on ${date} · Read ${previous}'s note`
+        : `${previous} handed you ${row.title} on ${date}`,
+      actionLabel: hasNote ? 'Read the note' : 'Open the job',
       stamp: { label: 'HAND-OFF', color: 'var(--color-dusty-blue)' },
       urgent: false,
       owner: 'designer',

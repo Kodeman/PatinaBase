@@ -215,6 +215,9 @@ jest.mock('@patina/supabase', () => ({
   // SQ-520 own-act lines and SQ-523 held-Pieces lines; each test fills one.
   useProjectFFEItems: () => ({ data: [...mockOwnActFfeItems, ...mockProjectFfeItems] }),
   useInstallWindow: () => ({ data: null, isSuccess: true }),
+  useProjectLeads: () => ({ data: new Map() }),
+  useNeedStates: () => ({ data: new Map() }),
+  useSetNeedState: () => ({ mutate: jest.fn() }),
   useProjectContextualHandoffs: () => mockContextualHandoffsQuery,
   useProjectParties: () => ({ data: [] }),
   useCoordinationItems: () => ({ data: [] }),

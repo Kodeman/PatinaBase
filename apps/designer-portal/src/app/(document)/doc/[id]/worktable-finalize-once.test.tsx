@@ -55,6 +55,9 @@ const ITEMS = [
 
 jest.mock('@patina/supabase', () => ({
   useInstallWindow: () => ({ data: null, isSuccess: true }),
+  useProjectLeads: () => ({ data: new Map() }),
+  useNeedStates: () => ({ data: new Map() }),
+  useSetNeedState: () => ({ mutate: jest.fn() }),
   /* B2 — the ticket now stands on the proposal spread too, and its Money row
      runs the ladder against an empty read. */
   computeArAging: jest.requireActual('@patina/supabase').computeArAging,

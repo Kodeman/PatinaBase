@@ -1044,7 +1044,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       handoffLead?.previousLeadUserId &&
       handoffLead?.previousLeadName &&
       handoffLead?.assignedAt &&
-      handoffNote &&
       !handoffRead,
   );
 
@@ -3536,7 +3535,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               }
             }}
           >
-            From {handoffLead?.previousLeadName}: {handoffNote}
+            {handoffNote
+              ? `From ${handoffLead?.previousLeadName}: ${handoffNote}`
+              : `${handoffLead?.previousLeadName} handed you this job.`}
           </MarginNote>
         )}
         {row.engagement_kind === 'project' && row.project_id && <ClientNoteComposer projectId={row.project_id} clientFirstName={row.client_name?.split(' ')[0]} />}

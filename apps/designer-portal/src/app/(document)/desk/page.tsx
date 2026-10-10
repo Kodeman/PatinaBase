@@ -211,12 +211,16 @@ export default function DeskPage() {
   // space — larger, and earlier in the composition — rather than sitting as
   // bottom front matter. Only known once the read resolves.
   const deskEmpty = !!data && roster.liveCount === 0;
+  const myHandoffNote = studioMembers
+    ?.find((m) => m.user_id === user?.id)
+    ?.handoff_note?.trim();
   const handoffNeeds = useMemo(() => {
     const handoffs = deriveHandoffNeeds(
       data?.live ?? [],
       projectLeads ?? new Map(),
       user?.id,
       needStates,
+      Boolean(myHandoffNote),
     );
     return deriveDeskNeedList(
       {
@@ -227,7 +231,7 @@ export default function DeskPage() {
       new Date(),
       handoffs,
     ).filter((entry) => entry.need.kind === 'handoff');
-  }, [data, projectLeads, user?.id, needStates]);
+  }, [data, projectLeads, user?.id, needStates, myHandoffNote]);
 
   // The Desk arbiter (return-teaching §2): these four lines keep their own
   // conditions, and at most one of them, or the teaching note, renders per
