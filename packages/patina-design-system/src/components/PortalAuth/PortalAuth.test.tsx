@@ -38,7 +38,7 @@ describe('Portal auth components', () => {
     expect(content).not.toContain('Use a QR code')
     expect(screen.getByRole('heading', { name: 'Start with your email.' })).toBeInTheDocument()
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Email sign-in code' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Email sign-in code' })).toBeEnabled()
     expect(content.indexOf('Email sign-in code')).toBeLessThan(content.indexOf('Continue with Apple'))
     expect(content.indexOf('Continue with Apple')).toBeLessThan(content.indexOf('Use a password instead'))
     expect(screen.queryByText('Continue with Google')).not.toBeInTheDocument()
