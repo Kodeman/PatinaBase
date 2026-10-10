@@ -13,7 +13,12 @@
 import type { NeedState } from '@patina/supabase';
 import type { DeskNeed } from './desk-need-list';
 import { classOfNeed } from './need-class';
-import { scopeDeskNeeds, type DeskLeads, type DeskScope } from './desk-scope';
+import {
+  scopeDeskNeeds,
+  type DeskDesigners,
+  type DeskLeads,
+  type DeskScope,
+} from './desk-scope';
 
 /** Q1 — the sheet's hard cap. */
 export const DAY_SHEET_LINES = 5;
@@ -49,6 +54,8 @@ export interface DaySheetInput {
   leads: DeskLeads;
   meUserId: string | null | undefined;
   scope: DeskScope;
+  /** Who carries each job no one leads yet (`deskDesignersOf(live)`). */
+  designers?: DeskDesigners;
   unreadFeeds: readonly string[];
   now: Date;
 }
@@ -84,7 +91,13 @@ function waitingWho(entry: DeskNeed, state: NeedState): string {
 
 export function deriveDaySheet(input: DaySheetInput): DaySheet {
   const today = localDay(input.now);
-  const scoped = scopeDeskNeeds([...input.needs], input.leads, input.meUserId, input.scope);
+  const scoped = scopeDeskNeeds(
+    [...input.needs],
+    input.leads,
+    input.meUserId,
+    input.scope,
+    input.designers,
+  );
   const candidates: DeskNeed[] = [];
   const waitingOn: DaySheetWaiting[] = [];
   const setAside: DaySheetSetAside[] = [];

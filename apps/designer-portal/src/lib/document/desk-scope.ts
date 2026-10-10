@@ -14,16 +14,47 @@ type CustodyNeed = NeedLine & {
   clientName?: string | null;
 };
 
-/** Keep all studio needs, or only needs on jobs whose current lead is this seat. */
+/** The engagement's `designer_id`, by the project id the leads map is keyed
+ *  on (`project_id ?? engagement_id`) — who carries a job no one leads yet. */
+export type DeskDesigners = ReadonlyMap<string, string | null>;
+
+export function deskDesignersOf(live: readonly DocumentStateRow[]): DeskDesigners {
+  return new Map(
+    live.map((row) => [row.project_id ?? row.engagement_id, row.designer_id ?? null] as const),
+  );
+}
+
+/**
+ * Mine: a job this seat leads. A job with no lead row — every inquiry before
+ * it is a project, and any project never handed a lead — is Mine when its
+ * designer is this seat, or when it has no designer at all: a false "Nothing
+ * needs you" is worse than a spare line. A job the read knows nothing of is
+ * not Mine.
+ */
+export function isMyJob(
+  projectId: string,
+  leads: DeskLeads,
+  meUserId: string | null | undefined,
+  designers: DeskDesigners = new Map(),
+): boolean {
+  if (!meUserId) return false;
+  const lead = leads.get(projectId);
+  if (lead) return lead.leadUserId === meUserId;
+  if (!designers.has(projectId)) return false;
+  const designer = designers.get(projectId);
+  return !designer || designer === meUserId;
+}
+
+/** Keep all studio needs, or only needs on jobs that are Mine (`isMyJob`). */
 export function scopeDeskNeeds(
   needs: DeskNeed[],
   leads: DeskLeads,
   meUserId: string | null | undefined,
   scope: DeskScope,
+  designers?: DeskDesigners,
 ): DeskNeed[] {
   if (scope === 'studio') return needs;
-  if (!meUserId) return [];
-  return needs.filter((entry) => leads.get(entry.projectId)?.leadUserId === meUserId);
+  return needs.filter((entry) => isMyJob(entry.projectId, leads, meUserId, designers));
 }
 
 function firstName(name: string | null | undefined): string | null {

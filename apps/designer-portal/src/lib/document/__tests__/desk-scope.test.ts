@@ -33,6 +33,34 @@ describe('Desk scope and custody', () => {
     expect(scopeDeskNeeds([mine], leads, null, 'mine')).toEqual([]);
   });
 
+  describe('a job no one leads yet (no lead_designer row)', () => {
+    const inquiry = deskNeed('eng-inquiry', 'designer', { kind: 'new_lead' });
+    const hers = deskNeed('eng-hers', 'designer');
+    const nobodys = deskNeed('eng-nobody', 'designer');
+    const designers = new Map<string, string | null>([
+      ['eng-inquiry', 'u-me'],
+      ['eng-hers', 'u-other'],
+      ['eng-nobody', null],
+    ]);
+
+    it('a leadless inquiry whose designer is me is Mine', () => {
+      expect(scopeDeskNeeds([inquiry], leads, 'u-me', 'mine', designers)).toEqual([inquiry]);
+    });
+
+    it('a leadless job whose designer is someone else is not', () => {
+      expect(scopeDeskNeeds([hers], leads, 'u-me', 'mine', designers)).toEqual([]);
+    });
+
+    it('a leadless job with no designer at all stays on Mine', () => {
+      expect(scopeDeskNeeds([nobodys], leads, 'u-me', 'mine', designers)).toEqual([nobodys]);
+    });
+
+    it('a lead row still decides over the designer', () => {
+      const led = new Map<string, string | null>([['theirs', 'u-me']]);
+      expect(scopeDeskNeeds([deskNeed('theirs', 'designer')], leads, 'u-me', 'mine', led)).toEqual([]);
+    });
+  });
+
   it.each([
     [deskNeed('mine', 'designer'), 'mine', 'Action with you'],
     [deskNeed('theirs', 'designer'), 'theirs', 'With Nina'],

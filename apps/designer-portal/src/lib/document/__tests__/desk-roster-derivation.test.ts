@@ -8,24 +8,18 @@ import type {
   SectionKey,
 } from '@/lib/document/desk-derivation';
 import {
-  CLAIMS_ANCHOR_ID,
   custodyWord,
   deriveDeskClaims,
   deriveDeskRoster,
   deriveRosterPeople,
-  facetHeading,
-  filterRosterToNeeds,
-  groupClaimsByPerson,
   groupRosterByPerson,
   motionAnchorDate,
-  NOTHING_NEEDS_YOU,
   OPEN_THE_JOB,
   ROSTER_STAGE_ORDER,
   rosterLineNeedsAHand,
   sentProposalReasonLine,
   sentProposalSignedLine,
   sentProposalStandingLine,
-  type AnsweredClientNote,
   type DeskRosterInput,
   type RosterMember,
 } from '@/lib/document/desk-roster-derivation';
@@ -475,265 +469,6 @@ describe('deriveDeskRoster — eleven jobs', () => {
   });
 });
 
-describe('deriveDeskDayLine — the day’s line quotes the grid (D7)', () => {
-  function claimsOf(over: Partial<DeskRosterInput> = {}, notes: AnsweredClientNote[] = []) {
-    return deriveDeskClaims({
-      roster: deriveDeskRoster(input(over), NOW),
-      answeredNotes: notes,
-      now: NOW,
-    });
-  }
-
-  it('names the first three cards, in the grid’s own rank order', () => {
-    const late = row('late', 'project', { title: 'Vandersteen residence' });
-    const mine = row('mine', 'project', { title: 'Cedar Lane study' });
-    const theirs = row('theirs', 'proposal', { title: 'Halvorsen loft' });
-    const fourth = row('fourth', 'care', { title: 'Osterberg cottage' });
-    const result = claimsOf({
-      live: [late, mine, theirs, fourth],
-      folders: [
-        folder(late, need({ owner: 'designer', dueOn: '2026-08-01' })),
-        folder(mine, need({ owner: 'designer', text: 'Two rooms await your mark-up' })),
-        folder(theirs, need({ owner: 'client', text: 'Opened, not signed' })),
-        folder(fourth, need({ owner: 'maker', text: 'The maker has not acknowledged' })),
-      ],
-    });
-
-    expect(result.dayLine!.lines.map((l) => l.key)).toEqual([
-      'card-late',
-      'card-mine',
-      'card-theirs',
-    ]);
-    expect(result.dayLine!.lines[0].parts[0]).toEqual({
-      kind: 'job',
-      text: 'Vandersteen residence',
-      engagementId: 'late',
-    });
-  });
-
-  it('prints the overdue clause in the red letter’s own part kind', () => {
-    const late = row('late', 'project');
-    const result = claimsOf({
-      live: [late],
-      folders: [folder(late, need({ owner: 'designer', dueOn: '2026-08-01' }))],
-    });
-    const clause = result.dayLine!.lines[0].parts.find((p) => p.kind === 'overdue');
-
-    expect(clause).toBeDefined();
-    expect(clause!.text).toContain('overdue');
-  });
-
-  it('says the card’s own reason when nothing is overdue', () => {
-    const mine = row('mine', 'project');
-    const result = claimsOf({
-      live: [mine],
-      folders: [folder(mine, need({ owner: 'designer', text: 'Two rooms await your mark-up' }))],
-    });
-
-    expect(result.dayLine!.lines[0].parts[1]).toEqual({
-      kind: 'text',
-      text: ' — Two rooms await your mark-up',
-    });
-  });
-
-  it('counts the cards it could not name, and points at the grid', () => {
-    const live = ['a', 'b', 'c', 'd', 'e'].map((id) => row(id, 'project'));
-    const result = claimsOf({
-      live,
-      folders: live.map((r) => folder(r, need({ owner: 'designer' }))),
-    });
-
-    expect(result.dayLine!.lines).toHaveLength(3);
-    expect(result.dayLine!.more).toEqual({ count: 2, anchorId: CLAIMS_ANCHOR_ID });
-  });
-
-  it('has no more-link when every card is named', () => {
-    const live = ['a', 'b'].map((id) => row(id, 'project'));
-    const result = claimsOf({
-      live,
-      folders: live.map((r) => folder(r, need({ owner: 'designer' }))),
-    });
-
-    expect(result.dayLine!.more).toBeNull();
-  });
-
-  it('says nothing at all when nothing claims her hand', () => {
-    // A "nothing needs you" banner over sixteen live jobs is a second queue.
-    expect(claimsOf({ live: [row('a', 'project')] }).dayLine).toBeNull();
-  });
-});
-
-describe('deriveDeskDayLine — the answered client note (D7’s fourth line)', () => {
-  function claimsOf(over: Partial<DeskRosterInput> = {}, notes: AnsweredClientNote[] = []) {
-    return deriveDeskClaims({
-      roster: deriveDeskRoster(input(over), NOW),
-      answeredNotes: notes,
-      now: NOW,
-    });
-  }
-
-  it('speaks for a job that has a CARD, below the three the line names', () => {
-    const a = row('a', 'project', { title: 'Alder house' });
-    const b = row('b', 'project', { title: 'Birch house' });
-    const c = row('c', 'project', { title: 'Cedar house' });
-    const claimed = row('claimed', 'project', {
-      title: 'Byrne remodel',
-      client_name: 'Erin Byrne',
-      project_id: 'p-byrne',
-    });
-    const result = claimsOf(
-      {
-        live: [a, b, c, claimed],
-        folders: [
-          folder(a, need({ owner: 'designer', dueOn: '2026-09-01' })),
-          folder(b, need({ owner: 'designer', dueOn: '2026-09-01' })),
-          folder(c, need({ owner: 'designer', dueOn: '2026-09-01' })),
-          folder(claimed, need({ owner: 'maker' })),
-        ],
-      },
-      [{ projectId: 'p-byrne', answeredAt: '2026-08-25T06:00:00Z' }],
-    );
-
-    expect(result.dayLine!.lines.map((l) => l.key)).toEqual([
-      'card-a',
-      'card-b',
-      'card-c',
-      'answered',
-    ]);
-    expect(result.dayLine!.lines[3].parts).toEqual([
-      { kind: 'text', text: 'Erin Byrne replied last night — ' },
-      { kind: 'job', text: 'Byrne remodel', engagementId: 'claimed' },
-    ]);
-  });
-
-  it('never counts a card the note already named among “N more below”', () => {
-    // Four cards, three quoted by rank and the fourth spoken by the note —
-    // so nothing is left unnamed, and the more-link must not offer to show
-    // the reader the job it has just finished telling them about.
-    const a = row('a', 'project');
-    const b = row('b', 'project');
-    const c = row('c', 'project');
-    const claimed = row('claimed', 'project', {
-      client_name: 'Erin Byrne',
-      project_id: 'p-byrne',
-    });
-    const result = claimsOf(
-      {
-        live: [a, b, c, claimed],
-        folders: [
-          folder(a, need({ owner: 'designer' })),
-          folder(b, need({ owner: 'designer' })),
-          folder(c, need({ owner: 'designer' })),
-          folder(claimed, need({ owner: 'maker' })),
-        ],
-      },
-      [{ projectId: 'p-byrne', answeredAt: '2026-08-25T06:00:00Z' }],
-    );
-
-    expect(result.cards).toHaveLength(4);
-    expect(result.dayLine!.lines.map((l) => l.key)).toEqual([
-      'card-a',
-      'card-b',
-      'card-c',
-      'answered',
-    ]);
-    expect(result.dayLine!.more).toBeNull();
-  });
-
-  it('still counts the cards no line named at all', () => {
-    const live = ['a', 'b', 'c', 'd'].map((id) => row(id, 'project'));
-    const quiet = row('quiet', 'care', {
-      client_name: 'Nora Ellison',
-      project_id: 'p-nora',
-    });
-    const result = claimsOf(
-      {
-        live: [...live, quiet],
-        folders: live.map((r) => folder(r, need({ owner: 'designer' }))),
-      },
-      [{ projectId: 'p-nora', answeredAt: '2026-08-25T06:00:00Z' }],
-    );
-
-    // The note spoke for a LEDGER row, so it took nothing off the card count.
-    expect(result.dayLine!.more).toEqual({ count: 1, anchorId: CLAIMS_ANCHOR_ID });
-  });
-
-  it('speaks for a QUIET job that is only a ledger row', () => {
-    // The client answering is news whether or not the job claims her hand;
-    // searching only the cards would have silently dropped this line.
-    const quiet = row('quiet', 'care', {
-      title: 'Osterberg cottage',
-      client_name: 'Nora Ellison',
-      project_id: 'p-nora',
-    });
-    const result = claimsOf({ live: [quiet] }, [
-      { projectId: 'p-nora', answeredAt: '2026-08-25T06:00:00Z' },
-    ]);
-
-    expect(result.cards).toEqual([]);
-    expect(result.dayLine!.lines.map((l) => l.key)).toEqual(['answered']);
-    expect(result.dayLine!.lines[0].parts).toEqual([
-      { kind: 'text', text: 'Nora Ellison replied last night — ' },
-      { kind: 'job', text: 'Osterberg cottage', engagementId: 'quiet' },
-    ]);
-  });
-
-  it('never quotes one job twice — a named card takes the note’s slot', () => {
-    const claimed = row('claimed', 'project', {
-      title: 'Byrne remodel',
-      client_name: 'Erin Byrne',
-      project_id: 'p-byrne',
-    });
-    const other = row('other', 'care', {
-      title: 'Osterberg cottage',
-      client_name: 'Nora Ellison',
-      project_id: 'p-nora',
-    });
-    const result = claimsOf(
-      {
-        live: [claimed, other],
-        folders: [folder(claimed, need({ owner: 'designer' }))],
-      },
-      [
-        { projectId: 'p-byrne', answeredAt: '2026-08-25T07:00:00Z' },
-        { projectId: 'p-nora', answeredAt: '2026-08-25T06:00:00Z' },
-      ],
-    );
-
-    // p-byrne is newest, but its job is already quoted as card-claimed, so the
-    // note falls to the next unquoted job rather than naming Byrne twice.
-    expect(result.dayLine!.lines.map((l) => l.engagementId)).toEqual([
-      'claimed',
-      'other',
-    ]);
-  });
-
-  it('drops a note older than the window', () => {
-    const quiet = row('quiet', 'care', {
-      client_name: 'Nora Ellison',
-      project_id: 'p-nora',
-    });
-    const result = claimsOf({ live: [quiet] }, [
-      { projectId: 'p-nora', answeredAt: '2026-08-20T06:00:00Z' },
-    ]);
-
-    expect(result.dayLine).toBeNull();
-  });
-
-  it('cannot say the line without a client name', () => {
-    // The roster refuses a role noun standing in for a name, and so does this.
-    const quiet = row('quiet', 'care', {
-      client_name: 'Client User',
-      project_id: 'p-nora',
-    });
-    const result = claimsOf({ live: [quiet] }, [
-      { projectId: 'p-nora', answeredAt: '2026-08-25T06:00:00Z' },
-    ]);
-
-    expect(result.dayLine).toBeNull();
-  });
-});
-
 describe('the roster line carries its stage and its designer', () => {
   it('writes the job’s own section and designer_id onto the line', () => {
     const r = deriveDeskRoster(
@@ -753,54 +488,6 @@ describe('the roster line carries its stage and its designer', () => {
       ['b', 'brief', null],
       ['a', 'install', 'user-anneke'],
     ]);
-  });
-});
-
-describe('rosterLineNeedsAHand / filterRosterToNeeds (IA-11)', () => {
-  function marked() {
-    return deriveDeskRoster(
-      input({
-        live: [row('needy', 'project'), row('quiet', 'project')],
-        folders: [folder(row('needy', 'project'))],
-      }),
-      NOW,
-    );
-  }
-
-  it('counts every marked row as needing a hand, quiet marks included', () => {
-    const [needy, quiet] = marked().groups[0].lines;
-    expect(needy.mark).not.toBeNull();
-    expect(rosterLineNeedsAHand(needy)).toBe(true);
-    expect(quiet.mark).toBeNull();
-    expect(rosterLineNeedsAHand(quiet)).toBe(false);
-  });
-
-  it('keeps only the marked rows and recounts the group', () => {
-    const filtered = filterRosterToNeeds(marked().groups);
-
-    expect(filtered).toHaveLength(1);
-    expect(filtered[0].count).toBe(1);
-    expect(filtered[0].lines.map((l) => l.engagementId)).toEqual(['needy']);
-  });
-
-  it('drops a group left with nothing in it', () => {
-    const r = deriveDeskRoster(
-      input({
-        live: [row('a', 'project'), row('b', 'install')],
-        folders: [folder(row('a', 'project'))],
-      }),
-      NOW,
-    );
-
-    expect(r.groups.map((g) => g.key)).toEqual(['project', 'install']);
-    expect(filterRosterToNeeds(r.groups).map((g) => g.key)).toEqual([
-      'project',
-    ]);
-  });
-
-  it('returns nothing at all when nothing is marked', () => {
-    const r = deriveDeskRoster(input({ live: [row('a', 'project')] }), NOW);
-    expect(filterRosterToNeeds(r.groups)).toEqual([]);
   });
 });
 
@@ -939,32 +626,6 @@ describe('groupRosterByPerson (IA-12)', () => {
     const groups = groupRosterByPerson(r.groups, PEOPLE);
 
     expect(groups.reduce((n, g) => n + g.count, 0)).toBe(r.liveCount);
-  });
-});
-
-describe('facetHeading (IA-11 / IA-12)', () => {
-  const HEAD = 'Every job · 16 live · 1 overdue';
-
-  it('says nothing extra with no facet on', () => {
-    expect(facetHeading(HEAD, { needsMe: false, byPerson: false })).toBe(HEAD);
-  });
-
-  it('names each facet, and both together, in words', () => {
-    expect(facetHeading(HEAD, { needsMe: true, byPerson: false })).toBe(
-      `${HEAD} · showing what needs you`,
-    );
-    expect(facetHeading(HEAD, { needsMe: false, byPerson: true })).toBe(
-      `${HEAD} · by person`,
-    );
-    expect(facetHeading(HEAD, { needsMe: true, byPerson: true })).toBe(
-      `${HEAD} · showing what needs you · by person`,
-    );
-  });
-});
-
-describe('the empty facet sentence', () => {
-  it('is a sentence, not an empty list', () => {
-    expect(NOTHING_NEEDS_YOU).toBe('No current action alerts.');
   });
 });
 
@@ -1178,7 +839,6 @@ describe('D5 · a claim takes a card, a quiet job takes a line', () => {
   function claimsOf(over: Partial<DeskRosterInput> = {}) {
     return deriveDeskClaims({
       roster: deriveDeskRoster(input(over), NOW),
-      answeredNotes: [],
       now: NOW,
     });
   }
@@ -1201,22 +861,6 @@ describe('D5 · a claim takes a card, a quiet job takes a line', () => {
   it('drops a stage group the split emptied', () => {
     const claimed = row('claimed', 'project');
     expect(claimsOf({ live: [claimed], folders: [folder(claimed)] }).ledger).toEqual([]);
-  });
-
-  it('agrees with filterRosterToNeeds, which is the same predicate', () => {
-    const claimed = row('claimed', 'project');
-    const quiet = row('quiet', 'project');
-    const roster = deriveDeskRoster(
-      input({ live: [claimed, quiet], folders: [folder(claimed)] }),
-      NOW,
-    );
-    const result = deriveDeskClaims({ roster, answeredNotes: [], now: NOW });
-
-    expect(result.cards.map((c) => c.line.engagementId)).toEqual(
-      filterRosterToNeeds(roster.groups).flatMap((g) =>
-        g.lines.map((l) => l.engagementId),
-      ),
-    );
   });
 
   it('keeps the roster’s own heading, and counts the ledger head', () => {
@@ -1248,7 +892,6 @@ describe('N2 · the cards rank by the band’s Next order, then name', () => {
   function claimsOf(over: Partial<DeskRosterInput> = {}) {
     return deriveDeskClaims({
       roster: deriveDeskRoster(input(over), NOW),
-      answeredNotes: [],
       now: NOW,
     });
   }
@@ -1383,62 +1026,6 @@ describe('N2 · the cards rank by the band’s Next order, then name', () => {
     expect(result.cards[0].stage).toBe('project');
     expect(result.cards[0].stageLabel).toBe('Project');
     expect(result.cards[0].custody).toBe('Action with you');
-  });
-});
-
-describe('IA-12 · By person regroups the card half too', () => {
-  const PEOPLE = deriveRosterPeople([
-    {
-      user_id: 'user-leah',
-      role: 'owner',
-      status: 'active',
-      profiles: { full_name: 'Leah Hartwell', display_name: null },
-    },
-    {
-      user_id: 'user-anneke',
-      role: 'member',
-      status: 'active',
-      profiles: { full_name: 'Anneke Sund', display_name: null },
-    },
-  ]);
-
-  function cardsOf(over: Partial<DeskRosterInput> = {}) {
-    return deriveDeskClaims({
-      roster: deriveDeskRoster(input(over), NOW),
-      answeredNotes: [],
-      now: NOW,
-    }).cards;
-  }
-
-  it('groups the cards by designerId, principal first', () => {
-    const mine = row('mine', 'project', { designer_id: 'user-leah' });
-    const hers = row('hers', 'project', { designer_id: 'user-anneke' });
-    const grouped = groupClaimsByPerson(
-      cardsOf({ live: [mine, hers], folders: [folder(mine), folder(hers)] }),
-      PEOPLE,
-    );
-
-    expect(grouped.map((g) => [g.label, g.count])).toEqual([
-      ['Leah Hartwell', 1],
-      ['Anneke Sund', 1],
-    ]);
-    expect(grouped[0].cards[0].line.engagementId).toBe('mine');
-  });
-
-  it('groups an unassigned card under the principal, never dropping it', () => {
-    const orphan = row('orphan', 'project', { designer_id: null });
-    const grouped = groupClaimsByPerson(
-      cardsOf({ live: [orphan], folders: [folder(orphan)] }),
-      PEOPLE,
-    );
-
-    expect(grouped).toHaveLength(1);
-    expect(grouped[0].count).toBe(1);
-  });
-
-  it('returns nothing to group when the studio has no named people', () => {
-    const mine = row('mine', 'project');
-    expect(groupClaimsByPerson(cardsOf({ live: [mine], folders: [folder(mine)] }), [])).toEqual([]);
   });
 });
 
@@ -1881,7 +1468,7 @@ describe('fix-now 6 — at rest only when every modelled feed answered', () => {
     expect(q.state).not.toContain('no current alert');
     // A job with a need keeps its need.
     expect(lines.find((l) => l.engagementId === 'b')!.notChecked).toBeNull();
-    expect(deriveDeskClaims({ roster, answeredNotes: [], now: NOW }).restHeading).toBe('Not checked · 1 job');
+    expect(deriveDeskClaims({ roster, now: NOW }).restHeading).toBe('Not checked · 1 job');
   });
 
   it('every feed answered (absent or empty) is the one state that may print at rest', () => {
@@ -1919,7 +1506,7 @@ describe('N6 — lead cards stand in the order they wrote in', () => {
       }),
       NOW,
     );
-    const { cards } = deriveDeskClaims({ roster, answeredNotes: [], now: NOW });
+    const { cards } = deriveDeskClaims({ roster, now: NOW });
     expect(cards.map((c) => c.line.engagementId)).toEqual(['z', 'a']);
   });
 });

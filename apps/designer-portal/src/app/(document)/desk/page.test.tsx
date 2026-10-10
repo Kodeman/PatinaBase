@@ -1,17 +1,11 @@
 /**
- * The Desk's studio-setup whisper (U7) and the count behind it.
+ * The Desk's composition: the Day Sheet over the line roster (US-25 slice 4),
+ * the setup whisper gone to the Account sheet's checklist, the header acts,
+ * and the US-14 arrival marks on the route root.
  *
- * The whisper is a live derivation — `owner && openCount >= 2` — over the same
- * `deriveSetupSteps` the Account sheet's Studio page renders as a checklist.
- * The Desk was calling it WITHOUT `contactsCount` / `seedSkipped`, so the
- * rolodex row read permanently open here: the whisper ran one step ahead of
- * the checklist it sends you to, and could never fall silent on a studio whose
- * only remaining step was the rolodex. This spec pins the two counts together.
- *
- * Everything the Desk renders besides the whisper is stubbed — this file is
- * about one derivation's inputs, not the Desk's composition.
+ * Everything the Desk mounts besides those is stubbed.
  */
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 
 const mockOrgs = jest.fn();
 const mockMembers = jest.fn();
@@ -23,7 +17,6 @@ const mockContacts = jest.fn();
 const mockRecentBoards = jest.fn();
 /** US-14 — the read after the roster that is still pending, if any. */
 let mockPendingRead:
-  | 'answered'
   | 'rollup'
   | 'boards'
   | 'studio'
@@ -46,6 +39,7 @@ jest.mock('@patina/supabase', () => ({
         : { data: mockMembers(), isLoading: false, isPending: false },
   useProjectLeads: () => ({ data: new Map() }),
   useNeedStates: () => ({ data: new Map() }),
+  useSetNeedState: () => ({ mutate: jest.fn(), isPending: false }),
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
   useRecentBoards: (...args: unknown[]) =>
@@ -86,15 +80,6 @@ jest.mock('@/hooks/use-desk-engagements', () => ({
 
 jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'me', name: 'Leah' } }),
-}));
-
-// The roster's day's line reads project_notes; this suite mounts no
-// QueryClient, so the read is stubbed like every other Desk feed here.
-jest.mock('@/hooks/use-answered-notes', () => ({
-  useAnsweredNotes: () =>
-    mockPendingRead === 'answered'
-      ? { data: undefined, isPending: true }
-      : { data: [], isPending: false },
 }));
 
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
@@ -210,56 +195,45 @@ beforeEach(() => {
   mockRecentBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
 });
 
-/** A crew member who has already accepted and opened a document — both the
- *  crew-invited and first-hire-opened rows read done off this one row, so
- *  the "falls silent" cases below isolate the rolodex step they're actually
- *  testing. */
-const HIRE_ARRIVED = {
-  user_id: 'hire-1',
-  status: 'active',
-  first_document_opened_at: '2026-01-05T00:00:00Z',
-};
-
-describe('Desk — the studio setup whisper counts the rolodex', () => {
-  it('falls silent once the rolodex is seeded and one step is left', () => {
-    mockMembers.mockReturnValue([
-      { user_id: 'me', job_title: 'Principal' },
-      HIRE_ARRIVED,
-    ]);
-    mockContacts.mockReturnValue([{ id: 'c-1' }, { id: 'c-2' }]);
+describe('Desk — the setup whisper left for the Account sheet (US-25 slice 4)', () => {
+  it('never whispers on the Desk, even at an owner whose studio is not set up', () => {
     render(<DeskPage />);
     expect(screen.queryByText(WHISPER)).not.toBeInTheDocument();
   });
 
-  it('falls silent once the owner skipped the seed review', () => {
-    mockMembers.mockReturnValue([
-      { user_id: 'me', job_title: 'Principal' },
-      HIRE_ARRIVED,
-    ]);
-    mockOrgs.mockReturnValue([
-      studio({ rolodex_seed_skipped_at: '2026-08-01T00:00:00Z' }),
-    ]);
-    render(<DeskPage />);
-    expect(screen.queryByText(WHISPER)).not.toBeInTheDocument();
-  });
-
-  it('still whispers while the rolodex is genuinely un-seeded', () => {
-    render(<DeskPage />);
-    expect(screen.getByText(WHISPER)).toBeInTheDocument();
-  });
-
-  it('reads the rolodex for the studio, with no flag in the way', () => {
-    // The `call-sheet` flag is retired (rulings §6): the rolodex step reads
-    // real data for every studio, on this surface and on the Studio page both.
-    mockContacts.mockReturnValue([{ id: 'c-1' }]);
-    render(<DeskPage />);
-    expect(mockContacts).toHaveBeenCalledWith('org-1');
-  });
-
-  it('never whispers at a member — they cannot act on the checklist', () => {
+  it('never whispers at a member either', () => {
     mockOrgs.mockReturnValue([studio({ membership: { role: 'member' } })]);
     render(<DeskPage />);
     expect(screen.queryByText(WHISPER)).not.toBeInTheDocument();
+  });
+});
+
+describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
+  it('says nothing needs her, once, when every feed answered and no job needs her', () => {
+    render(<DeskPage />);
+    expect(screen.getByTestId('day-sheet')).toBeInTheDocument();
+    expect(screen.getAllByText('Nothing needs you tonight.')).toHaveLength(1);
+  });
+
+  it('never says nothing needs her while a feed is unread (fix-now 6)', () => {
+    mockDeskRead = {
+      ...settledDeskRead(),
+      data: { folders: [], chips: [], live: [], unreadFeeds: ['purchase orders'] },
+    };
+    render(<DeskPage />);
+    expect(screen.queryByText('Nothing needs you tonight.')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('day-sheet')).getByText('Not checked: purchase orders.')).toBeInTheDocument();
+  });
+
+  it('opens on Mine and holds the scope per person', () => {
+    render(<DeskPage />);
+    const mine = screen.getByRole('button', { name: 'Mine' });
+    const studioScope = screen.getByRole('button', { name: 'The studio’s' });
+    expect(mine).toHaveAttribute('aria-pressed', 'true');
+    act(() => studioScope.click());
+    expect(studioScope).toHaveAttribute('aria-pressed', 'true');
+    expect(window.localStorage.getItem('patina.desk.scope.me')).toBe('studio');
+    window.localStorage.removeItem('patina.desk.scope.me');
   });
 });
 
@@ -280,12 +254,11 @@ describe('Desk — header acts print their sub-labels (F24)', () => {
 });
 
 describe('Desk — the roster is the Desk’s one population (B2-L2)', () => {
-  it('prints the stage-grouped roster', () => {
+  it('prints the line roster under the Day Sheet', () => {
     render(<DeskPage />);
     expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
-    expect(
-      screen.getByText('Every job · 0 live · 0 overdue'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Every job')).toBeInTheDocument();
+    expect(screen.queryByText(/\d+ live/)).not.toBeInTheDocument();
   });
 
   it('no longer prints the four-up folio grid or The studio today', () => {
@@ -351,7 +324,6 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
   });
 
   it.each([
-    ['the answered notes', 'answered'],
     ['the boards rollup', 'rollup'],
     ['the recent boards', 'boards'],
     ['the viewer studio', 'studio'],
@@ -412,7 +384,7 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     afterEach(() => act(() => setArrivalWaiting(null)));
 
     it('not ready: no route root, the skeleton marked held, and no roster until ready', () => {
-      mockPendingRead = 'answered';
+      mockPendingRead = 'rollup';
       armWait();
       const { container, rerender } = render(<DeskPage />);
       expect(main(container).hasAttribute('data-arrival')).toBe(false);

@@ -36,7 +36,11 @@ import {
 } from '@/lib/document/desk-roster-derivation';
 import { useDeskLineState } from '@/components/document/desk-arbiter';
 import { deriveDeskNeedList } from '@/lib/document/desk-need-list';
-import { deriveHandoffNeeds, type DeskScope } from '@/lib/document/desk-scope';
+import {
+  deriveHandoffNeeds,
+  deskDesignersOf,
+  type DeskScope,
+} from '@/lib/document/desk-scope';
 import { WEEKDAY_FORMAT, dayMonth } from '@/lib/document/dates';
 import { DeskContents } from '@/components/document/desk-contents';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
@@ -254,6 +258,7 @@ export default function DeskPage() {
       leads: projectLeads ?? new Map(),
       meUserId: user?.id,
       scope: deskScope,
+      designers: deskDesignersOf(data?.live ?? []),
       unreadFeeds: data?.unreadFeeds ?? [],
       now: at,
     });

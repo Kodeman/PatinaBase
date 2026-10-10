@@ -48,7 +48,7 @@ async function expectCardThroughDwell(page: Page, reads: ReadWatch): Promise<voi
   expect(held, `the card through the dwell: ${JSON.stringify(await arrivalEndedEvents(page))}`).toBe(true);
 }
 
-/** The top claim card's one act (desk-claim-card.tsx `data-part="act"`). */
+/** The Day Sheet's top line's act (day-sheet.tsx `data-part="act"`, US-25 slice 4). */
 const ACT_SELECTOR = '[data-arrival="desk"] [data-part~="act"]';
 
 test.describe('Desk plays', () => {

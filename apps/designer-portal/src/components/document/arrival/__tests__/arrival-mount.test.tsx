@@ -4,7 +4,7 @@
  * on the Desk after its ready mark.
  */
 import { fireEvent, render, waitFor } from '@testing-library/react';
-import { DeskClaimCard } from '@/components/document/desk-claim-card';
+import { DeskLedgerRow } from '@/components/document/desk-ledger-row';
 import { gate } from '@/lib/arrival/gate';
 import { createRun, engine } from '@/lib/arrival/engine';
 import { S } from '@/lib/arrival/plan';
@@ -19,7 +19,7 @@ import {
   makeHost,
   place,
 } from '@/lib/arrival/__tests__/dom-harness.test';
-import type { ClaimCard, RosterLine } from '@/lib/document/desk-roster-derivation';
+import type { RosterLine } from '@/lib/document/desk-roster-derivation';
 import {
   afterArrival,
   ArrivalMount,
@@ -699,47 +699,41 @@ describe('the click token', () => {
   });
 });
 
-describe('R-DM21 A — the Desk act on the real claim card', () => {
-  function claim(over: Partial<RosterLine> = {}): ClaimCard {
+describe('R-DM21 A — the Desk act on the real roster line', () => {
+  function rosterLine(over: Partial<RosterLine> = {}): RosterLine {
     return {
+      engagementId: 'e1',
+      name: 'Whitfield House',
       stage: 'project',
-      stageLabel: 'Project',
-      custody: 'Your pen',
-      band: 0,
-      line: {
-        engagementId: 'e1',
-        name: 'Whitfield House',
-        stage: 'project',
-        designerId: null,
-        state: 'Leah Whitfield · Procurement And Orders',
-        personLine: 'Leah Whitfield · Procurement And Orders',
-        overdueText: null,
-        mark: 'quiet',
-        needKind: 'overdue_decision',
-        overdue: { isOverdue: false, days: 0 },
-        jobHref: '/doc/e1',
-        act: { label: 'Review decisions', href: '/doc/e1' },
-        client: 'Leah Whitfield',
-        custody: 'Your pen',
-        needOwner: 'designer',
-        dueOn: null,
-        valueText: null,
-        needText: 'Two selections are waiting on Leah',
-        motionText: null,
-        projectId: 'p1',
-        ...over,
-      } as RosterLine,
-    };
+      designerId: null,
+      state: 'Leah Whitfield · Procurement And Orders',
+      personLine: 'Leah Whitfield · Procurement And Orders',
+      overdueText: null,
+      mark: 'quiet',
+      needKind: 'overdue_decision',
+      overdue: { isOverdue: false, days: 0 },
+      jobHref: '/doc/e1',
+      act: { label: 'Review decisions', href: '/doc/e1' },
+      client: 'Leah Whitfield',
+      custody: 'Action with you',
+      needOwner: 'designer',
+      dueOn: null,
+      valueText: null,
+      needText: 'Two selections are waiting on Leah',
+      motionText: null,
+      projectId: 'p1',
+      ...over,
+    } as RosterLine;
   }
 
-  function clickAct(card: ClaimCard) {
+  function clickAct(line: RosterLine) {
     const { container } = render(
       <ul>
-        <DeskClaimCard card={card} tone="project" index={0} settle={false} />
+        <DeskLedgerRow line={line} />
       </ul>,
     );
     render(<ArrivalMount />);
-    fireEvent.click(container.querySelector('[data-part~="act"]')!, { detail: 1 });
+    fireEvent.click(container.querySelector('[data-ledger-cell="act"] a')!, { detail: 1 });
   }
 
   function gateFor(pathname: string) {
@@ -752,7 +746,7 @@ describe('R-DM21 A — the Desk act on the real claim card', () => {
   }
 
   it('writes a token with the landing, and the gate declines token: straight to the record', () => {
-    clickAct(claim());
+    clickAct(rosterLine());
     expect(token()).toEqual({
       via: 'act',
       to: '/doc/e1',
@@ -763,15 +757,15 @@ describe('R-DM21 A — the Desk act on the real claim card', () => {
   });
 
   it('a purchase order lands on the FF&E region', () => {
-    clickAct(claim({ needKind: 'po_unsent', act: { label: 'Review the purchase order', href: '/doc/e1' } }));
+    clickAct(rosterLine({ needKind: 'po_unsent', act: { label: 'Review the purchase order', href: '/doc/e1' } }));
     expect(token()).toMatchObject({ via: 'act', landing: { kind: 'region', region: 'ffe' } });
     expect(gateFor('/doc/e1')).toEqual({ play: false, cause: 'token' });
   });
 
-  it('the name link on the same card writes no landing, and the Document plays', () => {
+  it('the name link on the same line writes no landing, and the Document plays', () => {
     render(
       <ul>
-        <DeskClaimCard card={claim()} tone="project" index={0} settle={false} />
+        <DeskLedgerRow line={rosterLine()} />
       </ul>,
     );
     render(<ArrivalMount />);

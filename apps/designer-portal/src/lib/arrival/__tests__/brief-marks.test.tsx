@@ -6,19 +6,16 @@
  */
 
 import { render } from '@testing-library/react';
-import type {
-  AnsweredClientNote,
-  ClaimCard,
-  DeskRoster as DeskRosterModel,
-} from '@/lib/document/desk-roster-derivation';
+import type { NeedLine } from '@/lib/document/desk-derivation';
+import type { DeskNeed } from '@/lib/document/desk-need-list';
+import { deriveDaySheet } from '@/lib/document/day-sheet';
 import {
   deriveLensBand,
   type LensBandInput,
 } from '@/lib/document/lens-band-derivation';
 import type { RedLetterRow } from '@/components/document/red-letter-zone';
 import type { SpineSection } from '@/lib/document/section-derivation';
-import { DeskClaimCard } from '@/components/document/desk-claim-card';
-import { DeskRoster } from '@/components/document/desk-roster';
+import { DaySheet } from '@/components/document/day-sheet';
 import { LensBand } from '@/components/document/lens-band';
 import { DocLetterhead } from '@/components/document/doc-letterhead';
 import { DocSpine } from '@/components/document/doc-spine';
@@ -31,14 +28,10 @@ jest.mock('@/components/document/command-bar', () => ({
   openLedger: jest.fn(),
 }));
 
-const mockAnsweredNotes = jest.fn(() => [] as AnsweredClientNote[]);
-jest.mock('@/hooks/use-answered-notes', () => ({
-  useAnsweredNotes: () => ({ data: mockAnsweredNotes() }),
-}));
-
 let mockProject: Record<string, unknown> | undefined;
 jest.mock('@patina/supabase', () => ({
   useProjectV2: () => ({ data: mockProject }),
+  useSetNeedState: () => ({ mutate: jest.fn(), isPending: false }),
 }));
 
 jest.mock('@/hooks/use-project-lifecycle', () => ({
@@ -66,270 +59,92 @@ const part = (root: ParentNode, name: string) =>
 const parts = (root: ParentNode, name: string) =>
   Array.from(root.querySelectorAll(`[data-part~="${name}"]`));
 
-// ── The Desk ────────────────────────────────────────────────────────────
+// ── The Desk (US-25 slice 4: the marks moved onto the Day Sheet) ──────────
 
-function card(over: Partial<ClaimCard> = {}): ClaimCard {
+const NOW = new Date(2026, 9, 9, 10, 0, 0);
+
+function sheetNeed(i: number, over: Partial<NeedLine> = {}): DeskNeed {
+  const key = `task_due:t${i}`;
   return {
-    stage: 'project',
-    stageLabel: 'Project',
-    custody: 'Your pen',
-    band: 0,
-    line: {
-      engagementId: 'vandersteen',
-      name: 'Vandersteen residence',
-      stage: 'project',
-      designerId: null,
-      state: 'Anne Vandersteen · Procurement And Orders',
-      personLine: 'Anne Vandersteen · Procurement And Orders',
-      overdueText: 'Overdue 6 days — Invoice 1042 · $17,500 overdue',
-      mark: 'urgent',
-      needKind: 'overdue_invoice',
-      overdue: { isOverdue: true, days: 6 },
-      jobHref: '/doc/vandersteen',
-      act: { label: 'Send reminder', href: '/doc/vandersteen' },
-      client: 'Anne Vandersteen',
-      custody: 'Your pen',
-      needOwner: 'designer',
-      dueOn: '2026-08-12',
-      valueText: '12 Aug',
-      needText: 'Invoice 1042 · $17,500 overdue',
-      motionText: null,
-      projectId: null,
-    },
-    ...over,
+    key,
+    projectId: `p${i}`,
+    projectName: `Job ${i}`,
+    need: {
+      key,
+      kind: 'task_due',
+      text: `Task ${i} is due`,
+      actionLabel: 'Open the task',
+      stamp: { label: 'DUE', color: 'var(--color-clay)' },
+      urgent: false,
+      owner: 'designer',
+      ...over,
+    } as NeedLine,
   };
 }
 
-function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
-  return {
-    heading: 'Every job · 3 live · 1 overdue',
-    overdueLine: 'One thing is overdue — Vandersteen.',
-    liveCount: 3,
-    overdueCount: 1,
-    groups: [
-      {
-        key: 'proposal',
-        label: 'Proposal',
-        count: 1,
-        lines: [
-          {
-            engagementId: 'byrne',
-            name: 'Byrne remodel',
-            stage: 'proposal',
-            designerId: null,
-            state: 'Erin Byrne · design agreement sent August 19',
-            overdueText: null,
-            mark: 'quiet',
-            custody: 'With Erin',
-            needOwner: 'client',
-            needKind: 'hesitating_proposal',
-            overdue: { isOverdue: false, days: 0 },
-            jobHref: '/doc/byrne',
-            act: { label: 'Follow up', href: '/doc/byrne' },
-          },
-        ],
-      },
-      {
-        key: 'project',
-        label: 'Project',
-        count: 2,
-        lines: [
-          {
-            engagementId: 'vandersteen',
-            name: 'Vandersteen residence',
-            stage: 'project',
-            designerId: null,
-            state: 'Anne Vandersteen · Procurement And Orders',
-            overdueText:
-              'Overdue 6 days — Invoice 1042 · $17,500 overdue — oldest due Aug 2 — send a reminder',
-            mark: 'urgent',
-            custody: 'Your pen',
-            needOwner: 'designer',
-            needKind: 'overdue_invoice',
-            overdue: { isOverdue: true, days: 6 },
-            jobHref: '/doc/vandersteen',
-            act: {
-              label: 'Send reminder',
-              href: '/doc/vandersteen',
-              ledger: {
-                name: 'accounts',
-                context: { page: 'receivables', invoiceId: 'inv-1' },
-              },
-            },
-          },
-          {
-            engagementId: 'reinhardt',
-            name: 'Reinhardt lake house',
-            stage: 'project',
-            designerId: null,
-            state: 'Reinhardt · Site Visit · quiet · no current alert',
-            overdueText: null,
-            mark: null,
-            needKind: null,
-            overdue: { isOverdue: false, days: 0 },
-            jobHref: '/doc/reinhardt',
-            act: { label: 'Open the job', href: '/doc/reinhardt' },
-            custody: 'No current alert',
-            needOwner: null,
-            motionText: 'With client since 4 Aug',
-            valueText: '4 Aug',
-          },
-        ],
-      },
-    ],
-    ...over,
-  };
-}
-
-/** Five cards, so the day's line quotes three of them. */
-function busyRoster(): DeskRosterModel {
-  const model = roster();
-  model.groups[0].lines.push(
-    ...['halvorsen', 'osterberg', 'ellison'].map((id) => ({
-      ...model.groups[0].lines[0],
-      engagementId: id,
-      name: `${id} loft`,
-    })),
-  );
-  model.groups[0].count = 4;
-  return model;
+function renderSheet(needs: DeskNeed[], unreadFeeds: string[] = []) {
+  const sheet = deriveDaySheet({
+    needs,
+    states: new Map(),
+    leads: new Map(),
+    meUserId: 'me',
+    scope: 'studio',
+    unreadFeeds,
+    now: NOW,
+  });
+  return render(<DaySheet sheet={sheet} scope="studio" onScope={() => {}} now={NOW} />);
 }
 
 describe('the Desk marks', () => {
-  beforeEach(() => {
-    mockAnsweredNotes.mockReturnValue([]);
-  });
-
-  it('marks the top card’s job, sentence and act — and the sentence keeps its register', () => {
-    const { container } = render(
-      <DeskClaimCard card={card()} tone="project" index={0} settle={false} />,
-    );
-
-    const job = part(container, 'job');
-    expectPrinted(job);
-    expect(job).toHaveAttribute('data-register', 'name');
-    expect(job.textContent).toBe('Vandersteen residence');
-
-    const headline = part(container, 'headline');
-    expectPrinted(headline);
-    expect(headline).toHaveAttribute('data-register', 'sentence');
-    expect(headline.textContent).toBe(
-      'Overdue 6 days — Invoice 1042 · $17,500 overdue',
-    );
-
-    const act = part(container, 'act');
-    expectPrinted(act);
-    expect(act.closest('[data-register="act"]')).not.toBeNull();
-    expect(act.textContent).toBe('Send reminder');
-  });
-
-  it('marks nothing on a card below the top one', () => {
-    const { container } = render(
-      <DeskClaimCard card={card()} tone="project" index={1} settle={false} />,
-    );
-    expect(container.querySelector('[data-part]')).toBeNull();
-    expect(container.querySelector('[data-register="sentence"]')).not.toBeNull();
-  });
-
-  it('marks one headline on the roster, the day lines quoting cards 2 and 3, and the overdue line', () => {
-    const { container } = render(<DeskRoster roster={busyRoster()} />);
-
-    const cards = Array.from(container.querySelectorAll('[data-claim-card]'));
-    expect(cards.length).toBeGreaterThanOrEqual(3);
+  it('marks the top line’s job, sentence and act; lines two and three are the facts', () => {
+    const { container } = renderSheet([1, 2, 3, 4].map((i) => sheetNeed(i)));
+    const lines = Array.from(container.querySelectorAll('[data-day-sheet-line]'));
 
     expect(parts(container, 'headline')).toHaveLength(1);
-    expect(parts(container, 'act')).toHaveLength(1);
     expect(parts(container, 'job')).toHaveLength(1);
+    expect(parts(container, 'act')).toHaveLength(1);
     const headline = part(container, 'headline');
     expectPrinted(headline);
-    expect(headline.closest('[data-claim-card]')).toBe(cards[0]);
-    expect(part(container, 'act')!.closest('[data-claim-card]')).toBe(cards[0]);
-    expect(part(container, 'job')!.closest('[data-claim-card]')).toBe(cards[0]);
+    expect(headline.closest('[data-day-sheet-line]')).toBe(lines[0]);
+    const job = part(container, 'job');
+    expectPrinted(job);
+    expect(job.textContent).toBe('Job 1');
+    const act = part(container, 'act');
+    expectPrinted(act);
+    expect(act.textContent).toBe('Open the task');
+    expect(act.closest('[data-day-sheet-line]')).toBe(lines[0]);
 
     for (const [name, quoted] of [
-      ['f1', cards[1]],
-      ['f2', cards[2]],
+      ['f1', lines[1]],
+      ['f2', lines[2]],
     ] as const) {
-      expect(parts(container, name)).toHaveLength(1);
-      const line = part(container, name);
-      expectPrinted(line);
-      expect(line).toHaveAttribute('data-day-line');
-      expect(
-        line.querySelector('a[href^="#roster-line-"]')!.getAttribute('href'),
-      ).toBe(`#${quoted.id}`);
+      expect(parts(container, name)).toEqual([quoted]);
+      expectPrinted(quoted);
     }
-    // The first day line quotes the headline's own card, so it is no fact.
-    expect(
-      container.querySelector('[data-day-line]')!.hasAttribute('data-part'),
-    ).toBe(false);
+    expect(lines[3].hasAttribute('data-part')).toBe(false);
 
     expect(parts(container, 'settle')).toHaveLength(1);
     const settle = part(container, 'settle');
     expectPrinted(settle);
-    expect(settle.textContent).toBe('One thing is overdue — Vandersteen.');
     expect(settle).not.toBe(headline);
   });
 
-  it('never marks the answered note as a fact', () => {
-    const model = roster();
-    model.groups[1].lines[1] = {
-      ...model.groups[1].lines[1],
-      client: 'Nora Ellison',
-      projectId: 'p-reinhardt',
-    };
-    mockAnsweredNotes.mockReturnValue([
-      { projectId: 'p-reinhardt', answeredAt: new Date().toISOString() },
-    ]);
-    const { container } = render(<DeskRoster roster={model} />);
-
-    const answered = container.querySelector('[data-day-line="answered"]');
-    expect(answered).not.toBeNull();
-    expect(answered!.hasAttribute('data-part')).toBe(false);
-  });
-
-  it('on a quiet roster, the always-printed overdue line is the one headline and the settle', () => {
-    const model = roster();
-    for (const group of model.groups) {
-      for (const line of group.lines) {
-        line.mark = null;
-        line.needKind = null;
-        line.overdueText = null;
-        line.overdue = { isOverdue: false, days: 0 };
-      }
-    }
-    model.overdueCount = 0;
-    model.overdueLine = 'Nothing is overdue.';
-    const { container } = render(<DeskRoster roster={model} />);
-
-    expect(container.querySelector('[data-claim-card]')).toBeNull();
+  it('on an empty sheet, the one sentence is the headline and the settle — never two nodes', () => {
+    const { container } = renderSheet([]);
     expect(parts(container, 'headline')).toHaveLength(1);
     const headline = part(container, 'headline');
     expectPrinted(headline);
-    expect(headline.textContent).toBe('Nothing is overdue.');
+    expect(headline.textContent).toBe('Nothing needs you tonight.');
     expect(parts(container, 'settle')).toEqual([headline]);
     expect(parts(container, 'act')).toHaveLength(0);
   });
 
-  it('with no live jobs, the quiet line is the one headline and the settle — never two nodes', () => {
-    const { container } = render(
-      <DeskRoster
-        roster={roster({
-          groups: [],
-          liveCount: 0,
-          overdueCount: 0,
-          overdueLine: 'Nothing is overdue.',
-        })}
-      />,
-    );
-
-    expect(parts(container, 'headline')).toHaveLength(1);
+  it('while a feed is unread, the not-checked sentence is the headline instead', () => {
+    const { container } = renderSheet([], ['invoices']);
     const headline = part(container, 'headline');
     expectPrinted(headline);
-    expect(headline.textContent).toBe(
-      'No current action alerts. The work is in motion.',
-    );
+    expect(headline.textContent).toBe('Not checked: invoices.');
     expect(parts(container, 'settle')).toEqual([headline]);
-    expect(parts(container, 'act')).toHaveLength(0);
   });
 });
 

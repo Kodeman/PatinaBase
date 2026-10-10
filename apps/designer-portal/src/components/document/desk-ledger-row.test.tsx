@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import type { RosterLine } from '@/lib/document/desk-roster-derivation';
-import { DeskLedgerRow } from './desk-ledger-row';
+import { DeskLedgerRow, actLanding } from './desk-ledger-row';
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
@@ -36,111 +36,73 @@ function line(over: Partial<RosterLine> = {}): RosterLine {
   };
 }
 
-describe('DeskLedgerRow — the at-rest row', () => {
-  it('prints the five cells in the ledger’s own column order', () => {
-    const { container } = render(<DeskLedgerRow line={line()} tone="discovery" />);
-    const cells = Array.from(
-      container.querySelectorAll('[data-ledger-cell]'),
-    ).map((el) => el.getAttribute('data-ledger-cell'));
-
-    expect(cells).toEqual(['mark', 'name', 'sentence', 'value', 'act']);
+describe('DeskLedgerRow — the roster line (US-25 slice 4)', () => {
+  it('prints the five cells in the line’s own column order', () => {
+    const { container } = render(<DeskLedgerRow line={line()} />);
+    const cells = Array.from(container.querySelectorAll('[data-ledger-cell]')).map((el) =>
+      el.getAttribute('data-ledger-cell'),
+    );
+    expect(cells).toEqual(['name', 'phase', 'sentence', 'value', 'act']);
   });
 
-  it('wears the at-rest ring, never a filled mark', () => {
-    const { container } = render(<DeskLedgerRow line={line()} tone="discovery" />);
-    const mark = container.querySelector('[data-roster-mark]')!;
-
-    expect(mark.getAttribute('data-mark-tone')).toBeNull();
-    expect(mark.getAttribute('data-mark-color')).toBeNull();
-    expect(mark).toHaveAttribute('aria-hidden', 'true');
+  it('prints the phase as an ink word, never a plate or a mark (Q7)', () => {
+    const { container } = render(<DeskLedgerRow line={line()} />);
+    expect(container.querySelector('[data-ledger-cell="phase"]')).toHaveTextContent('Discovery');
+    expect(container.querySelector('[data-roster-mark]')).toBeNull();
+    expect(container.querySelector('[data-stage-tab]')).toBeNull();
+    expect(container.querySelector('[style]')).toBeNull();
   });
 
-  it('carries the custody word and the person · phase run under the name', () => {
-    const { container } = render(<DeskLedgerRow line={line()} tone="discovery" />);
+  it('carries the custody word under the name', () => {
+    const { container } = render(<DeskLedgerRow line={line({ custody: 'With Anneke' })} />);
     const nameCell = container.querySelector('[data-ledger-cell="name"]')!;
-
-    expect(nameCell).toHaveTextContent('No current alert');
     expect(nameCell).toHaveTextContent('Reinhardt lake house');
-    expect(nameCell).toHaveTextContent('Site Visit');
+    expect(nameCell).toHaveTextContent('With Anneke');
   });
 
-  it('the line under the name is person · phase, never the body text', () => {
-    const { container } = render(<DeskLedgerRow line={line()} tone="discovery" />);
-    const person = container.querySelector('[data-register="person"]')!;
-
-    expect(person).toHaveTextContent('Reinhardt · Site Visit');
-    expect(person.textContent).not.toContain('nothing needs your hand');
-  });
-
-  it('writes no person line at all where there is neither client nor phase', () => {
-    const { container } = render(
-      <DeskLedgerRow line={line({ personLine: '' })} tone="discovery" />,
-    );
-
-    expect(container.querySelector('[data-register="person"]')).toBeNull();
-  });
-
-  it('says the sentence once — the name block never repeats it', () => {
-    const { container } = render(
+  it('prints the head need’s sentence, its overdue form first', () => {
+    const { container, rerender } = render(
       <DeskLedgerRow
-        line={line({ personLine: 'Reinhardt · Site Visit' })}
-        tone="discovery"
+        line={line({ needKind: 'overdue_invoice', needText: 'Invoice 1042 is overdue' })}
       />,
     );
-    const nameCell = container.querySelector('[data-ledger-cell="name"]')!;
-    const sentence = container.querySelector('[data-ledger-cell="sentence"]')!;
-
-    expect(sentence).toHaveTextContent('No current action alerts.');
-    expect(nameCell.textContent?.toLowerCase()).not.toContain(
-      'nothing needs your hand',
-    );
-  });
-
-  it('prints the in-motion sentence where the job has one', () => {
-    const { container } = render(
+    const sentence = () => container.querySelector('[data-ledger-cell="sentence"]');
+    expect(sentence()).toHaveTextContent('Invoice 1042 is overdue');
+    rerender(
       <DeskLedgerRow
-        line={line({ motionText: 'With client since 4 Aug' })}
-        tone="discovery"
+        line={line({
+          needKind: 'overdue_invoice',
+          needText: 'Invoice 1042 is overdue',
+          overdueText: 'Overdue 6 days — Invoice 1042 is overdue',
+        })}
       />,
     );
-
-    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
-      'With client since 4 Aug',
-    );
+    expect(sentence()).toHaveTextContent('Overdue 6 days — Invoice 1042 is overdue');
   });
 
-  it('says nothing needs your hand where the job is not in motion', () => {
-    const { container } = render(<DeskLedgerRow line={line()} tone="discovery" />);
-
-    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
-      'No current action alerts.',
+  it('prints the in-motion sentence at rest, else the honest at-rest words', () => {
+    const { container, rerender } = render(
+      <DeskLedgerRow line={line({ motionText: 'With client since 4 Aug' })} />,
     );
+    const sentence = () => container.querySelector('[data-ledger-cell="sentence"]');
+    expect(sentence()).toHaveTextContent('With client since 4 Aug');
+    rerender(<DeskLedgerRow line={line()} />);
+    expect(sentence()).toHaveTextContent('No current action alerts.');
+    rerender(<DeskLedgerRow line={line({ notChecked: 'Not checked: invoices.' })} />);
+    expect(sentence()).toHaveTextContent('Not checked: invoices.');
   });
 
-  it('prints the in-motion date in the value column, tabular (D8)', () => {
-    const { container } = render(
-      <DeskLedgerRow
-        line={line({ motionText: 'With client since 4 Aug', valueText: '4 Aug' })}
-        tone="discovery"
-      />,
-    );
-    const value = container.querySelector('[data-ledger-cell="value"]')!;
-
-    expect(value).toHaveTextContent('4 Aug');
-    expect(value.className).toContain('tabular-nums');
-  });
-
-  it('renders an empty value cell rather than dropping the column', () => {
-    // The column is the grid that makes a ledger a ledger: figures line up
-    // down the page only if the cell is always there.
-    const { container } = render(<DeskLedgerRow line={line()} tone="discovery" />);
-
-    expect(container.querySelector('[data-ledger-cell="value"]')!.textContent).toBe('');
+  it('prints the date in the value column, tabular, and keeps the cell when empty (D8)', () => {
+    const { container, rerender } = render(<DeskLedgerRow line={line({ valueText: '4 Aug' })} />);
+    const value = () => container.querySelector('[data-ledger-cell="value"]')!;
+    expect(value()).toHaveTextContent('4 Aug');
+    expect(value().className).toContain('tabular-nums');
+    rerender(<DeskLedgerRow line={line()} />);
+    expect(value().textContent).toBe('');
   });
 
   it('names the job on the act, and writes no shadow anywhere', () => {
-    const { container } = render(<DeskLedgerRow line={line()} tone="discovery" />);
-
+    const { container } = render(<DeskLedgerRow line={line()} />);
     expect(container.querySelector('[data-action-key^="roster-"]')).toHaveAttribute(
       'aria-label',
       'Open the job — Reinhardt lake house',
@@ -150,9 +112,30 @@ describe('DeskLedgerRow — the at-rest row', () => {
     }
   });
 
-  it('lands the day’s line’s anchor on the row', () => {
-    const { container } = render(<DeskLedgerRow line={line()} tone="discovery" />);
-
+  it('lands a return on the line’s own anchor', () => {
+    const { container } = render(<DeskLedgerRow line={line()} />);
     expect(container.querySelector('#roster-line-reinhardt')).not.toBeNull();
+  });
+});
+
+describe('actLanding — where a line’s act lands on the paper (R-DM21 A)', () => {
+  it('lands a need act that opens the job on its stage’s section', () => {
+    expect(
+      actLanding(line({ needKind: 'hesitating_proposal', stage: 'proposal', act: { label: 'Follow up', href: '/doc/reinhardt' } })),
+    ).toEqual({ kind: 'section', sectionKey: 'proposal' });
+  });
+
+  it('carries no landing for a ledger act or an act into another room', () => {
+    expect(
+      actLanding(
+        line({
+          needKind: 'overdue_invoice',
+          act: { label: 'Send reminder', href: '/doc/reinhardt', ledger: { name: 'accounts', context: {} } },
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      actLanding(line({ needKind: 'new_lead', act: { label: 'Respond', href: '/leads/1' } })),
+    ).toBeNull();
   });
 });

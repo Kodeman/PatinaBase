@@ -30,7 +30,13 @@ import { dayMonth, legalDate, parseSourceDate } from './dates';
 import { voiceFirstName } from './document-guide';
 import { classOfNeed, deskLeadNeed } from './need-class';
 import { rankByNext } from './desk-need-list';
-import { custodyFor, type DeskLeads, type DeskScope } from './desk-scope';
+import {
+  custodyFor,
+  deskDesignersOf,
+  isMyJob,
+  type DeskLeads,
+  type DeskScope,
+} from './desk-scope';
 import {
   deriveOverdue,
   overdueElapsedPhrase,
@@ -461,11 +467,11 @@ export function deriveDeskRoster(
   leads: DeskLeads = input.leads ?? new Map(),
   meUserId: string | null | undefined = input.meUserId,
 ): DeskRoster {
+  const designers = deskDesignersOf(input.live);
   const rosterLive = scope === 'mine'
-    ? input.live.filter((row) => {
-        const projectId = row.project_id ?? row.engagement_id;
-        return Boolean(meUserId && leads.get(projectId)?.leadUserId === meUserId);
-      })
+    ? input.live.filter((row) =>
+        isMyJob(row.project_id ?? row.engagement_id, leads, meUserId, designers),
+      )
     : input.live;
   const folderByEngagement = new Map(
     input.folders.map((folder) => [folder.row.engagement_id, folder]),

@@ -84,7 +84,9 @@ export function DeskLedgerRow({ line }: { line: RosterLine }) {
       >
         {line.valueText ?? ''}
       </span>
-      <span data-ledger-cell="act">
+      {/* `data-register="act"` is what the arrival click token reads (US-14
+          R-DM21 A): an act opens the record straight, with its landing. */}
+      <span data-ledger-cell="act" data-register="act">
         {line.act.ledger ? (
           <DocumentAction
             actionKey={actionKey}

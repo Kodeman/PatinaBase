@@ -61,7 +61,9 @@ function SheetLine({
   const handoff = need.kind === 'handoff';
   const sentence = deskNeedText(need, oneVoice);
   const when = timeWord(need.at, now);
-  const label = deskActionLabel(need, oneVoice) ?? 'Open the job';
+  // A hand-off names its own act: one-voice's kind name ("Read the note")
+  // would promise a note the hire's invite never carried.
+  const label = (handoff ? need.actionLabel : deskActionLabel(need, oneVoice)) ?? 'Open the job';
   const href = need.deepLink ?? `/doc/${entry.projectId}`;
   const top = index === 0;
 
@@ -98,7 +100,8 @@ function SheetLine({
         )}
         {when && <span className="text-[var(--text-muted)]">{`, ${when}`}</span>}
       </p>
-      <div className="day-sheet-acts">
+      {/* The arrival click token reads an act by `data-register="act"`. */}
+      <div className="day-sheet-acts" data-register="act">
         <DocumentAction
           actionKey={`day-sheet-${need.kind}`}
           variant="secondary"
