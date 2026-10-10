@@ -138,14 +138,14 @@ describe('BoardFindThisPiece', () => {
   it('renders nothing while board-photo-match is off', () => {
     mockFlagOn = false;
     renderAction();
-    expect(screen.queryByRole('button', { name: 'Find this piece' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Identify product' })).toBeNull();
   });
 
   it('registers a pin job, runs the resolver and shows the candidates in their groups', async () => {
     const room = renderAction();
-    fireEvent.click(screen.getByRole('button', { name: 'Find this piece' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Identify product' }));
 
-    await screen.findByRole('region', { name: 'From your library' });
+    await screen.findByRole('region', { name: 'Resource library matches' });
     expect(room.flushPending).toHaveBeenCalled();
     expect(mockRpc).toHaveBeenCalledWith('register_board_deck_import', {
       p_board_id: 'board-1',
@@ -160,13 +160,13 @@ describe('BoardFindThisPiece', () => {
     });
     expect(mockInvoke).toHaveBeenCalledWith('board-deck-import-resolve', { body: { import_id: 'imp-1' } });
 
-    const library = screen.getByRole('region', { name: 'From your library' });
+    const library = screen.getByRole('region', { name: 'Resource library matches' });
     expect(await within(library).findByText(/Cove sofa/)).toBeInTheDocument();
     expect(within(library).getByText('· Maker')).toBeInTheDocument();
     expect(within(library).getByText('My sofa')).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Likely, by look' })).getByText('Catalog sofa')).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Possible, by look' })).getByText('Other sofa')).toBeInTheDocument();
-    expect(screen.queryByText('Photo match is unavailable right now')).toBeNull();
+    expect(within(screen.getByRole('region', { name: 'Likely visual match' })).getByText('Catalog sofa')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Possible visual match' })).getByText('Other sofa')).toBeInTheDocument();
+    expect(screen.queryByText('Product image matching is temporarily unavailable.')).toBeNull();
     // No scores or percentages are shown.
     expect(screen.queryByText(/%|0\.9/)).toBeNull();
   });
@@ -175,10 +175,10 @@ describe('BoardFindThisPiece', () => {
     mockInvoke.mockResolvedValue({ data: { ok: true, summary: { look: { status: 'unavailable' } } }, error: null });
     mockItemRow = itemRow({ candidates: candidates.slice(0, 1) });
     renderAction();
-    fireEvent.click(screen.getByRole('button', { name: 'Find this piece' }));
-    expect(await screen.findByText('Photo match is unavailable right now')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Identify product' }));
+    expect(await screen.findByText('Product image matching is temporarily unavailable.')).toBeInTheDocument();
     expect(await screen.findByText(/Cove sofa/)).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'Likely, by look' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Likely visual match' })).toBeNull();
   });
 
   it('keeps through the keep RPC and pin patch; the picture stays as data.original_image_url', async () => {
@@ -192,8 +192,8 @@ describe('BoardFindThisPiece', () => {
     };
     mockKeep.mockResolvedValue(patch);
     const room = renderAction();
-    fireEvent.click(screen.getByRole('button', { name: 'Find this piece' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Keep Catalog sofa' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Identify product' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retain product match Catalog sofa' }));
 
     await waitFor(() => expect(room.replaceItem).toHaveBeenCalled());
     expect(mockKeep).toHaveBeenCalledWith({ importId: 'imp-1', itemId: 'item-1', candidateRank: 3 });

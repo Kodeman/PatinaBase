@@ -90,7 +90,7 @@ describe('CaptureContextSection thumbnails', () => {
     const { container } = render(<CaptureContextSection captures={[]} />);
     expect(container.querySelector('img')).toBeNull();
     expect(
-      screen.getByText('No photos or notes were pinned to this scan.'),
+      screen.getByText('No photos or notes were recorded for this survey.'),
     ).toBeInTheDocument();
   });
 });

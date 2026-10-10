@@ -230,7 +230,7 @@ describe('FactsRail — the Refine line is absent unless the caller resolves one
     expect(screen.getByText(/266 sq ft/)).toBeInTheDocument();
     expect(screen.getByText(/5 walls/)).toBeInTheDocument();
     expect(
-      screen.getByText('stands in for ceiling — RoomPlan captures none'),
+      screen.getByText('Ceiling height inferred from walls; ceiling not captured.'),
     ).toBeInTheDocument();
   });
 });

@@ -128,7 +128,7 @@ describe("RenderGallerySection — the strip", () => {
 
   it("shows the section heading with the tile count", () => {
     renderSection();
-    expect(screen.getByText("Renders")).toBeInTheDocument();
+    expect(screen.getByText("Rendered room views")).toBeInTheDocument();
     expect(screen.getByText("5 views")).toBeInTheDocument();
   });
 
@@ -137,7 +137,7 @@ describe("RenderGallerySection — the strip", () => {
 
     fireEvent.click(screen.getByAltText("Living room, top down view"));
     const lightbox = screen.getByTestId("lightbox");
-    expect(lightbox).toHaveAttribute("aria-label", "Living room · Top-down");
+    expect(lightbox).toHaveAttribute("aria-label", "Living room · Plan view");
     expect(lightbox.querySelector("img")).toHaveAttribute(
       "src",
       "https://r2/top_down.jpg",

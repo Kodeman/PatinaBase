@@ -428,7 +428,7 @@ describe('ProductPickerModal — configure step for optioned pieces', () => {
 
     fireEvent.click(await screen.findByRole('radio', { name: /King/ }));
 
-    const confirm = await screen.findByRole('button', { name: 'Add configured piece' });
+    const confirm = await screen.findByRole('button', { name: 'Add specified product to project' });
     await waitFor(() => expect(confirm).not.toBeDisabled());
     fireEvent.click(confirm);
 
@@ -505,14 +505,14 @@ describe('ProductPickerModal — configure step for optioned pieces', () => {
     await act(async () => {});
 
     fireEvent.click(
-      screen.getByRole('checkbox', { name: 'Specify the fabric now' }),
+      screen.getByRole('checkbox', { name: 'Specify fabric now' }),
     );
     fireEvent.change(screen.getByLabelText('Fabric'), {
       target: { value: 'Belgian Linen 12' },
     });
 
     const confirm = await screen.findByRole('button', {
-      name: 'Add configured piece',
+      name: 'Add specified product to project',
     });
     await waitFor(() => expect(confirm).not.toBeDisabled());
     fireEvent.click(confirm);
@@ -528,7 +528,7 @@ describe('ProductPickerModal — configure step for optioned pieces', () => {
     openLibraryPicker();
     await pickFirstResult();
 
-    const confirm = await screen.findByRole('button', { name: 'Add configured piece' });
+    const confirm = await screen.findByRole('button', { name: 'Add specified product to project' });
     expect(confirm).toBeDisabled();
   });
 
@@ -565,7 +565,7 @@ describe('ProductPickerModal — configure step for optioned pieces', () => {
     await pickFirstResult();
 
     fireEvent.click(await screen.findByRole('radio', { name: /King/ }));
-    const confirm = await screen.findByRole('button', { name: 'Add configured piece' });
+    const confirm = await screen.findByRole('button', { name: 'Add specified product to project' });
     await waitFor(() => expect(confirm).not.toBeDisabled());
     fireEvent.click(confirm);
 
@@ -592,7 +592,7 @@ describe('ProductPickerModal — custom commissions', () => {
     ).toBeInTheDocument();
     // No workspace: a commission has no picker-resolvable specification.
     expect(
-      screen.queryByRole('button', { name: 'Add configured piece' }),
+      screen.queryByRole('button', { name: 'Add specified product to project' }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('picker-configure-open-piece-room'));

@@ -462,7 +462,7 @@ describe('DecisionOptionBuilder — configured picks', () => {
     await act(async () => {});
 
     fireEvent.click(await screen.findByRole('radio', { name: /King/ }));
-    const confirm = await screen.findByRole('button', { name: 'Add configured piece' });
+    const confirm = await screen.findByRole('button', { name: 'Add specified product to project' });
     await waitFor(() => expect(confirm).not.toBeDisabled());
     fireEvent.click(confirm);
 
@@ -626,7 +626,7 @@ describe('DecisionOptionBuilder — COM picks', () => {
       await screen.findByRole('radio', { name: /Customer's Own Material/ }),
     );
     await act(async () => {});
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Specify the fabric now' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Specify fabric now' }));
     fireEvent.change(screen.getByLabelText('Fabric'), {
       target: { value: 'Belgian Linen 12' },
     });
@@ -634,7 +634,7 @@ describe('DecisionOptionBuilder — COM picks', () => {
       target: { value: 'Rogers & Goffigon' },
     });
 
-    const confirm = await screen.findByRole('button', { name: 'Add configured piece' });
+    const confirm = await screen.findByRole('button', { name: 'Add specified product to project' });
     await waitFor(() => expect(confirm).not.toBeDisabled());
     fireEvent.click(confirm);
 

@@ -103,10 +103,10 @@ describe('RoomView — MESH mode gate', () => {
 
     renderRoomView();
 
-    expect(screen.getByRole('button', { name: 'Mesh' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Scan mesh' })).toBeInTheDocument();
     // The projections it sits beside are untouched.
-    expect(screen.getByRole('button', { name: 'Plan' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Orbit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Floor plan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '3D room geometry' })).toBeInTheDocument();
   });
 
   it('hides MESH for a USDZ-only scan', () => {
@@ -120,8 +120,8 @@ describe('RoomView — MESH mode gate', () => {
 
     renderRoomView();
 
-    expect(screen.queryByRole('button', { name: 'Mesh' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Orbit' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Scan mesh' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '3D room geometry' })).toBeInTheDocument();
   });
 
   it('hides MESH while the scan row is still unresolved', () => {
@@ -129,7 +129,7 @@ describe('RoomView — MESH mode gate', () => {
 
     renderRoomView();
 
-    expect(screen.queryByRole('button', { name: 'Mesh' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Scan mesh' })).not.toBeInTheDocument();
   });
 });
 
@@ -164,7 +164,7 @@ describe('RoomView — signing is deferred until MESH is activated', () => {
     renderRoomView();
     const callsBeforeSwitch = sourcesPassed().length;
 
-    await user.click(screen.getByRole('button', { name: 'Mesh' }));
+    await user.click(screen.getByRole('button', { name: 'Scan mesh' }));
 
     const after = sourcesPassed().slice(callsBeforeSwitch);
     expect(after.length).toBeGreaterThan(0);
@@ -176,7 +176,7 @@ describe('RoomView — signing is deferred until MESH is activated', () => {
     const user = userEvent.setup();
 
     renderRoomView();
-    await user.click(screen.getByRole('button', { name: 'Orbit' }));
+    await user.click(screen.getByRole('button', { name: '3D room geometry' }));
 
     // No GLB means no MESH control and nothing to sign — switching elsewhere
     // must not start signing a URL that cannot be loaded anyway.

@@ -121,10 +121,10 @@ describe('RoomView — SPLAT mode gate', () => {
 
     renderRoomView();
 
-    expect(screen.getByRole('button', { name: 'Splat' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Photographic 3D view' })).toBeInTheDocument();
     // The projections it sits beside are untouched.
-    expect(screen.getByRole('button', { name: 'Plan' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Orbit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Floor plan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '3D room geometry' })).toBeInTheDocument();
   });
 
   it('hides SPLAT when the current Room File registers none', () => {
@@ -132,14 +132,14 @@ describe('RoomView — SPLAT mode gate', () => {
 
     renderRoomView();
 
-    expect(screen.queryByRole('button', { name: 'Splat' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Orbit' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Photographic 3D view' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '3D room geometry' })).toBeInTheDocument();
   });
 
   it('hides SPLAT for a scan with no Room File at all', () => {
     renderRoomView();
 
-    expect(screen.queryByRole('button', { name: 'Splat' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Photographic 3D view' })).not.toBeInTheDocument();
     // …and asks about nothing, rather than asking about `undefined`.
     expect(mockUseSplatUrl).toHaveBeenCalled();
     expect(mockUseSplatUrl.mock.calls.every((call) => call[0] === null)).toBe(true);
@@ -172,7 +172,7 @@ describe('RoomView — which Room File the gate reads', () => {
     renderRoomView();
 
     expect(mockUseSplatUrl.mock.calls.at(-1)?.[0]).toBe('rf-1');
-    expect(screen.getByRole('button', { name: 'Splat' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Photographic 3D view' })).toBeInTheDocument();
   });
 });
 
@@ -185,7 +185,7 @@ describe('RoomView — the SPLAT stage', () => {
     renderRoomView();
     expect(screen.queryByText('Splat · the room as photographed')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Splat' }));
+    await user.click(screen.getByRole('button', { name: 'Photographic 3D view' }));
 
     expect(screen.getByText('Splat · the room as photographed')).toBeInTheDocument();
     expect(
@@ -204,7 +204,7 @@ describe('RoomView — the SPLAT stage', () => {
     const user = userEvent.setup();
 
     renderRoomView();
-    await user.click(screen.getByRole('button', { name: 'Splat' }));
+    await user.click(screen.getByRole('button', { name: 'Photographic 3D view' }));
 
     expect(screen.getByTestId('splat-canvas')).toHaveAttribute(
       'data-splat-url',
@@ -221,8 +221,8 @@ describe('RoomView — the SPLAT stage', () => {
     const user = userEvent.setup();
 
     renderRoomView();
-    await user.click(screen.getByRole('button', { name: 'Splat' }));
-    await user.click(screen.getByRole('button', { name: 'Plan' }));
+    await user.click(screen.getByRole('button', { name: 'Photographic 3D view' }));
+    await user.click(screen.getByRole('button', { name: 'Floor plan' }));
 
     expect(screen.getByTestId('splat-canvas')).toBeInTheDocument();
   });

@@ -180,14 +180,14 @@ beforeEach(() => {
 
 describe('deck review row states and lexicon', () => {
   it('names every row state in the contract words', () => {
-    expect(howPhrase(piece())).toBe('From the link on the slide');
+    expect(howPhrase(piece())).toBe('Linked product match');
     expect(howPhrase(piece({ foundBy: 'words', candidates: [candidate({ source: 'words', band: 'likely' })] })))
-      .toBe('Named on the slide');
+      .toBe('Slide-text match');
     expect(howPhrase(piece({ foundBy: 'look', candidates: [candidate({ source: 'look', band: 'likely' })] })))
-      .toBe('Likely, by look');
+      .toBe('Likely visual match');
     expect(howPhrase(piece({ foundBy: 'look', candidates: [candidate({ source: 'look', band: 'possible' })] })))
-      .toBe('Possible, by look');
-    expect(howPhrase(piece({ state: 'not_found', foundBy: null, candidates: [] }))).toBe('Not found yet');
+      .toBe('Possible visual match');
+    expect(howPhrase(piece({ state: 'not_found', foundBy: null, candidates: [] }))).toBe('Product not identified');
     expect(rowState(piece({ state: 'pending' }))).toBe('finding');
     expect(rowState(piece({ state: 'kept' }))).toBe('kept');
     expect(rowState(piece({ state: 'reference' }))).toBe('reference');
@@ -229,7 +229,7 @@ describe('deck review row states and lexicon', () => {
 
   it('reads "Finding pieces · n of m" while resolving and "N pieces from the deck · n to confirm" when ready', () => {
     const items = [piece({ id: 'a' }), piece({ id: 'b', state: 'pending' }), piece({ id: 'c', state: 'kept' })];
-    expect(roomHeadLine('resolving', items)).toEqual({ text: 'Finding pieces · 2 of 3', review: true });
+    expect(roomHeadLine('resolving', items)).toEqual({ text: 'Identifying products · 2 of 3', review: true });
     expect(roomHeadLine('ready', items.map((i) => (i.state === 'pending' ? { ...i, state: 'not_found' as const } : i))))
       .toEqual({ text: '3 pieces from the deck · 2 to confirm', review: true });
     expect(roomHeadLine('laying_out', items)).toBeNull();
@@ -413,11 +413,11 @@ describe('BoardDeckImportLedger', () => {
     expect(row('b').getAttribute('data-deck-row-state')).toBe('kept');
     expect(row('b').querySelector('[data-deck-act="unkeep"]')).not.toBeNull();
     expect(row('b').querySelector('[data-deck-act="keep"]')).toBeNull();
-    expect(row('c').textContent).toContain('Not found yet');
+    expect(row('c').textContent).toContain('Product not identified');
     expect(row('c').querySelector('[data-deck-act="reference"]')).not.toBeNull();
     expect(row('d').getAttribute('data-deck-row-state')).toBe('needs_picture');
-    expect(row('d').textContent).toContain('Which picture?');
-    expect(row('d').textContent).toContain('Keep without a picture');
+    expect(row('d').textContent).toContain('Select product image');
+    expect(row('d').textContent).toContain('Retain product without image');
     expect(screen.getByTestId('front-matter').textContent).toContain('1 link still needs a picture');
   });
 
@@ -426,7 +426,7 @@ describe('BoardDeckImportLedger', () => {
     const strong = piece({ id: 'strong' });
     const weak = piece({ id: 'weak', boardItemId: 'pin-w', candidates: [candidate({ band: 'likely' })] });
     const props = renderLedger([strong, look, weak], [pin()]);
-    const bulk = screen.getByRole('button', { name: 'Keep every piece found by its link · 1' });
+    const bulk = screen.getByRole('button', { name: 'Retain all linked product matches · 1' });
     fireEvent.click(bulk);
     await waitFor(() => expect(props.keepEveryLink).toHaveBeenCalledWith([strong]));
   });
@@ -519,6 +519,6 @@ describe('BoardDeckImportLedger', () => {
       idempotencyKey: 'promote:pin-1',
       name: 'Cove sofa',
     })));
-    expect(await screen.findByText('Order from the schedule')).toHaveAttribute('href', '/doc/project-1');
+    expect(await screen.findByText('Order from item schedule')).toHaveAttribute('href', '/doc/project-1');
   });
 });
