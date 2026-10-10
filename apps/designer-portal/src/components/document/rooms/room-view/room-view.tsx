@@ -282,7 +282,7 @@ export function RoomView({
     return (
       <div className="mx-auto max-w-[520px] px-6 pt-24 text-center">
         <p className="font-heading text-[1.3rem] italic text-[var(--color-charcoal)]">
-          This room is still being drawn.
+          The room plan is not available yet.
         </p>
       </div>
     );
@@ -302,7 +302,7 @@ export function RoomView({
       {/* rv-head */}
       <div className="mb-1.5 flex flex-wrap items-baseline gap-4">
         <h2 className="font-heading text-[28px] font-medium text-[var(--color-charcoal)] sm:text-[34px]">
-          {clientName ?? 'Untitled room'}
+          {clientName ?? 'Unnamed room'}
           {roomType && (
             <span className="italic text-[var(--color-mocha)]">
               {' '}
@@ -330,14 +330,14 @@ export function RoomView({
           onClick={() => selectMode('plan')}
           className={modeClass(mode === 'plan', 'pr-5')}
         >
-          Plan
+          Floor plan
         </button>
         <button
           type="button"
           onClick={() => selectMode('orbit')}
           className={modeClass(mode === 'orbit', 'px-5')}
         >
-          Orbit
+          3D room geometry
         </button>
         {/* Mesh — the scan's own geometry, not a reconstruction. Present only
             for a scan that carries a GLB; a scan without one never sees the
@@ -348,7 +348,7 @@ export function RoomView({
             onClick={() => selectMode('mesh')}
             className={modeClass(mode === 'mesh', 'px-5')}
           >
-            Mesh
+            Scan mesh
           </button>
         )}
         {/* Splat — the room as photographed, not as reconstructed. Present only
@@ -361,16 +361,16 @@ export function RoomView({
             onClick={() => selectMode('splat')}
             className={modeClass(mode === 'splat', 'px-5')}
           >
-            Splat
+            Photographic 3D view
           </button>
         )}
         <span
           aria-disabled="true"
           className="-mb-px cursor-not-allowed border-b-2 border-transparent px-5 pb-3 pt-2.5 font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-mocha)] opacity-35"
         >
-          Walk
+          Walkthrough
           <span className="mt-0.5 block text-[11px] tracking-[0.1em] text-[var(--color-clay-ink)] opacity-100">
-            arrives with Place
+            Not available yet
           </span>
         </span>
       </div>
@@ -415,7 +415,7 @@ export function RoomView({
             <PlanStage
               geometry={geometry}
               stageCapRight={
-                capturing ? 'click two points' : 'hover for dimensions'
+                capturing ? 'Select two measurement points' : 'Hover to inspect dimensions'
               }
               photoLayer={
                 <PhotoMarkers

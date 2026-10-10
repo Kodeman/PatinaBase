@@ -328,27 +328,27 @@ export function BoardRoomInspector({
       {multi ? (
         <div className="mt-3 space-y-3">
           <div>
-            <p className="mb-1 font-mono text-[8px] uppercase text-[var(--text-muted)]">Align</p>
+            <p className="mb-1 font-mono text-[8px] uppercase text-[var(--text-muted)]">Align objects</p>
             <div className="grid grid-cols-3 gap-1">
-              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('left'); onCommand?.('arrange'); }}>Left</Button>
-              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('horizontal-center'); onCommand?.('arrange'); }}>Center</Button>
-              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('right'); onCommand?.('arrange'); }}>Right</Button>
-              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('top'); onCommand?.('arrange'); }}>Top</Button>
-              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('vertical-center'); onCommand?.('arrange'); }}>Middle</Button>
-              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('bottom'); onCommand?.('arrange'); }}>Bottom</Button>
+              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('left'); onCommand?.('arrange'); }}>Align left</Button>
+              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('horizontal-center'); onCommand?.('arrange'); }}>Center horizontally</Button>
+              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('right'); onCommand?.('arrange'); }}>Align right</Button>
+              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('top'); onCommand?.('arrange'); }}>Align top</Button>
+              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('vertical-center'); onCommand?.('arrange'); }}>Center vertically</Button>
+              <Button size="sm" variant="ghost" onClick={() => { api.alignItems('bottom'); onCommand?.('arrange'); }}>Align bottom</Button>
             </div>
           </div>
           <div>
-            <p className="mb-1 font-mono text-[8px] uppercase text-[var(--text-muted)]">Distribute</p>
+            <p className="mb-1 font-mono text-[8px] uppercase text-[var(--text-muted)]">Distribute objects</p>
             <div className="grid grid-cols-2 gap-1">
-              <Button size="sm" variant="ghost" disabled={selected.length < 3} onClick={() => { api.distributeItems('horizontal-centers'); onCommand?.('arrange'); }}>H centers</Button>
-              <Button size="sm" variant="ghost" disabled={selected.length < 3} onClick={() => { api.distributeItems('vertical-centers'); onCommand?.('arrange'); }}>V centers</Button>
-              <Button size="sm" variant="ghost" disabled={selected.length < 3} onClick={() => { api.distributeItems('horizontal-gaps'); onCommand?.('arrange'); }}>H gaps</Button>
-              <Button size="sm" variant="ghost" disabled={selected.length < 3} onClick={() => { api.distributeItems('vertical-gaps'); onCommand?.('arrange'); }}>V gaps</Button>
+              <Button size="sm" variant="ghost" disabled={selected.length < 3} onClick={() => { api.distributeItems('horizontal-centers'); onCommand?.('arrange'); }}>Distribute horizontal centers</Button>
+              <Button size="sm" variant="ghost" disabled={selected.length < 3} onClick={() => { api.distributeItems('vertical-centers'); onCommand?.('arrange'); }}>Distribute vertical centers</Button>
+              <Button size="sm" variant="ghost" disabled={selected.length < 3} onClick={() => { api.distributeItems('horizontal-gaps'); onCommand?.('arrange'); }}>Distribute horizontal spacing</Button>
+              <Button size="sm" variant="ghost" disabled={selected.length < 3} onClick={() => { api.distributeItems('vertical-gaps'); onCommand?.('arrange'); }}>Distribute vertical spacing</Button>
             </div>
           </div>
           <label className="block text-[9px] uppercase text-[var(--text-muted)]">
-            Section
+            Composition section
             <Select
               className="mt-1"
               value={sharedSectionId}
@@ -358,7 +358,7 @@ export function BoardRoomInspector({
               )}
             >
               {sharedSectionId === '__mixed__' && <option value="__mixed__" disabled>Mixed sections</option>}
-              <option value="">No section</option>
+              <option value="">Unsectioned</option>
               {api.state.sections.map((section) => (
                 <option key={section.id} value={section.id}>{section.name}</option>
               ))}
@@ -404,7 +404,7 @@ export function BoardRoomInspector({
 
           {lead.height != null && (
             <Button size="sm" variant="ghost" onClick={() => { api.updateItem(lead.id, { height: null }); onCommand?.('handle'); }}>
-              Reset height to auto
+              Restore automatic height
             </Button>
           )}
 
@@ -419,13 +419,13 @@ export function BoardRoomInspector({
           )}
 
           <label className="block text-[9px] uppercase text-[var(--text-muted)]">
-            Section
+            Composition section
             <Select
               className="mt-1"
               value={typeof lead.data?.section_id === 'string' ? lead.data.section_id : ''}
               onChange={(event) => api.setSectionMembership(lead.id, event.target.value || null)}
             >
-              <option value="">No section</option>
+              <option value="">Unsectioned</option>
               {api.state.sections.map((section) => (
                 <option key={section.id} value={section.id}>{section.name}</option>
               ))}
@@ -439,10 +439,10 @@ export function BoardRoomInspector({
           />
 
           <div className="grid grid-cols-2 gap-1">
-            <Button size="sm" variant="ghost" onClick={() => api.changeZOrder('forward')}>Forward</Button>
-            <Button size="sm" variant="ghost" onClick={() => api.changeZOrder('backward')}>Backward</Button>
-            <Button size="sm" variant="ghost" onClick={() => api.changeZOrder('front')}>To front</Button>
-            <Button size="sm" variant="ghost" onClick={() => api.changeZOrder('back')}>To back</Button>
+            <Button size="sm" variant="ghost" onClick={() => api.changeZOrder('forward')}>Bring forward</Button>
+            <Button size="sm" variant="ghost" onClick={() => api.changeZOrder('backward')}>Send backward</Button>
+            <Button size="sm" variant="ghost" onClick={() => api.changeZOrder('front')}>Bring to front</Button>
+            <Button size="sm" variant="ghost" onClick={() => api.changeZOrder('back')}>Send to back</Button>
           </div>
 
           <Button size="sm" variant="ghost" onClick={() => api.toggleLock([lead.id])}>
@@ -491,7 +491,7 @@ export function BoardRoomInspector({
 
           {owner?.kind === 'project' && lead.projectFfeItemId && (
             <p className="rounded-[4px] border border-[var(--border-default)] px-2.5 py-2 text-[10px] leading-4 text-[var(--text-muted)]">
-              In project · removing this pin removes only the board placement.
+              Project selection retained if this board placement is removed.
             </p>
           )}
 
@@ -533,7 +533,7 @@ export function BoardRoomInspector({
 
           {onOpenProduct && lead.productId && (lead.type === 'product' || lead.type === 'capture') && (
             <Button size="sm" variant="ghost" onClick={() => onOpenProduct(lead)}>
-              Open product
+              Open product record
             </Button>
           )}
 
@@ -550,7 +550,7 @@ export function BoardRoomInspector({
               rel="noreferrer"
               className="block truncate text-[11px] text-[var(--color-clay-ink)] underline underline-offset-2"
             >
-              Open source
+              Open product source
             </a>
           )}
         </div>

@@ -86,7 +86,7 @@ export function BoardRoomSectionsMenu({
   return (
     <details className="relative">
       <summary className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center px-2 font-mono text-[9px] uppercase tracking-[0.04em] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">
-        More
+        Composition tools
       </summary>
       <div className="absolute right-0 top-full z-[80] mt-1 w-[320px] max-w-[85vw] rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
         <div className="mb-3 grid grid-cols-3 gap-1 border-b border-[var(--border-default)] pb-3 xl:hidden">
@@ -94,19 +94,19 @@ export function BoardRoomSectionsMenu({
           <Button size="sm" className="min-h-11 min-w-11" variant={snapToGrid ? 'secondary' : 'ghost'} aria-pressed={snapToGrid} onClick={onToggleSnap}>Snap</Button>
           <Button size="sm" className="min-h-11 min-w-11" variant="ghost" disabled={!tidyEnabled} onClick={onTidy}>Tidy</Button>
         </div>
-        <p className="font-mono text-[9px] uppercase text-[var(--text-muted)]">Sections</p>
+        <p className="font-mono text-[9px] uppercase text-[var(--text-muted)]">Composition sections</p>
         <div className="mt-2 flex gap-1">
           <Input
             className="h-11"
             value={newName}
             aria-label="New section name"
-            placeholder="New section"
+            placeholder="Section name"
             onChange={(event) => setNewName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') add();
             }}
           />
-          <Button size="sm" className="min-h-11 min-w-11" variant="secondary" disabled={!newName.trim()} onClick={add}>Add</Button>
+          <Button size="sm" className="min-h-11 min-w-11" variant="secondary" disabled={!newName.trim()} onClick={add}>Add section</Button>
         </div>
         {api.state.sections.length > 0 && (
           <ul className="mt-2 space-y-1">
@@ -116,8 +116,8 @@ export function BoardRoomSectionsMenu({
           </ul>
         )}
         <div className="mt-3 grid gap-1 border-t border-[var(--border-default)] pt-2">
-          <Button size="sm" className="min-h-11 min-w-11" variant="ghost" onClick={() => api.trimCanvas()}>Trim canvas</Button>
-          <Button size="sm" className="min-h-11 min-w-11" variant="ghost" onClick={onSaveTemplate}>Save as template</Button>
+          <Button size="sm" className="min-h-11 min-w-11" variant="ghost" onClick={() => api.trimCanvas()}>Trim composition canvas</Button>
+          <Button size="sm" className="min-h-11 min-w-11" variant="ghost" onClick={onSaveTemplate}>Save studio template</Button>
         </div>
       </div>
     </details>

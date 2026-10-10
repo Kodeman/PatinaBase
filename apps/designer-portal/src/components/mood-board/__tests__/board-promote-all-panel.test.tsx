@@ -57,7 +57,7 @@ describe('BoardPromoteAllPanel (DV3)', () => {
     expect(
       screen.getByText("1 piece from this template aren't in the project selection yet"),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Promote all 1 pieces' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add 1 project selection' })).toBeInTheDocument();
   });
 
   it('stays hidden for a single leftover pin once the materialization moment has passed', () => {
@@ -85,7 +85,7 @@ describe('BoardPromoteAllPanel (DV3)', () => {
         onPromoted={jest.fn()}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Promote all 2 pieces' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add 2 project selections' })).toBeInTheDocument();
   });
 
   it('ignores client-verdict state entirely — every owner-linked product/capture pin counts, not just approved ones', () => {
@@ -104,7 +104,7 @@ describe('BoardPromoteAllPanel (DV3)', () => {
       />,
     );
     // 2 of 3 are product/capture pins; the note is never promotable.
-    expect(screen.getByRole('button', { name: 'Promote all 2 pieces' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add 2 project selections' })).toBeInTheDocument();
   });
 
   it('promotes every eligible pin sequentially, dismisses the one-shot banner, and reports aggregate failures', async () => {
@@ -130,7 +130,7 @@ describe('BoardPromoteAllPanel (DV3)', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Promote all 2 pieces' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add 2 project selections' }));
     await waitFor(() => expect(promoteMutateAsync).toHaveBeenCalledTimes(2));
 
     expect(promoteMutateAsync).toHaveBeenCalledWith(
@@ -178,9 +178,9 @@ describe('BoardPromoteAllPanel (DV3)', () => {
       />,
     );
 
-    expect(screen.getByRole('radio', { name: 'These are her selections' })).toBeChecked();
-    fireEvent.click(screen.getByRole('radio', { name: 'These are options' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Promote all 2 pieces' }));
+    expect(screen.getByRole('radio', { name: 'Client selections' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'Candidate selections' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add 2 project selections' }));
     await waitFor(() => expect(promoteMutateAsync).toHaveBeenCalledTimes(2));
 
     expect(promoteMutateAsync).toHaveBeenNthCalledWith(1, {
@@ -244,8 +244,8 @@ describe('BoardPromoteAllPanel (DV3)', () => {
         onPromoted={jest.fn()}
       />,
     );
-    expect(screen.getByText(/1 to confirm — Confirm the piece first/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Promote all 2 pieces' }));
+    expect(screen.getByText(/1 to confirm — Confirm product identification first/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add 2 project selections' }));
     await waitFor(() => expect(promoteMutateAsync).toHaveBeenCalledTimes(2));
     expect(promoteMutateAsync.mock.calls.map(([input]) => input.boardItemId)).toEqual(['pin-1', 'pin-2']);
   });

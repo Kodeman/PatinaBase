@@ -87,17 +87,15 @@ export function DeepAnalysisSheet({
   };
 
   return (
-    <RoomSheet open onClose={onClose} title={`Deep analysis — ${productName}`}>
+    <RoomSheet open onClose={onClose} title={`Product attribution — ${productName}`}>
       <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
-        Deep analysis · the 15-minute sitting
+        Style and client suitability
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
-        Map {productName}
+        Attribute {productName}
       </h2>
       <p className="mb-2 mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
-        Full intelligence mapping. The more you give, the better the Engine
-        matches — for every designer after you, too. Nothing is required; save
-        what you know.
+        Add style attribution and client suitability to support future sourcing. All fields are optional.
       </p>
       {prefill.source === 'draft' && (
         <p className="mb-4 border-l-2 border-[var(--color-clay)] pl-2.5 text-[0.7rem] italic text-[var(--color-aged-oak)]">
@@ -148,14 +146,14 @@ export function DeepAnalysisSheet({
           loadingLabel="Saving…"
           onClick={() => void save()}
         >
-          Save full analysis
+          Save attribution
         </DocumentAction>
         <DocumentAction
           actionKey="save-analysis-later"
           variant="tertiary"
           onClick={onClose}
         >
-          Later
+          Close without saving
         </DocumentAction>
       </DocumentActionGroup>
     </RoomSheet>

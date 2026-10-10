@@ -435,7 +435,7 @@ export function PieceConfigurationWorkspace({
         <div className="max-w-[650px]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="doc-type-meta uppercase tracking-[0.1em]">
-              The specification
+              Product specification
             </span>
             <span className="rounded-[3px] border border-[var(--color-clay)] bg-[rgba(196,165,123,0.08)] px-2 py-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
               {modeCopy.label}
@@ -448,7 +448,7 @@ export function PieceConfigurationWorkspace({
             id="piece-configuration-title"
             className="mt-2 font-heading text-[1.65rem] italic leading-tight text-[var(--color-charcoal)]"
           >
-            Choose the piece that will enter the project.
+            Specify the product configuration for the project.
           </h2>
           <p className="doc-type-body mt-2 text-[var(--color-quiet-ink)]">
             {modeCopy.short} Your chosen specification is saved with the
@@ -653,7 +653,7 @@ export function PieceConfigurationWorkspace({
           <div className="grid gap-2 sm:grid-cols-2">
             <label>
               <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.06em]">
-                Configuration name
+                Specification name
               </span>
               <Input
                 value={saveName}
@@ -666,7 +666,7 @@ export function PieceConfigurationWorkspace({
             </label>
             <label>
               <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.06em]">
-                Notes
+                Specification notes
               </span>
               <Input
                 value={notes}
@@ -688,7 +688,7 @@ export function PieceConfigurationWorkspace({
                 loading={savingConfiguration}
                 onClick={() => void save()}
               >
-                {activeSavedConfiguration ? "Save changes" : "Save for later"}
+                {activeSavedConfiguration ? "Save specification changes" : "Save specification"}
               </Button>
             )}
           <Button
@@ -703,10 +703,10 @@ export function PieceConfigurationWorkspace({
             }}
           >
             {revisionMode
-              ? "Apply project revision"
+              ? "Apply project specification revision"
               : draftDefinition.mode === "custom"
-                ? "Start commission"
-                : "Add configured piece"}
+                ? "Start custom commission"
+                : "Add specified product to project"}
           </Button>
         </div>
       </div>
@@ -899,7 +899,7 @@ function CustomerOwnMaterial({
   return (
     <fieldset data-testid="configuration-com">
       <legend className="text-[0.87rem] font-semibold text-[var(--color-charcoal)]">
-        Customer’s Own Material
+        Customer’s own material (COM)
       </legend>
       <p className="mt-1 text-[0.72rem] text-[var(--color-quiet-ink)]">
         {slots.length === 1
@@ -913,7 +913,7 @@ function CustomerOwnMaterial({
           onChange={(event) => onToggle(event.target.checked)}
           className="accent-[var(--color-clay)]"
         />
-        Specify the fabric now
+        Specify fabric now
       </label>
 
       {enabled && (
@@ -975,7 +975,7 @@ function CustomerOwnMaterial({
               onChange={(value) => onChange({ yardage: value })}
             />
             <ComField
-              label="Ship to"
+              label="Fabric ship-to"
               value={details.shipTo}
               placeholder="Vendor receiving, 22 Mill Rd"
               onChange={(value) => onChange({ shipTo: value })}
@@ -987,7 +987,7 @@ function CustomerOwnMaterial({
               onChange={(value) => onChange({ sidemark: value })}
             />
             <ComField
-              label="Second lead time (weeks)"
+              label="Material lead time (weeks)"
               value={details.secondLeadTimeWeeks}
               placeholder="4"
               onChange={(value) => onChange({ secondLeadTimeWeeks: value })}
@@ -1001,7 +1001,7 @@ function CustomerOwnMaterial({
                 }
                 className="accent-[var(--color-clay)]"
               />
-              Railroaded
+              Railroaded fabric
             </label>
             <div className="sm:col-span-2">
               <ComField
@@ -1062,7 +1062,7 @@ function ComponentComposer({
   return (
     <fieldset>
       <legend className="text-[0.87rem] font-semibold text-[var(--color-charcoal)]">
-        Compose the piece
+        Configure modules
       </legend>
       <p className="mt-1 text-[0.72rem] text-[var(--color-quiet-ink)]">
         Add only the modules needed. A chaise or end unit may also need a side.
@@ -1122,7 +1122,7 @@ function ComponentComposer({
                         })
                       }
                     >
-                      <option value="">Choose side</option>
+                      <option value="">Select orientation</option>
                       <option value="left">Left</option>
                       <option value="right">Right</option>
                     </Select>
@@ -1189,7 +1189,7 @@ function ConfigurationSummary({
     >
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="font-heading text-[1.05rem] italic text-[var(--color-charcoal)]">
-          This specification
+          Specification summary
         </h3>
         <span className="doc-type-meta">
           {authoritative ? "confirmed" : "estimating"}
@@ -1298,7 +1298,7 @@ function CompatibilityFeedback({
       {nonChoiceErrors.length > 0 && (
         <div role="alert">
           <p className="text-[0.76rem] font-semibold text-[var(--color-terracotta-ink)]">
-            This combination cannot be ordered yet.
+            This specification is not ready to order.
           </p>
           <ul className="mt-1 list-disc space-y-1 pl-5 text-[0.72rem] text-[var(--color-charcoal)]">
             {nonChoiceErrors.map((error) => (
@@ -1346,13 +1346,13 @@ function SavedConfigurations({
               </span>
               {item.sourceChanged && (
                 <span className="mt-0.5 block text-[0.66rem] font-medium text-[var(--color-terracotta-ink)]">
-                  Source changed · review
+                  Source revision · review required
                 </span>
               )}
             </span>
             {item.selection && (
               <Button variant="ghost" size="sm" onClick={() => onLoad(item)}>
-                Load
+                Load specification
               </Button>
             )}
           </li>

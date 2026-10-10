@@ -54,6 +54,16 @@ export type BoardAddRailTab =
   | 'scans'
   | 'feedback';
 
+const BOARD_RAIL_TAB_LABEL: Record<BoardAddRailTab, string> = {
+  project: 'Project selections',
+  library: 'Resource library',
+  captures: 'Captures',
+  uploads: 'Image uploads',
+  palettes: 'Palettes',
+  scans: 'Room surveys',
+  feedback: 'Board feedback',
+};
+
 const BOARD_RAIL_TAB_KEY = 'patina:mood-board:add-rail-tab';
 
 function projectSelectionFromRow(row: Record<string, unknown>): ProjectFfeSelection {
@@ -492,7 +502,7 @@ function PalettePanel({
   }
   if (isLoading) return <p className="text-[11px] text-[var(--text-muted)]">Loading palettes…</p>;
   if (palettes.length === 0) {
-    return <p className="text-[11px] text-[var(--text-muted)]">No proposal palettes yet.</p>;
+    return <p className="text-[11px] text-[var(--text-muted)]">No proposal palettes have been created.</p>;
   }
   return (
     <div className="space-y-2">
@@ -543,7 +553,7 @@ function ScansList({
   const visible = (scans as RoomScan[]).filter((scan) => Boolean(scan.thumbnail_url));
   if (isLoading) return <p className="text-[11px] text-[var(--text-muted)]">Loading scans…</p>;
   if (isError || visible.length === 0) {
-    return <p className="text-[11px] text-[var(--text-muted)]">No ready room scans.</p>;
+    return <p className="text-[11px] text-[var(--text-muted)]">No completed room surveys are available.</p>;
   }
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -609,7 +619,7 @@ function ProposalScansPanel({
   if (isLoading) return <p className="text-[11px] text-[var(--text-muted)]">Loading scans…</p>;
   const clientUserId = typeof proposal?.client_id === 'string' ? proposal.client_id : null;
   if (!clientUserId) {
-    return <p className="text-[11px] text-[var(--text-muted)]">Link a client to see their room scans.</p>;
+    return <p className="text-[11px] text-[var(--text-muted)]">Link a client to view their room surveys.</p>;
   }
   return <ScansList filters={{ userId: clientUserId, status: 'ready' }} {...props} />;
 }
@@ -658,7 +668,7 @@ function FeedbackPanel({
       {isLoading ? (
         <p className="text-[11px] text-[var(--text-muted)]">Loading feedback…</p>
       ) : boardItems.length === 0 ? (
-        <p className="text-[11px] text-[var(--text-muted)]">No pins match this filter.</p>
+        <p className="text-[11px] text-[var(--text-muted)]">No design board items match this filter.</p>
       ) : (
         <ul className="space-y-1.5">
           {boardItems.map((item, index) => {
@@ -924,7 +934,7 @@ export function BoardAddRail({
             onClick={() => selectTab(value)}
             className={`min-h-11 min-w-11 shrink-0 px-2 font-mono text-[8px] uppercase tracking-[0.04em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] ${tab === value ? 'border-b-2 border-[var(--color-clay)] text-[var(--color-clay-ink)]' : 'text-[var(--text-muted)]'}`}
           >
-            {value === 'project' ? 'In project' : value}
+            {BOARD_RAIL_TAB_LABEL[value]}
           </button>
         ))}
       </div>
@@ -958,7 +968,7 @@ export function BoardAddRail({
                     {selection.room?.name ?? (selection.assignmentScope === 'unassigned' ? 'Unsorted' : 'Throughout')} · {selection.designDisposition.replace('_', ' ')}
                   </span>
                 </span>
-                <span className="shrink-0 font-mono text-[8px] uppercase text-[var(--color-clay-ink)]">Place</span>
+                <span className="shrink-0 font-mono text-[8px] uppercase text-[var(--color-clay-ink)]">Place on board</span>
               </button>
             ))}
           </div>
@@ -970,7 +980,7 @@ export function BoardAddRail({
               Search personal, studio, and catalog pieces.
             </p>
             <Button variant="secondary" size="sm" className="min-h-11 min-w-11" onClick={() => setPickerOpen(true)}>
-              Browse products
+              Browse resource library
             </Button>
           </div>
         )}
@@ -1056,7 +1066,7 @@ export function BoardAddRail({
                 onClick={onBringInDeck}
                 className="ml-3 min-h-11 text-[12px] text-[var(--color-clay-ink)] underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
               >
-                Bring in a deck…
+                Import presentation…
               </button>
             )}
             {uploadProgress && <p role="status" className="text-[11px] text-[var(--text-muted)]">{uploadProgress}</p>}

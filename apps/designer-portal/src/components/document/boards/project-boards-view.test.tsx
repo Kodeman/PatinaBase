@@ -80,13 +80,13 @@ describe('the boards page', () => {
   it('lists this project’s boards, working and signed', () => {
     render(<ProjectBoardsView routeId="eng-1" />);
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Boards' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Design boards' })).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /Living room, warm/ }),
     ).toHaveAttribute('href', expect.stringContaining('/board/b1'));
     expect(screen.getByText('7 pieces · open room')).toBeInTheDocument();
-    expect(screen.getByText('Signed direction', { selector: 'span' })).toBeInTheDocument();
-    expect(screen.getByText(/Frozen at signing · 3 pieces/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Signed design direction' })).toBeInTheDocument();
+    expect(screen.getByText(/Signed snapshot · 3 items/)).toBeInTheDocument();
     // An archived board is not a board this project is composing from.
     expect(screen.queryByText('Retired')).toBeNull();
   });
@@ -191,11 +191,11 @@ describe('the boards page', () => {
     render(<ProjectBoardsView routeId="eng-1" />);
 
     expect(
-      screen.getByRole('link', { name: 'Open the Contract Room →' }),
+      screen.getByRole('link', { name: 'Open agreement workspace' }),
     ).toHaveAttribute('href', '/drafting/prop-9');
     expect(
       screen.getByText(
-        'This paper is still a proposal — its boards are in the Contract Room.',
+        'This proposal’s design boards are in the agreement workspace.',
       ),
     ).toBeInTheDocument();
   });
@@ -205,10 +205,10 @@ describe('the boards page', () => {
       engagement({ engagement_kind: 'proposal', project_id: null }),
     );
     render(<ProjectBoardsView routeId="eng-1" />);
-    expect(screen.queryByRole('link', { name: /Contract Room/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /agreement workspace/ })).toBeNull();
     expect(
       screen.getByText(
-        'This paper has no project yet — the boards open when one does.',
+        'Design boards are available once a project is created.',
       ),
     ).toBeInTheDocument();
   });
@@ -223,7 +223,7 @@ describe('the boards page', () => {
     });
 
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Boards' }),
+      screen.getByRole('heading', { level: 1, name: 'Design boards' }),
     ).toBeInTheDocument();
   });
 });

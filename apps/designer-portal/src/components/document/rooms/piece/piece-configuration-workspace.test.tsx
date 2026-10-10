@@ -109,7 +109,7 @@ describe("PieceConfigurationWorkspace", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Add configured piece" }),
+      screen.getByRole("button", { name: "Add specified product to project" }),
     ).toBeDisabled();
 
     fireEvent.click(screen.getByRole("radio", { name: /Queen/i }));
@@ -118,7 +118,7 @@ describe("PieceConfigurationWorkspace", () => {
     expect(screen.getByText("BED-Q")).toBeInTheDocument();
     expect(screen.getByText(/Width 64 in · Length 86 in/)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Add configured piece" }),
+      screen.getByRole("button", { name: "Add specified product to project" }),
     ).toBeEnabled();
   });
 
@@ -192,7 +192,7 @@ describe("PieceConfigurationWorkspace", () => {
       screen.getByText("Chaise end needs a left or right side."),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Add configured piece" }),
+      screen.getByRole("button", { name: "Add specified product to project" }),
     ).toBeDisabled();
 
     fireEvent.change(
@@ -209,7 +209,7 @@ describe("PieceConfigurationWorkspace", () => {
     expect(screen.getByText("$3,600")).toBeInTheDocument();
     expect(screen.queryByText("$4,600")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Add configured piece" }),
+      screen.getByRole("button", { name: "Add specified product to project" }),
     ).toBeEnabled();
   });
 
@@ -292,7 +292,7 @@ describe("PieceConfigurationWorkspace", () => {
       screen.getByText("Walnut is not offered with the whitewash finish."),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Add configured piece" }),
+      screen.getByRole("button", { name: "Add specified product to project" }),
     ).toBeDisabled();
 
     fireEvent.click(screen.getByRole("radio", { name: /Hand-rubbed oil/i }));
@@ -303,7 +303,7 @@ describe("PieceConfigurationWorkspace", () => {
     expect(screen.getByText("$3,450")).toBeInTheDocument();
     expect(screen.getByText("12 weeks")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Add configured piece" }),
+      screen.getByRole("button", { name: "Add specified product to project" }),
     ).toBeEnabled();
   });
 
@@ -331,14 +331,14 @@ describe("PieceConfigurationWorkspace", () => {
       components: [],
     });
     expect(
-      screen.getByRole("button", { name: "Save for later" }),
+      screen.getByRole("button", { name: "Save specification" }),
     ).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Save for later" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
     await waitFor(() => expect(onSaveConfiguration).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("radio", { name: /Queen/i }));
     expect(
-      screen.getByRole("button", { name: "Add configured piece" }),
+      screen.getByRole("button", { name: "Add specified product to project" }),
     ).toBeDisabled();
     expect(
       screen.getByText("Waiting for maker-rule check"),
@@ -357,7 +357,7 @@ describe("PieceConfigurationWorkspace", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Add configured piece" }),
+      screen.getByRole("button", { name: "Add specified product to project" }),
     );
     await waitFor(() =>
       expect(onPlace).toHaveBeenCalledWith(
@@ -410,9 +410,9 @@ describe("PieceConfigurationWorkspace", () => {
 
     expect(screen.queryByLabelText("Commission brief")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Save for later" }),
+      screen.queryByRole("button", { name: "Save specification" }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Start commission" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start custom commission" }));
 
     await waitFor(() => expect(onCustomCommission).toHaveBeenCalledWith(null));
     expect(onSaveConfiguration).not.toHaveBeenCalled();
@@ -443,9 +443,9 @@ describe("PieceConfigurationWorkspace", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Load" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load specification" }));
     expect(screen.getByText(/maker changed this piece/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save specification changes" }));
 
     await waitFor(() =>
       expect(onSaveConfiguration).toHaveBeenCalledWith(
@@ -522,7 +522,7 @@ describe("PieceConfigurationWorkspace", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Load" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load specification" }));
     expect(
       screen.getAllByText("No longer offered · remove or replace"),
     ).toHaveLength(2);
@@ -530,7 +530,7 @@ describe("PieceConfigurationWorkspace", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Remove one Chaise end" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save specification changes" }));
 
     await waitFor(() =>
       expect(onSaveConfiguration).toHaveBeenCalledWith(
@@ -576,10 +576,10 @@ describe("PieceConfigurationWorkspace", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Load" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load specification" }));
     fireEvent.click(screen.getByRole("radio", { name: /King/i }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Add configured piece" }),
+      screen.getByRole("button", { name: "Add specified product to project" }),
     );
 
     await waitFor(() =>
@@ -637,7 +637,7 @@ describe("PieceConfigurationWorkspace", () => {
     );
 
     const apply = await screen.findByRole("button", {
-      name: "Apply project revision",
+      name: "Apply project specification revision",
     });
     await waitFor(() => expect(apply).toBeEnabled());
     fireEvent.click(apply);
@@ -736,7 +736,7 @@ describe("PieceConfigurationWorkspace", () => {
       ).not.toBeInTheDocument();
 
       fireEvent.click(
-        screen.getByRole("checkbox", { name: "Specify the fabric now" }),
+        screen.getByRole("checkbox", { name: "Specify fabric now" }),
       );
       fireEvent.change(screen.getByLabelText("Fabric"), {
         target: { value: "Belgian Linen 12" },
@@ -747,7 +747,7 @@ describe("PieceConfigurationWorkspace", () => {
       fireEvent.change(screen.getByLabelText("Sidemark"), {
         target: { value: "HAYES / LIVING" },
       });
-      fireEvent.click(screen.getByRole("checkbox", { name: "Railroaded" }));
+      fireEvent.click(screen.getByRole("checkbox", { name: "Railroaded fabric" }));
 
       expect(screen.getByText(/The maker asks for/i)).toHaveTextContent(
         "14 yds",
@@ -758,7 +758,7 @@ describe("PieceConfigurationWorkspace", () => {
         ).length,
       ).toBeGreaterThan(0);
 
-      fireEvent.click(screen.getByRole("button", { name: "Save for later" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
 
       await waitFor(() =>
         expect(onSaveConfiguration).toHaveBeenCalledWith(
@@ -795,7 +795,7 @@ describe("PieceConfigurationWorkspace", () => {
         screen.getByRole("radio", { name: /Customer's Own Material/i }),
       );
       fireEvent.click(
-        screen.getByRole("checkbox", { name: "Specify the fabric now" }),
+        screen.getByRole("checkbox", { name: "Specify fabric now" }),
       );
       fireEvent.change(screen.getByLabelText("Fabric"), {
         target: { value: "Belgian Linen 12" },
@@ -803,7 +803,7 @@ describe("PieceConfigurationWorkspace", () => {
       fireEvent.click(screen.getByRole("radio", { name: /House Linen/i }));
 
       expect(screen.queryByTestId("configuration-com")).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "Save for later" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
 
       await waitFor(() =>
         expect(onSaveConfiguration).toHaveBeenCalledWith(
@@ -845,7 +845,7 @@ describe("PieceConfigurationWorkspace", () => {
         />,
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "Load" }));
+      fireEvent.click(screen.getByRole("button", { name: "Load specification" }));
 
       expect(screen.getByLabelText("Fabric")).toHaveValue("Mohair Velvet");
       expect(screen.getByLabelText("Mill")).toHaveValue("Pierre Frey");

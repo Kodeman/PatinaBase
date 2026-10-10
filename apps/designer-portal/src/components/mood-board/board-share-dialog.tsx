@@ -142,9 +142,7 @@ export function BoardShareDialog({
         <DialogHeader>
           <DialogTitle>Share {boardName}</DialogTitle>
           <DialogDescription>
-            Anyone with the link can view this board only. They cannot edit it. Reactions are
-            off unless you turn them on for a new link — a link&rsquo;s power never changes
-            once it is made.
+            Share view-only access to this design board. Feedback is optional and fixed when the review link is created. Create a new link to change access.
           </DialogDescription>
         </DialogHeader>
 
@@ -154,7 +152,7 @@ export function BoardShareDialog({
               Link created {copied ? 'and copied' : ''}
             </h3>
             <p className="mt-1 text-[12px] text-[var(--text-muted)]">
-              This raw link is shown once. Only its hash is stored.
+              Copy this share link now. It is only displayed once.
             </p>
             <div className="mt-3 flex items-center gap-2">
               <Input
@@ -173,14 +171,14 @@ export function BoardShareDialog({
 
         <section aria-labelledby="active-board-links">
           <h3 id="active-board-links" className="font-mono text-[10px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
-            Active links
+            Active review links
           </h3>
           {isLoading ? (
             <p className="mt-2 text-[12px] text-[var(--text-muted)]">Loading links…</p>
           ) : isError ? (
-            <p role="alert" className="mt-2 text-[12px] text-[var(--color-clay-ink)]">Links could not be read.</p>
+            <p role="alert" className="mt-2 text-[12px] text-[var(--color-clay-ink)]">Share links could not be loaded. Try again.</p>
           ) : activeShares.length === 0 ? (
-            <p className="mt-2 text-[12px] italic text-[var(--text-muted)]">No active links.</p>
+            <p className="mt-2 text-[12px] italic text-[var(--text-muted)]">No active review links.</p>
           ) : (
             <ul className="mt-2 space-y-2">
               {activeShares.map((share) => (
@@ -202,7 +200,7 @@ export function BoardShareDialog({
                     disabled={revokeShare.isPending}
                     onClick={() => void handleRevoke(share)}
                   >
-                    Revoke
+                    Revoke share link
                   </Button>
                 </li>
               ))}
@@ -212,11 +210,11 @@ export function BoardShareDialog({
 
         <section className="border-t border-[var(--border-default)] pt-4" aria-labelledby="new-board-link">
           <h3 id="new-board-link" className="font-mono text-[10px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
-            New link
+            New review link
           </h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="text-[11px] text-[var(--text-muted)]">
-              Label <span className="italic">(optional)</span>
+              Review link name <span className="italic">(optional)</span>
               <Input
                 value={label}
                 onChange={(event) => setLabel(event.target.value)}
@@ -225,7 +223,7 @@ export function BoardShareDialog({
               />
             </label>
             <label className="text-[11px] text-[var(--text-muted)]">
-              Expires <span className="italic">(optional)</span>
+              Expiry date <span className="italic">(optional)</span>
               <Input
                 type="date"
                 value={expiryDate}
@@ -243,10 +241,7 @@ export function BoardShareDialog({
               className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-clay)]"
             />
             <span>
-              <span className="text-[var(--text-primary)]">Allow reactions</span> — the reader
-              can tap approve or pass on each piece and leave a short note. Fixed when the link
-              is made; make a fresh link to change it. The link is shared, not personal —
-              everyone who has it sees every reaction left through it, not just their own.
+              <span className="text-[var(--text-primary)]">Enable item feedback</span> — recipients can approve or pass on each item and leave a note. This access is fixed when the link is created; make a new link to change it. Everyone using the link sees all feedback submitted through it.
             </span>
           </label>
           <Button
@@ -255,7 +250,7 @@ export function BoardShareDialog({
             disabled={createShare.isPending}
             onClick={() => void handleCreate()}
           >
-            {createShare.isPending ? 'Creating…' : 'Create and copy link'}
+            {createShare.isPending ? 'Creating…' : 'Create and copy review link'}
           </Button>
         </section>
 

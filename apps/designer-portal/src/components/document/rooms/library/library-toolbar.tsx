@@ -17,21 +17,21 @@ const LENSES: Array<{
   label: string;
   countKey: keyof LayerCounts;
 }> = [
-  { layer: "personal", label: "Mine", countKey: "personal" },
+  { layer: "personal", label: "Personal", countKey: "personal" },
   { layer: "studio", label: "Studio", countKey: "studio" },
-  { layer: "catalog", label: "Patina", countKey: "catalog" },
+  { layer: "catalog", label: "Patina catalog", countKey: "catalog" },
 ];
 
 const CAPABILITY_FILTERS: Array<{
   value: LibraryCapabilityFilter;
   label: string;
 }> = [
-  { value: "all", label: "All pieces" },
-  { value: "standard", label: "One spec" },
+  { value: "all", label: "All products" },
+  { value: "standard", label: "Fixed specification" },
   { value: "variant", label: "Variants" },
-  { value: "configured", label: "Options" },
+  { value: "configured", label: "Configurable" },
   { value: "modular", label: "Modular" },
-  { value: "custom", label: "Custom" },
+  { value: "custom", label: "Custom commissions" },
 ];
 
 function ActiveStrata() {
@@ -179,7 +179,7 @@ export function LibraryToolbar({
           data-library-add-trigger
           onClick={() => setAddOpen((value) => !value)}
         >
-          Add to Library
+          Add to library
         </DocumentAction>
 
         {addOpen && (
@@ -191,7 +191,7 @@ export function LibraryToolbar({
             className="absolute right-0 top-[calc(100%+4px)] z-30 w-[min(260px,calc(100vw-3rem))] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-4 py-3 motion-safe:animate-[doc-fade_200ms_ease-out] motion-reduce:animate-none"
           >
             <p className="mb-1 text-[14px] leading-relaxed text-[var(--color-charcoal)]">
-              Start a piece by hand, or bring in a list.
+              Add a product record or import a product list.
             </p>
             <div className="flex flex-col items-start">
               <DocumentAction
@@ -203,7 +203,7 @@ export function LibraryToolbar({
                 trailing="→"
                 onClick={() => chooseAddAction(onCompose)}
               >
-                Compose a piece
+                Create a product record
               </DocumentAction>
               <DocumentAction
                 actionKey="import-pieces"
@@ -213,7 +213,7 @@ export function LibraryToolbar({
                 trailing="→"
                 onClick={() => chooseAddAction(onImport)}
               >
-                Import a list
+                Import product list
               </DocumentAction>
             </div>
           </div>
@@ -226,7 +226,7 @@ export function LibraryToolbar({
         className="order-last flex w-full flex-wrap items-center gap-1.5 border-t border-[var(--doc-ink-border)] pt-2"
       >
         <span className="mr-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
-          Can be ordered as
+          Specification type
         </span>
         {CAPABILITY_FILTERS.map((filter) => (
           <FilterPill

@@ -124,7 +124,7 @@ describe("LibraryReachIn", () => {
     renderReachIn();
 
     expect(
-      screen.getByPlaceholderText(/reach into the library/i),
+      screen.getByPlaceholderText(/search the resource library/i),
     ).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });

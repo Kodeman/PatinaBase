@@ -115,11 +115,11 @@ describe('BoardTemplateDialog', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rename template' }));
     fireEvent.change(screen.getByLabelText('Rename Warm neutrals'), {
       target: { value: 'Soft neutrals' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save template name' }));
     await waitFor(() =>
       expect(rename).toHaveBeenCalledWith({
         templateId: 'template-1',
@@ -128,7 +128,7 @@ describe('BoardTemplateDialog', () => {
       }),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete template' }));
     await waitFor(() =>
       expect(remove).toHaveBeenCalledWith({ templateId: 'template-1', studioId: 'studio-1' }),
     );

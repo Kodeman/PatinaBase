@@ -39,16 +39,16 @@ import { subscribeToLibraryCapture } from "./library-capture-events";
 
 const SHELF_COPY: Record<LayerProductLayer, { name: string; meta: string }> = {
   personal: {
-    name: "My Library",
-    meta: "raw captures · from the extension, photos, paste",
+    name: "Personal library",
+    meta: "Unreviewed products · websites, photos, and links",
   },
   studio: {
-    name: "Studio Library",
-    meta: "proven · promoted from captures",
+    name: "Studio library",
+    meta: "Products shared within your studio",
   },
   catalog: {
-    name: "Patina Catalog",
-    meta: "maker pieces · order through Patina · nominate a maker",
+    name: "Patina catalog",
+    meta: "Trade products through Patina · recommend a maker",
   },
 };
 
@@ -116,7 +116,7 @@ export function LibraryRoom() {
     actionKey: "capture-piece",
     surfaceKey: "library",
     regionKey: "room-head",
-    label: "Capture",
+    label: "Capture a product",
     target: { kind: "press", onPress: () => setCaptureOpen(true) },
   });
 
@@ -128,7 +128,7 @@ export function LibraryRoom() {
 
   const handleNominate = async (productId: string) => {
     if (!studioId) {
-      setToast("Nominating a maker needs a studio on file.");
+      setToast("Add your studio details before recommending a maker.");
       return;
     }
     try {
@@ -141,18 +141,18 @@ export function LibraryRoom() {
       const vendorId =
         (data as { vendor_id?: string } | null)?.vendor_id ?? null;
       if (!vendorId) {
-        setToast("This piece has no maker on file to nominate.");
+        setToast("Add the maker to this product before recommending them.");
         return;
       }
       setNominateVendorId(vendorId);
     } catch {
-      setToast("Could not open the nomination just now.");
+      setToast("Could not open the maker recommendation. Try again.");
     }
   };
 
   return (
     <RoomShell
-      title="The Library"
+      title="Resource library"
       count={total != null ? `${total} pieces` : undefined}
       action={
         <DocumentActionGroup

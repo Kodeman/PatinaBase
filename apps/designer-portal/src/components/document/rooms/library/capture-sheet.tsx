@@ -40,11 +40,11 @@ export function CaptureSheet({
     const trimmedUrl = url.trim();
     const trimmedName = name.trim();
     if (!user?.id) {
-      setError('Your session is still resolving — try again in a moment.');
+      setError('Your account is still loading. Please try again shortly.');
       return;
     }
     if (!trimmedUrl && !trimmedName) {
-      setError('Paste a URL or name the piece first.');
+      setError('Enter a source link or product name.');
       return;
     }
     try {
@@ -61,25 +61,24 @@ export function CaptureSheet({
       reset();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Capture failed. Try again.');
+      setError(e instanceof Error ? e.message : 'Could not save the product record. Try again.');
     }
   };
 
   return (
-    <RoomSheet open={open} onClose={onClose} title="Capture into My Library">
+    <RoomSheet open={open} onClose={onClose} title="Capture a product">
       <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         Capture · into My Library
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
-        Bring something in
+        Add a product
       </h2>
       <p className="mb-5 mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
-        Captures land on your shelf raw — no taxonomy, no queue. You teach them
-        when you’re ready.
+        Save the product record now and complete its details later.
       </p>
 
       <label className="mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-        Paste a product URL
+        Product source link
       </label>
       <input
         type="url"
@@ -101,7 +100,7 @@ export function CaptureSheet({
       />
 
       <p className="mt-3 text-[0.66rem] italic text-[var(--color-aged-oak)]">
-        The Chrome extension and photo capture land on this same shelf.
+        Browser and photo captures also appear in your personal library.
       </p>
 
       {error && (
@@ -119,10 +118,10 @@ export function CaptureSheet({
           actionKey="capture-piece"
           variant="primary"
           loading={capture.isPending}
-          loadingLabel="Capturing…"
+          loadingLabel="Saving product…"
           onClick={() => void submit()}
         >
-          Capture to My Library
+          Save to personal library
         </DocumentAction>
         <DocumentAction
           actionKey="cancel-capture"

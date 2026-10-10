@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * "Find this piece" (US-15 W4a) — the deck resolver for one picture pin.
+ * "Identify product" (US-15 W4a) — the deck resolver for one picture pin.
  * The pin becomes a `source_format = 'pin'` import (register_board_deck_import,
  * one job per pin, resumable), the resolver runs for it under the designer's
  * JWT, and its 3–5 candidates are shown inline. Keep goes through the same
@@ -25,13 +25,13 @@ import {
 export const PHOTO_MATCH_FLAG = 'board-photo-match';
 
 export const FIND_PIECE_COPY = {
-  action: 'Find this piece',
-  finding: 'Finding this piece',
-  library: 'From your library',
+  action: 'Identify product',
+  finding: 'Finding product matches',
+  library: 'Resource library matches',
   likelyLook: DECK_REVIEW_COPY.likelyLook,
   possibleLook: DECK_REVIEW_COPY.possibleLook,
-  unavailable: 'Photo match is unavailable right now',
-  nothing: 'Nothing close yet',
+  unavailable: 'Product image matching is temporarily unavailable.',
+  nothing: 'No close product matches',
   keep: DECK_REVIEW_COPY.keep,
   kept: DECK_REVIEW_COPY.kept,
   failed: 'That did not go through.',
@@ -50,7 +50,7 @@ export interface FindPieceGroups {
 
 /**
  * The inline groups: anything found by link or words, and look matches in the
- * designer's own (personal or studio) library, under "From your library";
+ * designer's own (personal or studio) library, under "Resource library matches";
  * catalog look matches under "Likely, by look" / "Possible, by look".
  */
 export function groupFoundCandidates(candidates: readonly DeckImportCandidate[]): FindPieceGroups {

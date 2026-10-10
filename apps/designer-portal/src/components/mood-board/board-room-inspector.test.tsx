@@ -108,13 +108,13 @@ describe('BoardRoomInspector multi-selection', () => {
     expect(screen.getByText('2 pins')).toBeInTheDocument();
     expect(screen.queryByLabelText('Width')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Rotation')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Left' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'H gaps' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Align left' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Distribute horizontal spacing' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Lock 2 pins' }));
     expect(api.toggleLock).toHaveBeenCalledWith(['chair', 'rug']);
 
-    fireEvent.change(screen.getByLabelText('Section'), { target: { value: 'living' } });
+    fireEvent.change(screen.getByLabelText('Composition section'), { target: { value: 'living' } });
     expect(api.setItemsSectionMembership).toHaveBeenCalledWith(['chair', 'rug'], 'living');
 
     const deleteButton = screen.getByRole('button', { name: 'Delete reference' });
@@ -146,7 +146,7 @@ describe('BoardRoomInspector project placement lifecycle', () => {
       </div>,
     );
 
-    expect(screen.getByText(/removing this pin removes only the board placement/i)).toBeInTheDocument();
+    expect(screen.getByText(/Project selection retained if this board placement is removed/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Remove placement' }));
     expect(api.deleteItems).toHaveBeenCalledWith();
   });

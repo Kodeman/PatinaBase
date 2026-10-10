@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Bring in a Deck (US-15 W2) — "Lay it out": the browser turns a parsed deck
+ * Bring in a Deck (US-15 W2) — "Place presentation on board": the browser turns a parsed deck
  * into board sections and pins, through the room's own command and save path.
  *
  * Order: register (idempotent on board + sha-256; a re-drop resumes) → crops
@@ -52,14 +52,14 @@ export const DECK_OPEN_EVENT = 'document:open-deck-import';
 
 /** Contract copy lexicon (PLAN.md "The designer flow"; no codes in the UI). */
 export const DECK_COPY = {
-  notSupported: "Decks aren't supported here yet",
-  resave: 'Re-save it as .pptx and bring it in again.',
-  unreadable: "This deck couldn't be read — re-save it from PowerPoint and try again.",
-  tooLarge: 'This deck is too large to bring in here.',
-  resume: 'Already brought in — resume?',
-  hold: 'Confirm the piece first',
-  layOut: 'Lay it out',
-  bringIn: 'Bring in a deck…',
+  notSupported: "Presentation import is unavailable here.",
+  resave: 'Save as .pptx and retry the import.',
+  unreadable: "Presentation could not be read. Re-save in PowerPoint and retry.",
+  tooLarge: 'Presentation exceeds the import size limit.',
+  resume: 'Resume existing import?',
+  hold: 'Confirm product identification first',
+  layOut: 'Place presentation on board',
+  bringIn: 'Import presentation…',
 } as const;
 
 const DECK_EXTENSIONS = new Set(['pptx', 'ppsx', 'potx']);

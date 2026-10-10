@@ -183,7 +183,7 @@ export function LibraryCard({
                 actionKey="open-piece-teaching"
                 onClick={() => setOpen((v) => !v)}
               >
-                {open ? "Close" : needsValidation ? "Validate →" : "Teach →"}
+                {open ? "Close" : needsValidation ? "Review attribution" : "Add style attribution"}
               </CardLink>
             )}
             {onPromote && (
@@ -192,7 +192,7 @@ export function LibraryCard({
                 subtle
                 onClick={() => onPromote(item.id)}
               >
-                Promote ↑
+                Add to studio library
               </CardLink>
             )}
             {onNominate && (
@@ -201,7 +201,7 @@ export function LibraryCard({
                 subtle
                 onClick={() => onNominate(item.id)}
               >
-                Nominate ↗
+                Recommend maker
               </CardLink>
             )}
           </div>
@@ -331,7 +331,7 @@ function InlineQuickTags({
           loadingLabel="Saving…"
           onClick={() => void save()}
         >
-          Save teaching
+          Save attribution
         </DocumentAction>
         <DocumentAction
           actionKey="open-deep-analysis"
@@ -339,7 +339,7 @@ function InlineQuickTags({
           onClick={onDeep}
           trailing="→"
         >
-          Deep analysis
+          Style and client suitability
         </DocumentAction>
       </DocumentActionRow>
     </div>
@@ -350,7 +350,7 @@ function InlineQuickTags({
  *  rows, folded in beside Quick Tags / Deep Analysis. Shows the read on file and
  *  asks for a second eye: Agree confirms it, Disagree flags it for review. Votes
  *  go through the real useSubmitValidation path (errorSurface 'inline' → no
- *  toast, D2/R83). The card's "Needs a look" badge lifts on the queue refetch. */
+ *  toast, D2/R83). The card's "Attribution review needed" badge lifts on the queue refetch. */
 function InlineValidate({
   productId,
   onDeep,
@@ -419,8 +419,8 @@ function InlineValidate({
       {done ? (
         <p className="mt-3 text-[14px] italic text-[var(--color-charcoal)]">
           {done === "confirm"
-            ? "Recorded — thank you for weighing in."
-            : "Flagged for another eye."}
+            ? "Attribution review recorded."
+            : "Flagged for attribution review."}
         </p>
       ) : (
         <DocumentActionRow
@@ -437,7 +437,7 @@ function InlineValidate({
             loadingLabel="Recording…"
             onClick={() => void vote("confirm")}
           >
-            Agree
+            Confirm attribution
           </DocumentAction>
           <DocumentAction
             actionKey="flag-piece-read"
@@ -447,7 +447,7 @@ function InlineValidate({
             loadingLabel="Recording…"
             onClick={() => void vote("flag")}
           >
-            Disagree
+            Flag attribution for review
           </DocumentAction>
           <DocumentAction
             actionKey="open-deep-analysis"
@@ -455,7 +455,7 @@ function InlineValidate({
             onClick={onDeep}
             trailing="→"
           >
-            Deep analysis
+            Style and client suitability
           </DocumentAction>
         </DocumentActionRow>
       )}

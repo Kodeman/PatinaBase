@@ -91,7 +91,7 @@ describe("Library omnibox", () => {
       query: "walnut cabinet",
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ask a sourcing question" }));
     expect(screen.getByTestId("engine-results")).toHaveTextContent(
       "walnut cabinet",
     );
@@ -134,7 +134,7 @@ describe("Library lens and Add disclosure", () => {
   it("shows one active counted shelf lens and supports arrow-key selection", async () => {
     render(<ToolbarHarness onCompose={jest.fn()} onImport={jest.fn()} />);
 
-    const mine = screen.getByRole("tab", { name: "Mine, 2 pieces" });
+    const mine = screen.getByRole("tab", { name: "Personal, 2 pieces" });
     const studio = screen.getByRole("tab", { name: "Studio, 7 pieces" });
     const panel = screen.getByRole("tabpanel");
     expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
@@ -149,7 +149,7 @@ describe("Library lens and Add disclosure", () => {
     expect(screen.getByRole("tabpanel")).toHaveTextContent("studio");
 
     fireEvent.keyDown(studio, { key: "ArrowRight" });
-    const patina = screen.getByRole("tab", { name: "Patina, 31 pieces" });
+    const patina = screen.getByRole("tab", { name: "Patina catalog, 31 pieces" });
     expect(patina).toHaveAttribute("aria-controls", panel.id);
     expect(patina).toHaveAttribute("aria-selected", "true");
     await waitFor(() => expect(patina).toHaveFocus());
@@ -160,7 +160,7 @@ describe("Library lens and Add disclosure", () => {
     const onImport = jest.fn();
     render(<ToolbarHarness onCompose={onCompose} onImport={onImport} />);
 
-    const trigger = screen.getByRole("button", { name: "Add to Library" });
+    const trigger = screen.getByRole("button", { name: "Add to library" });
     fireEvent.click(trigger);
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(
@@ -168,22 +168,22 @@ describe("Library lens and Add disclosure", () => {
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Compose a piece" }),
+        screen.getByRole("button", { name: "Create a product record" }),
       ).toHaveFocus(),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Compose a piece" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create a product record" }));
     expect(onCompose).toHaveBeenCalledTimes(1);
     expect(
       screen.queryByRole("region", { name: "Add to Library options" }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(trigger);
-    fireEvent.click(screen.getByRole("button", { name: "Import a list" }));
+    fireEvent.click(screen.getByRole("button", { name: "Import product list" }));
     expect(onImport).toHaveBeenCalledTimes(1);
 
     fireEvent.click(trigger);
-    fireEvent.keyDown(screen.getByRole("button", { name: "Compose a piece" }), {
+    fireEvent.keyDown(screen.getByRole("button", { name: "Create a product record" }), {
       key: "Escape",
     });
     expect(
@@ -201,7 +201,7 @@ describe("Library lens and Add disclosure", () => {
   it("filters the family shelf by honest configuration capability", () => {
     render(<ToolbarHarness onCompose={jest.fn()} onImport={jest.fn()} />);
 
-    const all = screen.getByRole("button", { name: "All pieces" });
+    const all = screen.getByRole("button", { name: "All products" });
     const modular = screen.getByRole("button", { name: "Modular" });
     expect(all).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("active-capability")).toHaveTextContent("all");

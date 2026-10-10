@@ -92,8 +92,8 @@ describe('BoardApprovedPinsPanel', () => {
         onPromoted={jest.fn()}
       />,
     );
-    expect(screen.getByText('On schedule')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /send to schedule/i })).not.toBeInTheDocument();
+    expect(screen.getByText('On item schedule')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add to item schedule/i })).not.toBeInTheDocument();
   });
 
   it('sends a single approved, not-yet-scheduled pin via the promotion mutation', async () => {
@@ -110,7 +110,7 @@ describe('BoardApprovedPinsPanel', () => {
         onPromoted={onPromoted}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /send to schedule/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add to item schedule/i }));
     await waitFor(() => expect(promoteMutateAsync).toHaveBeenCalledTimes(1));
     expect(promoteMutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -146,7 +146,7 @@ describe('BoardApprovedPinsPanel', () => {
         onPromoted={jest.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /send all approved \(2\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add approved selections \(2\)/i }));
     await waitFor(() => expect(promoteMutateAsync).toHaveBeenCalledTimes(2));
     const calledItemIds = promoteMutateAsync.mock.calls.map((call) => call[0].boardItemId);
     expect(calledItemIds.sort()).toEqual(['pin-1', 'pin-2']);
@@ -177,7 +177,7 @@ describe('BoardApprovedPinsPanel', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /send all approved \(2\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add approved selections \(2\)/i }));
     await waitFor(() => expect(promoteMutateAsync).toHaveBeenCalledTimes(2));
 
     // The later success (pin-2) must not clear the earlier failure (pin-1):
@@ -200,7 +200,7 @@ describe('BoardApprovedPinsPanel', () => {
         onPromoted={jest.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /send to schedule/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add to item schedule/i }));
     await waitFor(() => expect(promoteMutateAsync).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/could not be sent/i)).not.toBeInTheDocument();
   });
@@ -218,7 +218,7 @@ describe('BoardApprovedPinsPanel', () => {
         onPromoted={jest.fn()}
       />,
     );
-    const badge = screen.getByText('Guest');
+    const badge = screen.getByText('Guest response');
     expect(badge).toHaveAttribute('data-verdict-source', 'guest');
   });
 
@@ -235,7 +235,7 @@ describe('BoardApprovedPinsPanel', () => {
         onPromoted={jest.fn()}
       />,
     );
-    expect(screen.queryByText('Guest')).not.toBeInTheDocument();
+    expect(screen.queryByText('Guest response')).not.toBeInTheDocument();
   });
 
   it('badges a pin approved by both a guest link and a signed-in client', () => {
@@ -252,6 +252,6 @@ describe('BoardApprovedPinsPanel', () => {
         onPromoted={jest.fn()}
       />,
     );
-    expect(screen.getByText('Guest')).toBeInTheDocument();
+    expect(screen.getByText('Guest response')).toBeInTheDocument();
   });
 });

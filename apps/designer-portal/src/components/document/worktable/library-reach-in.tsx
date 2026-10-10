@@ -213,7 +213,7 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           aria-label="Reach into the library"
-          placeholder="Reach into the library…"
+          placeholder="Search the resource library…"
           data-testid="library-reach-in-line"
           tabIndex={sheetOpen ? -1 : undefined}
           className={inputClass}
@@ -223,7 +223,7 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
       <DocSheet
         open={sheetOpen}
         onClose={closeSheet}
-        title="The Library"
+        title="Resource library"
         icon={Library}
         pageLabel="Reach-in"
       >
@@ -240,7 +240,7 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Reach into the library"
-            placeholder="Reach into the library…"
+            placeholder="Search the resource library…"
             data-testid="library-reach-in-sheet-input"
             className={inputClass}
           />
@@ -259,13 +259,13 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
         <div aria-busy={isLoading || undefined} className="mt-3">
           {!searching && (
             <p className="py-3 font-heading text-[14px] italic text-[var(--color-quiet-ink)]">
-              Keep typing — pieces surface as you reach.
+              Keep typing to search products.
             </p>
           )}
 
           {searching && isLoading && (
             <div className="flex items-center gap-2 py-3">
-              <StrataSweep size="sm" label="Searching the shelves" />
+              <StrataSweep size="sm" label="Searching the resource library…" />
               <span className="font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
                 Looking…
               </span>
@@ -274,7 +274,7 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
 
           {searching && isError && (
             <p className="py-3 text-[14px] italic text-[var(--color-charcoal)]">
-              The shelves could not be searched just now.
+              The resource library could not be searched. Try again.
             </p>
           )}
 

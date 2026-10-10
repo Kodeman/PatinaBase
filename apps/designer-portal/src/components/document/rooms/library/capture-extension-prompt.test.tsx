@@ -36,7 +36,7 @@ describe("CaptureExtensionPrompt", () => {
   it("fails closed when no Web Store configuration exists", () => {
     delete process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE;
     const { rerender } = render(<CaptureExtensionPrompt />);
-    expect(screen.queryByText(/Bring product pages/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Save product pages/i)).not.toBeInTheDocument();
     process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE = "under_review";
     rerender(<CaptureExtensionPrompt />);
   });
@@ -44,9 +44,9 @@ describe("CaptureExtensionPrompt", () => {
   it("shows the honest update-under-review alternative and permanently recedes on dismissal", () => {
     const { unmount } = render(<CaptureExtensionPrompt />);
 
-    expect(screen.getByText(/Bring product pages/i)).toBeInTheDocument();
+    expect(screen.getByText(/Save product pages/i)).toBeInTheDocument();
     expect(mockPromptViewed).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: /Paste a URL/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Paste a source link/i })).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", { name: /Dismiss extension prompt/i }),
@@ -55,11 +55,11 @@ describe("CaptureExtensionPrompt", () => {
       surface: "library",
       install_mode: "under_review",
     });
-    expect(screen.queryByText(/Bring product pages/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Save product pages/i)).not.toBeInTheDocument();
 
     unmount();
     render(<CaptureExtensionPrompt />);
-    expect(screen.queryByText(/Bring product pages/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Save product pages/i)).not.toBeInTheDocument();
   });
 
   it("offers the paste-URL alternative while Chrome is under review", () => {
@@ -67,12 +67,12 @@ describe("CaptureExtensionPrompt", () => {
     window.addEventListener("document:open-library-capture", opened);
     render(<CaptureExtensionPrompt />);
     fireEvent.click(
-      screen.getByRole("button", { name: /Paste a URL/i }),
+      screen.getByRole("button", { name: /Paste a source link/i }),
     );
 
     expect(opened).toHaveBeenCalledTimes(1);
     expect(mockInstallClicked).toHaveBeenCalledWith({ surface: "library", install_mode: "under_review" });
-    expect(screen.queryByText(/Bring product pages/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Save product pages/i)).not.toBeInTheDocument();
     window.removeEventListener("document:open-library-capture", opened);
   });
 });

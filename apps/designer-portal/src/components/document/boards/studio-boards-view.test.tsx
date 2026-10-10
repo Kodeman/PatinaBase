@@ -141,7 +141,7 @@ describe('StudioBoardsView', () => {
       data: { boards: [board()], capped: false },
     });
     render(<StudioBoardsView />);
-    for (const name of ['All', 'Awaiting reaction', 'Reactions in', 'Approved · pipeline']) {
+    for (const name of ['All design boards', 'Awaiting board feedback', 'Feedback received', 'Approved items for item schedule']) {
       expect(screen.getByRole('link', { name })).toHaveClass('min-h-11');
     }
   });
@@ -153,7 +153,7 @@ describe('StudioBoardsView', () => {
       data: { boards: [board()], capped: true },
     });
     render(<StudioBoardsView />);
-    expect(screen.getByText('Showing the most recently updated boards only.')).toBeInTheDocument();
+    expect(screen.getByText('Showing the most recently updated design boards.')).toBeInTheDocument();
   });
 
   it('shows an empty state when no boards are active', () => {
@@ -163,6 +163,6 @@ describe('StudioBoardsView', () => {
       data: { boards: [], capped: false },
     });
     render(<StudioBoardsView />);
-    expect(screen.getByText('No active boards yet.')).toBeInTheDocument();
+    expect(screen.getByText('No active design boards yet.')).toBeInTheDocument();
   });
 });

@@ -116,14 +116,14 @@ export function FactsRail({
 
   return (
     <aside className="border-t border-[var(--doc-ink-border)]">
-      <Fact k="Area">
+      <Fact k="Floor area">
         {area} sq ft · {ftIn(w)} × {ftIn(d)}
       </Fact>
 
       <Fact k="Walls">
         {plural(geometry.walls.length, 'wall')} · {ftIn(geometry.wallH)}
-        <Sub>stands in for ceiling — RoomPlan captures none</Sub>
-        {thicknessConvention && <Sub>wall thickness drawn by convention</Sub>}
+        <Sub>Ceiling height inferred from walls; ceiling not captured.</Sub>
+        {thicknessConvention && <Sub>Wall thickness is schematic.</Sub>}
       </Fact>
 
       <Fact k="Openings">
@@ -132,12 +132,12 @@ export function FactsRail({
         {plural(geometry.openings.length, 'opening')}
       </Fact>
 
-      <Fact k="Detected">
+      <Fact k="Detected furnishings">
         {detected.length > 0 ? detected.join(' · ') : 'nothing detected'}
       </Fact>
 
       {photos && photos.count > 0 && (
-        <Fact k="Photos">
+        <Fact k="Survey photos">
           {/* Quiet, not button-chrome (Measure-toolrow precedent): a scored
               word in the fact-value slot (I107) — the hairline draws under it
               on hover/focus and the mono "view" hint arrives with it. */}
@@ -156,7 +156,7 @@ export function FactsRail({
         </Fact>
       )}
 
-      <Fact k="Scan">
+      <Fact k="Survey details">
         {scanDate ? fmtDay(scanDate) : '—'}
         {qualityGrade ? ` · quality ${qualityGrade}` : ''}
         {coveragePercentage != null
@@ -165,7 +165,7 @@ export function FactsRail({
       </Fact>
 
       {roomFile && (
-        <Fact k="Room File">
+        <Fact k="Survey documents">
           {/* Quiet, not button-chrome (Photos/Measure precedent): the same
               scored word in the fact-value slot, with a mono "open" hint on
               hover/focus. Links into /room/[scanId]/file (R21 dissolve). */}
@@ -173,7 +173,7 @@ export function FactsRail({
             href={roomFile.href}
             className="group inline-flex min-h-11 items-center gap-1.5 font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-charcoal)] no-underline outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
-            <span className="da-score-hover">drawing set</span>
+            <span className="da-score-hover">Open drawing set</span>
             <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               open
             </span>
@@ -188,7 +188,7 @@ export function FactsRail({
       )}
 
       {lowConfWalls.length > 0 && (
-        <Fact k="Verify">
+        <Fact k="Site verification required">
           <Sub>
             {lowConfWalls.map((wall) => wall.name).join(' · ')} — drawn dashed;
             confirm on site
@@ -216,7 +216,7 @@ export function FactsRail({
             <span
               className={cn('da-score-hover', measure.armed && 'da-score-on')}
             >
-              Measure
+              Measure distance
             </span>
           </button>
           {measure.hasMeasurement && (
@@ -225,7 +225,7 @@ export function FactsRail({
               onClick={measure.onClear}
               className="inline-flex min-h-11 min-w-11 items-center justify-center px-1.5 font-mono text-[12px] font-light uppercase tracking-[0.12em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >
-              <span className="da-score-hover">Clear</span>
+              <span className="da-score-hover">Clear measurement</span>
             </button>
           )}
         </div>

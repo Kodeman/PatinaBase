@@ -2,7 +2,7 @@
 
 /**
  * The boards, on a page of their own (J-01). The list used to exist only
- * inside the ≥1440 shelf leaf, so the ticket's `Boards` row had nowhere to go
+ * inside the ≥1440 shelf leaf, so the ticket's `Design boards` row had nowhere to go
  * at 1280 and 390. This is that destination: the same two reads the leaf
  * makes, the same act that starts a board, and the return the plan room and
  * the spec book already print.
@@ -87,7 +87,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
     }
   }, [resolution, router]);
 
-  // F30 — the Add-to-project sheet's "Start a board" fires this at whichever
+  // F30 — the Add-to-project sheet's "Create design board" fires this at whichever
   // boards surface is mounted; on this page that is the builder below.
   useEffect(() => {
     const open = () => setStarting(true);
@@ -133,7 +133,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
 
   if (resolution?.kind === 'redirect') return null;
 
-  // ⌘K offers one `Boards` door on every document (F62), and a proposal-stage
+  // ⌘K offers one `Design boards` door on every document (F62), and a proposal-stage
   // document has boards — they live in the Drafting Room, which is where this
   // page sends the reader rather than dead-ending on a sentence.
   if (!projectId) {
@@ -142,8 +142,8 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
       <main className="min-h-screen bg-[var(--doc-paper)] px-8 py-16">
         <p className="max-w-lg font-heading text-[1.25rem] italic text-[var(--color-charcoal)]">
           {draftingProposalId
-            ? 'This paper is still a proposal — its boards are in the Contract Room.'
-            : 'This paper has no project yet — the boards open when one does.'}
+            ? 'This proposal’s design boards are in the agreement workspace.'
+            : 'Design boards are available once a project is created.'}
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-6">
           {draftingProposalId && (
@@ -151,14 +151,14 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
               href={`/drafting/${draftingProposalId}`}
               className="inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]"
             >
-              Open the Contract Room →
+              Open agreement workspace
             </Link>
           )}
           <Link
             href={`/doc/${routeId}`}
             className="inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
-            ← Back to the document
+            ← Back to project file
           </Link>
         </div>
       </main>
@@ -185,15 +185,15 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
             ← {projectName}
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-heading text-xl">Boards</h1>
+            <h1 className="truncate font-heading text-xl">Design boards</h1>
             <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {empty
-                ? 'No boards yet · start one'
+                ? 'No design boards yet. Create one to begin.'
                 : `${liveBoards.length} working · ${frozenBoards.length} signed`}
             </p>
           </div>
           {/* The ticket mounts on project, install and care alike, so its
-              `Boards` row opens the same page with the same act on all three
+              `Design boards` row opens the same page with the same act on all three
               (B1-L4's acceptance) — and the ≥1440 leaf is handed the same
               answer, so one row never means two different things by width. */}
           <DocumentActionRow surfaceKey={SURFACE_KEY} regionKey={REGION_KEY}>
@@ -224,7 +224,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
             {liveBoards.length > 0 && (
               <section aria-labelledby="project-boards-working" className="border-t border-[var(--color-pearl)] pt-4">
                 <h2 id="project-boards-working" className={LABEL}>
-                  Working boards
+                  Working design boards
                 </h2>
                 <div className="mt-2 border-t border-[var(--color-pearl)]">
                   {liveBoards.map((board) => (
@@ -247,7 +247,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
             {frozenBoards.length > 0 && (
               <section aria-labelledby="project-boards-signed" className="mt-8 border-t border-[var(--color-pearl)] pt-4">
                 <h2 id="project-boards-signed" className={LABEL}>
-                  Signed direction
+                  Signed design direction
                 </h2>
                 <div className="mt-2 border-t border-[var(--color-pearl)]">
                   {frozenBoards.map((snapshot) => (
@@ -259,7 +259,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
                           {snapshot.name}
                         </span>
                         <span className="mt-0.5 block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-                          Frozen at signing · {pieces(snapshot.items.length)}
+                          Signed snapshot · {snapshot.items.length} items
                         </span>
                       </span>
                     </div>

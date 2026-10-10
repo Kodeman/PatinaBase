@@ -37,7 +37,7 @@ describe('FactsRail — pure-prop content given geometry fixtures', () => {
     );
     expect(screen.getByText(/5 walls/)).toBeInTheDocument();
     expect(screen.getByText(/8′ 0″/)).toBeInTheDocument();
-    expect(screen.getByText('stands in for ceiling — RoomPlan captures none')).toBeInTheDocument();
+    expect(screen.getByText('Ceiling height inferred from walls; ceiling not captured.')).toBeInTheDocument();
   });
 
   it('shows the wall-thickness-convention sub line ONLY when thicknessConvention is true', () => {
@@ -50,7 +50,7 @@ describe('FactsRail — pure-prop content given geometry fixtures', () => {
         coveragePercentage={null}
       />,
     );
-    expect(screen.queryByText('wall thickness drawn by convention')).not.toBeInTheDocument();
+    expect(screen.queryByText('Wall thickness is schematic.')).not.toBeInTheDocument();
 
     rerender(
       <FactsRail
@@ -61,7 +61,7 @@ describe('FactsRail — pure-prop content given geometry fixtures', () => {
         coveragePercentage={null}
       />,
     );
-    expect(screen.getByText('wall thickness drawn by convention')).toBeInTheDocument();
+    expect(screen.getByText('Wall thickness is schematic.')).toBeInTheDocument();
   });
 
   it('renders windows/doors/openings counts', () => {
@@ -119,7 +119,7 @@ describe('FactsRail — pure-prop content given geometry fixtures', () => {
         coveragePercentage={null}
       />,
     );
-    expect(screen.getByText('Verify')).toBeInTheDocument();
+    expect(screen.getByText('Site verification required')).toBeInTheDocument();
     expect(screen.getByText(/North wall \(east run\)/)).toBeInTheDocument();
     expect(screen.getByText(/drawn dashed; confirm on site/)).toBeInTheDocument();
   });
@@ -134,7 +134,7 @@ describe('FactsRail — pure-prop content given geometry fixtures', () => {
         coveragePercentage={null}
       />,
     );
-    expect(screen.queryByText('Verify')).not.toBeInTheDocument();
+    expect(screen.queryByText('Site verification required')).not.toBeInTheDocument();
     expect(screen.queryByText(/drawn dashed; confirm on site/)).not.toBeInTheDocument();
   });
 
@@ -148,7 +148,7 @@ describe('FactsRail — pure-prop content given geometry fixtures', () => {
         coveragePercentage={null}
       />,
     );
-    expect(screen.queryByText('Photos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Survey photos')).not.toBeInTheDocument();
   });
 
   it('omits the Photos line when the count is 0', () => {
@@ -162,7 +162,7 @@ describe('FactsRail — pure-prop content given geometry fixtures', () => {
         photos={{ count: 0, onOpen: () => {} }}
       />,
     );
-    expect(screen.queryByText('Photos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Survey photos')).not.toBeInTheDocument();
   });
 
   it('renders the Photos line and opens the viewer on click when count > 0', () => {
@@ -177,7 +177,7 @@ describe('FactsRail — pure-prop content given geometry fixtures', () => {
         photos={{ count: 6, onOpen }}
       />,
     );
-    expect(screen.getByText('Photos')).toBeInTheDocument();
+    expect(screen.getByText('Survey photos')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /6 photos/ }));
     expect(onOpen).toHaveBeenCalledTimes(1);
   });

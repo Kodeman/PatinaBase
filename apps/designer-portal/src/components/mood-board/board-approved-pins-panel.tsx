@@ -219,7 +219,7 @@ export function BoardApprovedPinsPanel({
             disabled={sendingAll || promote.isPending}
             onClick={() => void sendAll()}
           >
-            {sendingAll ? 'Sending…' : `Send all approved (${eligible.length})`}
+            {sendingAll ? 'Sending…' : `Add approved selections (${eligible.length})`}
           </Button>
         )}
       </div>
@@ -242,12 +242,12 @@ export function BoardApprovedPinsPanel({
                     : 'Approved via a guest share link, not a signed-in client'
                 }
               >
-                Guest
+                Guest response
               </span>
             )}
             {scheduled ? (
               <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-sage)]">
-                On schedule
+                On item schedule
               </span>
             ) : deckPinHoldReason(item) ? (
               <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
@@ -260,7 +260,7 @@ export function BoardApprovedPinsPanel({
                 disabled={sendingId === item.id || sendingAll}
                 onClick={() => void sendOne(item)}
               >
-                {sendingId === item.id ? 'Sending…' : 'Send to schedule'}
+                {sendingId === item.id ? 'Sending…' : 'Add to item schedule'}
               </Button>
             )}
           </li>

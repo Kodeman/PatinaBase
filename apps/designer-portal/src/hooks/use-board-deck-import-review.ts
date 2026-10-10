@@ -37,30 +37,30 @@ import {
 
 /** Contract lexicon (PLAN.md "The designer flow" steps 3–5). No scores, no %. */
 export const DECK_REVIEW_COPY = {
-  byLink: 'From the link on the slide',
-  named: 'Named on the slide',
-  likelyLook: 'Likely, by look',
-  possibleLook: 'Possible, by look',
-  web: 'Found on the web',
-  notFound: 'Not found yet',
-  finding: 'Finding pieces',
-  kept: 'Kept',
-  reference: 'Kept as reference',
-  keep: 'Keep',
-  swap: 'Swap',
-  pasteLink: 'Paste a link',
-  keepAsReference: 'Keep as reference',
-  unkeep: 'Unkeep',
-  review: 'Review',
-  searchLibrary: 'Search the library',
-  whichPicture: 'Which picture?',
-  keepWithoutPicture: 'Keep without a picture',
-  bulkKeepLinks: 'Keep every piece found by its link',
+  byLink: 'Linked product match',
+  named: 'Slide-text match',
+  likelyLook: 'Likely visual match',
+  possibleLook: 'Possible visual match',
+  web: 'Web source',
+  notFound: 'Product not identified',
+  finding: 'Identifying products',
+  kept: 'Product match retained',
+  reference: 'Reference retained',
+  keep: 'Retain product match',
+  swap: 'Replace product match',
+  pasteLink: 'Add source link',
+  keepAsReference: 'Retain as reference',
+  unkeep: 'Remove retained match',
+  review: 'Review product identification',
+  searchLibrary: 'Search resource library',
+  whichPicture: 'Select product image',
+  keepWithoutPicture: 'Retain product without image',
+  bulkKeepLinks: 'Retain all linked product matches',
   onSchedule: 'Already on the schedule',
   inProject: 'Already in the project',
   selections: 'These are her selections',
   options: 'These are options',
-  orderFromSchedule: 'Order from the schedule',
+  orderFromSchedule: 'Order from item schedule',
 } as const;
 
 export const DECK_REVIEW_POLL_MS = 5_000;
@@ -258,7 +258,7 @@ export function frontMatterStats(items: readonly DeckImportItem[]): { label: str
   return stats;
 }
 
-/** The text "Search the library" opens with: what the slide said. */
+/** The text "Search resource library" opens with: what the slide said. */
 export function captionSearchText(item: DeckImportItem): string {
   const extracted = item.extracted as {
     caption?: { name?: string; vendor?: string; text?: string };
@@ -604,7 +604,7 @@ export function useDeckImportDecisions(importId: string | undefined, room: DeckR
       : keepMutation.mutateAsync({ importId: importId!, itemId: item.id, productId });
   }), [captureFromUrl, commitCapture, importId, keepMutation, run, swapMutation]);
 
-  /** "Keep every piece found by its link" — eligible rows only, one at a time. */
+  /** "Retain all linked product matches" — eligible rows only, one at a time. */
   const keepEveryLink = useCallback(async (items: readonly DeckImportItem[]) => {
     let kept = 0;
     for (const item of items.filter(isBulkKeepEligible)) {

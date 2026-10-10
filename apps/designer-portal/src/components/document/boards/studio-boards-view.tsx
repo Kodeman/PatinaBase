@@ -27,9 +27,9 @@ const LABEL =
   'font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]';
 
 const STATUS_FILTERS: ReadonlyArray<{ key: BoardReactionStatus; label: string }> = [
-  { key: 'awaiting_reaction', label: 'Awaiting reaction' },
-  { key: 'reactions_in', label: 'Reactions in' },
-  { key: 'approved_pipeline', label: 'Approved · pipeline' },
+  { key: 'awaiting_reaction', label: 'Awaiting board feedback' },
+  { key: 'reactions_in', label: 'Feedback received' },
+  { key: 'approved_pipeline', label: 'Approved items for item schedule' },
 ];
 
 function isBoardReactionStatus(value: string | null): value is BoardReactionStatus {
@@ -143,13 +143,13 @@ export function StudioBoardsView() {
             href="/desk"
             className="inline-flex min-h-11 items-center py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
-            ← Desk
+            ← Studio overview
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-heading text-xl">Studio boards</h1>
+            <h1 className="truncate font-heading text-xl">Studio design boards</h1>
             <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {overview.isLoading
-                ? 'Reading the boards…'
+                ? 'Loading design boards…'
                 : activeFilterLabel
                   ? `${filtered.length} ${activeFilterLabel.toLowerCase()}`
                   : `${boards.length} active board${boards.length === 1 ? '' : 's'}`}
@@ -164,7 +164,7 @@ export function StudioBoardsView() {
                 activeStatus ? 'text-[var(--text-muted)]' : 'text-[var(--color-clay-ink)]'
               }`}
             >
-              All
+              All design boards
             </Link>
             {STATUS_FILTERS.map((filter) => (
               <Link
@@ -188,11 +188,11 @@ export function StudioBoardsView() {
           </p>
         ) : overview.isError ? (
           <p role="alert" className="font-heading text-[1.05rem] italic text-[var(--color-clay-ink)]">
-            The studio's boards are unavailable right now. Try again in a moment.
+            The studio’s design boards could not be loaded. Please try again.
           </p>
         ) : filtered.length === 0 ? (
           <p className="font-heading text-[1.05rem] italic text-[var(--text-muted)]">
-            {activeFilterLabel ? `No boards are ${activeFilterLabel.toLowerCase()}.` : 'No active boards yet.'}
+            {activeFilterLabel ? `No boards are ${activeFilterLabel.toLowerCase()}.` : 'No active design boards yet.'}
           </p>
         ) : (
           <div className="border-t border-[var(--color-pearl)]">
@@ -203,7 +203,7 @@ export function StudioBoardsView() {
         )}
         {overview.data?.capped && (
           <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-            Showing the most recently updated boards only.
+            Showing the most recently updated design boards.
           </p>
         )}
       </div>

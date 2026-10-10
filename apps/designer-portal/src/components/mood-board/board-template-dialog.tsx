@@ -150,7 +150,7 @@ export function BoardTemplateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85dvh] max-w-xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Board templates</DialogTitle>
+          <DialogTitle>Studio board templates</DialogTitle>
           <DialogDescription>
             Save this composition as a studio starter. Templates copy the layout and imagery without owner-linked product or capture records.
           </DialogDescription>
@@ -158,7 +158,7 @@ export function BoardTemplateDialog({
 
         <section aria-labelledby="save-board-template">
           <h3 id="save-board-template" className="font-mono text-[10px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
-            Save this board
+            Save studio template
           </h3>
           <p className="mt-1 text-[11px] text-[var(--text-muted)]">
             {itemCount} {itemCount === 1 ? 'piece' : 'pieces'} · {sectionCount} {sectionCount === 1 ? 'section' : 'sections'}
@@ -198,12 +198,12 @@ export function BoardTemplateDialog({
 
         <section className="border-t border-[var(--border-default)] pt-4" aria-labelledby="studio-board-templates-manage">
           <h3 id="studio-board-templates-manage" className="font-mono text-[10px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
-            Your studio
+            Studio templates
           </h3>
           {templatesQuery.isLoading ? (
             <p className="mt-2 text-[12px] text-[var(--text-muted)]">Loading templates…</p>
           ) : studioTemplates.length === 0 ? (
-            <p className="mt-2 text-[12px] italic text-[var(--text-muted)]">No studio templates yet.</p>
+            <p className="mt-2 text-[12px] italic text-[var(--text-muted)]">No studio templates have been saved.</p>
           ) : (
             <ul className="mt-2 space-y-2">
               {studioTemplates.map((template) => (
@@ -236,7 +236,7 @@ export function BoardTemplateDialog({
                         disabled={renameTemplate.isPending || !editingName.trim()}
                         onClick={() => void handleRename(template.id)}
                       >
-                        Save
+                        Save template name
                       </Button>
                     ) : (
                       <Button
@@ -247,7 +247,7 @@ export function BoardTemplateDialog({
                           setEditingName(template.name);
                         }}
                       >
-                        Rename
+                        Rename template
                       </Button>
                     )}
                     <Button
@@ -256,7 +256,7 @@ export function BoardTemplateDialog({
                       disabled={deleteTemplate.isPending}
                       onClick={() => void handleDelete(template.id)}
                     >
-                      Delete
+                      Delete template
                     </Button>
                   </div>
                 </li>

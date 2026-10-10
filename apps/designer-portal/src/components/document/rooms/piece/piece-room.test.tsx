@@ -290,9 +290,9 @@ describe("PieceRoom quiet facets", () => {
   it("lands editable pieces on the first incomplete facet and keeps one open", async () => {
     render(<PieceRoom productId="piece-1" />);
 
-    const identity = screen.getByRole("button", { name: /Identity/i });
-    const story = screen.getByRole("button", { name: /The story/i });
-    const commerce = screen.getByRole("button", { name: /Commerce/i });
+    const identity = screen.getByRole("button", { name: /Product identity/i });
+    const story = screen.getByRole("button", { name: /Product description/i });
+    const commerce = screen.getByRole("button", { name: /Pricing/i });
 
     await waitFor(() => expect(story).toHaveAttribute("aria-expanded", "true"));
     expect(identity).toHaveAttribute("aria-expanded", "false");
@@ -325,15 +325,15 @@ describe("PieceRoom quiet facets", () => {
     render(<PieceRoom productId="piece-1" />);
 
     expect(
-      screen.queryByRole("button", { name: /Identity/i }),
+      screen.queryByRole("button", { name: /Product identity/i }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /Style & character/i }),
+      screen.queryByRole("button", { name: /Style and character/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Identity")).toBeInTheDocument();
-    expect(screen.getByText("Style & character")).toBeInTheDocument();
-    expect(screen.getByText("Name")).toBeInTheDocument();
-    expect(screen.getByText("SEO title")).toBeInTheDocument();
+    expect(screen.getByText("Product identity")).toBeInTheDocument();
+    expect(screen.getByText("Style and character")).toBeInTheDocument();
+    expect(screen.getByText("Product name")).toBeInTheDocument();
+    expect(screen.getByText("Search listing title")).toBeInTheDocument();
   });
 
   it("opens the custom commission workshop as a new project record", async () => {
@@ -345,7 +345,7 @@ describe("PieceRoom quiet facets", () => {
     render(<PieceRoom productId="piece-1" />);
 
     const start = await screen.findByRole("button", {
-      name: "Start commission",
+      name: "Start custom commission",
     });
     await waitFor(() => expect(start).toBeEnabled());
     await act(async () => {
@@ -367,7 +367,7 @@ describe("PieceRoom — flat-facet gating on configured pieces (P2-9)", () => {
     mockProduct = { ...editablePiece(), configuration_mode: "variant" };
     render(<PieceRoom productId="piece-1" />);
 
-    fireEvent.click(screen.getByRole("button", { name: /The piece/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Physical specification/i }));
 
     expect(
       screen.getByTestId("readonly-available_colors"),
@@ -387,7 +387,7 @@ describe("PieceRoom — flat-facet gating on configured pieces (P2-9)", () => {
   it("leaves available_colors and finish editable while configuration_mode is standard", () => {
     render(<PieceRoom productId="piece-1" />);
 
-    fireEvent.click(screen.getByRole("button", { name: /The piece/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Physical specification/i }));
 
     expect(
       screen.queryByTestId("readonly-available_colors"),
@@ -406,7 +406,7 @@ describe("PieceRoom — flat-facet gating on configured pieces (P2-9)", () => {
     render(<PieceRoom productId="piece-1" />);
 
     // Catalog pieces render every facet expanded as a static specimen — no
-    // click needed to mount "The piece" section.
+    // click needed to mount "Physical specification" section.
     expect(
       screen.getByTestId("readonly-available_colors"),
     ).toBeInTheDocument();

@@ -50,7 +50,7 @@ describe('Piece AddToProjectSheet', () => {
         onAdded={onAdded}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Separate need' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create separate requirement' }));
     fireEvent.click(screen.getByRole('button', { name: /Lake house/i }));
 
     await waitFor(() => expect(place).toHaveBeenCalledWith(expect.objectContaining({

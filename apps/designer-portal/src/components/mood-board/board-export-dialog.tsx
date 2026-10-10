@@ -180,7 +180,7 @@ export function BoardExportDialog({
         <DialogHeader>
           <DialogTitle>Export {boardName}</DialogTitle>
           <DialogDescription>
-            Composition exports preserve the canvas. The spec sheet creates a grouped product reference.
+            Composition exports preserve the layout. The specification sheet groups products by section.
           </DialogDescription>
         </DialogHeader>
 
@@ -191,7 +191,7 @@ export function BoardExportDialog({
             disabled={busy !== null}
             className="rounded-[5px] border border-[var(--border-default)] p-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
           >
-            <span className="font-heading text-[14px] text-[var(--text-primary)]">Composition · PNG</span>
+            <span className="font-heading text-[14px] text-[var(--text-primary)]">Board composition · PNG</span>
             <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
               {pngPlan.capped
                 ? `${formatMoodBoardExportScale(pngPlan.effectiveScale)}× effective scale · ${pngPlan.width} × ${pngPlan.height}px (8192px cap).`
@@ -204,8 +204,8 @@ export function BoardExportDialog({
             disabled={busy !== null}
             className="rounded-[5px] border border-[var(--border-default)] p-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
           >
-            <span className="font-heading text-[14px] text-[var(--text-primary)]">Composition · PDF</span>
-            <span className="mt-1 block text-[11px] text-[var(--text-muted)]">One landscape page with authored geometry.</span>
+            <span className="font-heading text-[14px] text-[var(--text-primary)]">Board composition · PDF</span>
+            <span className="mt-1 block text-[11px] text-[var(--text-muted)]">Single landscape page preserving the composition.</span>
           </button>
           <button
             type="button"
@@ -213,8 +213,8 @@ export function BoardExportDialog({
             disabled={busy !== null}
             className="rounded-[5px] border border-[var(--border-default)] p-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
           >
-            <span className="font-heading text-[14px] text-[var(--text-primary)]">Spec sheet · PDF</span>
-            <span className="mt-1 block text-[11px] text-[var(--text-muted)]">Section-grouped product tiles for sourcing.</span>
+            <span className="font-heading text-[14px] text-[var(--text-primary)]">Product specification sheet · PDF</span>
+            <span className="mt-1 block text-[11px] text-[var(--text-muted)]">Product references grouped by composition section.</span>
           </button>
         </div>
 

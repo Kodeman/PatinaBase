@@ -94,7 +94,7 @@ describe('double-send guard (SQ-368 F15)', () => {
 
     render(<BoardScheduleInspectorAction proposalId="proposal-1" scopeRoomId={null} item={item} />);
 
-    const button = screen.getByRole('button', { name: 'Send to the schedule' });
+    const button = screen.getByRole('button', { name: 'Add to item schedule' });
     // The mocked mutation's isPending stays false until it resolves, so the
     // button never disables itself between clicks — exactly the race SQ-368
     // F15 covers (a second menu/inspector trigger before the first settles).

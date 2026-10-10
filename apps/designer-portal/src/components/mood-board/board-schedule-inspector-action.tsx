@@ -55,7 +55,7 @@ export function BoardScheduleInspectorAction({
   if (status) {
     return (
       <p className="text-[11px] text-[var(--text-muted)]" role="status">
-        {status.kind === 'added' ? 'Added to the schedule' : 'Already on the schedule'}
+        {status.kind === 'added' ? 'Added to the schedule' : 'Already on item schedule'}
         {status.docCode ? ` · ${status.docCode}` : ''}
       </p>
     );
@@ -96,12 +96,12 @@ export function BoardScheduleInspectorAction({
         {addItem.isPending
           ? 'Sending…'
           : twin
-            ? 'Already on the schedule'
-            : 'Send to the schedule'}
+            ? 'Already on item schedule'
+            : 'Add to item schedule'}
       </Button>
       {schedule.isError && (
         <p className="text-[11px] text-[var(--color-clay-ink)]" role="alert">
-          The schedule is unavailable. Try again in a moment.
+          The item schedule could not be loaded. Try again.
         </p>
       )}
       {error && <p className="text-[11px] text-[var(--color-clay-ink)]" role="alert">{error}</p>}

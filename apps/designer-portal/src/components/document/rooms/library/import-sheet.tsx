@@ -156,12 +156,12 @@ export function ImportSheet({
   };
 
   return (
-    <RoomSheet open={open} onClose={close} title="Import into My Library">
+    <RoomSheet open={open} onClose={close} title="Import to personal library">
       <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         Import · onto My Library
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
-        Bring a spreadsheet in
+        Import a product schedule
       </h2>
       <p className="mb-5 mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
         A CSV or Excel export from a maker. Every piece lands on your shelf raw
@@ -177,8 +177,8 @@ export function ImportSheet({
             accept=".csv,.tsv,.xlsx,.xls"
             multiple={false}
             description="Drop a CSV or Excel file"
-            label="or click to choose one"
-            hint="CSV · TSV · XLSX · XLS — up to 5,000 pieces"
+            label="Choose a file"
+            hint="CSV · TSV · XLSX · XLS — up to 5,000 product records"
             className="min-h-[168px]"
           />
           {parseError && (
@@ -216,7 +216,7 @@ export function ImportSheet({
               disabled={step === 'importing'}
               className="min-h-11 px-0"
             >
-              Change file
+              Replace import file
             </DocumentAction>
           </div>
 
@@ -288,10 +288,10 @@ export function ImportSheet({
                 !hasName || built.validCount === 0 || step === 'importing'
               }
               loading={step === 'importing'}
-              loadingLabel="Bringing them in…"
+              loadingLabel="Importing product records…"
               onClick={() => void doImport()}
             >
-              Bring {built.validCount} onto the shelf
+              Import {built.validCount} product records
             </DocumentAction>
             <DocumentAction
               actionKey="cancel-import"
@@ -328,14 +328,14 @@ export function ImportSheet({
               variant="tertiary"
               onClick={close}
             >
-              Back to the shelves
+              Back to resource library
             </DocumentAction>
             <DocumentAction
               actionKey="import-another"
               variant="secondary"
               onClick={reset}
             >
-              Import another
+              Import another file
             </DocumentAction>
           </DocumentActionGroup>
         </div>

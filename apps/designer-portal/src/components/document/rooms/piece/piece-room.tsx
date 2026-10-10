@@ -166,9 +166,9 @@ const STATUS_OPTIONS = [
 const PAYMENT_OPTIONS = [
   { value: "fifty_fifty", label: "50 / 50" },
   { value: "thirty_seventy", label: "30 / 70" },
-  { value: "full_upfront", label: "Full upfront" },
+  { value: "full_upfront", label: "Full payment upfront" },
   { value: "net_30", label: "Net 30" },
-  { value: "custom_milestones", label: "Custom milestones" },
+  { value: "custom_milestones", label: "Custom payment milestones" },
 ];
 
 type PieceFacetId =
@@ -507,22 +507,22 @@ export function PieceRoom({ productId }: { productId: string }) {
   // ── Loading / not found ───────────────────────────────────────────────────
   if (!hydrated || isLoading) {
     return (
-      <RoomShell title="A piece" backTo="/library" backLabel="the Library">
+      <RoomShell title="Product record" backTo="/library" backLabel="Resource library">
         <div className="flex min-h-[40vh] items-center justify-center">
-          <StrataSweep size="sm" label="Pulling the piece from the shelf" />
+          <StrataSweep size="sm" label="Loading product record" />
         </div>
       </RoomShell>
     );
   }
   if (error || !p || !loadedSections) {
     return (
-      <RoomShell title="A piece" backTo="/library" backLabel="the Library">
+      <RoomShell title="Product record" backTo="/library" backLabel="Resource library">
         <div
           role="alert"
           className="mx-auto max-w-[520px] px-6 pt-16 text-center"
         >
           <p className="font-heading text-[1.3rem] italic text-[var(--color-charcoal)]">
-            This piece isn’t on a shelf.
+            This product record is unavailable.
           </p>
           <p className="mt-2 text-[0.84rem] text-[var(--color-aged-oak)]">
             It may have been merged or removed, or it failed to load. Try again,
@@ -597,10 +597,10 @@ export function PieceRoom({ productId }: { productId: string }) {
 
   return (
     <RoomShell
-      title={p.name || "A piece"}
+      title={p.name || "Product record"}
       count={`${LAYER_LABEL[layer]} · ${pct}%`}
       backTo="/library"
-      backLabel="the Library"
+      backLabel="Resource library"
     >
       <div className="mx-auto max-w-[1080px] px-6 pb-12 sm:px-9">
         {/* ── Letterhead hero ── */}
@@ -683,7 +683,7 @@ export function PieceRoom({ productId }: { productId: string }) {
                   loadingLabel="Saving…"
                   onClick={() => void saveToMyLibrary()}
                 >
-                  Save to My Library
+                  Save to personal library
                 </DocumentAction>
               )}
               {layer === "personal" && canEdit && (
@@ -692,7 +692,7 @@ export function PieceRoom({ productId }: { productId: string }) {
                   variant="secondary"
                   onClick={() => setPromoteOpen(true)}
                 >
-                  Promote to Studio
+                  Add to studio library
                 </DocumentAction>
               )}
               {layer === "studio" && canEdit && (
@@ -711,7 +711,7 @@ export function PieceRoom({ productId }: { productId: string }) {
                     setNominateOpen(true);
                   }}
                 >
-                  Nominate maker
+                  Recommend maker
                 </DocumentAction>
               )}
             </DocumentActionGroup>
@@ -760,13 +760,13 @@ export function PieceRoom({ productId }: { productId: string }) {
 
         {/* ── Movement 1 · The record ── */}
         <Movement
-          name="The record"
-          meta="Line 1 · what it is"
+          name="Product record"
+          meta="Product identity and specifications"
           hue="var(--color-mocha)"
         >
           <PieceFacet
-            name="Identity"
-            status={sections.identity ? "on file" : "partly written"}
+            name="Product identity"
+            status={sections.identity ? "Recorded" : "Incomplete record"}
             done={sections.identity}
             open={activeFacet === "identity"}
             onToggle={() => selectFacet("identity")}
@@ -776,7 +776,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               productId={p.id}
               column="name"
               serverValue={p.name}
-              label="Name"
+              label="Product name"
               readOnly={readOnly}
             />
             <div className="flex flex-col gap-0 sm:flex-row sm:gap-3">
@@ -785,7 +785,7 @@ export function PieceRoom({ productId }: { productId: string }) {
                   productId={p.id}
                   column="brand"
                   serverValue={p.brand}
-                  label="Maker"
+                  label="Maker or manufacturer"
                   placeholder="Nordic Atelier"
                   readOnly={readOnly}
                 />
@@ -795,7 +795,7 @@ export function PieceRoom({ productId }: { productId: string }) {
                   productId={p.id}
                   column="sku"
                   serverValue={p.sku}
-                  label="SKU"
+                  label="SKU / product code"
                   placeholder="optional"
                   readOnly={readOnly}
                 />
@@ -805,7 +805,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               productId={p.id}
               column="source_url"
               serverValue={p.source_url}
-              label="Source URL"
+              label="Source link"
               placeholder="paste, or from a capture"
               readOnly={readOnly}
             />
@@ -820,8 +820,8 @@ export function PieceRoom({ productId }: { productId: string }) {
           </PieceFacet>
 
           <PieceFacet
-            name="The piece"
-            status={sections.piece ? "measured" : "not yet measured"}
+            name="Physical specification"
+            status={sections.piece ? "Dimensions recorded" : "Dimensions not recorded"}
             done={sections.piece}
             open={activeFacet === "piece"}
             onToggle={() => selectFacet("piece")}
@@ -852,7 +852,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               productId={p.id}
               column="available_colors"
               serverValue={p.available_colors}
-              label="Available colors"
+              label="Available colorways"
               swatch
               readOnly={readOnly || configurationView.mode !== "standard"}
             />
@@ -867,7 +867,7 @@ export function PieceRoom({ productId }: { productId: string }) {
           </PieceFacet>
 
           <PieceFacet
-            name="The story"
+            name="Product description"
             status={
               p.short_description || p.description ? "written" : "unwritten"
             }
@@ -880,7 +880,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               productId={p.id}
               column="short_description"
               serverValue={p.short_description}
-              label="Short description"
+              label="Product summary"
               placeholder="the card blurb"
               rows={2}
               readOnly={readOnly}
@@ -889,7 +889,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               productId={p.id}
               column="description"
               serverValue={p.description}
-              label="Description"
+              label="Product description"
               placeholder="the full story of the piece"
               rows={4}
               readOnly={readOnly}
@@ -897,7 +897,7 @@ export function PieceRoom({ productId }: { productId: string }) {
           </PieceFacet>
 
           <PieceFacet
-            name="Categorization"
+            name="Product classification"
             status={p.category ? p.category : "uncategorized"}
             done={!!p.category}
             open={activeFacet === "categorization"}
@@ -924,7 +924,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               productId={p.id}
               column="tags"
               serverValue={p.tags}
-              label="Tags"
+              label="Product tags"
               readOnly={readOnly}
             />
             <FacetChips
@@ -946,12 +946,12 @@ export function PieceRoom({ productId }: { productId: string }) {
 
         {/* ── Movement 2 · The catalog ── */}
         <Movement
-          name="The catalog"
-          meta="Line 2 · into the marketplace"
+          name="Trade and procurement"
+          meta="Commercial and sourcing details"
           hue="var(--color-clay)"
         >
           <PieceFacet
-            name="Commerce"
+            name="Pricing"
             status={sections.commerce ? "priced" : "no price yet"}
             done={sections.commerce}
             open={activeFacet === "commerce"}
@@ -994,7 +994,7 @@ export function PieceRoom({ productId }: { productId: string }) {
 
           {canEdit && (
             <PieceFacet
-              name="Lifecycle"
+              name="Catalog status"
               status={labelStatus(p.status)}
               done={p.status === "published"}
               open={activeFacet === "lifecycle"}
@@ -1005,7 +1005,7 @@ export function PieceRoom({ productId }: { productId: string }) {
                 productId={p.id}
                 column="status"
                 serverValue={p.status}
-                label="Status"
+                label="Catalog status"
                 options={STATUS_OPTIONS}
                 required
                 readOnly={false}
@@ -1030,7 +1030,7 @@ export function PieceRoom({ productId }: { productId: string }) {
             <FacetVendorPicker
               productId={p.id}
               column="vendor_id"
-              label="Maker"
+              label="Maker or manufacturer"
               currentVendorId={p.vendor_id}
               currentVendorName={p.vendor?.name ?? null}
               readOnly={readOnly}
@@ -1038,7 +1038,7 @@ export function PieceRoom({ productId }: { productId: string }) {
             <FacetVendorPicker
               productId={p.id}
               column="retailer_id"
-              label="Where to buy"
+              label="Purchase source"
               currentVendorId={p.retailer_id}
               currentVendorName={p.retailer?.name ?? null}
               readOnly={readOnly}
@@ -1077,7 +1077,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               productId={p.id}
               column="usage_notes"
               serverValue={p.usage_notes}
-              label="Usage notes"
+              label="Specification notes"
               placeholder="how a designer should use this piece"
               rows={3}
               needed={studioNeeds}
@@ -1090,7 +1090,7 @@ export function PieceRoom({ productId }: { productId: string }) {
 
           {showSeo && (
             <PieceFacet
-              name="Listing metadata"
+              name="Search listing details"
               status={p.seo_title ? "set" : "optional"}
               done={!!p.seo_title}
               open={activeFacet === "seo"}
@@ -1101,14 +1101,14 @@ export function PieceRoom({ productId }: { productId: string }) {
                 productId={p.id}
                 column="seo_title"
                 serverValue={p.seo_title}
-                label="SEO title"
+                label="Search listing title"
                 readOnly={readOnly}
               />
               <FacetTextarea
                 productId={p.id}
                 column="seo_description"
                 serverValue={p.seo_description}
-                label="SEO description"
+                label="Search listing description"
                 rows={2}
                 readOnly={readOnly}
               />
@@ -1118,12 +1118,12 @@ export function PieceRoom({ productId }: { productId: string }) {
 
         {/* ── Movement 3 · The eye ── */}
         <Movement
-          name="The eye"
-          meta="Line 3 · the teaching"
+          name="Style attribution"
+          meta="Attribution and recommendations"
           hue="var(--color-dusty-blue)"
         >
           <PieceFacet
-            name="Style & character"
+            name="Style and character"
             status={
               hasTeaching
                 ? `taught · ${taughtStyles.length} trait${taughtStyles.length > 1 ? "s" : ""}`
@@ -1147,7 +1147,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               </div>
             ) : (
               <p className="mt-3 text-[0.8rem] italic text-[var(--color-aged-oak)]">
-                Untaught. Teach its character so the Engine can place it well.
+                Add style attribution to support future sourcing recommendations.
               </p>
             )}
             <DocumentActionGroup
@@ -1412,7 +1412,7 @@ function RefreshFromSource({
 
       {ranOnce && changes && changes.length === 0 && (
         <p className="doc-type-body mt-3 italic text-[var(--color-quiet-ink)]">
-          Already up to date with the source.
+          Product record matches the source.
         </p>
       )}
 
@@ -1457,7 +1457,7 @@ function RefreshFromSource({
                     loading={field.isPending}
                     loadingLabel="Accepting…"
                   >
-                    Accept
+                    Accept source update
                   </DocumentAction>
                 )}
               </li>
@@ -1515,7 +1515,7 @@ function Colophon({ p }: { p: PieceProduct }) {
 
   const rows: Array<[string, string | null]> = [
     ["Layer", LAYER_LABEL[(p.layer as Layer) ?? "personal"]],
-    ["Status", labelStatus(p.status)],
+    ["Catalog status", labelStatus(p.status)],
     ["Patina-managed", p.patina_managed ? "yes" : "no"],
     ["Captured", fmt(p.captured_at)],
     ["Created", fmt(p.created_at)],

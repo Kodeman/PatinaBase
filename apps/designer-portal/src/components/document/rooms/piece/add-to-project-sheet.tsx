@@ -119,10 +119,10 @@ export function AddToProjectSheet({
       </p>
       <fieldset className="mb-4">
         <legend className="mb-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-          If this piece is already in the project
+          Existing project product
         </legend>
         <div className="grid grid-cols-3 gap-1.5">
-          {([['reuse', 'Reuse'], ['create', 'Separate need'], ['hold', 'Hold']] as const).map(([value, label]) => (
+          {([['reuse', 'Reuse existing item'], ['create', 'Create separate requirement'], ['hold', 'Hold for review']] as const).map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -137,11 +137,11 @@ export function AddToProjectSheet({
       </fieldset>
       {isLoading ? (
         <p className="text-[0.8rem] italic text-[var(--color-aged-oak)]">
-          Reading your projects…
+          Loading project files…
         </p>
       ) : targets.length === 0 ? (
         <p className="text-[0.8rem] italic text-[var(--color-aged-oak)]">
-          No open projects to add to yet.
+          No open projects are available.
         </p>
       ) : (
         <ul className="flex flex-col gap-1.5">

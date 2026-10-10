@@ -184,7 +184,7 @@ describe('BoardAddRail thumbnails carry no native browser drag payload', () => {
   it('creates the project selection and placement before adding a capture product locally', async () => {
     const onAddItems = jest.fn();
     renderRail(onAddItems);
-    fireEvent.click(screen.getByRole('tab', { name: 'captures' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Captures' }));
     fireEvent.click(screen.getByRole('button', { name: /Oak chair/i }));
 
     await waitFor(() => expect(placeProduct).toHaveBeenCalledWith(expect.objectContaining({
@@ -204,19 +204,19 @@ describe('BoardAddRail thumbnails carry no native browser drag payload', () => {
 
   it('captures tab thumbnail is draggable={false}', () => {
     renderRail();
-    fireEvent.click(screen.getByRole('tab', { name: 'captures' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Captures' }));
     expect(screen.getByAltText('')).toHaveAttribute('draggable', 'false');
   });
 
   it('uploads tab thumbnail is draggable={false}', () => {
     renderRail();
-    fireEvent.click(screen.getByRole('tab', { name: 'uploads' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Image uploads' }));
     expect(screen.getByAltText('')).toHaveAttribute('draggable', 'false');
   });
 
   it('scans tab thumbnail is draggable={false}', () => {
     renderRail();
-    fireEvent.click(screen.getByRole('tab', { name: 'scans' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Room surveys' }));
     expect(screen.getByAltText('')).toHaveAttribute('draggable', 'false');
   });
 });
@@ -246,7 +246,7 @@ describe('BoardAddRail feedback tab', () => {
       },
     ];
     renderRail();
-    fireEvent.click(screen.getByRole('tab', { name: 'feedback' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Board feedback' }));
 
     expect(screen.getByText('Guest')).toBeInTheDocument();
     expect(
@@ -256,7 +256,7 @@ describe('BoardAddRail feedback tab', () => {
 
   it('leaves an untouched pin without a guest marker', () => {
     renderRail();
-    fireEvent.click(screen.getByRole('tab', { name: 'feedback' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Board feedback' }));
 
     expect(screen.getByText('No verdict')).toBeInTheDocument();
     expect(screen.queryByText('Guest')).not.toBeInTheDocument();
@@ -302,7 +302,7 @@ describe('BoardAddRail requests a fresh point on every click-add (CI-11)', () =>
 describe('BoardAddRail palettes tab owner-kind wall (VD16)', () => {
   it('explains, in a distinct explanatory-note style, that palettes are proposal-only', () => {
     renderRail();
-    fireEvent.click(screen.getByRole('tab', { name: 'palettes' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Palettes' }));
 
     const note = screen.getByRole('note');
     expect(note).toHaveTextContent('Palettes stay with proposal boards');

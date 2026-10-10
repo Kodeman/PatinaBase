@@ -9,7 +9,7 @@
  *
  * roomFilter is the rooms rail's lens (W3d): a non-null scope-room id LIFTS
  * that room's lines to the front of the scheme — it never hides the rest
- * (room-lens doctrine). An empty scheme leads with a scored-ink "Add a line"
+ * (room-lens doctrine). An empty scheme leads with a scored-ink "Add selection"
  * that opens the builder's own add flow in place, never a route away. Every
  * tool at every width — nothing gated behind 1440 (doctrine A4).
  */
@@ -29,7 +29,7 @@ export interface SchemeProps {
 
 export function Scheme({ proposalId, roomFilter = null }: SchemeProps) {
   return (
-    <section aria-label="The scheme" data-scheme>
+    <section aria-label="Design scheme" data-scheme>
       {/* D4 inside the paper: the shared builder's bulk bar + filter popover
           carry shadow-lg in the old zones — strip them here without touching
           them, the same move the Drafting Room's FF&E facet makes. */}
@@ -42,7 +42,7 @@ export function Scheme({ proposalId, roomFilter = null }: SchemeProps) {
               <DocumentActionGroup
                 surfaceKey="open-document"
                 regionKey="scheme"
-                aria-label="Start the scheme"
+                aria-label="Start design scheme"
               >
                 <DocumentAction
                   actionKey="scheme-add-line"
@@ -53,7 +53,7 @@ export function Scheme({ proposalId, roomFilter = null }: SchemeProps) {
                 </DocumentAction>
               </DocumentActionGroup>
               <p className="doc-type-body mt-1 text-[var(--color-quiet-ink)]">
-                The scheme starts loose — a first line is enough.
+                Add the first selection to begin the design scheme.
               </p>
             </div>
           )}

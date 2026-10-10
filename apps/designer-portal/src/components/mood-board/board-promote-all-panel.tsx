@@ -160,7 +160,7 @@ export function BoardPromoteAllPanel({
                 checked={disposition === 'selected'}
                 onChange={() => setDisposition('selected')}
               />
-              These are her selections
+              Client selections
             </label>
             <label className="flex min-h-8 items-center gap-1.5 text-[11px] text-[var(--text-primary)]">
               <input
@@ -169,7 +169,7 @@ export function BoardPromoteAllPanel({
                 checked={disposition === 'candidate'}
                 onChange={() => setDisposition('candidate')}
               />
-              These are options
+              Candidate selections
             </label>
           </fieldset>
           <Button
@@ -178,7 +178,7 @@ export function BoardPromoteAllPanel({
             disabled={sendingAll || promote.isPending}
             onClick={() => void sendAll()}
           >
-            {sendingAll ? 'Promoting…' : `Promote all ${eligible.length} pieces`}
+            {sendingAll ? 'Promoting…' : `Add ${eligible.length} project ${eligible.length === 1 ? 'selection' : 'selections'}`}
           </Button>
           {justMaterialized && (
             <button

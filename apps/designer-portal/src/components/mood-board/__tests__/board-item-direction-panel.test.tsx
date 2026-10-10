@@ -61,7 +61,7 @@ describe('BoardItemDirectionPanel', () => {
         directions={[direction({ id: 'a' }), direction({ id: 'b', resolved: true })]}
       />,
     );
-    expect(screen.getByText('Direction · 2')).toBeInTheDocument();
+    expect(screen.getByText('Studio direction · 2')).toBeInTheDocument();
     expect(screen.getByLabelText('1 unresolved direction note')).toBeInTheDocument();
     expect(screen.queryByText('Swap the sconce for the brass one.')).not.toBeInTheDocument();
   });
@@ -74,10 +74,10 @@ describe('BoardItemDirectionPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /direction/i }));
     expect(screen.getByText('Swap the sconce for the brass one.')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('Direction for the studio — not visible to the client'), {
+    fireEvent.change(screen.getByPlaceholderText('Studio direction — not visible to clients'), {
       target: { value: '  Check the rug pairing too.  ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add note' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add direction note' }));
 
     await waitFor(() =>
       expect(addMutateAsync).toHaveBeenCalledWith({
@@ -101,20 +101,20 @@ describe('BoardItemDirectionPanel', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /direction/i }));
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Resolve' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Resolve direction' })[0]);
     expect(resolveMutateAsync).toHaveBeenCalledWith({ boardId: 'board-1', directionId: 'open' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen direction' }));
     expect(reopenMutateAsync).toHaveBeenCalledWith({ boardId: 'board-1', directionId: 'closed' });
   });
 
   it('shows the empty state and no badge when there is no direction on the pin', () => {
     render(<BoardItemDirectionPanel boardId="board-1" boardItemId="pin-1" directions={[]} />);
-    expect(screen.getByText('Direction')).toBeInTheDocument();
+    expect(screen.getByText('Studio direction')).toBeInTheDocument();
     expect(screen.queryByLabelText(/unresolved direction/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /direction/i }));
     expect(
-      screen.getByText('No direction on this pin yet. Studio-only — never shown to a client or a guest link.'),
+      screen.getByText('No studio direction recorded for this item. Visible only within the studio.'),
     ).toBeInTheDocument();
   });
 
@@ -137,7 +137,7 @@ describe('BoardItemDirectionPanel', () => {
       <BoardItemDirectionPanel boardId="board-1" boardItemId="pin-1" directions={[direction()]} />,
     );
     fireEvent.click(screen.getByRole('button', { name: /direction/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Resolve' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve direction' }));
 
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent(
@@ -156,7 +156,7 @@ describe('BoardItemDirectionPanel', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /direction/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen direction' }));
 
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent('Could not reopen this note.'),

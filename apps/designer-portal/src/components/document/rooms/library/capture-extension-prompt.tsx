@@ -68,13 +68,13 @@ export function CaptureExtensionPrompt() {
     >
       <div className="min-w-0">
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.11em] text-[var(--color-clay-ink)]">
-          Chrome capture
+          Browser capture
         </p>
         <h2
           id="capture-extension-prompt-title"
           className="mt-1 font-heading text-[17px] text-[var(--color-charcoal)]"
         >
-          Bring product pages into your Library.
+          Save product pages to your resource library.
         </h2>
         <p className="mt-1 max-w-[58ch] text-[11.5px] leading-relaxed text-[var(--color-aged-oak)]">
           {mode === "webstore"
@@ -101,7 +101,7 @@ export function CaptureExtensionPrompt() {
               if (mode !== "webstore") requestLibraryCapture();
               recede();
             }}
-          >{mode === "webstore" ? "Add to Chrome" : "Paste a URL"}</DocumentAction>
+          >{mode === "webstore" ? "Add to Chrome" : "Paste a source link"}</DocumentAction>
           <DocumentAction
             actionKey="capture-extension-instructions"
             variant="tertiary"

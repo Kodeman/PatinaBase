@@ -90,7 +90,7 @@ describe('BoardShareDialog', () => {
     expect(screen.getByText(/3 views/)).toBeInTheDocument();
     expect(screen.queryByText('Old link')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke share link' }));
     await waitFor(() =>
       expect(revoke).toHaveBeenCalledWith({ shareId: 'share-existing', boardId: 'board-1' }),
     );
@@ -114,7 +114,7 @@ describe('BoardShareDialog', () => {
     fireEvent.change(screen.getByPlaceholderText('Client review'), {
       target: { value: 'Design review' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Create and copy link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create and copy review link' }));
 
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith({
@@ -155,11 +155,11 @@ describe('BoardShareDialog', () => {
       />,
     );
 
-    const toggle = screen.getByRole('checkbox', { name: /Allow reactions/ });
+    const toggle = screen.getByRole('checkbox', { name: /Enable item feedback/ });
     expect(toggle).not.toBeChecked();
 
     fireEvent.click(toggle);
-    fireEvent.click(screen.getByRole('button', { name: 'Create and copy link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create and copy review link' }));
 
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith(
@@ -180,7 +180,7 @@ describe('BoardShareDialog', () => {
     );
 
     expect(
-      screen.getByText(/everyone who has it sees every reaction left through it/i),
+      screen.getByText(/Everyone using the link sees all feedback submitted through it/i),
     ).toBeInTheDocument();
   });
 });

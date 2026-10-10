@@ -34,15 +34,15 @@ export function LibrarianBar({
           <h1>s on one page is the structure SPEC §7 #11 forbids. The type is
           untouched; only the element changed. */}
       <h2 className="m-0 font-heading text-[2.1rem] font-normal leading-[1.08] text-[var(--color-charcoal)] min-[700px]:text-[2.5rem]">
-        Find a piece—or <em className="italic text-[var(--color-charcoal)]">ask about one.</em>
+        Find a product or <em className="italic text-[var(--color-charcoal)]">ask a sourcing question.</em>
       </h2>
       <p className="mx-auto mt-3 max-w-[52ch] text-[14px] leading-relaxed text-[var(--color-charcoal)]">
-        Known pieces surface immediately. Ask reads the same words across all three shelves.
+        Product matches appear as you type. Questions search the personal library, studio library, and Patina catalog.
       </p>
 
       <form
         role="search"
-        aria-label="Find or ask the Library"
+        aria-label="Search the resource library or ask a sourcing question"
         onSubmit={ask}
         className="mx-auto mt-6 max-w-[680px]"
       >
@@ -60,9 +60,9 @@ export function LibrarianBar({
               setQuery(event.target.value);
               if (asking) setAsking(null);
             }}
-            aria-label="Find a piece or ask the Library"
+            aria-label="Find a product or ask a sourcing question"
             aria-describedby="library-omnibox-hint"
-            placeholder="Piece, maker, SKU, category, or material question…"
+            placeholder="Product, maker, SKU, category, or material question…"
             data-library-omnibox
             className="min-h-11 min-w-0 flex-1 bg-transparent px-1 py-2 text-left text-[16px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-body)]"
           />
@@ -75,7 +75,7 @@ export function LibrarianBar({
             trailing="→"
             disabled={!query.trim()}
           >
-            Ask
+            Ask a sourcing question
           </DocumentAction>
         </div>
         <p
@@ -99,7 +99,7 @@ export function LibrarianBar({
             id="library-engine-results"
             className="mb-2 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]"
           >
-            Library answer
+            Sourcing answer
           </h2>
           <EngineResults query={asking} inDocument={null} onPlaced={onPlaced} />
         </section>

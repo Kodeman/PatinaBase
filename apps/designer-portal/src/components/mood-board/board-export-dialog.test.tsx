@@ -73,7 +73,7 @@ describe('BoardExportDialog', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Composition · PNG/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Board composition · PNG/ }));
     await waitFor(() => expect(exportPng).toHaveBeenCalled());
     expect(calls).toEqual(['flush', 'png']);
     expect(onExported).toHaveBeenCalledWith(
@@ -101,7 +101,7 @@ describe('BoardExportDialog', () => {
     );
 
     expect(screen.getByText(/1\.64× effective scale/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Composition · PNG/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Board composition · PNG/ }));
     await waitFor(() =>
       expect(screen.getByText(/PNG downloaded at 1\.64× effective scale/)).toBeInTheDocument(),
     );
@@ -125,7 +125,7 @@ describe('BoardExportDialog', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Composition · PDF/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Board composition · PDF/ }));
     await waitFor(() =>
       expect(screen.getByText(/choose Spec sheet for a more legible product reference/)).toBeInTheDocument(),
     );
@@ -150,7 +150,7 @@ describe('BoardExportDialog', () => {
     };
     const { rerender } = render(<BoardExportDialog {...props} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Composition · PDF/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Board composition · PDF/ }));
     await waitFor(() =>
       expect(downloadPdf).toHaveBeenCalledWith(
         { kind: 'board-composition', projectId: 'project-1', boardId: 'board-1' },
@@ -160,7 +160,7 @@ describe('BoardExportDialog', () => {
 
     rerender(<BoardExportDialog {...props} open={false} />);
     rerender(<BoardExportDialog {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: /Spec sheet · PDF/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Product specification sheet · PDF/ }));
     await waitFor(() =>
       expect(downloadPdf).toHaveBeenLastCalledWith(
         { kind: 'board', projectId: 'project-1', boardId: 'board-1' },

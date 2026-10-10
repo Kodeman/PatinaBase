@@ -26,28 +26,28 @@ export function RoomsIndex() {
 
   return (
     <RoomShell
-      title="The Scans"
+      title="Measured rooms"
       count={ready ? `${entries.length} scanned room${entries.length === 1 ? '' : 's'}` : undefined}
     >
       <div className="mx-auto max-w-[1180px] px-6 pb-16 pt-8 sm:px-9">
         {isLoading && (
           <div className="flex items-center justify-center gap-2 py-16">
-            <StrataSweep size="sm" label="Reading the roster" />
+            <StrataSweep size="sm" label="Loading room surveys" />
             <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] opacity-60">
-              reading the roster…
+              Loading room surveys…
             </span>
           </div>
         )}
 
         {isError && (
           <p className="py-16 text-center text-[13px] italic text-[var(--text-muted)]">
-            The roster could not be read just now.
+            Room surveys could not be loaded. Try again.
           </p>
         )}
 
         {ready && entries.length === 0 && (
           <p className="py-16 text-center font-heading text-[15px] italic text-[var(--text-muted)]">
-            No rooms have arrived yet.
+            No room surveys have been uploaded yet.
           </p>
         )}
 

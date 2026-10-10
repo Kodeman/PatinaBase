@@ -108,7 +108,7 @@ export default function JudgmentsPage() {
 
   return (
     <RoomShell
-      title="Side by side"
+      title="Style preferences"
       backTo="/library"
       backLabel="the Library"
     >
@@ -122,8 +122,7 @@ export default function JudgmentsPage() {
                 band's title was a <span> — is a second one. The page opens on
                 the question instead. */}
             <p className="mb-8 max-w-[560px] font-heading text-[1.05rem] italic leading-relaxed text-[var(--color-mocha)]">
-              Which is more you? Go on instinct — the Engine learns your eye
-              from every pair.
+              Choose the product that best reflects your design preferences.
             </p>
 
             {writeError && (
@@ -151,42 +150,41 @@ export default function JudgmentsPage() {
                     onClick={() => choose('neither')}
                     className="font-body text-[0.8rem] text-[var(--text-muted)] underline decoration-[var(--color-pearl)] underline-offset-2 hover:text-[var(--text-primary)]"
                   >
-                    Neither of these
+                    Neither
                   </button>
                   <button
                     type="button"
                     onClick={() => choose('both')}
                     className="font-body text-[0.8rem] text-[var(--text-muted)] underline decoration-[var(--color-pearl)] underline-offset-2 hover:text-[var(--text-primary)]"
                   >
-                    Both, honestly
+                    Both
                   </button>
                 </div>
               </div>
             ) : deck.length === 0 ? (
               <div className="py-16 text-center">
                 <p className="mb-2 font-heading text-[1.3rem] italic text-[var(--text-muted)]">
-                  Nothing to weigh yet
+                  No style comparisons available
                 </p>
                 <p className="font-body text-[0.88rem] text-[var(--text-muted)]">
-                  The Engine needs a few readable pieces in the library first.
-                  Check back soon.
+                  More product records are needed before style comparisons are available.
                 </p>
               </div>
             ) : (
               <div className="py-16 text-center">
                 <p className="mb-2 font-heading text-[1.3rem] italic text-[var(--text-muted)]">
-                  That&apos;s plenty for now
+                  Comparison round complete
                 </p>
                 <p className="mb-6 font-body text-[0.88rem] text-[var(--text-muted)]">
-                  Every pair sharpens how the Engine sees through your eye.
+                  Your preferences inform future sourcing recommendations.
                 </p>
                 <div className="flex items-center justify-center gap-3">
                   <Button variant="secondary" onClick={anotherRound}>
-                    Keep going
+                    Continue comparisons
                   </Button>
                   <Button variant="ghost" asChild>
                     {/* R21 — "Your Eye" rehoused to the People Room's rail. */}
-                    <Link href="/people?view=your-eye">See your eye</Link>
+                    <Link href="/people?view=your-eye">View design profile</Link>
                   </Button>
                 </div>
               </div>

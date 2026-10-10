@@ -1133,9 +1133,9 @@ function BoardRoomSurface({
     return (
       <main className="fixed inset-0 flex h-[100dvh] items-center justify-center bg-[var(--bg-primary)] p-8">
         <div className="max-w-md text-center">
-          <h1 className="font-heading text-xl">This board is unavailable</h1>
+          <h1 className="font-heading text-xl">This design board is unavailable</h1>
           <p className="mt-2 text-sm text-[var(--text-muted)]">It may not exist, or you may not have access.</p>
-          <Button className="mt-4" variant="secondary" onClick={() => router.push('/desk')}>Return to the Desk</Button>
+          <Button className="mt-4" variant="secondary" onClick={() => router.push('/desk')}>Return to studio overview</Button>
         </div>
       </main>
     );
@@ -1260,7 +1260,7 @@ function BoardRoomSurface({
     <main
       ref={rootRef}
       tabIndex={-1}
-      aria-label={`${state.name} mood board room`}
+      aria-label={`${state.name} design board workspace`}
       className="fixed inset-0 z-[40] flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden overscroll-contain bg-[var(--bg-primary)] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] outline-none"
     >
       <header className="relative z-50 flex min-h-14 shrink-0 items-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-2 sm:px-4">
@@ -1272,12 +1272,12 @@ function BoardRoomSurface({
         {api.mode === 'present' ? (
           <label className="hidden min-h-11 min-w-11 items-center justify-center gap-1.5 text-[10px] text-[var(--text-muted)] sm:flex">
             <input type="checkbox" checked={api.showNotes} onChange={(event) => api.setShowNotes(event.target.checked)} />
-            Notes
+            Show annotations
           </label>
         ) : (
           <>
             <button type="button" onClick={toggleRail} className="hidden min-h-11 min-w-11 px-2 font-mono text-[9px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] md:block">
-              {railCollapsed ? 'Sources' : 'Hide sources'}
+              {railCollapsed ? 'Show resources' : 'Hide resources'}
             </button>
             <button type="button" disabled={!api.canUndo} onClick={api.undo} className="hidden min-h-11 min-w-11 px-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30 sm:block" aria-label="Undo">↶</button>
             <button type="button" disabled={!api.canRedo} onClick={api.redo} className="hidden min-h-11 min-w-11 px-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30 sm:block" aria-label="Redo">↷</button>
@@ -1286,9 +1286,9 @@ function BoardRoomSurface({
             <button type="button" aria-label="Zoom out" onClick={() => zoomBy(-0.1)} className="flex min-h-11 min-w-11 items-center justify-center text-sm text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">−</button>
             <span className="min-w-10 text-center font-mono text-[9px] tabular-nums text-[var(--text-muted)]">{Math.round(api.view.zoom * 100)}%</span>
             <button type="button" aria-label="Zoom in" onClick={() => zoomBy(0.1)} className="flex min-h-11 min-w-11 items-center justify-center text-sm text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">+</button>
-            <Button variant="ghost" size="sm" className="min-h-11 min-w-11 inline-flex" onClick={fit}>Fit</Button>
-            <button type="button" aria-pressed={showGrid} onClick={toggleGrid} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Grid</button>
-            <button type="button" aria-pressed={snapToGrid} onClick={toggleSnap} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Snap</button>
+            <Button variant="ghost" size="sm" className="min-h-11 min-w-11 inline-flex" onClick={fit}>Fit to screen</Button>
+            <button type="button" aria-label="Show grid" aria-pressed={showGrid} onClick={toggleGrid} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Grid</button>
+            <button type="button" aria-label="Snap to grid" aria-pressed={snapToGrid} onClick={toggleSnap} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Snap</button>
             <Button
               variant="ghost"
               size="sm"
@@ -1296,16 +1296,16 @@ function BoardRoomSurface({
               disabled={!tidyTarget.enabled}
               onClick={runTidy}
             >
-              Tidy
+              Arrange composition
             </Button>
           </>
         )}
 
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)}>Share</Button>
-          {api.mode === 'edit' && <Button variant="ghost" size="sm" className="hidden min-h-11 min-w-11 sm:inline-flex" onClick={() => setExportOpen(true)}>Export</Button>}
+          <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)} aria-label="Share design board">Share</Button>
+          {api.mode === 'edit' && <Button variant="ghost" size="sm" className="hidden min-h-11 min-w-11 sm:inline-flex" onClick={() => setExportOpen(true)} aria-label="Export design board">Export</Button>}
           <Button variant={api.mode === 'present' ? 'secondary' : 'ghost'} size="sm" className="min-h-11 min-w-11" onClick={api.togglePresent}>
-            {api.mode === 'present' ? 'Edit' : 'Present'}
+            {api.mode === 'present' ? 'Edit design board' : 'Present design board'}
           </Button>
           {api.mode === 'edit' && (
             <BoardRoomSectionsMenu
@@ -1320,7 +1320,7 @@ function BoardRoomSurface({
             />
           )}
           <Button variant="primary" size="sm" className="min-h-11 min-w-11" disabled={api.isExiting} onClick={() => void api.requestExit()}>
-            {api.isExiting ? 'Saving…' : 'Done'}
+            {api.isExiting ? 'Saving…' : 'Save and close'}
           </Button>
         </div>
       </header>
@@ -1347,7 +1347,7 @@ function BoardRoomSurface({
                 api.discardPersistenceError();
               }}
             >
-              Dismiss reverted change
+              Dismiss reverted-change notice
             </button>
           </span>
         </div>
@@ -1400,7 +1400,7 @@ function BoardRoomSurface({
                 onClick={() => setDeckLedgerOpen(true)}
                 className="min-h-8 text-[var(--color-clay-ink)] underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
               >
-                Review
+                Review import
               </button>
             </>
           )}
