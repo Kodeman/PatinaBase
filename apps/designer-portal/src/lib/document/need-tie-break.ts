@@ -121,6 +121,7 @@ const TIE_BREAK_RANK: Record<NeedKind, NeedTieBreakRank> = {
   exception_open: 3,
 
   schedule_unconfigured: 4,
+  handoff: 3,
 };
 
 export function needTieBreakRank(kind: NeedKind): NeedTieBreakRank {

@@ -650,6 +650,7 @@ function needVerb(kind: NeedKind): string {
     case 'memo_return': return 'Mark returned';
     case 'exception_open': return 'Choose a path';
     case 'return_by': return 'Return it or keep it';
+    case 'handoff': return 'Read the note';
   }
 }
 

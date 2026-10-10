@@ -658,6 +658,7 @@ const NEED_TIER: Record<NeedKind, LensStandingTier> = {
   memo_return: 'decision-due',
   exception_open: 'damage',
   return_by: 'decision-due',
+  handoff: 'decision-due',
 };
 
 /** The sheet's kind line — the need's own stamp word, `desk-derivation.ts`. */
@@ -690,6 +691,7 @@ const NEED_EYEBROW: Record<NeedKind, string> = {
   memo_return: 'MEMO RETURN',
   exception_open: 'EXCEPTION',
   return_by: 'RETURN BY',
+  handoff: 'HAND-OFF',
 };
 
 /** After rank 4, the desk's last. */

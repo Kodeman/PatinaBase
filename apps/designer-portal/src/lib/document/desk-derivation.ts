@@ -156,7 +156,8 @@ export type NeedKind =
   | 'exception_open'
   // C-25 (d2 §M9): a store's return window closes within three days and the
   // piece bought on a card is not yet received or installed.
-  | 'return_by';
+  | 'return_by'
+  | 'handoff';
 
 /** The visible next act printed in each Desk folio footer. Triage-owned lead
  * needs intentionally have no footer act: their TriageBar carries the choices. */
@@ -189,6 +190,7 @@ export const NEED_ACTION_LABELS: Record<NeedKind, string | null> = {
   memo_return: 'Mark returned',
   exception_open: 'Choose a path',
   return_by: 'Return it or keep it',
+  handoff: 'Read the note',
 };
 
 /**
@@ -890,6 +892,8 @@ const NEED_RANK: Record<NeedKind, number> = {
   // C-25: a lapsing return window is money the studio cannot get back after
   // the date — it sorts with the claim clocks, just under the claim itself.
   return_by: 3.25,
+  // Handoff is the new lead's own, low-priority act.
+  handoff: 14,
 };
 
 /** Prototype stamp palette (v0.3 is the look authority): borders use brand

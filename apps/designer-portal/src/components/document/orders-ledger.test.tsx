@@ -20,13 +20,25 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 const mockHeld: { data: Record<string, unknown>[] } = { data: [] };
+const mockProjectLeads = { data: new Map<string, { leadUserId: string; leadName: string }>() };
+const mockCanSeeMargin = jest.fn(() => true);
+
+afterEach(() => {
+  mockCanSeeMargin.mockReturnValue(true);
+  mockProjectLeads.data = new Map();
+});
 
 jest.mock('@patina/supabase', () => ({
   usePurchaseOrders: jest.fn(),
   useUpdatePurchaseOrderETA: jest.fn(),
   useVendors: jest.fn(),
   useHeldPurchaseOrders: () => ({ data: mockHeld.data }),
+  useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
+  useProjectLeads: () => mockProjectLeads,
 }));
+
+jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'viewer' } }) }));
+jest.mock('@/hooks/use-can-see-margin', () => ({ useCanSeeMargin: () => mockCanSeeMargin() }));
 
 // The paper's own suites live under order-paper/__tests__.
 jest.mock('@/components/portal/procurement/order-paper', () => ({
@@ -267,6 +279,8 @@ describe('OrdersLedger quiet register', () => {
     mockPush.mockReset();
     mockInvalidateQueries.mockReset();
     mockMutateEta.mockReset();
+    mockCanSeeMargin.mockReturnValue(true);
+    mockProjectLeads.data = new Map();
     mockMutateEta.mockResolvedValue(undefined);
     mockUsePurchaseOrders.mockReturnValue({
       data: ORDERS,
@@ -401,6 +415,25 @@ describe('OrdersLedger quiet register', () => {
     expect(
       screen.queryByRole('button', { name: 'Align ETA' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('OrdersLedger · person-grain money visibility', () => {
+  it('shows a lead their PO money but not other projects or studio totals', () => {
+    mockCanSeeMargin.mockReturnValue(false);
+    mockProjectLeads.data = new Map([
+      ['project-1', { leadUserId: 'viewer', leadName: 'Maya Lee' }],
+    ]);
+    mockUsePurchaseOrders.mockReturnValue({ data: ORDERS, isLoading: false });
+    mockUseVendors.mockReturnValue({ data: { data: VENDORS } });
+    mockUseUpdatePurchaseOrderETA.mockReturnValue({ mutateAsync: mockMutateEta });
+
+    renderBook();
+
+    expect(screen.getByText(/1,250/)).toBeInTheDocument();
+    expect(screen.queryByText(/2,420/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('front-matter')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /money out/ })).toHaveLength(1);
   });
 });
 

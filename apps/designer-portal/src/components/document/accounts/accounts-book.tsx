@@ -14,16 +14,20 @@
  * ONLY — this book never reaches the client mirror.
  */
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  computeArAging,
   useArAging,
   useEarningsStats,
   useInvoices,
+  useOrganizations,
+  useProjectLeads,
 } from '@patina/supabase';
 import { LedgerFrontMatter } from '../ledger-front-matter';
 import { useStudioMargin } from '@/hooks/use-studio-accounts';
 import { useCanSeeMargin } from '@/hooks/use-can-see-margin';
+import { useAuth } from '@/hooks/use-auth';
 import { mixedCurrenciesText } from '@/lib/currency-totals';
 import { collectedCents } from '@/lib/document/account-summary';
 import { fmtUsd } from '@/lib/document/format';
@@ -63,6 +67,28 @@ export function AccountsBook({
   const { data: earnings } = useEarningsStats();
   const margin = useStudioMargin();
   const canSeeMargin = useCanSeeMargin();
+  const { user } = useAuth();
+  const { data: organizations } = useOrganizations();
+  const studio = organizations?.find((org) => org.type === 'design_studio') ?? organizations?.[0] ?? null;
+  const { data: projectLeads } = useProjectLeads(studio?.id ?? '');
+  const leadProjectIds = useMemo(
+    () => new Set(
+      [...(projectLeads ?? new Map()).entries()]
+        .filter(([, lead]) => lead.leadUserId === user?.id)
+        .map(([projectId]) => projectId),
+    ),
+    [projectLeads, user?.id],
+  );
+  const visibleInvoices = useMemo(
+    () => canSeeMargin
+      ? invoices ?? []
+      : (invoices ?? []).filter((invoice) => leadProjectIds.has(invoice.project_id ?? '')),
+    [canSeeMargin, invoices, leadProjectIds],
+  );
+  const visibleAging = useMemo(
+    () => canSeeMargin ? aging : computeArAging(visibleInvoices),
+    [aging, canSeeMargin, visibleInvoices],
+  );
 
   // page is a free string on the shared context — narrow it to this book.
   const [page, setPage] = useState<BookPage>(
@@ -77,25 +103,21 @@ export function AccountsBook({
     router.push(`/doc/${projectId}`);
   };
 
-  const stats = !isLoading
+  const stats = !isLoading && canSeeMargin
     ? [
         { label: 'revenue', value: fmtUsd(collectedCents(invoices ?? [])) },
         { label: 'A/R', value: fmtUsd(aging.totalBalanceCents) },
-        // R1 — the studio margin shows only to a viewer who may see margin.
-        ...(canSeeMargin
-          ? [
-              {
-                label: 'margin',
-                value: margin.data?.mixedCurrencies
-                  ? mixedCurrenciesText(margin.data.mixedCurrencies)
-                  : margin.data?.marginPct != null
-                    ? `${margin.data.marginPct}%`
-                    : '—',
-              },
-            ]
-          : []),
+        {
+          label: 'margin',
+          value: margin.data?.mixedCurrencies
+            ? mixedCurrenciesText(margin.data.mixedCurrencies)
+            : margin.data?.marginPct != null
+              ? `${margin.data.marginPct}%`
+              : '—',
+        },
       ]
     : [];
+  const availablePages = canSeeMargin ? PAGES : PAGES.filter((p) => p.key !== 'earnings');
 
   return (
     <div ref={sheetRef} className="mx-auto max-w-3xl">
@@ -125,7 +147,7 @@ export function AccountsBook({
 
       {/* R28: the book's pages — DM-mono links, never tabs. */}
       <div className="mb-4 flex flex-wrap items-baseline gap-x-4 border-b border-[var(--color-pearl)] pb-2">
-        {PAGES.map((p) => (
+        {availablePages.map((p) => (
           <button
             key={p.key}
             type="button"
@@ -158,19 +180,19 @@ export function AccountsBook({
 
           {page === 'ledger' && (
             <AccountsLedgerPage
-              invoices={invoices ?? []}
+              invoices={visibleInvoices}
               highlightInvoiceId={initialContext?.invoiceId ?? null}
               onOpenDocument={openDocument}
             />
           )}
           {page === 'receivables' && (
             <AccountsReceivablesPage
-              aging={aging}
+              aging={visibleAging}
               highlightInvoiceId={initialContext?.invoiceId ?? null}
               onOpenDocument={openDocument}
             />
           )}
-          {page === 'earnings' && (
+          {canSeeMargin && page === 'earnings' && (
             <AccountsEarningsPage stats={earnings} />
           )}
         </>

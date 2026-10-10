@@ -30,6 +30,7 @@ import { dayMonth, legalDate, parseSourceDate } from './dates';
 import { voiceFirstName } from './document-guide';
 import { classOfNeed, deskLeadNeed } from './need-class';
 import { rankByNext } from './desk-need-list';
+import { custodyFor, type DeskLeads, type DeskScope } from './desk-scope';
 import {
   deriveOverdue,
   overdueElapsedPhrase,
@@ -201,6 +202,10 @@ export interface DeskRosterInput {
   /** Fix-now 6 — the modelled feeds the read could not answer. Absent = every
    *  feed answered. */
   unreadFeeds?: readonly string[];
+  /** N4 — defaults to the whole studio until the Day Sheet chooses a scope. */
+  scope?: DeskScope;
+  leads?: DeskLeads;
+  meUserId?: string | null;
 }
 
 /** Fix-now 6 — the custody word on a quiet job while a feed went unread. */
@@ -225,37 +230,22 @@ function clientOf(row: DocumentStateRow, voice = false): string | null {
   return PLACEHOLDER_CLIENT_NAMES.has(last.toLowerCase()) ? null : name;
 }
 
-/** D6's four words. 'At rest' is the fifth, and belongs to a job with no need
- *  at all rather than to an owner. */
-const CUSTODY_YOUR_PEN = 'Your pen';
-const CUSTODY_THE_CLIENT = 'With the client';
-const CUSTODY_THE_MAKER = 'With the maker';
+const CUSTODY_YOUR_PEN = 'Action with you';
 const CUSTODY_AT_REST = 'No current alert';
 
-/**
- * D6 — whose hand the job is in, said in one of four ways.
- *
- * The owner is READ off the need, never inferred at render: the rule that
- * derived the need already knew the answer, and a card that guesses is the
- * thing the ruling forbids. A need whose rule states no owner defaults to the
- * studio's own pen — the recommendation Kody took — rather than falling silent
- * or claiming a client we cannot name.
- *
- * The client's first name is printed only where `clientOf` will vouch for it:
- * the seed's placeholder `Client User` is refused here exactly as it is
- * refused on the line, because a role noun never stands in for a real name.
- */
+/** D6 — whose hand the job is in, named from the current lead and need owner. */
 export function custodyWord(
   need: NeedLine | null,
   row: DocumentStateRow,
+  leads: DeskLeads = new Map(),
+  meUserId?: string | null,
 ): string {
-  if (!need) return CUSTODY_AT_REST;
-  if (need.owner === 'maker') return CUSTODY_THE_MAKER;
-  if (need.owner === 'client') {
-    const client = clientOf(row);
-    return client ? `With ${firstName(client)}` : CUSTODY_THE_CLIENT;
-  }
-  return CUSTODY_YOUR_PEN;
+  return custodyFor(
+    need ? { ...need, clientName: clientOf(row) } : null,
+    leads,
+    meUserId,
+    row.project_id ?? row.engagement_id,
+  );
 }
 
 /**
@@ -465,7 +455,16 @@ export function sentProposalSignedLine(clientFirstName: string | null): string {
 export function deriveDeskRoster(
   input: DeskRosterInput,
   now: Date,
+  scope: DeskScope = input.scope ?? 'studio',
+  leads: DeskLeads = input.leads ?? new Map(),
+  meUserId: string | null | undefined = input.meUserId,
 ): DeskRoster {
+  const rosterLive = scope === 'mine'
+    ? input.live.filter((row) => {
+        const projectId = row.project_id ?? row.engagement_id;
+        return Boolean(meUserId && leads.get(projectId)?.leadUserId === meUserId);
+      })
+    : input.live;
   const folderByEngagement = new Map(
     input.folders.map((folder) => [folder.row.engagement_id, folder]),
   );
@@ -478,7 +477,7 @@ export function deriveDeskRoster(
   // when every feed answered; otherwise the quiet line names what went unread.
   const unreadFeeds = [...(input.unreadFeeds ?? [])];
   const notChecked = unreadFeeds.length > 0 ? `Not checked: ${unreadFeeds.join(', ')}.` : null;
-  const entries: RosterEntry[] = input.live.map((row) => {
+  const entries: RosterEntry[] = rosterLive.map((row) => {
     const folder = folderByEngagement.get(row.engagement_id) ?? null;
     const chip = deskMotion(chipByEngagement.get(row.engagement_id) ?? null, voice);
     // FR3 F3-4 (`one-voice`) — the line leads with the band's Next, so a setup
@@ -569,7 +568,9 @@ export function deriveDeskRoster(
         client,
         dueOn: need?.dueOn ?? null,
         needText,
-        custody: lineNotChecked ? CUSTODY_NOT_CHECKED : custodyWord(need, row),
+        custody: lineNotChecked
+          ? CUSTODY_NOT_CHECKED
+          : custodyWord(need, row, leads, meUserId),
         needOwner: need?.owner ?? null,
         needAt: need?.at ?? null,
         // The need's own date first — a deadline outranks a provenance stamp.

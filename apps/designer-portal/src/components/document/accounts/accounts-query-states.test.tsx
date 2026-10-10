@@ -17,8 +17,11 @@ jest.mock('@/hooks/use-teaching-note', () => ({
   useTeachingNoteFor: () => ({ note: null, bind: null }),
 }));
 
+const mockProjectLeads = new Map<string, { leadUserId: string; leadName: string }>();
+
 jest.mock('@patina/supabase', () => ({
   useEmailDelivery: () => ({ byRef: {}, isLoading: false, isError: false }),
+  computeArAging: (invoices: unknown[]) => ({ totalBalanceCents: invoices.length * 100, buckets: [] }),
   useArAging: jest.fn(),
   useDesignerTeachingStats: jest.fn(),
   useEarnings: jest.fn(),
@@ -26,6 +29,8 @@ jest.mock('@patina/supabase', () => ({
   useInvoice: jest.fn(),
   useInvoices: jest.fn(),
   useIssueInvoice: () => ({ isPending: false, mutateAsync: jest.fn() }),
+  useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
+  useProjectLeads: () => ({ data: mockProjectLeads }),
   useRecordPayment: () => ({ isPending: false, mutateAsync: jest.fn() }),
   useSendInvoice: () => ({ isPending: false, mutateAsync: jest.fn() }),
   useVoidInvoice: () => ({ isPending: false, mutateAsync: jest.fn() }),
@@ -47,9 +52,11 @@ jest.mock('@/hooks/use-studio-accounts', () => ({
   useStudioMargin: () => ({ data: null }),
 }));
 
+jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'viewer' } }) }));
+
 // R1 — the margin stat's gate; its query states are not under test here.
 jest.mock('@/hooks/use-can-see-margin', () => ({
-  useCanSeeMargin: () => true,
+  useCanSeeMargin: () => false,
 }));
 
 // InvoiceFolio reconciles a returning Stripe checkout through a real
@@ -60,15 +67,21 @@ jest.mock('@/hooks/use-invoice-checkout-reconciliation', () => ({
 }));
 
 jest.mock('../ledger-front-matter', () => ({
-  LedgerFrontMatter: () => <div data-testid="ledger-front-matter">Ledger totals</div>,
+  LedgerFrontMatter: ({ stats = [] }: { stats?: { label: string; value: string }[] }) => (
+    <div data-testid="ledger-front-matter">{stats.map((stat) => `${stat.label}: ${stat.value}`).join(' | ')}</div>
+  ),
 }));
 
 jest.mock('./accounts-ledger-page', () => ({
-  AccountsLedgerPage: () => <div data-testid="accounts-ledger">Ledger rows</div>,
+  AccountsLedgerPage: ({ invoices = [] }: { invoices?: { id: string }[] }) => (
+    <div data-testid="accounts-ledger" data-invoice-ids={invoices.map((invoice) => invoice.id).join(',')}>Ledger rows</div>
+  ),
 }));
 
 jest.mock('./accounts-receivables-page', () => ({
-  AccountsReceivablesPage: () => <div>Receivables rows</div>,
+  AccountsReceivablesPage: ({ aging }: { aging: { totalBalanceCents: number } }) => (
+    <div data-testid="accounts-receivables">Receivables {aging.totalBalanceCents}</div>
+  ),
 }));
 
 jest.mock('./accounts-earnings-page', () => ({
@@ -92,6 +105,7 @@ const mockUseDesignerTeachingStats = useDesignerTeachingStats as jest.Mock;
 
 describe('designer Accounts query failures', () => {
   beforeEach(() => {
+    mockProjectLeads.clear();
     mockUseArAging.mockReturnValue({
       aging: { totalBalanceCents: 0, buckets: [] },
     });
@@ -117,6 +131,28 @@ describe('designer Accounts query failures', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('limits a person to led-project invoices and hides studio money totals', () => {
+    mockProjectLeads.set('project-1', { leadUserId: 'viewer', leadName: 'Maya Lee' });
+    mockUseInvoices.mockReturnValue({
+      data: [
+        { id: 'invoice-1', project_id: 'project-1' },
+        { id: 'invoice-2', project_id: 'project-2' },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+    });
+    mockUseArAging.mockReturnValue({ aging: { totalBalanceCents: 999_900, buckets: [] } });
+
+    render(<AccountsBook onClose={jest.fn()} />);
+
+    expect(screen.getByTestId('accounts-ledger')).toHaveAttribute('data-invoice-ids', 'invoice-1');
+    expect(screen.getByTestId('ledger-front-matter')).toBeEmptyDOMElement();
+    expect(screen.queryByRole('button', { name: 'Earnings' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Receivables' }));
+    expect(screen.getByTestId('accounts-receivables')).toHaveTextContent('Receivables 100');
   });
 
   it('distinguishes an invoice-folio query failure from invoice not found', () => {

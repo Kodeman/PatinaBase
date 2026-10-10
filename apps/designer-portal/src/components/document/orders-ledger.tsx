@@ -19,6 +19,8 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useHeldPurchaseOrders,
+  useOrganizations,
+  useProjectLeads,
   usePurchaseOrders,
   useUpdatePurchaseOrderETA,
   useVendors,
@@ -51,6 +53,8 @@ import { DocSheetHead } from './overlays/doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { DocumentAction } from './document-action';
+import { useAuth } from '@/hooks/use-auth';
+import { useCanSeeMargin } from '@/hooks/use-can-see-margin';
 
 type BookPage = 'ledger' | 'week' | 'receiving' | 'vendors';
 
@@ -140,6 +144,21 @@ export function OrdersLedger({
     data: AnyRecord[] | undefined;
     isLoading: boolean;
   };
+  const { user } = useAuth();
+  const canSeeMargin = useCanSeeMargin();
+  const { data: organizations } = useOrganizations();
+  const studio = organizations?.find((org) => org.type === 'design_studio') ?? organizations?.[0] ?? null;
+  const { data: projectLeads } = useProjectLeads(studio?.id ?? '');
+  const moneyProjectIds = useMemo(
+    () => new Set(
+      [...(projectLeads ?? new Map()).entries()]
+        .filter(([, lead]) => lead.leadUserId === user?.id)
+        .map(([projectId]) => projectId),
+    ),
+    [projectLeads, user?.id],
+  );
+  const canSeePoMoney = (po: AnyRecord) =>
+    canSeeMargin || moneyProjectIds.has(po.project_id ?? po.project?.id ?? '');
   // useVendors returns { data, pagination } — unwrap, and ask for the
   // whole directory (the vendor pane is a book, not a feed).
   const { data: vendorsPage } = useVendors(undefined, {
@@ -422,7 +441,7 @@ export function OrdersLedger({
       {page === 'ledger' && (
         <>
           {/* Front-matter (R5): procurement throughput — the page's opening. */}
-          {!isLoading && (
+          {!isLoading && canSeeMargin && (
             <LedgerFrontMatter
               caption="throughput"
               stats={ordersThroughput((orders ?? []) as POForThroughput[])}
@@ -509,7 +528,7 @@ export function OrdersLedger({
           )}
           {/* The bill run (D1-11): under the `payment · due` lens, one total
               over exactly the rows beneath it (V11). */}
-          {!isLoading && paymentLens === 'due' && (
+          {!isLoading && canSeeMargin && paymentLens === 'due' && (
             <LedgerFrontMatter
               caption="due to makers this week"
               stats={dueToMakers(groups.flatMap((g) => g.pos))}
@@ -545,8 +564,10 @@ export function OrdersLedger({
                 {[
                   'Held for release',
                   String(heldShown.length),
-                  fmtUsd(heldShown.reduce((s, h) => s + h.totalCents, 0)),
-                ].join(' · ')}
+                  canSeeMargin
+                    ? fmtUsd(heldShown.reduce((s, h) => s + h.totalCents, 0))
+                    : null,
+                ].filter(Boolean).join(' · ')}
               </p>
               <ul>
                 {heldShown.map((h) => {
@@ -564,7 +585,9 @@ export function OrdersLedger({
                         </p>
                         <p className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
                           {[
-                            fmtUsd(h.totalCents),
+                            canSeeMargin || moneyProjectIds.has(h.projectId)
+                              ? fmtUsd(h.totalCents)
+                              : null,
                             h.heldAt ? `held ${fmtDay(h.heldAt)}` : 'held',
                             holder,
                           ]
@@ -722,7 +745,7 @@ export function OrdersLedger({
                           <p className="doc-type-meta min-w-[12rem] flex-1 uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
                             {[
                               po.project?.name ?? 'Project',
-                              po.total_cents != null
+                              po.total_cents != null && canSeePoMoney(po)
                                 ? fmtUsd(po.total_cents)
                                 : '—',
                               // R18: the row narrates the send lifecycle.
@@ -764,7 +787,7 @@ export function OrdersLedger({
                                 differences {ackPoId === po.id ? '↑' : '↓'}
                               </button>
                             )}
-                            {hasMoney && (
+                            {hasMoney && canSeePoMoney(po) && (
                               <button
                                 type="button"
                                 data-orders-money-toggle
@@ -852,7 +875,7 @@ export function OrdersLedger({
                           />
                         </li>
                       )}
-                      {hasMoney && moneyPoId === po.id && (
+                      {hasMoney && canSeePoMoney(po) && moneyPoId === po.id && (
                         <li
                           data-orders-money-unfold
                           className="border-b border-[var(--color-pearl)] px-1 py-3 sm:pl-12"

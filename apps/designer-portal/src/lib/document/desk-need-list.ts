@@ -87,7 +87,11 @@ export function rankDeskNeeds(needs: readonly DeskNeed[], now: Date): DeskNeed[]
 
 /** Every need of every live job — the whole chain each folder carries, setup
  *  and act-less needs included — ranked by `rankDeskNeeds`. */
-export function deriveDeskNeedList(input: DeskRosterInput, now: Date): DeskNeed[] {
+export function deriveDeskNeedList(
+  input: DeskRosterInput,
+  now: Date,
+  handoffs: readonly DeskNeed[] = [],
+): DeskNeed[] {
   const folderByEngagement = new Map(
     input.folders.map((folder) => [folder.row.engagement_id, folder]),
   );
@@ -100,5 +104,5 @@ export function deriveDeskNeedList(input: DeskRosterInput, now: Date): DeskNeed[
       needs.push({ key: need.key, projectId, projectName: row.title, need });
     }
   }
-  return rankDeskNeeds(needs, now);
+  return rankDeskNeeds([...needs, ...handoffs], now);
 }

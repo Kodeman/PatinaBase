@@ -38,6 +38,9 @@ import {
   useOrganizationMembers,
   useMarkFirstDocumentOpened,
   useInstallWindow,
+  useProjectLeads,
+  useNeedStates,
+  useSetNeedState,
 } from '@patina/supabase';
 import type { DiscoveryRead } from '@patina/supabase';
 import {
@@ -139,6 +142,7 @@ import type { CallSheetOpenMode } from '@/components/document/roster/call-sheet'
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
 import { FolioLetterhead, ProposalFolioStrip } from '@/components/document/folio-strip';
+import { MarginNote } from '@/components/document/margin-note';
 import { DocColophon } from '@/components/document/doc-colophon';
 import { useDocumentRooms } from '@/hooks/use-document-rooms';
 import { gateState, useSectionGates } from '@/hooks/use-section-work';
@@ -1003,6 +1007,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const myStudio = myOrgs?.find((o) => o.type === 'design_studio') ?? myOrgs?.[0] ?? null;
   const { data: myStudioMembers } = useOrganizationMembers(myStudio?.id ?? '');
   const myMembership = myStudioMembers?.find((m) => m.user_id === user?.id);
+  const { data: projectLeads } = useProjectLeads(myStudio?.id ?? '');
+  const { data: needStates } = useNeedStates(myStudio?.id ?? '');
+  const setNeedState = useSetNeedState();
   const markFirstDocumentOpened = useMarkFirstDocumentOpened();
   useEffect(() => {
     if (!myStudio || !myMembership) return;
@@ -1025,6 +1032,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const row = resolution?.kind === 'engagement' ? resolution.row : null;
   const projectId = row?.project_id ?? '';
   const proposalId = row?.proposal_id ?? '';
+  const handoffLead = projectLeads?.get(projectId);
+  const handoffNeedKey = projectId ? `handoff:${projectId}` : null;
+  const handoffRead = handoffNeedKey
+    ? Boolean(needStates?.get(handoffNeedKey)?.actedAt)
+    : false;
+  const handoffNote = myMembership?.handoff_note?.trim();
+  const showHandoffNote = Boolean(
+    row?.engagement_kind === 'project' &&
+      handoffLead?.leadUserId === user?.id &&
+      handoffLead?.previousLeadUserId &&
+      handoffLead?.previousLeadName &&
+      handoffLead?.assignedAt &&
+      handoffNote &&
+      !handoffRead,
+  );
 
   const { data: project, isLoading: projectIsLoading, isError: projectIsError } = useProjectV2(projectId) as {
     data: AnyRecord;
@@ -3497,6 +3519,25 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
         {row.engagement_kind === 'project' && row.project_id && (
           <FolioLetterhead projectId={row.project_id} />
+        )}
+        {showHandoffNote && handoffNeedKey && row.project_id && (
+          <MarginNote
+            noteKey={`document-handoff:${row.project_id}`}
+            label="HAND-OFF"
+            act={{ label: 'Mark read' }}
+            seen={handoffRead}
+            onSeen={(how) => {
+              if (how === 'acted') {
+                setNeedState.mutate({
+                  needKey: handoffNeedKey,
+                  projectId: row.project_id!,
+                  action: 'acted',
+                });
+              }
+            }}
+          >
+            From {handoffLead?.previousLeadName}: {handoffNote}
+          </MarginNote>
         )}
         {row.engagement_kind === 'project' && row.project_id && <ClientNoteComposer projectId={row.project_id} clientFirstName={row.client_name?.split(' ')[0]} />}
 

@@ -969,41 +969,41 @@ describe('the empty facet sentence', () => {
 });
 
 describe('D6 · custodyWord — whose hand, in words', () => {
-  it('says Your pen for the studio’s own need', () => {
+  it('says Action with you for the studio’s own need', () => {
     expect(custodyWord(need({ owner: 'designer' }), row('a', 'project'))).toBe(
-      'Your pen',
+      'Action with you',
     );
   });
 
-  it('defaults to Your pen when the rule stated no owner at all', () => {
+  it('defaults to Action with you when the rule stated no owner at all', () => {
     expect(custodyWord(need({ owner: undefined }), row('a', 'project'))).toBe(
-      'Your pen',
+      'Action with you',
     );
     expect(custodyWord(need({ owner: null }), row('a', 'project'))).toBe(
-      'Your pen',
+      'Action with you',
     );
   });
 
   it('names the client by first name where the row carries one', () => {
     const r = row('a', 'project', { client_name: 'Nora Ellison' });
-    expect(custodyWord(need({ owner: 'client' }), r)).toBe('With Nora');
+    expect(custodyWord(need({ owner: 'client' }), r)).toBe('Awaiting Nora Ellison');
   });
 
-  it('falls back to With the client where the name is a placeholder', () => {
+  it('falls back to Awaiting client where the name is a placeholder', () => {
     // `clientOf` refuses the seed's `Client User` as a family name, and so
     // does this — a role noun never stands in for a name we do not have.
     const r = row('a', 'project', { client_name: 'Client User' });
-    expect(custodyWord(need({ owner: 'client' }), r)).toBe('With the client');
+    expect(custodyWord(need({ owner: 'client' }), r)).toBe('Awaiting client');
   });
 
-  it('falls back to With the client where the row carries no name', () => {
+  it('falls back to Awaiting client where the row carries no name', () => {
     const r = row('a', 'project', { client_name: null });
-    expect(custodyWord(need({ owner: 'client' }), r)).toBe('With the client');
+    expect(custodyWord(need({ owner: 'client' }), r)).toBe('Awaiting client');
   });
 
-  it('says With the maker for a vendor-owned need', () => {
+  it('says Awaiting supplier for a vendor-owned need', () => {
     expect(custodyWord(need({ owner: 'maker' }), row('a', 'project'))).toBe(
-      'With the maker',
+      'Awaiting supplier',
     );
   });
 
@@ -1026,7 +1026,7 @@ describe('D6 · deriveDeskRoster writes custody onto every line', () => {
     const lines = roster.groups[0].lines;
 
     expect(lines.find((l) => l.engagementId === 'claimed')!.custody).toBe(
-      'With Nora',
+      'Awaiting Nora Ellison',
     );
     expect(lines.find((l) => l.engagementId === 'claimed')!.needOwner).toBe(
       'client',
@@ -1382,7 +1382,7 @@ describe('N2 · the cards rank by the band’s Next order, then name', () => {
 
     expect(result.cards[0].stage).toBe('project');
     expect(result.cards[0].stageLabel).toBe('Project');
-    expect(result.cards[0].custody).toBe('Your pen');
+    expect(result.cards[0].custody).toBe('Action with you');
   });
 });
 
@@ -1636,7 +1636,7 @@ describe('deriveDeskRoster — the lead need is the band’s Next (FR3 F3-4)', (
     expect(on.needKind).toBe('po_unacknowledged');
     expect(on.act.label).toBe('Follow up with the maker');
     expect(on.needText).toBe('NA-2026-077 sent 6 days ago — no acknowledgment');
-    expect(on.custody).toBe('With the maker');
+    expect(on.custody).toBe('Awaiting supplier');
     // Flag off, today's head of the chain.
     const off = chained(halloran, [setup, po], false);
     expect(off.needKind).toBe('schedule_unconfigured');
@@ -1703,7 +1703,7 @@ describe('deriveDeskRoster — the lead need is the band’s Next (FR3 F3-4)', (
     const off = chained(cedar, [setup], false);
     expect(off.act.label).toBe('Open the schedule');
     expect(off.needKind).toBe('schedule_unconfigured');
-    expect(off.custody).toBe('Your pen');
+    expect(off.custody).toBe('Action with you');
   });
 });
 

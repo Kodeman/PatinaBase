@@ -50,6 +50,7 @@ export const NEED_CLASS: Record<NeedKind, NeedClass> = {
   ceremony_pending: 2,
   reconnect_due: 2,
   pulse_due: 2,
+  handoff: 2,
   // 3 · setup
   schedule_unconfigured: 3,
 };

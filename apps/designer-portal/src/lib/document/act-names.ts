@@ -553,6 +553,7 @@ export const NEED_ACT_LABELS: Record<NeedKind, string> = {
   memo_return: 'Mark returned',
   exception_open: 'Choose a path',
   return_by: 'Return it or keep it',
+  handoff: 'Read the note',
 };
 
 /**

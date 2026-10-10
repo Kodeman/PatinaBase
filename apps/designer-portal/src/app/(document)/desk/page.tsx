@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   useProfile,
   useOrganizations,
@@ -15,6 +16,8 @@ import {
   useBoardsReactionRollup,
   useRecentBoards,
   useStudioUnbilledTime,
+  useProjectLeads,
+  useNeedStates,
 } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useViewerStudio } from '@/hooks/use-viewer-studio';
@@ -34,6 +37,8 @@ import {
   pinnedProjectIdsFromRoster,
 } from '@/lib/document/desk-roster-derivation';
 import { useDeskLineState } from '@/components/document/desk-arbiter';
+import { deriveDeskNeedList } from '@/lib/document/desk-need-list';
+import { deriveHandoffNeeds, type DeskScope } from '@/lib/document/desk-scope';
 import { WEEKDAY_FORMAT, dayMonth } from '@/lib/document/dates';
 import { DeskContents } from '@/components/document/desk-contents';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
@@ -44,7 +49,6 @@ import {
   StudioSetupWhisper,
   useStudioSetupWhisperEligible,
 } from '@/components/document/account/studio-setup-whisper';
-import { firstNameOf } from '@/lib/document/account-identity';
 import {
   START_DESK_WALKTHROUGH_EVENT,
   clearDeskWalkthroughLater,
@@ -88,10 +92,6 @@ export default function DeskPage() {
 
   // U7 — the setup whisper's render predicate, over the reads it renders from.
   const setupWhisperEligible = useStudioSetupWhisperEligible();
-  // L8 — the owner's handoff-note margin note, behind the teammate-persona
-  // flag (W2). Flag off (or loading) never renders it.
-  const { value: teammatePersonaEnabled, isLoading: teammatePersonaLoading } =
-    useFeatureFlag('onboarding-teammate-persona');
   // US-19 FR2 F2-2 — the roster prints each act by its one name.
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const { data: orgs, isLoading: orgsLoading } = useOrganizations();
@@ -101,18 +101,9 @@ export default function DeskPage() {
     isLoading: studioMembersLoading,
     isPending: studioMembersPending,
   } = useOrganizationMembers(studio?.id ?? '');
-
-  // L8 — the hire-handoff margin note. Reads the signed-in member's OWN
-  // organization_members row for a note the owner wrote on the invite; the
-  // owner's first name comes from that row's `invited_by`, resolved against
-  // this same studioMembers list (the inviter is a member of the same org).
-  const myMembership = studioMembers?.find((m) => m.user_id === user?.id) ?? null;
-  const handoffOwner = myMembership?.invited_by
-    ? (studioMembers?.find((m) => m.user_id === myMembership.invited_by) ?? null)
-    : null;
-  const handoffOwnerFirstName = firstNameOf(
-    handoffOwner?.profiles.full_name || handoffOwner?.profiles.display_name,
-  );
+  const { data: projectLeads } = useProjectLeads(studio?.id ?? '');
+  const { data: needStates } = useNeedStates(studio?.id ?? '');
+  const [deskScope, setDeskScope] = useState<DeskScope>('studio');
 
   // A9: no mobile primary action is registered here — the header's
   // "Capture a lead" (below) is the one on-screen CTA at every viewport, and
@@ -207,16 +198,36 @@ export default function DeskPage() {
           live: data?.live ?? [],
           oneVoice,
           unreadFeeds: data?.unreadFeeds,
+          scope: deskScope,
+          leads: projectLeads,
+          meUserId: user?.id,
         },
         new Date(),
       ),
-    [data, oneVoice],
+    [data, deskScope, oneVoice, projectLeads, user?.id],
   );
 
   // A quiet Desk (no live jobs at all) lets the Studio index rise to fill the
   // space — larger, and earlier in the composition — rather than sitting as
   // bottom front matter. Only known once the read resolves.
   const deskEmpty = !!data && roster.liveCount === 0;
+  const handoffNeeds = useMemo(() => {
+    const handoffs = deriveHandoffNeeds(
+      data?.live ?? [],
+      projectLeads ?? new Map(),
+      user?.id,
+      needStates,
+    );
+    return deriveDeskNeedList(
+      {
+        folders: data?.folders ?? [],
+        chips: data?.chips ?? [],
+        live: data?.live ?? [],
+      },
+      new Date(),
+      handoffs,
+    ).filter((entry) => entry.need.kind === 'handoff');
+  }, [data, projectLeads, user?.id, needStates]);
 
   // The Desk arbiter (return-teaching §2): these four lines keep their own
   // conditions, and at most one of them, or the teaching note, renders per
@@ -233,21 +244,7 @@ export default function DeskPage() {
     ready: hydrated && !!data && !isError,
     pinnedProjectIds,
     lines: {
-      // L8 — the owner's handoff note, once, on the new hire's first Desk.
-      // Behind `onboarding-teammate-persona`; renders only for a member
-      // whose own membership row carries a written note.
-      'hire-handoff': {
-        when:
-          teammatePersonaLoading ||
-          (teammatePersonaEnabled && (orgsLoading || studioMembersLoading))
-            ? 'pending'
-            : !!(teammatePersonaEnabled && myMembership?.handoff_note),
-        node: (
-          <MarginNote noteKey="hire-handoff" className="mb-10">
-            From {handoffOwnerFirstName}: {myMembership?.handoff_note}
-          </MarginNote>
-        ),
-      },
+      'hire-handoff': { when: false, node: null },
       // R94 — the one first-touch note: what the Desk is, and the ⌘K move.
       // Recedes forever on the first ⌘K open or the × (never a tour). R97 —
       // held while the walkthrough modal/tour is on screen, and retired on
@@ -377,11 +374,43 @@ export default function DeskPage() {
         ))}
       </div>
     ) : (
-      <DeskRoster
-        roster={roster}
-        studioMembers={studioMembers}
-        belowHead={deskLine}
-      />
+      <>
+        <nav aria-label="Desk scope" className="mb-3 flex gap-4 border-b border-[var(--border-subtle)] pb-2">
+          {([
+            ['mine', 'Mine'],
+            ['studio', "The studio's"],
+          ] as const).map(([scope, label]) => (
+            <button
+              key={scope}
+              type="button"
+              aria-pressed={deskScope === scope}
+              onClick={() => setDeskScope(scope)}
+              className={`doc-type-meta min-h-11 uppercase tracking-[0.06em] ${deskScope === scope ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        <DeskRoster
+          roster={roster}
+          studioMembers={studioMembers}
+          belowHead={deskLine}
+        />
+        {handoffNeeds.length > 0 && (
+          <ul aria-label="Unread hand-offs" className="mt-4 border-t border-[var(--border-subtle)]">
+            {handoffNeeds.map((entry) => (
+              <li key={entry.key} className="border-b border-[var(--border-subtle)] py-3">
+                <Link
+                  href={entry.need.deepLink ?? `/doc/${entry.projectId}`}
+                  className="doc-type-body text-[var(--text-primary)] underline decoration-[var(--border-default)] underline-offset-2"
+                >
+                  {entry.need.text}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </>
     );
 
   return (

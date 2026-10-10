@@ -55,6 +55,7 @@ const NEED_KIND_STAMP_COLOR: Record<NeedKind, string> = {
   memo_return: 'var(--color-clay)',
   exception_open: 'var(--color-terracotta)',
   return_by: 'var(--color-clay)',
+  handoff: 'var(--color-dusty-blue)',
 };
 
 export interface RedLetterRow {
