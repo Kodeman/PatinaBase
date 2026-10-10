@@ -112,7 +112,7 @@ test('a job with a claim takes a card; a quiet job takes a ledger row', async ({
   // The at-rest half announces its count — a quantity of WORK, the one count
   // this surface permits.
   await expect(roster.locator('[data-desk-rest-head]')).toHaveText(
-    /^At rest · \d+ jobs?$/,
+    /^No current alert · \d+ jobs?$/,
   );
 
   // Nothing folds on first paint, in either half.
