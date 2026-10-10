@@ -1,3 +1,4 @@
+import { calendarDaysPast } from '@patina/supabase';
 import {
   deriveNeed,
   type DocumentStateRow,
@@ -331,15 +332,10 @@ const spell = (n: number) => NUMBER_WORDS[n] ?? String(n);
 const asLocalDate = (iso: string) =>
   new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
 
-const DAY_MS = 86_400_000;
 
 /** Whole calendar days from `now` to `iso`, in the reader's own zone. */
 function calendarDaysUntil(iso: string, now: Date): number | null {
-  const then = asLocalDate(iso);
-  if (Number.isNaN(then.getTime())) return null;
-  const thenMidnight = new Date(then.getFullYear(), then.getMonth(), then.getDate()).getTime();
-  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  return Math.round((thenMidnight - nowMidnight) / DAY_MS);
+  return -calendarDaysPast(iso, now);
 }
 
 /** "Tuesday, 11 September" — the weekday and the one day idiom, composed

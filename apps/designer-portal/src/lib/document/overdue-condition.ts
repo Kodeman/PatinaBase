@@ -1,3 +1,4 @@
+import { calendarDaysPast } from '@patina/supabase';
 /**
  * Overdue — one derivation, three renderings (ratified Ruling IV).
  *
@@ -10,7 +11,6 @@
  * red banners, push notifications, auto-approval, modal nags.
  */
 
-const DAY_MS = 86_400_000;
 
 export interface OverdueCondition {
   isOverdue: boolean;
@@ -41,11 +41,8 @@ export function deriveOverdue(
 ): OverdueCondition {
   if (!dueAt) return NOT_OVERDUE;
   const due = parseDue(dueAt);
-  if (Number.isNaN(due)) return NOT_OVERDUE;
-  const elapsed = now.getTime() - due;
-  if (elapsed <= 0) return NOT_OVERDUE;
-  if (serverOverdue === false) return NOT_OVERDUE;
-  return { isOverdue: true, days: Math.max(1, Math.floor(elapsed / DAY_MS)) };
+  if (Number.isNaN(due) || now.getTime() <= due || serverOverdue === false) return NOT_OVERDUE;
+  return { isOverdue: true, days: Math.max(1, calendarDaysPast(dueAt, now)) };
 }
 
 function dayCount(days: number): string {

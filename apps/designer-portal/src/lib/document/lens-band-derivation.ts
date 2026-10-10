@@ -1,3 +1,4 @@
+import { calendarDaysPast } from '@patina/supabase';
 /**
  * The lens band, derived — OD-1, OD-7, OD-8.
  *
@@ -140,24 +141,11 @@ const SENSE_ORDER: Record<LensDeadlineSense, number> = {
 const asLocalDate = (iso: string) =>
   new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
 
-const DAY_MS = 86_400_000;
 
 /** Whole calendar days from `now` to `iso` — negative once the day has passed.
  *  Midnight-to-midnight, so "tomorrow" is 1 at any hour of either day. */
 function calendarDaysUntil(iso: string, now: Date): number | null {
-  const then = asLocalDate(iso);
-  if (Number.isNaN(then.getTime())) return null;
-  const thenMidnight = new Date(
-    then.getFullYear(),
-    then.getMonth(),
-    then.getDate(),
-  ).getTime();
-  const nowMidnight = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  ).getTime();
-  return Math.round((thenMidnight - nowMidnight) / DAY_MS);
+  return -calendarDaysPast(iso, now);
 }
 
 export interface LensShortForm {

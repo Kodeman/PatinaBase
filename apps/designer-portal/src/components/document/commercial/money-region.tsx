@@ -139,11 +139,23 @@ export function MoneyRegion({
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const { data: projectInvoices } = useProjectInvoices(oneVoice ? projectId : null);
   const receivableDue = oneVoice
-    ? ((projectInvoices ?? []) as { id: string; status: string; due_date?: string | null }[])
-        .filter((invoice) => invoice.status === 'sent' || invoice.status === 'partially_paid')
+    ? ((projectInvoices ?? []) as { id: string; status: string; due_date?: string | null; total_cents?: number | null; amount_paid_cents?: number | null; payments?: { status: string }[] }[])
+        .filter((invoice) =>
+          (invoice.status === 'sent' || invoice.status === 'partially_paid') &&
+          (invoice.total_cents == null || invoice.total_cents > (invoice.amount_paid_cents ?? 0)) &&
+          !invoice.payments?.some((payment) => payment.status === 'requires_refund'),
+        )
         .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'))[0] ?? null
     : null;
 
+  const refundCents = (projectInvoices ?? []).reduce(
+    (sum, invoice) =>
+      sum +
+      (invoice.payments ?? [])
+        .filter((payment) => payment.status === 'requires_refund')
+        .reduce((total, payment) => total + payment.amount_cents, 0),
+    0,
+  );
   const account = accountQuery.data ?? null;
   const accountFailed = Boolean(accountQuery.isError);
   const accountSettled = !accountQuery.isLoading && !accountFailed;
@@ -332,6 +344,9 @@ export function MoneyRegion({
         style={QUIET_RESERVE}
       >
         <RegionRule weight="mid" />
+        {refundCents > 0 ? (
+          <p className="mt-3 text-sm text-[var(--text-muted)]">A payment of {money(refundCents)} needs a refund.</p>
+        ) : null}
         <FoldSeam
           headingId={HEADING_ID}
           bodyId={BODY_ID}
@@ -374,10 +389,16 @@ export function MoneyRegion({
 
       {quiet ? (
         <div id={BODY_ID}>
+          {refundCents > 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">A payment of {money(refundCents)} needs a refund.</p>
+          ) : null}
           <p className="sr-only">{quietStateSentence(quietStatus, 'Money')}</p>
         </div>
       ) : (
       <div id={BODY_ID}>
+        {refundCents > 0 ? (
+          <p className="mt-3 text-sm text-[var(--text-muted)]">A payment of {money(refundCents)} needs a refund.</p>
+        ) : null}
         <ol className="mt-3 space-y-2">
           <Rung
             name="Budget"

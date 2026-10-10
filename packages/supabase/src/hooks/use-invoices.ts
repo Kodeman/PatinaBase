@@ -6,6 +6,7 @@
 // contract until `pnpm db:generate` is run. Follows use-procurement.ts house
 // style.
 
+import { calendarDaysPast } from '../utils/calendar-days';
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
@@ -530,7 +531,7 @@ export function useProjectInvoices(projectId: string | null | undefined) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('invoices')
-        .select('*, line_items:invoice_line_items(*)')
+        .select('*, line_items:invoice_line_items(*), payments:invoice_payments(*)')
         .eq('project_id', projectId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -670,11 +671,7 @@ function arBalanceCents(invoice: Invoice): number {
 /** Whole days past due (UTC-pinned bare DATE math). <= 0 means not yet due. */
 export function invoiceDaysOverdue(invoice: Pick<Invoice, 'due_date'>): number {
   if (!invoice.due_date) return 0;
-  const due = Date.parse(`${invoice.due_date.slice(0, 10)}T00:00:00Z`);
-  if (Number.isNaN(due)) return 0;
-  const now = new Date();
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return Math.floor((today - due) / 86_400_000);
+  return calendarDaysPast(invoice.due_date, new Date());
 }
 
 function arBucketKey(daysOverdue: number): ArBucketKey {

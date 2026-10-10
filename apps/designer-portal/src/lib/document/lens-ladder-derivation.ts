@@ -1,3 +1,4 @@
+import { calendarDaysPast } from '@patina/supabase';
 /**
  * The ladder — one segment per stop this spread actually puts on the paper,
  * and the doors filed beneath them (C-3, OD-2/OD-8/OD-14).
@@ -30,7 +31,7 @@ import {
 import { ESSENTIAL_KEYS } from './discovery-readiness';
 import { fmtDay } from './format';
 import { money } from './project-commerce';
-import type { TicketInput } from './ticket-derivation';
+import { unansweredPoClause, type TicketInput } from './ticket-derivation';
 
 export interface LadderRoomRung {
   id: string;
@@ -163,14 +164,9 @@ const FIDELITY_WORDS: ReadonlySet<string> = new Set(Object.values(FIDELITY_WORD)
 const asLocalDate = (iso: string) =>
   new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
 
-const DAY_MS = 86_400_000;
 
 function calendarDaysUntil(iso: string, now: Date): number | null {
-  const then = asLocalDate(iso);
-  if (Number.isNaN(then.getTime())) return null;
-  const midnight = (d: Date) =>
-    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  return Math.round((midnight(then) - midnight(now)) / DAY_MS);
+  return -calendarDaysPast(iso, now);
 }
 
 /** `SEP 15` — the rail's register of a day. */
@@ -352,7 +348,12 @@ function piecesRegister(input: LadderInput): Register {
   const ticket = input.ticket;
   if (!ticket.pieces.settled) return reading();
   const counts = countPieces(ticket);
-  if (counts.total === 0) return empty('Nothing yet');
+  const unansweredPo = unansweredPoClause(ticket.pieces.unansweredPo, ticket.now ?? new Date());
+  if (counts.total === 0) {
+    return unansweredPo
+      ? { value: unansweredPo.phrase, narrowValue: unansweredPo.phrase, countLine: unansweredPo.phrase, fallback: null }
+      : empty('Nothing yet');
+  }
 
   const lines = `${counts.total} ${counts.total === 1 ? 'LINE' : 'LINES'}`;
   const rooms =
@@ -366,8 +367,8 @@ function piecesRegister(input: LadderInput): Register {
   // OD-14: the narrow measure splices the room count in and drops the damage
   // date first to stay inside the cap — the date prints on the paper's own
   // count line, and on the band's line 2 when it is the worst thing standing.
-  const full = [lines, damaged].filter(Boolean).join(' · ');
-  const narrowFull = [lines, rooms, damaged].filter(Boolean).join(' · ');
+  const full = [lines, damaged, unansweredPo?.phrase].filter(Boolean).join(' · ');
+  const narrowFull = [lines, rooms, damaged, unansweredPo?.phrase].filter(Boolean).join(' · ');
   const narrow =
     narrowFull.length <= LENS_VALUE_MAX_CHARS
       ? narrowFull
@@ -386,8 +387,8 @@ function piecesRegister(input: LadderInput): Register {
     .join(' · ');
 
   return {
-    value: cap(full, LENS_VALUE_MAX_CHARS),
-    narrowValue: cap(narrow, LENS_VALUE_MAX_CHARS),
+    value: cap(unansweredPo?.phrase ?? full, LENS_VALUE_MAX_CHARS),
+    narrowValue: cap(unansweredPo?.phrase ?? narrow, LENS_VALUE_MAX_CHARS),
     countLine: cap(words, LENS_COUNT_MAX_CHARS),
     fallback: null,
   };

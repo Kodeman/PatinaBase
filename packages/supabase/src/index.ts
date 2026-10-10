@@ -1,3 +1,5 @@
+export { calendarDaysPast } from './utils/calendar-days';
+
 export {
   createClient,
   createBrowserClient,

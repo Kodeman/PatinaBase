@@ -16,7 +16,7 @@
  * straight off the invoice rows (total_cents − amount_paid_cents).
  */
 
-import type { Invoice } from '@patina/supabase';
+import { calendarDaysPast, type Invoice } from '@patina/supabase';
 import {
   AR_OVERDUE_NEEDS_DAYS,
   AR_CHASE_COOLDOWN_DAYS,
@@ -27,10 +27,7 @@ const DAY_MS = 86_400_000;
 
 /** Whole days past due (UTC-pinned bare-DATE math; <= 0 means not yet due). */
 function daysOverdue(dueDate: string, now: Date): number {
-  const due = Date.parse(`${dueDate.slice(0, 10)}T00:00:00Z`);
-  if (Number.isNaN(due)) return 0;
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return Math.floor((today - due) / DAY_MS);
+  return calendarDaysPast(dueDate, now);
 }
 
 function balanceCents(inv: Invoice): number {

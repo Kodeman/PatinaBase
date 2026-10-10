@@ -1,3 +1,4 @@
+import { calendarDaysPast } from '@patina/supabase';
 /**
  * The operational needs' tie-break — direction A §3, as revised by C-AP-06,
  * and by A3-L7, which gives `NeedLine` a `dueOn`/`owner` and reads them here.
@@ -23,7 +24,6 @@ import type { NeedKind, NeedLine } from './desk-derivation';
 
 export type NeedTieBreakRank = 1 | 2 | 3 | 4;
 
-const DAY_MS = 86_400_000;
 
 /** Bare DATE columns parse as LOCAL midnight, matching document-guide.ts's
  *  own `asLocalDate` — a bare ISO date must not slip a day in negative-offset
@@ -34,11 +34,7 @@ const asLocalDate = (iso: string): Date =>
 /** Whole calendar days from `now` to `iso` — negative when `iso` is past.
  *  `null` when `iso` does not parse. */
 function calendarDaysUntil(iso: string, now: Date): number | null {
-  const then = asLocalDate(iso);
-  if (Number.isNaN(then.getTime())) return null;
-  const thenMidnight = new Date(then.getFullYear(), then.getMonth(), then.getDate()).getTime();
-  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  return Math.round((thenMidnight - nowMidnight) / DAY_MS);
+  return -calendarDaysPast(iso, now);
 }
 
 /**

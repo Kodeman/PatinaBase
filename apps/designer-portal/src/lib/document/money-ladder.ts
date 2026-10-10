@@ -142,8 +142,11 @@ function deriveOwed(input: MoneyLadderInput): MoneyRung {
   if (!settled) return rung('owed', null, PENDING);
 
   const aging = computeArAging([...rows]);
-  const lead = aging.openInvoices[0];
+  const lead = aging.openInvoices.find((invoice) => (invoice.total_cents || 0) > (invoice.amount_paid_cents || 0));
   if (!lead) return rung('owed', null, 'nothing owed yet');
+  if (lead.payments?.some((payment) => payment.status === 'requires_refund')) {
+    return rung('owed', null, 'a payment needs a refund');
+  }
   // A `partially_paid` invoice stays open with a zero remaining balance, so
   // `openInvoices` is not by itself a receivable. Stating "$0 out" against a
   // named invoice would be the empty tier F61 retired, one rung lower.

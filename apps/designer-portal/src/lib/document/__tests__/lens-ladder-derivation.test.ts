@@ -146,6 +146,16 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
     }
   });
 
+  it('names an unanswered purchase order with zero or several lines', () => {
+    const unansweredPo = { count: 1, label: 'PO-HD-0412', sentAt: '2026-10-01T00:49:08Z' };
+    const emptyPieces = byKey(input({ ticket: ticket({ pieces: { settled: true, lines: [], unansweredPo }, now: new Date(2026, 9, 10) }) }));
+    expect(emptyPieces.ffe.value).not.toBe('Nothing yet');
+    expect(emptyPieces.ffe.value).toContain('PO-HD-0412');
+
+    const populated = byKey(input({ ticket: ticket({ pieces: { settled: true, lines: lines().slice(0, 3), unansweredPo }, now: new Date(2026, 9, 10) }) }));
+    expect(populated.ffe.value).toContain('PO-HD-0412');
+  });
+
   it('keeps every value inside the 30-character cap at both measures', () => {
     for (const segment of deriveLadderSegments(input())) {
       expect((segment.value ?? '').length).toBeLessThanOrEqual(

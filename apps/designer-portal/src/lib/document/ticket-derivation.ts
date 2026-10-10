@@ -1,3 +1,4 @@
+import { calendarDaysPast } from '@patina/supabase';
 /**
  * The job ticket — the document's map, derived once.
  *
@@ -326,19 +327,7 @@ const asLocalDate = (iso: string) =>
 const DAY_MS = 86_400_000;
 
 function calendarDaysUntil(iso: string, now: Date): number | null {
-  const then = asLocalDate(iso);
-  if (Number.isNaN(then.getTime())) return null;
-  const thenMidnight = new Date(
-    then.getFullYear(),
-    then.getMonth(),
-    then.getDate(),
-  ).getTime();
-  const nowMidnight = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  ).getTime();
-  return Math.round((thenMidnight - nowMidnight) / DAY_MS);
+  return -calendarDaysPast(iso, now);
 }
 
 const fmtWeekdayDate = (iso: string) => {
@@ -456,7 +445,7 @@ const PO_UNANSWERED_DAYS = 1;
 
 /** `PO-2026-0418 unanswered, 14 days` — the clause the Pieces row prints and
  *  the guide quotes, or null while nothing is standing. */
-function unansweredPoClause(
+export function unansweredPoClause(
   po: TicketUnansweredPo | null | undefined,
   now: Date,
 ): { phrase: string; sentAt: string } | null {

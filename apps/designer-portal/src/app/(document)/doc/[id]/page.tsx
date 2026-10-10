@@ -1,5 +1,6 @@
 'use client';
 
+import { calendarDaysPast } from '@patina/supabase';
 /**
  * The open document — full bleed (D12): the paper IS the screen. No
  * surround, no border, no stacked edge; spine and margin are sticky rails;
@@ -664,10 +665,10 @@ function ProjectTicketFacts({
     onDamagedOn(damagedOn);
   }, [damagedOn, onDamagedOn]);
 
-  const leadingOpenInvoice = useMemo(
-    () => computeArAging(invoicesQuery.data ?? []).openInvoices[0] ?? null,
-    [invoicesQuery.data],
-  );
+  const leadingOpenInvoice = useMemo(() => {
+    const aging = computeArAging(invoicesQuery.data ?? []);
+    return aging.openInvoices.find((invoice) => (invoice.total_cents || 0) > (invoice.amount_paid_cents || 0)) ?? null;
+  }, [invoicesQuery.data]);
 
   const boardsCount =
     (liveBoardsQuery.data ?? []).filter((board) => board.status !== 'archived')
@@ -2201,14 +2202,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           awaiting: unsettledApprovals.length - overdueApprovals.length,
           overdue: overdueApprovals.length,
           overdueDays: oldestOverdueDueAt
-            ? Math.max(
-                0,
-                Math.floor(
-                  (gateNow.getTime() -
-                    new Date(oldestOverdueDueAt).getTime()) /
-                    86_400_000,
-                ),
-              )
+            ? calendarDaysPast(oldestOverdueDueAt, gateNow)
             : null,
           records: approvalRecords.length,
         },

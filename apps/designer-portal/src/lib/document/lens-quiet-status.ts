@@ -1,3 +1,4 @@
+import { calendarDaysPast } from '@patina/supabase';
 /**
  * What a quiet stop's head SAYS — W4-R1, the design lead's print contract.
  *
@@ -86,12 +87,10 @@ export interface ScheduleQuietFacts {
 const asLocalDate = (iso: string) =>
   new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
 
-const DAY_MS = 86_400_000;
 
 function calendarDaysUntil(then: Date, now: Date): number {
-  const midnight = (d: Date) =>
-    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  return Math.round((midnight(then) - midnight(now)) / DAY_MS);
+  const date = `${then.getFullYear()}-${String(then.getMonth()+1).padStart(2,'0')}-${String(then.getDate()).padStart(2,'0')}`;
+  return -calendarDaysPast(date, now);
 }
 
 export function scheduleQuietStatus({
