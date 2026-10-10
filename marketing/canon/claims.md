@@ -59,6 +59,8 @@ source. Keep `|` out of cells.
 | C28 | Middle West Studio designed the interiors of Kippley Custom Carpentry's 2026 Fall Parade home on Moll Drive in Waunakee (the Moll Drive house). | docs/marketing/partners/kippley.md §Moll Drive house | verified |
 | C29 | The Moll Drive house is a traditional home with warm wood accents, a kitchen with a generous island and walk-in pantry, rear windows onto the landscape, and a finished walkout lower level. | https://www.madisonfallparadeofhomes.com/kippleycustomcarpentry (listing; read 2026-10-09) | verified |
 | C30 | Leah will be at the Moll Drive house during the Fall Parade on ⟨day and hours⟩. | Kody, chat 2026-10-09: Leah or Kody will be present the second weekend. Promote once the day and hours are set and recorded in docs/marketing/partners/kippley.md | todo |
+| C31 | On Patina, everyone who acts on a job (the client's household, the contractor, the trades and the studio's own team) holds a seat on that job, and a seat's access ends when the job does. | docs/design/the-document/DECISIONS.md R151 (PR-c household + seat; PR-d grant ends with the engagement window; built and deployed in the People room program) | verified |
+| C32 | A trade sends its insurance certificate, W-9 and licence to the studio through a link, and the studio confirms them. | docs/design/the-document/DECISIONS.md R151 PR-a (tokened field-link page a trade writes to, unverified until a studio member confirms) | verified |
 
 ## Never claim (not ledger rows; lint cannot catch all of these)
 

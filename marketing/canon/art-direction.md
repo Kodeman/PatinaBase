@@ -43,15 +43,30 @@ From `packages/patina-design-system/src/tokens/typography.ts`.
 
 ## 3. Photography and imagery
 
-- **Rights-owned Midwest spaces.** Photographs come from studios, homes and workshops we have
+- **Rights-owned Midwest spaces.** Photographs come from studios, homes and job sites we have
   written permission to show. Credit the studio and photographer.
-- **What to show:** materials (white oak, walnut, linen, plaster, brass gone soft), grain up close,
-  daylight through a real window, hands at work (sanding, marking a drawing, pinning a sample),
-  real studios mid-job: a sample board half-pinned, a tape measure on a sill, a drawing with notes.
-- **Never:** the stock look (staged smiles, empty showrooms, laptop-on-a-marble-desk), gradients,
-  emoji, the glossy 3D-render look, neon, lens-flare drama, coastal or skyline cues.
-- **Faces:** no person's face as the hero unless that person has consented in writing. Prefer
-  hands, backs, shoulders, a figure at the edge of frame.
+- **How studios work now (Kody, 2026-10-09).** A residential design studio today is a bright,
+  current working office: laptops and a large monitor on the desk, a phone in hand, plans printed
+  and pinned, and a sample library of fabric books, tile, stone, wood and finish samples on open
+  shelves. Show that as it really is. Do not stage the work in a century-old workshop.
+- **What to show:**
+  - the studio's sample library, with a designer pulling fabric books or a tile and laying a scheme
+    out on the table;
+  - a designer at a desk working between a laptop, a monitor and printed plans;
+  - plans in the space: a drawing set or tablet open in the house under construction, with the
+    contractor, a trade or the client looking at the same page;
+  - the house mid-build: framing, drywall, cabinet boxes going in, a kitchen island before its top;
+  - materials up close as supporting shots, not the whole story.
+- **People:** working adults of mixed ages, dressed for a studio or a job site, caught mid-task
+  and looking at the work. Groups of two or three sharing one set of plans or one screen carry the
+  "same page" idea. Faces may be in the frame at a natural distance; no portrait-style hero face
+  and no one looking into the lens.
+- **Never:** old-workshop nostalgia (antique hand tools, dusty benches, grime, sepia, worn
+  hands as the subject); a studio with no computer in it; the stock look (staged smiles,
+  handshakes, empty showrooms, a laptop alone on a marble desk); gradients, emoji, the glossy
+  3D-render look, neon, lens-flare drama, coastal or skyline cues.
+- **Faces in rights-owned photographs:** no real person's face as the hero unless that person has
+  consented in writing.
 - **Generated images are illustrations.** Never caption a Midjourney or FLUX image as a real
   project, a real client's home, a real maker's piece or a real studio. Never generate a likeness
   of a real person or a real maker's product.
@@ -76,7 +91,8 @@ Sizes and formats are in `marketing/canon/channels.json`; these are the layout h
   bleed or not at all. DM Mono footer line for sources.
 - **poster-18x24 (3:4, 300 dpi):** one image, one Playfair line readable from six feet, subhead and
   body in the bottom quarter. Bleed 0.125 in. Image at 5400×7200 px or upscaled to it.
-- **video-9x16 (≤ 30 s) / video-16x9 (≤ 60 s):** open on texture or hands in the first two seconds.
+- **video-9x16 (≤ 30 s) / video-16x9 (≤ 60 s):** open on the work in the first two seconds: a
+  sample library, plans on site, a screen and a set of drawings.
   On-screen text in the middle third, ≤ 7 words, Inter. The Patina mark once, at the end, on paper.
 
 ## 5. Midjourney house style
@@ -98,36 +114,43 @@ comma-separated, concrete nouns over adjectives.
 
 **Example prompts (text only):**
 
-1. a designer's hand pinning a linen swatch to a sample board, unbleached linen and walnut veneer
-   chips, soft north window light, 50mm at eye level, quiet and focused, a converted brick
-   warehouse studio in Milwaukee's Third Ward
-2. a white oak dining table mid-install, hand-rubbed oil finish catching the grain, low late
-   afternoon sun across plank floors, 35mm wide from the doorway, calm and settled, a 1920s
-   bungalow in Madison's Vilas neighborhood
-3. two pairs of hands over a drawing set on a work table, graphite notes and a brass scale ruler,
-   overcast daylight from a long window, 85mm close crop, collaborative and unhurried, a small
-   design studio above a Main Street storefront in Mineral Point, Wisconsin
-4. a maker planing a cherry board in a timber-frame workshop, curled shavings on the bench, dusty
-   shafts of morning light, 50mm at bench height, patient and exacting, rural Driftless Area
-   barn workshop in winter
-5. a half-finished living room with drop cloths, plaster walls and a single upholstered chair
-   waiting in place, wool boucle and raw plaster, diffuse snow-light through tall windows,
-   28mm from the corner, anticipation, a Prairie School house in Oak Park, Illinois
-6. a tape measure, a fabric ring and a phone resting on a deep window sill, cotton, steel and
-   painted pine, early morning frost light, 100mm macro, quiet beginning of a workday, a farmhouse
-   on the edge of Door County
+1. an interior designer in her thirties pulling a fabric book from the open shelves of a studio
+   sample library, rows of fabric books, tile and wood samples behind her, bright even daylight
+   from large windows, 35mm at eye level, candid and mid-task, a contemporary design studio in
+   Madison, Wisconsin
+2. a designer at a white oak desk working between a laptop and a large monitor showing a floor
+   plan, printed plans and a tile sample beside the keyboard, clean daylight and soft overhead
+   light, 50mm over the shoulder, focused, a bright modern studio office in Milwaukee's Third Ward
+3. a designer, a contractor in a work jacket and a homeowner standing in a framed-out kitchen
+   looking at the same set of plans on a tablet, studs, drywall stacks and cabinet boxes around
+   them, overcast daylight through new window openings, 35mm documentary, a new-build house
+   in Waunakee, Wisconsin
+4. a kitchen mid-install with cabinet boxes in place, the island waiting for its top and a
+   printed elevation taped to the wall, plywood, painted cabinetry and drywall, daylight from a
+   rear window wall, 28mm from the doorway, work in progress, a new home outside Madison
+5. two designers at a large studio table laying out a scheme of fabric, tile, a wood door sample
+   and printed plans while a laptop sits open at the end, daylight from tall windows, 50mm from
+   slightly above, collaborative, a contemporary design studio in Madison
+6. a phone and a printed drawing set on a kitchen island under construction, a tape measure
+   beside them, quartz sample and painted cabinet door, morning light, 85mm close, the start of
+   a site visit, a new-build house in Wisconsin
 
 **Negative list** (append to every prompt as one `--no` clause):
 `--no text, letters, words, watermark, logo, signage, gradient, emoji, glossy render, CGI, 3d render,
-plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, face in focus,
-skyline, palm trees, ocean, beach, mountains, penthouse, marble everywhere`
+plastic, chrome, neon, lens flare, HDR, oversaturated, stock photo, smiling at camera, looking at
+camera, posed portrait, handshake, antique workshop, hand tools, sepia, grime, distressed, skyline,
+palm trees, ocean, beach, mountains, penthouse, marble everywhere`
+
+Screens in a frame show plans, elevations or photos with no legible words; `--no text` keeps them
+unreadable, which is what we want.
 
 ## 6. Image to video (Midjourney V8 animate)
 
 - Animate from a chosen still (the video job's `startFrom`). Use **low motion**.
 - **One camera move per clip**, named in the motion prompt: a slow push-in, a slow lateral slide,
   or a slow tilt down. No orbiting, no zoom-and-pan combinations, no fast cuts inside a clip.
-- Subject motion stays small: dust in light, a hand finishing a stroke, a curtain lifting.
+- Subject motion stays small: a person turning a page of plans, a fabric book set down, a
+  contractor pointing at a wall.
 - **Clips are ≤ 10 s.** A 30 s 9:16 piece is three or four clips cut together in the hyperframes
   composition, not one long extension.
 - Reject any clip where faces, hands or materials warp, text appears, or the light flickers.
