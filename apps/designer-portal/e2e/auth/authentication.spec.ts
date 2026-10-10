@@ -20,8 +20,8 @@ test.describe('Authentication Flow', () => {
 
     await expect(page.getByRole('heading', { name: /Welcome back to the studio/i })).toBeVisible();
     await expect(page.getByText(/their clients, and the makers they trust/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /Email me a one-time code/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Use email and password instead/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Email sign-in code/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Use a password instead/i })).toBeVisible();
     // The QR left the right pane for the brand pane's ambient badge.
     await expect(page.getByRole('button', { name: /Use a QR code/i })).toHaveCount(0);
   });
@@ -44,7 +44,7 @@ test.describe('Authentication Flow', () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/auth/signin');
-    await expect(page.getByRole('button', { name: /Email me a one-time code/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Email sign-in code/i })).toBeVisible();
     // Give a hydrated media-query gate every chance to misfire before asserting.
     await page.waitForTimeout(2_000);
 
@@ -67,9 +67,9 @@ test.describe('Authentication Flow', () => {
     await page.goto('/auth/signin');
 
     const labels = await page.getByRole('button').allTextContents();
-    const emailIndex = labels.findIndex((label) => label.includes('Email me a one-time code'));
+    const emailIndex = labels.findIndex((label) => label.includes('Email sign-in code'));
     const appleIndex = labels.findIndex((label) => label.includes('Continue with Apple'));
-    const passwordIndex = labels.findIndex((label) => label.includes('Use email and password instead'));
+    const passwordIndex = labels.findIndex((label) => label.includes('Use a password instead'));
 
     expect(emailIndex).toBeGreaterThanOrEqual(0);
     expect(labels.some((label) => label.includes('Use a QR code'))).toBe(false);

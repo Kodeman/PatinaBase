@@ -507,7 +507,7 @@ export function PortalLogin({
   )
   const errorTarget = state === 'code' ? 'code' : passwordOpen ? 'password' : 'email'
   const errorId = `portal-auth-${errorTarget}-error`
-  const friendlyError = error && <PortalAuthNotice id={errorId} tone="error" title="Let’s try that again." className={cn('mb-[6px]', RISE.notice)}>{error}</PortalAuthNotice>
+  const friendlyError = error && <PortalAuthNotice id={errorId} tone="error" title="Sign-in unsuccessful" className={cn('mb-[6px]', RISE.notice)}>{error}</PortalAuthNotice>
 
   React.useEffect(() => {
     if (!interactionLocked) codeSubmissionInFlight.current = false
@@ -533,13 +533,13 @@ export function PortalLogin({
       {state === 'code' ? (
         <form className="space-y-[20px]" onSubmit={(event) => { event.preventDefault(); submitCode(code) }}>
           <div className={cn('grid gap-[8px]', RISE.head)}>
-            <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-[#65594E]">Email passcode</p>
-            <h2 className="font-heading text-[30px] font-medium leading-[1.1] tracking-[-0.03em] text-[#2C2926] [text-wrap:balance]">Check your inbox.</h2>
+            <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-[#65594E]">Email sign-in code</p>
+            <h2 className="font-heading text-[30px] font-medium leading-[1.1] tracking-[-0.03em] text-[#2C2926] [text-wrap:balance]">Check your email</h2>
             <p className="text-[14px] leading-[1.6] text-[#65594E]">We sent a six-digit code to <strong className="font-semibold text-[#2C2926]">{email}</strong>.</p>
           </div>
           <OtpInput value={code} onChange={onCodeChange ?? (() => undefined)} onComplete={submitCode} disabled={interactionLocked} error={Boolean(error)} errorId={errorId} />
           <div className={cn('flex items-center justify-between gap-[16px] text-[14px]', RISE.action)}>
-            <button type="button" onClick={onChangeMethod} disabled={interactionLocked} className="min-h-[44px] text-[#2C2926] underline decoration-[#8B7355] underline-offset-4 disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C]">Use a different email</button>
+            <button type="button" onClick={onChangeMethod} disabled={interactionLocked} className="min-h-[44px] text-[#2C2926] underline decoration-[#8B7355] underline-offset-4 disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C]">Change email address</button>
             {/* A countdown is not a link until it can be pressed — it reads as the quiet fact it is. */}
             <button type="button" disabled={resendInSeconds > 0 || interactionLocked} onClick={onResendCode} className={cn('min-h-[44px] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C]', resendInSeconds > 0 ? 'cursor-default text-[#65594E]' : 'font-semibold text-[#2C2926] underline decoration-[#8B7355] underline-offset-4 disabled:cursor-not-allowed disabled:opacity-55')}>{resendInSeconds > 0 ? `Resend in ${resendInSeconds}s` : 'Resend code'}</button>
           </div>
@@ -553,13 +553,13 @@ export function PortalLogin({
           </div>
           <div className={cn('group relative grid gap-[8px]', RISE.field)}>
             <label className="text-[11px] font-semibold uppercase leading-[1.4] tracking-[0.15em] text-[#65594E]" htmlFor="portal-auth-email">Email address</label>
-            <input id="portal-auth-email" type="email" autoComplete="email" value={email} onChange={(event) => onEmailChange(event.target.value)} aria-invalid={errorTarget === 'email' && Boolean(error) || undefined} aria-describedby={errorTarget === 'email' && error ? errorId : undefined} className="h-[48px] w-full border border-[#8B7355] bg-white px-[12px] text-[16px] text-[#2C2926] outline-none transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] placeholder:text-[#7A6A5B] focus-visible:border-[#5C4A3C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#5C4A3C] motion-reduce:transition-none" placeholder="you@studio.com" disabled={interactionLocked} />
+            <input id="portal-auth-email" type="email" autoComplete="email" value={email} onChange={(event) => onEmailChange(event.target.value)} aria-invalid={errorTarget === 'email' && Boolean(error) || undefined} aria-describedby={errorTarget === 'email' && error ? errorId : undefined} className="h-[48px] w-full border border-[#8B7355] bg-white px-[12px] text-[16px] text-[#2C2926] outline-none transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] placeholder:text-[#7A6A5B] focus-visible:border-[#5C4A3C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#5C4A3C] motion-reduce:transition-none" placeholder="you@example.com" disabled={interactionLocked} />
             <PortalAuthFieldSeam />
           </div>
           {/* The entrance rides a wrapper, never the button: an animation that
               settles opacity to 1 would outrank the button's own disabled dim. */}
           <div className={RISE.action}>
-            <button type="submit" disabled={!email || interactionLocked} className="h-[48px] w-full bg-[#1A1816] px-[16px] text-[14px] font-semibold text-[#FAF7F2] transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] hover:bg-[#2C2926] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none">{interactionLocked ? 'Sending code…' : 'Email me a one-time code'}</button>
+            <button type="submit" disabled={!email || interactionLocked} className="h-[48px] w-full bg-[#1A1816] px-[16px] text-[14px] font-semibold text-[#FAF7F2] transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] hover:bg-[#2C2926] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none">{interactionLocked ? 'Sending code…' : 'Email sign-in code'}</button>
           </div>
         </form>
       )}
@@ -572,7 +572,7 @@ export function PortalLogin({
         })}
         <div>
           <PortalAuthRule />
-          <button type="button" aria-expanded={passwordOpen} aria-controls="portal-auth-password-panel" onClick={() => onPasswordExpandedChange?.(!passwordOpen)} disabled={interactionLocked} className="flex min-h-[44px] w-full items-center justify-between gap-[12px] py-[12px] text-left text-[14px] font-semibold text-[#2C2926] transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none"><span>Use email and password instead</span><span aria-hidden="true" className="font-mono text-[15px] text-[#65594E]">{passwordOpen ? '−' : '+'}</span></button>
+          <button type="button" aria-expanded={passwordOpen} aria-controls="portal-auth-password-panel" onClick={() => onPasswordExpandedChange?.(!passwordOpen)} disabled={interactionLocked} className="flex min-h-[44px] w-full items-center justify-between gap-[12px] py-[12px] text-left text-[14px] font-semibold text-[#2C2926] transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none"><span>Use a password instead</span><span aria-hidden="true" className="font-mono text-[15px] text-[#65594E]">{passwordOpen ? '−' : '+'}</span></button>
           {passwordOpen && <form id="portal-auth-password-panel" className="grid gap-[12px] pb-[4px] pt-[4px]" onSubmit={(event) => { event.preventDefault(); if (!interactionLocked) onPasswordSignIn?.() }}><div className="grid gap-[8px]"><label className="text-[11px] font-semibold uppercase leading-[1.4] tracking-[0.15em] text-[#65594E]" htmlFor="portal-auth-password">Password</label><input id="portal-auth-password" type="password" autoComplete="current-password" value={password} onChange={(event) => onPasswordChange?.(event.target.value)} disabled={interactionLocked} aria-invalid={errorTarget === 'password' && Boolean(error) || undefined} aria-describedby={errorTarget === 'password' && error ? errorId : undefined} className="h-[48px] w-full border border-[#8B7355] bg-white px-[12px] text-[16px] text-[#2C2926] outline-none transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] disabled:cursor-not-allowed disabled:opacity-55 focus-visible:border-[#5C4A3C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#5C4A3C] motion-reduce:transition-none" /></div><div className="flex items-center justify-between gap-[12px]"><button type="button" onClick={onForgotPassword} disabled={interactionLocked} className="min-h-[44px] text-[14px] text-[#2C2926] underline decoration-[#8B7355] underline-offset-4 disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C]">Forgot password?</button><button type="submit" disabled={!email || !password || interactionLocked} className="min-h-[44px] border border-[#8B7355] px-[16px] py-[9px] text-[14px] font-semibold text-[#2C2926] transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] hover:border-[#2C2926] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none">Sign in</button></div></form>}
         </div>
       </div>}

@@ -63,7 +63,7 @@ async function fillEmail(email = 'jamie@example.com') {
 async function sendCode() {
   await fillEmail();
   fireEvent.click(
-    screen.getByRole('button', { name: 'Email me a one-time code' }),
+    screen.getByRole('button', { name: 'Email sign-in code' }),
   );
   await screen.findByLabelText('Six-digit code');
 }

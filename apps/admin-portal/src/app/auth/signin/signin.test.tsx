@@ -132,13 +132,13 @@ describe('Admin sign in', () => {
     render(<SignInPage />);
 
     expect(
-      screen.getByRole('button', { name: 'Email me a one-time code' }),
+      screen.getByRole('button', { name: 'Email sign-in code' }),
     ).toBeDisabled();
     expect(
       screen.getByRole('button', { name: 'Continue with Apple' }),
     ).toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Use email and password instead' }),
+      screen.getByRole('button', { name: 'Use a password instead' }),
     ).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
     // The right-pane QR disclosure is gone entirely — the badge now lives in
@@ -158,10 +158,10 @@ describe('Admin sign in', () => {
       target: { value: 'ops@patina.com' },
     });
     fireEvent.click(
-      screen.getByRole('button', { name: 'Email me a one-time code' }),
+      screen.getByRole('button', { name: 'Email sign-in code' }),
     );
 
-    await screen.findByText('Check your inbox.');
+    await screen.findByText('Check your email');
     expect(mockSendOtp).toHaveBeenCalledWith(
       expect.objectContaining({
         email: 'ops@patina.com',
@@ -271,7 +271,7 @@ describe('Admin sign in', () => {
       ),
     );
     fireEvent.click(
-      screen.getByRole('button', { name: 'Use email and password instead' }),
+      screen.getByRole('button', { name: 'Use a password instead' }),
     );
     expect(mockCancelQr).toHaveBeenCalled();
     expect(mockUseAmbientQrAuth).toHaveBeenLastCalledWith(
@@ -285,7 +285,7 @@ describe('Admin sign in', () => {
       target: { value: 'ops@patina.com' },
     });
     fireEvent.click(
-      screen.getByRole('button', { name: 'Use email and password instead' }),
+      screen.getByRole('button', { name: 'Use a password instead' }),
     );
     fireEvent.change(screen.getByLabelText('Password'), {
       target: { value: 'correct-horse-battery-staple' },

@@ -76,7 +76,7 @@ export function ProductListItem({
         {thumbUrl ? (
           <img src={thumbUrl} alt={name} className="h-full w-full rounded object-cover" />
         ) : (
-          <span className="type-meta-small">IMG</span>
+          <span className="type-meta-small">Product image</span>
         )}
       </div>
 

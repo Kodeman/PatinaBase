@@ -24077,7 +24077,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1202",
@@ -24101,7 +24102,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "planned"
+    "status": "implemented",
+    "verifyEvidence": "Proposed display copy present in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1203",
@@ -24125,7 +24127,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1204",
@@ -24149,7 +24152,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "planned"
+    "status": "implemented",
+    "verifyEvidence": "Proposed display copy present in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1205",
@@ -24173,7 +24177,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "planned"
+    "status": "implemented",
+    "verifyEvidence": "Proposed display copy present in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1206",
@@ -24197,7 +24202,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "planned"
+    "status": "implemented",
+    "verifyEvidence": "Proposed display copy present in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1207",
@@ -24219,9 +24225,10 @@
       "apps/client-portal",
       "apps/admin-portal"
     ],
-    "exception": null,
+    "exception": "Approved studio-specific proposal conflicts with the shared-auth audience-neutral rule. Retain neutral “Start with your email.” here; portal wrappers own studio-specific explanations.",
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "planned"
+    "status": "exception",
+    "verifyEvidence": "Existing display copy retained in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1208",
@@ -24245,7 +24252,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1209",
@@ -24269,7 +24277,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "planned"
+    "status": "implemented",
+    "verifyEvidence": "Proposed display copy present in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1210",
@@ -24293,7 +24302,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1211",
@@ -24317,7 +24327,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1212",
@@ -25041,7 +25052,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "planned"
+    "status": "implemented",
+    "verifyEvidence": "Proposed display copy present in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1248",
@@ -25065,7 +25077,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1249",
@@ -25089,7 +25102,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-1250",
@@ -30206,7 +30220,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-10176",
@@ -30229,7 +30244,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-10177",
@@ -30252,7 +30268,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "planned"
+    "status": "implemented",
+    "verifyEvidence": "Proposed display copy present in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-10178",
@@ -30275,7 +30292,8 @@
     ],
     "exception": null,
     "verify": "packages/patina-design-system/src/components/PortalAuth/PortalAuth.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/patina-design-system/src/components/PortalAuth/PortalAuth.tsx; PortalAuth.test.tsx (11 passed)."
   },
   {
     "id": "C-10179",
@@ -30298,7 +30316,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/reference/HelpArticle/portableTextComponents.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10180",
@@ -30321,7 +30340,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/reference/HelpArticle/HelpArticle.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10181",
@@ -30344,7 +30364,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/reference/HelpArticle/HelpArticle.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10182",
@@ -30367,7 +30388,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/reference/HelpArticle/HelpArticle.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10183",
@@ -30390,7 +30412,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/reference/HelpArticle/HelpArticle.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10184",
@@ -30413,7 +30436,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/reference/HelpSearch/HelpSearch.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10185",
@@ -30436,7 +30460,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/reference/HelpSearch/HelpSearch.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10186",
@@ -30459,7 +30484,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/reactive/ContextualHelpPanel/ContextualHelpPanel.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10187",
@@ -30482,7 +30508,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/reactive/ContextualHelpPanel/ContextualHelpPanel.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10188",
@@ -30505,7 +30532,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/reactive/ContextualHelpPanel/ContextualHelpPanel.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10189",
@@ -30528,7 +30556,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/ambient/SmartDefault/SmartDefault.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10190",
@@ -30551,7 +30580,8 @@
     ],
     "exception": null,
     "verify": "packages/help-system/src/reference/HelpArticle/HelpArticle.test.tsx",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/help-system/src/proactive/Coachmark/Coachmark.tsx; HelpArticle/HelpSearch focused tests (45 passed); retained strings source-checked."
   },
   {
     "id": "C-10191",
@@ -30573,7 +30603,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/promotion-toast.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10192",
@@ -30595,7 +30626,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/tier-badge.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10193",
@@ -30617,7 +30649,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/tier-badge.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10194",
@@ -30639,7 +30672,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/tier-badge.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10195",
@@ -30661,7 +30695,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10196",
@@ -30683,7 +30718,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10197",
@@ -30705,7 +30741,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10198",
@@ -30727,7 +30764,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10199",
@@ -30749,7 +30787,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10200",
@@ -30771,7 +30810,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10201",
@@ -30793,7 +30833,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10202",
@@ -30815,7 +30856,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10203",
@@ -30837,7 +30879,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10204",
@@ -30859,7 +30902,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10205",
@@ -30881,7 +30925,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10206",
@@ -30903,7 +30948,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10207",
@@ -30925,7 +30971,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10208",
@@ -30947,7 +30994,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10209",
@@ -30969,7 +31017,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10210",
@@ -30991,7 +31040,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10211",
@@ -31013,7 +31063,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/nomination-status-banner.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10212",
@@ -31035,7 +31086,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/vendor-context-block.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10213",
@@ -31057,7 +31109,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/vendor-context-block.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10214",
@@ -31079,7 +31132,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/vendor-context-block.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10215",
@@ -31101,7 +31155,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/vendor-context-block.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10216",
@@ -31123,7 +31178,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/layer-icon.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10217",
@@ -31145,7 +31201,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/product-card.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10218",
@@ -31167,7 +31224,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "planned"
+    "status": "implemented",
+    "verifyEvidence": "Proposed display copy present in packages/catalog-ui/src/components/product-list-item.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10219",
@@ -31189,7 +31247,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/destination-picker.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10220",
@@ -31211,7 +31270,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/catalog-refine-bar.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10221",
@@ -31233,7 +31293,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/catalog-ui type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/catalog-ui/src/components/catalog-refine-bar.tsx; catalog-ui type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10222",
@@ -31254,7 +31315,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/types type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/types/src/field-config.ts; types type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10223",
@@ -31275,7 +31337,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/types type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/types/src/field-config.ts; types type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10224",
@@ -31296,7 +31359,8 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/types type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/types/src/field-config.ts; types type-check passed; retained strings source-checked."
   },
   {
     "id": "C-10225",
@@ -31317,6 +31381,7 @@
     ],
     "exception": null,
     "verify": "pnpm --filter @patina/types type-check",
-    "status": "unchanged"
+    "status": "unchanged",
+    "verifyEvidence": "Existing display copy retained in packages/types/src/field-config.ts; types type-check passed; retained strings source-checked."
   }
 ]

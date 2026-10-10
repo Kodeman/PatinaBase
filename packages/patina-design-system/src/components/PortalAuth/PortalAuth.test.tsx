@@ -36,14 +36,16 @@ describe('Portal auth components', () => {
     const content = document.body.textContent ?? ''
     // The QR left this pane for the brand-side badge: email → Apple → password.
     expect(content).not.toContain('Use a QR code')
-    expect(content.indexOf('Email me a one-time code')).toBeLessThan(content.indexOf('Continue with Apple'))
-    expect(content.indexOf('Continue with Apple')).toBeLessThan(content.indexOf('Use email and password instead'))
+    expect(screen.getByRole('heading', { name: 'Start with your email.' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument()
+    expect(content.indexOf('Email sign-in code')).toBeLessThan(content.indexOf('Continue with Apple'))
+    expect(content.indexOf('Continue with Apple')).toBeLessThan(content.indexOf('Use a password instead'))
     expect(screen.queryByText('Continue with Google')).not.toBeInTheDocument()
 
     rerender(<PortalLogin {...loginProps} state="email" oauthActions={[{ id: 'apple', label: 'Continue with Apple', onSelect: vi.fn() }, { id: 'google', label: 'Continue with Google', available: true, onSelect: vi.fn() }]} />)
     const extendedContent = document.body.textContent ?? ''
     expect(extendedContent.indexOf('Continue with Apple')).toBeLessThan(extendedContent.indexOf('Continue with Google'))
-    expect(extendedContent.indexOf('Continue with Google')).toBeLessThan(extendedContent.indexOf('Use email and password instead'))
+    expect(extendedContent.indexOf('Continue with Google')).toBeLessThan(extendedContent.indexOf('Use a password instead'))
   })
 
   it('accepts a pasted six-digit code through its single semantic input', async () => {
@@ -51,6 +53,9 @@ describe('Portal auth components', () => {
     const onComplete = vi.fn()
     const onCodeChange = vi.fn()
     const { rerender } = render(<PortalLogin {...loginProps} state="code" code="" onCodeChange={onCodeChange} onVerifyCode={onComplete} />)
+    expect(screen.getByText('Email sign-in code')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Check your email' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Change email address' })).toBeEnabled()
     expect(screen.getByLabelText('Six-digit code')).toHaveFocus()
     await user.click(screen.getByLabelText('Six-digit code'))
     await user.paste('123456')
@@ -90,7 +95,7 @@ describe('Portal auth components', () => {
     expect(screen.getByLabelText('Password')).toBeInTheDocument()
     rerender(<PortalLogin {...loginProps} state="email" password="secret" onPasswordExpandedChange={onExpandedChange} />)
     expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Use email and password instead' }))
+    await user.click(screen.getByRole('button', { name: 'Use a password instead' }))
     expect(onExpandedChange).toHaveBeenCalledWith(true)
   })
 
@@ -100,12 +105,12 @@ describe('Portal auth components', () => {
     expect(appleAction).toBeDisabled()
     expect(appleAction).toHaveAttribute('aria-busy', 'true')
     expect(screen.getByLabelText('Email address')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Use email and password instead' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Use a password instead' })).toBeDisabled()
   })
 
   it('locks competing disclosures while an authentication method is finishing', () => {
     const { rerender } = render(<PortalLogin {...loginProps} state="email" isSubmitting />)
-    expect(screen.getByRole('button', { name: 'Use email and password instead' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Use a password instead' })).toBeDisabled()
     rerender(<PortalLogin {...loginProps} state="password" password="secret" isSubmitting />)
     expect(screen.getByLabelText('Password')).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Forgot password?' })).toBeDisabled()
@@ -113,6 +118,7 @@ describe('Portal auth components', () => {
 
   it('associates friendly errors with the active credential input', () => {
     const { rerender } = render(<PortalLogin {...loginProps} state="email" error="Enter a valid email address." />)
+    expect(screen.getByText('Sign-in unsuccessful')).toBeInTheDocument()
     expect(screen.getByLabelText('Email address')).toHaveAttribute('aria-describedby', 'portal-auth-email-error')
     rerender(<PortalLogin {...loginProps} state="code" code="" error="That code did not match." />)
     expect(screen.getByLabelText('Six-digit code')).toHaveAttribute('aria-describedby', 'portal-auth-code-error')

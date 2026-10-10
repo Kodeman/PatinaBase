@@ -70,10 +70,10 @@ describe('ClientPortalLogin', () => {
 
   it('presents email, Apple, then password in order, with no QR disclosure', () => {
     render(<ClientPortalLogin />);
-    const email = screen.getByRole('button', { name: /one-time code/i });
+    const email = screen.getByRole('button', { name: /email sign-in code/i });
     const apple = screen.getByRole('button', { name: /continue with apple/i });
     const password = screen.getByRole('button', {
-      name: /email and password/i,
+      name: /use a password instead/i,
     });
     expect(
       email.compareDocumentPosition(apple) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -104,7 +104,7 @@ describe('ClientPortalLogin', () => {
       expect.objectContaining({ enabled: true }),
     );
     fireEvent.click(
-      screen.getByRole('button', { name: /email and password/i }),
+      screen.getByRole('button', { name: /use a password instead/i }),
     );
     expect(useAmbientQrAuth).toHaveBeenLastCalledWith(
       expect.objectContaining({ enabled: false }),
@@ -117,8 +117,8 @@ describe('ClientPortalLogin', () => {
     fireEvent.change(screen.getByLabelText('Email address'), {
       target: { value: ' client@example.com ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /one-time code/i }));
-    await screen.findByText('Check your inbox.');
+    fireEvent.click(screen.getByRole('button', { name: /email sign-in code/i }));
+    await screen.findByText('Check your email');
     expect(sendOtp).toHaveBeenCalledWith(
       expect.objectContaining({ email: 'client@example.com' }),
     );
@@ -140,7 +140,7 @@ describe('ClientPortalLogin', () => {
       target: { value: 'client@example.com' },
     });
     fireEvent.click(
-      screen.getByRole('button', { name: /email and password/i }),
+      screen.getByRole('button', { name: /use a password instead/i }),
     );
     fireEvent.change(screen.getByLabelText('Password'), {
       target: { value: 'secret-password' },
