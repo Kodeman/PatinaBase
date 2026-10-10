@@ -315,7 +315,7 @@ describe("ScheduleSpine region head", () => {
     expect(screen.getByTestId("schedule-birth")).toBeInTheDocument();
     expect(document.querySelector("[data-fold-seam]")).toBeNull();
     expect(
-      screen.getByRole("heading", { name: "Schedule" }),
+      screen.getByRole("heading", { name: "Project schedule" }),
     ).toBeInTheDocument();
   });
 
@@ -334,7 +334,7 @@ describe("ScheduleSpine region head", () => {
     expect(document.querySelector("[data-fold-seam]")).toBeNull();
     expect(document.querySelector("[data-region-head]")).not.toBeNull();
     expect(
-      screen.getByRole("heading", { name: "Schedule" }),
+      screen.getByRole("heading", { name: "Project schedule" }),
     ).toBeInTheDocument();
   });
 
@@ -351,7 +351,7 @@ describe("ScheduleSpine region head", () => {
     const seam = document.querySelector("[data-fold-seam]") as HTMLElement;
     expect(seam).not.toBeNull();
     expect(
-      screen.queryByRole("heading", { name: "Schedule" }),
+      screen.queryByRole("heading", { name: "Project schedule" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByTestId("phase-section")).not.toBeInTheDocument();
     // The body is UNMOUNTED behind the seam, so the seam must not claim to
@@ -375,7 +375,7 @@ describe("ScheduleSpine region head", () => {
 
     expect(document.querySelector("[data-fold-seam]")).toBeNull();
     expect(
-      screen.getByRole("heading", { name: "Schedule" }),
+      screen.getByRole("heading", { name: "Project schedule" }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("phase-section")).toBeInTheDocument();
   });
@@ -392,7 +392,7 @@ describe("ScheduleSpine region head", () => {
 
     expect(document.querySelector("[data-fold-seam]")).toBeNull();
     expect(
-      screen.getByRole("heading", { name: "Schedule" }),
+      screen.getByRole("heading", { name: "Project schedule" }),
     ).toBeInTheDocument();
   });
 
@@ -502,7 +502,7 @@ describe("ScheduleSpine quiet body (W4)", () => {
     });
 
     expect(
-      screen.getByRole("heading", { name: "Schedule" }),
+      screen.getByRole("heading", { name: "Project schedule" }),
     ).toBeInTheDocument();
     // W4-R1: the count line IS the head's status line, and PHASES NEVER PRINT
     // here — the rail carries the count. The install day and how far out it
@@ -595,7 +595,7 @@ describe("ScheduleSpine quiet body (W4)", () => {
       bare.container.querySelector("[data-region-count-line]"),
     ).toBeNull();
     // Never zero text: the head and the sr-only state line still print.
-    expect(screen.getByRole("heading", { name: "Schedule" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Project schedule" })).toBeInTheDocument();
     expect(
       bare.container.querySelector('[data-region-head="schedule"]'),
     ).toHaveTextContent("No recorded activity");

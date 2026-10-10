@@ -256,7 +256,7 @@ function OpenClaimRow({
             loadingLabel="Resolving…"
             onClick={() => void run('resolved')}
           >
-            Mark resolved
+            Resolve claim
           </DocumentAction>
         </div>
       )}
@@ -333,7 +333,7 @@ function QueueRow({
           variant="primary"
           onClick={onInspect}
         >
-          Inspect
+          Inspect delivery
         </DocumentAction>
         <button
           type="button"
@@ -510,17 +510,17 @@ export function ReceivingBookPage({
       {!isLoading && (
         <div className="mb-4 grid grid-cols-2 items-stretch gap-y-4 border-y border-[var(--color-pearl)] py-3 sm:grid-cols-4 sm:gap-y-0">
           <Figure
-            label="Arriving"
+            label="Inbound deliveries"
             value={stats.find((s) => s.label === 'Arriving')?.value ?? '0'}
             sub="next 7 days"
           />
           <Figure
-            label="Awaiting log"
+            label="Unlogged deliveries"
             value={stats.find((s) => s.label === 'Awaiting log')?.value ?? '0'}
           />
           <Figure label="Open claims" value={String(openClaimCount)} />
           <Figure
-            label="Received · 30d"
+            label="Received · last 30 days"
             value={String((inspections ?? []).length)}
             sub={
               stats.find((s) => s.label === '30-day pass')
@@ -559,7 +559,7 @@ export function ReceivingBookPage({
             ))}
             {queue.length === 0 && (
               <li className="doc-type-body py-2 italic text-[var(--color-quiet-ink)]">
-                Nothing waiting on the warehouse floor.
+                No deliveries awaiting receipt.
               </li>
             )}
           </ul>

@@ -122,7 +122,7 @@ function openReceiving() {
       <ReceivingBookPage projectId={PROJECT} onOpenDocument={jest.fn()} />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Inspect' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect delivery' }));
 }
 
 const receive = (name: string, count: number) =>

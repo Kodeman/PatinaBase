@@ -63,7 +63,7 @@ test('the sheet doorway opens the Hours book', async ({
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/desk?sheet=hours', { waitUntil: 'domcontentloaded' });
 
-  await expect(page.getByRole('dialog', { name: 'Hours' })).toBeVisible({
+  await expect(page.getByRole('dialog', { name: 'Timesheets' })).toBeVisible({
     timeout: COLD,
   });
   await declineDeskWalkthrough(page);
@@ -79,15 +79,15 @@ for (const { label, width, height } of WIDTHS) {
     await page.setViewportSize({ width, height });
     await page.goto('/desk?sheet=hours', { waitUntil: 'domcontentloaded' });
 
-    const sheet = page.getByRole('dialog', { name: 'Hours' });
+    const sheet = page.getByRole('dialog', { name: 'Timesheets' });
     await expect(sheet).toBeVisible({ timeout: COLD });
     await declineDeskWalkthrough(page);
 
     // HT-8 — the admin's instrument. Two words with nothing in hand: her own
     // hours and the studio's. No tab bar, no leaderboard.
-    const lens = sheet.getByRole('group', { name: 'Hours scope' });
+    const lens = sheet.getByRole('group', { name: 'Time ledger scope' });
     await expect(lens).toBeVisible({ timeout: COLD });
-    await expect(lens.getByRole('button', { name: 'mine' })).toHaveAttribute(
+    await expect(lens.getByRole('button', { name: 'My time' })).toHaveAttribute(
       'aria-current',
       'true',
     );
@@ -112,7 +112,7 @@ for (const { label, width, height } of WIDTHS) {
     expect(dateBox?.x ?? -1).toBeGreaterThanOrEqual(0);
     expect((dateBox?.x ?? 0) + (dateBox?.width ?? 0)).toBeLessThanOrEqual(width);
 
-    const addAct = sheet.getByRole('button', { name: 'Add' });
+    const addAct = sheet.getByRole('button', { name: 'Log time', exact: true });
     const addBox = await addAct.boundingBox();
     expect((addBox?.x ?? 0) + (addBox?.width ?? 0)).toBeLessThanOrEqual(width);
 
@@ -130,7 +130,7 @@ test('the studio scope answers with a total above its buckets', async ({
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/desk?sheet=hours', { waitUntil: 'domcontentloaded' });
 
-  const sheet = page.getByRole('dialog', { name: 'Hours' });
+  const sheet = page.getByRole('dialog', { name: 'Timesheets' });
   await expect(sheet).toBeVisible({ timeout: COLD });
   await declineDeskWalkthrough(page);
 
@@ -139,9 +139,9 @@ test('the studio scope answers with a total above its buckets', async ({
   // HT-30 — the total is the front matter of the rows; HT-36 — the buckets are
   // cut five ways and carry no free text.
   await expect(
-    sheet.getByRole('group', { name: 'Group hours' }),
+    sheet.getByRole('group', { name: 'Group time entries' }),
   ).toBeVisible({ timeout: COLD });
-  await expect(sheet.getByRole('button', { name: 'by person' })).toHaveAttribute(
+  await expect(sheet.getByRole('button', { name: 'By team member' })).toHaveAttribute(
     'aria-current',
     'true',
   );

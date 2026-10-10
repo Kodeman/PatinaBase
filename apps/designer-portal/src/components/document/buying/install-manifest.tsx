@@ -212,7 +212,7 @@ function ManifestFields({ line, row }: { line: ManifestLine; row: InstallManifes
             loading={upsert.isPending}
             onClick={save}
           >
-            Save
+            Save installation details
           </DocumentAction>
         )}
       </div>
@@ -270,7 +270,7 @@ function PunchItem({ item }: { item: InstallPunchItemRow }) {
               .catch((e: Error) => setError(e.message || 'The punch item was not resolved.'));
           }}
         >
-          Resolve
+          Resolve punch item
         </DocumentAction>
       )}
       <ErrorLine message={error} />
@@ -353,7 +353,7 @@ function AddPunch({ projectId, line }: { projectId: string; line: ManifestLine }
           <span className={LABEL_CLS}>Due</span>
           <input
             type="date"
-            aria-label="Punch due on"
+            aria-label="Punch item due date"
             value={dueOn}
             disabled={busy}
             onChange={(e) => setDueOn(e.target.value)}
@@ -387,7 +387,7 @@ function AddPunch({ projectId, line }: { projectId: string; line: ManifestLine }
           disabled={!request || uploading > 0}
           onClick={save}
         >
-          Record it
+          Record punch item
         </DocumentAction>
         <DocumentAction
           actionKey="cancel-install-punch"
@@ -397,7 +397,7 @@ function AddPunch({ projectId, line }: { projectId: string; line: ManifestLine }
           disabled={busy}
           onClick={close}
         >
-          Put back
+          Cancel
         </DocumentAction>
       </div>
       <ErrorLine message={error} />
@@ -422,7 +422,7 @@ export function InstallManifest({
   // 0a-2 (D6): no count here — the region's rows print each piece's state word.
   return (
     <section
-      aria-label="Install manifest"
+      aria-label="Installation manifest"
       data-testid="install-manifest"
       className="mt-3 border-t border-[var(--color-pearl)] pt-2"
     >

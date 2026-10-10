@@ -301,7 +301,7 @@ describe('RolodexPicker — the hits and their history', () => {
 /**
  * CR9-2 — THE WAY OUT IS ALWAYS VISIBLE; THE SENTENCE IS THE EMPTY SEARCH'S.
  *
- * "Add someone new" sits under the hits on every frame. The sentence beside it
+ * "Add new contact" sits under the hits on every frame. The sentence beside it
  * — "No one by that name in the rolodex." — was ungated, so it printed directly
  * beneath the people the search had just found.
  */
@@ -312,7 +312,7 @@ describe('RolodexPicker — the fallback is always visible', () => {
     expect(
       screen.queryByText('– No one by that name in the rolodex.'),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add someone new' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add new contact' })).toBeInTheDocument();
   });
 
   it('shows it on an empty rolodex too', () => {
@@ -324,7 +324,7 @@ describe('RolodexPicker — the fallback is always visible', () => {
   it('unfolds the inline add form in the SAME sheet', () => {
     render(<RolodexPicker {...props} />);
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add someone new' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add new contact' }));
     expect(screen.getByLabelText('Name')).toBeInTheDocument();
     expect(screen.getByLabelText('Phone')).toBeInTheDocument();
     // Still one sheet — the hits are still on it.
@@ -335,7 +335,7 @@ describe('RolodexPicker — the fallback is always visible', () => {
 describe('RolodexPicker — the stamp', () => {
   it('is ON by default', () => {
     render(<RolodexPicker {...props} startInAdd />);
-    const stamp = screen.getByRole('checkbox', { name: /Save to the studio rolodex/ });
+    const stamp = screen.getByRole('checkbox', { name: /Save to studio directory/ });
     expect(stamp).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByText('so the next project starts with them')).toBeInTheDocument();
   });
@@ -345,7 +345,7 @@ describe('RolodexPicker — the stamp', () => {
     fireEvent.change(screen.getByLabelText('Name'), {
       target: { value: 'Hector Salas' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add to the call sheet' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to project contacts' }));
 
     await waitFor(() => expect(addPartyMutate).toHaveBeenCalled());
     expect(addContactMutate).toHaveBeenCalledWith(
@@ -371,9 +371,9 @@ describe('RolodexPicker — the stamp', () => {
       target: { value: 'Hector Salas' },
     });
     fireEvent.click(
-      screen.getByRole('checkbox', { name: /Save to the studio rolodex/ }),
+      screen.getByRole('checkbox', { name: /Save to studio directory/ }),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Add to the call sheet' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to project contacts' }));
 
     await waitFor(() => expect(addPartyMutate).toHaveBeenCalled());
     expect(addContactMutate).not.toHaveBeenCalled();
@@ -394,7 +394,7 @@ describe('RolodexPicker — the stamp', () => {
     recordedStudio.current = null;
     render(<RolodexPicker {...props} scopeKinds={['sub']} startInAdd />);
     expect(
-      screen.queryByRole('checkbox', { name: /Save to the studio rolodex/ }),
+      screen.queryByRole('checkbox', { name: /Save to studio directory/ }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
@@ -405,7 +405,7 @@ describe('RolodexPicker — the stamp', () => {
     fireEvent.change(screen.getByLabelText('Name'), {
       target: { value: 'Hector Salas' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add to the call sheet' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to project contacts' }));
     await waitFor(() => expect(addPartyMutate).toHaveBeenCalled());
     expect(addContactMutate).not.toHaveBeenCalled();
     expect(addPartyMutate).toHaveBeenCalledWith(
@@ -415,7 +415,7 @@ describe('RolodexPicker — the stamp', () => {
 
   it('refuses a nameless add, in words, without calling anything', () => {
     render(<RolodexPicker {...props} startInAdd />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add to the call sheet' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to project contacts' }));
     expect(screen.getByText('A name, at least.')).toBeInTheDocument();
     expect(addPartyMutate).not.toHaveBeenCalled();
     expect(addContactMutate).not.toHaveBeenCalled();
@@ -489,7 +489,7 @@ describe('RolodexPicker — bring forward', () => {
 
   /**
    * QA r19 MAJOR-1 — SPEC §5.7 #2: "the picker is a DocSheet region titled
-   * 'From the rolodex' with the eyebrow 'OKONKWO RESIDENCE'". `projectName`
+   * 'Add from directory' with the eyebrow 'OKONKWO RESIDENCE'". `projectName`
    * reached this component and was spent only on the consequence sentence and
    * the consent clauses, so the sheet's own head named no job at either width,
    * and the only "Okonkwo" in the sheet was a person's surname.
@@ -927,7 +927,7 @@ describe('RolodexPicker — searching a prior job', () => {
       isLoading: false,
     });
     render(<RolodexPicker {...props} />);
-    fireEvent.change(screen.getByLabelText('Search the rolodex'), {
+    fireEvent.change(screen.getByLabelText('Search contact directory'), {
       target: { value: 'Ellsworth' },
     });
     expect(screen.getByText('Rosa Martínez')).toBeInTheDocument();
@@ -940,7 +940,7 @@ describe('RolodexPicker — searching a prior job', () => {
       isLoading: false,
     });
     render(<RolodexPicker {...props} />);
-    const field = screen.getByLabelText('Search the rolodex');
+    const field = screen.getByLabelText('Search contact directory');
     fireEvent.change(field, { target: { value: 'Martínez Tile' } });
     expect(screen.getByText('Rosa Martínez')).toBeInTheDocument();
     fireEvent.change(field, { target: { value: 'Nobody' } });
@@ -950,7 +950,7 @@ describe('RolodexPicker — searching a prior job', () => {
 
   it('asks the rolodex for the kind only — the name search is the room’s', () => {
     render(<RolodexPicker {...props} />);
-    fireEvent.change(screen.getByLabelText('Search the rolodex'), {
+    fireEvent.change(screen.getByLabelText('Search contact directory'), {
       target: { value: 'Lindqvist' },
     });
     for (const call of useStudioContacts.mock.calls) {
@@ -970,7 +970,7 @@ describe('RolodexPicker — searching a prior job', () => {
       isLoading: false,
     });
     render(<RolodexPicker {...props} />);
-    fireEvent.change(screen.getByLabelText('Search the rolodex'), {
+    fireEvent.change(screen.getByLabelText('Search contact directory'), {
       target: { value: 'Lindqvist' },
     });
     expect(screen.getByText('Rosa Martínez')).toBeInTheDocument();
@@ -1024,7 +1024,7 @@ describe('RolodexPicker — searching a prior job', () => {
       },
     ];
     render(<RolodexPicker {...props} />);
-    const field = screen.getByLabelText('Search the rolodex');
+    const field = screen.getByLabelText('Search contact directory');
 
     // the firm the row resolves, which her own card does not carry
     fireEvent.change(field, { target: { value: 'Northgate' } });
@@ -1049,7 +1049,7 @@ describe('RolodexPicker — searching a prior job', () => {
     });
     directoryRows = [];
     render(<RolodexPicker {...props} />);
-    fireEvent.change(screen.getByLabelText('Search the rolodex'), {
+    fireEvent.change(screen.getByLabelText('Search contact directory'), {
       target: { value: 'Martínez Tile' },
     });
     expect(screen.getByText('Rosa Martínez')).toBeInTheDocument();
@@ -1096,7 +1096,7 @@ describe('RolodexPicker — searching a prior job', () => {
     expect(
       screen.getByRole('button', { name: 'Add one to the roster' }),
     ).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Search the rolodex'), {
+    fireEvent.change(screen.getByLabelText('Search contact directory'), {
       target: { value: 'Nobody' },
     });
     expect(

@@ -283,7 +283,7 @@ export function MoneyRegion({
     // band's own primary calls — the region head is now the single doorway.
     {
       key: 'draw-project-invoice',
-      label: 'Draw an invoice',
+      label: 'Draft an invoice',
       onClick: () => openInvoiceComposer({ projectId }),
     },
     // D5 (US-19) — Record a change, the head's second act on every spread
@@ -316,7 +316,7 @@ export function MoneyRegion({
     // calls.
     {
       key: 'open-project-hours',
-      label: 'Hours · this project ↗',
+      label: 'Project time ledger ↗',
       variant: 'tertiary',
       onClick: () => openLedger('hours', { projectId }),
     },
@@ -363,7 +363,7 @@ export function MoneyRegion({
 
   return (
     <section
-      aria-label="Money"
+      aria-label="Project financials"
       data-index-region="money"
       data-density={density}
       className="mt-[var(--doc-region-gap)]"
@@ -374,7 +374,7 @@ export function MoneyRegion({
         headingId={HEADING_ID}
         name="Money"
         status={quiet ? quietStatus : headStatus}
-        eyebrow="The money · one region"
+        eyebrow="Project financial summary"
         surfaceKey="accounts"
         regionKey="money-head"
         actions={
@@ -401,36 +401,37 @@ export function MoneyRegion({
         ) : null}
         <ol className="mt-3 space-y-2">
           <Rung
-            name="Budget"
+            name="Client budget"
             figure={figureOf(ladder.budget)}
             meaning="What the client has agreed to fund"
           />
           <Rung
-            name="Plan"
+            name="Planned expenditure"
             figure={figureOf(ladder.plan)}
             meaning="What the plan intends to spend"
           />
           <Rung
-            name="Authorized"
+            name="Vendor commitments"
             figure={figureOf(ladder.authorized)}
             meaning="What is contractually owed to makers"
           />
           <Rung
-            name="Moved"
+            name="Outstanding order payments"
             figure={figureOf(ladder.moved)}
             meaning="Committed, not yet paid out"
           />
-          <Rung name="Owed" figure={figureOf(ladder.owed)} meaning="The receivable" />
+          <Rung name="Client receivables" figure={figureOf(ladder.owed)} meaning="The receivable" />
           <Rung
-            name="Not drawn"
+            name="Undisbursed vendor payments"
             figure={figureOf(ladder.notDrawn)}
             meaning="Deposits and holdbacks not yet drawn"
           />
         </ol>
 
         <p className="mt-3 max-w-2xl text-[11px] leading-relaxed text-[var(--text-muted)]">
-          Budget &rarr; plan &rarr; authorized &rarr; moved. Moved is what is ordered and
-          not yet paid out &mdash; not the contractually owed total above it.
+          Client budget &rarr; planned expenditure &rarr; vendor commitments &rarr; outstanding
+          order payments. Outstanding order payments are what is ordered and not yet paid out
+          &mdash; not the contractually owed total above it.
           {committedSettled && draftScopeCount > 0
             ? ` ${draftScopeCount} trade ${draftScopeCount === 1 ? 'scope' : 'scopes'} still in draft, counted in neither.`
             : ''}

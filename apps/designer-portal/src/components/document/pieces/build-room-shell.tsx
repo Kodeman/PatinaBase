@@ -78,23 +78,23 @@ export interface BuildRoomShellProps {
 }
 
 const LENS_WORD: Record<BuildRoomLens, string> = {
-  rough: "Rough in",
-  spec: "Spec",
-  price: "Price",
-  release: "Release",
-  finishes: "Finishes",
+  rough: "Preliminary selections",
+  spec: "Specifications",
+  price: "Pricing",
+  release: "Purchasing authorization",
+  finishes: "Finish schedule",
 };
 
 const LENS_READING: Record<BuildRoomLens, string> = {
   rough:
-    "Rough in · Name it, count it, place it. Specs, prices and buying come later.",
-  spec: "Spec · Fill each line's details and its product. No money here.",
+    "Create preliminary selections by item, quantity and room. Complete specifications and pricing in the next tabs.",
+  spec: "Complete each selection’s specifications and product reference. Use Pricing for costs.",
   price:
-    "Price · Line up trade cost, markup and client price. Rough figures stay as ~ until you set them.",
+    "Set trade costs, markups and client prices. A ~ indicates an estimate.",
   release:
-    "Release · Check what the client will see, then release rooms for authorization. Nothing here edits a spec or a price.",
+    "Review the client edition, then issue rooms for purchasing authorization. Edit specifications and pricing in their tabs.",
   finishes:
-    "Finishes · Note each room’s surfaces, products and sheens for the painter. Nothing here edits a line.",
+    "Document surfaces, products and sheens by room for the painter. Item specifications are managed separately.",
 };
 
 function plural(n: number, one: string, many: string): string {
@@ -111,11 +111,11 @@ function placeName(
   room: BuildRoomPlace,
   rooms: readonly BuildRoomRoom[],
 ): string {
-  if (room == null) return "Whole job";
+  if (room == null) return "All project selections";
   if (room === THROUGHOUT_PLACE) return "Throughout";
-  if (room === UNASSIGNED_PLACE) return "Not in a room yet";
+  if (room === UNASSIGNED_PLACE) return "Unassigned to a room";
   if (room === REMOVED_PLACE) return "Removed";
-  return rooms.find((r) => r.id === room)?.name ?? "Whole job";
+  return rooms.find((r) => r.id === room)?.name ?? "All project selections";
 }
 
 function placeCounts(
@@ -395,7 +395,7 @@ export function BuildRoomShell({
           {...{ [BUILD_ROOM_TITLE_ATTR]: "" }}
           className={`sr-only font-mono text-[12px] font-medium uppercase leading-none tracking-[0.08em] md:not-sr-only md:shrink-0 ${QUIET_FOCUS}`}
         >
-          Build the pieces
+          FF&E schedule
         </h1>
 
         <div
@@ -422,7 +422,7 @@ export function BuildRoomShell({
         {/* At 390 five lens words do not fit in fixed fifths: the row wraps instead. */}
         <div
           role="group"
-          aria-label="Lens"
+          aria-label="Schedule view"
           className="order-last -mx-4 flex w-[calc(100%+2rem)] flex-wrap justify-center gap-x-1 border-t border-[var(--sheet-rule)] md:order-none md:mx-0 md:w-auto md:flex-1 md:flex-nowrap md:gap-6 md:border-t-0"
         >
           {lenses.map((candidate) => {
@@ -489,7 +489,7 @@ export function BuildRoomShell({
         >
           <a
             href={buildRoomHref(docId, { lens: activeLens, room: null })}
-            aria-label="Rooms, whole job"
+            aria-label="All project rooms"
             aria-current={room == null ? "location" : undefined}
             onClick={(event) => {
               if (!isPlainClick(event)) return;
@@ -606,7 +606,7 @@ function AddRoom({
         aria-disabled={saving || undefined}
         className={`${ACT} mt-1 text-[var(--sheet-ink)]`}
       >
-        Add the room
+        Add room
       </button>
     </form>
   );

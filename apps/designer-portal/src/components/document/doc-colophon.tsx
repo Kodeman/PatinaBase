@@ -105,7 +105,7 @@ export function DocColophon({
           {studioName ?? 'The studio'}
         </span>
         <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-          hands on the work: {hands}
+          Project viewers: {hands}
         </span>
         <span className="flex-1" />
         {/* R29: deep-links the R28 vendor pane, pre-addressed with this
@@ -120,7 +120,7 @@ export function DocColophon({
             variant="secondary"
             onClick={() => openLedger('orders', { page: 'vendors', projectId })}
           >
-            Brief a vendor
+            Vendor correspondence
           </DocumentAction>
           {!isCompleted && !isArchived && (
             <DocumentAction
@@ -137,7 +137,7 @@ export function DocColophon({
                 expectedStatus: isPaused ? 'on_hold' : 'active',
               })}
             >
-              {isPaused ? 'Resume' : 'Hold'}
+              {isPaused ? 'Resume project' : 'Place project on hold'}
             </DocumentAction>
           )}
           {!isArchived && (
@@ -147,7 +147,7 @@ export function DocColophon({
               onClick={() => setPane(pane === 'archive' ? null : 'archive')}
               className="text-[var(--color-terracotta-ink)] decoration-[var(--color-terracotta)]"
             >
-              Archive
+              Archive project
             </DocumentAction>
           )}
           <DocumentAction
@@ -161,7 +161,7 @@ export function DocColophon({
               );
             }}
           >
-            Add to the team
+            Add project contact
           </DocumentAction>
         </DocumentActionGroup>
       </div>
@@ -169,7 +169,7 @@ export function DocColophon({
       {pane === 'archive' && !isArchived && (
         <div className="mt-2 max-w-[420px] rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] p-3">
           <p className="text-[11px] italic text-[var(--color-charcoal)]">
-            The document goes to the cabinet — find it any time in ⌘K.
+            The project will move to the archive. Find it with Search (⌘K).
           </p>
           <DocumentActionRow
             surfaceKey="open-document"
@@ -195,14 +195,14 @@ export function DocColophon({
                 });
               }}
             >
-              Archive it
+              Archive project
             </DocumentAction>
             <DocumentAction
               actionKey="cancel-archive"
               variant="tertiary"
               onClick={() => setPane(null)}
             >
-              Keep it out
+              Cancel archive
             </DocumentAction>
           </DocumentActionRow>
         </div>

@@ -202,7 +202,7 @@ test.describe("Contract Room · composed", () => {
     // (FS-5/FS-13), laid over the room rather than instead of it.
     await page.getByRole("button", { name: "Read the whole paper" }).click();
     const preview = page
-      .getByRole("dialog", { name: "The whole paper" })
+      .getByRole("dialog", { name: "Full agreement" })
       .getByRole("article", { name: "Design services agreement client copy" });
     await expect(
       preview.getByRole("heading", { name: "Concept fee" }),

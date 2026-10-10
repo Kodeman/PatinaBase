@@ -187,7 +187,7 @@ describe('InstallManifest', () => {
     mockManifest.data = [manifestRow()];
     render(<InstallManifest projectId="p1" lines={[sofa]} />);
     fireEvent.change(screen.getByLabelText('Installer for Sofa, COM'), { target: { value: 'Hale' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save installation details' }));
     await waitFor(() =>
       expect(mockUpsertManifest).toHaveBeenCalledWith({
         ffeItemId: 'item-1',
@@ -213,14 +213,14 @@ describe('InstallManifest', () => {
       `scuff on base · due ${fmtDay('2026-11-13')} · 1 photo`,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Resolve' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve punch item' }));
     await waitFor(() => expect(mockResolvePunch).toHaveBeenCalledWith({ punchId: 'punch-1' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Punch' }));
     fireEvent.change(screen.getByLabelText('Punch note for Sofa, COM'), {
       target: { value: 'touch-up on left arm' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Record it' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record punch item' }));
     await waitFor(() =>
       expect(mockUpsertPunch).toHaveBeenCalledWith({ ffeItemId: 'item-1', note: 'touch-up on left arm' }),
     );

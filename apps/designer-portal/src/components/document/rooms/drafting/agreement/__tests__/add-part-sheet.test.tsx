@@ -99,7 +99,7 @@ function renderSheet(
 }
 
 const partRows = () =>
-  within(screen.getByRole("region", { name: "Parts" })).getAllByRole(
+  within(screen.getByRole("region", { name: "Agreement parts" })).getAllByRole(
     "listitem",
   );
 
@@ -110,7 +110,7 @@ beforeEach(() => {
 describe("the Add-a-part picker", () => {
   it("is headed From your Library", () => {
     renderSheet();
-    expect(screen.getByText("From your Library")).toBeInTheDocument();
+    expect(screen.getByText("Agreement clause library")).toBeInTheDocument();
   });
 
   it("lists Patina's standard parts and the studio's own, each chipped", () => {
@@ -168,13 +168,13 @@ describe("the Add-a-part picker", () => {
       }),
     ]);
     fireEvent.click(screen.getByRole("button", { name: "Schedule ▾" }));
-    const menu = screen.getByRole("list", { name: "Schedule variants" });
+    const menu = screen.getByRole("list", { name: "Fee schedule types" });
     const rowFor = (label: string) =>
       within(menu)
         .getAllByRole("listitem")
         .find((row) => within(row).queryByText(label)) as HTMLElement;
 
-    for (const label of ["Flat fee", "Fee by phase"]) {
+    for (const label of ["Flat fee", "Phase fees"]) {
       const row = rowFor(label);
       expect(within(row).getByRole("button")).toBeDisabled();
       expect(
@@ -182,7 +182,7 @@ describe("the Add-a-part picker", () => {
       ).toBeInTheDocument();
     }
     // Everything that is not a fee basis is still on offer.
-    expect(within(rowFor("Ceiling")).getByRole("button")).toBeEnabled();
+    expect(within(rowFor("Fee ceiling")).getByRole("button")).toBeEnabled();
   });
 
   it("refuses a Library fee-basis part beside a fee by phase already on the agreement", () => {
@@ -192,7 +192,7 @@ describe("the Add-a-part picker", () => {
           partKey: "custom.per-phase",
           kind: "schedule",
           variant: "per_phase",
-          title: "Fee by phase",
+          title: "Phase fees",
         }),
       ],
       jest.fn(),
@@ -217,8 +217,8 @@ describe("the Add-a-part picker", () => {
   it("offers both fee bases on an agreement that names neither", () => {
     renderSheet();
     fireEvent.click(screen.getByRole("button", { name: "Schedule ▾" }));
-    const menu = screen.getByRole("list", { name: "Schedule variants" });
-    for (const label of ["Flat fee", "Fee by phase"]) {
+    const menu = screen.getByRole("list", { name: "Fee schedule types" });
+    for (const label of ["Flat fee", "Phase fees"]) {
       const row = within(menu)
         .getAllByRole("listitem")
         .find((item) => within(item).queryByText(label)) as HTMLElement;
@@ -230,7 +230,7 @@ describe("the Add-a-part picker", () => {
     renderSheet();
     fireEvent.click(screen.getByRole("button", { name: "Schedule ▾" }));
     const variants = within(
-      screen.getByRole("list", { name: "Schedule variants" }),
+      screen.getByRole("list", { name: "Fee schedule types" }),
     ).getAllByRole("listitem");
     expect(variants).toHaveLength(AGREEMENT_SCHEDULE_VARIANTS.length);
     expect(variants).toHaveLength(15);
@@ -239,7 +239,7 @@ describe("the Add-a-part picker", () => {
   it("chips every variant in the Schedule menu with its R9 standing", () => {
     renderSheet();
     fireEvent.click(screen.getByRole("button", { name: "Schedule ▾" }));
-    const menu = screen.getByRole("list", { name: "Schedule variants" });
+    const menu = screen.getByRole("list", { name: "Fee schedule types" });
     expect(within(menu).getAllByText("creates authority")).toHaveLength(6);
     expect(
       within(menu).getAllByText("creates authority · deposit only"),
@@ -251,7 +251,7 @@ describe("the Add-a-part picker", () => {
     const onAdd = renderSheet();
     fireEvent.click(screen.getByRole("button", { name: "Clause" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Add to this agreement" }),
+      screen.getByRole("button", { name: "Add to agreement" }),
     );
     expect(onAdd).toHaveBeenCalledTimes(1);
     const choice = onAdd.mock.calls[0][0];
@@ -269,7 +269,7 @@ describe("the Add-a-part picker", () => {
     ) as HTMLElement;
     fireEvent.click(within(houseRules).getByRole("button"));
     fireEvent.click(
-      screen.getByRole("button", { name: "Add to this agreement" }),
+      screen.getByRole("button", { name: "Add to agreement" }),
     );
     expect(onAdd).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -283,7 +283,7 @@ describe("the Add-a-part picker", () => {
   it("adds nothing until a choice is made", () => {
     const onAdd = renderSheet();
     expect(
-      screen.getByRole("button", { name: "Add to this agreement" }),
+      screen.getByRole("button", { name: "Add to agreement" }),
     ).toBeDisabled();
     expect(onAdd).not.toHaveBeenCalled();
   });

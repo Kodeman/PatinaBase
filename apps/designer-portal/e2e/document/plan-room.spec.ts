@@ -120,7 +120,7 @@ test('files a dropped set, then shares a sheet with the client', async ({
   await expect(
     page.getByText(/Choose a PDF set; the light table splits it/),
   ).toBeVisible();
-  // Scoped by action key: the intake strip carries a second "Choose a PDF"
+  // Scoped by action key: the intake strip carries "Upload drawing PDFs"
   // (`choose-plan-pdf`), and the empty state's own primary act is the one the
   // invitation offers.
   await expect(
@@ -138,8 +138,8 @@ test('files a dropped set, then shares a sheet with the client', async ({
   });
   await expect(page.getByLabel('Sheet number for page 1')).toHaveValue('ID-401');
   await expect(page.getByLabel('Sheet number for page 2')).toHaveValue('ID-501');
-  await expect(page.getByText('Loose papers')).toBeVisible();
-  await expect(page.getByRole('button', { name: /Send to the Folio/i })).toBeVisible();
+  await expect(page.getByText('Unfiled pages')).toBeVisible();
+  await expect(page.getByRole('button', { name: /File as project document/i })).toBeVisible();
 
   // Neither new-sheet card asks a question, so the strip's gate is already
   // open — the fork chips only appear on a near miss.
@@ -188,7 +188,7 @@ test('files a dropped set, then shares a sheet with the client', async ({
   ).toBe('ID-401,ID-501');
 
   // The room lands back on the set once the filing clears.
-  await expect(page.getByText('The current set')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Current set', { exact: true })).toBeVisible({ timeout: 30_000 });
 
   // ── The same file again ─────────────────────────────────────────────────
   // A NEW staged table mints a NEW idempotency key, so this is a second batch,
@@ -239,7 +239,7 @@ test('files a dropped set, then shares a sheet with the client', async ({
   ).toBe(2);
 
   // ── Share one sheet with the client ─────────────────────────────────────
-  await expect(page.getByText('The current set')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Current set', { exact: true })).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: /ID-401/ }).first().click();
   await expect(
     page.getByRole('heading', { name: 'Millwork Elevations - Study' }),

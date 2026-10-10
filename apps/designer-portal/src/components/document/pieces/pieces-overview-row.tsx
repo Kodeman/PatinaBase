@@ -114,7 +114,7 @@ export function PiecesOverviewRow({
             variant="tertiary"
             onClick={onAddLine}
           >
-            Add a line
+            Add room selection
           </DocumentAction>
           <DocumentAction
             actionKey="work-this-room"
@@ -124,7 +124,7 @@ export function PiecesOverviewRow({
             href={buildRoomHref(docId, { lens: 'rough', room: row.key })}
             trailing="→"
           >
-            Work this room
+            Edit room selections
           </DocumentAction>
         </div>
       </div>

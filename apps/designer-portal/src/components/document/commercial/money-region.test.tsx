@@ -177,17 +177,17 @@ describe('MoneyRegion', () => {
 
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
     expect(screen.getByText('$18,000 remaining · $13,772 authorized')).toBeVisible();
-    expect(screen.getByText('Budget · $100,000 approved')).toBeVisible();
-    expect(screen.getByText('Plan · $86,540 specified')).toBeVisible();
-    expect(screen.getByText('Authorized · $13,772 ordered')).toBeVisible();
+    expect(screen.getByText('Client budget · $100,000 approved')).toBeVisible();
+    expect(screen.getByText('Planned expenditure · $86,540 specified')).toBeVisible();
+    expect(screen.getByText('Vendor commitments · $13,772 ordered')).toBeVisible();
     expect(
-      screen.getByText('Moved · $9,772 in motion — ordered $13,772 less $4,000 paid out'),
+      screen.getByText('Outstanding order payments · $9,772 in motion — ordered $13,772 less $4,000 paid out'),
     ).toBeVisible();
     expect(
-      screen.getByText(/^Owed · \$1,750 out · Invoice 2026-114, \d+ days · \$1,750 billed to date$/),
+      screen.getByText(/^Client receivables · \$1,750 out · Invoice 2026-114, \d+ days · \$1,750 billed to date$/),
     ).toBeVisible();
     expect(
-      screen.getByText('Not drawn · $500 balance · PO-2026-0418, 50% at release'),
+      screen.getByText('Undisbursed vendor payments · $500 balance · PO-2026-0418, 50% at release'),
     ).toBeVisible();
   });
 
@@ -199,12 +199,12 @@ describe('MoneyRegion', () => {
       (li) => li.querySelector('p')?.textContent?.split(' · ')[0],
     );
     expect(rungs).toEqual([
-      'Budget',
-      'Plan',
-      'Authorized',
-      'Moved',
-      'Owed',
-      'Not drawn',
+      'Client budget',
+      'Planned expenditure',
+      'Vendor commitments',
+      'Outstanding order payments',
+      'Client receivables',
+      'Undisbursed vendor payments',
     ]);
   });
 
@@ -235,9 +235,9 @@ describe('MoneyRegion', () => {
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByText('Authorized · $10,000 ordered')).toBeVisible();
+    expect(screen.getByText('Vendor commitments · $10,000 ordered')).toBeVisible();
     expect(
-      screen.getByText('Moved · $7,500 in motion — ordered $10,000 less $2,500 paid out'),
+      screen.getByText('Outstanding order payments · $7,500 in motion — ordered $10,000 less $2,500 paid out'),
     ).toBeVisible();
   });
 
@@ -251,7 +251,7 @@ describe('MoneyRegion', () => {
     const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
 
-    expect(screen.getByText('Plan · working budget v1 · no rooms yet')).toBeVisible();
+    expect(screen.getByText('Planned expenditure · working budget v1 · no rooms yet')).toBeVisible();
     expect(container).not.toHaveTextContent('$0');
   });
 
@@ -265,12 +265,12 @@ describe('MoneyRegion', () => {
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByText('Budget · could not be read')).toBeVisible();
-    expect(screen.getByText('Plan · could not be read')).toBeVisible();
-    expect(screen.getByText('Authorized · could not be read')).toBeVisible();
-    expect(screen.getByText('Moved · could not be read')).toBeVisible();
-    expect(screen.getByText('Owed · could not be read')).toBeVisible();
-    expect(screen.getByText('Not drawn · could not be read')).toBeVisible();
+    expect(screen.getByText('Client budget · could not be read')).toBeVisible();
+    expect(screen.getByText('Planned expenditure · could not be read')).toBeVisible();
+    expect(screen.getByText('Vendor commitments · could not be read')).toBeVisible();
+    expect(screen.getByText('Outstanding order payments · could not be read')).toBeVisible();
+    expect(screen.getByText('Client receivables · could not be read')).toBeVisible();
+    expect(screen.getByText('Undisbursed vendor payments · could not be read')).toBeVisible();
   });
 
   it('degrades every tier to a band-honest line when nothing is recorded', () => {
@@ -279,12 +279,12 @@ describe('MoneyRegion', () => {
 
     expect(screen.getByText('no budget yet')).toBeVisible();
     expect(screen.queryByText(/remaining/)).not.toBeInTheDocument();
-    expect(screen.getByText('Budget · nothing approved yet')).toBeVisible();
-    expect(screen.getByText('Plan · no working budget yet')).toBeVisible();
-    expect(screen.getByText('Authorized · nothing executed yet')).toBeVisible();
-    expect(screen.getByText('Moved · nothing in motion yet')).toBeVisible();
-    expect(screen.getByText('Owed · nothing owed yet')).toBeVisible();
-    expect(screen.getByText('Not drawn · nothing standing undrawn')).toBeVisible();
+    expect(screen.getByText('Client budget · nothing approved yet')).toBeVisible();
+    expect(screen.getByText('Planned expenditure · no working budget yet')).toBeVisible();
+    expect(screen.getByText('Vendor commitments · nothing executed yet')).toBeVisible();
+    expect(screen.getByText('Outstanding order payments · nothing in motion yet')).toBeVisible();
+    expect(screen.getByText('Client receivables · nothing owed yet')).toBeVisible();
+    expect(screen.getByText('Undisbursed vendor payments · nothing standing undrawn')).toBeVisible();
     expect(container).not.toHaveTextContent('$0');
   });
 
@@ -294,12 +294,12 @@ describe('MoneyRegion', () => {
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByText('Plan')).toBeVisible();
-    expect(screen.getByText('Moved')).toBeVisible();
-    expect(screen.getByText('Not drawn')).toBeVisible();
+    expect(screen.getByText('Planned expenditure')).toBeVisible();
+    expect(screen.getByText('Outstanding order payments')).toBeVisible();
+    expect(screen.getByText('Undisbursed vendor payments')).toBeVisible();
     expect(screen.queryByText(/Plan · /)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Moved · /)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Not drawn · /)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Outstanding order payments · /)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Undisbursed vendor payments · /)).not.toBeInTheDocument();
   });
 
   it('carries the four detail surfaces the tiers summarise, accounts included', () => {
@@ -315,9 +315,9 @@ describe('MoneyRegion', () => {
     const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
 
-    const caption = screen.getByText(/Moved is what is ordered/);
+    const caption = screen.getByText(/Outstanding order payments are what is ordered/);
     expect(caption).toHaveTextContent(
-      'Budget → plan → authorized → moved. Moved is what is ordered and not yet paid out — not the contractually owed total above it.',
+      'Client budget → planned expenditure → vendor commitments → outstanding order payments. Outstanding order payments are what is ordered and not yet paid out — not the contractually owed total above it.',
     );
     // SP-05 — the migration note naming UI that no longer exists is gone.
     expect(container).not.toHaveTextContent('Absorbs today’s four separate bands');
@@ -335,7 +335,7 @@ describe('MoneyRegion', () => {
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByText(/Moved is what is ordered/)).toHaveTextContent(
+    expect(screen.getByText(/Outstanding order payments are what is ordered/)).toHaveTextContent(
       '1 trade scope still in draft, counted in neither.',
     );
   });
@@ -352,7 +352,7 @@ describe('MoneyRegion', () => {
     expect(
       document.querySelectorAll('[data-action-variant="inked"]'),
     ).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Draw an invoice' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Draft an invoice' })).toHaveAttribute(
       'data-action-variant',
       'inked',
     );
@@ -382,7 +382,7 @@ describe('MoneyRegion', () => {
     render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
 
-    expect(screen.getByText('Budget · nothing approved yet')).toBeVisible();
+    expect(screen.getByText('Client budget · nothing approved yet')).toBeVisible();
     expect(screen.getByText(/^no ceiling · /)).toBeVisible();
   });
 
@@ -513,7 +513,7 @@ describe('MoneyRegion', () => {
     };
 
     render(<MoneyRegion projectId="project-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Draw an invoice' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Draft an invoice' }));
 
     expect(mockOpenInvoiceComposer).toHaveBeenCalledWith({ projectId: 'project-1' });
   });
@@ -526,7 +526,7 @@ describe('MoneyRegion', () => {
     };
 
     render(<MoneyRegion projectId="project-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Hours · this project ↗' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Project time ledger ↗' }));
 
     expect(mockOpenLedger).toHaveBeenCalledWith('hours', { projectId: 'project-1' });
   });
@@ -608,7 +608,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     ).toHaveClass('sr-only');
 
     expect(document.querySelectorAll('ol > li')).toHaveLength(0);
-    expect(screen.queryByText(/^Budget · /)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Client budget · /)).not.toBeInTheDocument();
     expect(screen.queryByText('Account band')).not.toBeInTheDocument();
   });
 
@@ -619,7 +619,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     const head = document.querySelector('[data-region-head="money-head"]')!;
     // Entry 0 of a three-act ledger.
     expect(head).toContainElement(
-      screen.getByRole('button', { name: 'Draw an invoice' }),
+      screen.getByRole('button', { name: 'Draft an invoice' }),
     );
     // Entries 1 and 2 are not rendered — not rendered inert, not aria-hidden:
     // `DocumentActionGroup`'s one-leader guard and `action-visibility.spec.ts`
@@ -680,7 +680,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
       document.querySelector('[data-index-region="money"]'),
     ).toHaveAttribute('data-density', 'full');
     expect(screen.queryByText('Quiet — opens as you read')).not.toBeInTheDocument();
-    expect(screen.getByText(/^Owed · /)).toBeInTheDocument();
+    expect(screen.getByText(/^Client receivables · /)).toBeInTheDocument();
     // The same outer box on the other side of the promotion: same
     // margins, same border, same reserve, same rules. A stop that grew a
     // top margin on promotion would move every root below it.
@@ -719,7 +719,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
 
 // US-19 499-2 / 507-1 (one-voice) — the Money head leads with `Record the
 // payment` (scored) only while a client receivable on this paper is due; a
-// maker balance is never this head's; `Draw an invoice` is plain everywhere.
+// maker balance is never this head's; `Draft an invoice` is plain everywhere.
 describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
   const flags = process.env.NEXT_PUBLIC_FLAG_OVERRIDES;
   beforeEach(() => {
@@ -758,7 +758,7 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
     expect(record).toHaveAttribute('data-action-variant', 'inked');
     expect(head.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
     expect(head.querySelectorAll('.da-terminal')).toHaveLength(0);
-    expect(within(head).getByRole('button', { name: 'Draw an invoice' })).toHaveAttribute(
+    expect(within(head).getByRole('button', { name: 'Draft an invoice' })).toHaveAttribute(
       'data-action-variant',
       'secondary',
     );
@@ -787,7 +787,7 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
       'data-action-variant',
       'inked',
     );
-    expect(within(head).getByRole('button', { name: 'Draw an invoice' })).toHaveAttribute(
+    expect(within(head).getByRole('button', { name: 'Draft an invoice' })).toHaveAttribute(
       'data-action-variant',
       'secondary',
     );
@@ -800,7 +800,7 @@ describe('MoneyRegion · the head’s leader (499-2, 507-1)', () => {
     render(<MoneyRegion projectId="project-1" />);
 
     expect(screen.queryByRole('button', { name: 'Record the payment' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Draw an invoice' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Draft an invoice' })).toHaveAttribute(
       'data-action-variant',
       'inked',
     );

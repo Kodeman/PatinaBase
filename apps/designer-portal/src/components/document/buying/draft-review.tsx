@@ -178,7 +178,7 @@ export function DraftReview({
             className={INPUT_CLS}
           />
           <label htmlFor={`${fieldId}-body`} className="sr-only">
-            Letter
+            Correspondence
           </label>
           <textarea
             id={`${fieldId}-body`}
@@ -204,7 +204,7 @@ export function DraftReview({
               loadingLabel="Sending"
               onClick={sendDraft}
             >
-              Send
+              Send correspondence
             </DocumentAction>
             {!recipient && onAddAddress && (
               <DocumentAction
@@ -214,7 +214,7 @@ export function DraftReview({
                 variant="tertiary"
                 onClick={onAddAddress}
               >
-                Add an address
+                Add recipient email
               </DocumentAction>
             )}
             <DocumentAction
@@ -225,7 +225,7 @@ export function DraftReview({
               disabled={pending}
               onClick={discardDraft}
             >
-              Discard
+              Discard draft
             </DocumentAction>
           </div>
           {!recipient && (
@@ -257,7 +257,7 @@ export function DraftReview({
                 loadingLabel="Sending"
                 onClick={sendAgain}
               >
-                Send again
+                Resend correspondence
               </DocumentAction>
             </div>
           )}

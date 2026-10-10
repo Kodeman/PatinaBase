@@ -101,7 +101,7 @@ describe('VendorAccountTerms — the studio account on Terms (C-12)', () => {
       expect(screen.queryByText('Trade discount')).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: /edit the account/i }));
       expect(screen.queryByLabelText(/trade discount/i)).toBeNull();
-      fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^save vendor account$/i }));
       expect(mockUpsert).toHaveBeenCalledTimes(1);
       expect(mockUpsert.mock.calls[0][0].request).not.toHaveProperty('tradeDiscountPct');
     },
@@ -125,7 +125,7 @@ describe('VendorAccountTerms — the studio account on Terms (C-12)', () => {
     expect(discount.value).toBe('12');
     fireEvent.change(discount, { target: { value: '15' } });
     fireEvent.change(screen.getByLabelText(/concealed damage/i), { target: { value: '7' } });
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^save vendor account$/i }));
     await waitFor(() => expect(mockUpsert).toHaveBeenCalledTimes(1));
     const { organizationId, vendorId, request } = mockUpsert.mock.calls[0][0];
     expect(organizationId).toBe('studio-1');
@@ -150,7 +150,7 @@ describe('VendorAccountTerms — the studio account on Terms (C-12)', () => {
     render(<VendorAccountTerms vendor={vendor} />);
     fireEvent.click(screen.getByRole('button', { name: /set up the account/i }));
     fireEvent.change(screen.getByLabelText(/orders email/i), { target: { value: 'nope' } });
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^save vendor account$/i }));
     expect(screen.getByRole('alert').textContent).toMatch(/orders email/i);
     expect(mockUpsert).not.toHaveBeenCalled();
   });

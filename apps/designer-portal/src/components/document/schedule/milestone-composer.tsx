@@ -195,7 +195,7 @@ export function MilestoneComposer({
         <div className="mt-[0.55rem] inline-flex items-center gap-[0.5rem] rounded-[3px] border border-[var(--color-pearl)] bg-[var(--color-off-white)] px-[0.6rem] py-[0.3rem]">
           <button
             type="button"
-            aria-label="Fewer days before end"
+            aria-label="Reduce days before phase end"
             disabled={beforeDays <= 1}
             onClick={() => {
               setBeforeDays((n) => Math.max(1, n - 1));
@@ -210,7 +210,7 @@ export function MilestoneComposer({
           </span>
           <button
             type="button"
-            aria-label="More days before end"
+            aria-label="Increase days before phase end"
             onClick={() => {
               setBeforeDays((n) => n + 1);
               clearError();

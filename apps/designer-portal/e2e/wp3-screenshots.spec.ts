@@ -57,7 +57,7 @@ async function openDocument(
     waitUntil: 'domcontentloaded',
   });
   await expect(
-    page.getByRole('heading', { name: 'Approval record' }),
+    page.getByRole('heading', { name: 'Approval register' }),
   ).toBeVisible({ timeout: 30_000 });
 }
 

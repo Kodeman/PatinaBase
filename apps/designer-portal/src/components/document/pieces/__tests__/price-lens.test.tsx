@@ -409,7 +409,7 @@ describe("PriceLens: the row menu", () => {
     ).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(
-        within(form).getByRole("button", { name: "Make it an allowance" }),
+        within(form).getByRole("button", { name: "Set as allowance" }),
       );
     });
     // 00744 step 10 reads budget_max_cents as the line total: 9 rolls × $250.
@@ -517,7 +517,7 @@ describe("PriceLens: the row menu", () => {
     });
     await act(async () => {
       fireEvent.click(
-        within(form).getByRole("button", { name: "Add the labor line" }),
+        within(form).getByRole("button", { name: "Add labor line" }),
       );
     });
     expect(mockAddLabor).toHaveBeenCalledWith({

@@ -161,14 +161,14 @@ export function ReleaseLens({
   if (room === REMOVED_PLACE) {
     return (
       <p className="max-w-[56ch] py-6 font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]">
-        Removed lines are not released. Restore one in Rough in to release it.
+        Removed selections are excluded from authorization. Restore them in Preliminary selections first.
       </p>
     );
   }
   if (rawLines && model.groups.length === 0) {
     return (
       <p className="max-w-[56ch] py-6 font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]">
-        No lines here yet. Add them in Rough in, then release them here.
+        No selections yet. Add them in Preliminary selections, then return for purchasing authorization.
       </p>
     );
   }
@@ -402,7 +402,7 @@ function DispositionSelect({
           role="alert"
           className="font-sans text-[13px] text-[var(--sheet-ink)]"
         >
-          That did not save. Choose again.
+          The selection was not saved. Choose again.
         </span>
       )}
     </span>
@@ -437,7 +437,7 @@ function HandBack({
           handBack.mutate({ projectId, roomId });
         }}
       >
-        READY FOR LEAH
+        Mark room ready for review
       </button>
       {(last || handBack.isError) && (
         <span
@@ -471,7 +471,7 @@ function CeremonyLines({ set }: { set: ReleaseSet }) {
 function LeftOut({ omitted }: { omitted: readonly ReleaseOmission[] }) {
   if (omitted.length === 0) return null;
   return (
-    <section aria-label="Not in this release" className="flex flex-col gap-1">
+    <section aria-label="Excluded selections" className="flex flex-col gap-1">
       <p className={CONSEQUENCE_CLS}>Not in this release:</p>
       <ul className="flex flex-col gap-1">
         {omitted.map(({ row, reason }) => (
@@ -603,7 +603,7 @@ function Ceremony({
               })
             }
           >
-            VOID THE DRAFT
+            Void authorization draft
           </button>
           {noClient ? (
             noClientNote
@@ -620,7 +620,7 @@ function Ceremony({
                 });
               }}
             >
-              SEND THE DRAFT
+              Send purchasing authorization
             </button>
           )}
         </div>
@@ -637,7 +637,7 @@ function Ceremony({
           </p>
         )}
         <p className="font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink-faint)]">
-          Nothing here is ready and selected for the client yet.
+          No selections are ready for purchasing authorization.
         </p>
         <LeftOut omitted={omitted} />
       </div>

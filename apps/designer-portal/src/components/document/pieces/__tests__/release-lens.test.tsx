@@ -1,7 +1,7 @@
 /**
  * T-41 (a3; S7, D1 row 6, D18, Q13): the Release lens. The table across rooms
  * `LINE · ROOM · STAGE · READINESS · FOR THE CLIENT`; the blocker sentences;
- * Leah's disposition select (placeholders print `—`); `READY FOR LEAH` writes
+ * Leah's disposition select (placeholders print `—`); `Mark room ready for review` writes
  * only a hand-back; the ceremony names its 7 lines and $30,760, ends the set
  * with the wallpaper's install, and releases through
  * `create_furnishings_authorization_from_schedule` then the send; afterwards
@@ -308,7 +308,7 @@ describe("ReleaseLens", () => {
     const bedroom = screen.getByRole("button", {
       name: "Ready for Leah, Bedroom",
     });
-    expect(bedroom).toHaveTextContent("READY FOR LEAH");
+    expect(bedroom).toHaveTextContent("Mark room ready for review");
     fireEvent.click(bedroom);
     expect(mockHandBack).toHaveBeenCalledWith({
       projectId: "proj-1",
@@ -373,7 +373,7 @@ describe("ReleaseLens", () => {
     rerender(<ReleaseLens {...props} />);
     expect(screen.queryByRole("button", { name: /^Release / })).toBeNull();
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "SEND THE DRAFT" }));
+      fireEvent.click(screen.getByRole("button", { name: "Send purchasing authorization" }));
     });
     expect(mockRelease).toHaveBeenCalledTimes(1);
     expect(mockSend).toHaveBeenCalledTimes(2);
@@ -403,7 +403,7 @@ describe("ReleaseLens", () => {
     expect(l1.queryByRole("combobox")).toBeNull();
 
     await act(async () => {
-      fireEvent.click(ceremony.getByRole("button", { name: "SEND THE DRAFT" }));
+      fireEvent.click(ceremony.getByRole("button", { name: "Send purchasing authorization" }));
     });
     expect(mockSend).toHaveBeenCalledWith("prop-3");
     expect(mockRelease).not.toHaveBeenCalled();
@@ -417,7 +417,7 @@ describe("ReleaseLens", () => {
     mockDraft.data = W4_DRAFT;
     render(<ReleaseLens {...props} />);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "VOID THE DRAFT" }));
+      fireEvent.click(screen.getByRole("button", { name: "Void authorization draft" }));
     });
     expect(mockVoid).toHaveBeenCalledTimes(1);
     const [{ proposalId, reason }] = mockVoid.mock.calls[0];
@@ -514,7 +514,7 @@ describe("ReleaseLens", () => {
       ceremony.getByText("This release · 6 lines · $23,960:"),
     ).toBeInTheDocument();
     const leftOut = within(
-      ceremony.getByRole("region", { name: "Not in this release" }),
+      ceremony.getByRole("region", { name: "Excluded selections" }),
     );
     expect(
       leftOut.getAllByRole("listitem").map((li) => li.textContent),

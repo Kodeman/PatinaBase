@@ -1,7 +1,7 @@
 /**
  * US-19 FR2 F2-16 and F2-9 (`one-voice`) — the Direction card at 390.
  *
- * Design review 2 (`390-direction-top`): `Not started yet` broke a word a line
+ * Design review 2 (`390-direction-top`): `Not started` broke a word a line
  * beside `WRITE THE PROPOSAL →`, which overprinted it. Below 640 the card's row
  * wraps and a zero-height, full-basis break puts the act on its own line under
  * the status. The share doorway beneath it printed `SHARE…`; D1 names it
@@ -60,12 +60,12 @@ beforeEach(() => {
 });
 
 describe('the Direction card at 390 under one-voice (FR2 F2-16)', () => {
-  it('stacks `Not started yet` above `Write the proposal` below 640', () => {
+  it('stacks `Not started` above `Write the proposal` below 640', () => {
     const { container } = renderCard();
     const card = container.querySelector('[data-direction-card]') as HTMLElement;
     expect(card).toHaveClass('max-[639px]:flex-wrap');
 
-    const status = screen.getByText('Not started yet');
+    const status = screen.getByText('Not started');
     const act = screen.getByRole('button', { name: /Write the proposal/ });
     const brk = card.querySelector('[data-direction-card-break]') as HTMLElement;
     expect(brk).toHaveClass('hidden', 'basis-full', 'h-0', 'max-[639px]:block');

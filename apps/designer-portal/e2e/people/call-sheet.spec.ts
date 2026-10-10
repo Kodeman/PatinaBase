@@ -34,7 +34,7 @@ async function openTheCallSheet(page: import('@playwright/test').Page) {
   const instrument = page.locator('[data-action-key="open-call-sheet"]');
   await expect(instrument).toBeVisible({ timeout: 30_000 });
   await instrument.click();
-  await expect(page.getByText('Call sheet · Okonkwo residence')).toBeVisible();
+  await expect(page.getByText('Project directory · Okonkwo residence')).toBeVisible();
   // QA-R2-6: the sheet's heading is static markup, but every read behind it is
   // `enabled: open` — the roster, the authority grants, the consent org and the
   // site access card all START when the sheet opens. On a cold page that round
@@ -98,7 +98,7 @@ test('task 3 — who has site access right now, one click from the sheet', async
   await expect(line).toContainText('Key held by Ngozi Eze');
   await expect(line).toContainText('controls the gate');
 
-  await page.getByRole('button', { name: 'Open the site access card' }).click();
+  await page.getByRole('button', { name: 'Open site access details' }).click();
   await expect(page.getByText('Site access · Okonkwo residence')).toBeVisible();
 
   // Studio only, and it says so.
@@ -141,7 +141,7 @@ test('task 3 — logging who was told writes the notice', async ({
   const wasTold = (before.data?.told_refs ?? []) as string[];
 
   await openTheCallSheet(page);
-  await page.getByRole('button', { name: 'Open the site access card' }).click();
+  await page.getByRole('button', { name: 'Open site access details' }).click();
   await expect(page.getByText('Site access · Okonkwo residence')).toBeVisible();
 
   const act = page.getByRole('button', { name: 'Log who was told' });

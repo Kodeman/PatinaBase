@@ -310,7 +310,7 @@ function LineRoomSelect({
             });
           }}
         >
-          <option value="unassigned">Not in a room yet</option>
+          <option value="unassigned">Unassigned</option>
           <option value="throughout">Throughout</option>
           {(rooms ?? []).map((room) => (
             <option key={room.id} value={`room:${room.id}`}>
@@ -549,7 +549,7 @@ export function SelectionEditor({
             configurationHash={configuration.hash}
             approvedHash={configuration.approvedHash}
             lockedAt={configuration.lockedAt}
-            label="Project configuration"
+            label="Project product configuration"
           />
           {item.product_id && configuration.configurationId && (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--color-pearl)] pt-3">
@@ -602,7 +602,7 @@ export function SelectionEditor({
           </label>
         ))}
         <div className="text-[11px] text-[var(--text-muted)] sm:col-span-2">
-          <span>Selected dimensions</span>
+          <span>Specified dimensions</span>
           <div className="mt-1">
             {rawDimensionsMode ? (
               <div>
@@ -619,7 +619,7 @@ export function SelectionEditor({
                   onClick={switchToStructuredDimensions}
                   className="mt-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-4 hover:underline"
                 >
-                  Use structured editor
+                  Use dimension fields
                 </button>
               </div>
             ) : (
@@ -633,7 +633,7 @@ export function SelectionEditor({
                   onClick={switchToRawDimensions}
                   className="mt-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-4 hover:underline"
                 >
-                  Edit raw JSON
+                  Advanced: edit dimensions as JSON
                 </button>
               </div>
             )}
@@ -664,15 +664,15 @@ export function SelectionEditor({
 
       <div className="mt-5 border-t border-[var(--color-pearl)] pt-4">
         <p className="text-[11px] font-medium text-[var(--color-charcoal)]">
-          Declare a field not applicable
+          Mark field not applicable
         </p>
         <div className="mt-2 grid gap-2 sm:grid-cols-[150px_1fr_auto]">
           <Select
-            aria-label="Field to mark not applicable"
+            aria-label="Field that does not apply"
             value={naField}
             onChange={(event) => setNaField(event.target.value as SpecField)}
           >
-            <option value="sku">SKU</option>
+            <option value="sku">SKU / product code</option>
             <option value="finish">Finish</option>
             <option value="material">Material</option>
             <option value="color_fabric">Color / fabric</option>
@@ -680,9 +680,9 @@ export function SelectionEditor({
             <option value="exact_location">Location</option>
           </Select>
           <Input
-            aria-label="Reason field is not applicable"
+            aria-label="Reason for not applicable"
             value={naReason}
-            placeholder="Reason required"
+            placeholder="Explain why this field does not apply"
             onChange={(event) => setNaReason(event.target.value)}
           />
           <Button variant="secondary" onClick={() => void declareNa()}>
@@ -702,7 +702,7 @@ export function SelectionEditor({
       )}
       <div className="mt-5 flex justify-end">
         <Button loading={updateSpec.isPending} onClick={() => void save()}>
-          Save line
+          Save specification
         </Button>
       </div>
     </div>
@@ -1200,10 +1200,10 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
           >
             {(
               [
-                ["workbench", "Workbench"],
-                ["preview", "Audience preview"],
-                ["preflight", "Preflight"],
-                ["history", "Revisions"],
+                ["workbench", "Specification editor"],
+                ["preview", "Audience editions"],
+                ["preflight", "Issue readiness"],
+                ["history", "Revision history"],
               ] as Array<[WorkspaceView, string]>
             ).map(([id, label]) => (
               <button
@@ -1222,7 +1222,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
             ))}
           </nav>
           <Button size="sm" variant="secondary" onClick={runPreflight}>
-            Preflight
+            Run issue checks
           </Button>
         </div>
       </header>
@@ -1231,7 +1231,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         <div className="mx-auto grid max-w-[1500px] md:grid-cols-[220px_minmax(340px,1fr)_minmax(360px,0.9fr)]">
           <aside className="border-r border-[var(--color-pearl)] p-4 md:min-h-[calc(100vh-70px)]">
             <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-              Chapters
+              Specification sections
             </p>
             <ol className="mt-3 space-y-1">
               {groups.map((group, index) => (
@@ -1255,7 +1255,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
             </ol>
             <div className="mt-8">
               <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-                Readiness
+                Issue readiness
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {(
@@ -1283,7 +1283,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
           </aside>
 
           <section
-            aria-label="Spec book lines"
+            aria-label="Specification register"
             className="border-r border-[var(--color-pearl)]"
           >
             {groups.map((group) => (
@@ -1329,7 +1329,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
               <>
                 {selectedItem.setting && (
                   <label className="mb-5 flex items-center justify-between gap-4 border-b border-[var(--color-pearl)] pb-3 text-[11px] text-[var(--text-muted)]">
-                    Include in publication
+                    Include in issue
                     <input
                       type="checkbox"
                       checked={selectedItem.setting.included}
@@ -1388,7 +1388,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
               </>
             ) : (
               <p className="py-16 text-center italic text-[var(--text-muted)]">
-                Choose a line.
+                Select an item to view its specification.
               </p>
             )}
           </aside>
@@ -1399,7 +1399,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         <div className="mx-auto grid max-w-[1300px] gap-6 px-5 py-8 lg:grid-cols-[230px_1fr]">
           <aside>
             <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-              Edition
+              Audience edition
             </p>
             <div className="mt-3 space-y-2">
               {AUDIENCES.map((audience) => (
@@ -1423,7 +1423,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
               ))}
             </div>
             <label className="mt-6 block text-[11px] text-[var(--text-muted)]">
-              Item sheet
+              Specification sheet
               <Select
                 className="mt-1"
                 value={selectedItem?.id ?? ""}
@@ -1470,7 +1470,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
 
             <div className="mt-8">
               <h3 className="font-mono text-[11px] uppercase tracking-[0.1em]">
-                Blocking
+                Issue blockers
               </h3>
               <ul className="mt-3 divide-y divide-[var(--color-pearl)] border-y border-[var(--color-pearl)]">
                 {preflight.blockers.length === 0 ? (
@@ -1493,7 +1493,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                           }}
                           className="min-h-11 px-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
                         >
-                          Resolve
+                          Resolve issue
                         </button>
                       )}
                     </li>
@@ -1504,7 +1504,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
 
             <div className="mt-8">
               <h3 className="font-mono text-[11px] uppercase tracking-[0.1em]">
-                Warnings
+                Issue warnings
               </h3>
               <ul className="mt-3 divide-y divide-[var(--color-pearl)] border-y border-[var(--color-pearl)]">
                 {preflight.warnings.map((issue, index) => (
@@ -1518,11 +1518,11 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
               </ul>
               {preflight.warnings.length > 0 && (
                 <label className="mt-4 block text-[11px] text-[var(--text-muted)]">
-                  Warning acknowledgement reason
+                  Issue-with-warnings reason
                   <Textarea
                     className="mt-1"
                     value={warningReason}
-                    placeholder="Required to issue with warnings"
+                    placeholder="Explain why you are issuing with these warnings"
                     onChange={(event) => setWarningReason(event.target.value)}
                   />
                 </label>
@@ -1532,7 +1532,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
 
           <aside className="border-l border-[var(--color-pearl)] pl-6">
             <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-              Issue
+              Issue specification set
             </p>
             <div className="mt-4 space-y-2">
               {AUDIENCES.map((audience) => (
@@ -1577,7 +1577,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
             </label>
             {issueType !== "full" && (
               <label className="mt-4 block text-[11px] text-[var(--text-muted)]">
-                Reason
+                Issue reason
                 <Textarea
                   className="mt-1"
                   value={issueReason}
@@ -1615,7 +1615,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
           <div className="flex items-end justify-between">
             <div>
               <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-                Immutable ledger
+                Issued revision register
               </p>
               <h2 className="mt-2 font-heading text-2xl">Revisions</h2>
             </div>
@@ -1632,7 +1632,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                 }}
               >
                 <Sparkles className="h-4 w-4" />
-                Start addendum
+                Create specification addendum
               </Button>
             )}
           </div>
@@ -1720,7 +1720,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                               onClick={() => void shareArtifact(artifact)}
                             >
                               <Share2 className="h-3 w-3" />
-                              Share
+                              Share issued set
                             </Button>
                           )}
                           {shareResult?.artifactId === artifact.id && (

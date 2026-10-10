@@ -563,7 +563,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
 
       {lineData && shown.length === 0 ? (
         <p className="max-w-[56ch] font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]">
-          No lines here yet. Add them in Rough in, then price them here.
+          No selections yet. Add them in Preliminary selections, then price them here.
         </p>
       ) : null}
 
@@ -801,14 +801,14 @@ function LaborForm({
           aria-busy={addLabor.isPending || undefined}
           className={cn(ACT, "text-[var(--sheet-ink)]")}
         >
-          Add the labor line
+          Add labor line
         </button>
         <button
           type="button"
           onClick={() => onDone()}
           className={cn(ACT, "text-[var(--sheet-ink-muted)]")}
         >
-          Put back
+          Cancel
         </button>
       </div>
       {error ? (
@@ -903,7 +903,7 @@ function AllowanceForm({
           aria-busy={makeAllowance.isPending || undefined}
           className={cn(ACT, "text-[var(--sheet-ink)]")}
         >
-          Make it an allowance
+          Set as allowance
         </button>
         <button
           type="button"

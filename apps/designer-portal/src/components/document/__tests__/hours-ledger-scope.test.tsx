@@ -395,7 +395,7 @@ describe('the Hours scope lens', () => {
     viewerRole = 'member';
     const plain = renderLedger('project-1');
     expect(
-      plain.queryByRole('group', { name: 'Hours scope' }),
+      plain.queryByRole('group', { name: 'Time ledger scope' }),
     ).not.toBeInTheDocument();
     plain.unmount();
 
@@ -404,19 +404,19 @@ describe('the Hours scope lens', () => {
     viewerRole = 'admin';
     const asAdmin = renderLedger('project-1');
     expect(
-      asAdmin.getByRole('group', { name: 'Hours scope' }),
+      asAdmin.getByRole('group', { name: 'Time ledger scope' }),
     ).toBeInTheDocument();
     asAdmin.unmount();
 
     viewerRole = 'owner';
     renderLedger('project-1');
-    const lens = screen.getByRole('group', { name: 'Hours scope' });
+    const lens = screen.getByRole('group', { name: 'Time ledger scope' });
     expect(lens).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'the studio' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'this document' }),
+      screen.getByRole('button', { name: 'This project' }),
     ).toBeInTheDocument();
   });
 
@@ -444,7 +444,7 @@ describe('the Hours scope lens', () => {
     fireEvent.click(screen.getByRole('button', { name: 'The entries' }));
 
     const text = container.textContent ?? '';
-    expect(text).toContain('this document');
+    expect(text).toContain('This project');
     // The grand total is the front matter; the buckets and then the entries
     // follow it.
     expect(text.indexOf('3h 00m')).toBeGreaterThan(-1);
@@ -465,7 +465,7 @@ describe('the Hours scope lens', () => {
       screen.queryByText(/no studio yet/),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /Name your studio/ }),
+      screen.queryByRole('button', { name: /Name studio/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -508,12 +508,12 @@ describe('the Hours scope lens', () => {
 
     // The scope that was ABOUT the document cannot outlive it: the caption and
     // the lens word both go, and the rollup is never asked for the whole studio
-    // under the caption "this document".
+    // under the caption "This project".
     expect(
-      screen.queryByRole('button', { name: 'this document' }),
+      screen.queryByRole('button', { name: 'This project' }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'mine' }),
+      screen.getByRole('button', { name: 'My time' }),
     ).toHaveAttribute('aria-current', 'true');
     for (const call of rollupCalls) {
       expect(call).not.toMatchObject({ projectId: null, studioId: 'studio-1' });
@@ -635,7 +635,7 @@ describe('the Hours scope lens', () => {
     renderLedger('project-1');
 
     expect(
-      screen.queryByRole('group', { name: 'Hours scope' }),
+      screen.queryByRole('group', { name: 'Time ledger scope' }),
     ).not.toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByLabelText('Duration (minutes)')).toBeInTheDocument(),
@@ -657,14 +657,14 @@ describe('the Hours scope lens', () => {
     renderLedger('project-1');
 
     // Her own rows (WEEK_ENTRY carries rate_role 'lead_designer').
-    fireEvent.click(screen.getByRole('button', { name: 'mine' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My time' }));
     await waitFor(() =>
       expect(screen.getByLabelText('Duration (minutes)')).toBeInTheDocument(),
     );
     expect(screen.queryByText(/lead designer/)).not.toBeInTheDocument();
 
     // And the scope entries behind an aggregate (LEDGER_ROW: 'support_designer').
-    fireEvent.click(screen.getByRole('button', { name: 'this document' }));
+    fireEvent.click(screen.getByRole('button', { name: 'This project' }));
     fireEvent.click(screen.getByRole('button', { name: 'The entries' }));
     await waitFor(() =>
       expect(screen.getAllByText('Maria Obi').length).toBeGreaterThan(0),
@@ -701,7 +701,7 @@ describe('the Hours scope lens', () => {
     renderLedger();
 
     expect(
-      screen.getByRole('group', { name: 'Hours scope' }),
+      screen.getByRole('group', { name: 'Time ledger scope' }),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'the studio' }));
@@ -726,7 +726,7 @@ describe('the Hours scope lens', () => {
 
     expect(mockScopeViewedCalls).toEqual([{ scope: 'mine', group_by: null }]);
     expect(
-      screen.queryByRole('group', { name: 'Hours scope' }),
+      screen.queryByRole('group', { name: 'Time ledger scope' }),
     ).not.toBeInTheDocument();
   });
 
@@ -856,7 +856,7 @@ describe('the Hours scope lens', () => {
 
   it('prints no zero for a document total the function has not given (HT-10-a)', async () => {
     // project_hours_total raises for a caller who is not on the project rather
-    // than answering zero — so a zero under "this document · all time" is a
+    // than answering zero — so a zero under "This project · all time" is a
     // reading the server never gave.
     viewerRole = 'member';
     projectTotalState = 'pending';
@@ -864,13 +864,13 @@ describe('the Hours scope lens', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('this document · all time, for its whole team'),
+        screen.getByText('This project · all time, for its whole team'),
       ).toBeInTheDocument(),
     );
     // Scoped to that readout: the sheet's own front matter legitimately reads a
     // zero for a week with nothing in it — this section has no answer at all.
     const total = screen
-      .getByText('this document · all time, for its whole team')
+      .getByText('This project · all time, for its whole team')
       .closest('section') as HTMLElement;
     expect(total.textContent).toContain('Reading…');
     expect(total.textContent).not.toContain('0 min');
@@ -895,7 +895,7 @@ describe('the Hours scope lens', () => {
     renderLedger('project-1', client);
 
     const door = await screen.findByRole('button', {
-      name: /Name your studio/,
+      name: /Name studio/,
     });
     await act(async () => {
       fireEvent.click(door);
@@ -906,7 +906,7 @@ describe('the Hours scope lens', () => {
     );
     expect(screen.queryByText(/no studio yet/)).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /Name your studio/ }),
+      screen.queryByRole('button', { name: /Name studio/ }),
     ).not.toBeInTheDocument();
   });
 });
@@ -956,15 +956,15 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText('unbilled · all time')).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Bill it' }),
+      screen.queryByRole('button', { name: 'Draft time invoice' }),
     ).not.toBeInTheDocument();
     // The capture row — an admin never gets one under another person's caption.
     expect(screen.queryByLabelText('Minutes')).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Add' }),
+      screen.queryByRole('button', { name: 'Log time' }),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'mine' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My time' }));
 
     // And all four return to the one scope whose week, whose balance and whose
     // hand they are.
@@ -975,7 +975,7 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
     );
     expect(screen.getByText(/pending billing authority/)).toBeInTheDocument();
     expect(screen.getByText('unbilled · all time')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Bill it' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Draft time invoice' })).toBeInTheDocument();
     expect(screen.getByLabelText('Minutes')).toBeInTheDocument();
   });
 
@@ -988,12 +988,12 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'this document' }),
+        screen.getByRole('button', { name: 'This project' }),
       ).toHaveAttribute('aria-current', 'true'),
     );
     expect(screen.queryByText('unbilled · all time')).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Bill it' }),
+      screen.queryByRole('button', { name: 'Draft time invoice' }),
     ).not.toBeInTheDocument();
   });
 
@@ -1016,7 +1016,7 @@ describe('the sheet’s un-scoped remainder (M5-02)', () => {
     expect(weekLine().textContent).not.toMatch(/Week ·/);
     expect(weekLine().textContent).not.toMatch(/Today ·/);
 
-    fireEvent.click(screen.getByRole('button', { name: 'mine' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My time' }));
 
     await waitFor(() => expect(weekLine().textContent).toMatch(/Week ·/));
     expect(weekLine().textContent).toMatch(/Today ·/);
@@ -1156,12 +1156,12 @@ describe('the Export act (W5, m10-r3)', () => {
       await screen.findByRole('button', { name: 'Export → CSV' }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'this document' }));
+    fireEvent.click(screen.getByRole('button', { name: 'This project' }));
     expect(
       screen.queryByRole('button', { name: 'Export → CSV' }),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'mine' }));
+    fireEvent.click(screen.getByRole('button', { name: 'My time' }));
     expect(
       screen.queryByRole('button', { name: 'Export → CSV' }),
     ).not.toBeInTheDocument();

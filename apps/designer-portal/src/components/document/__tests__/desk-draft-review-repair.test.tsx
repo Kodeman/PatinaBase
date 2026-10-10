@@ -1,7 +1,7 @@
 /**
  * US-19 FR3 F3-22 (517-5; `one-voice`): the Desk's DraftReview takes 506-2's
  * form too — a held date request's Send reads `No address on file for
- * {maker}.` (aria-describedby), with the repair `Add an address` landing as
+ * {maker}.` (aria-describedby), with the repair `Add recipient email` landing as
  * 517-1 does: the maker's vendor terms, or the line's maker selector on its
  * document when the maker has no vendor record.
  */
@@ -92,15 +92,15 @@ beforeEach(() => {
 describe('Desk DraftReview held Send repair (517-5)', () => {
   it('names the maker in the held reason, wired by aria-describedby, and offers Add an address', () => {
     render(<FolderCard folder={draftFolio()} />);
-    const send = screen.getByRole('button', { name: 'Send' });
+    const send = screen.getByRole('button', { name: 'Send correspondence' });
     expect(send).toHaveAttribute('aria-disabled', 'true');
     expect(send).toHaveAccessibleDescription('No address on file for Hewn.');
-    expect(screen.getByRole('button', { name: 'Add an address' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add recipient email' })).toBeInTheDocument();
   });
 
   it('a maker with a vendor record: Add an address opens its terms with focus on Orders email', async () => {
     render(<FolderCard folder={draftFolio()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add an address' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add recipient email' }));
     await waitFor(() =>
       expect(mockOpenLedger).toHaveBeenCalledWith('orders', {
         page: 'vendors',
@@ -121,10 +121,10 @@ describe('Desk DraftReview held Send repair (517-5)', () => {
         })}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Send' })).toHaveAccessibleDescription(
+    expect(screen.getByRole('button', { name: 'Send correspondence' })).toHaveAccessibleDescription(
       'No address on file for Fixture Metalworks.',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Add an address' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add recipient email' }));
     expect(focusFfeLinePending.request).toEqual({ itemId: 'line-1', cell: 'maker' });
     expect(mockPush).toHaveBeenCalledWith('/doc/proj-1');
     expect(mockOpenLedger).not.toHaveBeenCalled();
@@ -133,7 +133,7 @@ describe('Desk DraftReview held Send repair (517-5)', () => {
   it("flag off: today's Desk review — no maker in the reason, no repair", () => {
     mockOneVoice = false;
     render(<FolderCard folder={draftFolio()} />);
-    expect(screen.getByRole('button', { name: 'Send' })).toHaveAccessibleDescription('No address on file.');
-    expect(screen.queryByRole('button', { name: 'Add an address' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Send correspondence' })).toHaveAccessibleDescription('No address on file.');
+    expect(screen.queryByRole('button', { name: 'Add recipient email' })).toBeNull();
   });
 });

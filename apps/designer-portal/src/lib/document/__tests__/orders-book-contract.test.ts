@@ -37,7 +37,7 @@ describe('R28 — the book pages are text links, never tabs', () => {
     // The page links carry the mono face (DM-mono tracking).
     expect(ledger).toMatch(/font-mono/);
     // The four pages exist as a typed list.
-    for (const label of ['Ledger', 'The Week', 'Receiving', 'Vendors']) {
+    for (const label of ['Order register', 'Weekly orders', 'Receiving', 'Vendor accounts']) {
       expect(ledger).toContain(`label: '${label}'`);
     }
   });

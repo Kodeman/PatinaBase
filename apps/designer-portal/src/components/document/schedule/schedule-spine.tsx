@@ -1161,12 +1161,12 @@ export function ScheduleSpine({
         <>
           <RegionHead
             headingId={scheduleHeadingId}
-            name="Schedule"
+            name="Project schedule"
             status={
               <>
                 {density === 'quiet' ? scheduleQuietLine : scheduleStatus}
                 {loading && (
-                  <SectionLoadingLine variant="inline" label="resolving the schedule" />
+                  <SectionLoadingLine variant="inline" label="Updating project schedule…" />
                 )}
               </>
             }
@@ -1230,7 +1230,7 @@ export function ScheduleSpine({
       <DocSheet
         open={sheet?.kind === 'composer' && Boolean(designerClientId)}
         onClose={closeSheet}
-        title="New open item"
+        title="New coordination item"
       >
         {sheet?.kind === 'composer' && designerClientId && (
           <ItemComposer

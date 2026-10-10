@@ -482,10 +482,10 @@ describe("AgreementComposer · composing", () => {
   it("adds a blank part and unfolds it", () => {
     renderComposer();
     addAPart();
-    fireEvent.click(screen.getByRole("button", { name: "Ceiling" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fee ceiling" }));
     expect(railRows()).toHaveLength(4);
     expect(
-      screen.getByRole("region", { name: "Ceiling editor" }),
+      screen.getByRole("region", { name: "Fee ceiling editor" }),
     ).toBeInTheDocument();
   });
 
@@ -495,10 +495,10 @@ describe("AgreementComposer · composing", () => {
   it("lands a part added at a seam directly after that seam's part", () => {
     renderComposer();
     addAPartAt(1);
-    fireEvent.click(screen.getByRole("button", { name: "Ceiling" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fee ceiling" }));
     expect(railRows()).toEqual([
       expect.stringContaining("Services"),
-      expect.stringContaining("Ceiling"),
+      expect.stringContaining("Fee ceiling"),
       expect.stringContaining("Exclusions"),
       expect.stringContaining("Terms"),
     ]);
@@ -507,8 +507,8 @@ describe("AgreementComposer · composing", () => {
   it("lands a part added at the seam above the paper first", () => {
     renderComposer();
     addAPartAt(0);
-    fireEvent.click(screen.getByRole("button", { name: "Ceiling" }));
-    expect(railRows()[0]).toContain("Ceiling");
+    fireEvent.click(screen.getByRole("button", { name: "Fee ceiling" }));
+    expect(railRows()[0]).toContain("Fee ceiling");
     expect(railRows()[1]).toContain("Services");
   });
 
@@ -517,14 +517,14 @@ describe("AgreementComposer · composing", () => {
   it("saves the seam landing as the part's position", async () => {
     renderComposer();
     addAPartAt(2);
-    fireEvent.click(screen.getByRole("button", { name: "Ceiling" }));
-    write("Ceiling");
+    fireEvent.click(screen.getByRole("button", { name: "Fee ceiling" }));
+    write("Fee ceiling");
     await waitFor(() => expect(mockSaveParts).toHaveBeenCalled());
     const sent = mockSaveParts.mock.calls.at(-1)![0] as AgreementPart[];
     expect(sent.map((entry) => [entry.position, entry.title])).toEqual([
       [1, "Services"],
       [2, "Exclusions"],
-      [3, "Ceiling"],
+      [3, "Fee ceiling"],
       [4, "Terms"],
     ]);
   });
@@ -1248,7 +1248,7 @@ describe("AgreementComposer · one part per money variant (R18/R29)", () => {
 
     addAPart();
 
-    expect(screen.queryByRole("button", { name: "Ceiling" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Fee ceiling" })).toBeNull();
     // The menu is open and offering the parts that are still addable, so the
     // absence above is a filter and not an unopened menu.
     expect(screen.getByRole("button", { name: "Clause" })).toBeInTheDocument();

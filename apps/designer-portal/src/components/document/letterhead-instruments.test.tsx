@@ -167,7 +167,7 @@ describe('the letterhead ledger — what it prints at ≥1180', () => {
       'Message',
       'Preview',
       'Sharing',
-      'Call sheet · 2',
+      'Project directory · 2',
     ]);
   });
 
@@ -189,7 +189,7 @@ describe('the letterhead ledger — what it prints below 1180', () => {
       'Message',
       'Preview',
       'Sharing',
-      'Call sheet · 2',
+      'Project directory · 2',
     ]);
   });
 
@@ -269,7 +269,7 @@ describe('the letterhead ledger under one-voice — D1 names (FR2 F2-9)', () => 
       'Message Nora',
       "Preview the client's copy",
       'Sharing',
-      'Call sheet · 2',
+      'Project directory · 2',
     ]);
     for (const bare of ['Message', 'Preview', 'Punch', 'Share…']) {
       expect(printedLabels()).not.toContain(bare);
@@ -533,12 +533,12 @@ describe('the phone dock under one-voice (D7, §3 2-6)', () => {
     renderDock({ clientProfileId: 'client-1' });
     expect(more().map((act) => act.label)).toEqual([
       'Message Chen',
-      "Preview the client's copy",
-      'Sharing',
-      'Call sheet',
-      'Set dates',
-      'Set a budget band',
-      'Keys',
+      "Preview client edition",
+      'Client access',
+      'Project directory',
+      'Set project dates',
+      'Set budget range',
+      'Keyboard shortcuts',
     ]);
     const byKey = (key: string) => more().find((act) => act.actionKey === key)!;
     expect(byKey('message-family').held).toBeUndefined();
@@ -585,7 +585,7 @@ describe('the phone dock under one-voice (D7, §3 2-6)', () => {
  * US-19 FR2 F2-17 / 500-4 (`one-voice`) — every proposal paper (a Direction
  * paper among them) carries More's paper-wide rows: `Standing · N` when the
  * band moved its door to the dock, `Message {first}` (its held form when no
- * client can be messaged), `Preview the client's copy`, `Keys`. The four
+ * client can be messaged), `Preview client edition`, `Keys`. The four
  * project rows stay on project papers.
  */
 describe('a proposal paper’s More under one-voice (FR2 F2-17, 500-4)', () => {
@@ -640,8 +640,8 @@ describe('a proposal paper’s More under one-voice (FR2 F2-17, 500-4)', () => {
     renderProposal({ clientProfileId: 'client-1' });
     expect(more().map((act) => act.label)).toEqual([
       'Message Elena',
-      "Preview the client's copy",
-      'Keys',
+      "Preview client edition",
+      'Keyboard shortcuts',
     ]);
     expect(more().find((act) => act.actionKey === 'message-family')?.held).toBeUndefined();
   });
@@ -651,8 +651,8 @@ describe('a proposal paper’s More under one-voice (FR2 F2-17, 500-4)', () => {
     expect(more().map((act) => act.label)).toEqual([
       'All open · 3',
       'Message Elena',
-      "Preview the client's copy",
-      'Keys',
+      "Preview client edition",
+      'Keyboard shortcuts',
     ]);
   });
 
@@ -662,8 +662,8 @@ describe('a proposal paper’s More under one-voice (FR2 F2-17, 500-4)', () => {
     renderProposal({ clientProfileId: null, designerClientId: 'dc-1' });
     expect(more().map((act) => act.label)).toEqual([
       'Message Elena',
-      "Preview the client's copy",
-      'Keys',
+      "Preview client edition",
+      'Keyboard shortcuts',
     ]);
     const message = more().find((act) => act.actionKey === 'message-family')!;
     expect(message.held).toMatchObject({
@@ -813,7 +813,7 @@ describe('a relationship paper’s letterhead under one-voice (FR3 F3-25, F3-6)'
 
   it('no login: held Message {first} with its real reason, Keys, and no Preview', () => {
     renderRelationship(true);
-    expect(more().map((act) => act.label)).toEqual(['All open · 2', 'Message Elena', 'Keys']);
+    expect(more().map((act) => act.label)).toEqual(['All open · 2', 'Message Elena', 'Keyboard shortcuts']);
     expect(more().find((act) => act.actionKey === 'message-family')?.held).toMatchObject({
       reason: 'Elena has no login yet.',
       repair: { label: 'Invite Elena' },
@@ -874,7 +874,7 @@ describe('a Brief paper’s letterhead under one-voice (FR4 524-d)', () => {
   it('Keys and Standing only: no Message, no Preview — even with an in-app profile', () => {
     mockOneVoice = true;
     renderBrief('profile-1');
-    expect(more()).toEqual(['All open · 3', 'Keys']);
+    expect(more()).toEqual(['All open · 3', 'Keyboard shortcuts']);
     expect(screen.queryByRole('button', { name: /Message/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Preview/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Document letterhead actions' })).toBeNull();
@@ -927,7 +927,7 @@ describe('Follow up on a declined proposal opens the composer (fix-now 14)', () 
     expect(screen.getByPlaceholderText('A quick note to Nora…')).toBeInTheDocument();
     expect(screen.getByText('Nora declined the proposal: “The budget is too high for this year.”')).toBeInTheDocument();
     expect(screen.getByText('Follow up')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send client message' })).toBeDisabled();
   });
 
   it('with no reason given, still says she declined', () => {

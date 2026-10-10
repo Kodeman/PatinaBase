@@ -47,7 +47,7 @@ async function openDocument(page: import('@playwright/test').Page) {
   // The record is the ceremony's own mount; waiting on it rather than on
   // networkidle keeps the spec off the race the projection loses.
   await expect(
-    page.getByRole('heading', { name: 'Approval record' }),
+    page.getByRole('heading', { name: 'Approval register' }),
   ).toBeVisible({ timeout: 30_000 });
 }
 

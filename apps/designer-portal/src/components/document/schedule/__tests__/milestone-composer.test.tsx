@@ -76,11 +76,11 @@ describe('MilestoneComposer — timing presets (D3)', () => {
     nameTheMilestone();
     fireEvent.click(screen.getByRole('button', { name: 'Before end' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'More days before end' }));
-    fireEvent.click(screen.getByRole('button', { name: 'More days before end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Increase days before phase end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Increase days before phase end' }));
     expect(screen.getByText('5 days before end')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Fewer days before end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reduce days before phase end' }));
     expect(screen.getByText('4 days before end')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add milestone' }));
@@ -95,13 +95,13 @@ describe('MilestoneComposer — timing presets (D3)', () => {
     renderComposer();
     fireEvent.click(screen.getByRole('button', { name: 'Before end' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Fewer days before end' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Fewer days before end' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Fewer days before end' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Fewer days before end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reduce days before phase end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reduce days before phase end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reduce days before phase end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reduce days before phase end' }));
 
     expect(screen.getByText('1 day before end')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Fewer days before end' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reduce days before phase end' })).toBeDisabled();
   });
 
   it('"Pick a date" opens the Folio and a committed day submits as anchorDate', () => {
@@ -137,8 +137,8 @@ describe('MilestoneComposer — timing presets (D3)', () => {
     nameTheMilestone();
 
     fireEvent.click(screen.getByRole('button', { name: 'Before end' }));
-    fireEvent.click(screen.getByRole('button', { name: 'More days before end' }));
-    fireEvent.click(screen.getByRole('button', { name: 'More days before end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Increase days before phase end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Increase days before phase end' }));
     expect(screen.getByText('5 days before end')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'At phase end' }));

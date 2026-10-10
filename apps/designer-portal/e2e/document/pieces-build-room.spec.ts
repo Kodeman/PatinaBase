@@ -107,7 +107,7 @@ function piecesUrl(lens: string, room?: string): string {
 async function openSheet(page: Page, lens: string, room?: string): Promise<void> {
   await page.goto(piecesUrl(lens, room), { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('build-room')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('group', { name: 'Lens' }).getByRole('button', { pressed: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Schedule view' }).getByRole('button', { pressed: true })).toBeVisible();
 }
 
 /** The return path lands on the overview at the room's row, marked as the one you came from. */
@@ -143,7 +143,7 @@ for (const vp of VIEWPORTS) {
       const names = ['Sconces, pair', 'Drapery panels, linen', 'Rug, 9 × 12', 'Side table'];
       await timed(info, `S1 @${vp.name}`, async () => {
         await openSheet(page, 'rough', ROOM.living);
-        await expect(page.getByText('Rough in · Name it, count it, place it.')).toBeVisible();
+        await expect(page.getByText('Create preliminary selections by item, quantity and room.')).toBeVisible();
 
         // The rail (1440) or the room picker (390) counts placed lines in each room.
         if (vp.phone) {
@@ -324,7 +324,7 @@ for (const vp of VIEWPORTS) {
         await menu.getByRole('menuitem', { name: 'Make it an allowance' }).click();
         const form = page.getByRole('form', { name: 'Make Bed, king, upholstered an allowance' });
         await form.getByRole('textbox').first().fill('4500');
-        await form.getByRole('button', { name: 'Make it an allowance' }).click();
+        await form.getByRole('button', { name: 'Set as allowance' }).click();
         await expect(lineRow(page, bed).first()).toContainText('Up to $4,500');
         await expect
           .poll(() => psqlScalar(`SELECT item_type || ':' || budget_max_cents FROM public.project_ffe_items WHERE id = '${bed}'`))
@@ -338,7 +338,7 @@ for (const vp of VIEWPORTS) {
         ).toBe('every PO line must be an active selected line for the PO project and vendor');
 
         // Return path: Esc, with nothing holding it.
-        await page.getByTestId('build-room').getByRole('heading', { name: 'Build the pieces' }).click({ force: true });
+        await page.getByTestId('build-room').getByRole('heading', { name: 'FF&E schedule' }).click({ force: true });
         await page.keyboard.press('Escape');
         await expectBackAtRoom(page, ROOM.bedroom);
       });
@@ -421,17 +421,17 @@ for (const vp of VIEWPORTS) {
         await page.goto(`/doc/${JOB}#pieces-room-${ROOM.living}`, { waitUntil: 'domcontentloaded' });
         const row = page.locator(`[data-pieces-room="${ROOM.living}"]`);
         await expect(row).toBeVisible({ timeout: 30_000 });
-        await row.getByRole('link', { name: /work this room/i }).click();
+        await row.getByRole('link', { name: /edit room selections/i }).click();
         await expect(page).toHaveURL(new RegExp(`/doc/${JOB}/pieces\\?lens=rough&room=${ROOM.living}`));
 
         // The head names the sheet and the lens; the reading says what the lens does.
-        const lenses = page.getByRole('group', { name: 'Lens' });
-        await expect(page.getByRole('heading', { name: 'Build the pieces' })).toBeAttached();
-        await expect(lenses.getByRole('button', { name: 'Rough in' })).toHaveAttribute('aria-pressed', 'true');
-        await lenses.getByRole('button', { name: 'Release' }).click();
+        const lenses = page.getByRole('group', { name: 'Schedule view' });
+        await expect(page.getByRole('heading', { name: 'FF&E schedule' })).toBeAttached();
+        await expect(lenses.getByRole('button', { name: 'Preliminary selections' })).toHaveAttribute('aria-pressed', 'true');
+        await lenses.getByRole('button', { name: 'Purchasing authorization' }).click();
         await expect(page).toHaveURL(/lens=release/);
-        await expect(lenses.getByRole('button', { name: 'Release' })).toHaveAttribute('aria-pressed', 'true');
-        await expect(page.getByText('Release · Check what the client will see, then release rooms for authorization.')).toBeVisible();
+        await expect(lenses.getByRole('button', { name: 'Purchasing authorization' })).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.getByText('Review the client edition, then issue rooms for purchasing authorization.')).toBeVisible();
 
         // Back walks the lens change, then lands on the overview at the room.
         await page.goBack();
@@ -440,7 +440,7 @@ for (const vp of VIEWPORTS) {
         await expectBackAtRoom(page, ROOM.living);
 
         // In again, then Esc.
-        await row.getByRole('link', { name: /work this room/i }).click();
+        await row.getByRole('link', { name: /edit room selections/i }).click();
         await expect(page.getByTestId('build-room')).toBeVisible();
         if (vp.phone) {
           // The phone head: the room picker carries the place.
@@ -448,7 +448,7 @@ for (const vp of VIEWPORTS) {
           await page.getByRole('navigation', { name: 'Choose a room' }).getByRole('link', { name: /^Kitchen/ }).click();
           await expect(page).toHaveURL(new RegExp(`room=${ROOM.kitchen}`));
         }
-        await page.getByRole('heading', { name: 'Build the pieces' }).click({ force: true });
+        await page.getByRole('heading', { name: 'FF&E schedule' }).click({ force: true });
         await page.keyboard.press('Escape');
         await expectBackAtRoom(page, vp.phone ? ROOM.kitchen : ROOM.living);
 
@@ -459,7 +459,7 @@ for (const vp of VIEWPORTS) {
         // ready and selected, so the ceremony names the missing client first.
         await openSheet(page, 'release', ROOM.bedroom);
         await expect(page.getByTestId('release-lens')).toContainText('Link a client to this job before releasing.');
-        await page.getByRole('heading', { name: 'Build the pieces' }).click({ force: true });
+        await page.getByRole('heading', { name: 'FF&E schedule' }).click({ force: true });
         await page.keyboard.press('Escape');
         await expectBackAtRoom(page, ROOM.bedroom);
       });
@@ -503,7 +503,7 @@ for (const vp of VIEWPORTS) {
 
         if (vp.phone) {
           // The phone's lens strip wraps; nothing runs off the 390 page.
-          const lensButtons = page.getByRole('group', { name: 'Lens' }).getByRole('button');
+          const lensButtons = page.getByRole('group', { name: 'Schedule view' }).getByRole('button');
           await expect(lensButtons).toHaveCount(5);
           for (const button of await lensButtons.all()) {
             const box = await button.boundingBox();
@@ -586,16 +586,16 @@ for (const vp of VIEWPORTS) {
       await openSheet(page, 'rough', ROOM.sunroom);
       await expect(roomHeading(page, ROOM.sunroom)).toBeFocused({ timeout: 15_000 });
       if (!vp.phone) {
-        await page.getByRole('group', { name: 'Lens' }).getByRole('button', { name: 'Price' }).click();
+        await page.getByRole('group', { name: 'Schedule view' }).getByRole('button', { name: 'Pricing' }).click();
         await expect(page).toHaveURL(/lens=price/);
         await expect(roomHeading(page, ROOM.sunroom)).toBeFocused({ timeout: 15_000 });
       }
 
       await openSheet(page, 'spec');
-      await expect(page.getByRole('heading', { name: 'Build the pieces' })).toBeFocused();
-      await page.getByRole('group', { name: 'Lens' }).getByRole('button', { name: 'Rough in' }).click();
+      await expect(page.getByRole('heading', { name: 'FF&E schedule' })).toBeFocused();
+      await page.getByRole('group', { name: 'Schedule view' }).getByRole('button', { name: 'Preliminary selections' }).click();
       await expect(page).toHaveURL(/lens=rough/);
-      await expect(page.getByRole('heading', { name: 'Build the pieces' })).toBeFocused();
+      await expect(page.getByRole('heading', { name: 'FF&E schedule' })).toBeFocused();
 
       await openSheet(page, 'rough', ROOM.sunroom);
       await expect(roomHeading(page, ROOM.sunroom)).toBeFocused({ timeout: 15_000 });
@@ -630,7 +630,7 @@ for (const vp of VIEWPORTS) {
       }
 
       await openSheet(page, 'rough');
-      const title = page.getByRole('heading', { name: 'Build the pieces' });
+      const title = page.getByRole('heading', { name: 'FF&E schedule' });
       await expect(title).toBeFocused();
       await page.keyboard.press('ControlOrMeta+ArrowDown');
       await expect.poll(async () => (await focused()).tag).toMatch(/^(INPUT|SELECT|TEXTAREA)$/);
@@ -688,7 +688,7 @@ test.describe('The Build room · focus after each act @1440', () => {
     await menu.getByRole('menuitem', { name: 'Make it an allowance' }).click();
     const form = page.getByRole('form', { name: 'Make Bed, king, upholstered an allowance' });
     await form.getByRole('textbox').first().fill('4500');
-    await form.getByRole('button', { name: 'Make it an allowance' }).click();
+    await form.getByRole('button', { name: 'Set as allowance' }).click();
     await expect(lineRow(page, bed).first().locator('[data-allowance-cell]')).toBeFocused();
     await expect(lineRow(page, bed).first().locator('[data-allowance-cell]')).toContainText('Up to $4,500');
 
@@ -696,7 +696,7 @@ test.describe('The Build room · focus after each act @1440', () => {
     await labor.getByRole('menuitem', { name: 'Add labor' }).click();
     const laborForm = page.getByRole('form', { name: 'Add labor to Bed, king, upholstered' });
     await laborForm.getByRole('textbox', { name: 'Labor' }).fill('Deliver and set up');
-    await laborForm.getByRole('button', { name: 'Add the labor line' }).click();
+    await laborForm.getByRole('button', { name: 'Add labor line' }).click();
     await expect(page.locator('[data-line-name]:focus')).toHaveText('Deliver and set up', { timeout: 15_000 });
   });
 
@@ -844,7 +844,7 @@ test.describe('The Build room · row-menu taps', () => {
     const form = page.getByRole('form', { name: 'Make Bed, king, upholstered an allowance' });
     await expect(form).toBeVisible();
     await form.getByRole('textbox').first().fill('4500');
-    await form.getByRole('button', { name: 'Make it an allowance' }).tap();
+    await form.getByRole('button', { name: 'Set as allowance' }).tap();
     await expect
       .poll(() => psqlScalar(`SELECT item_type || ':' || budget_max_cents FROM public.project_ffe_items WHERE id = '${bed}'`))
       .toBe('allowance:450000');

@@ -3011,7 +3011,7 @@ describe('DocumentPage guide activation', () => {
     const record = document.querySelector<HTMLElement>(
       '[data-index-region="record"]',
     )!;
-    expect(within(record).getByText('The record')).toBeVisible();
+    expect(within(record).getByText('Project record')).toBeVisible();
     expect(within(record).getByText(/^\d+ complete$/)).toBeVisible();
   });
 
@@ -3050,7 +3050,7 @@ describe('DocumentPage guide activation', () => {
     };
 
     const openTheRecord = () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Open the record' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Open project record' }));
     };
 
     beforeEach(() => {

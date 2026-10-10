@@ -101,7 +101,7 @@ async function openThePicker(page: import("@playwright/test").Page) {
   const instrument = page.locator('[data-action-key="open-call-sheet"]');
   await expect(instrument).toBeVisible({ timeout: 30_000 });
   await instrument.click();
-  await expect(page.getByText(`Call sheet · ${projectName}`)).toBeVisible({
+  await expect(page.getByText(`Project directory · ${projectName}`)).toBeVisible({
     timeout: 30_000,
   });
   await page.locator('[data-action-key="open-rolodex-picker"]').click();
@@ -129,7 +129,7 @@ test("task 5 — search the prior job, tick four, one confirm", async ({
   await expect(travel).toContainText("show to client");
 
   // SPEC §5.7 #3 — the search field takes the PRIOR JOB, not a person.
-  await page.getByLabel("Search the rolodex").fill("Lindqvist");
+  await page.getByLabel("Search contact directory").fill("Lindqvist");
   const rows = page.locator("[data-pick-mark]");
   await expect
     .poll(async () => rows.count(), { timeout: 15_000 })
@@ -265,7 +265,7 @@ test("Put back clears the pick and writes nothing", async ({
   authenticatedPage: page,
 }) => {
   await openThePicker(page);
-  await page.getByLabel("Search the rolodex").fill("Lindqvist");
+  await page.getByLabel("Search contact directory").fill("Lindqvist");
   /**
    * ERIN SATO, NOT DANA KOWALSKI — THE ACT ROW COUNTS *FRESH* PICKS.
    *

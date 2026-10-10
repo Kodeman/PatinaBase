@@ -391,8 +391,8 @@ test.describe("Studio buying Phase 0 — the non-owner member walk", () => {
     await shot(page, testInfo, "05-shipped");
 
     // The Orders book opened from the project wears the project lens.
-    await page.getByRole("button", { name: "Brief a vendor" }).click();
-    const pages = page.getByRole("navigation", { name: "Orders book pages" });
+    await page.getByRole("button", { name: "Vendor correspondence" }).click();
+    const pages = page.getByRole("navigation", { name: "Order register views" });
     await expect(pages).toBeVisible({ timeout: 30_000 });
     await pages.getByRole("button", { name: "Receiving", exact: true }).click();
     await expect(

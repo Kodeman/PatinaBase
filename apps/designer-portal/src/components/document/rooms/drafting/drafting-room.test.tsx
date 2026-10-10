@@ -239,7 +239,7 @@ describe('DraftingRoom quiet deep work', () => {
 
     const rooms = screen.getByRole('button', { name: /Rooms/i });
     const palette = screen.getByRole('button', { name: /Palette/i });
-    const payments = screen.getByRole('button', { name: /Payments/i });
+    const payments = screen.getByRole('button', { name: /Payment schedule/i });
 
     await waitFor(() =>
       expect(palette).toHaveAttribute('aria-expanded', 'true'),
@@ -266,17 +266,17 @@ describe('DraftingRoom quiet deep work', () => {
     render(<DraftingRoom proposalId="proposal-1" />);
 
     const preview = screen.getByRole('button', {
-      name: 'Preview client copy',
+      name: 'Preview client edition',
     });
     expect(preview).toHaveClass('min-[1440px]:hidden');
     expect(
-      screen.queryByRole('dialog', { name: 'Client copy preview' }),
+      screen.queryByRole('dialog', { name: 'Client edition preview' }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(preview);
 
     const dialog = screen.getByRole('dialog', {
-      name: 'Client copy preview',
+      name: 'Client edition preview',
     });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(

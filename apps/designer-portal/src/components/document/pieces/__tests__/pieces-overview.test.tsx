@@ -225,18 +225,18 @@ describe('<PiecesOverview>', () => {
     expect(within(living).getByRole('button', { name: 'Living Room' })).toBeInTheDocument();
     expect(within(living).getByText('6 lines · 5 placeholders')).toBeInTheDocument();
     expect(within(living).getByText('~$23,564')).toBeInTheDocument();
-    expect(within(living).getByRole('button', { name: 'Add a line' })).toHaveAttribute(
+    expect(within(living).getByRole('button', { name: 'Add room selection' })).toHaveAttribute(
       'data-action-key',
       'open-add-schedule-line',
     );
-    const work = within(living).getByRole('link', { name: /Work this room/ });
+    const work = within(living).getByRole('link', { name: /Edit room selections/ });
     expect(work).toHaveAttribute('href', '/doc/doc-1/pieces?lens=rough&room=living');
     expect(work).toHaveTextContent('→');
   });
 
   it('hands ADD A LINE its room', () => {
     const { onAddLine } = renderOverview();
-    fireEvent.click(within(row('dining')).getByRole('button', { name: 'Add a line' }));
+    fireEvent.click(within(row('dining')).getByRole('button', { name: 'Add room selection' }));
     expect(onAddLine).toHaveBeenCalledWith(expect.objectContaining({ key: 'dining', roomId: 'dining' }));
   });
 
@@ -309,7 +309,7 @@ describe('<PiecesOverview>', () => {
     const line = row('living').firstElementChild as HTMLElement;
     expect(line).toHaveClass('flex-col', 'sm:flex-row', 'min-h-14');
     // At 390 the door stands above ADD A LINE; from sm they read in order.
-    const acts = within(row('living')).getByRole('link', { name: /Work this room/ })
+    const acts = within(row('living')).getByRole('link', { name: /Edit room selections/ })
       .parentElement as HTMLElement;
     expect(acts).toHaveClass('flex-col-reverse', 'sm:flex-row');
   });

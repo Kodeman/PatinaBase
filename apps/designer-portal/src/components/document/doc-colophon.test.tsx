@@ -52,7 +52,7 @@ describe('DocColophon team doorway', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add to the team' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add project contact' }));
 
     expect(opened).toHaveBeenCalledTimes(1);
     expect((opened.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({ mode: 'picker' });

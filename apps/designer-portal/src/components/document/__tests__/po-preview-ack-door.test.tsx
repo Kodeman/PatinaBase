@@ -94,7 +94,7 @@ describe('PoPreview · resend paper — one acknowledgment door (US-19 F7-8)', (
     await screen.findByTitle('Purchase order PDF');
     expect(screen.queryByText(/Vendor confirmed/)).not.toBeInTheDocument();
     expect(screen.getAllByTestId('ack-check-door')).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: 'Log what they confirmed' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Log order acknowledgment' })).toHaveLength(1);
     expect(screen.getByTestId('ack-check-door')).toHaveTextContent('awaiting acknowledgment');
   });
 

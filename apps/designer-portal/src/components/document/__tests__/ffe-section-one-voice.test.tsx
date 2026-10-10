@@ -208,7 +208,7 @@ describe('The project spread’s Pieces head (US-21 Q14)', () => {
     expect(document.getElementById('project-ffe')).toHaveAttribute('data-density', 'quiet');
     expect(headActs()).toEqual(['work-the-pieces', 'record-a-change-pieces-head']);
     const lead = document.querySelector('[data-action-key="work-the-pieces"]');
-    expect(lead).toHaveTextContent('Build the item list');
+    expect(lead).toHaveTextContent('Edit FF&E schedule');
     expect(lead).toHaveAttribute('data-action-variant', 'inked');
     expect(lead).toHaveAttribute('href', '/doc/project-1/pieces?lens=rough');
     expect(

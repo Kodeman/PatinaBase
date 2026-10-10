@@ -416,13 +416,13 @@ export function LineCard({
           </fieldset>
         ) : (
           <div className="sm:col-span-2">
-            <span className={LABEL_CLASS}>Maker</span>
+            <span className={LABEL_CLASS}>Maker or manufacturer</span>
             {choosingMaker || (!maker && !newMaker) ? (
               <MakerSearch disabled={saving} autoFocus={choosingMaker} onChoose={chooseMaker} onCancel={() => setChoosingMaker(false)} />
             ) : maker ? (
               <p className="flex min-h-11 items-center gap-3 text-[13px] text-[var(--color-charcoal)]">
                 <span data-testid="line-card-maker">{maker.name}</span>
-                <button type="button" onClick={() => setChoosingMaker(true)} className="text-[11px] text-[var(--color-clay-ink)] underline">Change maker</button>
+                <button type="button" onClick={() => setChoosingMaker(true)} className="text-[11px] text-[var(--color-clay-ink)] underline">Change manufacturer</button>
               </p>
             ) : null}
             {newMaker && !choosingMaker && (
@@ -430,7 +430,7 @@ export function LineCard({
                 <legend className={LABEL_CLASS}>New maker</legend>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <label><span className={LABEL_CLASS}>Name</span><input value={newMaker.name} onChange={(e) => setNewMaker({ ...newMaker, name: e.target.value })} className={FIELD_CLASS} /></label>
-                  <label><span className={LABEL_CLASS}>Orders email</span><input type="email" value={newMaker.ordersEmail} onChange={(e) => setNewMaker({ ...newMaker, ordersEmail: e.target.value })} className={FIELD_CLASS} /></label>
+                  <label><span className={LABEL_CLASS}>Order contact email</span><input type="email" value={newMaker.ordersEmail} onChange={(e) => setNewMaker({ ...newMaker, ordersEmail: e.target.value })} className={FIELD_CLASS} /></label>
                   <label><span className={LABEL_CLASS}>Website</span><input value={newMaker.website} onChange={(e) => setNewMaker({ ...newMaker, website: e.target.value })} placeholder="hale-upholstery.com" className={FIELD_CLASS} /></label>
                   <label><span className={LABEL_CLASS}>Specialty</span><input value={newMaker.specialty} onChange={(e) => setNewMaker({ ...newMaker, specialty: e.target.value })} className={FIELD_CLASS} /></label>
                 </div>
@@ -440,7 +440,7 @@ export function LineCard({
           </div>
         )}
 
-        <label><span className={LABEL_CLASS}>SKU</span><input value={sku} onChange={(e) => setSku(e.target.value)} className={FIELD_CLASS} /></label>
+        <label><span className={LABEL_CLASS}>SKU / product code</span><input value={sku} onChange={(e) => setSku(e.target.value)} className={FIELD_CLASS} /></label>
         <label><span className={LABEL_CLASS}>Finish</span><input value={finish} onChange={(e) => setFinish(e.target.value)} className={FIELD_CLASS} /></label>
         <div className="sm:col-span-2">
           <span className={LABEL_CLASS}>Dimensions</span>
@@ -448,12 +448,12 @@ export function LineCard({
         </div>
         <label><span className={LABEL_CLASS}>Quantity</span><input type="number" min={1} value={quantity} onChange={(e) => setQuantity(e.target.value)} className={FIELD_CLASS} /></label>
         <label>
-          <span className={LABEL_CLASS}>Trade cost</span>
+          <span className={LABEL_CLASS}>Trade cost per item</span>
           <input inputMode="decimal" value={tradeInput} onChange={(e) => setTradeInput(e.target.value)} placeholder="each" className={FIELD_CLASS} />
         </label>
         {canSeeMargin && (
           <div data-testid="line-card-client-price">
-            <span className={LABEL_CLASS}>Client price</span>
+            <span className={LABEL_CLASS}>Client price per item</span>
             {clientCents != null ? (
               <p className="min-h-11 pt-2 text-[13px] text-[var(--color-charcoal)]">
                 {fmtUsd(clientCents)} each <span className={META_CLASS}>· read from the source</span>
@@ -475,7 +475,7 @@ export function LineCard({
       )}
 
       <fieldset className="mt-4">
-        <legend className={LABEL_CLASS}>Kind</legend>
+        <legend className={LABEL_CLASS}>Item category</legend>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[var(--color-charcoal)]">
           {(['catalog', 'custom', 'find', 'store'] as const).map((value) => (
             <label key={value} className="flex min-h-11 items-center gap-1.5">
@@ -492,7 +492,7 @@ export function LineCard({
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <fieldset className="sm:col-span-2">
-          <legend className={LABEL_CLASS}>Place in</legend>
+          <legend className={LABEL_CLASS}>Room assignment</legend>
           <div className="grid grid-cols-3 gap-1.5">
             {(['unassigned', 'throughout', 'room'] as const).map((scope) => (
               <button
@@ -511,13 +511,13 @@ export function LineCard({
           <label>
             <span className={LABEL_CLASS}>Room</span>
             <select value={roomId} onChange={(event) => { setRoomId(event.target.value); setBoardId(''); }} className={FIELD_CLASS}>
-              <option value="">Choose room</option>
+              <option value="">Choose a room</option>
               {rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
             </select>
           </label>
         )}
         <label>
-          <span className={LABEL_CLASS}>Design status</span>
+          <span className={LABEL_CLASS}>Selection status</span>
           <select value={disposition} onChange={(event) => setDisposition(event.target.value as Exclude<FfeDesignDisposition, 'superseded'>)} className={FIELD_CLASS}>
             <option value="candidate">Candidate</option>
             <option value="selected">Selected</option>
@@ -526,7 +526,7 @@ export function LineCard({
           </select>
         </label>
         <label>
-          <span className={LABEL_CLASS}>Optional board placement</span>
+          <span className={LABEL_CLASS}>Design board (optional)</span>
           <select value={boardId} onChange={(event) => setBoardId(event.target.value)} className={FIELD_CLASS}>
             <option value="">No board</option>
             {compatibleBoards.map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}
@@ -544,13 +544,13 @@ export function LineCard({
             <legend className={LABEL_CLASS}>If this product is already in the project</legend>
             <div className="grid grid-cols-3 gap-1.5">
               <button type="button" aria-pressed={duplicateMode === 'reuse'} onClick={() => setDuplicateMode('reuse')} className={`${FIELD_CLASS} ${duplicateMode === 'reuse' ? 'border-[var(--color-clay)]' : ''}`}>Reuse selection</button>
-              <button type="button" aria-pressed={duplicateMode === 'create'} onClick={() => setDuplicateMode('create')} className={`${FIELD_CLASS} ${duplicateMode === 'create' ? 'border-[var(--color-clay)]' : ''}`}>Separate need</button>
-              <button type="button" aria-pressed={duplicateMode === 'hold'} onClick={() => { setDuplicateMode('hold'); setPlaceholderSelectionId(''); }} className={`${FIELD_CLASS} ${duplicateMode === 'hold' ? 'border-[var(--color-clay)]' : ''}`}>Hold</button>
+              <button type="button" aria-pressed={duplicateMode === 'create'} onClick={() => setDuplicateMode('create')} className={`${FIELD_CLASS} ${duplicateMode === 'create' ? 'border-[var(--color-clay)]' : ''}`}>Create separate selection</button>
+              <button type="button" aria-pressed={duplicateMode === 'hold'} onClick={() => { setDuplicateMode('hold'); setPlaceholderSelectionId(''); }} className={`${FIELD_CLASS} ${duplicateMode === 'hold' ? 'border-[var(--color-clay)]' : ''}`}>Hold for review</button>
             </div>
           </fieldset>
           {placeholders.length > 0 && duplicateMode !== 'hold' && (
             <label className="mt-3 block">
-              <span className={LABEL_CLASS}>Optional placeholder to fill</span>
+              <span className={LABEL_CLASS}>Fill preliminary selection (optional)</span>
               <select value={placeholderSelectionId} onChange={(event) => setPlaceholderSelectionId(event.target.value)} className={FIELD_CLASS}>
                 <option value="">Create or reuse normally</option>
                 {placeholders.map((placeholder) => <option key={placeholder.id} value={placeholder.id}>{placeholder.name}</option>)}

@@ -58,7 +58,7 @@ describe('DraftReview', () => {
     render(<DraftReview draft={DRAFT} />);
     expect(screen.getByTestId('draft-recipient')).toHaveTextContent('To orders@hale.test');
     expect(screen.getByLabelText('Subject')).toHaveValue(DRAFT.subject);
-    expect(screen.getByLabelText('Letter')).toHaveValue(DRAFT.body);
+    expect(screen.getByLabelText('Correspondence')).toHaveValue(DRAFT.body);
     expect(screen.getByText('Reply to the maker')).toBeInTheDocument();
   });
 
@@ -70,12 +70,12 @@ describe('DraftReview', () => {
     expect(
       screen.getByRole('region', { name: 'Follow-up to the maker, drafted' }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('Letter')).toHaveValue(DRAFT.body);
+    expect(screen.getByLabelText('Correspondence')).toHaveValue(DRAFT.body);
   });
 
   it('sends the stored draft by id without an update when nothing was edited', async () => {
     render(<DraftReview draft={DRAFT} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send correspondence' }));
     await waitFor(() => expect(mockSend).toHaveBeenCalledWith('draft-1'));
     expect(mockUpdate).not.toHaveBeenCalled();
     await screen.findByText('Sent to orders@hale.test.');
@@ -84,8 +84,8 @@ describe('DraftReview', () => {
   it('saves an edit, then sends', async () => {
     render(<DraftReview draft={DRAFT} />);
     fireEvent.change(screen.getByLabelText('Subject'), { target: { value: '  PO 1042: please confirm  ' } });
-    fireEvent.change(screen.getByLabelText('Letter'), { target: { value: 'Please confirm 07 Smoke.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    fireEvent.change(screen.getByLabelText('Correspondence'), { target: { value: 'Please confirm 07 Smoke.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send correspondence' }));
     await waitFor(() => expect(mockSend).toHaveBeenCalledWith('draft-1'));
     expect(mockUpdate).toHaveBeenCalledWith({
       draftId: 'draft-1',
@@ -97,15 +97,15 @@ describe('DraftReview', () => {
   it('does not send when the edit fails to save, and says why', async () => {
     mockUpdate.mockRejectedValueOnce(new Error('subject is 1–300 characters'));
     render(<DraftReview draft={DRAFT} />);
-    fireEvent.change(screen.getByLabelText('Letter'), { target: { value: 'Edited.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    fireEvent.change(screen.getByLabelText('Correspondence'), { target: { value: 'Edited.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send correspondence' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('subject is 1–300 characters');
     expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('discards by id', async () => {
     render(<DraftReview draft={DRAFT} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard draft' }));
     await waitFor(() => expect(mockDiscard).toHaveBeenCalledWith('draft-1'));
     expect(mockSend).not.toHaveBeenCalled();
     await screen.findByText('Discarded.');
@@ -121,7 +121,7 @@ describe('DraftReview', () => {
       />,
     );
     expect(screen.getByTestId('draft-recipient')).toHaveTextContent('no address on file');
-    const send = screen.getByRole('button', { name: 'Send' });
+    const send = screen.getByRole('button', { name: 'Send correspondence' });
     // D3 held: offered, focusable, never native disabled.
     expect(send).toHaveAttribute('aria-disabled', 'true');
     expect(send).not.toBeDisabled();
@@ -130,30 +130,30 @@ describe('DraftReview', () => {
     expect(mockSend).not.toHaveBeenCalled();
     expect(mockUpdate).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add an address' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add recipient email' }));
     expect(onAddAddress).toHaveBeenCalledTimes(1);
   });
 
   it('with no addressee known, the held Send still says why, and offers no repair it cannot land', () => {
     render(<DraftReview draft={{ ...DRAFT, to_email: null }} />);
-    const send = screen.getByRole('button', { name: 'Send' });
+    const send = screen.getByRole('button', { name: 'Send correspondence' });
     expect(send).toHaveAttribute('aria-disabled', 'true');
     expect(send).toHaveAccessibleDescription('No address on file.');
-    expect(screen.queryByRole('button', { name: 'Add an address' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add recipient email' })).toBeNull();
   });
 
   it('with an address the Send is plain: no reason, no repair', () => {
     render(<DraftReview draft={DRAFT} addressee="Hale Upholstery" onAddAddress={jest.fn()} />);
-    const send = screen.getByRole('button', { name: 'Send' });
+    const send = screen.getByRole('button', { name: 'Send correspondence' });
     expect(send).not.toHaveAttribute('aria-disabled');
     expect(send).not.toHaveAttribute('aria-describedby');
-    expect(screen.queryByRole('button', { name: 'Add an address' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add recipient email' })).toBeNull();
   });
 
   it('is read-only once sent', () => {
     render(<DraftReview draft={{ ...DRAFT, status: 'sent' }} />);
     expect(screen.queryByLabelText('Subject')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send correspondence' })).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('Sent to orders@hale.test.');
   });
 
@@ -161,8 +161,8 @@ describe('DraftReview', () => {
     const claimedAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
     render(<DraftReview draft={{ ...DRAFT, status: 'sending', updated_at: claimedAt }} />);
     expect(screen.queryByLabelText('Subject')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Send again' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send correspondence' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Resend correspondence' })).toBeNull();
     const time = new Date(claimedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     expect(screen.getByRole('status')).toHaveTextContent(/^Sending since /);
     expect(screen.getByRole('status')).toHaveTextContent(`${time}.`);
@@ -172,18 +172,18 @@ describe('DraftReview', () => {
     const claimedAt = new Date(Date.now() - 11 * 60 * 1000).toISOString();
     render(<DraftReview draft={{ ...DRAFT, status: 'sending', updated_at: claimedAt }} />);
     expect(screen.getByRole('status')).toHaveTextContent(/^Sending since /);
-    fireEvent.click(screen.getByRole('button', { name: 'Send again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resend correspondence' }));
     await waitFor(() => expect(mockResend).toHaveBeenCalledWith('draft-1'));
     expect(mockSend).not.toHaveBeenCalled();
     await screen.findByText('Sent to orders@hale.test.');
-    expect(screen.queryByRole('button', { name: 'Send again' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Resend correspondence' })).toBeNull();
   });
 
   it('says why when sending again fails', async () => {
     mockResend.mockRejectedValueOnce(new Error('The provider refused the message.'));
     const claimedAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     render(<DraftReview draft={{ ...DRAFT, status: 'sending', updated_at: claimedAt }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Send again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resend correspondence' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('The provider refused the message.');
   });
 });

@@ -508,7 +508,7 @@ ON CONFLICT (id) DO NOTHING;`);
     const draftSend = page.waitForResponse((r) =>
       r.url().includes("/functions/v1/procurement-draft-send"),
     );
-    await reply.getByRole("button", { name: "Send", exact: true }).click();
+    await reply.getByRole("button", { name: "Send correspondence", exact: true }).click();
     const draftSent = await draftSend;
     const draftBody = await draftSent.json().catch(() => ({}));
     expect(
@@ -613,7 +613,7 @@ WHERE i.purchase_order_id = ${q(poId)}`),
     await openLine(page);
     const exceptions = page.getByTestId("line-exceptions");
     await exceptions
-      .getByRole("button", { name: "Track it" })
+      .getByRole("button", { name: "Track claim" })
       .click({ timeout: 30_000 });
     const damageRow = exceptions
       .getByTestId("exception-row")
@@ -637,13 +637,13 @@ FROM public.procurement_exceptions WHERE ffe_item_id = ${q(LINE_A_ID)} AND type 
     });
     await expect(wrong).toBeVisible();
     await wrong.getByRole("radio", { name: /^Backorder/ }).check();
-    await wrong.getByRole("button", { name: "Open the exception" }).click();
+    await wrong.getByRole("button", { name: "Open order exception" }).click();
     await expect(wrong).toBeHidden({ timeout: 30_000 });
     const backorderRow = exceptions
       .getByTestId("exception-row")
       .filter({ hasText: /^Backorder/ });
     await expect(backorderRow).toHaveCount(1, { timeout: 30_000 });
-    await backorderRow.getByRole("button", { name: "Choose a path" }).click();
+    await backorderRow.getByRole("button", { name: "Choose resolution" }).click();
     const pathSheet = page.getByTestId("exception-path-sheet");
     await expect(pathSheet).toBeVisible();
     // Choosing Substitute swaps the path radios for the substitution flow, so
@@ -676,7 +676,7 @@ WHERE e.ffe_item_id = ${q(LINE_A_ID)} AND e.type = 'backorder'`),
 
     // ── 7. The find, recorded as a purchase; its line is ordered. ──────────
     await openDocument(page);
-    await page.getByRole("button", { name: "Add a line" }).first().click();
+    await page.getByRole("button", { name: "Add room selection" }).first().click();
     await page.getByRole("button", { name: /^Bought it already/ }).click();
     const purchase = page.getByTestId("purchase-record-form");
     await expect(purchase).toBeVisible({ timeout: 30_000 });
@@ -761,7 +761,7 @@ WHERE c.purchase_order_id = ${q(poId)}`),
     });
     await expect(
       head.locator('[data-action-key="open-add-to-project"]'),
-    ).toContainText("Add to the job");
+    ).toContainText("Add project items");
     // Release is not asserted: with `delivery-procurement` on and a release
     // offered, it moves to the Delivery table head (`releaseInHead`).
     await expect(

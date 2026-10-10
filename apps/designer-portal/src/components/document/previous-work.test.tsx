@@ -24,17 +24,17 @@ describe('PreviousWork', () => {
 
   it('is closed by default and exposes an accessible disclosure', () => {
     render(<PreviousWork count={3}><div>Brief recap</div></PreviousWork>);
-    const button = screen.getByRole('button', { name: 'Open the record' });
+    const button = screen.getByRole('button', { name: 'Open project record' });
     expect(button).toHaveAttribute('aria-expanded', 'false');
     // An `aria-expanded` with nothing named is a state with no subject.
     expect(
       document.getElementById(button.getAttribute('aria-controls')!),
     ).toBeInTheDocument();
-    expect(screen.getByText('The record')).toBeInTheDocument();
+    expect(screen.getByText('Project record')).toBeInTheDocument();
     expect(screen.getByText('3 complete')).toBeInTheDocument();
     expect(screen.queryByText('Brief recap')).not.toBeInTheDocument();
     fireEvent.click(button);
-    const folded = screen.getByRole('button', { name: 'Fold ↑' });
+    const folded = screen.getByRole('button', { name: 'Collapse ↑' });
     expect(folded).toHaveAttribute('aria-expanded', 'true');
     expect(
       document.getElementById(folded.getAttribute('aria-controls')!),
@@ -70,7 +70,7 @@ describe('PreviousWork', () => {
     );
 
     // The disclosure toggle promises only what its body holds.
-    const disclosure = screen.getByRole('button', { name: 'Open the record' });
+    const disclosure = screen.getByRole('button', { name: 'Open project record' });
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
 
     const door = screen.getByRole('button', {
@@ -89,7 +89,7 @@ describe('PreviousWork', () => {
 
       const root = container.querySelector('[data-index-region="record"]');
       expect(root).not.toBeNull();
-      expect(root).toHaveAttribute('aria-label', 'The record');
+      expect(root).toHaveAttribute('aria-label', 'Project record');
       // W3-L4 — one region-spacing token, owned by the root, no mb-*.
       expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
       expect(
@@ -110,7 +110,7 @@ describe('PreviousWork', () => {
     it('prints the empty status line and is not a press target at count 0', () => {
       render(<PreviousWork count={0}>{null}</PreviousWork>);
 
-      expect(screen.getByText('The record')).toBeInTheDocument();
+      expect(screen.getByText('Project record')).toBeInTheDocument();
       // Reconciliation §"Quiet regions" ratifies `Nothing yet` for the empty
       // read; F-07 caught the paraphrase.
       expect(screen.getByText('No recorded activity')).toBeInTheDocument();
@@ -127,9 +127,9 @@ describe('PreviousWork', () => {
 
       const root = container.querySelector('[data-index-region="record"]');
       expect(root).not.toBeNull();
-      expect(root).toHaveAttribute('aria-label', 'The record');
+      expect(root).toHaveAttribute('aria-label', 'Project record');
       expect(screen.getByText('2 complete')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Open the record' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open project record' })).toBeInTheDocument();
     });
   });
 
@@ -157,7 +157,7 @@ describe('PreviousWork', () => {
         '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
       });
 
-      expect(screen.getByRole('heading', { name: 'The record' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Project record' })).toBeInTheDocument();
       // W4-R1: the count line IS the head's status line, at either density.
       const head = container.querySelector('[data-region-head="record"]')!;
       expect(head).toHaveTextContent('2 complete');

@@ -79,7 +79,7 @@ beforeEach(() => {
 describe('The Direction card body (F3-20, 515-3)', () => {
   it('reads A draft taking shape — keep going. with no percentage', () => {
     renderDraft();
-    expect(body()).toHaveTextContent(/^A draft taking shape — keep going\.$/);
+    expect(body()).toHaveTextContent(/^Draft in progress — keep going\.$/);
     expect(body()).not.toHaveTextContent('%');
     expect(screen.queryByText(/% written/)).not.toBeInTheDocument();
   });
@@ -87,6 +87,6 @@ describe('The Direction card body (F3-20, 515-3)', () => {
   it('keeps today’s percentage sentence with one-voice off', () => {
     mockOneVoice = false;
     renderDraft();
-    expect(body()).toHaveTextContent('A draft taking shape · 40% written — keep going');
+    expect(body()).toHaveTextContent('Draft in progress · 40% written — keep going');
   });
 });

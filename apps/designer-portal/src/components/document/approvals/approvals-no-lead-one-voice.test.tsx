@@ -1,6 +1,6 @@
 /**
  * US-19 FR2 F2-26 — Cedar's Client approvals with no decision lead named:
- * `This project does not have a designated decision lead yet.` and
+ * `No lead approver is designated for this project.` and
  * `0 decided · no decision lead` become one sentence under `one-voice`:
  * `No decision lead named yet.` one-voice off keeps both of today's strings.
  */
@@ -67,7 +67,7 @@ describe('No decision lead named (F2-26)', () => {
     renderCedar();
     expect(screen.getAllByText('No decision lead named yet.')).toHaveLength(1);
     expect(
-      screen.queryByText('This project does not have a designated decision lead yet.'),
+      screen.queryByText('No lead approver is designated for this project.'),
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/no decision lead$/)).not.toBeInTheDocument();
   });
@@ -76,7 +76,7 @@ describe('No decision lead named (F2-26)', () => {
     mockOneVoice = false;
     renderCedar();
     expect(
-      screen.getByText('This project does not have a designated decision lead yet.'),
+      screen.getByText('No lead approver is designated for this project.'),
     ).toBeInTheDocument();
     expect(screen.getByText('0 decided · no decision lead')).toBeInTheDocument();
   });

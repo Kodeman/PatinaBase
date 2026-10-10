@@ -89,12 +89,12 @@ export function PreviousWork({
       data-density={printedDensity}
       style={{ '--doc-quiet-reserve': QUIET_RESERVE } as CSSProperties}
       className="mt-[var(--doc-region-gap)]"
-      aria-label="The record"
+      aria-label="Project record"
     >
       <RegionHead
         headingId={RECORD_HEADING_ID}
         // F90 — canon names it The Record (I137); the screen now says so.
-        name="The record"
+        name="Project record"
         // W4-R1 — the head's own status line IS the count line at either
         // density: `N complete`, and `Nothing yet` for the empty read.
         status={recordQuietStatus({ complete: count })}
@@ -120,7 +120,7 @@ export function PreviousWork({
                   // withdrew would make this control announce a disclosure
                   // that shows nothing. The disclosure is only expanded when
                   // the body it names is actually printing.
-                  label: open && !quiet ? 'Fold ↑' : 'Open the record',
+                  label: open && !quiet ? 'Collapse ↑' : 'Open project record',
                   onClick: () => setOpen(!open),
                   'aria-expanded': open && !quiet,
                   'aria-controls': contentId,

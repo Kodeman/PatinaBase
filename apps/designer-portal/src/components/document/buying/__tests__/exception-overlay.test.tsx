@@ -88,20 +88,20 @@ beforeEach(() => {
 });
 
 describe('ExceptionRow', () => {
-  it('prints type · status, the dated clock with its basis, and "Choose a path"', () => {
+  it('prints type · status, the dated clock with its basis, and "Choose resolution"', () => {
     const onChoose = jest.fn();
     render(<ExceptionRow exception={row()} makerLane={false} onChoose={onChoose} />);
     expect(screen.getByText(/Damage · open/)).toBeInTheDocument();
     expect(screen.getByTestId('exception-clock')).toHaveTextContent(
       /^By .+\. Hewn wants written notice within 3 days of delivery\.$/,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Choose a path' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose resolution' }));
     expect(onChoose).toHaveBeenCalled();
   });
 
   it('offers no act for an ack discrepancy (answered in the acknowledgment)', () => {
     render(<ExceptionRow exception={row({ type: 'ack_discrepancy' })} makerLane={false} onChoose={jest.fn()} />);
-    expect(screen.queryByRole('button', { name: 'Choose a path' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Choose resolution' })).toBeNull();
   });
 
   it('on the maker lane reads one line, no act, no clock, no money', () => {
@@ -148,11 +148,11 @@ describe('LineExceptions — the unfold band', () => {
       />,
       { wrapper: wrap },
     );
-    expect(screen.getByText('A damage claim with no clock yet.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Track it' })).toBeInTheDocument();
+    expect(screen.getByText('Damage claim deadline not set.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Track claim' })).toBeInTheDocument();
   });
 
-  it('SQ-448: never offers "Track it" on a catalog-lane claim, even before any exception exists', () => {
+  it('SQ-448: never offers "Track claim" on a catalog-lane claim, even before any exception exists', () => {
     render(
       <LineExceptions
         item={{
@@ -164,7 +164,7 @@ describe('LineExceptions — the unfold band', () => {
       />,
       { wrapper: wrap },
     );
-    expect(screen.queryByRole('button', { name: 'Track it' })).toBeNull();
-    expect(screen.queryByText('A damage claim with no clock yet.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Track claim' })).toBeNull();
+    expect(screen.queryByText('Damage claim deadline not set.')).toBeNull();
   });
 });

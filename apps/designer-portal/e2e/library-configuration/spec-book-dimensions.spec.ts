@@ -70,7 +70,7 @@ test('the structured editor writes W/D/H/unit and preserves unknown captured key
 
   // The workbench auto-selects the first item, so the editor mounts unprompted.
   await expect(page.getByRole('navigation', { name: 'Spec book workspace' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Workbench' })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: 'Specification editor' })).toHaveAttribute(
     'aria-current',
     'page',
   );
@@ -87,7 +87,7 @@ test('the structured editor writes W/D/H/unit and preserves unknown captured key
   // z-40) overlays the bottom of the editor aside, and a plain click — even
   // `{ force: true }`, which only skips the actionability CHECK and still clicks
   // at coordinates — lands on the drawer instead, silently doing nothing.
-  await page.getByRole('button', { name: 'Save line' }).dispatchEvent('click');
+  await page.getByRole('button', { name: 'Save specification' }).dispatchEvent('click');
 
   // Poll the row FIRST — it is the authoritative evidence, and the mutation
   // lands well after any network-idle signal on a cold dev server.
@@ -120,11 +120,11 @@ test('the raw JSON escape hatch stays available beside the structured control', 
   await page.goto(`/doc/${projectId}/spec-book`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('navigation', { name: 'Spec book workspace' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Edit raw JSON' }).click();
+  await page.getByRole('button', { name: 'Advanced: edit dimensions as JSON' }).click();
   // Toggling to raw swaps the affordance rather than losing the structured path.
-  await expect(page.getByRole('button', { name: 'Use structured editor' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use dimension fields' })).toBeVisible();
   await expect(page.getByLabel('width', { exact: true })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Use structured editor' }).click();
+  await page.getByRole('button', { name: 'Use dimension fields' }).click();
   await expect(page.getByLabel('width', { exact: true })).toBeVisible();
 });

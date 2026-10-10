@@ -407,7 +407,7 @@ function DraftingRoomEditor({
 
   return (
     <RoomShell
-      title="The Contract Room"
+      title="Proposal drafting"
       count={pct > 0 ? `${pct}% drafted` : undefined}
       backLabel={exitLabel}
       // C2 — the share instrument is the Room's sole head action: a quiet
@@ -480,7 +480,7 @@ function DraftingRoomEditor({
               className="min-[1440px]:hidden"
               onClick={openPreview}
             >
-              Preview client copy
+              Preview client edition
             </DocumentAction>
           </div>
         </section>
@@ -491,7 +491,7 @@ function DraftingRoomEditor({
           <div>
             {/* Movement 1 · Scope */}
             <MovementRule
-              name="Scope"
+              name="Scope of work"
               meta="Line 1 · the rooms & what fills them"
               hue={MOVEMENT.scope}
             />
@@ -512,7 +512,7 @@ function DraftingRoomEditor({
             </FacetSection>
 
             <FacetSection
-              name="FF&E"
+              name="FF&E schedule"
               accent={MOVEMENT.scope}
               done={facets.ffe}
               status={
@@ -590,13 +590,13 @@ function DraftingRoomEditor({
                 offer so the page reads scope → vision → commerce, but the lines
                 still map by facet, not by order. */}
             <MovementRule
-              name="The Vision"
+              name="Design concept"
               meta="Line 3 · palette & boards"
               hue={MOVEMENT.vision}
             />
 
             <FacetSection
-              name="Palette"
+              name="Material palette"
               accent={MOVEMENT.vision}
               done={facets.palette}
               status={
@@ -613,7 +613,7 @@ function DraftingRoomEditor({
             </FacetSection>
 
             <FacetSection
-              name="Boards"
+              name="Design boards"
               accent={MOVEMENT.vision}
               done={facets.boards}
               status={
@@ -629,13 +629,13 @@ function DraftingRoomEditor({
 
             {/* Movement 2 · The Offer (commerce) */}
             <MovementRule
-              name="The Offer"
+              name="Commercial terms"
               meta="Line 2 · phases, exclusions, payments, terms"
               hue={MOVEMENT.offer}
             />
 
             <FacetSection
-              name="Phases"
+              name="Project phases"
               accent={MOVEMENT.offer}
               done={facets.phases}
               status={
@@ -663,7 +663,7 @@ function DraftingRoomEditor({
             </FacetSection>
 
             <FacetSection
-              name="Payments"
+              name="Payment schedule"
               accent={MOVEMENT.offer}
               done={facets.payments}
               status={
@@ -681,7 +681,7 @@ function DraftingRoomEditor({
             </FacetSection>
 
             <FacetSection
-              name="Terms"
+              name="Terms & conditions"
               accent={MOVEMENT.offer}
               done={facets.terms}
               status={
@@ -723,7 +723,7 @@ function DraftingRoomEditor({
       <DocSheet
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        title="Client copy preview"
+        title="Client edition preview"
       >
         <section className="mx-auto max-w-[420px]" aria-label="Client copy">
           <header className="mb-5 border-b border-[var(--doc-ink-border)] pb-3">
@@ -736,7 +736,7 @@ function DraftingRoomEditor({
                   aria-hidden
                   className="h-1.5 w-1.5 rounded-full bg-[var(--color-sage)]"
                 />
-                Live
+                Live preview
               </span>
             </div>
             <p className="doc-type-body mt-1 text-[var(--color-quiet-ink)]">

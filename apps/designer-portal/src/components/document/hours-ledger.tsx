@@ -149,11 +149,11 @@ export type HoursScope = "mine" | "member" | "project" | "studio";
 
 /** HT-36 — how the studio scope's buckets are cut. The five the rollup admits. */
 const GROUP_BY: ReadonlyArray<[TimeHoursGroupBy, string]> = [
-  ["member", "by person"],
-  ["project", "by document"],
-  ["day", "by day"],
-  ["iso_week", "by week"],
-  ["activity", "by activity"],
+  ["member", "By team member"],
+  ["project", "By project"],
+  ["day", "By day"],
+  ["iso_week", "By week"],
+  ["activity", "By activity"],
 ];
 
 /**
@@ -805,9 +805,9 @@ export function HoursLedger({
   // one door is the person (no staff picker in a money ledger), and "this
   // document" means the one the sheet was opened onto.
   const lensWords: ReadonlyArray<[HoursScope, string]> = useMemo(() => {
-    const words: Array<[HoursScope, string]> = [["mine", "mine"]];
-    if (memberScope) words.push(["member", memberScope.name ?? "this person"]);
-    if (lensProjectId) words.push(["project", "this document"]);
+    const words: Array<[HoursScope, string]> = [["mine", "My time"]];
+    if (memberScope) words.push(["member", memberScope.name ?? "Team member"]);
+    if (lensProjectId) words.push(["project", "This project"]);
     words.push(["studio", "the studio"]);
     return words;
   }, [memberScope, lensProjectId]);
@@ -842,7 +842,7 @@ export function HoursLedger({
     <div ref={sheetRef} className="mx-auto max-w-3xl">
       <DocSheetHead
         icon={HOURS_ICON}
-        title="Hours"
+        title="Timesheets"
         helpKey={DOCUMENT_SURFACE_KEYS.hours}
       />
       {/* Return teaching: the ledger, then the margin an in-place note sits in. */}
@@ -949,7 +949,7 @@ export function HoursLedger({
       {viewerIsOwnerOrAdmin && lensWords.length > 1 && (
         <p
           role="group"
-          aria-label="Hours scope"
+          aria-label="Time ledger scope"
           className="mb-4 flex flex-wrap items-baseline gap-x-3 border-b border-[var(--color-pearl)]/70 pb-2"
         >
           {lensWords.map(([key, label]) => {
@@ -1240,7 +1240,7 @@ export function HoursLedger({
               onChange={(event) => setBillingProjectId(event.target.value)}
               className="rounded-[3px] border border-[var(--color-pearl)] bg-white px-2 py-1 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--doc-paper)]"
             >
-              <option value="">Choose a document…</option>
+              <option value="">Choose a project…</option>
               {unbilledProjects.map((projectId) => (
                 <option key={projectId} value={projectId}>
                   {(projects ?? []).find((project) => project.id === projectId)
@@ -1264,7 +1264,7 @@ export function HoursLedger({
               })
             }
           >
-            Bill it
+            Draft time invoice
           </DocumentAction>
         </div>
       )}
@@ -1289,7 +1289,7 @@ export function HoursLedger({
         ratePendingMinutes === 0 ? (
           <div className="py-4">
             <p className="font-heading text-[15px] italic text-[var(--color-charcoal)]">
-              No hours logged yet
+              No time entries yet
             </p>
             <p className="mt-1.5 max-w-[52ch] text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
               Time logs itself while a document is in your hand; you can also
@@ -1389,7 +1389,7 @@ export function HoursLedger({
               value={addProject}
               onChange={(e) => setAddProject(e.target.value)}
             >
-              <option value="">Document…</option>
+              <option value="">Project…</option>
               {/* HT-15 — the studio's own hours, without a client's house to
                   misattribute them to. */}
               {internalStudio && (
@@ -1433,7 +1433,7 @@ export function HoursLedger({
               onChange={(e) => setAddActivity(e.target.value)}
             >
               {/* HT-24 — the honest first answer, not a silent 'design'. */}
-              <option value="">activity not set</option>
+              <option value="">Activity not selected</option>
               {ACTIVITIES.map((a) => (
                 <option key={a.key} value={a.key}>
                   {a.label}
@@ -1451,7 +1451,7 @@ export function HoursLedger({
               loadingLabel="Adding…"
               onClick={() => void batchAdd()}
             >
-              Add
+              Log time
             </DocumentAction>
           </div>
           {/* HT-11/HT-12/HT-41 — the same controls every other capture surface
@@ -1499,9 +1499,9 @@ export function HoursLedger({
 }
 
 const SCOPE_CAPTION: Record<HoursScope, string> = {
-  mine: "mine",
-  member: "this person",
-  project: "this document",
+  mine: "My time",
+  member: "Team member",
+  project: "This project",
   studio: "the studio",
 };
 
@@ -1559,7 +1559,7 @@ function PricingStudioLine({
             );
           }}
         >
-          Name your studio
+          Name studio
         </DocumentAction>
       )}
       {note && (
@@ -1661,7 +1661,7 @@ function ScopeRollup({
                   if (next) onChooseStudio(next.id);
                 }}
                 className="min-h-11 inline-flex items-center text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
-                title="Answer for your other studio"
+                title="Set pricing studio"
               >
                 {studioName} ({studioChoices.findIndex((c) => c.id === studioId) +
                   1}{" "}
@@ -1703,7 +1703,7 @@ function ScopeRollup({
 
       <p
         role="group"
-        aria-label="Group hours"
+        aria-label="Group time entries"
         className="mt-1.5 flex flex-wrap items-baseline gap-x-3"
       >
         {GROUP_BY.map(([key, label]) => (
@@ -1818,7 +1818,7 @@ function MemberProjectTotal({ projectId }: { projectId: string }) {
           nothing this week it stood above "Nothing logged this week." So it
           says which is which. */}
       <p className="t-head text-[var(--color-clay-ink)]">
-        this document · all time, for its whole team
+        This project · all time, for its whole team
       </p>
       {/* The function raises for a caller who is not on the project rather than
           answering zero, so a zero printed before it answers is a reading it
@@ -2273,7 +2273,7 @@ function EntryRow({
               regionKey="delete-entry-confirmation"
               className="items-center"
             >
-              <span className="text-[var(--color-aged-oak)]">delete?</span>
+              <span className="text-[var(--color-aged-oak)]">Delete time entry?</span>
               <DocumentAction
                 actionKey="confirm-delete-time-entry"
                 variant="danger"
@@ -2282,14 +2282,14 @@ function EntryRow({
                 loadingLabel="Deleting…"
                 onClick={() => void doDelete()}
               >
-                Delete
+                Delete time entry
               </DocumentAction>
               <DocumentAction
                 actionKey="cancel-delete-time-entry"
                 variant="tertiary"
                 onClick={() => setConfirming(false)}
               >
-                Keep
+                Keep time entry
               </DocumentAction>
             </DocumentActionGroup>
           ) : (
@@ -2325,7 +2325,7 @@ function EntryRow({
               loadingLabel="Naming…"
               onClick={stamp}
             >
-              Name the studio that prices this document
+              Pricing studio for this project
             </DocumentAction>
           ) : (
             <Link

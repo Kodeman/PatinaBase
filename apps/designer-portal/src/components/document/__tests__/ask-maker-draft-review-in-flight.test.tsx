@@ -2,7 +2,7 @@
  * US-19 FR3 F3-22 (517-3, 517-1; `one-voice`): a date request in flight is not
  * held — the install row's act reads `Open the draft` while it sends, and
  * `Open the held draft` returns only for a held or awaiting note. The sheet's
- * `Add an address` lands on the vendor's terms with focus on the Orders email.
+ * `Add recipient email` lands on the vendor's terms with focus on the Orders email.
  */
 import type { ReactElement } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -128,7 +128,7 @@ describe('AskMakerSheet Add an address landing (517-1)', () => {
         held={{ ...HELD, to_email: null } as never}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Add an address' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add recipient email' }));
     expect(onClose).toHaveBeenCalled();
     await waitFor(() =>
       expect(mockOpenLedger).toHaveBeenCalledWith('orders', {
@@ -151,7 +151,7 @@ describe('AskMakerSheet Add an address landing (517-1)', () => {
         held={{ ...HELD, to_email: null } as never}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Add an address' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add recipient email' }));
     await waitFor(() =>
       expect(mockOpenLedger).toHaveBeenCalledWith('orders', {
         page: 'vendors',

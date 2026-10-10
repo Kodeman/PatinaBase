@@ -1,7 +1,7 @@
 /**
  * US-19 FR3 F3-22 (517-4, 517-1; `one-voice`): the Movement cell carries one
  * status line for the line's date request in every state, in the Desk's
- * words — held or awaiting, sending, sent — and a held Send's `Add an address`
+ * words — held or awaiting, sending, sent — and a held Send's `Add recipient email`
  * lands on the vendor's terms with focus on the Orders email.
  */
 
@@ -105,11 +105,11 @@ describe('MovementCell date request status line (F3-22, 517-4)', () => {
     renderCell(LINE);
     expect(statusLine()).toHaveTextContent('Date request to Hewn drafted — not sent.');
     expect(screen.queryByText('Date request drafted · no address')).toBeNull();
-    const send = screen.getByRole('button', { name: 'Send' });
+    const send = screen.getByRole('button', { name: 'Send correspondence' });
     expect(send).toHaveAttribute('aria-disabled', 'true');
     expect(send).toHaveAccessibleDescription('No address on file for Hewn.');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add an address' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add recipient email' }));
     await waitFor(() =>
       expect(mockOpenLedger).toHaveBeenCalledWith('orders', {
         page: 'vendors',
@@ -126,7 +126,7 @@ describe('MovementCell date request status line (F3-22, 517-4)', () => {
     mockDrafts.data = [{ ...ASK, to_email: null }];
     renderCell({ id: 'line-1', vendor_name: null, vendor_id: null, product: { brand: 'Fixture Metalworks' } });
     expect(statusLine()).toHaveTextContent('Date request to Fixture Metalworks drafted — not sent.');
-    fireEvent.click(screen.getByRole('button', { name: 'Add an address' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add recipient email' }));
     expect((land.mock.calls[0][0] as CustomEvent).detail).toEqual({ itemId: 'line-1', cell: 'maker' });
     expect(mockOpenLedger).not.toHaveBeenCalled();
     window.removeEventListener('document:focus-ffe-line', land);

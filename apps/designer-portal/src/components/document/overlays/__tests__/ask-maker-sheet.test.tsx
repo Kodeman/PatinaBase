@@ -281,7 +281,7 @@ describe('AskMakerSheet', () => {
         held={{ ...(HELD as object), to_email: null } as never}
       />,
     );
-    const send = screen.getByRole('button', { name: 'Send' });
+    const send = screen.getByRole('button', { name: 'Send correspondence' });
     expect(send).toHaveAttribute('aria-disabled', 'true');
     expect(send).toHaveAccessibleDescription('No address on file for Nordic Atelier.');
     fireEvent.click(send);
@@ -289,7 +289,7 @@ describe('AskMakerSheet', () => {
 
     // A maker named by hand has no record yet: the repair lands on the line's
     // maker selector, and the sheet steps aside for it.
-    fireEvent.click(screen.getByRole('button', { name: 'Add an address' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add recipient email' }));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect((heard.mock.calls[0][0] as CustomEvent).detail).toEqual({ itemId: CHAIR.id, cell: 'maker' });
     window.removeEventListener('document:focus-ffe-line', heard);
@@ -316,7 +316,7 @@ describe('AskMakerSheet', () => {
     expect(screen.queryByRole('button', { name: 'Hold for review' })).toBeNull();
     expect(mockSend).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send correspondence' }));
     await waitFor(() => expect(mockSend).toHaveBeenCalledWith('draft-1'));
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -445,7 +445,7 @@ describe('InstallReadingLine', () => {
     // A Discard inside settles the review there; the sheet does not flip back
     // to a fresh compose when the held read empties.
     mockDraftsRead = async () => [];
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard draft' }));
     await waitFor(() => expect(mockDiscard).toHaveBeenCalledWith('draft-1'));
     expect(await screen.findByText('Discarded.')).toBeInTheDocument();
     await act(async () => {});

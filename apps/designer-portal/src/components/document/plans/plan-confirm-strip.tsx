@@ -278,7 +278,7 @@ export function PlanConfirmStrip({
   return (
     <div
       role="region"
-      aria-label="Pending filing"
+      aria-label="Pending drawing intake"
       data-plan-confirm-strip
       /* Clears the Studio drawer exactly as the composition bar and the log
          strip do: the drawer is a 60px fixed rail at z-40 from 1180px up, and
@@ -334,7 +334,7 @@ export function PlanConfirmStrip({
           onClick={onSaveForLater}
           disabled={running}
         >
-          Save the table for later
+          Save intake for later
         </DocumentAction>
         <DocumentAction
           actionKey="file-plan-prints"

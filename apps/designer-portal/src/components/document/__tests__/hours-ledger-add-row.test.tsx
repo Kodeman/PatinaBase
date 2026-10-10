@@ -223,7 +223,7 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+        // "Project…" · "Studio time — no document" (HT-15) · the one project.
       ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
@@ -235,7 +235,7 @@ describe('the Hours add row', () => {
     fireEvent.change(screen.getByLabelText('Date'), {
       target: { value: '2026-08-04' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Log time' }));
 
     await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
     const sent = mockCreate.mock.calls[0][0];
@@ -252,13 +252,13 @@ describe('the Hours add row', () => {
     // design work the member never claimed.
     expect(screen.getByLabelText('Activity')).toHaveValue('');
     expect(
-      screen.getByRole('option', { name: 'activity not set' }),
+      screen.getByRole('option', { name: 'Activity not selected' }),
     ).toBeInTheDocument();
 
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+        // "Project…" · "Studio time — no document" (HT-15) · the one project.
       ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
@@ -267,7 +267,7 @@ describe('the Hours add row', () => {
     fireEvent.change(screen.getByLabelText('Minutes'), {
       target: { value: '30' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Log time' }));
 
     await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
     expect(mockCreate.mock.calls[0][0].activity).toBeNull();
@@ -281,7 +281,7 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+        // "Project…" · "Studio time — no document" (HT-15) · the one project.
       ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
@@ -290,12 +290,12 @@ describe('the Hours add row', () => {
     fireEvent.change(screen.getByLabelText('Minutes'), {
       target: { value: '30' },
     });
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Log time' })).toBeEnabled();
 
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '' } });
 
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(screen.getByRole('button', { name: 'Log time' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Log time' }));
     await waitFor(() => expect(screen.getByLabelText('Date')).toHaveValue(''));
     expect(mockCreate).not.toHaveBeenCalled();
   });
@@ -310,7 +310,7 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+        // "Project…" · "Studio time — no document" (HT-15) · the one project.
       ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Minutes'), {
@@ -323,14 +323,14 @@ describe('the Hours add row', () => {
     expect(
       screen.queryByText('non-billable \u00b7 no agreement'),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Log time' })).toBeDisabled();
 
     fireEvent.click(
       screen.getByRole('button', {
         name: /Non-billable \u2014 press to make billable/,
       }),
     );
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Log time' })).toBeEnabled();
 
     mockAuthority = { data: null, isLoading: false, isError: false };
     fireEvent.change(screen.getByLabelText('Minutes'), {
@@ -347,7 +347,7 @@ describe('the Hours add row', () => {
       }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Log time' }));
     await waitFor(() => expect(mockCreate).toHaveBeenCalled());
     expect(mockCreate.mock.calls[0][0]).toMatchObject({ billable: true });
   });
@@ -406,7 +406,7 @@ describe('the Hours add row', () => {
     await waitFor(() =>
       expect(
         screen.getByLabelText('Project').querySelectorAll('option'),
-        // "Document…" · "Studio time — no document" (HT-15) · the one project.
+        // "Project…" · "Studio time — no document" (HT-15) · the one project.
       ).toHaveLength(3),
     );
     fireEvent.change(screen.getByLabelText('Project'), {
@@ -453,7 +453,7 @@ describe('the Hours add row', () => {
     fireEvent.change(screen.getByLabelText('Minutes'), {
       target: { value: '45' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Log time' }));
 
     await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
     expect(mockCreate.mock.calls[0][0]).toEqual(

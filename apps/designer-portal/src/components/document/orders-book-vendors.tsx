@@ -315,7 +315,7 @@ export function VendorAccountTerms({
       ['Account #', account?.account_number ?? null],
       ['Rep', repName],
       [
-        'Terms',
+        'Payment terms',
         account?.payment_pattern
           ? [
               termsLabel(vendor, account),
@@ -425,7 +425,7 @@ export function VendorAccountTerms({
     <div data-vendor-account-editor>
       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
         {input('accountNumber', 'Account #')}
-        <TermsField label="Rep" htmlFor={id('repContactId')}>
+        <TermsField label="Sales rep" htmlFor={id('repContactId')}>
           <Select id={id('repContactId')} value={form.repContactId} onChange={set('repContactId')}>
             <option value="">No rep</option>
             {people.map((c) => (
@@ -449,7 +449,7 @@ export function VendorAccountTerms({
         </TermsField>
         {input('depositPct', 'Deposit %', { inputMode: 'decimal' })}
         {input('netDays', 'Net days', { inputMode: 'numeric' })}
-        <TermsField label="Pays by" htmlFor={id('paymentMethodId')}>
+        <TermsField label="Payment method" htmlFor={id('paymentMethodId')}>
           <Select id={id('paymentMethodId')} value={form.paymentMethodId} onChange={set('paymentMethodId')}>
             <option value="">Not set</option>
             {(methods ?? []).map((m) => (
@@ -459,7 +459,7 @@ export function VendorAccountTerms({
             ))}
           </Select>
         </TermsField>
-        <TermsField label="Orders go by" htmlFor={id('transmission')}>
+        <TermsField label="Order transmission" htmlFor={id('transmission')}>
           <Select id={id('transmission')} value={form.transmission} onChange={set('transmission')}>
             <option value="">Not set</option>
             {TRANSMISSION_OPTIONS.map((o) => (
@@ -486,7 +486,7 @@ export function VendorAccountTerms({
         {input('resaleCertOnFileOn', 'Resale cert on file', { type: 'date' })}
         {showDiscount && input('tradeDiscountPct', 'Trade discount %', { inputMode: 'decimal' })}
       </div>
-      <TermsField label="Notes" htmlFor={id('notes')}>
+      <TermsField label="Vendor account notes" htmlFor={id('notes')}>
         <textarea id={id('notes')} rows={2} value={form.notes} onChange={set('notes')} className={`${FIELD} resize-none`} />
       </TermsField>
       {error && (
@@ -508,7 +508,7 @@ export function VendorAccountTerms({
           disabled={upsert.isPending}
           onClick={save}
         >
-          Save
+          Save vendor account
         </DocumentAction>
         <DocumentAction
           actionKey="cancel-vendor-account"
@@ -820,7 +820,7 @@ function VendorThread({
       >
         <textarea
           rows={2}
-          placeholder="Reply…"
+          placeholder="Write a reply to the vendor…"
           aria-label="Reply to vendor"
           className="doc-type-control min-h-11 w-full min-w-0 flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-2 text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           value={body}
@@ -845,7 +845,7 @@ function VendorThread({
             )
           }
         >
-          Send
+          Send reply
         </DocumentAction>
       </DocumentActionRow>
     </div>
@@ -890,7 +890,7 @@ function BriefComposer({
         <textarea
           rows={2}
           placeholder={`Brief ${vendor.name}…`}
-          aria-label="Opening brief"
+          aria-label="Vendor brief"
           className="doc-type-control min-h-11 w-full min-w-0 flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-2 text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -922,7 +922,7 @@ function BriefComposer({
             );
           }}
         >
-          Open brief
+          Open vendor brief
         </DocumentAction>
       </DocumentActionRow>
       {error && (

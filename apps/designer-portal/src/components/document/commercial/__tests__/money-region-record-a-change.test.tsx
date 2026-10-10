@@ -88,9 +88,9 @@ describe('The Money head with ask-the-paper on (F16, R33)', () => {
     const acts = headActs();
 
     expect(acts.slice(0, 3)).toEqual([
-      'Draw an invoice',
+      'Draft an invoice',
       'Record a change',
-      'Hours · this project ↗',
+      'Project time ledger ↗',
     ]);
     expect(acts.some((act) => /Collapse/.test(act))).toBe(true);
     expect(acts).not.toContain('Amendment');

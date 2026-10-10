@@ -158,7 +158,7 @@ describe('RecordPaymentForm · Esc is Cancel (US-19 F3-1)', () => {
 
   it('leaves Esc alone with the flag off', () => {
     renderBand();
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment · Balance' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record vendor payment · Balance' }));
     const form = screen.getByTestId('record-payment-form');
     expect(fireEvent.keyDown(form.querySelector('input')!, { key: 'Escape' })).toBe(true);
     expect(screen.getByTestId('record-payment-form')).toBeInTheDocument();

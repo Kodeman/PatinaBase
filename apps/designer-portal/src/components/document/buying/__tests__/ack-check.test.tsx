@@ -277,7 +277,7 @@ describe('resolving a difference', () => {
   it('disputes through resolve_ack_line and points at the drafted reply', async () => {
     render(<AckRecord purchaseOrderId="po-1" projectId="project-1" />);
     const finish = screen.getByTestId('ack-line-line-finish');
-    fireEvent.click(within(finish).getByRole('button', { name: 'Dispute' }));
+    fireEvent.click(within(finish).getByRole('button', { name: 'Dispute acknowledgment' }));
     await waitFor(() =>
       expect(mockResolve).toHaveBeenCalledWith({
         lineId: 'line-finish',
@@ -297,7 +297,7 @@ describe('resolving a difference', () => {
     const onStartChange = jest.fn();
     render(<AckRecord purchaseOrderId="po-1" projectId="project-1" onStartChange={onStartChange} />);
     const price = screen.getByTestId('ack-line-line-price');
-    fireEvent.click(within(price).getByRole('button', { name: 'Accept theirs' }));
+    fireEvent.click(within(price).getByRole('button', { name: 'Accept acknowledged value' }));
     const routed = await within(price).findByTestId('ack-change-order');
     expect(routed).toHaveTextContent('a price change is a change order the client re-approves');
     fireEvent.click(within(routed).getByRole('button', { name: 'Start a change →' }));
@@ -324,7 +324,7 @@ describe('resolving a difference', () => {
     );
     expect(screen.getByTestId('po-ack-stamp')).toHaveTextContent('Acknowledged · 2 differences');
     expect(screen.queryByTestId('po-change-sheet')).not.toBeInTheDocument();
-    fireEvent.click(within(screen.getByTestId('ack-line-line-price')).getByRole('button', { name: 'Accept theirs' }));
+    fireEvent.click(within(screen.getByTestId('ack-line-line-price')).getByRole('button', { name: 'Accept acknowledged value' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Start a change →' }));
     expect(screen.getByTestId('po-change-sheet')).toBeInTheDocument();
   });
@@ -342,8 +342,8 @@ describe('F9-2 — the acknowledgment inside the Order cell wraps at 390', () =>
       table: within(record).getByRole('table'),
       rowLabel: within(finish).getByRole('rowheader'),
       verdict: within(finish).getByText(/^differs/),
-      decisions: within(finish).getByRole('button', { name: 'Dispute' }).parentElement as HTMLElement,
-      door: screen.getByRole('button', { name: 'They corrected it — log the new acknowledgment' }),
+      decisions: within(finish).getByRole('button', { name: 'Dispute acknowledgment' }).parentElement as HTMLElement,
+      door: screen.getByRole('button', { name: 'Log revised acknowledgment' }),
     };
   };
 
@@ -397,8 +397,8 @@ describe('F9-2 — the acknowledgment inside the Order cell wraps at 390', () =>
   it('F9-2b: inCell wraps the Accept theirs / Dispute decisions; the default keeps them nowrap', () => {
     const { rerender } = render(<AckRecord purchaseOrderId="po-1" projectId="project-1" inCell />);
     const finishInCell = screen.getByTestId('ack-line-line-finish');
-    const acceptInCell = within(finishInCell).getByRole('button', { name: 'Accept theirs' });
-    const disputeInCell = within(finishInCell).getByRole('button', { name: 'Dispute' });
+    const acceptInCell = within(finishInCell).getByRole('button', { name: 'Accept acknowledged value' });
+    const disputeInCell = within(finishInCell).getByRole('button', { name: 'Dispute acknowledgment' });
     expect(acceptInCell).toHaveClass('whitespace-normal');
     expect(acceptInCell).not.toHaveClass('whitespace-nowrap');
     expect(disputeInCell).toHaveClass('whitespace-normal');
@@ -406,8 +406,8 @@ describe('F9-2 — the acknowledgment inside the Order cell wraps at 390', () =>
 
     rerender(<AckRecord purchaseOrderId="po-1" projectId="project-1" />);
     const finishDefault = screen.getByTestId('ack-line-line-finish');
-    const acceptDefault = within(finishDefault).getByRole('button', { name: 'Accept theirs' });
-    const disputeDefault = within(finishDefault).getByRole('button', { name: 'Dispute' });
+    const acceptDefault = within(finishDefault).getByRole('button', { name: 'Accept acknowledged value' });
+    const disputeDefault = within(finishDefault).getByRole('button', { name: 'Dispute acknowledgment' });
     expect(acceptDefault).toHaveClass('whitespace-nowrap');
     expect(acceptDefault).not.toHaveClass('whitespace-normal');
     expect(disputeDefault).toHaveClass('whitespace-nowrap');
@@ -423,7 +423,7 @@ describe('US-19 F6-9 (D17, one-voice) — the acknowledgment form behind a door'
   const SENT = '2026-10-01T12:00:00Z';
   const openDoor = () => {
     render(<AckCheckForm purchaseOrderId="po-1" sentAt={SENT} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Log what they confirmed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Log order acknowledgment' }));
   };
 
   it('an unacknowledged PO prints the fact and one door, and no input until it is pressed', async () => {
@@ -434,8 +434,8 @@ describe('US-19 F6-9 (D17, one-voice) — the acknowledgment form behind a door'
     expect(screen.queryAllByRole('textbox')).toHaveLength(0);
     expect(screen.queryByTestId('ack-check')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Log what they confirmed' }));
-    const theirOrder = screen.getByRole('textbox', { name: 'Their order №' });
+    fireEvent.click(screen.getByRole('button', { name: 'Log order acknowledgment' }));
+    const theirOrder = screen.getByRole('textbox', { name: 'Vendor order number' });
     await waitFor(() => expect(document.activeElement).toBe(theirOrder));
     expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
   });
@@ -460,13 +460,13 @@ describe('US-19 F6-9 (D17, one-voice) — the acknowledgment form behind a door'
 
   it('Esc on the form is Cancel: it closes, takes the key, and focus goes back to the door', async () => {
     openDoor();
-    const theirOrder = screen.getByRole('textbox', { name: 'Their order №' });
+    const theirOrder = screen.getByRole('textbox', { name: 'Vendor order number' });
     const notTaken = fireEvent.keyDown(theirOrder, { key: 'Escape' });
     expect(notTaken).toBe(false);
     expect(screen.queryAllByRole('textbox')).toHaveLength(0);
     await waitFor(() =>
       expect(document.activeElement).toBe(
-        screen.getByRole('button', { name: 'Log what they confirmed' }),
+        screen.getByRole('button', { name: 'Log order acknowledgment' }),
       ),
     );
   });
@@ -482,14 +482,14 @@ describe('US-19 F6-9 (D17, one-voice) — the acknowledgment form behind a door'
     mockState.acks = [DIFFERING_ACK];
     render(<AckCheckForm purchaseOrderId="po-1" sentAt={SENT} />);
     expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Their order №' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Vendor order number' })).toBeInTheDocument();
   });
 
   it('door={false} (F7-8: the host is the door) mounts the inputs at once, focused on Their order №', async () => {
     render(<AckCheckForm purchaseOrderId="po-1" sentAt={SENT} door={false} />);
     expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Log what they confirmed' })).not.toBeInTheDocument();
-    const theirOrder = screen.getByRole('textbox', { name: 'Their order №' });
+    expect(screen.queryByRole('button', { name: 'Log order acknowledgment' })).not.toBeInTheDocument();
+    const theirOrder = screen.getByRole('textbox', { name: 'Vendor order number' });
     expect(screen.getByTestId('ack-check')).toBeInTheDocument();
     await waitFor(() => expect(document.activeElement).toBe(theirOrder));
   });
@@ -521,7 +521,7 @@ describe('flag off — the form stands open as today', () => {
   it('door={false} changes nothing with the flag off — no door, no focus taken', () => {
     render(<AckCheckForm purchaseOrderId="po-1" sentAt={SENT} door={false} />);
     expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
-    expect(document.activeElement).not.toBe(screen.getByRole('textbox', { name: 'Their order №' }));
+    expect(document.activeElement).not.toBe(screen.getByRole('textbox', { name: 'Vendor order number' }));
   });
 
   it('the Order cell keeps vendor', () => {

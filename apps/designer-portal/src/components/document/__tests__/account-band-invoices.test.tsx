@@ -99,7 +99,7 @@ describe('AccountBand margin gate (C-36, R1)', () => {
   it('shows margin, the trade → client line and est. commissions to a viewer who may see margin', () => {
     render(<AccountBand projectId="project-1" />);
     expect(screen.getByText(/29% margin/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /The accounts · this project/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
     expect(screen.getByText(/est\. commissions/)).toBeInTheDocument();
     expect(screen.getByText(/trade cost on 1 of 1 committed/)).toBeInTheDocument();
   });
@@ -107,7 +107,7 @@ describe('AccountBand margin gate (C-36, R1)', () => {
   it('FR4 Fix 12: one-voice prints "trade cost on every committed line" when all lines carry it', () => {
     mockOneVoice = true;
     render(<AccountBand projectId="project-1" />);
-    fireEvent.click(screen.getByRole('button', { name: /The accounts · this project/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
     expect(screen.getByText(/trade cost on every committed line/)).toBeInTheDocument();
     expect(screen.queryByText(/trade cost on 1 of 1/)).not.toBeInTheDocument();
   });
@@ -123,7 +123,7 @@ describe('AccountBand margin gate (C-36, R1)', () => {
       estCommissionCents: 4_000,
     };
     render(<AccountBand projectId="project-1" />);
-    fireEvent.click(screen.getByRole('button', { name: /The accounts · this project/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
     expect(screen.getByText(/2 committed without trade cost/)).toBeInTheDocument();
   });
 
@@ -131,7 +131,7 @@ describe('AccountBand margin gate (C-36, R1)', () => {
     mockCanSeeMargin = false;
     render(<AccountBand projectId="project-1" />);
     expect(screen.queryByText(/% margin/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /The accounts · this project/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
     expect(screen.queryByText(/% margin/)).not.toBeInTheDocument();
     expect(screen.queryByText(/est\. commissions/)).not.toBeInTheDocument();
     expect(screen.queryByText(/trade cost on/)).not.toBeInTheDocument();
@@ -186,7 +186,7 @@ describe('AccountBand invoice handoff', () => {
     render(<AccountBand projectId="project-1" />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The project accounts could not be opened.',
+      'Project accounts could not be loaded. Try again.',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(mockRefetch).toHaveBeenCalledTimes(1);
@@ -198,7 +198,7 @@ describe('AccountBand invoice handoff', () => {
     );
 
     render(<AccountBand projectId="project-1" />);
-    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate invoice' }));
 
     expect(screen.getByRole('alert')).toHaveTextContent(
@@ -212,7 +212,7 @@ describe('AccountBand invoice handoff', () => {
     window.addEventListener('document:open-invoice-folio', opened);
 
     render(<AccountBand projectId="project-1" />);
-    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Open invoice' }));
 
     expect(opened).toHaveBeenCalledTimes(1);
@@ -224,28 +224,28 @@ describe('AccountBand invoice handoff', () => {
 
   it('uses the change workflow as the only post-project add doorway', () => {
     render(<AccountBand projectId="project-1" activeSection="install" />);
-    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
 
     expect(screen.getByRole('button', { name: 'Add a change' })).toBeInTheDocument();
     act(() => window.dispatchEvent(new CustomEvent('document:open-project-change')));
     expect(screen.getByText('Change sheet open')).toBeInTheDocument();
   });
 
-  it('renders its own "Draw an invoice" primary by default (byte-identical standalone mount)', () => {
+  it('renders its own "Draft an invoice" primary by default (byte-identical standalone mount)', () => {
     render(<AccountBand projectId="project-1" />);
-    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
 
-    expect(screen.getByRole('button', { name: 'Draw an invoice' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Draft an invoice' })).toBeInTheDocument();
   });
 
-  it('drops its own "Draw an invoice" primary when headless, keeping export + amendment', () => {
+  it('drops its own "Draft an invoice" primary when headless, keeping export + amendment', () => {
     render(<AccountBand projectId="project-1" headless />);
-    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
 
     expect(
-      screen.queryByRole('button', { name: 'Draw an invoice' }),
+      screen.queryByRole('button', { name: 'Draft an invoice' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Export · QBO' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export to QuickBooks Online format' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Amendment' })).toBeInTheDocument();
   });
 
@@ -253,7 +253,7 @@ describe('AccountBand invoice handoff', () => {
     // The Money region's head already carries the one inked leader; a milestone
     // row printing a primary beside it would be a second leader on the page.
     render(<AccountBand projectId="project-1" headless />);
-    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
 
     expect(document.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Generate invoice' })).toHaveAttribute(
@@ -264,7 +264,7 @@ describe('AccountBand invoice handoff', () => {
 
   it('keeps the milestone act primary on the standalone mount', () => {
     render(<AccountBand projectId="project-1" />);
-    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project accounts/ }));
 
     expect(screen.getByRole('button', { name: 'Generate invoice' })).toHaveAttribute(
       'data-action-variant',
@@ -328,7 +328,7 @@ describe('AccountBand currencies (SQ-207)', () => {
       rooms: [usdRoom],
     };
     const { container } = render(<AccountBand projectId="project-1" />);
-    const head = screen.getByRole('button', { name: /The accounts/ });
+    const head = screen.getByRole('button', { name: /Project accounts/ });
     expect(head).toHaveTextContent('$500 budget · $4,200 committed · 29% margin');
     fireEvent.click(head);
     expect(screen.getByText('$800 under')).toBeInTheDocument();
@@ -355,7 +355,7 @@ describe('AccountBand currencies (SQ-207)', () => {
       ],
     };
     render(<AccountBand projectId="project-1" />);
-    const head = screen.getByRole('button', { name: /The accounts/ });
+    const head = screen.getByRole('button', { name: /Project accounts/ });
     expect(head).toHaveTextContent('Mixed currencies — total unavailable (EUR, USD) committed');
     fireEvent.click(head);
     expect(screen.getByText(/Margin: Mixed currencies — total unavailable \(EUR, USD\)/)).toBeInTheDocument();

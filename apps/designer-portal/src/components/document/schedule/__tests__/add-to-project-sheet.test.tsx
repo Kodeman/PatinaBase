@@ -143,9 +143,9 @@ describe('Add to the job — roads', () => {
     expect(screen.getByText('The line, as it will be bought')).toBeInTheDocument();
     expect(pageLabel('from the Library')).toBeInTheDocument();
     expect(await screen.findByTestId('line-card-maker')).toHaveTextContent('Hale Upholstery');
-    expect(screen.getByLabelText('SKU')).toHaveValue('HU-88-COVE');
+    expect(screen.getByLabelText('SKU / product code')).toHaveValue('HU-88-COVE');
     expect(screen.getByLabelText('Finish')).toHaveValue('Ebonized oak legs');
-    expect(screen.getByLabelText('Trade cost')).toHaveValue('6480');
+    expect(screen.getByLabelText('Trade cost per item')).toHaveValue('6480');
     expect(screen.getByTestId('line-card-client-price')).toHaveTextContent('read from the source');
     expect(screen.getByTestId('line-card-readiness')).toHaveTextContent("Orderable once it has: the client's yes");
     expect(screen.queryByTestId('retail-as-trade-warning')).not.toBeInTheDocument();
@@ -166,8 +166,8 @@ describe('Add to the job — roads', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pick Cove Sofa' }));
     expect(pageLabel('from a link')).toBeInTheDocument();
     await screen.findByTestId('line-card-maker');
-    fireEvent.change(screen.getByLabelText('Trade cost'), { target: { value: '6100' } });
-    fireEvent.change(screen.getByLabelText('SKU'), { target: { value: 'HU-88-COVE-B' } });
+    fireEvent.change(screen.getByLabelText('Trade cost per item'), { target: { value: '6100' } });
+    fireEvent.change(screen.getByLabelText('SKU / product code'), { target: { value: 'HU-88-COVE-B' } });
     fireEvent.click(screen.getByRole('button', { name: 'Put it on the schedule' }));
 
     await waitFor(() => expect(setSpec).toHaveBeenCalledWith({ projectId: 'project-1', itemId: 'selection-1', sku: 'HU-88-COVE-B' }));
@@ -185,9 +185,9 @@ describe('Add to the job — roads', () => {
     fireEvent.click(road(row));
     expect(pageLabel(label)).toBeInTheDocument();
     expect(screen.queryByTestId('line-card-maker')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('SKU')).toHaveValue('');
+    expect(screen.getByLabelText('SKU / product code')).toHaveValue('');
     fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Side table' } });
-    fireEvent.change(screen.getByLabelText('Optional board placement'), { target: { value: 'board-wide' } });
+    fireEvent.change(screen.getByLabelText('Design board (optional)'), { target: { value: 'board-wide' } });
     fireEvent.click(screen.getByRole('button', { name: 'Put it on the schedule' }));
     await waitFor(() => expect(createNeed).toHaveBeenCalledWith(expect.objectContaining({
       name: 'Side table', boardId: 'board-wide', assignmentScope: 'unassigned', source, itemType,
@@ -250,7 +250,7 @@ describe('the line card — R-DI4 and R-PB4', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pick Cove Sofa' }));
     await screen.findByTestId('line-card-maker');
 
-    expect(screen.getByLabelText('Trade cost')).toHaveValue('');
+    expect(screen.getByLabelText('Trade cost per item')).toHaveValue('');
     expect(screen.getByTestId('retail-as-trade-warning')).toHaveTextContent(
       'Only a retail price was read ($9,720). That is the client price, not your trade cost.',
     );
@@ -268,7 +268,7 @@ describe('the line card — R-DI4 and R-PB4', () => {
     fireEvent.click(road(/From the Library/));
     fireEvent.click(screen.getByRole('button', { name: 'Pick Cove Sofa' }));
     expect(await screen.findByTestId('retail-as-trade-warning')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Trade cost'), { target: { value: '6480' } });
+    fireEvent.change(screen.getByLabelText('Trade cost per item'), { target: { value: '6480' } });
     expect(screen.queryByTestId('retail-as-trade-warning')).not.toBeInTheDocument();
   });
 
@@ -303,8 +303,8 @@ describe('the line card — R-DI4 and R-PB4', () => {
     fireEvent.click(screen.getByRole('option', { name: /Add a maker: “Ojai Workroom”/ }));
     expect(screen.getByText("Saved to your studio's makers. Patina looks for this maker by website, then by name, before adding one.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Website'), { target: { value: 'ojaiworkroom.com' } });
-    fireEvent.change(screen.getByLabelText('Orders email'), { target: { value: 'orders@ojaiworkroom.com' } });
-    fireEvent.change(screen.getByLabelText('Trade cost'), { target: { value: '4200' } });
+    fireEvent.change(screen.getByLabelText('Order contact email'), { target: { value: 'orders@ojaiworkroom.com' } });
+    fireEvent.change(screen.getByLabelText('Trade cost per item'), { target: { value: '4200' } });
     fireEvent.click(screen.getByRole('button', { name: 'Put it on the schedule' }));
 
     await waitFor(() => expect(setCommercials).toHaveBeenCalled());
@@ -341,7 +341,7 @@ describe('the line card — R-DI4 and R-PB4', () => {
     renderSheet();
     fireEvent.click(road(/From the Library/));
     fireEvent.click(screen.getByRole('button', { name: 'Pick Cove Sofa' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Separate need' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create separate selection' }));
     fireEvent.click(screen.getByRole('button', { name: 'Put it on the schedule' }));
     await screen.findByRole('alert');
     fireEvent.click(screen.getByRole('button', { name: 'Put it on the schedule' }));
@@ -356,7 +356,7 @@ describe('the line card — R-DI4 and R-PB4', () => {
     renderSheet();
     fireEvent.click(road(/From the Library/));
     fireEvent.click(screen.getByRole('button', { name: 'Pick Cove Sofa' }));
-    fireEvent.change(screen.getByLabelText('Optional placeholder to fill'), { target: { value: 'placeholder-1' } });
+    fireEvent.change(screen.getByLabelText('Fill preliminary selection (optional)'), { target: { value: 'placeholder-1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Put it on the schedule' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Filled placeholder · Cove Sofa');
     expect(placeProduct).toHaveBeenCalledWith(expect.objectContaining({ placeholderSelectionId: 'placeholder-1' }));

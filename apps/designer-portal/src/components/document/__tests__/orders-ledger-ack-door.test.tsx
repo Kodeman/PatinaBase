@@ -183,17 +183,17 @@ describe('OrdersLedger · log ack is the door (US-19 F7-8)', () => {
     render(<OrdersLedger onClose={jest.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'log ack ↓' }));
 
-    const theirOrder = screen.getByRole('textbox', { name: 'Their order №' });
+    const theirOrder = screen.getByRole('textbox', { name: 'Vendor order number' });
     await waitFor(() => expect(document.activeElement).toBe(theirOrder));
     expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Log what they confirmed' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Log order acknowledgment' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'log ack ↑' })).toBeInTheDocument();
   });
 
   it('flag off opens the form as today, without taking focus', () => {
     render(<OrdersLedger onClose={jest.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'log ack ↓' }));
-    const theirOrder = screen.getByRole('textbox', { name: 'Their order №' });
+    const theirOrder = screen.getByRole('textbox', { name: 'Vendor order number' });
     expect(screen.queryByTestId('ack-check-door')).not.toBeInTheDocument();
     expect(document.activeElement).not.toBe(theirOrder);
   });

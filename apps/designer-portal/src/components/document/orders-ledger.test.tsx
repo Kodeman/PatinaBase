@@ -295,7 +295,7 @@ describe('OrdersLedger quiet register', () => {
   it('opens as a two-line register with bulk controls hidden and row acts intact', () => {
     const { container, onClose } = renderBook();
 
-    expect(screen.getByText('Orders · Ledger')).toBeInTheDocument();
+    expect(screen.getByText('Purchase orders · Order register')).toBeInTheDocument();
     expect(screen.queryByText(/the studio book/i)).not.toBeInTheDocument();
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
     expect(container.querySelector('[data-orders-bulk-bar]')).toBeNull();
@@ -384,7 +384,7 @@ describe('OrdersLedger quiet register', () => {
     fireEvent.change(screen.getByLabelText('Shared ETA'), {
       target: { value: '2026-09-18' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Align ETA' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update ETA' }));
 
     await waitFor(() => expect(mockMutateEta).toHaveBeenCalledTimes(2));
     expect(mockMutateEta).toHaveBeenNthCalledWith(1, {
@@ -413,7 +413,7 @@ describe('OrdersLedger quiet register', () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText('Shared ETA')).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Align ETA' }),
+      screen.queryByRole('button', { name: 'Update ETA' }),
     ).not.toBeInTheDocument();
   });
 });

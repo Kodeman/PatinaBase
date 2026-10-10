@@ -201,7 +201,7 @@ export function ReminderArmRow({
           loadingLabel="Sending…"
           onClick={onSend}
         >
-          Send the reminder
+          Send proposal reminder
         </DocumentAction>
         <DocumentAction
           actionKey="cancel-proposal-reminder"
@@ -512,14 +512,14 @@ function LegacyProposalInstruments({
           <div className="min-w-0 flex-1">
             {!oneVoice && (
               <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                Drafting the proposal
+                Proposal in preparation
               </p>
             )}
             <p className="mt-0.5 text-[14px] leading-snug text-[var(--color-charcoal)]">
               {pct === 0 ? (
                 <>
-                  <b>Not started yet</b>
-                  {!oneVoice && <> — open the Contract Room to write it</>}
+                  <b>Not started</b>
+                  {!oneVoice && <> — open Proposal drafting to write it</>}
                 </>
               ) : fullyDrafted ? (
                 <>
@@ -529,11 +529,11 @@ function LegacyProposalInstruments({
                 // US-19 FR3 F3-20 / 515-3 — V11 is the whole paper: the count
                 // lives in the mark only.
                 <>
-                  <b>A draft taking shape</b> — keep going.
+                  <b>Draft in progress</b> — keep going.
                 </>
               ) : (
                 <>
-                  <b>A draft taking shape</b> · {pct}% written — keep going
+                  <b>Draft in progress</b> · {pct}% written — keep going
                 </>
               )}
             </p>

@@ -182,9 +182,9 @@ describe('PoMoneyOut · the schedule and its states', () => {
     const band = screen.getByTestId('po-money-out');
     expect(band).toHaveTextContent('Deposit $4,410 · paid');
     expect(band).toHaveTextContent('Balance $4,410 · due');
-    const acts = within(band).getAllByRole('button', { name: /^Record payment/ });
+    const acts = within(band).getAllByRole('button', { name: /^Record vendor payment/ });
     expect(acts).toHaveLength(1);
-    expect(acts[0]).toHaveAccessibleName('Record payment · Balance');
+    expect(acts[0]).toHaveAccessibleName('Record vendor payment · Balance');
   });
 
   it('reads a partial payment as "paid X of Y" and pre-fills the remainder', () => {
@@ -193,7 +193,7 @@ describe('PoMoneyOut · the schedule and its states', () => {
     expect(screen.getByTestId('po-money-out')).toHaveTextContent(
       'Balance $4,410 · paid $2,000 of $4,410 · due',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment · Balance' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record vendor payment · Balance' }));
     expect(screen.getByLabelText('Amount paid')).toHaveValue('2410.00');
   });
 });
@@ -202,10 +202,10 @@ describe('PoMoneyOut · record what we paid', () => {
   it('records the full remainder with the studio card it was paid on', async () => {
     setup();
     renderBand();
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment · Balance' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record vendor payment · Balance' }));
     expect(screen.getByLabelText('Amount paid')).toHaveValue('4410.00');
     expect(screen.getByLabelText('Paid with')).toHaveValue('pm:pm-amex');
-    fireEvent.change(screen.getByLabelText('Reference'), {
+    fireEvent.change(screen.getByLabelText('Payment reference'), {
       target: { value: ' conf 88123 ' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Record the balance · $4,410' }));
@@ -227,7 +227,7 @@ describe('PoMoneyOut · record what we paid', () => {
   it('records a partial payment by check on the day it was paid', async () => {
     setup();
     renderBand();
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment · Balance' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record vendor payment · Balance' }));
     fireEvent.change(screen.getByLabelText('Amount paid'), {
       target: { value: '$2,000' },
     });
@@ -254,7 +254,7 @@ describe('PoMoneyOut · record what we paid', () => {
     setup();
     mockUpload.mockResolvedValue({ storage_path: 'project-1/1-receipt.pdf' });
     renderBand();
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment · Balance' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record vendor payment · Balance' }));
     const file = new File(['%PDF'], 'receipt.pdf', { type: 'application/pdf' });
     fireEvent.change(screen.getByLabelText('Receipt'), { target: { files: [file] } });
     fireEvent.click(screen.getByRole('button', { name: 'Record the balance · $4,410' }));
@@ -272,7 +272,7 @@ describe('PoMoneyOut · record what we paid', () => {
   it('holds the act while the amount is not a dollar figure', () => {
     setup();
     renderBand();
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment · Balance' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record vendor payment · Balance' }));
     fireEvent.change(screen.getByLabelText('Amount paid'), { target: { value: 'two' } });
     expect(screen.getByRole('alert')).toHaveTextContent('Enter the amount paid');
     const act = screen.getByRole('button', { name: /^Record the balance/ });
@@ -285,7 +285,7 @@ describe('PoMoneyOut · record what we paid', () => {
     setup();
     mockRecord.mockRejectedValue(new Error('record_vendor_payment: paidOn is in the future'));
     renderBand();
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment · Balance' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record vendor payment · Balance' }));
     fireEvent.click(screen.getByRole('button', { name: 'Record the balance · $4,410' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('paidOn is in the future');
     expect(screen.getByTestId('record-payment-form')).toBeInTheDocument();
@@ -313,7 +313,7 @@ describe('PoMoneyOut · one-voice (US-19 D1, D3)', () => {
   it('keeps today’s secondary Record the balance, and no sentence, with the flag off', () => {
     setup();
     renderBand();
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment · Balance' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record vendor payment · Balance' }));
     const act = screen.getByRole('button', { name: 'Record the balance · $4,410' });
     expect(act).not.toHaveClass('da-terminal');
     expect(screen.queryByText(/^Records /)).not.toBeInTheDocument();
@@ -382,13 +382,13 @@ describe('PoMoneyOut · void, never edit', () => {
     const act = screen.getByRole('button', { name: 'Void payment' });
     expect(act).toBeDisabled();
     fireEvent.click(act);
-    fireEvent.change(screen.getByLabelText('Reason for voiding'), {
+    fireEvent.change(screen.getByLabelText('Reason for voiding payment record'), {
       target: { value: '   ' },
     });
     expect(act).toBeDisabled();
     expect(mockVoid).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText('Reason for voiding'), {
+    fireEvent.change(screen.getByLabelText('Reason for voiding payment record'), {
       target: { value: ' Recorded on the wrong order ' },
     });
     expect(act).toBeEnabled();
@@ -426,7 +426,7 @@ describe('PoMoneyOut · Stripe and catalog rows are read-only', () => {
     renderBand();
     const band = screen.getByTestId('po-money-out');
     expect(band).toHaveTextContent('Settles through Patina checkout');
-    expect(within(band).queryByRole('button', { name: /Record payment/ })).not.toBeInTheDocument();
+    expect(within(band).queryByRole('button', { name: /Record vendor payment/ })).not.toBeInTheDocument();
   });
 
   it('reads a Patina-catalog PO without amounts or a record act (V1)', () => {
@@ -436,7 +436,7 @@ describe('PoMoneyOut · Stripe and catalog rows are read-only', () => {
     expect(band).toHaveTextContent('Payment in full · due');
     expect(band).toHaveTextContent('Settles through Patina checkout');
     expect(band).not.toHaveTextContent('$');
-    expect(within(band).queryByRole('button', { name: /Record payment/ })).not.toBeInTheDocument();
+    expect(within(band).queryByRole('button', { name: /Record vendor payment/ })).not.toBeInTheDocument();
   });
 });
 
@@ -510,7 +510,7 @@ describe('MoneyOutCell · fronting fact (R9: a fact, never a block)', () => {
     expect(screen.getByTestId('money-out-fronting')).toHaveTextContent(
       'Client deposit not yet received',
     );
-    expect(screen.getByRole('button', { name: 'Record payment · Balance' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Record vendor payment · Balance' })).toBeEnabled();
   });
 
   it('reads each coverage state, and stays silent without an entry', () => {

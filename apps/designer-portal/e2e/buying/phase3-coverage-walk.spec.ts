@@ -441,10 +441,10 @@ async function openOrdersBookPaper(
   act: "send →" | "open →",
 ) {
   await openDocument(page, j, line);
-  await page.getByRole("button", { name: "Brief a vendor" }).click();
-  const pages = page.getByRole("navigation", { name: "Orders book pages" });
+  await page.getByRole("button", { name: "Vendor correspondence" }).click();
+  const pages = page.getByRole("navigation", { name: "Order register views" });
   await expect(pages).toBeVisible({ timeout: 30_000 });
-  await pages.getByRole("button", { name: "Ledger", exact: true }).click();
+  await pages.getByRole("button", { name: "Order register", exact: true }).click();
   // Rows sit under their maker's heading; a row names its job.
   await page
     .locator("[data-orders-po-row]")
@@ -620,7 +620,7 @@ WHERE vq.project_id = ${q(QUOTE.projectId)}`),
     const ackRecord = poCell.getByTestId("ack-record");
     await expect(ackRecord).toBeVisible({ timeout: 30_000 });
     await shot(page, testInfo, "b1-ack-difference");
-    await ackRecord.getByRole("button", { name: "Dispute" }).click();
+    await ackRecord.getByRole("button", { name: "Dispute acknowledgment" }).click();
     await expect(
       ackRecord.getByText(
         "Disputed. The reply to the maker is drafted for your review; nothing is sent until you send it.",
@@ -707,7 +707,7 @@ WHERE purchase_order_id = ${q(CHANGE_PO)}`),
       .getByLabel(`Install state for ${INSTALL_LINE.name}`)
       .selectOption("on_site");
     await shot(page, testInfo, "c1-manifest-filled");
-    await row.getByRole("button", { name: "Save", exact: true }).click();
+    await row.getByRole("button", { name: "Save installation details", exact: true }).click();
     await expect
       .poll(
         () =>
@@ -719,7 +719,7 @@ FROM public.install_manifest_items WHERE ffe_item_id = ${q(INSTALL_LINE.id)}`),
       .toBe(`Hall, north wall|${installOn}|Hollis crew|on_site`);
     // Saved: the row re-reads its record, nothing left to save.
     await expect(
-      row.getByRole("button", { name: "Save", exact: true }),
+      row.getByRole("button", { name: "Save installation details", exact: true }),
     ).toHaveCount(0, {
       timeout: 30_000,
     });
@@ -733,8 +733,8 @@ FROM public.install_manifest_items WHERE ffe_item_id = ${q(INSTALL_LINE.id)}`),
     await row
       .getByLabel(`Punch note for ${INSTALL_LINE.name}`)
       .fill("Touch up the plaster at the back plate");
-    await row.getByLabel("Punch due on").fill(dueOn);
-    await row.getByRole("button", { name: "Record it" }).click();
+    await row.getByLabel("Punch item due date").fill(dueOn);
+    await row.getByRole("button", { name: "Record punch item" }).click();
     const punch = row
       .getByTestId("install-punch-item")
       .filter({ hasText: "Touch up the plaster at the back plate" });
@@ -745,9 +745,9 @@ SELECT due_on || '|' || (resolved_at IS NULL)
 FROM public.install_punch_items WHERE ffe_item_id = ${q(INSTALL_LINE.id)}`),
     ).toBe(`${dueOn}|true`);
     await shot(page, testInfo, "c2-punch-recorded");
-    await punch.getByRole("button", { name: "Resolve" }).click();
+    await punch.getByRole("button", { name: "Resolve punch item" }).click();
     await expect(punch).toContainText("resolved", { timeout: 30_000 });
-    await expect(punch.getByRole("button", { name: "Resolve" })).toHaveCount(0);
+    await expect(punch.getByRole("button", { name: "Resolve punch item" })).toHaveCount(0);
     expect(
       psqlScalar(`
 SELECT (resolved_at IS NOT NULL) || '|' || (resolved_by = ${q(memberId)})
@@ -781,7 +781,7 @@ FROM public.install_punch_items WHERE ffe_item_id = ${q(INSTALL_LINE.id)}`),
     await form.getByLabel("Description").fill("Linen memo, 18 in");
     await form.getByLabel("Return by").fill(returnBy);
     await shot(page, testInfo, "d1-request-sample");
-    await form.getByRole("button", { name: "Record it" }).click();
+    await form.getByRole("button", { name: "Record punch item" }).click();
     await expect(samples.getByTestId("line-sample")).toHaveCount(1, {
       timeout: 30_000,
     });
@@ -1117,7 +1117,7 @@ COMMIT;`);
     await expect(reply.getByRole("status")).toHaveText(/^Sending since /, {
       timeout: 30_000,
     });
-    const again = reply.getByRole("button", { name: "Send again" });
+    const again = reply.getByRole("button", { name: "Resend correspondence" });
     await expect(again).toBeVisible();
     await shot(page, testInfo, "g5-sending-stalled");
     const draftSend = page.waitForResponse((r) =>

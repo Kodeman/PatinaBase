@@ -311,7 +311,7 @@ async function expectPiecesHead(page: Page): Promise<void> {
   });
   await expect(
     head.locator('[data-action-key="open-add-to-project"]'),
-  ).toContainText("Add to the job");
+  ).toContainText("Add project items");
   await expect(
     head.locator('[data-action-key="record-a-change-pieces-head"]'),
   ).toContainText("Record a change");
@@ -638,9 +638,9 @@ ON CONFLICT (id) DO NOTHING;`);
     await shot(page, testInfo, "05-tracking-shipped");
 
     // The studio vendor account card, from the Orders book's vendor page.
-    await page.getByRole("button", { name: "Brief a vendor" }).click();
+    await page.getByRole("button", { name: "Vendor correspondence" }).click();
     await expect(
-      page.getByRole("navigation", { name: "Orders book pages" }),
+      page.getByRole("navigation", { name: "Order register views" }),
     ).toBeVisible({ timeout: 30_000 });
     const card = page.locator("[data-vendor-account]");
     if (!(await card.isVisible())) {
@@ -737,18 +737,18 @@ WHERE i.purchase_order_id = ${q(poId)} AND c.state = 'drafted'`),
       timeout: 30_000,
     });
     // A studio-lane PO, and the member is not its payer: no Pay now.
-    await expect(moneyOut.getByRole("button", { name: /Pay now/ })).toHaveCount(
+    await expect(moneyOut.getByRole("button", { name: /Pay vendor now/ })).toHaveCount(
       0,
     );
 
     await moneyOut
-      .getByRole("button", { name: "Record payment · Deposit" })
+      .getByRole("button", { name: "Record vendor payment · Deposit" })
       .click();
     let form = moneyOut.getByTestId("record-payment-form");
     await expect(form.getByLabel("Amount paid")).toHaveValue(DEPOSIT);
     await form.getByLabel("Amount paid").fill(PARTIAL);
     await form.getByLabel("Paid with").selectOption("kind:check");
-    await form.getByLabel("Reference").fill(`chk ${RUN}-1`);
+    await form.getByLabel("Payment reference").fill(`chk ${RUN}-1`);
     await form
       .getByRole("button", { name: `Record the deposit · ${usd(PARTIAL)}` })
       .click();
@@ -764,12 +764,12 @@ WHERE i.purchase_order_id = ${q(poId)} AND c.state = 'drafted'`),
     await shot(page, testInfo, "09-partial-deposit");
 
     await moneyOut
-      .getByRole("button", { name: "Record payment · Deposit" })
+      .getByRole("button", { name: "Record vendor payment · Deposit" })
       .click();
     form = moneyOut.getByTestId("record-payment-form");
     await expect(form.getByLabel("Amount paid")).toHaveValue(REMAINDER);
     await form.getByLabel("Paid with").selectOption("kind:check");
-    await form.getByLabel("Reference").fill(`chk ${RUN}-2`);
+    await form.getByLabel("Payment reference").fill(`chk ${RUN}-2`);
     await form
       .getByRole("button", { name: `Record the deposit · ${usd(REMAINDER)}` })
       .click();

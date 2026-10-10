@@ -510,7 +510,7 @@ test.describe("Contract Room · the galley", () => {
     await openGalley(page, proposalId);
 
     await page.locator('[data-action-key="read-whole-agreement"]').click();
-    const sheet = page.getByRole("dialog", { name: "The whole paper" });
+    const sheet = page.getByRole("dialog", { name: "Full agreement" });
     await expect(sheet).toBeVisible();
 
     // FS-5/FS-13 — the SAME renderer the galley prints, never a third.

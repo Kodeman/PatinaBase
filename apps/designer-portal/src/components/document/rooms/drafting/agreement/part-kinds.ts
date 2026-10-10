@@ -46,19 +46,19 @@ const KIND_LABELS: Record<AgreementPartKind, string> = {
 
 const VARIANT_LABELS: Record<string, string> = {
   rate_card: "Role rates",
-  ceiling: "Ceiling",
+  ceiling: "Fee ceiling",
   retainer: "Retainer",
-  cadence: "Billing cadence",
+  cadence: "Billing frequency",
   procurement: "Furnishings deposit",
   flat: "Flat fee",
-  per_phase: "Fee by phase",
-  percent_of_cost: "Percent of cost",
-  percent_of_spend: "Percent of spend",
+  per_phase: "Phase fees",
+  percent_of_cost: "Percentage of cost",
+  percent_of_spend: "Percentage of spend",
   cost_plus: "Cost plus",
   day_rate: "Day rate",
-  package: "Package",
+  package: "Package fee",
   pricing_basis: "Pricing basis",
-  draws: "Draws",
+  draws: "Progress draws",
   allowances: "Allowances",
 };
 

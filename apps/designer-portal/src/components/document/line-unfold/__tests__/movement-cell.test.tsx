@@ -99,13 +99,13 @@ describe('MovementCell date requests', () => {
       null,
     );
     expect(screen.getByText('Date request drafted · no address')).toBeInTheDocument();
-    const send = screen.getByRole('button', { name: 'Send' });
+    const send = screen.getByRole('button', { name: 'Send correspondence' });
     expect(send).toHaveAttribute('aria-disabled', 'true');
     expect(send).toHaveAccessibleDescription('No address on file for Fixture Metalworks.');
 
     // A brand-only maker has no record to keep an address on: the repair
     // lands on the line's maker selector.
-    fireEvent.click(screen.getByRole('button', { name: 'Add an address' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add recipient email' }));
     expect(land).toHaveBeenCalledTimes(1);
     expect((land.mock.calls[0][0] as CustomEvent).detail).toEqual({ itemId: 'line-1', cell: 'maker' });
     window.removeEventListener('document:focus-ffe-line', land);

@@ -381,7 +381,7 @@ describe("the Contract Room with the Library on", () => {
       .find((item) => within(item).queryByText("House rules")) as HTMLElement;
     fireEvent.click(within(row).getByRole("button"));
     fireEvent.click(
-      screen.getByRole("button", { name: "Add to this agreement" }),
+      screen.getByRole("button", { name: "Add to agreement" }),
     );
 
     await waitFor(() => expect(railRows()).toHaveLength(3));
@@ -626,7 +626,7 @@ describe("the Contract Room with the Library on", () => {
       .find((item) => within(item).queryByText("House rules")) as HTMLElement;
     fireEvent.click(within(libraryRow).getByRole("button"));
     fireEvent.click(
-      screen.getByRole("button", { name: "Add to this agreement" }),
+      screen.getByRole("button", { name: "Add to agreement" }),
     );
     await waitFor(() => expect(railRows()).toHaveLength(3));
 

@@ -299,7 +299,7 @@ describe('CallSheetMount — the chevron is wired', () => {
     expect(sheet).toHaveAttribute('data-role', 'sub');
     // The call sheet is still underneath — a sheet never unmounts what it
     // opened from (D1).
-    expect(screen.getByText('Call sheet · Ellsworth Residence')).toBeInTheDocument();
+    expect(screen.getByText('Project directory · Ellsworth Residence')).toBeInTheDocument();
   });
 
   it('puts the person away without closing the call sheet', () => {

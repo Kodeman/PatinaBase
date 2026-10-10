@@ -68,9 +68,9 @@ async function addAndSendOneRecipient() {
   fireEvent.change(screen.getByLabelText('Recipient name'), {
     target: { value: 'Jamie Client' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add recipient' }));
   fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
-  await screen.findByText('sent');
+  await screen.findByText('Sent');
 }
 
 describe('PlanIssueCeremony ratios (FR4 Fix 12)', () => {
@@ -134,11 +134,11 @@ describe('PlanIssueCeremony ratios (FR4 Fix 12)', () => {
     fireEvent.change(screen.getByLabelText('Recipient name'), {
       target: { value: 'Jamie Client' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add recipient' }));
     fireEvent.change(screen.getByLabelText('Recipient name'), {
       target: { value: 'Morgan Trade' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add recipient' }));
     fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
 
     expect(await screen.findByText(/1 sent · 1 to go/)).toBeInTheDocument();

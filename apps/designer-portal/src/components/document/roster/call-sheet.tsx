@@ -148,11 +148,11 @@ export function CallSheet({
 
   return (
     <>
-      <DocSheet open={open} onClose={onClose} title="Call sheet" icon={Users} wide>
+      <DocSheet open={open} onClose={onClose} title="Project directory" icon={Users} wide>
         <style>{PRINT_CSS}</style>
         <div data-call-sheet-region>
           <p className="font-heading text-[1.05rem] italic leading-snug text-[var(--color-charcoal)]">
-            Call sheet · {projectTitle}
+            Project directory · {projectTitle}
           </p>
 
           {/* R-U — the site access card, folded to one line at the head, with
@@ -168,7 +168,7 @@ export function CallSheet({
               onClick={() => setAccessOpen(true)}
               className="call-sheet-no-print inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-charcoal)] underline decoration-[var(--color-clay)] underline-offset-4"
             >
-              Open the site access card
+              Open site access details
             </button>
           </div>
 
@@ -190,7 +190,7 @@ export function CallSheet({
               variant="primary"
               onClick={() => openPicker(false)}
             >
-              From the rolodex
+              Add from directory
             </DocumentAction>
             <DocumentAction
               actionKey="add-new-person"
@@ -200,14 +200,14 @@ export function CallSheet({
                 setAddOpen(true);
               }}
             >
-              New person
+              Add new project contact
             </DocumentAction>
             <DocumentAction
               actionKey="print-call-sheet"
               variant="tertiary"
               onClick={() => window.print()}
             >
-              Print
+              Print contact sheet
             </DocumentAction>
           </DocumentActionGroup>
 
@@ -231,21 +231,21 @@ export function CallSheet({
 
           {isLoading && (
             <p className="py-8 text-center text-[0.74rem] text-[var(--color-aged-oak)]">
-              Reading the call sheet…
+              Loading project directory…
             </p>
           )}
 
           {empty && (
             <div className="mt-6 border-t border-[var(--color-pearl)] pt-6">
               <p className="text-[0.8rem] text-[var(--color-aged-oak)]">
-                – No one is on the call sheet yet.
+                – No project contacts yet.
               </p>
               <button
                 type="button"
                 onClick={() => openPicker(false)}
                 className="call-sheet-no-print mt-2 inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-charcoal)] underline decoration-[var(--color-clay)] underline-offset-4"
               >
-                Add the first name
+                Add first project contact
               </button>
             </div>
           )}
@@ -284,8 +284,8 @@ export function CallSheet({
         projectName={projectTitle}
         startInAdd={pickerStartsInAdd}
         onAdded={(name) => {
-          setAdded(`${name} is on the call sheet.`);
-          setAnnouncement(`${name} is on the call sheet.`);
+          setAdded(`${name} added to project contacts.`);
+          setAnnouncement(`${name} added to project contacts.`);
         }}
       />
 

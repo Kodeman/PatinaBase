@@ -266,7 +266,7 @@ export function PlanIssueCeremony({
     <section aria-label="Issue the current set" className="px-4 py-6 md:px-8">
       <div className="mx-auto grid max-w-[1200px] gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0">
-          <SectionEyebrow>The issue</SectionEyebrow>
+          <SectionEyebrow>Issue details</SectionEyebrow>
 
           <div className="grid gap-3">
             <Input
@@ -280,7 +280,7 @@ export function PlanIssueCeremony({
             />
             <div
               role="group"
-              aria-label="What this set is for"
+              aria-label="Issue purpose"
               className="flex flex-wrap gap-1.5"
             >
               {PURPOSES.map((value) => (
@@ -306,7 +306,7 @@ export function PlanIssueCeremony({
 
           {/* Contents — the whole current set, with what moved marked */}
           <div className="mt-8">
-            <SectionEyebrow count={selectedIds.length}>Contents</SectionEyebrow>
+            <SectionEyebrow count={selectedIds.length}>Issue contents</SectionEyebrow>
             {priorIssue && (
               <p className="mb-3 max-w-xl text-[0.82rem] text-[var(--text-muted)]">
                 {oneVoice ? (
@@ -434,7 +434,7 @@ export function PlanIssueCeremony({
                     setFreeCompany('');
                   }}
                 >
-                  Add
+                  Add recipient
                 </DocumentAction>
               </DocumentActionRow>
             </div>
@@ -461,7 +461,7 @@ export function PlanIssueCeremony({
                         )}
                       </span>
                       {link ? (
-                        <StatusChip label="sent" color="#85947C" />
+                        <StatusChip label="Sent" color="#85947C" />
                       ) : (
                         <DocumentActionRow
                           surfaceKey="plan-room"
@@ -477,7 +477,7 @@ export function PlanIssueCeremony({
                               )
                             }
                           >
-                            Remove
+                            Remove recipient
                           </DocumentAction>
                         </DocumentActionRow>
                       )}
@@ -513,9 +513,9 @@ export function PlanIssueCeremony({
                   {name}
                 </p>
                 {finalized ? (
-                  <Stamp label="ISSUED" color="var(--color-sage)" ink="var(--color-sage-ink)" />
+                  <Stamp label="Issued" color="var(--color-sage)" ink="var(--color-sage-ink)" />
                 ) : (
-                  <StatusChip label="Not yet minted" color="var(--color-aged-oak)" />
+                  <StatusChip label="Not yet generated" color="var(--color-aged-oak)" />
                 )}
               </div>
               <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
@@ -546,7 +546,7 @@ export function PlanIssueCeremony({
                 surfaceKey="plan-room"
                 regionKey="issue-ceremony"
                 className="mt-4"
-                aria-label="Issue the set"
+                aria-label="Issue set"
               >
                 {!finalized && (
                   <DocumentAction

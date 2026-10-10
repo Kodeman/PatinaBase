@@ -564,7 +564,7 @@ export function LetterheadInstruments({
           ? [
               {
                 actionKey: 'preview-as-client',
-                label: "Preview the client's copy",
+                label: "Preview client edition",
                 onPress: () => setMirrorOpen(true),
               },
             ]
@@ -573,12 +573,12 @@ export function LetterheadInstruments({
           ? [
               {
                 actionKey: 'sharing-settings',
-                label: 'Sharing',
+                label: 'Client access',
                 onPress: () => setSharingAsk((n) => n + 1),
               },
               {
                 actionKey: 'open-call-sheet',
-                label: 'Call sheet',
+                label: 'Project directory',
                 onPress: () =>
                   window.dispatchEvent(
                     new CustomEvent('document:open-call-sheet', {
@@ -588,17 +588,17 @@ export function LetterheadInstruments({
               },
               {
                 actionKey: 'set-dates',
-                label: 'Set dates',
+                label: 'Set project dates',
                 onPress: () => openVitalsEditor('target'),
               },
               {
                 actionKey: 'set-budget-band',
-                label: 'Set a budget band',
+                label: 'Set budget range',
                 onPress: () => openVitalsEditor('budget'),
               },
             ]
           : []),
-        { actionKey: 'keys', label: 'Keys', onPress: () => openKeys('drawer') },
+        { actionKey: 'keys', label: 'Keyboard shortcuts', onPress: () => openKeys('drawer') },
       ].map((act, order) => ({ ...act, order }))
     : [];
 
@@ -805,7 +805,7 @@ export function LetterheadInstruments({
                 setComposing(false);
               }}
             >
-              Send
+              Send client message
             </DocumentAction>
             <DocumentAction
               actionKey="cancel-message"
@@ -919,9 +919,9 @@ function CallSheetInstrument({ projectId }: { projectId: string }) {
       // 327px run cannot afford, and the ledger's second row cost 44px of the
       // 390 letterhead. CSS, not a viewport read — nothing in this letterhead
       // measures the window in JS (N-03).
-      aria-label={`Call sheet · ${roster.length}`}
+      aria-label={`Project directory · ${roster.length}`}
     >
-      Call sheet
+      Project directory
       <span className="max-[1179px]:hidden"> · {roster.length}</span>
     </DocumentAction>
   );

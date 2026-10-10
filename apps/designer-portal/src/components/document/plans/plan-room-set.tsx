@@ -175,20 +175,20 @@ export function PlanRoomSet({
           <DocumentActionRow
             surfaceKey="plan-room"
             regionKey="holders-behind"
-            aria-label="Bring the holders current"
+            aria-label="Update drawing recipients"
           >
             <DocumentAction
               actionKey="issue-current-set-band"
               variant="primary"
               onClick={onIssue}
             >
-              Issue the current set
+              Issue current set
             </DocumentAction>
           </DocumentActionRow>
         </div>
       )}
 
-      <SectionEyebrow count={set.length}>The current set</SectionEyebrow>
+      <SectionEyebrow count={set.length}>Current set</SectionEyebrow>
       <div className="mb-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {set.map((row) => {
           const held = holders
@@ -244,17 +244,17 @@ export function PlanRoomSet({
         })}
       </div>
 
-      <SectionEyebrow count={log.length}>The drawing log</SectionEyebrow>
+      <SectionEyebrow count={log.length}>Drawing register</SectionEyebrow>
       {/* The header sits OUTSIDE the list: a column heading is not a list item,
           and a screen reader counting it as one miscounts the log. */}
       <div
         aria-hidden
         className="grid grid-cols-[5.5rem_7rem_minmax(0,1fr)] gap-3 border-b border-[var(--color-pearl)] pb-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] sm:grid-cols-[6rem_7rem_minmax(0,1fr)_12rem]"
       >
-        <span>When</span>
+        <span>Date</span>
         <span>Event</span>
-        <span>What</span>
-        <span className="hidden sm:block">Who</span>
+        <span>Drawing or change</span>
+        <span className="hidden sm:block">Person</span>
       </div>
       <div role="list" aria-label="Drawing log" className="mb-10 grid">
         {log.map((row) => (
@@ -287,10 +287,10 @@ export function PlanRoomSet({
             className="grid grid-cols-[minmax(0,1fr)_6rem_5.5rem] gap-3 border-b border-[var(--color-pearl)] pb-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] sm:grid-cols-[minmax(0,1fr)_6rem_5.5rem_8rem_minmax(0,14rem)]"
           >
             <span>Recipient</span>
-            <span>For</span>
+            <span>Purpose</span>
             <span>Sent</span>
             <span className="hidden sm:block">Opened</span>
-            <span className="hidden sm:block">Link</span>
+            <span className="hidden sm:block">Access link</span>
           </div>
           <div role="list" aria-label="Transmittals" className="grid">
             {transmittals.map((transmittal) => {
@@ -359,7 +359,7 @@ export function PlanRoomSet({
                       loadingLabel="Minting…"
                       onClick={() => reissue(transmittal.id)}
                     >
-                      Reissue the link
+                      Reissue access link
                     </DocumentAction>
                     {confirmRevoke === transmittal.id ? (
                       <DocumentAction
@@ -376,7 +376,7 @@ export function PlanRoomSet({
                         disabled={!token || token.status === 'revoked'}
                         onClick={() => setConfirmRevoke(transmittal.id)}
                       >
-                        Revoke
+                        Revoke access
                       </DocumentAction>
                     )}
                   </DocumentActionRow>

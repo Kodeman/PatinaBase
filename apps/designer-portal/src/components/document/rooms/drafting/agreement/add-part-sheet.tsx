@@ -198,7 +198,7 @@ export function AddPartSheet({
   };
 
   return (
-    <DocSheet open={open} onClose={close} title="From your Library">
+    <DocSheet open={open} onClose={close} title="Agreement clause library">
       <div className="mx-auto max-w-[720px] space-y-6">
         <p className="text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
           Add a part this studio already has, or start a blank one. Nothing is
@@ -206,7 +206,7 @@ export function AddPartSheet({
         </p>
 
         <div className="grid gap-8 sm:grid-cols-2">
-          <section aria-label="Parts">
+          <section aria-label="Agreement parts">
             <p className={LABEL}>Parts</p>
             {library.isLoading ? (
               <p className="mt-3 text-[12px] italic text-[var(--text-muted)]">
@@ -263,7 +263,7 @@ export function AddPartSheet({
             )}
           </section>
 
-          <section aria-label="Blank">
+          <section aria-label="Blank section">
             <p className={LABEL}>Blank</p>
             <div className="mt-3 space-y-1">
               {BLANK_KINDS.map((blank) => (
@@ -302,7 +302,7 @@ export function AddPartSheet({
                 </Button>
                 {scheduleOpen && (
                   <ul
-                    aria-label="Schedule variants"
+                    aria-label="Fee schedule types"
                     className="mt-1 border-t border-[var(--doc-ink-border)]"
                   >
                     {AGREEMENT_SCHEDULE_VARIANTS.map((variant) => {
@@ -362,7 +362,7 @@ export function AddPartSheet({
 
         <div className="flex items-center gap-3 border-t border-[var(--doc-ink-border)] pt-4">
           <Button disabled={!chosen} onClick={add}>
-            Add to this agreement
+            Add to agreement
           </Button>
           <Button variant="ghost" onClick={close}>
             Cancel

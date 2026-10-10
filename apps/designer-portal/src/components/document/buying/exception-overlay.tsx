@@ -135,7 +135,7 @@ export function ExceptionRow({
             variant={exception.status === 'open' ? 'primary' : 'secondary'}
             onClick={onChoose}
           >
-            Choose a path
+            Choose resolution
           </DocumentAction>
         )}
       </div>
@@ -202,7 +202,7 @@ export function SomethingWrongSheet({
     <DocSheet open={open} onClose={onClose} title={title} icon={AlertTriangle} kind="procurement-exception">
       <div data-testid="something-wrong-sheet" className="space-y-4">
         <fieldset>
-          <legend className={LABEL_CLS}>What happened</legend>
+          <legend className={LABEL_CLS}>Exception type</legend>
           <div className="mt-1.5 space-y-1">
             {OPENABLE_TYPES.map((t) => (
               <label key={t.type} className="flex items-baseline gap-2 text-[12px]">
@@ -222,7 +222,7 @@ export function SomethingWrongSheet({
         </fieldset>
         {type === 'backorder' && (
           <label className="block">
-            <span className={LABEL_CLS}>Order a substitute by (optional)</span>
+            <span className={LABEL_CLS}>Replacement order deadline (optional)</span>
             <input
               type="date"
               value={orderBy}
@@ -232,7 +232,7 @@ export function SomethingWrongSheet({
           </label>
         )}
         <label className="block">
-          <span className={LABEL_CLS}>What you found</span>
+          <span className={LABEL_CLS}>Exception details</span>
           <textarea
             rows={2}
             value={note}
@@ -259,7 +259,7 @@ export function SomethingWrongSheet({
             loadingLabel="Opening…"
             onClick={() => void submit()}
           >
-            Open the exception
+            Open order exception
           </DocumentAction>
         </DocumentActionGroup>
       </div>
@@ -298,13 +298,13 @@ function MoneyBackFields({
           </label>
         ))}
         <label className="flex items-baseline gap-1.5">
-          <span className={LABEL_CLS}>Amount $</span>
+          <span className={LABEL_CLS}>Amount ($)</span>
           <input
             inputMode="decimal"
             value={value.amount}
             disabled={disabled}
             onChange={(e) => onChange({ ...value, amount: e.target.value })}
-            aria-label="Amount back"
+            aria-label="Refund or credit amount"
             className={`w-24 border-b border-[var(--color-pearl)] ${FIELD_CLS} text-[12px]`}
           />
         </label>
@@ -433,7 +433,7 @@ export function ExceptionPathSheet({
         ) : (
           <>
             <fieldset>
-              <legend className={LABEL_CLS}>The path</legend>
+              <legend className={LABEL_CLS}>Resolution</legend>
               <div className="mt-1.5 space-y-1">
                 {paths.map((p) => (
                   <label key={p.path} className="flex items-baseline gap-2 text-[12px]">
@@ -493,7 +493,7 @@ export function ExceptionPathSheet({
                 loadingLabel="Recording…"
                 onClick={() => void record()}
               >
-                Record the path
+                Record resolution
               </DocumentAction>
             </DocumentActionGroup>
           </>
@@ -614,7 +614,7 @@ export function SubstitutionFlow({
       ) : (
         <>
           <fieldset>
-            <legend className={LABEL_CLS}>Offer the client</legend>
+            <legend className={LABEL_CLS}>Client resolution options</legend>
             <ul className="mt-1.5 space-y-1.5">
               {candidates.map((alt) => {
                 const reading = alternateReading(alt, Boolean(canSeeMargin));
@@ -746,7 +746,7 @@ export function SubstitutionFlow({
 
   return (
     <section data-testid="substitution-flow" data-stage={stage.stage} className="space-y-2">
-      <p className={LABEL_CLS}>Substitute</p>
+      <p className={LABEL_CLS}>Substitute item</p>
       {body}
       {error && (
         <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
@@ -864,7 +864,7 @@ export function TrackClaimAct({ claimId, ffeItemId }: { claimId: string; ffeItem
   };
   return (
     <div className="flex flex-wrap items-baseline gap-2 py-0.5">
-      <span className="text-[11px] text-[var(--color-charcoal)]">A damage claim with no clock yet.</span>
+      <span className="text-[11px] text-[var(--color-charcoal)]">Damage claim deadline not set.</span>
       <DocumentAction
         actionKey="track-claim-as-exception"
         surfaceKey="project"
@@ -875,7 +875,7 @@ export function TrackClaimAct({ claimId, ffeItemId }: { claimId: string; ffeItem
         loadingLabel="Tracking…"
         onClick={track}
       >
-        Track it
+        Track claim
       </DocumentAction>
       {error && (
         <p role="alert" className="w-full text-[11px] text-[var(--color-terracotta-ink)]">

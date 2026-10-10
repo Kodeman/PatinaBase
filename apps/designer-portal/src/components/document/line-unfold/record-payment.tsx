@@ -363,7 +363,7 @@ export function RecordPaymentForm({
           </select>
         </label>
         <label className="flex items-baseline gap-1.5">
-          <span className={LABEL_CLS}>Reference</span>
+          <span className={LABEL_CLS}>Payment reference</span>
           <input
             aria-label="Reference"
             placeholder="check № or confirmation"
@@ -375,7 +375,7 @@ export function RecordPaymentForm({
         </label>
       </div>
       <label className="flex items-baseline gap-1.5">
-        <span className={LABEL_CLS}>Receipt</span>
+        <span className={LABEL_CLS}>Payment receipt</span>
         <input
           type="file"
           aria-label="Receipt"
@@ -458,7 +458,7 @@ export function VoidPaymentForm({
   return (
     <div className="mt-1 flex flex-wrap items-center gap-x-2 border-l border-[var(--color-pearl)] pl-2.5">
       <input
-        aria-label="Reason for voiding"
+        aria-label="Reason for voiding payment record"
         placeholder="why this record is wrong"
         value={reason}
         disabled={voidPayment.isPending}
@@ -523,7 +523,7 @@ export function PoMoneyOut({
   const [recordingRowId, setRecordingRowId] = useState<string | null>(null);
   const [voidingId, setVoidingId] = useState<string | null>(null);
   const oneVoice = useFeatureFlag('one-voice').value === true;
-  const recordWord = oneVoice ? needActLabel('payment_due') : 'Record payment';
+  const recordWord = oneVoice ? needActLabel('payment_due') : 'Record vendor payment';
   // C-22: a catalog row still owed (a failed or never-finished checkout) pays
   // through the same Patina checkout — the Desk's "Pay again" lands here.
   const startCheckout = useStartPoCheckout({ errorSurface: 'inline' });
@@ -617,7 +617,7 @@ export function PoMoneyOut({
               onClick={() => setVoidingId(r.id)}
               aria-label={`Void the ${fmtUsd(r.amount_cents)} payment`}
             >
-              void
+              Void payment record
             </DocumentAction>
           )
         )}
@@ -680,7 +680,7 @@ export function PoMoneyOut({
                     onClick={() => void payNow(p.id!)}
                     aria-label={`Pay now · ${scheduleName(p)}`}
                   >
-                    Pay now →
+                    Pay vendor now →
                   </DocumentAction>
                 )}
               </span>

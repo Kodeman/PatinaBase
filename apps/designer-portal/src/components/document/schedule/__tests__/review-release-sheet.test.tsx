@@ -159,11 +159,11 @@ describe('ReviewReleaseSheet', () => {
     expect(screen.getAllByRole('columnheader').map((c) => c.textContent)).toEqual([
       'Item',
       'Room',
-      'Signed qty',
+      'Signed quantity',
       'Client price',
       'Item',
       'Room',
-      'Signed qty',
+      'Signed quantity',
       'Client price',
     ]);
     expect(screen.getByText('Walnut bed, king')).toBeInTheDocument();
@@ -172,7 +172,7 @@ describe('ReviewReleaseSheet', () => {
 
   it('figures the total, the deposit and the balance', () => {
     renderSheet();
-    expect(screen.getByText('authorization total')).toBeInTheDocument();
+    expect(screen.getByText('Authorization total')).toBeInTheDocument();
     expect(screen.getByText('$23,300')).toBeInTheDocument();
     expect(screen.getByText('deposit at 50%')).toBeInTheDocument();
     expect(screen.getAllByText('$11,650')).toHaveLength(2);
@@ -190,7 +190,7 @@ describe('ReviewReleaseSheet', () => {
     // The one-currency room still states its figure.
     expect(screen.getByText(/1 line · \$6,800/)).toBeInTheDocument();
     // The authorization total gives way to the note, and no deposit is figured.
-    expect(screen.getByText('authorization total')).toBeInTheDocument();
+    expect(screen.getByText('Authorization total')).toBeInTheDocument();
     expect(
       screen.getByText('Mixed currencies — total unavailable (EUR, USD)'),
     ).toBeInTheDocument();
@@ -221,8 +221,8 @@ describe('ReviewReleaseSheet', () => {
 
   it('takes an other percent by hand', () => {
     renderSheet();
-    fireEvent.click(screen.getByRole('button', { name: 'Other' }));
-    fireEvent.change(screen.getByLabelText('Deposit percent'), {
+    fireEvent.click(screen.getByRole('button', { name: 'Custom percentage' }));
+    fireEvent.change(screen.getByLabelText('Deposit percentage'), {
       target: { value: '35' },
     });
     expect(screen.getByText('deposit at 35%')).toBeInTheDocument();
@@ -237,7 +237,7 @@ describe('ReviewReleaseSheet', () => {
 
   it('releases with the ticked lines and the chosen deposit', async () => {
     renderSheet();
-    fireEvent.click(screen.getByRole('button', { name: /save as draft/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save authorization draft/i }));
     await waitFor(() => expect(releaseMutate).toHaveBeenCalled());
     expect(releaseMutate).toHaveBeenCalledWith({
       name: 'Furnishings authorization № 3',
@@ -317,13 +317,13 @@ describe('ReviewReleaseSheet', () => {
     // The coverage remedy cannot help an already-covering, merely-open
     // checkpoint — publishing another one just creates another 'open' one.
     expect(
-      screen.queryByRole('button', { name: /publish fresh checkpoint/i }),
+      screen.queryByRole('button', { name: /issue updated budget checkpoint/i }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole('button', { name: /record audited override/i }),
     );
-    fireEvent.change(screen.getByLabelText(/reason for the override/i), {
+    fireEvent.change(screen.getByLabelText(/override reason/i), {
       target: { value: 'Client confirmed verbally on the walkthrough call.' },
     });
     fireEvent.click(screen.getByRole('button', { name: /^record override$/i }));
@@ -399,7 +399,7 @@ describe('ReviewReleaseSheet', () => {
     };
     renderSheet();
     fireEvent.click(
-      screen.getByRole('button', { name: /publish fresh checkpoint/i }),
+      screen.getByRole('button', { name: /issue updated budget checkpoint/i }),
     );
     await waitFor(() => expect(publishMutate).toHaveBeenCalled());
     expect(publishMutate).toHaveBeenCalledWith({
@@ -445,7 +445,7 @@ describe('ReviewReleaseSheet', () => {
     process.env.NEXT_PUBLIC_FLAG_OVERRIDES = 'one-voice:true';
     try {
       renderSheet();
-      const confirm = screen.getByRole('button', { name: 'Release for authorization' });
+      const confirm = screen.getByRole('button', { name: 'Issue for purchasing authorization' });
       expect(confirm).toHaveClass('da-terminal');
       expect(screen.queryByRole('button', { name: 'Send for signature' })).not.toBeInTheDocument();
       const sentence = screen.getByText(/Prices lock on release\./);
@@ -470,7 +470,7 @@ describe('ReviewReleaseSheet', () => {
   it('surfaces a failed release inline and keeps the sheet open', async () => {
     releaseMutate.mockRejectedValueOnce(new Error('The RPC said no.'));
     renderSheet();
-    fireEvent.click(screen.getByRole('button', { name: /save as draft/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save authorization draft/i }));
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent('The RPC said no.'),
     );

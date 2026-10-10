@@ -33,9 +33,9 @@ import { PlanSheetDetail } from './plan-sheet-detail';
 type PlanView = 'set' | 'light-table' | 'sheet' | 'issue';
 
 const VIEW_TABS: Array<[PlanView, string]> = [
-  ['set', 'The set'],
-  ['light-table', 'The light table'],
-  ['issue', 'Issue'],
+  ['set', 'Current set'],
+  ['light-table', 'Drawing intake'],
+  ['issue', 'Issue set'],
 ];
 
 export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
@@ -88,7 +88,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
           aria-live="polite"
           className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
         >
-          Reading the drawing log…
+          Loading drawing register…
         </p>
       </main>
     );
@@ -100,13 +100,13 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
     return (
       <main className="min-h-screen bg-[var(--doc-paper)] px-8 py-16">
         <p className="max-w-lg font-heading text-[1.25rem] italic text-[var(--color-charcoal)]">
-          This paper has no project yet — the drawing sets open when one does.
+          Drawing sets become available once a project is created.
         </p>
         <Link
           href={`/doc/${routeId}`}
           className="mt-4 inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
         >
-          ← Back to the document
+          ← Back to project file
         </Link>
       </main>
     );
@@ -204,7 +204,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
               variant="secondary"
               onClick={() => fileInput.current?.click()}
             >
-              Choose a PDF
+              Upload drawing PDFs
             </DocumentAction>
           </DocumentActionRow>
           <input

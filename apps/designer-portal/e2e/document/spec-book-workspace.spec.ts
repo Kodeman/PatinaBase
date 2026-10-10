@@ -76,7 +76,7 @@ test.describe("spec-book workspace", () => {
       page.getByRole("navigation", { name: "Spec book workspace" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Workbench" }),
+      page.getByRole("button", { name: "Specification editor" }),
     ).toHaveAttribute("aria-current", "page");
 
     // Force the workbench onto the exact item beforeAll pinned above — the
@@ -87,7 +87,7 @@ test.describe("spec-book workspace", () => {
 
     const savedFinish = `E2E saved finish ${Date.now()}`;
     await page.getByLabel("Finish", { exact: true }).fill(savedFinish);
-    await page.getByRole("button", { name: "Save line" }).press("Enter");
+    await page.getByRole("button", { name: "Save specification" }).press("Enter");
 
     await expect
       .poll(() =>
@@ -112,7 +112,7 @@ test.describe("spec-book workspace", () => {
     await page
       .getByLabel("Finish", { exact: true })
       .fill(`Stale browser finish ${Date.now()}`);
-    await page.getByRole("button", { name: "Save line" }).press("Enter");
+    await page.getByRole("button", { name: "Save specification" }).press("Enter");
     // Scoped to `main`: the conflict also raises a global toast (a second,
     // assertive `role="status"` element with the same text) — this assertion
     // is about the workbench's own inline feedback, not the toast.
@@ -135,14 +135,14 @@ test.describe("spec-book workspace", () => {
       )
       .toEqual([concurrentFinish, String(originalRowVersion + 2)]);
 
-    await page.getByRole("button", { name: "Audience preview" }).click();
+    await page.getByRole("button", { name: "Audience editions" }).click();
     await expect(
       page.getByRole("region", { name: "client edition preview" }),
     ).toBeVisible();
     await expect(page.getByText("Trade price", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Markup", { exact: true })).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Preflight" }).first().click();
+    await page.getByRole("button", { name: "Issue readiness", exact: true }).first().click();
     await expect(
       page.getByText(/blockers remain|ready to issue/i),
     ).toBeVisible();

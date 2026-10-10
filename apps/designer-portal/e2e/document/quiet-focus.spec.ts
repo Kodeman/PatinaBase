@@ -72,16 +72,16 @@ test.describe('Quiet Work focused rooms', () => {
     await expect
       .poll(() => page.locator('button[aria-expanded="true"]:visible').count())
       .toBeGreaterThanOrEqual(1);
-    const payments = page.getByRole('button', { name: /Payments/i }).first();
+    const payments = page.getByRole('button', { name: /Payment schedule/i }).first();
     await payments.click();
     await expect(payments).toHaveAttribute('aria-expanded', 'true');
 
     const preview = page.getByRole('button', {
-      name: 'Preview client copy',
+      name: 'Preview client edition',
     });
     await expect(preview).toBeVisible();
     await preview.click();
-    const dialog = page.getByRole('dialog', { name: 'Client copy preview' });
+    const dialog = page.getByRole('dialog', { name: 'Client edition preview' });
     await expect(dialog).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();

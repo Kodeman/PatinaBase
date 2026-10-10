@@ -146,7 +146,7 @@ describe('the Money seam, on the Delivery table', () => {
     expect(section.className).not.toMatch(/\bmb-/);
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
     expect(screen.getByText('$17,600 remaining · $62,400 authorized')).toBeVisible();
-    expect(screen.getByText('Budget · $80,000 approved')).toBeVisible();
+    expect(screen.getByText('Client budget · $80,000 approved')).toBeVisible();
     expect(screen.getByText('Account band')).toBeInTheDocument();
   });
 
@@ -230,7 +230,7 @@ describe('the Money seam, on the Delivery table', () => {
     ).not.toBeInTheDocument();
     // The region stands as it does anywhere unsettled: each rung printing its
     // name and no figure.
-    expect(screen.getByText('Budget')).toBeInTheDocument();
+    expect(screen.getByText('Client budget')).toBeInTheDocument();
   });
 
   it('will not fold over money that is chasing the designer', () => {

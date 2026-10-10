@@ -900,7 +900,7 @@ function RoomHeading({
           variant="tertiary"
           onClick={onAddLine}
         >
-          Add a line
+          Add room selection
         </DocumentAction>
       )}
     </div>
@@ -1920,7 +1920,7 @@ function FFESectionBody({
   // each room's own act stays `Add a line`.
   const ffeAddToProjectEntry: RegionLedgerEntry = {
     key: 'open-add-to-project',
-    label: 'Add to the job',
+    label: 'Add project items',
     onClick: () => openAddToProject('section'),
   };
   // 0a-8 / D3 Gated — held, not natively disabled: the act stays in tab order
@@ -1936,13 +1936,13 @@ function FFESectionBody({
     !anyEligible;
   const ffeReleaseEntry: RegionLedgerEntry = {
     key: 'release-for-authorization',
-    label: 'Release for authorization',
+    label: 'Prepare purchasing authorization',
     onClick: () => ceremony?.begin(),
     disabled: nothingReady || !canRelease,
     reason: nothingReady
-      ? 'Nothing is ready to release yet.'
+      ? 'No selections are ready for purchasing authorization yet.'
       : !canRelease && ffeItemsSettled
-        ? 'No signed agreement stands behind the job yet.'
+        ? 'A signed agreement is required before purchasing authorization.'
         : undefined,
   };
   // US-19 F3-2 / FR4 (P-2) — every Pieces act lands with focus on Pieces' own
@@ -2118,7 +2118,7 @@ function FFESectionBody({
   const ffeLedger: RegionLedgerEntry[] = [
     {
       key: 'work-the-pieces',
-      label: 'Build the item list',
+      label: 'Edit FF&E schedule',
       href: buildRoomHref(docId, { lens: 'rough', room: null }),
       trailing: '→',
     },
@@ -2321,7 +2321,7 @@ function FFESectionBody({
             <div className="mb-1.5">
               <RegionHead
                 headingId={ffeHeadingId}
-                name="Pieces"
+                name="FF&E selections"
                 // W4-R1 governs WHICH line prints (the quiet form is the
                 // head's own status line); D-B39/W5-R3 governs HOW the
                 // readiness pulse rides it — inline, inside the same <p>, so
@@ -2607,7 +2607,7 @@ function FFESectionBody({
           {throughout.length > 0 && (
             <div>
               <RoomHeading
-                name="Throughout"
+                name="Throughout project"
                 budgetCents={0}
                 rows={throughout}
                 onAddLine={() =>

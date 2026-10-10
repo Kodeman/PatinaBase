@@ -351,7 +351,7 @@ test.describe("Quiet Work release browser contracts", () => {
     await expect(drawer).toBeVisible();
     await drawer.getByRole("button", { name: /^Orders/ }).click();
 
-    const ordersDialog = page.getByRole("dialog", { name: "Orders" });
+    const ordersDialog = page.getByRole("dialog", { name: "Purchase orders" });
     await expect(ordersDialog).toBeVisible();
     await expect(ordersDialog).toHaveAttribute(
       "data-doc-sheet-scroll-region",

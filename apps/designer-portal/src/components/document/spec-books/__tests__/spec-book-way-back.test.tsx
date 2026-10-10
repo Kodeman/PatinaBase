@@ -190,7 +190,7 @@ describe("T-7 — the item editor's Room select", () => {
       within(select)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["Not in a room yet", "Throughout", "Living room", "Dining room"]);
+    ).toEqual(["Unassigned", "Throughout", "Living room", "Dining room"]);
   });
 
   it("writes a room through useAssignLineRoom with assignmentScope 'room'", () => {
@@ -328,7 +328,7 @@ describe('T-7 — the spec book says "lines"', () => {
 
     expect(screen.getByText(/Working book · 3 lines ·/)).toBeInTheDocument();
     expect(
-      screen.getByRole("region", { name: "Spec book lines" }),
+      screen.getByRole("region", { name: "Specification register" }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/selections/)).not.toBeInTheDocument();
   });
@@ -338,7 +338,7 @@ describe('T-7 — the spec book says "lines"', () => {
 
     fireEvent.click(
       within(screen.getByRole("navigation", { name: "Spec book workspace" }))
-        .getByRole("button", { name: "Preflight" }),
+        .getByRole("button", { name: "Issue readiness" }),
     );
 
     expect(screen.getByText(/3\s+lines checked/)).toBeInTheDocument();

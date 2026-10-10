@@ -220,7 +220,7 @@ describe("Spec Book artifact recovery actions", () => {
     const user = userEvent.setup();
     render(<SpecBookWorkspace projectId="project-1" />);
 
-    await user.click(screen.getByRole("button", { name: "Revisions" }));
+    await user.click(screen.getByRole("button", { name: "Revision history" }));
     await user.click(screen.getByRole("button", { name: "Finalize" }));
 
     expect(renderArtifactMutateAsync).toHaveBeenCalledTimes(1);
@@ -240,7 +240,7 @@ describe("Spec Book artifact recovery actions", () => {
     renderArtifactMutateAsync.mockResolvedValueOnce({ finalized: false });
     render(<SpecBookWorkspace projectId="project-1" />);
 
-    await user.click(screen.getByRole("button", { name: "Revisions" }));
+    await user.click(screen.getByRole("button", { name: "Revision history" }));
     await user.click(screen.getByRole("button", { name: "Finalize" }));
 
     expect(
@@ -267,7 +267,7 @@ describe("SelectionEditor — structured dimensions", () => {
       "title",
       "Missing: finish, selected_dimensions",
     );
-    expect(screen.queryByRole("combobox", { name: "Readiness" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Issue readiness" })).not.toBeInTheDocument();
   });
 
   it("renders the DimensionFields control seeded from the spec's selected_dimensions", () => {
@@ -284,7 +284,7 @@ describe("SelectionEditor — structured dimensions", () => {
     fireEvent.change(screen.getByLabelText("width"), {
       target: { value: "84" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save line" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
     await screen.findByText("Line saved.");
 
     expect(mutateAsync).toHaveBeenCalledTimes(1);
@@ -310,7 +310,7 @@ describe("SelectionEditor — structured dimensions", () => {
       />,
     );
     fireEvent.change(screen.getByLabelText("width"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save line" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
     await screen.findByText("Line saved.");
     expect(mutateAsync.mock.calls[0][0].changes.selected_dimensions).toBeNull();
   });
@@ -324,7 +324,7 @@ describe("SelectionEditor — legacy non-object fallback", () => {
       />,
     );
     expect(screen.queryByLabelText("width")).toBeNull();
-    expect(screen.getByText("Use structured editor")).toBeInTheDocument();
+    expect(screen.getByText("Use dimension fields")).toBeInTheDocument();
     const textarea = screen.getByPlaceholderText(
       '{"width":"32 in","height":"30 in"}',
     );
@@ -337,7 +337,7 @@ describe("SelectionEditor — legacy non-object fallback", () => {
         item={buildItem({ selected_dimensions: "32x30x18" as never })}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save line" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
     await screen.findByText("Line saved.");
     expect(mutateAsync.mock.calls[0][0].changes.selected_dimensions).toBe(
       "32x30x18",
@@ -354,7 +354,7 @@ describe("SelectionEditor — legacy non-object fallback", () => {
       screen.getByPlaceholderText('{"width":"32 in","height":"30 in"}'),
       { target: { value: "{not json" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save line" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
     expect(
       await screen.findByText(
         'Dimensions must be valid JSON, for example {"width":"32 in"}.',
@@ -368,7 +368,7 @@ describe("SelectionEditor — raw JSON toggle", () => {
   it("switches from structured to raw, pre-filled with the current value", async () => {
     const user = userEvent.setup();
     render(<SelectionEditor item={buildItem()} />);
-    await user.click(screen.getByText("Edit raw JSON"));
+    await user.click(screen.getByText("Advanced: edit dimensions as JSON"));
     const textarea = screen.getByPlaceholderText(
       '{"width":"32 in","height":"30 in"}',
     );
@@ -384,29 +384,29 @@ describe("SelectionEditor — raw JSON toggle", () => {
   it("switches raw back to structured, hydrating the DimensionFields inputs", async () => {
     const user = userEvent.setup();
     render(<SelectionEditor item={buildItem()} />);
-    await user.click(screen.getByText("Edit raw JSON"));
+    await user.click(screen.getByText("Advanced: edit dimensions as JSON"));
     const textarea = screen.getByPlaceholderText(
       '{"width":"32 in","height":"30 in"}',
     );
     fireEvent.change(textarea, {
       target: { value: '{"width":"90","depth":"40","height":"32","unit":"cm"}' },
     });
-    await user.click(screen.getByText("Use structured editor"));
+    await user.click(screen.getByText("Use dimension fields"));
 
     expect(screen.getByLabelText("width")).toHaveValue("90");
     expect(screen.getByLabelText("unit")).toHaveValue("cm");
-    expect(screen.queryByText("Use structured editor")).toBeNull();
+    expect(screen.queryByText("Use dimension fields")).toBeNull();
   });
 
   it("blocks switching back to structured on invalid JSON, keeping the raw editor open", async () => {
     const user = userEvent.setup();
     render(<SelectionEditor item={buildItem()} />);
-    await user.click(screen.getByText("Edit raw JSON"));
+    await user.click(screen.getByText("Advanced: edit dimensions as JSON"));
     fireEvent.change(
       screen.getByPlaceholderText('{"width":"32 in","height":"30 in"}'),
       { target: { value: "{broken" } },
     );
-    await user.click(screen.getByText("Use structured editor"));
+    await user.click(screen.getByText("Use dimension fields"));
 
     expect(
       await screen.findByText(
@@ -419,12 +419,12 @@ describe("SelectionEditor — raw JSON toggle", () => {
   it("rejects a non-object JSON value (e.g. an array) when switching back", async () => {
     const user = userEvent.setup();
     render(<SelectionEditor item={buildItem()} />);
-    await user.click(screen.getByText("Edit raw JSON"));
+    await user.click(screen.getByText("Advanced: edit dimensions as JSON"));
     fireEvent.change(
       screen.getByPlaceholderText('{"width":"32 in","height":"30 in"}'),
       { target: { value: "[1,2,3]" } },
     );
-    await user.click(screen.getByText("Use structured editor"));
+    await user.click(screen.getByText("Use dimension fields"));
 
     expect(
       await screen.findByText(/needs an object like/),
@@ -438,7 +438,7 @@ describe("SelectionEditor — raw JSON toggle", () => {
     fireEvent.change(screen.getByLabelText("depth"), {
       target: { value: "42" },
     });
-    await user.click(screen.getByText("Edit raw JSON"));
+    await user.click(screen.getByText("Advanced: edit dimensions as JSON"));
     expect(
       screen.getByPlaceholderText('{"width":"32 in","height":"30 in"}'),
     ).toHaveValue(

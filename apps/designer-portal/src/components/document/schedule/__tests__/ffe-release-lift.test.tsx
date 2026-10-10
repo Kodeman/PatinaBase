@@ -183,9 +183,9 @@ describe('the release lift — the schedule’s half', () => {
     // US-21 Q14: the head's leader is Build the item list, release lifted or not.
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Build the item list');
+    expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
     expect(
-      screen.queryByRole('button', { name: 'Release for authorization' }),
+      screen.queryByRole('button', { name: 'Prepare purchasing authorization' }),
     ).toBeNull();
     expect(
       document.querySelector('[data-action-key="open-add-to-project"]'),
@@ -263,7 +263,7 @@ describe('the release lift — the schedule’s half', () => {
 
     expect(offered).toHaveBeenLastCalledWith(false);
     const entry = screen.getByRole('button', {
-      name: 'Release for authorization',
+      name: 'Prepare purchasing authorization',
     });
     // 0a-8 / D3 Gated — held, never native `disabled`: focusable, marked
     // `aria-disabled`, its reason beneath and linked, and the press a no-op.
@@ -274,7 +274,7 @@ describe('the release lift — the schedule’s half', () => {
     const reasonId = entry.getAttribute('aria-describedby');
     expect(reasonId).toBeTruthy();
     expect(document.getElementById(reasonId!)).toHaveTextContent(
-      'Nothing is ready to release yet.',
+      'No selections are ready for purchasing authorization yet.',
     );
     fireEvent.click(entry);
     expect(screen.queryByText('Choose what to release')).not.toBeInTheDocument();
@@ -288,9 +288,9 @@ describe('the release lift — the schedule’s half', () => {
     // US-21 Q14: Build the item list leads; the release stands in the head's ledger.
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Build the item list');
+    expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
     expect(
-      screen.getByRole('button', { name: 'Release for authorization' }),
+      screen.getByRole('button', { name: 'Prepare purchasing authorization' }),
     ).not.toHaveAttribute('aria-disabled', 'true');
   });
 });

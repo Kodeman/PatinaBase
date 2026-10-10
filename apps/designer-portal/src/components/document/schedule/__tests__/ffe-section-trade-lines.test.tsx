@@ -200,7 +200,7 @@ describe('trade presence lines on the schedule', () => {
   it('refuses to let trade work join a furnishings release, and says which scope holds it', () => {
     renderSection();
     fireEvent.click(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     );
 
     expect(
@@ -220,7 +220,7 @@ describe('trade presence lines on the schedule', () => {
     mockTradeScopes = [];
     renderSection();
     fireEvent.click(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     );
     expect(screen.getByText('on trade scope')).toBeInTheDocument();
     expect(screen.getByText('On trade scope')).toBeInTheDocument();

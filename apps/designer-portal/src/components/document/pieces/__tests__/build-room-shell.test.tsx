@@ -64,7 +64,7 @@ function renderShell(overrides: Partial<BuildRoomShellProps> = {}) {
 }
 
 const lensButtons = () =>
-  within(screen.getByRole("group", { name: "Lens" })).getAllByRole("button");
+  within(screen.getByRole("group", { name: "Schedule view" })).getAllByRole("button");
 
 describe("BuildRoomShell — the head (SPEC §6 shell)", () => {
   it("prints ← job, BUILD THE PIECES, the four lens words as pressed buttons, and the room counts", () => {
@@ -80,16 +80,16 @@ describe("BuildRoomShell — the head (SPEC §6 shell)", () => {
     expect(back.className).toContain("uppercase");
     const title = screen.getByRole("heading", {
       level: 1,
-      name: "Build the pieces",
+      name: "FF&E schedule",
     });
     expect(title.className).toContain("uppercase");
 
     expect(lensButtons().map((b) => b.textContent)).toEqual([
-      "Rough in",
-      "Spec",
-      "Price",
-      "Release",
-      "Finishes",
+      "Preliminary selections",
+      "Specifications",
+      "Pricing",
+      "Purchasing authorization",
+      "Finish schedule",
     ]);
     expect(lensButtons().map((b) => b.getAttribute("aria-pressed"))).toEqual([
       "true",
@@ -111,20 +111,20 @@ describe("BuildRoomShell — the head (SPEC §6 shell)", () => {
   it.each([
     [
       "rough",
-      "Rough in · Name it, count it, place it. Specs, prices and buying come later.",
+      "Create preliminary selections by item, quantity and room. Complete specifications and pricing in the next tabs.",
     ],
-    ["spec", "Spec · Fill each line's details and its product. No money here."],
+    ["spec", "Complete each selection’s specifications and product reference. Use Pricing for costs."],
     [
       "price",
-      "Price · Line up trade cost, markup and client price. Rough figures stay as ~ until you set them.",
+      "Set trade costs, markups and client prices. A ~ indicates an estimate.",
     ],
     [
       "release",
-      "Release · Check what the client will see, then release rooms for authorization. Nothing here edits a spec or a price.",
+      "Review the client edition, then issue rooms for purchasing authorization. Edit specifications and pricing in their tabs.",
     ],
     [
       "finishes",
-      "Finishes · Note each room’s surfaces, products and sheens for the painter. Nothing here edits a line.",
+      "Document surfaces, products and sheens by room for the painter. Item specifications are managed separately.",
     ],
   ] as const)("reads the %s lens in one sentence", (lens, sentence) => {
     renderShell({ lens });
@@ -133,7 +133,7 @@ describe("BuildRoomShell — the head (SPEC §6 shell)", () => {
 
   it("pushes a lens change with the room kept", () => {
     const { props } = renderShell();
-    fireEvent.click(screen.getByRole("button", { name: "Spec" }));
+    fireEvent.click(screen.getByRole("button", { name: "Specifications" }));
     expect(props.onNavigate).toHaveBeenCalledWith({
       lens: "spec",
       room: "living",
@@ -143,13 +143,13 @@ describe("BuildRoomShell — the head (SPEC §6 shell)", () => {
   it("counts what is ready on the whole job in the Release lens (a3)", () => {
     renderShell({ lens: "release", room: null });
     expect(screen.getByTestId("build-room-place")).toHaveTextContent(
-      "Whole job · 25 lines · 7 ready",
+      "All project selections · 25 lines · 7 ready",
     );
   });
 
   it("counts the room's surfaces in the Finishes lens (a11)", () => {
     renderShell({ lens: "finishes", room: "bedroom", surfaceCount: 3 });
-    expect(screen.getByRole("button", { name: "Finishes" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Finish schedule" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -173,13 +173,13 @@ describe("BuildRoomShell — Price for a seat without money (R1, Q7)", () => {
   it("leaves the Price lens out entirely, not gated", () => {
     renderShell({ canSeeMoney: false });
     expect(lensButtons().map((b) => b.textContent)).toEqual([
-      "Rough in",
-      "Spec",
-      "Release",
-      "Finishes",
+      "Preliminary selections",
+      "Specifications",
+      "Purchasing authorization",
+      "Finish schedule",
     ]);
     expect(
-      screen.queryByRole("button", { name: "Price" }),
+      screen.queryByRole("button", { name: "Pricing" }),
     ).not.toBeInTheDocument();
   });
 
@@ -194,7 +194,7 @@ describe("BuildRoomShell — Price for a seat without money (R1, Q7)", () => {
       room: "living",
     });
     renderShell({ canSeeMoney: false, lens: "price" });
-    expect(screen.getByRole("button", { name: "Rough in" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Preliminary selections" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -259,7 +259,7 @@ describe("BuildRoomShell — the room rail", () => {
       target: { value: "Mudroom" },
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Add the room" }));
+      fireEvent.click(screen.getByRole("button", { name: "Add room" }));
     });
     expect(onAddRoom).toHaveBeenCalledWith("Mudroom");
     expect(screen.queryByLabelText("Room name")).not.toBeInTheDocument();
@@ -273,7 +273,7 @@ describe("BuildRoomShell — the room rail", () => {
       target: { value: "Mudroom" },
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Add the room" }));
+      fireEvent.click(screen.getByRole("button", { name: "Add room" }));
     });
     expect(screen.getByRole("alert")).toHaveTextContent(
       "The room was not added. Try again.",
@@ -418,7 +418,7 @@ describe("BuildRoomShell — ⌘↓ from the landing reaches the lines (T-60e, F
     renderSheet(null);
     const title = screen.getByRole("heading", {
       level: 1,
-      name: "Build the pieces",
+      name: "FF&E schedule",
     });
     expect(title).toHaveFocus();
     expect(title).toHaveAttribute(
@@ -520,7 +520,7 @@ describe("BuildRoomShell — at 390 (a13)", () => {
     });
     await act(async () => {
       fireEvent.click(
-        within(list).getByRole("button", { name: "Add the room" }),
+        within(list).getByRole("button", { name: "Add room" }),
       );
     });
     expect(onAddRoom).toHaveBeenCalledWith("Mudroom");
@@ -528,7 +528,7 @@ describe("BuildRoomShell — at 390 (a13)", () => {
 
   it("lays the lens words out as a full-width row with 44px targets", () => {
     renderShell();
-    const group = screen.getByRole("group", { name: "Lens" });
+    const group = screen.getByRole("group", { name: "Schedule view" });
     expect(group.className.split(/\s+/)).toEqual(
       expect.arrayContaining(["flex", "w-[calc(100%+2rem)]"]),
     );
@@ -539,7 +539,7 @@ describe("BuildRoomShell — at 390 (a13)", () => {
 
   it("wraps five lens words at 390 rather than squeezing them into fixed fifths (T-58 F4)", () => {
     renderShell();
-    const group = screen.getByRole("group", { name: "Lens" });
+    const group = screen.getByRole("group", { name: "Schedule view" });
     const phoneClasses = group.className
       .split(/\s+/)
       .filter((cls) => !/^(sm|md|lg|xl):/.test(cls));

@@ -288,10 +288,10 @@ describe('ProjectApprovalDocument authority and composer', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'New approval' }));
-    expect(screen.getByLabelText('Exact project phase')).not.toHaveTextContent(
+    expect(screen.getByLabelText('Approval phase')).not.toHaveTextContent(
       'Discovery',
     );
-    expect(screen.getByLabelText('Exact project phase')).toHaveTextContent(
+    expect(screen.getByLabelText('Approval phase')).toHaveTextContent(
       'Design development',
     );
   });
@@ -319,7 +319,7 @@ describe('ProjectApprovalDocument authority and composer', () => {
     ]);
     expect(parts.every((part) => part.tagName === 'FIELDSET')).toBe(true);
     expect(screen.getByRole('group', { name: 'Artifact' })).toBeVisible();
-    expect(screen.getByLabelText('Scope note')).toBeVisible();
+    expect(screen.getByLabelText('Approval scope note')).toBeVisible();
   });
 
   it('sends the exact phase/artifact, preserves all three signed zero deltas, and reuses the key on retry', async () => {
@@ -335,30 +335,30 @@ describe('ProjectApprovalDocument authority and composer', () => {
     renderDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'New approval' }));
-    fireEvent.change(screen.getByLabelText('Title'), {
+    fireEvent.change(screen.getByLabelText('Approval request title'), {
       target: { value: 'Drawing set 02' },
     });
     fireEvent.change(screen.getByLabelText('Approval question'), {
       target: { value: 'Approve this exact drawing set?' },
     });
-    fireEvent.change(screen.getByLabelText('Exact project phase'), {
+    fireEvent.change(screen.getByLabelText('Approval phase'), {
       target: { value: 'phase-1' },
     });
-    fireEvent.change(screen.getByLabelText('Issued artifact'), {
+    fireEvent.change(screen.getByLabelText('Issued document'), {
       target: { value: 'plan_issue:issue-1' },
     });
-    fireEvent.change(screen.getByLabelText('Due date and time'), {
+    fireEvent.change(screen.getByLabelText('Response due date and time'), {
       target: { value: '2099-09-01T12:00' },
     });
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Create review draft' }),
+      screen.getByRole('button', { name: 'Create approval draft' }),
     );
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Temporary write conflict',
     );
     fireEvent.click(
-      screen.getByRole('button', { name: 'Create review draft' }),
+      screen.getByRole('button', { name: 'Create approval draft' }),
     );
 
     await waitFor(() => expect(createApproval).toHaveBeenCalledTimes(2));
@@ -396,12 +396,12 @@ describe("P-13 — the designer's one-line why", () => {
   it('asks for her line first, above the gate anatomy, and says where it lands', () => {
     const { container } = openComposer();
 
-    const why = screen.getByLabelText('What would you tell her about this?');
+    const why = screen.getByLabelText('Client review note');
     expect(why).toBeVisible();
     expect(why).not.toBeRequired();
     expect(why).toHaveAttribute('maxlength', '200');
     expect(
-      screen.getByText(/One line\. She reads it under the question\./),
+      screen.getByText(/Add a one-sentence note below the client’s approval question\./),
     ).toBeVisible();
 
     // First field on the paper: it precedes the artifact fieldset.
@@ -415,13 +415,13 @@ describe("P-13 — the designer's one-line why", () => {
 
   it('counts down in words only as the cap comes close, and never in figures', () => {
     openComposer();
-    const why = screen.getByLabelText('What would you tell her about this?');
+    const why = screen.getByLabelText('Client review note');
     const help = () =>
-      screen.getByText(/One line\. She reads it under the question\./)
+      screen.getByText(/Add a one-sentence note below the client’s approval question\./)
         .textContent ?? '';
 
     fireEvent.change(why, { target: { value: 'x'.repeat(120) } });
-    expect(help()).toBe('One line. She reads it under the question.');
+    expect(help()).toBe('Add a one-sentence note below the client’s approval question.');
 
     fireEvent.change(why, { target: { value: 'x'.repeat(199) } });
     expect(help()).toContain('One character left.');
@@ -436,7 +436,7 @@ describe("P-13 — the designer's one-line why", () => {
   it('holds the why to one line: Enter does nothing and a pasted newline collapses', () => {
     openComposer();
     const why = screen.getByLabelText(
-      'What would you tell her about this?',
+      'Client review note',
     ) as HTMLTextAreaElement;
 
     const enter = createEvent.keyDown(why, { key: 'Enter', code: 'Enter' });
@@ -452,27 +452,27 @@ describe("P-13 — the designer's one-line why", () => {
 
   it('sends a why with no newline in it, however it was pasted', async () => {
     openComposer();
-    fireEvent.change(screen.getByLabelText('Title'), {
+    fireEvent.change(screen.getByLabelText('Approval request title'), {
       target: { value: 'Drawing set 02' },
     });
     fireEvent.change(screen.getByLabelText('Approval question'), {
       target: { value: 'Approve this exact drawing set?' },
     });
-    fireEvent.change(screen.getByLabelText('Exact project phase'), {
+    fireEvent.change(screen.getByLabelText('Approval phase'), {
       target: { value: 'phase-1' },
     });
-    fireEvent.change(screen.getByLabelText('Issued artifact'), {
+    fireEvent.change(screen.getByLabelText('Issued document'), {
       target: { value: 'plan_issue:issue-1' },
     });
-    fireEvent.change(screen.getByLabelText('Due date and time'), {
+    fireEvent.change(screen.getByLabelText('Response due date and time'), {
       target: { value: '2099-09-01T12:00' },
     });
     fireEvent.change(
-      screen.getByLabelText('What would you tell her about this?'),
+      screen.getByLabelText('Client review note'),
       { target: { value: '\n The walnut\nholds the room. \n' } },
     );
     fireEvent.click(
-      screen.getByRole('button', { name: 'Create review draft' }),
+      screen.getByRole('button', { name: 'Create approval draft' }),
     );
 
     await waitFor(() => expect(createApproval).toHaveBeenCalledTimes(1));
@@ -483,27 +483,27 @@ describe("P-13 — the designer's one-line why", () => {
 
   it('carries the trimmed line to the create call, and null when she wrote none', async () => {
     openComposer();
-    fireEvent.change(screen.getByLabelText('Title'), {
+    fireEvent.change(screen.getByLabelText('Approval request title'), {
       target: { value: 'Drawing set 02' },
     });
     fireEvent.change(screen.getByLabelText('Approval question'), {
       target: { value: 'Approve this exact drawing set?' },
     });
-    fireEvent.change(screen.getByLabelText('Exact project phase'), {
+    fireEvent.change(screen.getByLabelText('Approval phase'), {
       target: { value: 'phase-1' },
     });
-    fireEvent.change(screen.getByLabelText('Issued artifact'), {
+    fireEvent.change(screen.getByLabelText('Issued document'), {
       target: { value: 'plan_issue:issue-1' },
     });
-    fireEvent.change(screen.getByLabelText('Due date and time'), {
+    fireEvent.change(screen.getByLabelText('Response due date and time'), {
       target: { value: '2099-09-01T12:00' },
     });
     fireEvent.change(
-      screen.getByLabelText('What would you tell her about this?'),
+      screen.getByLabelText('Client review note'),
       { target: { value: '  The walnut holds the room.  ' } },
     );
     fireEvent.click(
-      screen.getByRole('button', { name: 'Create review draft' }),
+      screen.getByRole('button', { name: 'Create approval draft' }),
     );
 
     await waitFor(() => expect(createApproval).toHaveBeenCalledTimes(1));
@@ -514,23 +514,23 @@ describe("P-13 — the designer's one-line why", () => {
 
   it('leaves the why null when the field is untouched', async () => {
     openComposer();
-    fireEvent.change(screen.getByLabelText('Title'), {
+    fireEvent.change(screen.getByLabelText('Approval request title'), {
       target: { value: 'Drawing set 02' },
     });
     fireEvent.change(screen.getByLabelText('Approval question'), {
       target: { value: 'Approve this exact drawing set?' },
     });
-    fireEvent.change(screen.getByLabelText('Exact project phase'), {
+    fireEvent.change(screen.getByLabelText('Approval phase'), {
       target: { value: 'phase-1' },
     });
-    fireEvent.change(screen.getByLabelText('Issued artifact'), {
+    fireEvent.change(screen.getByLabelText('Issued document'), {
       target: { value: 'plan_issue:issue-1' },
     });
-    fireEvent.change(screen.getByLabelText('Due date and time'), {
+    fireEvent.change(screen.getByLabelText('Response due date and time'), {
       target: { value: '2099-09-01T12:00' },
     });
     fireEvent.click(
-      screen.getByRole('button', { name: 'Create review draft' }),
+      screen.getByRole('button', { name: 'Create approval draft' }),
     );
 
     await waitFor(() => expect(createApproval).toHaveBeenCalledTimes(1));
@@ -960,10 +960,10 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
     approvals = [baseReview];
     const { rerender } = renderDocument();
 
-    expect(screen.getByRole('button', { name: 'Publish for approval' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Withdraw' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Issue approval request' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Withdraw request' })).toBeEnabled();
     expect(
-      screen.queryByRole('button', { name: 'Supersede with new artifact' }),
+      screen.queryByRole('button', { name: 'Supersede with revised document' }),
     ).not.toBeInTheDocument();
 
     approvals = [{ ...baseReview, completedReviewCount: 1 }];
@@ -980,7 +980,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
         ]}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Publish for approval' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Issue approval request' }));
     await waitFor(() =>
       expect(publishApproval).toHaveBeenCalledWith({
         projectId: 'project-1',
@@ -998,7 +998,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
     approvals = [{ ...baseReview, lifecycleStatus: 'pending' }];
     renderDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Withdraw' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Withdraw request' }));
     fireEvent.change(screen.getByLabelText('Withdrawal reason'), {
       target: { value: 'A newer issued set is ready.' },
     });
@@ -1041,13 +1041,13 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
     renderDocument();
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Supersede with new artifact' }),
+      screen.getByRole('button', { name: 'Supersede with revised document' }),
     );
     const options = Array.from(
-      screen.getByLabelText('New issued artifact').querySelectorAll('option'),
+      screen.getByLabelText('Revised issued document').querySelectorAll('option'),
     ).map((option) => option.textContent);
     expect(options).toEqual([
-      'Choose a genuinely new artifact',
+      'Select a new issued document',
       'Issued drawing set 03 · v2',
     ]);
   });
@@ -1077,7 +1077,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
     approvalsArriveOpen();
 
     expect(
-      screen.queryByRole('button', { name: 'Supersede with new artifact' }),
+      screen.queryByRole('button', { name: 'Supersede with revised document' }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(/This approval belongs to a completed phase/),
@@ -1209,7 +1209,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
     ).toBeVisible();
     // The ceremony is folded away, not left open beside its own seal.
     expect(container.querySelector('[data-gate-part]')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Publish for approval' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Issue approval request' })).toBeNull();
   });
 
   it('links the superseded edition under the seal and focuses it in place', () => {
@@ -1291,7 +1291,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       screen.getByText('+$4,200.50 · -2 days · +7 lead-time days'),
     ).toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Supersede with new artifact' }),
+      screen.getByRole('button', { name: 'Supersede with revised document' }),
     ).toBeEnabled();
   });
 
@@ -1310,7 +1310,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
     ).toBeVisible();
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Supersede with new artifact' }),
+      screen.getByRole('button', { name: 'Supersede with revised document' }),
     );
     expect(
       screen.getAllByText('Decision lead — Marta Chen · frozen at publish'),

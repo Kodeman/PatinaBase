@@ -1,7 +1,7 @@
 /**
  * US-19 FR6 F6-1b (D1-b, D1-c; `one-voice`) — the proposal reminder is named
  * for what it does, `Send a reminder`, and arms before it sends (J2): one press
- * prints what Mei will get and writes nothing; `Send the reminder` sends. Esc
+ * prints what Mei will get and writes nothing; `Send proposal reminder` sends. Esc
  * on the armed row is Cancel, focus back on the control. The send wall and the
  * Finalize table's head share the arm. Flag off, both stay one-press `Nudge
  * {household}` as today.
@@ -64,7 +64,7 @@ const renderWall = () =>
 const renderHead = () => wrap(<FinalizeHead proposalId="proposal-1" clientName="Mei Tanaka" />);
 
 const control = () => screen.getByRole('button', { name: 'Send a reminder' });
-const sendTheReminder = () => screen.getByRole('button', { name: 'Send the reminder' });
+const sendTheReminder = () => screen.getByRole('button', { name: 'Send proposal reminder' });
 
 beforeEach(() => {
   mockNudge.mockReset().mockResolvedValue({ _emailDispatched: true });
@@ -95,7 +95,7 @@ describe.each([
     expect(screen.queryByRole('button', { name: /^Nudge/ })).toBeNull();
   });
 
-  it('one press writes nothing; `Send the reminder` writes once', async () => {
+  it('one press writes nothing; `Send proposal reminder` writes once', async () => {
     renderIt();
     fireEvent.click(control());
     expect(mockNudge).not.toHaveBeenCalled();
@@ -112,7 +112,7 @@ describe.each([
     expect(mockNudge).toHaveBeenCalledTimes(1);
     expect(mockNudge).toHaveBeenCalledWith({ proposalId: 'proposal-1' });
     expect(screen.getByText('Reminder sent to Mei.')).toHaveAttribute('role', 'status');
-    expect(screen.queryByRole('button', { name: 'Send the reminder' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send proposal reminder' })).toBeNull();
   });
 
   it('Esc on the armed row is Cancel: nothing sent, focus back on `Send a reminder`', () => {

@@ -256,7 +256,7 @@ describe('the schedule ceremony', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(mockReadinessRefetch).toHaveBeenCalledTimes(1);
     fireEvent.click(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     );
     expect(
       screen.getByRole('checkbox', {
@@ -290,17 +290,17 @@ describe('the schedule ceremony', () => {
   it('offers the head act on a project with billing authority', () => {
     renderSection();
     expect(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     ).toBeInTheDocument();
   });
 
   it('holds the head act, and says why, when no agreement stands behind the project', () => {
     mockAuthority = { data: null };
     renderSection();
-    const button = screen.getByRole('button', { name: /release for authorization/i });
+    const button = screen.getByRole('button', { name: /prepare purchasing authorization/i });
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(
-      screen.getByText('No signed agreement stands behind the job yet.'),
+      screen.getByText('A signed agreement is required before purchasing authorization.'),
     ).toBeInTheDocument();
     fireEvent.click(button);
     expect(screen.queryByText('Choose what to release')).not.toBeInTheDocument();
@@ -328,13 +328,13 @@ describe('the schedule ceremony', () => {
     renderSection();
 
     const button = screen.getByRole('button', {
-      name: /release for authorization/i,
+      name: /prepare purchasing authorization/i,
     });
     // 0a-8 — held with its reason, not natively disabled.
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).not.toHaveAttribute('disabled');
     expect(
-      screen.getByText('Nothing is ready to release yet.'),
+      screen.getByText('No selections are ready for purchasing authorization yet.'),
     ).toBeInTheDocument();
 
     fireEvent.click(button);
@@ -344,18 +344,18 @@ describe('the schedule ceremony', () => {
   it('leaves the head act enabled with no explanatory text when at least one line is eligible', () => {
     renderSection();
     const button = screen.getByRole('button', {
-      name: /release for authorization/i,
+      name: /prepare purchasing authorization/i,
     });
     expect(button).toBeEnabled();
     expect(
-      screen.queryByText('Nothing is ready to release yet.'),
+      screen.queryByText('No selections are ready for purchasing authorization yet.'),
     ).not.toBeInTheDocument();
   });
 
   it('turns the schedule into a selection surface', () => {
     renderSection();
     fireEvent.click(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     );
     expect(screen.getByText('Choose what to release')).toBeInTheDocument();
     expect(
@@ -374,7 +374,7 @@ describe('the schedule ceremony', () => {
   it('says why a line cannot go, and refuses to tick it', () => {
     renderSection();
     fireEvent.click(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     );
     expect(
       screen.getByRole('checkbox', {
@@ -388,7 +388,7 @@ describe('the schedule ceremony', () => {
   it('ticks a whole room from its header, and counts what it holds', () => {
     renderSection();
     fireEvent.click(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     );
     fireEvent.click(
       screen.getByRole('checkbox', {
@@ -412,7 +412,7 @@ describe('the schedule ceremony', () => {
     mockInstruments = [];
     renderSection();
     fireEvent.click(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     );
     fireEvent.click(
       screen.getByRole('checkbox', {
@@ -426,7 +426,7 @@ describe('the schedule ceremony', () => {
   it('puts the ceremony back on Esc, with nothing created', () => {
     renderSection();
     fireEvent.click(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     );
     fireEvent.click(
       screen.getByRole('checkbox', {
@@ -436,13 +436,13 @@ describe('the schedule ceremony', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByText('Choose what to release')).not.toBeInTheDocument();
     expect(screen.queryByTestId('composition-bar')).not.toBeInTheDocument();
-    expect(screen.getByText('Pieces')).toBeInTheDocument();
+    expect(screen.getByText('FF&E selections')).toBeInTheDocument();
   });
 
   it('opens the review sheet from the bar', () => {
     renderSection();
     fireEvent.click(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     );
     fireEvent.click(
       screen.getByRole('checkbox', {
@@ -470,7 +470,7 @@ describe('the schedule ceremony', () => {
     mockInstruments = [];
     renderSection();
     fireEvent.click(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     );
     fireEvent.click(
       screen.getByRole('checkbox', {
@@ -489,7 +489,7 @@ describe('the schedule ceremony', () => {
   });
 
   it('carries a quiet Add a line under every room', () => {
-    // SP-09 gave the region-head ledger act the same words ('Add a line'), so
+    // SP-09 gave the region-head ledger act the same words ('Add room selection'), so
     // the per-room add is scoped by its own action key rather than by text.
     renderSection();
     const roomAddLines = document.querySelectorAll(

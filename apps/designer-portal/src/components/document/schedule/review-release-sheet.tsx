@@ -322,7 +322,7 @@ export function ReviewReleaseSheet({
       onClose={onClose}
       wide
       icon={FileSignature}
-      title="Release for authorization"
+      title="Purchasing authorization"
       pageLabel={`№ ${instrumentNumber}`}
     >
       <div className="mb-4">
@@ -359,7 +359,7 @@ export function ReviewReleaseSheet({
                   Room
                 </th>
                 <th scope="col" className="py-1 text-right font-normal">
-                  Signed qty
+                  Signed quantity
                 </th>
                 <th scope="col" className="py-1 text-right font-normal">
                   Client price
@@ -393,7 +393,7 @@ export function ReviewReleaseSheet({
 
       {/* Five figures, one band — money is stated, never boxed. */}
       <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-2 border-l-[3px] border-[var(--color-sage)] py-2 pl-3 sm:grid-cols-3">
-        <Figure label="authorization total" value={formatCurrencyTotal(total)} />
+        <Figure label="Authorization total" value={formatCurrencyTotal(total)} />
         {percent !== null && !isMixed(total) && (
           <>
             <Figure
@@ -401,7 +401,7 @@ export function ReviewReleaseSheet({
               value={formatMoney(depositCents(total.cents, percent), total.currency)}
             />
             <Figure
-              label="balance on delivery"
+              label="Balance due on delivery"
               value={formatMoney(
                 total.cents - depositCents(total.cents, percent),
                 total.currency,
@@ -445,7 +445,7 @@ export function ReviewReleaseSheet({
                 : 'border-[var(--color-pearl)] text-[var(--text-muted)]'
             }`}
           >
-            Other
+            Custom percentage
           </button>
           {otherOpen && (
             <input
@@ -453,7 +453,7 @@ export function ReviewReleaseSheet({
               min={0}
               max={100}
               autoFocus
-              aria-label="Deposit percent"
+              aria-label="Deposit percentage"
               value={percent ?? ''}
               onChange={(event) => {
                 const parsed = Number(event.target.value);
@@ -511,7 +511,7 @@ export function ReviewReleaseSheet({
               disabled={publishCheckpoint.isPending}
               onClick={publishFresh}
             >
-              Publish fresh checkpoint
+              Issue updated budget checkpoint
             </DocumentAction>
           </>
         ) : blocked && awaitingAcknowledgment ? (
@@ -537,7 +537,7 @@ export function ReviewReleaseSheet({
             ) : (
               <div className="mt-2 max-w-md">
                 <label className="block text-[11px] text-[var(--text-muted)]">
-                  Reason for the override
+                  Override reason
                   <textarea
                     className="mt-1 w-full rounded-[3px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[11.5px] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
                     rows={2}
@@ -631,7 +631,7 @@ export function ReviewReleaseSheet({
           loadingLabel="Drafting…"
           onClick={saveDraft}
         >
-          Save as draft
+          Save authorization draft
         </DocumentAction>
         <DocumentAction
           actionKey="send-authorization-for-signature"
@@ -648,7 +648,7 @@ export function ReviewReleaseSheet({
           }
           onClick={sendForSignature}
         >
-          {oneVoice ? 'Release for authorization' : 'Send for signature'}
+          {oneVoice ? 'Issue for purchasing authorization' : 'Send for signature'}
         </DocumentAction>
       </DocumentActionGroup>
     </DocSheet>

@@ -903,7 +903,7 @@ export function RolodexPicker({
         type="search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        aria-label="Search the rolodex"
+        aria-label="Search contact directory"
         placeholder="a name, a company, a trade…"
         className={UNDERLINE_INPUT}
       />
@@ -1109,7 +1109,7 @@ export function RolodexPicker({
             onClick={() => setAdding(true)}
             className={`${WORD} ${WORD_OFF}`}
           >
-            Add someone new
+            Add new contact
           </button>
         )}
       </div>
@@ -1243,7 +1243,7 @@ export function RolodexPicker({
             </span>
             <span className="min-w-0">
               <span className="block font-heading text-[0.86rem] text-[var(--color-charcoal)]">
-                Save to the studio rolodex
+                Save to studio directory
               </span>
               <span className="mt-0.5 block text-[0.7rem] text-[var(--color-aged-oak)]">
                 so the next project starts with them
@@ -1266,7 +1266,7 @@ export function RolodexPicker({
               loading={addParty.isPending || addContact.isPending}
               loadingLabel="Adding…"
             >
-              Add to the call sheet
+              Add to project contacts
             </DocumentAction>
           </DocumentActionGroup>
         </div>

@@ -747,13 +747,13 @@ export function ProjectApprovalDocument({
       <div id={APPROVALS_BODY_ID}>
       {!clientProfileId && (
         <p role="status" className="mt-4 text-[13px] text-[var(--text-muted)]">
-          Add the project client before assigning decision authority.
+          Add the project client before assigning approval authority.
         </p>
       )}
       {clientProfileId && authority === null && !authorityQuery.isLoading && !noLeadSentence && (
         <div className="mt-4 border-l-2 border-[var(--color-golden-hour)] pl-3">
           <p className="text-[13px] text-[var(--color-charcoal)]">
-            This project does not have a designated decision lead yet.
+            No lead approver is designated for this project.
           </p>
         </div>
       )}
@@ -763,14 +763,14 @@ export function ProjectApprovalDocument({
             role="alert"
             className="text-[13px] text-[var(--color-terracotta-ink)]"
           >
-            Decision authority does not match this project’s current client.
+            The approval authority does not match the current project client.
           </p>
         </div>
       )}
 
       {authorityMatches && availablePhases.length === 0 && (
         <p role="status" className="mt-4 text-[13px] text-[var(--text-muted)]">
-          Add or reopen a project phase before authoring a new approval.
+          Add or reopen a project phase before preparing an approval request.
           Completed phases cannot receive a new unresolved blocker.
         </p>
       )}
@@ -791,14 +791,14 @@ export function ProjectApprovalDocument({
           className="mt-5 min-w-0 border-t border-[var(--color-pearl)] pt-5"
         >
           <h3 className="font-heading text-[18px] text-[var(--color-charcoal)]">
-            Draft an exact review request
+            Draft approval request
           </h3>
 
           {/* P-13 — her sentence comes first, before the anatomy. It sits
               outside the six parts on purpose: a gate has six and no more. */}
           <div className="mt-4 min-w-0">
             <Field
-              label="What would you tell her about this?"
+              label="Client review note"
               id="approval-why"
             >
               {/* One line means one line: a pasted newline collapses on the
@@ -822,14 +822,14 @@ export function ProjectApprovalDocument({
               />
             </Field>
             <p id="approval-why-help" aria-live="polite" className={META}>
-              One line. She reads it under the question.
+              Add a one-sentence note below the client’s approval question.
               {whyRemaining ? ` ${whyRemaining}` : ''}
             </p>
           </div>
 
-          <GateCeremony label="Gate anatomy">
+          <GateCeremony label="Approval request details">
             <GateFieldset part="artifact">
-              <Field label="Issued artifact" id="approval-artifact">
+              <Field label="Issued document" id="approval-artifact">
                 <select
                   id="approval-artifact"
                   className={INPUT}
@@ -870,7 +870,7 @@ export function ProjectApprovalDocument({
 
             <GateFieldset part="question">
               <div className="grid min-w-0 grid-cols-1 gap-4 min-[560px]:grid-cols-2">
-                <Field label="Title" id="approval-title">
+                <Field label="Approval request title" id="approval-title">
                   <input
                     id="approval-title"
                     className={INPUT}
@@ -897,7 +897,7 @@ export function ProjectApprovalDocument({
 
             <GateFieldset part="scope">
               <div className="grid min-w-0 grid-cols-1 gap-4">
-                <Field label="Exact project phase" id="approval-phase">
+                <Field label="Approval phase" id="approval-phase">
                   <select
                     id="approval-phase"
                     className={INPUT}
@@ -915,12 +915,12 @@ export function ProjectApprovalDocument({
                     ))}
                   </select>
                 </Field>
-                <Field label="Scope note" id="approval-context">
+                <Field label="Approval scope note" id="approval-context">
                   <textarea
                     id="approval-context"
                     rows={2}
                     className={INPUT}
-                    placeholder="What this releases, and what it does not."
+                    placeholder="What this approval authorizes and what it excludes."
                     value={form.context}
                     onChange={(event) =>
                       updateForm({ context: event.target.value })
@@ -938,13 +938,13 @@ export function ProjectApprovalDocument({
               <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-3">
                 <DeltaField
                   id="approval-cost-delta"
-                  label="Cost delta (cents)"
+                  label="Cost adjustment (cents)"
                   value={form.costCentsDelta}
                   onChange={(costCentsDelta) => updateForm({ costCentsDelta })}
                 />
                 <DeltaField
                   id="approval-schedule-delta"
-                  label="Schedule delta (days)"
+                  label="Schedule adjustment (days)"
                   value={form.scheduleDaysDelta}
                   onChange={(scheduleDaysDelta) =>
                     updateForm({ scheduleDaysDelta })
@@ -952,7 +952,7 @@ export function ProjectApprovalDocument({
                 />
                 <DeltaField
                   id="approval-lead-delta"
-                  label="Lead-time delta (days)"
+                  label="Lead time adjustment (days)"
                   value={form.leadTimeDaysDelta}
                   onChange={(leadTimeDaysDelta) =>
                     updateForm({ leadTimeDaysDelta })
@@ -966,7 +966,7 @@ export function ProjectApprovalDocument({
             </GateFieldset>
 
             <GateFieldset part="confirmation">
-              <Field label="Due date and time" id="approval-due">
+              <Field label="Response due date and time" id="approval-due">
                 <input
                   id="approval-due"
                   type="datetime-local"
@@ -989,7 +989,7 @@ export function ProjectApprovalDocument({
                   loading={createApproval.isPending}
                   loadingLabel="Creating…"
                 >
-                  Create review draft
+                  Create approval draft
                 </DocumentAction>
                 <DocumentAction
                   actionKey="cancel-project-approval-draft"
@@ -1010,9 +1010,9 @@ export function ProjectApprovalDocument({
         approvalsQuery.isError) && (
       <div className="mt-6 min-w-0 border-t border-[var(--color-pearl)] pt-4">
         <h3 className="font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-          Approval record
+          Approval register
           {(approvalsQuery.isLoading || authorityQuery.isLoading) && (
-            <SectionLoadingLine variant="inline" label="Reading approvals" />
+            <SectionLoadingLine variant="inline" label="Loading approval register…" />
           )}
         </h3>
         {approvalsQuery.isError && (
@@ -1020,7 +1020,7 @@ export function ProjectApprovalDocument({
             role="alert"
             className="mt-3 text-[13px] text-[var(--color-terracotta-ink)]"
           >
-            Approvals could not be read.
+            Approvals could not be loaded. Try again.
           </p>
         )}
         <ol className="mt-2 min-w-0">
@@ -1216,7 +1216,7 @@ export function ProjectApprovalDocument({
                                 )
                             }
                           >
-                            Publish for approval
+                            Issue approval request
                           </DocumentAction>
                         )}
                         {actions.withdraw && (
@@ -1233,7 +1233,7 @@ export function ProjectApprovalDocument({
                               });
                             }}
                           >
-                            Withdraw
+                            Withdraw request
                           </DocumentAction>
                         )}
                         {actions.supersede && (
@@ -1243,7 +1243,7 @@ export function ProjectApprovalDocument({
                             aria-expanded={superseding}
                             onClick={() => beginSupersede(review)}
                           >
-                            Supersede with new artifact
+                            Supersede with revised document
                           </DocumentAction>
                         )}
                       </DocumentActionRow>
@@ -1351,13 +1351,13 @@ export function ProjectApprovalDocument({
                     className="mt-4 min-w-0 border-l-2 border-[var(--color-clay)] pl-3"
                   >
                     <h4 className="font-heading text-[16px] text-[var(--color-charcoal)]">
-                      Superseding request
+                      Superseding approval request
                     </h4>
 
-                    <GateCeremony label="Superseding gate anatomy">
+                    <GateCeremony label="Superseding request details">
                       <GateFieldset part="artifact">
                         <Field
-                          label="New issued artifact"
+                          label="Revised issued document"
                           id={`supersede-artifact-${review.decisionId}`}
                         >
                           <select
@@ -1373,7 +1373,7 @@ export function ProjectApprovalDocument({
                             required
                           >
                             <option value="">
-                              Choose a genuinely new artifact
+                              Select a new issued document
                             </option>
                             {eligibleArtifacts.map((candidate) => (
                               <option
@@ -1495,7 +1495,7 @@ export function ProjectApprovalDocument({
 
                       <GateFieldset part="confirmation">
                         <Field
-                          label="New due date and time"
+                          label="New response due date and time"
                           id={`supersede-due-${review.decisionId}`}
                         >
                           <input
@@ -1525,7 +1525,7 @@ export function ProjectApprovalDocument({
                             loading={supersedeApproval.isPending}
                             loadingLabel="Superseding…"
                           >
-                            Create superseding draft
+                            Create superseding approval draft
                           </DocumentAction>
                           <DocumentAction
                             actionKey="cancel-supersede-project-approval"

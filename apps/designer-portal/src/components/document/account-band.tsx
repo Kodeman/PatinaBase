@@ -253,7 +253,7 @@ export function AccountBand({
   if (isError) {
     return (
       <AccountsQueryFailure
-        title="The project accounts could not be opened."
+        title="Project accounts could not be loaded. Try again."
         message="Budget, commitments, milestones, and invoice actions are unavailable until this read succeeds."
         onRetry={refetch}
       />
@@ -287,13 +287,13 @@ export function AccountBand({
         className="grid w-full grid-cols-[auto_1fr_auto_auto] items-baseline gap-3 px-3 py-2 text-left"
       >
         <span className="font-heading text-[12.5px] font-medium italic text-[var(--color-charcoal)]">
-          The accounts · this project
+          Project accounts
         </span>
         <span className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           {collapsedLine}
         </span>
         <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak,#8B7355)]">
-          Studio eyes only
+          Studio only
         </span>
         <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
           {open ? 'fold ↑' : 'unfold ↓'}
@@ -308,13 +308,13 @@ export function AccountBand({
               Room
             </span>
             <span className="text-right font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-              Allocated
+              Budget allocation
             </span>
             <span className="text-right font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               Committed
             </span>
             <span className="text-right font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-              Variance
+              Budget variance
             </span>
           </div>
           {data.rooms.map((r) => (
@@ -412,7 +412,7 @@ export function AccountBand({
           {data.milestones.length > 0 && (
             <div className="mt-3">
               <p className="mb-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                Payment milestones
+                Payment schedule
               </p>
               {data.milestones.map((m) => (
                 <MilestoneRow key={m.id} m={m} projectId={projectId} headless={headless} />
@@ -435,7 +435,7 @@ export function AccountBand({
                 variant="primary"
                 onClick={() => openInvoiceComposer({ projectId })}
               >
-                Draw an invoice
+                Draft an invoice
               </DocumentAction>
             )}
             {/* R77 — the per-document Hours lens (the drawer pre-addresses
@@ -457,7 +457,7 @@ export function AccountBand({
                 );
               }}
             >
-              Export · QBO
+              Export to QuickBooks Online format
             </DocumentAction>
             {/* R81 — the Amendment: scope changes composed from the money
                 band (the margin escalation is the other doorway). */}

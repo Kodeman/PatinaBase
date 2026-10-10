@@ -62,10 +62,10 @@ type BookPage = 'ledger' | 'week' | 'receiving' | 'vendors';
 const ORDERS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'orders')!.icon;
 
 const PAGES: { key: BookPage; label: string }[] = [
-  { key: 'ledger', label: 'Ledger' },
-  { key: 'week', label: 'The Week' },
+  { key: 'ledger', label: 'Order register' },
+  { key: 'week', label: 'Weekly orders' },
   { key: 'receiving', label: 'Receiving' },
-  { key: 'vendors', label: 'Vendors' },
+  { key: 'vendors', label: 'Vendor accounts' },
 ];
 
 // help-desk Wave 1 — the head's `?` doorway scopes to the OPEN page: the
@@ -379,7 +379,7 @@ export function OrdersLedger({
     >
       <DocSheetHead
         icon={ORDERS_ICON}
-        title="Orders"
+        title="Purchase orders"
         pageLabel={PAGES.find((p) => p.key === page)?.label}
         onClose={onClose}
         helpKey={HELP_KEY_BY_PAGE[page]}
@@ -390,7 +390,7 @@ export function OrdersLedger({
 
       {/* R28: the book's pages — DM-mono links, never tabs. */}
       <nav
-        aria-label="Orders book pages"
+        aria-label="Order register views"
         data-orders-page-links
         className="mb-4 flex flex-wrap items-center gap-x-4 border-b border-[var(--color-pearl)]"
       >
@@ -540,7 +540,7 @@ export function OrdersLedger({
             heldShown.length === 0 &&
             (projectLens || paymentLens) && (
               <p className="doc-type-body py-2 italic text-[var(--color-quiet-ink)]">
-                Nothing under this lens.
+                No orders match this view.
               </p>
             )}
           {/* The zero-PO state (help-desk Wave 1, copy §E.3) — the page was
@@ -881,7 +881,7 @@ export function OrdersLedger({
                           className="border-b border-[var(--color-pearl)] px-1 py-3 sm:pl-12"
                         >
                           <p className="doc-type-meta mb-1 uppercase tracking-[0.07em] text-[var(--color-quiet-ink)]">
-                            Money out
+                            Vendor payments
                           </p>
                           <PoMoneyOut
                             purchaseOrderId={po.id}
@@ -970,7 +970,7 @@ export function OrdersLedger({
                     loadingLabel="Aligning…"
                     onClick={sameTruck}
                   >
-                    Align ETA
+                    Update ETA
                   </DocumentAction>
                 </>
               )}

@@ -420,7 +420,7 @@ describe('letterhead-instruments — the Call Sheet instrument', () => {
     // action-region assertions already use.
     const button = baseElement.querySelector('[data-action-key="open-call-sheet"]');
     expect(button).not.toBeNull();
-    expect(button!.textContent).toContain('Call sheet · 3');
+    expect(button!.textContent).toContain('Project directory · 3');
     // Two of the three rows above are on-paper only (no profile_id, no field
     // link) — the terracotta tail states that count.
     expect(button!.textContent).toContain('· 2 ON PAPER');
@@ -436,7 +436,7 @@ describe('letterhead-instruments — the Call Sheet instrument', () => {
 
     const button = baseElement.querySelector('[data-action-key="open-call-sheet"]');
     expect(button).not.toBeNull();
-    expect(button!.textContent).toBe('Call sheet · 1');
+    expect(button!.textContent).toBe('Project directory · 1');
   });
 
   // Flag retired (rulings §6): the instrument mounts for every studio.

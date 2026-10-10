@@ -307,7 +307,7 @@ export function LightTable({
 
       {decidable.length > 0 && (
         <>
-          <SectionEyebrow count={decidable.length}>Pages to place</SectionEyebrow>
+          <SectionEyebrow count={decidable.length}>Pages to file</SectionEyebrow>
           <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {decidable.map(cardFor)}
           </div>
@@ -336,7 +336,7 @@ export function LightTable({
 
       {loose.length > 0 && (
         <div className="border-t border-[var(--color-pearl)] pt-4">
-          <SectionEyebrow count={loose.length}>Loose papers</SectionEyebrow>
+          <SectionEyebrow count={loose.length}>Unfiled pages</SectionEyebrow>
           <p className="mb-3 max-w-xl text-[0.82rem] text-[var(--text-muted)]">
             No sheet number on these. They aren’t drawings in the set — they go to
             the Folio, clipped to the letterhead. If one is really a revision, put
@@ -359,7 +359,7 @@ export function LightTable({
                   </span>
                   {state === 'sent' ? (
                     <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-sage-ink)]">
-                      In the Folio
+                      Filed in project documents
                     </span>
                   ) : (
                     <DocumentActionRow
@@ -373,7 +373,7 @@ export function LightTable({
                         loadingLabel="Filing…"
                         onClick={() => sendToFolio(proposal)}
                       >
-                        Send to the Folio
+                        File as project document
                       </DocumentAction>
                     </DocumentActionRow>
                   )}

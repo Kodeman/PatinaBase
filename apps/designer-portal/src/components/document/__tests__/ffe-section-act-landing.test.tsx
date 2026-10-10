@@ -655,7 +655,7 @@ describe('the band’s Release for authorization lands on the head’s own entry
     expect(taken).toBe(true);
     await waitFor(() =>
       expect(document.activeElement).toBe(
-        screen.getByRole('button', { name: 'Release for authorization' }),
+        screen.getByRole('button', { name: 'Prepare purchasing authorization' }),
       ),
     );
     expect(document.activeElement).toHaveAttribute('data-action-key', 'release-for-authorization');
@@ -674,11 +674,11 @@ describe('the band’s Release for authorization lands on the head’s own entry
       taken = pressRelease();
     });
     expect(taken).toBe(true);
-    const entry = screen.getByRole('button', { name: 'Release for authorization' });
+    const entry = screen.getByRole('button', { name: 'Prepare purchasing authorization' });
     await waitFor(() => expect(document.activeElement).toBe(entry));
     expect(entry).toHaveAttribute('aria-disabled', 'true');
     expect(entry).not.toHaveAttribute('disabled');
-    expect(screen.getByText('Nothing is ready to release yet.')).toBeInTheDocument();
+    expect(screen.getByText('No selections are ready for purchasing authorization yet.')).toBeInTheDocument();
   });
 
   it('lands on the held entry when no agreement stands behind the job (US-21 Q14)', async () => {
@@ -691,11 +691,11 @@ describe('the band’s Release for authorization lands on the head’s own entry
       taken = pressRelease();
     });
     expect(taken).toBe(true);
-    const entry = screen.getByRole('button', { name: 'Release for authorization' });
+    const entry = screen.getByRole('button', { name: 'Prepare purchasing authorization' });
     await waitFor(() => expect(document.activeElement).toBe(entry));
     expect(entry).toHaveAttribute('aria-disabled', 'true');
     expect(
-      screen.getByText('No signed agreement stands behind the job yet.'),
+      screen.getByText('A signed agreement is required before purchasing authorization.'),
     ).toBeInTheDocument();
   });
 

@@ -24,7 +24,7 @@ export function WholePaperSheet({
   previewProps: React.ComponentProps<typeof ServiceAgreementPreview>;
 }) {
   return (
-    <DocSheet open={open} onClose={onClose} title="The whole paper" wide>
+    <DocSheet open={open} onClose={onClose} title="Full agreement" wide>
       <ServiceAgreementPreview {...previewProps} />
     </DocSheet>
   );

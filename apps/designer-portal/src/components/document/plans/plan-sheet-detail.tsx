@@ -139,14 +139,14 @@ export function PlanSheetDetail({
               setOpenPrintId(currentPrint.id);
             }}
           >
-            Open the print
+            Open drawing revision
           </DocumentAction>
           <DocumentAction
             actionKey="issue-current-set-sheet"
             variant="secondary"
             onClick={onIssue}
           >
-            Issue the current set
+            Issue current set
           </DocumentAction>
           <DocumentAction
             actionKey="toggle-plan-sheet-state"
@@ -179,7 +179,7 @@ export function PlanSheetDetail({
 
       {/* The print rail — newest first */}
       <div className="mt-6">
-        <SectionEyebrow count={prints.length}>The prints</SectionEyebrow>
+        <SectionEyebrow count={prints.length}>Drawing revisions</SectionEyebrow>
         <div className="grid">
           {prints.map((print) => {
             const isCurrent = print.id === sheet.current_print_id;
@@ -247,7 +247,7 @@ export function PlanSheetDetail({
                       setOpenPrintId(print.id);
                     }}
                   >
-                    Open
+                    Open revision
                   </DocumentAction>
                 </DocumentActionRow>
               </div>

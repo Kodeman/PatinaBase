@@ -210,7 +210,7 @@ describe('FF&E project-mode region head', () => {
     renderProject();
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Build the item list');
+    expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
     expect(inked[0]).toHaveAttribute('data-action-key', 'work-the-pieces');
     expect(inked[0]).toHaveAttribute('href', '/doc/project-1/pieces?lens=rough');
   });
@@ -234,10 +234,10 @@ describe('FF&E project-mode region head', () => {
     mockCoverage = { 'line-1': { coverage: 'invoiced' } };
     renderProject();
     const add = document.querySelector('[data-action-key="open-add-to-project"]');
-    expect(add).toHaveTextContent('Add to the job');
-    expect(add).not.toHaveTextContent('Add a line');
+    expect(add).toHaveTextContent('Add project items');
+    expect(add).not.toHaveTextContent('Add room selection');
     const roomAct = document.querySelector('[data-action-key="open-add-schedule-line"]');
-    expect(roomAct).toHaveTextContent('Add a line');
+    expect(roomAct).toHaveTextContent('Add room selection');
     fireEvent.click(add as HTMLElement);
     expect(openAddToProject).toHaveBeenCalledWith('section');
   });
@@ -275,7 +275,7 @@ describe('FF&E project-mode region head', () => {
     );
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Build the item list');
+    expect(inked[0]).toHaveTextContent('Edit FF&E schedule');
     for (const retired of [
       'open-spec-book',
       'bill-project-ffe',
@@ -301,18 +301,18 @@ describe('FF&E project-mode region head', () => {
 
   it('US-21 Q14 — holds Release for authorization, never inked, with its reason', () => {
     renderProject();
-    const release = screen.getByRole('button', { name: 'Release for authorization' });
+    const release = screen.getByRole('button', { name: 'Prepare purchasing authorization' });
     expect(release).toHaveAttribute('data-action-variant', 'secondary');
     expect(release).toHaveAttribute('aria-disabled', 'true');
     expect(
-      screen.getByText('No signed agreement stands behind the job yet.'),
+      screen.getByText('A signed agreement is required before purchasing authorization.'),
     ).toBeInTheDocument();
   });
 
   it('prints Release for authorization pressable, still not inked, once canRelease holds', () => {
     mockAuthority = { data: { state: 'active', agreementId: 'agreement-1' } };
     renderProject();
-    const release = screen.getByRole('button', { name: 'Release for authorization' });
+    const release = screen.getByRole('button', { name: 'Prepare purchasing authorization' });
     expect(release).toHaveAttribute('data-action-variant', 'secondary');
     expect(release).not.toHaveAttribute('aria-disabled', 'true');
     expect(document.querySelectorAll('[data-action-variant="inked"]')).toHaveLength(1);
@@ -328,7 +328,7 @@ describe('FF&E project-mode region head', () => {
 
     expect(document.querySelector('[data-fold-seam]')).toBeNull();
     expect(document.querySelector('[data-region-head]')).not.toBeNull();
-    expect(screen.getByRole('heading', { name: 'Pieces' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'FF&E selections' })).toBeInTheDocument();
   });
 
   it('renders the fold seam with its summary when she folded it herself', () => {
@@ -368,7 +368,7 @@ describe('FF&E project-mode region head', () => {
     renderProject();
     fireEvent.click(screen.getByRole('button', { name: /expand/i }));
     expect(
-      screen.getByRole('heading', { name: 'Pieces' }),
+      screen.getByRole('heading', { name: 'FF&E selections' }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Collapse ↑' }),
@@ -376,7 +376,7 @@ describe('FF&E project-mode region head', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Collapse ↑' }));
     expect(
-      screen.queryByRole('heading', { name: 'Pieces' }),
+      screen.queryByRole('heading', { name: 'FF&E selections' }),
     ).not.toBeInTheDocument();
     expect(screen.getByText(/expand/i)).toBeInTheDocument();
   });
@@ -435,7 +435,7 @@ describe('FF&E room rows — the name unfolds the room', () => {
     mockAuthority = { data: { state: 'active', agreementId: 'agreement-1' } };
     renderProjectInLens();
     fireEvent.click(
-      screen.getByRole('button', { name: /release for authorization/i }),
+      screen.getByRole('button', { name: /prepare purchasing authorization/i }),
     );
     // In selecting mode the heading's press target is the tri-state tick, not
     // the room lens — "Primary bedroom" prints as plain text, not a button.
@@ -474,7 +474,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     ];
     renderProject();
 
-    expect(screen.getByRole('heading', { name: 'Pieces' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'FF&E selections' })).toBeInTheDocument();
     // W4-R1: the count line IS the head's status line.
     const head = document.querySelector('[data-region-head="ffe"]')!;
     expect(head).toHaveTextContent('2 lines · 1 room');
@@ -494,7 +494,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     // The schedule is not on the paper: no line, no room head, no Throughout.
     expect(screen.queryByText('Walnut bed, king')).not.toBeInTheDocument();
     expect(screen.queryByText('Primary bedroom')).not.toBeInTheDocument();
-    expect(screen.queryByText('Throughout')).not.toBeInTheDocument();
+    expect(screen.queryByText('Throughout project')).not.toBeInTheDocument();
   });
 
   it('F3 — prints its leader alone: every overflow act is NOT rendered at quiet', () => {
@@ -505,7 +505,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     // US-21 Q14: entry 0 is Build the item list; Add to the job and the release
     // are overflow.
     expect(head).toContainElement(
-      screen.getByRole('link', { name: /Build the item list/ }),
+      screen.getByRole('link', { name: /Edit FF&E schedule/ }),
     );
     // Not rendered, not hidden: `DocumentActionGroup`'s one-leader guard and
     // `action-visibility.spec.ts` both COUNT `[data-action-key]` nodes, so an
@@ -589,7 +589,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     const quietBox = regionBoxSignature(
       document.querySelector('[data-index-region="ffe"]'),
     );
-    const heading = screen.getByRole('heading', { name: 'Pieces' });
+    const heading = screen.getByRole('heading', { name: 'FF&E selections' });
 
     act(() => {
       __setDensityForTest('full');
@@ -599,7 +599,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     );
 
     expect(document.querySelector('[data-region-head="ffe"]')).toBe(head);
-    expect(screen.getByRole('heading', { name: 'Pieces' })).toBe(heading);
+    expect(screen.getByRole('heading', { name: 'FF&E selections' })).toBe(heading);
     expect(
       document.querySelector('[data-index-region="ffe"]'),
     ).toHaveAttribute('data-density', 'full');
@@ -627,7 +627,7 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
 
     expect(document.querySelector('[data-fold-seam]')).not.toBeNull();
     expect(
-      screen.queryByRole('heading', { name: 'Pieces' }),
+      screen.queryByRole('heading', { name: 'FF&E selections' }),
     ).not.toBeInTheDocument();
     expect(
       document.querySelector('[data-index-region="ffe"]'),

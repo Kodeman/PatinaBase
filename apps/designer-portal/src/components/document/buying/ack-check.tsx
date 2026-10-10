@@ -254,7 +254,7 @@ export function AckCheckForm({
             setDoorOpen(true);
           }}
         >
-          Log what they confirmed
+          Log order acknowledgment
         </DocumentAction>
       </div>
     );
@@ -267,7 +267,7 @@ export function AckCheckForm({
       </p>
       <div className="mb-2 flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-0.5">
-          <span className={LABEL_CLS}>Their order №</span>
+          <span className={LABEL_CLS}>Vendor order number</span>
           <input
             ref={poNoRef}
             type="text"
@@ -300,10 +300,10 @@ export function AckCheckForm({
           <table className="w-full min-w-[22rem] border-collapse text-left text-[11px] text-[var(--color-charcoal)]">
             <thead>
               <tr className={LABEL_CLS}>
-                <th scope="col" className={`${CELL_CLS} font-normal`}>What</th>
+                <th scope="col" className={`${CELL_CLS} font-normal`}>Order detail</th>
                 {showQuoted && <th scope="col" className={`${CELL_CLS} font-normal`}>Quoted</th>}
-                <th scope="col" className={`${CELL_CLS} font-normal`}>We ordered</th>
-                <th scope="col" className={`${CELL_CLS} font-normal`}>They confirmed</th>
+                <th scope="col" className={`${CELL_CLS} font-normal`}>Purchase order</th>
+                <th scope="col" className={`${CELL_CLS} font-normal`}>Acknowledged value</th>
                 <th scope="col" className={`${CELL_CLS} font-normal`}>
                   <span className="sr-only">Check</span>
                 </th>
@@ -566,7 +566,7 @@ export function AckRecord({
                           wrap={inCell}
                           onClick={() => void answer(line, 'accepted')}
                         >
-                          Accept theirs
+                          Accept acknowledged value
                         </DocumentAction>
                         {line.verdict === 'mismatch' && (
                           <DocumentAction
@@ -578,7 +578,7 @@ export function AckRecord({
                             wrap={inCell}
                             onClick={() => void answer(line, 'disputed')}
                           >
-                            Dispute
+                            Dispute acknowledgment
                           </DocumentAction>
                         )}
                       </div>
@@ -624,7 +624,7 @@ export function AckRecord({
 
       {newAck ? (
         <div className="mt-2 border-t border-[var(--color-pearl)] pt-2">
-          <p className={`${LABEL_CLS} mb-1`}>Their corrected acknowledgment</p>
+          <p className={`${LABEL_CLS} mb-1`}>Revised acknowledgment</p>
           <AckCheckForm
             purchaseOrderId={purchaseOrderId}
             vendorPoNumber={vendorPoNumber ?? latest.vendor_order_ref}
@@ -642,7 +642,7 @@ export function AckRecord({
           wrap={inCell}
           onClick={() => setNewAck(true)}
         >
-          They corrected it — log the new acknowledgment
+          Log revised acknowledgment
         </DocumentAction>
       )}
 

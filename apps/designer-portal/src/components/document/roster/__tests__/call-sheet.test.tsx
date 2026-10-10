@@ -349,7 +349,7 @@ beforeEach(() => {
 describe('CallSheet — the head', () => {
   it('names the job', () => {
     render(<CallSheet {...props} />);
-    expect(screen.getByText('Call sheet · Okonkwo residence')).toBeInTheDocument();
+    expect(screen.getByText('Project directory · Okonkwo residence')).toBeInTheDocument();
   });
 
   it('folds the site access card to one line with a way in (R-U)', () => {
@@ -358,7 +358,7 @@ describe('CallSheet — the head', () => {
       'Key held by Ngozi Eze. Luis Ochoa controls the gate. Changed 16 Oct 2026.',
     );
     expect(
-      screen.getByRole('button', { name: /Open the site access card/ }),
+      screen.getByRole('button', { name: /Open site access details/ }),
     ).toBeInTheDocument();
   });
 
@@ -367,7 +367,7 @@ describe('CallSheet — the head', () => {
     expect(mockSiteAccessCard).toHaveBeenLastCalledWith(
       expect.objectContaining({ open: false }),
     );
-    fireEvent.click(screen.getByRole('button', { name: /Open the site access card/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Open site access details/ }));
     expect(mockSiteAccessCard).toHaveBeenLastCalledWith(
       expect.objectContaining({ open: true }),
     );
@@ -384,9 +384,9 @@ describe('CallSheet — the head', () => {
 
   it('leads with From the rolodex, then New person, then Print', () => {
     render(<CallSheet {...props} />);
-    expect(screen.getByRole('button', { name: /From the rolodex/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /New person/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Print$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add from directory/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add new project contact/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Print contact sheet$/ })).toBeInTheDocument();
   });
 });
 
@@ -460,25 +460,25 @@ describe('CallSheet — the bands', () => {
     usePeopleSeats.mockReturnValue({ data: [], isLoading: false });
     useProjectRoster.mockReturnValue({ data: [], isLoading: false });
     render(<CallSheet {...props} />);
-    expect(screen.getByText('– No one is on the call sheet yet.')).toBeInTheDocument();
+    expect(screen.getByText('– No project contacts yet.')).toBeInTheDocument();
   });
 });
 
 describe('CallSheet — the picker doorways', () => {
   it('opens the picker on From the rolodex', () => {
     render(<CallSheet {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: /From the rolodex/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add from directory/ }));
     expect(mockRolodexPicker).toHaveBeenLastCalledWith(
       expect.objectContaining({ open: true, startInAdd: false }),
     );
   });
 
-  // QA-2 (w2 r5): "New person" opened the rolodex picker's inline form, so the
+  // QA-2 (w2 r5): "Add new project contact" opened the rolodex picker's inline form, so the
   // Call Sheet could not reach direction §3.5's Add sheet — the kind switch,
   // the contact rule, the consent capture and the authority field — at all.
   it('opens the Add sheet on New person, on this job, not the picker', () => {
     render(<CallSheet {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: /New person/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add new project contact/ }));
     expect(mockAddPersonSheet).toHaveBeenLastCalledWith(
       expect.objectContaining({ open: true, initialProjectId: 'okonkwo' }),
     );
