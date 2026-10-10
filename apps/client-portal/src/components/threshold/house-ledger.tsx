@@ -144,7 +144,7 @@ export function HouseLedger({ ledger, today }: HouseLedgerProps) {
 
   const rows: LedgerRow[] = [
     { key: 'held' as const, words: 'Held on finished work', cents: ledger.heldCents },
-    { key: 'awaiting' as const, words: 'Awaiting your name', cents: ledger.awaitingCents },
+    { key: 'awaiting' as const, words: 'Awaiting your signature', cents: ledger.awaitingCents },
   ].flatMap((row) => (figure(row.cents) ? [{ ...row, cents: row.cents }] : []));
 
   return (

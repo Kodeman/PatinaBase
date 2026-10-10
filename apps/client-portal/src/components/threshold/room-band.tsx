@@ -412,8 +412,8 @@ function lintelLedger(band: RoomBandModel): string | null {
     );
   }
   const doors = band.marks.filter((mark) => mark.kind === 'door').length;
-  if (doors === 1) parts.push('one door waits on your name');
-  if (doors > 1) parts.push(`${countInWords(doors)} doors wait on your name`);
+  if (doors === 1) parts.push('one document needs your signature');
+  if (doors > 1) parts.push(`${countInWords(doors)} documents need your signature`);
   if (band.marks.some((mark) => mark.kind === 'wall')) {
     parts.push('finished work waits for your acceptance');
   }

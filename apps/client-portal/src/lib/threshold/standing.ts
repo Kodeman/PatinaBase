@@ -185,9 +185,9 @@ export function previouslyLine(receipt: { label: string; date: Date } | null): s
 /** The key's own heading — how much of this drawing waits on her hand. */
 export function keySentence(markCount: number): string {
   const marks = tally(markCount);
-  if (marks === 0) return 'No open requests on this room drawing.';
-  if (marks === 1) return 'One mark stands open on this drawing.';
-  return `${capitalize(countInWords(marks))} marks stand open on this drawing.`;
+  if (marks === 0) return 'No open requests on this plan.';
+  if (marks === 1) return 'One open request on this plan.';
+  return `${capitalize(countInWords(marks))} open requests on this plan.`;
 }
 
 /* ── the day, in words ──────────────────────────────────────────────────────

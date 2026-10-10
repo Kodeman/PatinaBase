@@ -143,7 +143,7 @@ describe('RoomBand', () => {
       '$24,900.00 agreed against $23,800.00 planned — about eleven hundred past its target',
     );
     expect(lintel).toHaveTextContent('two pieces');
-    expect(lintel).toHaveTextContent('one door waits on your name');
+    expect(lintel).toHaveTextContent('one document needs your signature');
   });
 
   it('states the agreed figure alone when the room carries no target', () => {

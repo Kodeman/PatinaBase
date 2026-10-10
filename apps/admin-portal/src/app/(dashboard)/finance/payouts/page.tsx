@@ -139,7 +139,7 @@ export default function PayoutsPage() {
   return (
     <div>
       <PageHeader
-        title="Designer payouts"
+        title="Designer"
         accent="payouts"
         description="Earnings and payout batches across the designer network."
       />

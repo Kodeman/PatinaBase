@@ -29,7 +29,7 @@ export default function CatalogPromotionsPage() {
     <div>
       <PageHeader
         title="Layer promotion"
-        accent="Coming in v1.1"
+        accent="Deferred"
         description="Personal → Studio → Patina Catalog promotion flow. Deferred from procurement-workspace v1 — the full implementation requires schema groundwork (studios, studio_members, products.layer, RLS replacement, promotion audit log, vendor nominations) that's larger than the Sprint 3 W3.3 slice."
       />
 

@@ -106,7 +106,7 @@ const ANCHOR_CLASS =
 function markSentence(mark: ThresholdMark): string {
   const money = mark.amountCents > 0 ? `${formatCurrency(mark.amountCents)}, ` : '';
   return mark.kind === 'door'
-    ? `${mark.label} — ${money}your name.`
+    ? `${mark.label} — ${money}needs your signature.`
     : `${mark.label} — ${money}held back until you accept it.`;
 }
 
@@ -237,7 +237,7 @@ export function PlanKey({ geometry, marks, keySentence }: PlanKeyProps) {
               <span className="mb-px block font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
                 Open
               </span>
-              Everything else in the house stands open.
+              No request — every other room.
             </div>
           )}
         </div>

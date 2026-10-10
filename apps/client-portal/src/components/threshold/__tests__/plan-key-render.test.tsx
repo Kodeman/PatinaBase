@@ -150,7 +150,10 @@ describe('PlanKey — a key on a drawing', () => {
     );
 
     expect(screen.getByTestId('plan-key-sentence')).toHaveTextContent(
-      'Two marks stand open on this drawing.',
+      'Two open requests on this plan.',
+    );
+    expect(screen.getByTestId('plan-key-item-open')).toHaveTextContent(
+      'No request — every other room.',
     );
     expect(screen.getByTestId('plan-key-item-door:p1')).toHaveTextContent('Shut');
     expect(screen.getByTestId('plan-key-item-door:p1')).toHaveTextContent('The library door');
@@ -173,12 +176,12 @@ describe('PlanKey — a key on a drawing', () => {
       <PlanKey
         geometry={geometry(ROOMS, [homeless])}
         marks={[homeless]}
-        keySentence="One mark stands open on this drawing."
+        keySentence="One open request on this plan."
       />,
     );
 
     expect(screen.getByTestId('plan-key-item-door:p9')).toHaveTextContent(
-      'The design services agreement — your name.',
+      'The design services agreement — needs your signature.',
     );
     expect(container.querySelectorAll('[data-plan-mark]')).toHaveLength(0);
   });
@@ -209,7 +212,7 @@ describe('PlanKey — a key on a drawing', () => {
       <PlanKey
         geometry={geo}
         marks={[long]}
-        keySentence="One mark stands open on this drawing."
+        keySentence="One open request on this plan."
       />,
     );
 

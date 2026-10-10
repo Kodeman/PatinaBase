@@ -10,7 +10,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold rail / project standing; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:118 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:1334:      { id: \"doorstep\", label: \"Project status\", short: \"project status\" },"
   },
   {
     "id": "CL-002",
@@ -24,7 +24,7 @@
     "verify": "Inspect apps/client-portal/src/lib/threshold/standing.ts in Threshold standing sentence; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
     "exception": "Signature sentence targets the document, not an abstract door; standing.ts:63 and doorstep.tsx:94 retain the signature-door parser target.",
-    "evidence": "apps/client-portal/src/lib/threshold/standing.ts: Signature sentence targets the document, not an abstract door; standing.ts:63 and doorstep.tsx:94 retain the signature-door parser target."
+    "evidence": "apps/client-portal/src/lib/threshold/standing.ts:63 — `thresholdStanding` uses the shipped signature wording for one required document."
   },
   {
     "id": "CL-003",
@@ -37,7 +37,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/doorstep.tsx in Threshold standing sentence; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/doorstep.tsx:203 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/doorstep.tsx:203:              {sinceActive ? 'Show all project updates' : 'What changed since yesterday'}"
   },
   {
     "id": "CL-004",
@@ -51,7 +51,7 @@
     "verify": "Inspect apps/client-portal/src/components/threshold/doorstep.tsx in Threshold status links; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
     "exception": "The document fragment targets the signature door and finished work still targets acceptance; doorstep.tsx:93-95.",
-    "evidence": "apps/client-portal/src/components/threshold/doorstep.tsx: The document fragment targets the signature door and finished work still targets acceptance; doorstep.tsx:93-95."
+    "evidence": "apps/client-portal/src/components/threshold/doorstep.tsx:93:  { pattern: /finished work/i, anchor: 'wall' },"
   },
   {
     "id": "CL-005",
@@ -64,7 +64,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold invoice rail; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:319 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:1340:        : [{ id: \"letterbox\", label: \"Invoices and payments\", short: \"invoices and payments\" }]),"
   },
   {
     "id": "CL-006",
@@ -77,7 +77,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/letterbox.tsx in Threshold invoice heading; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/letterbox.tsx:28 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/letterbox.tsx:263:        Invoices and payments"
   },
   {
     "id": "CL-007",
@@ -91,7 +91,7 @@
     "verify": "Inspect apps/client-portal/src/components/threshold/letterbox.tsx in Threshold invoice action; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
     "exception": "The payment region is labeled by its purpose; letterbox.tsx:343-364 only opens the chooser and line 339 explicitly says nothing is charged until a method is chosen.",
-    "evidence": "apps/client-portal/src/components/threshold/letterbox.tsx: The payment region is labeled by its purpose; letterbox.tsx:343-364 only opens the chooser and line 339 explicitly says nothing is charged until a method is chosen."
+    "evidence": "apps/client-portal/src/components/threshold/letterbox.tsx:409:              aria-label=\"Pay this invoice\""
   },
   {
     "id": "CL-008",
@@ -125,13 +125,13 @@
     "surface": "Threshold money summary",
     "source": "apps/client-portal/src/components/threshold/house-ledger.tsx",
     "current": "Owed",
-    "proposed": "Unpaid invoices",
+    "proposed": "Unpaid across ${countInWords(count)} open invoices / Unpaid on invoice ${number} / Unpaid on the open invoice / Unpaid across ${countInWords(count)} open invoices from the studio, not for this house / Unpaid on the open invoice from the studio, not for this house / Unpaid across ${countInWords(count)} open invoices, ${countInWords(studioCount)} from the studio",
     "meaning": "Client balance, not vendor payouts.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/house-ledger.tsx in Threshold money summary; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
     "exception": "Unpaid invoice rollup includes adopted studio invoices: derive.ts:537-572; house-ledger.tsx:74-84 identifies studio amounts separately.",
-    "evidence": "apps/client-portal/src/components/threshold/house-ledger.tsx: Unpaid invoice rollup includes adopted studio invoices: derive.ts:537-572; house-ledger.tsx:74-84 identifies studio amounts separately."
+    "evidence": "apps/client-portal/src/components/threshold/house-ledger.tsx:76-84 — The shipped unpaid-invoice summary distinguishes invoice count and studio-invoice scope."
   },
   {
     "id": "CL-011",
@@ -144,7 +144,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold project progress rail; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:1098 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:1364:      ...(road ? [{ id: \"road\", label: \"Orders in progress\", short: \"orders in progress\" }] : []),"
   },
   {
     "id": "CL-012",
@@ -157,7 +157,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/the-road.tsx in Threshold project progress heading; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/the-road.tsx:93 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/the-road.tsx:93:          Orders in progress; apps/client-portal/src/components/threshold/the-road.tsx:110:        aria-label=\"Orders in progress, shown across six delivery stages for each item\""
   },
   {
     "id": "CL-013",
@@ -170,7 +170,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/the-road.tsx in Threshold project progress accessibility; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/the-road.tsx:110 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/the-road.tsx:110:        aria-label=\"Orders in progress, shown across six delivery stages for each item\""
   },
   {
     "id": "CL-014",
@@ -183,7 +183,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/the-road.tsx in Threshold project progress error; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/the-road.tsx:59 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/the-road.tsx:158 — The failed direct-orders read displays the shipped refresh message."
   },
   {
     "id": "CL-015",
@@ -196,7 +196,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/plan-key.tsx in Threshold project progress map; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/plan-key.tsx:169 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/plan-key.tsx:169:          <a href={`#${geometry.road.anchor}`} aria-label=\"Orders in progress\" className={ANCHOR_CLASS}>; apps/client-portal/src/components/threshold/plan-key.tsx:186:              Orders in progress"
   },
   {
     "id": "CL-016",
@@ -209,7 +209,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold project map; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:414 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:1358:        : [{ id: \"key\", label: \"Project rooms\", short: \"project rooms\" }]),"
   },
   {
     "id": "CL-017",
@@ -222,7 +222,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/plan-key.tsx in Threshold project map accessibility; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/plan-key.tsx:145 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/plan-key.tsx:145:          aria-label=\"Project rooms\""
   },
   {
     "id": "CL-018",
@@ -230,13 +230,13 @@
     "surface": "Threshold project map state",
     "source": "apps/client-portal/src/lib/threshold/standing.ts",
     "current": "Nothing stands open on this drawing.",
-    "proposed": "No open requests on this room drawing.",
+    "proposed": "No open requests on this plan. / One open request on this plan. / N open requests on this plan.",
     "meaning": "No open marks on this drawing, not project completion.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/lib/threshold/standing.ts in Threshold project map state; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
     "exception": "standing.ts:187-191 counts drawing marks (signature doors and finished-work acceptance); the zero case is scoped to the room drawing, not project completion.",
-    "evidence": "apps/client-portal/src/lib/threshold/standing.ts: standing.ts:187-191 counts drawing marks (signature doors and finished-work acceptance); the zero case is scoped to the room drawing, not project completion."
+    "evidence": "apps/client-portal/src/lib/threshold/standing.ts:188-190 — The plan key counts requests with distinct zero, one, and plural wording."
   },
   {
     "id": "CL-019",
@@ -249,7 +249,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold return rail; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:169 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:1369:      { id: \"mat\", label: \"Project details and documents\", short: \"project details and documents\" },"
   },
   {
     "id": "CL-020",
@@ -262,7 +262,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/mat.tsx in Threshold return heading; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/mat.tsx:12 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/mat.tsx:101:        Project details and documents"
   },
   {
     "id": "CL-021",
@@ -288,7 +288,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold note rail; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:319 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:1365:      ...(model.note ? [{ id: \"note\", label: \"Message from your designer\", short: \"designer message\" }] : []),"
   },
   {
     "id": "CL-023",
@@ -301,7 +301,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/the-note.tsx in Threshold note accessibility; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/the-note.tsx:114 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/the-note.tsx:114:      aria-label=\"Message from your designer\""
   },
   {
     "id": "CL-024",
@@ -314,21 +314,34 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/story-pole.tsx in Threshold navigation accessibility; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/story-pole.tsx:21 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/story-pole.tsx:189:      aria-label=\"Project sections\"; apps/client-portal/src/components/threshold/story-pole.tsx:193:        Project sections"
   },
   {
     "id": "CL-025",
     "audience": "homeowner",
     "surface": "Threshold navigation landmarks",
     "source": "apps/client-portal/src/components/threshold/landmark-ledger.tsx",
-    "current": "Where we are / What changed / What you owe / What needs you / The papers",
-    "proposed": "Project status / What changed / Unpaid invoices / What needs you / Documents",
-    "meaning": "Links to printed sections, not new destinations.",
+    "current": "Where we are / The papers",
+    "proposed": "Project status / Documents",
+    "meaning": "Landmark links name project status and documents; the “What you owe” invoice landmark remains a separately documented exception.",
+    "owner": "P1",
+    "verify": "Inspect apps/client-portal/src/components/threshold/landmark-ledger.tsx in Threshold navigation landmarks; check visible and accessible wording without changing destination or effect.",
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/landmark-ledger.tsx:58-65 — The landmark labels “Project status” and “Documents” are implemented."
+  },
+  {
+    "id": "CL-025-EX",
+    "audience": "homeowner",
+    "surface": "Threshold navigation landmarks",
+    "source": "apps/client-portal/src/components/threshold/landmark-ledger.tsx",
+    "current": "What you owe",
+    "proposed": "What you owe",
+    "meaning": "Retain the invoice landmark until its target is narrowed; the letterbox can show no unpaid invoices.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/landmark-ledger.tsx in Threshold navigation landmarks; check visible and accessible wording without changing destination or effect.",
     "status": "exception",
-    "exception": "landmark-ledger.tsx:58-65 always links to #letterbox when the section renders, even without unpaid invoices; preserve What you owe rather than promise an unpaid-only destination. Other index labels are updated.",
-    "evidence": "apps/client-portal/src/components/threshold/landmark-ledger.tsx: landmark-ledger.tsx:58-65 always links to #letterbox when the section renders, even without unpaid invoices; preserve What you owe rather than promise an unpaid-only destination. Other index labels are updated."
+    "exception": "The #letterbox target can render without unpaid invoices; preserve the broader “What you owe” landmark.",
+    "evidence": "apps/client-portal/src/components/threshold/landmark-ledger.tsx:58-65 — “What you owe” remains the broader label for the letterbox destination."
   },
   {
     "id": "CL-026",
@@ -341,7 +354,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/door-acts.tsx in Threshold signature controls; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/door-acts.tsx:7 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/door-acts.tsx:248:    ...(kind && !isLegacy ? [{ key: 'read' as const, label: 'Read document' }] : []),"
   },
   {
     "id": "CL-027",
@@ -406,7 +419,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/room-band.tsx in Threshold room section accessibility; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/room-band.tsx:175 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/room-band.tsx:175-177 — The room drawing’s accessible label names the room, selection count, and piece/pieces."
   },
   {
     "id": "CL-032",
@@ -445,7 +458,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/details-sheet.tsx in Threshold profile preferences; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/details-sheet.tsx:25 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/details-sheet.tsx:25:/* ── Your details ──────────────────────────────────────────────────────────; apps/client-portal/src/components/threshold/details-sheet.tsx:261:            Your details"
   },
   {
     "id": "CL-035",
@@ -679,7 +692,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/field/spec-book/[token]/page.tsx in Field spec-book share; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/app/field/spec-book/[token]/page.tsx:59 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/app/field/spec-book/[token]/page.tsx:59:        <p className=\"type-meta\">Patina · Shared specification book</p>"
   },
   {
     "id": "CL-060",
@@ -774,7 +787,7 @@
   },
   {
     "id": "CL-067",
-    "audience": "trade",
+    "audience": "homeowner",
     "surface": "Evidence request",
     "source": "apps/client-portal/src/app/evidence/[token]/page.tsx",
     "current": "This link has expired.",
@@ -787,7 +800,7 @@
   },
   {
     "id": "CL-068",
-    "audience": "trade",
+    "audience": "homeowner",
     "surface": "Evidence upload state",
     "source": "apps/client-portal/src/app/evidence/[token]/evidence-uploader.tsx",
     "current": "Add more photos",
@@ -814,7 +827,7 @@
   },
   {
     "id": "CL-071",
-    "audience": "homeowner",
+    "audience": "shared",
     "surface": "Invoice payment terminal states",
     "source": "apps/client-portal/src/app/pay/[token]/settling-sheet.tsx",
     "current": "This link is no longer good",
@@ -827,7 +840,7 @@
   },
   {
     "id": "CL-072",
-    "audience": "homeowner",
+    "audience": "shared",
     "surface": "Invoice link used",
     "source": "apps/client-portal/src/app/pay/used/page.tsx",
     "current": "You have already come back from this payment",
@@ -849,7 +862,7 @@
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/config/navigation.ts in Admin zone navigation; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/admin-portal/src/config/navigation.ts:51 — Admin zone groups users and studios; existing URLs retained."
+    "evidence": "apps/admin-portal/src/config/navigation.ts:51:    label: 'Users and studios',"
   },
   {
     "id": "AD-002",
@@ -935,16 +948,16 @@
     "surface": "Admin navigation badge pairing",
     "source": "apps/admin-portal/src/hooks/use-admin-nav-counts.ts",
     "current": "Verification / Applications / Waitlist",
-    "proposed": "Verification (/verification) / Applications (/applications) / Waitlist (/waitlist)",
+    "proposed": "Non-copy key row: pending counts keyed by route",
     "meaning": "Count keys match display labels and represent distinct pending queues.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/hooks/use-admin-nav-counts.ts in Admin navigation badge pairing; check visible and accessible wording without changing destination or effect.",
-    "status": "implemented",
+    "status": "unchanged",
     "depends": [
       "apps/admin-portal/src/config/navigation.ts",
       "apps/admin-portal/src/components/portal/sub-nav.tsx"
     ],
-    "evidence": "apps/admin-portal/src/hooks/use-admin-nav-counts.ts:37 — Queue counts remain verification, applications, waitlist; destination keys replace fragile label keys."
+    "evidence": "apps/admin-portal/src/hooks/use-admin-nav-counts.ts:37 — Route keys pair pending counts with Verification, Applications, and Waitlist; this is navigation-key behavior, not copy."
   },
   {
     "id": "AD-009",
@@ -961,7 +974,7 @@
       "apps/admin-portal/src/config/navigation.ts",
       "apps/admin-portal/src/hooks/use-admin-nav-counts.ts"
     ],
-    "evidence": "apps/admin-portal/src/components/portal/sub-nav.tsx:49 — Sub-navigation reads the same destination keys as the producer."
+    "evidence": "apps/admin-portal/src/components/portal/sub-nav.tsx:49:              const count = counts[item.href];"
   },
   {
     "id": "AD-010",
@@ -1176,14 +1189,13 @@
     "audience": "admin",
     "surface": "Admin payout register",
     "source": "apps/admin-portal/src/app/(dashboard)/finance/payouts/page.tsx",
-    "current": "Designer / Earnings and payout batches across the designer network.",
+    "current": "Designer payouts / Earnings and payout batches across the designer network.",
     "proposed": "Designer payouts / Earnings and payout batches across the designer network.",
     "meaning": "Money owed to designers rather than vendor payouts or unpaid client invoices.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/finance/payouts/page.tsx in Admin payout register; check visible and accessible wording without changing destination or effect.",
-    "status": "implemented",
-    "exception": "This page explicitly names designers and earnings; confirm the underlying recipient and pending/processing/completed states before changing the heading, never relabel it vendor payouts.",
-    "evidence": "apps/admin-portal/src/app/(dashboard)/finance/payouts/page.tsx:142 — designer_payouts query joins profiles:designer_id in app/api/admin/payouts/route.ts:65-80."
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/finance/payouts/page.tsx:142-143 — PageHeader renders title=\"Designer\" with accent=\"payouts\", producing the exact heading “Designer payouts”."
   },
   {
     "id": "AD-027",
@@ -1248,7 +1260,7 @@
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/config/navigation.ts in Admin product create; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/admin-portal/src/config/navigation.ts:173 — Creation destination remains /catalog/new."
+    "evidence": "apps/admin-portal/src/config/navigation.ts:173 and apps/admin-portal/src/components/portal/command-palette.tsx:93 — The /catalog/new action is labeled “Add product” in both navigation and the command palette."
   },
   {
     "id": "AD-032",
@@ -1430,7 +1442,7 @@
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/dashboard/page.tsx in Admin overview dashboard; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/admin-portal/src/app/(dashboard)/dashboard/page.tsx:110 — Metric remains sent communications over 24h."
+    "evidence": "apps/admin-portal/src/app/(dashboard)/dashboard/page.tsx:82:          label=\"Pending applications\""
   },
   {
     "id": "AD-047",
@@ -1443,7 +1455,7 @@
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/analytics/page.tsx in Admin analytics; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/admin-portal/src/app/(dashboard)/analytics/page.tsx:136 — Unavailable communications data remains distinct from zero sends."
+    "evidence": "apps/admin-portal/src/app/(dashboard)/analytics/page.tsx:110:                  <p className=\"type-meta-small\">Total sent</p>"
   },
   {
     "id": "AD-048",
@@ -1482,7 +1494,7 @@
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/nominations/page.tsx in Admin nominations; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/admin-portal/src/app/(dashboard)/nominations/page.tsx:74 — Nominator-visible decline reason remains unchanged."
+    "evidence": "apps/admin-portal/src/app/(dashboard)/nominations/page.tsx:74:        <h1 className=\"type-section-head\">Catalog nominations</h1>"
   },
   {
     "id": "AD-051",
@@ -1547,7 +1559,7 @@
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/communications/campaigns/page.tsx in Admin campaign list; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/campaigns/page.tsx:132 — Campaign creation and cancel actions retain existing effects."
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/campaigns/page.tsx:286:            New campaign"
   },
   {
     "id": "AD-056",
@@ -1560,7 +1572,7 @@
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/communications/automations/page.tsx in Admin automation list; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/automations/page.tsx:172 — Pause and Activate actions retain existing effects."
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/automations/page.tsx:172:            New automation; apps/admin-portal/src/app/(dashboard)/communications/automations/page.tsx:221:                New automation"
   },
   {
     "id": "AD-057",
@@ -1599,7 +1611,7 @@
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/catalog/promotions/page.tsx in Admin product promotion; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/admin-portal/src/app/(dashboard)/catalog/promotions/page.tsx:21 — Deferred capability remains disabled."
+    "evidence": "apps/admin-portal/src/app/(dashboard)/catalog/promotions/page.tsx:21: *        §5 \"Layer promotion scope clarification\" (lines 740–746); apps/admin-portal/src/app/(dashboard)/catalog/promotions/page.tsx:31:        title=\"Layer promotion\""
   },
   {
     "id": "MF-001",
@@ -1625,7 +1637,7 @@
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/layout.tsx in Manufacturer shell placeholder; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/manufacturer-portal/src/app/layout.tsx:75 — Replaces public sprint language."
+    "evidence": "apps/manufacturer-portal/src/app/layout.tsx:75:            Manufacturer preview"
   },
   {
     "id": "MF-003",
@@ -1646,13 +1658,13 @@
     "surface": "Manufacturer home promise",
     "source": "apps/manufacturer-portal/src/app/page.tsx",
     "current": "We’ll walk you through the short onboarding flow",
-    "proposed": "Manufacturer onboarding is not available yet. We’ll contact you when it is ready.",
+    "proposed": "Manufacturer onboarding is not available yet. We’ll follow up by email when it is ready. No action is needed from you right now.",
     "meaning": "Current home promises a flow the placeholder cannot provide.",
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/page.tsx in Manufacturer home promise; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
     "exception": "Remove the implied available flow on home while preserving the nomination context and exact follow-up expectation; confirm outreach email promise.",
-    "evidence": "apps/manufacturer-portal/src/app/page.tsx:17 — Nomination retained; email follow-up and no-action-needed wording match onboarding/page.tsx:29-33."
+    "evidence": "apps/manufacturer-portal/src/app/page.tsx:15-18 — Home-page copy states onboarding is unavailable and follow-up is by email; no action is needed."
   },
   {
     "id": "MF-005",
@@ -1666,7 +1678,7 @@
     "verify": "Inspect apps/manufacturer-portal/src/app/page.tsx in Manufacturer home CTA; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
     "exception": "Whether a status CTA is worthwhile is a product decision; alternatively say \"About onboarding\". Do not retain a start action when no enrollment can start.",
-    "evidence": "apps/manufacturer-portal/src/app/page.tsx:35 — Destination onboarding/page.tsx:29-33 describes availability, not enrollment or individual status."
+    "evidence": "apps/manufacturer-portal/src/app/page.tsx:35:        About onboarding"
   },
   {
     "id": "MF-006",
@@ -1679,7 +1691,7 @@
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/onboarding/page.tsx in Manufacturer onboarding heading; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/manufacturer-portal/src/app/onboarding/page.tsx:29 — Placeholder keeps explicit email follow-up and no action needed."
+    "evidence": "apps/manufacturer-portal/src/app/onboarding/page.tsx:29:        Manufacturer onboarding is not available yet"
   },
   {
     "id": "MF-007",
@@ -1731,7 +1743,7 @@
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/layout.tsx in Manufacturer metadata; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/manufacturer-portal/src/app/layout.tsx:6 — Metadata no longer claims catalog management."
+    "evidence": "apps/manufacturer-portal/src/app/layout.tsx:6:  description: 'Manufacturer information and onboarding availability.',"
   },
   {
     "id": "CL-074",
@@ -1810,7 +1822,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/letterbox-door.tsx in Threshold receipt error; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/letterbox-door.tsx:197 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/letterbox-door.tsx:197:        Your documents could not load just now. Nothing on them has changed."
   },
   {
     "id": "CL-080",
@@ -1979,7 +1991,7 @@
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/mission-control/approval-inbox.tsx in Admin queued work review; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/admin-portal/src/components/mission-control/approval-inbox.tsx:109 — Action review queue, not conversations."
+    "evidence": "apps/admin-portal/src/components/mission-control/approval-inbox.tsx:109:        label=\"No work awaiting review\""
   },
   {
     "id": "AD-071",
@@ -1992,7 +2004,7 @@
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/portal/command-palette.tsx in Admin command navigation; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/admin-portal/src/components/portal/command-palette.tsx:64 — Command palette agrees with zone label and retains /users URL."
+    "evidence": "apps/admin-portal/src/components/portal/command-palette.tsx:61:            <LayoutDashboard className=\"mr-2 h-4 w-4\" /> Overview"
   },
   {
     "id": "CL-082",
@@ -2005,7 +2017,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/other-houses.tsx in Other project link; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/other-houses.tsx:9 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/other-houses.tsx:31:      <h2 className={COLUMN_HEAD_CLASS}>Your other projects</h2>"
   },
   {
     "id": "CL-083",
@@ -2019,7 +2031,7 @@
     "verify": "Inspect apps/client-portal/src/components/threshold/wall-gate.tsx in Finished-work acceptance; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
     "exception": "wall-gate.tsx:156-226 places finished-work heading alongside the named acceptance and its release consequence; this is not a photo-verification claim.",
-    "evidence": "apps/client-portal/src/components/threshold/wall-gate.tsx: wall-gate.tsx:156-226 places finished-work heading alongside the named acceptance and its release consequence; this is not a photo-verification claim."
+    "evidence": "apps/client-portal/src/components/threshold/wall-gate.tsx:226:          Finished work to review"
   },
   {
     "id": "CL-084",
@@ -2032,7 +2044,7 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/instruments/making-spine.tsx in Project delivery timeline; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/client-portal/src/components/threshold/instruments/making-spine.tsx:570 — rendered label updated; anchors and behavior retained."
+    "evidence": "apps/client-portal/src/components/threshold/instruments/making-spine.tsx:570:          Current project stage"
   },
   {
     "id": "CL-085",
@@ -2073,7 +2085,7 @@
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/fulfillment/pos/[poId]/page.tsx in Admin fulfillment purchase order; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
     "exception": "Confirm whether this control opens a preview or commits settlement; keep authorization and financial effect explicit.",
-    "evidence": "apps/admin-portal/src/app/(dashboard)/fulfillment/pos/[poId]/page.tsx:125 — Opens SettleDialog; settlement only commits on settle-dialog.tsx:87-102,200-206."
+    "evidence": "apps/admin-portal/src/app/(dashboard)/fulfillment/pos/[poId]/page.tsx:125:                  Review purchase order settlement"
   },
   {
     "id": "AD-073",
@@ -2086,7 +2098,7 @@
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/analytics/daily-room/page.tsx in Admin daily analytics; check visible and accessible wording without changing destination or effect.",
     "status": "implemented",
-    "evidence": "apps/admin-portal/src/app/(dashboard)/analytics/daily-room/page.tsx:50 — Operational analytics destination, not a homeowner room."
+    "evidence": "apps/admin-portal/src/app/(dashboard)/analytics/daily-room/page.tsx:50:        <h1 className=\"text-2xl font-semibold\">Daily activity analytics</h1>"
   },
   {
     "id": "AD-074",
@@ -5337,5 +5349,57 @@
     "verify": "Review apps/admin-portal/src/features/catalog/USAGE_EXAMPLE.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
     "status": "unchanged",
     "evidence": "apps/admin-portal/src/features/catalog/USAGE_EXAMPLE.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
+  },
+  {
+    "id": "CL-087",
+    "audience": "homeowner",
+    "surface": "Threshold room-band signature count",
+    "source": "apps/client-portal/src/components/threshold/room-band.tsx",
+    "current": "one door waits on your name / N doors wait on your name",
+    "proposed": "one document needs your signature / N documents need your signature",
+    "meaning": "Count signature-required documents in the room band; preserve door mark counts and kind.",
+    "owner": "P1",
+    "verify": "Inspect room-band lintel labels and verify singular/plural counts and door mark semantics remain unchanged.",
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/room-band.tsx:415-416 — The lintel labels one or multiple signature-required documents."
+  },
+  {
+    "id": "CL-088",
+    "audience": "homeowner",
+    "surface": "Threshold plan-key signature mark",
+    "source": "apps/client-portal/src/components/threshold/plan-key.tsx",
+    "current": "<label> — $X, your name.",
+    "proposed": "<label> — $X, needs your signature.",
+    "meaning": "A door mark names the document signature action and any amount.",
+    "owner": "P1",
+    "verify": "Inspect the plan key door-mark sentence; confirm the amount and mark kind are preserved.",
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/plan-key.tsx:108-110 — Door marks retain their label and amount, followed by the signature request."
+  },
+  {
+    "id": "CL-089",
+    "audience": "homeowner",
+    "surface": "Threshold house-ledger awaiting row",
+    "source": "apps/client-portal/src/components/threshold/house-ledger.tsx",
+    "current": "Awaiting your name",
+    "proposed": "Awaiting your signature",
+    "meaning": "Name the pending signature without changing the financial figure or state.",
+    "owner": "P1",
+    "verify": "Inspect the awaiting row in the house ledger and verify its amount and state are unchanged.",
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/house-ledger.tsx:147 — The awaiting ledger row is labeled “Awaiting your signature”."
+  },
+  {
+    "id": "AD-077",
+    "audience": "admin",
+    "surface": "Admin command-palette product action",
+    "source": "apps/admin-portal/src/components/portal/command-palette.tsx",
+    "current": "Add Product",
+    "proposed": "Add product",
+    "meaning": "Match the sentence-case creation action without changing its destination.",
+    "owner": "P2",
+    "verify": "Inspect the command-palette action and confirm it still navigates to /catalog/new.",
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/components/portal/command-palette.tsx:93 — The command-palette product action reads “Add product”."
   }
 ]

@@ -90,7 +90,7 @@ export function CommandPalette() {
             <ClipboardCheck className="mr-2 h-4 w-4" /> Applications
           </CommandItem>
           <CommandItem onSelect={() => navigate('/catalog/new')}>
-            <Package className="mr-2 h-4 w-4" /> Add Product
+            <Package className="mr-2 h-4 w-4" /> Add product
           </CommandItem>
           <CommandItem onSelect={() => navigate('/flags')}>
             <Flag className="mr-2 h-4 w-4" /> Feature Flags

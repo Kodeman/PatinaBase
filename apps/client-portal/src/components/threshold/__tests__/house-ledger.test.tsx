@@ -148,7 +148,7 @@ describe('HouseLedger — the house in figures, with its words', () => {
     );
     expect(screen.getByTestId('house-ledger-held')).toHaveTextContent('$1,440.00');
     expect(screen.getByTestId('house-ledger-awaiting')).toHaveTextContent('$6,890.00');
-    expect(screen.getByTestId('house-ledger-awaiting')).toHaveTextContent('Awaiting your name');
+    expect(screen.getByTestId('house-ledger-awaiting')).toHaveTextContent('Awaiting your signature');
   });
 
   it('counts the invoices the owed figure is spread across', () => {

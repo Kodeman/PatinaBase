@@ -119,19 +119,19 @@ describe('previouslyLine', () => {
 
 describe('keySentence', () => {
   it('counts two marks', () => {
-    expect(keySentence(2)).toBe('Two marks stand open on this drawing.');
+    expect(keySentence(2)).toBe('Two open requests on this plan.');
   });
 
   it('counts one mark', () => {
-    expect(keySentence(1)).toBe('One mark stands open on this drawing.');
+    expect(keySentence(1)).toBe('One open request on this plan.');
   });
 
   it('reports a clear drawing', () => {
-    expect(keySentence(0)).toBe('No open requests on this room drawing.');
+    expect(keySentence(0)).toBe('No open requests on this plan.');
   });
 
   it('counts more than two in words', () => {
-    expect(keySentence(4)).toBe('Four marks stand open on this drawing.');
+    expect(keySentence(4)).toBe('Four open requests on this plan.');
   });
 });
 
@@ -161,7 +161,7 @@ describe('previouslyLine — what it will not print', () => {
 
 describe('keySentence — past twelve', () => {
   it('falls to figures', () => {
-    expect(keySentence(13)).toBe('13 marks stand open on this drawing.');
+    expect(keySentence(13)).toBe('13 open requests on this plan.');
   });
 });
 
