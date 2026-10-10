@@ -97,10 +97,13 @@ struct S5InboxTerminalScreen: View {
 
     private var transferLabel: String {
         switch transfer.phase {
+        case .local: return "Saved on this device"
+        case .queued: return "Queued for upload"
         case .uploading: return "Uploading"
         case .awaitingConfirmation: return "Awaiting confirmation"
         case .retryableFailure: return "Retry needed"
-        default: return "Queued to sync"
+        case .rejected: return "Transfer rejected"
+        case .complete: return "Destination unconfirmed"
         }
     }
 

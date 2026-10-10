@@ -143,8 +143,8 @@ struct S4SavedTerminalScreen: View {
             case .queued: return "Saved on this device. Queued for upload."
             case .uploading: return "Sending this capture."
             case .awaitingConfirmation: return "Upload finished. Waiting for confirmation."
-            case .retryableFailure: return "The transfer failed. Retry to send this capture."
-            case .rejected: return "The transfer was rejected. Review this capture before trying again."
+            case .retryableFailure: return "The transfer failed. You can retry it from Sync status."
+            case .rejected: return "The transfer was rejected. Review this capture."
             case .complete: return "Patina has the receipt, but the destination still needs confirmation."
             }
         }

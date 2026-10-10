@@ -95,7 +95,7 @@ private struct S3Content: View {
             destinationCard(
                 destination: .library,
                 glyph: "books.vertical.fill",
-                title: "Resource library — ready to use",
+                title: "Resource library — keep for reuse",
                 blurb: "Keep this piece with your reusable resources. Review details before relying on them."
             )
 

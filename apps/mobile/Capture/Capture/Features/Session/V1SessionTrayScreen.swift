@@ -171,7 +171,7 @@ struct V1SessionTrayScreen: View {
     /// the server to learn the project on the next drain. `placedJustNow`
     /// marks that gap without claiming an upload is already active, and clears
     /// itself the moment `reload()` finds the record complete (Task 27's
-    /// complete (Task 27's placement call site is where it's raised).
+    /// placement call site is where it's raised).
     @ViewBuilder
     private func placedSyncingLine(_ piece: Piece) -> some View {
         if placedJustNow.contains(piece.id), piece.transferState.phase != .complete {

@@ -793,7 +793,7 @@ public extension Piece {
     }
 
     /// FC-R6: a capture that was placed AFTER it committed. The server learns the
-    /// project on the next drain; until then the tray shows `placed · syncing`.
+    /// project on the next drain; until then the tray shows `Placed · not yet confirmed`.
     var placementNeedsReplay: Bool { placementReplayPending == true }
 
     /// The sync path may short-circuit on a receipt it already holds ONLY while
