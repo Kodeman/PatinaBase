@@ -46,7 +46,7 @@ export function SubNav() {
           <div className="flex h-[38px] flex-1 items-stretch gap-0">
             {subNavItems.map((item) => {
               const isActive = activeSubNavHref === item.href;
-              const count = counts[item.label];
+              const count = counts[item.href];
 
               return (
                 <Link

@@ -169,7 +169,7 @@ export default function AutomationsPage() {
             className="flex items-center gap-2 px-4 py-2.5 bg-patina-mocha-brown text-white rounded-lg text-sm font-medium hover:bg-patina-charcoal transition-colors"
           >
             <Plus className="w-4 h-4" />
-            New Automation
+            New automation
           </button>
         </div>
       </div>
@@ -218,7 +218,7 @@ export default function AutomationsPage() {
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-patina-mocha-brown text-white rounded-lg text-sm font-medium hover:bg-patina-charcoal transition-colors"
               >
                 <Plus className="w-4 h-4" />
-                New Automation
+                New automation
               </button>
             )}
           </div>

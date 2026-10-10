@@ -47,7 +47,7 @@ export default async function DailyRoomAnalyticsPage() {
   return (
     <div className="space-y-8 p-8">
       <header>
-        <h1 className="text-2xl font-semibold">The Daily Room — Analytics</h1>
+        <h1 className="text-2xl font-semibold">Daily activity analytics</h1>
         <p className="text-sm text-muted-foreground">
           Aggregates from the behavioral telemetry pipeline. Volume metrics
           live in PostHog.

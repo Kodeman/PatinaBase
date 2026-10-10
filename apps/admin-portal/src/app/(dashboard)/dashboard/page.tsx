@@ -107,7 +107,7 @@ export default function DashboardPage() {
           trend="neutral"
         />
         <MetricBlock
-          label="Comms sent (24h)"
+          label="Communications sent (24h)"
           labelExtra={
             <InfoIcon
               surfaceKey={SurfaceKeys.AdminPortal.Overview.Metric.CommsSent}

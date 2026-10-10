@@ -106,7 +106,7 @@ export function ApprovalInbox({ filters = { status: 'awaiting_review' } }: Appro
   if (list.length === 0) {
     return (
       <EmptyState
-        label="Inbox zero"
+        label="No work awaiting review"
         message="Nothing is awaiting review. Agent work will surface here as it lands."
       />
     );

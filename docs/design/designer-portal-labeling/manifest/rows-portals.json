@@ -784,7 +784,8 @@
     "meaning": "Groups users, studios, roles, applications, verification, and waitlist.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/config/navigation.ts in Admin zone navigation; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/config/navigation.ts:51 — Admin zone groups users and studios; existing URLs retained."
   },
   {
     "id": "AD-002",
@@ -796,7 +797,8 @@
     "meaning": "Operational monitoring destinations remain separate.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/config/navigation.ts in Admin overview navigation; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/config/navigation.ts:44 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-003",
@@ -808,7 +810,8 @@
     "meaning": "Catalog and communication administration, not designer Resource library.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/config/navigation.ts in Admin content navigation; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/config/navigation.ts:65 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-004",
@@ -820,7 +823,8 @@
     "meaning": "Operational orders are not the designer Purchase orders destination.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/config/navigation.ts in Admin operations navigation; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/config/navigation.ts:77 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-005",
@@ -832,7 +836,8 @@
     "meaning": "System operations and diagnostics.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/config/navigation.ts in Admin system navigation; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/config/navigation.ts:89 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-006",
@@ -844,7 +849,8 @@
     "meaning": "Nav appears with NEXT_PUBLIC_ENABLE_FULFILLMENT; direct routes work regardless.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/config/navigation.ts in Admin fulfillment navigation (flag on); check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/config/navigation.ts:34 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-007",
@@ -856,7 +862,8 @@
     "meaning": "Flag hides entry only; no claim that direct route is unavailable.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/config/navigation.ts in Admin fulfillment navigation (flag off); check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/config/navigation.ts:34 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-008",
@@ -864,15 +871,16 @@
     "surface": "Admin navigation badge pairing",
     "source": "apps/admin-portal/src/hooks/use-admin-nav-counts.ts",
     "current": "Verification / Applications / Waitlist",
-    "proposed": "Verification / Applications / Waitlist",
+    "proposed": "Verification (/verification) / Applications (/applications) / Waitlist (/waitlist)",
     "meaning": "Count keys match display labels and represent distinct pending queues.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/hooks/use-admin-nav-counts.ts in Admin navigation badge pairing; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged",
+    "status": "implemented",
     "depends": [
       "apps/admin-portal/src/config/navigation.ts",
       "apps/admin-portal/src/components/portal/sub-nav.tsx"
-    ]
+    ],
+    "evidence": "apps/admin-portal/src/hooks/use-admin-nav-counts.ts:37 — Queue counts remain verification, applications, waitlist; destination keys replace fragile label keys."
   },
   {
     "id": "AD-009",
@@ -880,15 +888,16 @@
     "surface": "Admin navigation badge consumer",
     "source": "apps/admin-portal/src/components/portal/sub-nav.tsx",
     "current": "counts[item.label]",
-    "proposed": "counts[item.label]",
+    "proposed": "counts[item.href]",
     "meaning": "Badge lookup must move with any label change; stable route paths unchanged.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/portal/sub-nav.tsx in Admin navigation badge consumer; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged",
+    "status": "implemented",
     "depends": [
       "apps/admin-portal/src/config/navigation.ts",
       "apps/admin-portal/src/hooks/use-admin-nav-counts.ts"
-    ]
+    ],
+    "evidence": "apps/admin-portal/src/components/portal/sub-nav.tsx:49 — Sub-navigation reads the same destination keys as the producer."
   },
   {
     "id": "AD-010",
@@ -900,7 +909,8 @@
     "meaning": "Account actions and their destinations.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/config/navigation.ts in Admin profile controls; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/config/navigation.ts:7 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-011",
@@ -912,7 +922,8 @@
     "meaning": "Accessible controls.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/portal/utility-bar.tsx in Admin utility accessibility; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/portal/utility-bar.tsx:5 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-012",
@@ -924,7 +935,8 @@
     "meaning": "Identity administration, not studio contacts.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/users/page.tsx in Admin users; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/users/page.tsx:35 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-013",
@@ -936,7 +948,8 @@
     "meaning": "Organization provisioning, not client contacts.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/studios/page.tsx in Admin studios; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/studios/page.tsx:32 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-014",
@@ -948,7 +961,8 @@
     "meaning": "Authorization role management.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/roles/page.tsx in Admin roles; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/roles/page.tsx:45 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-015",
@@ -960,7 +974,8 @@
     "meaning": "Applicant reviews and status tabs, not maker onboarding completion.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/applications/page.tsx in Admin applications; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/applications/page.tsx:18 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-016",
@@ -972,7 +987,8 @@
     "meaning": "Verification decisions; do not conflate with application review.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/verification/page.tsx in Admin verification; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/verification/page.tsx:56 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-017",
@@ -984,7 +1000,8 @@
     "meaning": "Qualification pipeline and its distinct states.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/waitlist/page.tsx in Admin waitlist; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/waitlist/page.tsx:38 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-018",
@@ -996,7 +1013,8 @@
     "meaning": "Operations pipeline, not studio project schedule.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/pipeline/page.tsx in Admin pipeline; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/pipeline/page.tsx:14 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-019",
@@ -1008,7 +1026,8 @@
     "meaning": "Operational tracking, not manufacturer self-service enrollment.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/pipeline/onboarding/page.tsx in Admin onboarding pipeline; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/pipeline/onboarding/page.tsx:8 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-020",
@@ -1020,7 +1039,8 @@
     "meaning": "Platform order administration; do not blanket-rename to purchase orders.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/orders/page.tsx in Admin orders; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/orders/page.tsx:38 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-021",
@@ -1032,7 +1052,8 @@
     "meaning": "Fulfillment work queue, not correspondence inbox.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/fulfillment/page.tsx in Admin fulfillment queue; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/fulfillment/page.tsx:6 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-022",
@@ -1044,7 +1065,8 @@
     "meaning": "Physical shipment state and ETA.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/fulfillment/shipments/page.tsx in Admin fulfillment shipments; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/fulfillment/shipments/page.tsx:4 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-023",
@@ -1056,7 +1078,8 @@
     "meaning": "Operational exception handling, not product-review exceptions.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/fulfillment/exceptions/page.tsx in Admin fulfillment exceptions; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/fulfillment/exceptions/page.tsx:4 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-024",
@@ -1068,7 +1091,8 @@
     "meaning": "Vendor operational records, not all contacts.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/fulfillment/vendors/page.tsx in Admin fulfillment vendor; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/fulfillment/vendors/page.tsx:23 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-025",
@@ -1080,7 +1104,8 @@
     "meaning": "Draft/issue distinctions are retained.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/fulfillment/composer/po-paper.tsx in Admin purchase-order composer; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/composer/po-paper.tsx:63 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-026",
@@ -1092,8 +1117,9 @@
     "meaning": "Money owed to designers rather than vendor payouts or unpaid client invoices.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/finance/payouts/page.tsx in Admin payout register; check visible and accessible wording without changing destination or effect.",
-    "status": "exception",
-    "exception": "This page explicitly names designers and earnings; confirm the underlying recipient and pending/processing/completed states before changing the heading, never relabel it vendor payouts."
+    "status": "implemented",
+    "exception": "This page explicitly names designers and earnings; confirm the underlying recipient and pending/processing/completed states before changing the heading, never relabel it vendor payouts.",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/finance/payouts/page.tsx:142 — designer_payouts query joins profiles:designer_id in app/api/admin/payouts/route.ts:65-80."
   },
   {
     "id": "AD-027",
@@ -1105,7 +1131,8 @@
     "meaning": "Includes templates, campaigns, threads, audiences, suppression and delivery errors; not Studio inbox.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/communications/page.tsx in Admin communications; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/page.tsx:19 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-028",
@@ -1117,7 +1144,8 @@
     "meaning": "Conversations, separate from outbound campaign jobs.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/communications/threads/page.tsx in Admin communication threads; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/threads/page.tsx:22 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-029",
@@ -1129,7 +1157,8 @@
     "meaning": "Failed delivery queue distinct from draft messages.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/communications/dlq/page.tsx in Admin communication delivery errors; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/dlq/page.tsx:138 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-030",
@@ -1141,7 +1170,8 @@
     "meaning": "Product administration rather than designer Resource library.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/catalog/page.tsx in Admin content catalog; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/catalog/page.tsx:6 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-031",
@@ -1153,7 +1183,8 @@
     "meaning": "Creation action and destination remain the same.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/config/navigation.ts in Admin product create; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/config/navigation.ts:173 — Creation destination remains /catalog/new."
   },
   {
     "id": "AD-032",
@@ -1165,7 +1196,8 @@
     "meaning": "System status rather than all-clear of project actions.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/health/page.tsx in Admin health; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/health/page.tsx:12 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-033",
@@ -1177,7 +1209,8 @@
     "meaning": "Recorded events; not editorial review.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/audit/page.tsx in Admin audit; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/audit/page.tsx:22 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-034",
@@ -1189,7 +1222,8 @@
     "meaning": "Feature configuration and availability, not marketing labels.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/flags/page.tsx in Admin flags; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/flags/page.tsx:58 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-035",
@@ -1201,7 +1235,8 @@
     "meaning": "Security and operational feature explanations retain enforcement caveats.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/settings/page.tsx in Admin settings; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/settings/page.tsx:11 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-036",
@@ -1213,7 +1248,8 @@
     "meaning": "Admin wrapper; shared authentication defaults remain audience-neutral.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/auth/signin/page.tsx in Admin auth sign-in; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/auth/signin/page.tsx:373 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-037",
@@ -1225,7 +1261,8 @@
     "meaning": "Success and error remain distinct.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/auth/forgot-password/page.tsx in Admin auth recovery; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/auth/forgot-password/page.tsx:52 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-038",
@@ -1237,7 +1274,8 @@
     "meaning": "Pending and success branches remain distinct.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/auth/reset-password/page.tsx in Admin auth reset; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/auth/reset-password/page.tsx:92 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-039",
@@ -1249,7 +1287,8 @@
     "meaning": "Required second factor cannot be mislabeled optional.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/auth/mfa-enroll/page.tsx in Admin auth factor enrollment; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/auth/mfa-enroll/page.tsx:163 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-040",
@@ -1261,7 +1300,8 @@
     "meaning": "Recovery and normal sign-in branch remain distinct.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/auth/callback/page.tsx in Admin auth callback; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/auth/callback/page.tsx:155 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-041",
@@ -1273,7 +1313,8 @@
     "meaning": "Permission denial, not an empty state.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/unauthorized/page.tsx in Admin unauthorized; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/unauthorized/page.tsx:9 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-042",
@@ -1285,7 +1326,8 @@
     "meaning": "Loading component before user records render.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/users/page.tsx in Admin loading state; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/users/page.tsx:41 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-043",
@@ -1297,7 +1339,8 @@
     "meaning": "Error is not an empty directory.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/users/page.tsx in Admin error state; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/users/page.tsx:250 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-044",
@@ -1309,7 +1352,8 @@
     "meaning": "Filtered empty differs from no users ever.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/users/page.tsx in Admin empty state; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/users/page.tsx:97 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-046",
@@ -1321,7 +1365,8 @@
     "meaning": "Operational metrics with distinct counts; not studio action alerts.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/dashboard/page.tsx in Admin overview dashboard; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/dashboard/page.tsx:110 — Metric remains sent communications over 24h."
   },
   {
     "id": "AD-047",
@@ -1333,7 +1378,8 @@
     "meaning": "Communication delivery metrics; empty means unavailable data rather than zero sends.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/analytics/page.tsx in Admin analytics; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/analytics/page.tsx:136 — Unavailable communications data remains distinct from zero sends."
   },
   {
     "id": "AD-048",
@@ -1345,7 +1391,8 @@
     "meaning": "Operational asset browser.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/media/page.tsx in Admin media; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/media/page.tsx:17 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-049",
@@ -1357,7 +1404,8 @@
     "meaning": "Supplier feed operations; trigger is a real action.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/feeds/page.tsx in Admin feeds; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/feeds/page.tsx:138 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-050",
@@ -1369,7 +1417,8 @@
     "meaning": "Maker nomination review and consequence disclosure.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/nominations/page.tsx in Admin nominations; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/nominations/page.tsx:74 — Nominator-visible decline reason remains unchanged."
   },
   {
     "id": "AD-051",
@@ -1381,7 +1430,8 @@
     "meaning": "Platform project administration, not a homeowner page.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/projects/page.tsx in Admin projects; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/projects/page.tsx:5 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-052",
@@ -1393,7 +1443,8 @@
     "meaning": "Privacy operations and consent are not communication preferences.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/privacy/page.tsx in Admin privacy; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/privacy/page.tsx:22 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-053",
@@ -1405,7 +1456,8 @@
     "meaning": "Outbox delivery states stay distinct.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/system/jobs/page.tsx in Admin system jobs; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/system/jobs/page.tsx:139 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-054",
@@ -1417,7 +1469,8 @@
     "meaning": "Version reachability and freshness, not project progress.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/system/deployments/page.tsx in Admin deployed versions; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/system/deployments/page.tsx:68 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-055",
@@ -1429,7 +1482,8 @@
     "meaning": "Draft and send/cancel actions retain their side effects.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/communications/campaigns/page.tsx in Admin campaign list; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/campaigns/page.tsx:132 — Campaign creation and cancel actions retain existing effects."
   },
   {
     "id": "AD-056",
@@ -1441,7 +1495,8 @@
     "meaning": "Activation starts a sequence; keep consequence clear.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/communications/automations/page.tsx in Admin automation list; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/automations/page.tsx:172 — Pause and Activate actions retain existing effects."
   },
   {
     "id": "AD-057",
@@ -1453,7 +1508,8 @@
     "meaning": "Suppression is delivery eligibility, not a conversation inbox.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/communications/suppressed/page.tsx in Admin suppression list; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/suppressed/page.tsx:83 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-058",
@@ -1465,7 +1521,8 @@
     "meaning": "Operational messages distinct from user conversations.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/communications/system-emails/page.tsx in Admin communications delivery; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/system-emails/page.tsx:28 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-059",
@@ -1477,7 +1534,8 @@
     "meaning": "Deferred functionality must not appear actionable.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/catalog/promotions/page.tsx in Admin product promotion; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/catalog/promotions/page.tsx:21 — Deferred capability remains disabled."
   },
   {
     "id": "MF-001",
@@ -1489,7 +1547,8 @@
     "meaning": "Manufacturer audience identity.",
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/layout.tsx in Manufacturer shell; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/manufacturer-portal/src/app/layout.tsx:5 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "MF-002",
@@ -1501,7 +1560,8 @@
     "meaning": "Internal sprint language should not be public; no self-service promise.",
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/layout.tsx in Manufacturer shell placeholder; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/manufacturer-portal/src/app/layout.tsx:75 — Replaces public sprint language."
   },
   {
     "id": "MF-003",
@@ -1513,7 +1573,8 @@
     "meaning": "Introduction, not proof of enrollment.",
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/page.tsx in Manufacturer home welcome; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/manufacturer-portal/src/app/page.tsx:13 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "MF-004",
@@ -1525,8 +1586,9 @@
     "meaning": "Current home promises a flow the placeholder cannot provide.",
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/page.tsx in Manufacturer home promise; check visible and accessible wording without changing destination or effect.",
-    "status": "exception",
-    "exception": "Remove the implied available flow on home while preserving the nomination context and exact follow-up expectation; confirm outreach email promise."
+    "status": "implemented",
+    "exception": "Remove the implied available flow on home while preserving the nomination context and exact follow-up expectation; confirm outreach email promise.",
+    "evidence": "apps/manufacturer-portal/src/app/page.tsx:17 — Nomination retained; email follow-up and no-action-needed wording match onboarding/page.tsx:29-33."
   },
   {
     "id": "MF-005",
@@ -1534,12 +1596,13 @@
     "surface": "Manufacturer home CTA",
     "source": "apps/manufacturer-portal/src/app/page.tsx",
     "current": "Start onboarding",
-    "proposed": "View onboarding status",
+    "proposed": "About onboarding",
     "meaning": "Link still opens a coming-soon page, never a form.",
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/page.tsx in Manufacturer home CTA; check visible and accessible wording without changing destination or effect.",
-    "status": "exception",
-    "exception": "Whether a status CTA is worthwhile is a product decision; alternatively say \"About onboarding\". Do not retain a start action when no enrollment can start."
+    "status": "implemented",
+    "exception": "Whether a status CTA is worthwhile is a product decision; alternatively say \"About onboarding\". Do not retain a start action when no enrollment can start.",
+    "evidence": "apps/manufacturer-portal/src/app/page.tsx:35 — Destination onboarding/page.tsx:29-33 describes availability, not enrollment or individual status."
   },
   {
     "id": "MF-006",
@@ -1551,7 +1614,8 @@
     "meaning": "Explicit absence of an enrollable workflow.",
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/onboarding/page.tsx in Manufacturer onboarding heading; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/manufacturer-portal/src/app/onboarding/page.tsx:29 — Placeholder keeps explicit email follow-up and no action needed."
   },
   {
     "id": "MF-007",
@@ -1563,7 +1627,8 @@
     "meaning": "No form available; follow-up claim retained.",
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/onboarding/page.tsx in Manufacturer onboarding explanation; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/manufacturer-portal/src/app/onboarding/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "MF-008",
@@ -1575,7 +1640,8 @@
     "meaning": "Reference identifier, not successful account enrollment.",
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/onboarding/page.tsx in Manufacturer nomination reference; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/manufacturer-portal/src/app/onboarding/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "MF-009",
@@ -1587,7 +1653,8 @@
     "meaning": "Browser title remains truthful.",
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/layout.tsx in Manufacturer document title; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/manufacturer-portal/src/app/layout.tsx:5 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "MF-010",
@@ -1599,7 +1666,8 @@
     "meaning": "Metadata must not imply implemented catalog management.",
     "owner": "P2",
     "verify": "Inspect apps/manufacturer-portal/src/app/layout.tsx in Manufacturer metadata; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/manufacturer-portal/src/app/layout.tsx:6 — Metadata no longer claims catalog management."
   },
   {
     "id": "CL-074",
@@ -1708,7 +1776,8 @@
     "meaning": "Suspension revokes access and sessions.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/users/SuspendUserDialog.tsx in Admin user access; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/users/SuspendUserDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-061",
@@ -1720,7 +1789,8 @@
     "meaning": "Activation grants access.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/users/ActivateUserDialog.tsx in Admin user activation; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/users/ActivateUserDialog.tsx:71 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-062",
@@ -1732,7 +1802,8 @@
     "meaning": "Ownership transfer and role change must stay explicit.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/studios/TransferOwnershipDialog.tsx in Admin studio ownership; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/studios/TransferOwnershipDialog.tsx:93 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-063",
@@ -1744,7 +1815,8 @@
     "meaning": "Permanent deletion cannot be called archive.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/catalog/detail/admin-delete-dialog.tsx in Admin product deletion; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/detail/admin-delete-dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-064",
@@ -1756,7 +1828,8 @@
     "meaning": "Unpublish differs from deletion.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/catalog/detail/admin-unpublish-dialog.tsx in Admin product unpublishing; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/detail/admin-unpublish-dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-065",
@@ -1768,7 +1841,8 @@
     "meaning": "Logged send starts SLA; drafting does not.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/fulfillment/composer/transmission-log.tsx in Admin fulfillment transmission; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/composer/transmission-log.tsx:28 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-066",
@@ -1780,7 +1854,8 @@
     "meaning": "Vendor invoice amount and settlement authority retained.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/fulfillment/settlement/settle-dialog.tsx in Admin fulfillment settlement; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/settlement/settle-dialog.tsx:114 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-067",
@@ -1792,7 +1867,8 @@
     "meaning": "Preview versus financial posting distinguished.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/fulfillment/exceptions/mono-consequence.tsx in Admin fulfillment consequence; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/exceptions/mono-consequence.tsx:27 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-068",
@@ -1804,7 +1880,8 @@
     "meaning": "Creates account and sends invitation; consequence must remain explicit.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/applications/OnboardApplicantDialog.tsx in Admin onboarding invitation; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/applications/OnboardApplicantDialog.tsx:82 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-069",
@@ -1816,7 +1893,8 @@
     "meaning": "Outbound email act, not a draft-only action.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/applications/SendEmailDialog.tsx in Admin email send; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/applications/SendEmailDialog.tsx:75 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-070",
@@ -1828,7 +1906,8 @@
     "meaning": "This is an action-review queue, not conversations.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/mission-control/approval-inbox.tsx in Admin queued work review; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/components/mission-control/approval-inbox.tsx:109 — Action review queue, not conversations."
   },
   {
     "id": "AD-071",
@@ -1840,7 +1919,8 @@
     "meaning": "Search/navigation alias must agree with the renamed People zone.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/portal/command-palette.tsx in Admin command navigation; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/components/portal/command-palette.tsx:64 — Command palette agrees with zone label and retains /users URL."
   },
   {
     "id": "CL-082",
@@ -1910,12 +1990,13 @@
     "surface": "Admin fulfillment purchase order",
     "source": "apps/admin-portal/src/app/(dashboard)/fulfillment/pos/[poId]/page.tsx",
     "current": "Settle this PO",
-    "proposed": "Settle this purchase order",
+    "proposed": "Review purchase order settlement",
     "meaning": "Settlement has a financial consequence; expand abbreviation only after confirming action/authority.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/fulfillment/pos/[poId]/page.tsx in Admin fulfillment purchase order; check visible and accessible wording without changing destination or effect.",
-    "status": "exception",
-    "exception": "Confirm whether this control opens a preview or commits settlement; keep authorization and financial effect explicit."
+    "status": "implemented",
+    "exception": "Confirm whether this control opens a preview or commits settlement; keep authorization and financial effect explicit.",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/fulfillment/pos/[poId]/page.tsx:125 — Opens SettleDialog; settlement only commits on settle-dialog.tsx:87-102,200-206."
   },
   {
     "id": "AD-073",
@@ -1927,7 +2008,8 @@
     "meaning": "Operational analytics destination, not the homeowner project room.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/app/(dashboard)/analytics/daily-room/page.tsx in Admin daily analytics; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/analytics/daily-room/page.tsx:50 — Operational analytics destination, not a homeowner room."
   },
   {
     "id": "AD-074",
@@ -1939,7 +2021,8 @@
     "meaning": "Stage dots have exact accessible titles; a stage is not settlement.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/fulfillment/queue/queue-row.tsx in Admin fulfillment lifecycle labels; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/queue/queue-row.tsx:58 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-075",
@@ -1951,7 +2034,8 @@
     "meaning": "Explicit placeholder rather than a live metric.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/mission-control/vital-tile.tsx in Admin analytics instrumentation placeholder; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/vital-tile.tsx:28 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "AD-076",
@@ -1963,7 +2047,8 @@
     "meaning": "No projects in this studio is not absence of all work.",
     "owner": "P2",
     "verify": "Inspect apps/admin-portal/src/components/studios/StudioProjectsList.tsx in Admin studio projects empty state; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/studios/StudioProjectsList.tsx:30 — Existing operational wording retained; no new meaning asserted."
   },
   {
     "id": "CL-F001",
@@ -2407,7 +2492,8 @@
     "meaning": "Existing app (dashboard) catalog [productId] product-edit-client display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/catalog/[productId]/product-edit-client.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/catalog/[productId]/product-edit-client.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F002",
@@ -2419,7 +2505,8 @@
     "meaning": "Existing app (dashboard) catalog categories page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/catalog/categories/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/catalog/categories/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F003",
@@ -2431,7 +2518,8 @@
     "meaning": "Existing app (dashboard) catalog collections [id] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/catalog/collections/[id]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/catalog/collections/[id]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F004",
@@ -2443,7 +2531,8 @@
     "meaning": "Existing app (dashboard) catalog collections page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/catalog/collections/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/catalog/collections/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F005",
@@ -2455,7 +2544,8 @@
     "meaning": "Existing app (dashboard) catalog new page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/catalog/new/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/catalog/new/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F006",
@@ -2467,7 +2557,8 @@
     "meaning": "Existing app (dashboard) communications analytics page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/analytics/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/analytics/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F007",
@@ -2479,7 +2570,8 @@
     "meaning": "Existing app (dashboard) communications audiences [id] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/audiences/[id]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/audiences/[id]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F008",
@@ -2491,7 +2583,8 @@
     "meaning": "Existing app (dashboard) communications audiences new page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/audiences/new/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/audiences/new/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F009",
@@ -2503,7 +2596,8 @@
     "meaning": "Existing app (dashboard) communications audiences page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/audiences/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/audiences/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F010",
@@ -2515,7 +2609,8 @@
     "meaning": "Existing app (dashboard) communications automations [id] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/automations/[id]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/automations/[id]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F011",
@@ -2527,7 +2622,8 @@
     "meaning": "Existing app (dashboard) communications automations new page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/automations/new/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/automations/new/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F012",
@@ -2539,7 +2635,8 @@
     "meaning": "Existing app (dashboard) communications campaigns [id] edit page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/campaigns/[id]/edit/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/campaigns/[id]/edit/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F013",
@@ -2551,7 +2648,8 @@
     "meaning": "Existing app (dashboard) communications campaigns [id] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/campaigns/[id]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/campaigns/[id]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F014",
@@ -2563,7 +2661,8 @@
     "meaning": "Existing app (dashboard) communications campaigns new page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/campaigns/new/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/campaigns/new/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F015",
@@ -2575,7 +2674,8 @@
     "meaning": "Existing app (dashboard) communications templates new page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/templates/new/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/templates/new/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F016",
@@ -2587,7 +2687,8 @@
     "meaning": "Existing app (dashboard) communications templates page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/templates/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/templates/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F017",
@@ -2599,7 +2700,8 @@
     "meaning": "Existing app (dashboard) communications threads [id] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/communications/threads/[id]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/communications/threads/[id]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F018",
@@ -2611,7 +2713,8 @@
     "meaning": "Existing app (dashboard) cowork page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/cowork/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/cowork/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F019",
@@ -2623,7 +2726,8 @@
     "meaning": "Existing app (dashboard) demo analytics page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/demo/analytics/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/demo/analytics/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F020",
@@ -2635,7 +2739,8 @@
     "meaning": "Existing app (dashboard) demo audit page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/demo/audit/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/demo/audit/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F021",
@@ -2647,7 +2752,8 @@
     "meaning": "Existing app (dashboard) demo dashboard page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/demo/dashboard/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/demo/dashboard/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F022",
@@ -2659,7 +2765,8 @@
     "meaning": "Existing app (dashboard) demo flags page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/demo/flags/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/demo/flags/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F023",
@@ -2671,7 +2778,8 @@
     "meaning": "Existing app (dashboard) demo health page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/demo/health/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/demo/health/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F024",
@@ -2683,7 +2791,8 @@
     "meaning": "Existing app (dashboard) demo media page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/demo/media/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/demo/media/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F025",
@@ -2695,7 +2804,8 @@
     "meaning": "Existing app (dashboard) demo page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/demo/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/demo/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F026",
@@ -2707,7 +2817,8 @@
     "meaning": "Existing app (dashboard) demo privacy page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/demo/privacy/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/demo/privacy/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F027",
@@ -2719,7 +2830,8 @@
     "meaning": "Existing app (dashboard) demo search page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/demo/search/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/demo/search/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F028",
@@ -2731,7 +2843,8 @@
     "meaning": "Existing app (dashboard) demo settings page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/demo/settings/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/demo/settings/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F029",
@@ -2743,7 +2856,8 @@
     "meaning": "Existing app (dashboard) demo user-lifecycle page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/demo/user-lifecycle/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/demo/user-lifecycle/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F030",
@@ -2755,7 +2869,8 @@
     "meaning": "Existing app (dashboard) fulfillment config page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/fulfillment/config/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/fulfillment/config/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F031",
@@ -2767,7 +2882,8 @@
     "meaning": "Existing app (dashboard) fulfillment exceptions [exceptionId] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/fulfillment/exceptions/[exceptionId]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/fulfillment/exceptions/[exceptionId]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F032",
@@ -2779,7 +2895,8 @@
     "meaning": "Existing app (dashboard) fulfillment orders [orderId] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/fulfillment/orders/[orderId]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/fulfillment/orders/[orderId]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F033",
@@ -2791,7 +2908,8 @@
     "meaning": "Existing app (dashboard) fulfillment vendors [vendorId] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/fulfillment/vendors/[vendorId]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/fulfillment/vendors/[vendorId]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F034",
@@ -2803,7 +2921,8 @@
     "meaning": "Existing app (dashboard) layout display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/layout.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/layout.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F035",
@@ -2815,7 +2934,8 @@
     "meaning": "Existing app (dashboard) mission-control orders page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/mission-control/orders/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/mission-control/orders/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F036",
@@ -2827,7 +2947,8 @@
     "meaning": "Existing app (dashboard) mission-control page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/mission-control/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/mission-control/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F037",
@@ -2839,7 +2960,8 @@
     "meaning": "Existing app (dashboard) mission-control pipelines page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/mission-control/pipelines/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/mission-control/pipelines/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F038",
@@ -2851,7 +2973,8 @@
     "meaning": "Existing app (dashboard) mission-control runs page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/mission-control/runs/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/mission-control/runs/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F039",
@@ -2863,7 +2986,8 @@
     "meaning": "Existing app (dashboard) pipeline [slug] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/pipeline/[slug]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/pipeline/[slug]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F040",
@@ -2875,7 +2999,8 @@
     "meaning": "Existing app (dashboard) pipeline review page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/pipeline/review/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/pipeline/review/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F041",
@@ -2887,7 +3012,8 @@
     "meaning": "Existing app (dashboard) projects [id] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/projects/[id]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/projects/[id]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F042",
@@ -2899,7 +3025,8 @@
     "meaning": "Existing app (dashboard) roles [roleId] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/roles/[roleId]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/roles/[roleId]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F043",
@@ -2911,7 +3038,8 @@
     "meaning": "Existing app (dashboard) studios [id] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/studios/[id]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/studios/[id]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F044",
@@ -2923,7 +3051,8 @@
     "meaning": "Existing app (dashboard) users [id] page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/(dashboard)/users/[id]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/(dashboard)/users/[id]/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F045",
@@ -2935,7 +3064,8 @@
     "meaning": "Existing app auth auth-shell display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/auth/auth-shell.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/auth/auth-shell.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F046",
@@ -2947,7 +3077,8 @@
     "meaning": "Existing app auth error page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/auth/error/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/auth/error/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F047",
@@ -2959,7 +3090,8 @@
     "meaning": "Existing app auth signout page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/auth/signout/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/auth/signout/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F048",
@@ -2971,7 +3103,8 @@
     "meaning": "Existing app auth verify-otp page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/auth/verify-otp/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/auth/verify-otp/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F049",
@@ -2983,7 +3116,8 @@
     "meaning": "Existing app not-found display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/not-found.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/not-found.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F050",
@@ -2995,7 +3129,8 @@
     "meaning": "Existing app preferences unsubscribe page display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/app/preferences/unsubscribe/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/app/preferences/unsubscribe/page.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F051",
@@ -3007,7 +3142,8 @@
     "meaning": "Existing components analytics bottleneck-chart display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/analytics/bottleneck-chart.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/analytics/bottleneck-chart.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F052",
@@ -3019,7 +3155,8 @@
     "meaning": "Existing components applications ApplicationDetailDrawer display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/applications/ApplicationDetailDrawer.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/applications/ApplicationDetailDrawer.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F053",
@@ -3031,7 +3168,8 @@
     "meaning": "Existing components auth QRLoginDisplay display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/auth/QRLoginDisplay.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/auth/QRLoginDisplay.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F054",
@@ -3043,7 +3181,8 @@
     "meaning": "Existing components auth protected-route display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/auth/protected-route.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/auth/protected-route.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F055",
@@ -3055,7 +3194,8 @@
     "meaning": "Existing components auth rate-limit-banner display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/auth/rate-limit-banner.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/auth/rate-limit-banner.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F056",
@@ -3067,7 +3207,8 @@
     "meaning": "Existing components automations EnrollmentsPanel display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/automations/EnrollmentsPanel.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/automations/EnrollmentsPanel.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F057",
@@ -3079,7 +3220,8 @@
     "meaning": "Existing components catalog INTEGRATION_EXAMPLE display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/INTEGRATION_EXAMPLE.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/INTEGRATION_EXAMPLE.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F058",
@@ -3091,7 +3233,8 @@
     "meaning": "Existing components catalog admin-catalog-filters display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/admin-catalog-filters.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/admin-catalog-filters.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F059",
@@ -3103,7 +3246,8 @@
     "meaning": "Existing components catalog admin-catalog-results display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/admin-catalog-results.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/admin-catalog-results.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F060",
@@ -3115,7 +3259,8 @@
     "meaning": "Existing components catalog admin-catalog-search-bar display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/admin-catalog-search-bar.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/admin-catalog-search-bar.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F061",
@@ -3127,7 +3272,8 @@
     "meaning": "Existing components catalog admin-product-card display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/admin-product-card.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/admin-product-card.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F062",
@@ -3139,7 +3285,8 @@
     "meaning": "Existing components catalog admin-product-list display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/admin-product-list.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/admin-product-list.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F063",
@@ -3151,7 +3298,8 @@
     "meaning": "Existing components catalog admin-product-table display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/admin-product-table.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/admin-product-table.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F064",
@@ -3163,7 +3311,8 @@
     "meaning": "Existing components catalog bulk-action-dialogs display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/bulk-action-dialogs.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/bulk-action-dialogs.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F065",
@@ -3175,7 +3324,8 @@
     "meaning": "Existing components catalog bulk-action-toolbar display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/bulk-action-toolbar.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/bulk-action-toolbar.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F066",
@@ -3187,7 +3337,8 @@
     "meaning": "Existing components catalog bulk-import-dialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/bulk-import-dialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/bulk-import-dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F067",
@@ -3199,7 +3350,8 @@
     "meaning": "Existing components catalog catalog-error-fallback display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/catalog-error-fallback.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/catalog-error-fallback.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F068",
@@ -3211,7 +3363,8 @@
     "meaning": "Existing components catalog category-tree-selector display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/category-tree-selector.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/category-tree-selector.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F069",
@@ -3223,7 +3376,8 @@
     "meaning": "Existing components catalog detail admin-edit-bar display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/detail/admin-edit-bar.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/detail/admin-edit-bar.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F070",
@@ -3235,7 +3389,8 @@
     "meaning": "Existing components catalog detail seo-panel display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/detail/seo-panel.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/detail/seo-panel.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F071",
@@ -3247,7 +3402,8 @@
     "meaning": "Existing components catalog detail validation-issues-bar display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/detail/validation-issues-bar.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/detail/validation-issues-bar.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F072",
@@ -3259,7 +3415,8 @@
     "meaning": "Existing components catalog image-gallery display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/image-gallery.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/image-gallery.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F073",
@@ -3271,7 +3428,8 @@
     "meaning": "Existing components catalog image-uploader display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/image-uploader.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/image-uploader.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F074",
@@ -3283,7 +3441,8 @@
     "meaning": "Existing components catalog media-uploader display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/media-uploader.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/media-uploader.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F075",
@@ -3295,7 +3454,8 @@
     "meaning": "Existing components catalog product-create-dialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/product-create-dialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/product-create-dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F076",
@@ -3307,7 +3467,8 @@
     "meaning": "Existing components catalog rule-builder display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/catalog/rule-builder.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/catalog/rule-builder.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F077",
@@ -3319,7 +3480,8 @@
     "meaning": "Existing components categories category-form-modal display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/categories/category-form-modal.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/categories/category-form-modal.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F078",
@@ -3331,7 +3493,8 @@
     "meaning": "Existing components communications audience-sample-preview display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/audience-sample-preview.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/audience-sample-preview.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F079",
@@ -3343,7 +3506,8 @@
     "meaning": "Existing components communications email-builder block-palette display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/block-palette.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/block-palette.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F080",
@@ -3355,7 +3519,8 @@
     "meaning": "Existing components communications email-builder block-preview display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/block-preview.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/block-preview.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F081",
@@ -3367,7 +3532,8 @@
     "meaning": "Existing components communications email-builder builder-canvas display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/builder-canvas.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/builder-canvas.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F082",
@@ -3379,7 +3545,8 @@
     "meaning": "Existing components communications email-builder builder-header display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/builder-header.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/builder-header.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F083",
@@ -3391,7 +3558,8 @@
     "meaning": "Existing components communications email-builder email-template-builder display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/email-template-builder.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/email-template-builder.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F084",
@@ -3403,7 +3571,8 @@
     "meaning": "Existing components communications email-builder html-editor display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/html-editor.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/html-editor.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F085",
@@ -3415,7 +3584,8 @@
     "meaning": "Existing components communications email-builder preview-pane display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/preview-pane.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/preview-pane.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F086",
@@ -3427,7 +3597,8 @@
     "meaning": "Existing components communications email-builder props-forms cta-button-props-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/props-forms/cta-button-props-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/props-forms/cta-button-props-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F087",
@@ -3439,7 +3610,8 @@
     "meaning": "Existing components communications email-builder props-forms divider-props-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/props-forms/divider-props-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/props-forms/divider-props-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F088",
@@ -3451,7 +3623,8 @@
     "meaning": "Existing components communications email-builder props-forms footer-props-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/props-forms/footer-props-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/props-forms/footer-props-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F089",
@@ -3463,7 +3636,8 @@
     "meaning": "Existing components communications email-builder props-forms header-props-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/props-forms/header-props-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/props-forms/header-props-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F090",
@@ -3475,7 +3649,8 @@
     "meaning": "Existing components communications email-builder props-forms hero-props-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/props-forms/hero-props-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/props-forms/hero-props-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F091",
@@ -3487,7 +3662,8 @@
     "meaning": "Existing components communications email-builder props-forms maker-spotlight-props-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/props-forms/maker-spotlight-props-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/props-forms/maker-spotlight-props-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F092",
@@ -3499,7 +3675,8 @@
     "meaning": "Existing components communications email-builder props-forms notification-props-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/props-forms/notification-props-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/props-forms/notification-props-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F093",
@@ -3511,7 +3688,8 @@
     "meaning": "Existing components communications email-builder props-forms product-card-props-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/props-forms/product-card-props-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/props-forms/product-card-props-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F094",
@@ -3523,7 +3701,8 @@
     "meaning": "Existing components communications email-builder props-forms product-grid-props-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/props-forms/product-grid-props-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/props-forms/product-grid-props-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F095",
@@ -3535,7 +3714,8 @@
     "meaning": "Existing components communications email-builder props-forms text-block-props-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/props-forms/text-block-props-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/props-forms/text-block-props-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F096",
@@ -3547,7 +3727,8 @@
     "meaning": "Existing components communications email-builder props-panel display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/props-panel.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/props-panel.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F097",
@@ -3559,7 +3740,8 @@
     "meaning": "Existing components communications email-builder sortable-block display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/sortable-block.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/sortable-block.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F098",
@@ -3571,7 +3753,8 @@
     "meaning": "Existing components communications email-builder variables-panel display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/email-builder/variables-panel.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/email-builder/variables-panel.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F099",
@@ -3583,7 +3766,8 @@
     "meaning": "Existing components communications pre-send-checklist display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/communications/pre-send-checklist.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/communications/pre-send-checklist.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F100",
@@ -3595,7 +3779,8 @@
     "meaning": "Existing components dashboards ExecutiveDashboard display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/dashboards/ExecutiveDashboard.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/dashboards/ExecutiveDashboard.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F101",
@@ -3607,7 +3792,8 @@
     "meaning": "Existing components dashboards PostHogStatsWidget display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/dashboards/PostHogStatsWidget.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/dashboards/PostHogStatsWidget.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F102",
@@ -3619,7 +3805,8 @@
     "meaning": "Existing components fulfillment composer ack-capture-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/composer/ack-capture-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/composer/ack-capture-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F103",
@@ -3631,7 +3818,8 @@
     "meaning": "Existing components fulfillment composer transmit-panel display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/composer/transmit-panel.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/composer/transmit-panel.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F104",
@@ -3643,7 +3831,8 @@
     "meaning": "Existing components fulfillment config config-key-editor display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/config/config-key-editor.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/config/config-key-editor.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F105",
@@ -3655,7 +3844,8 @@
     "meaning": "Existing components fulfillment exceptions case-file display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/exceptions/case-file.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/exceptions/case-file.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F106",
@@ -3667,7 +3857,8 @@
     "meaning": "Existing components fulfillment exceptions evidence-grid display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/exceptions/evidence-grid.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/exceptions/evidence-grid.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F107",
@@ -3679,7 +3870,8 @@
     "meaning": "Existing components fulfillment exceptions exceptions-list display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/exceptions/exceptions-list.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/exceptions/exceptions-list.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F108",
@@ -3691,7 +3883,8 @@
     "meaning": "Existing components fulfillment exceptions open-exception-drawer display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/exceptions/open-exception-drawer.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/exceptions/open-exception-drawer.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F109",
@@ -3703,7 +3896,8 @@
     "meaning": "Existing components fulfillment exceptions resolution-paths display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/exceptions/resolution-paths.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/exceptions/resolution-paths.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F110",
@@ -3715,7 +3909,8 @@
     "meaning": "Existing components fulfillment queue queue-bands display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/queue/queue-bands.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/queue/queue-bands.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F111",
@@ -3727,7 +3922,8 @@
     "meaning": "Existing components fulfillment shared deadline-clock display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/shared/deadline-clock.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/shared/deadline-clock.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F112",
@@ -3739,7 +3935,8 @@
     "meaning": "Existing components fulfillment shared procurement-trail display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/shared/procurement-trail.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/shared/procurement-trail.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F113",
@@ -3751,7 +3948,8 @@
     "meaning": "Existing components fulfillment shipments add-shipment-form display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/shipments/add-shipment-form.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/shipments/add-shipment-form.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F114",
@@ -3763,7 +3961,8 @@
     "meaning": "Existing components fulfillment shipments eta-change-dialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/shipments/eta-change-dialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/shipments/eta-change-dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F115",
@@ -3775,7 +3974,8 @@
     "meaning": "Existing components fulfillment shipments shipment-board display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/shipments/shipment-board.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/shipments/shipment-board.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F116",
@@ -3787,7 +3987,8 @@
     "meaning": "Existing components fulfillment shipments shipment-row display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/shipments/shipment-row.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/shipments/shipment-row.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F117",
@@ -3799,7 +4000,8 @@
     "meaning": "Existing components fulfillment vendors add-vendor-dialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/vendors/add-vendor-dialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/vendors/add-vendor-dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F118",
@@ -3811,7 +4013,8 @@
     "meaning": "Existing components fulfillment vendors vendor-directory-table display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/vendors/vendor-directory-table.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/vendors/vendor-directory-table.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F119",
@@ -3823,7 +4026,8 @@
     "meaning": "Existing components fulfillment vendors vendor-profile-editor display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/vendors/vendor-profile-editor.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/vendors/vendor-profile-editor.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F120",
@@ -3835,7 +4039,8 @@
     "meaning": "Existing components fulfillment vendors vendor-scorecard display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/vendors/vendor-scorecard.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/vendors/vendor-scorecard.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F121",
@@ -3847,7 +4052,8 @@
     "meaning": "Existing components fulfillment workbench client-order-panel display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/workbench/client-order-panel.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/workbench/client-order-panel.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F122",
@@ -3859,7 +4065,8 @@
     "meaning": "Existing components fulfillment workbench confirm-split-bar display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/workbench/confirm-split-bar.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/workbench/confirm-split-bar.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F123",
@@ -3871,7 +4078,8 @@
     "meaning": "Existing components fulfillment workbench money-strip display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/workbench/money-strip.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/workbench/money-strip.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F124",
@@ -3883,7 +4091,8 @@
     "meaning": "Existing components fulfillment workbench po-draft-card display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/workbench/po-draft-card.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/workbench/po-draft-card.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F125",
@@ -3895,7 +4104,8 @@
     "meaning": "Existing components fulfillment workbench po-draft-column display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/workbench/po-draft-column.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/workbench/po-draft-column.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F126",
@@ -3907,7 +4117,8 @@
     "meaning": "Existing components fulfillment workbench unmapped-assign-popover display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/fulfillment/workbench/unmapped-assign-popover.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/fulfillment/workbench/unmapped-assign-popover.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F127",
@@ -3919,7 +4130,8 @@
     "meaning": "Existing components mission-control approval-card display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/approval-card.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/approval-card.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F128",
@@ -3931,7 +4143,8 @@
     "meaning": "Existing components mission-control confidence-badge display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/confidence-badge.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/confidence-badge.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F129",
@@ -3943,7 +4156,8 @@
     "meaning": "Existing components mission-control edit-payload-drawer display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/edit-payload-drawer.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/edit-payload-drawer.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F130",
@@ -3955,7 +4169,8 @@
     "meaning": "Existing components mission-control evidence-pack display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/evidence-pack.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/evidence-pack.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F131",
@@ -3967,7 +4182,8 @@
     "meaning": "Existing components mission-control leah-review-deck display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/leah-review-deck.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/leah-review-deck.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F132",
@@ -3979,7 +4195,8 @@
     "meaning": "Existing components mission-control morning-brief-panel display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/morning-brief-panel.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/morning-brief-panel.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F133",
@@ -3991,7 +4208,8 @@
     "meaning": "Existing components mission-control orders new-order-dialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/orders/new-order-dialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/orders/new-order-dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F134",
@@ -4003,7 +4221,8 @@
     "meaning": "Existing components mission-control orders order-detail display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/orders/order-detail.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/orders/order-detail.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F135",
@@ -4015,7 +4234,8 @@
     "meaning": "Existing components mission-control orders orders-list display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/orders/orders-list.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/orders/orders-list.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F136",
@@ -4027,7 +4247,8 @@
     "meaning": "Existing components mission-control pipelines card-action-menu display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/pipelines/card-action-menu.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/pipelines/card-action-menu.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F137",
@@ -4039,7 +4260,8 @@
     "meaning": "Existing components mission-control pipelines designer-prospect-card display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/pipelines/designer-prospect-card.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/pipelines/designer-prospect-card.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F138",
@@ -4051,7 +4273,8 @@
     "meaning": "Existing components mission-control pipelines designers-board display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/pipelines/designers-board.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/pipelines/designers-board.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F139",
@@ -4063,7 +4286,8 @@
     "meaning": "Existing components mission-control pipelines maker-vendor-card display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/pipelines/maker-vendor-card.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/pipelines/maker-vendor-card.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F140",
@@ -4075,7 +4299,8 @@
     "meaning": "Existing components mission-control pipelines makers-board display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/pipelines/makers-board.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/pipelines/makers-board.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F141",
@@ -4087,7 +4312,8 @@
     "meaning": "Existing components mission-control pipelines new-prospect-dialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/pipelines/new-prospect-dialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/pipelines/new-prospect-dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F142",
@@ -4099,7 +4325,8 @@
     "meaning": "Existing components mission-control pipelines pipeline-dnd-board display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/pipelines/pipeline-dnd-board.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/pipelines/pipeline-dnd-board.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F143",
@@ -4111,7 +4338,8 @@
     "meaning": "Existing components mission-control reject-note-popover display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/reject-note-popover.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/reject-note-popover.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F144",
@@ -4123,7 +4351,8 @@
     "meaning": "Existing components mission-control run-log-table display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/run-log-table.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/run-log-table.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F145",
@@ -4135,7 +4364,8 @@
     "meaning": "Existing components mission-control stale-badge display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/stale-badge.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/stale-badge.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F146",
@@ -4147,7 +4377,8 @@
     "meaning": "Existing components mission-control vitals-strip display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/mission-control/vitals-strip.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/mission-control/vitals-strip.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F147",
@@ -4159,7 +4390,8 @@
     "meaning": "Existing components pipeline add-vendor-dialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/add-vendor-dialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/add-vendor-dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F148",
@@ -4171,7 +4403,8 @@
     "meaning": "Existing components pipeline cowork task-queue-table display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/cowork/task-queue-table.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/cowork/task-queue-table.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F149",
@@ -4183,7 +4416,8 @@
     "meaning": "Existing components pipeline detail cowork-action-sidebar display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/detail/cowork-action-sidebar.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/detail/cowork-action-sidebar.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F150",
@@ -4195,7 +4429,8 @@
     "meaning": "Existing components pipeline detail cowork-activity-log display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/detail/cowork-activity-log.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/detail/cowork-activity-log.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F151",
@@ -4207,7 +4442,8 @@
     "meaning": "Existing components pipeline detail onboarding-phases display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/detail/onboarding-phases.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/detail/onboarding-phases.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F152",
@@ -4219,7 +4455,8 @@
     "meaning": "Existing components pipeline detail rubric-item display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/detail/rubric-item.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/detail/rubric-item.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F153",
@@ -4231,7 +4468,8 @@
     "meaning": "Existing components pipeline detail vendor-notes display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/detail/vendor-notes.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/detail/vendor-notes.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F154",
@@ -4243,7 +4481,8 @@
     "meaning": "Existing components pipeline feed-upload-dialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/feed-upload-dialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/feed-upload-dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F155",
@@ -4255,7 +4494,8 @@
     "meaning": "Existing components pipeline leah-queue-banner display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/leah-queue-banner.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/leah-queue-banner.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F156",
@@ -4267,7 +4507,8 @@
     "meaning": "Existing components pipeline review dimension-slider display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/review/dimension-slider.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/review/dimension-slider.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F157",
@@ -4279,7 +4520,8 @@
     "meaning": "Existing components pipeline review review-card display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/review/review-card.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/review/review-card.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F158",
@@ -4291,7 +4533,8 @@
     "meaning": "Existing components pipeline score-badge display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/score-badge.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/score-badge.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F159",
@@ -4303,7 +4546,8 @@
     "meaning": "Existing components pipeline vendor-table display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/pipeline/vendor-table.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/pipeline/vendor-table.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F160",
@@ -4315,7 +4559,8 @@
     "meaning": "Existing components portal data-table display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/portal/data-table.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/portal/data-table.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F161",
@@ -4327,7 +4572,8 @@
     "meaning": "Existing components portal filter-tabs display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/portal/filter-tabs.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/portal/filter-tabs.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F162",
@@ -4339,7 +4585,8 @@
     "meaning": "Existing components portal list-row display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/portal/list-row.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/portal/list-row.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F163",
@@ -4351,7 +4598,8 @@
     "meaning": "Existing components portal mobile-tab-bar display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/portal/mobile-tab-bar.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/portal/mobile-tab-bar.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F164",
@@ -4363,7 +4611,8 @@
     "meaning": "Existing components portal toast-provider display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/portal/toast-provider.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/portal/toast-provider.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F165",
@@ -4375,7 +4624,8 @@
     "meaning": "Existing components portal top-bar display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/portal/top-bar.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/portal/top-bar.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F166",
@@ -4387,7 +4637,8 @@
     "meaning": "Existing components products product-filters display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/products/product-filters.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/products/product-filters.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F167",
@@ -4399,7 +4650,8 @@
     "meaning": "Existing components products tabs details-tab display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/products/tabs/details-tab.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/products/tabs/details-tab.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F168",
@@ -4411,7 +4663,8 @@
     "meaning": "Existing components products tabs inventory-tab display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/products/tabs/inventory-tab.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/products/tabs/inventory-tab.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F169",
@@ -4423,7 +4676,8 @@
     "meaning": "Existing components products tabs media-tab-enhanced display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/products/tabs/media-tab-enhanced.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/products/tabs/media-tab-enhanced.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F170",
@@ -4435,7 +4689,8 @@
     "meaning": "Existing components products tabs media-tab display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/products/tabs/media-tab.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/products/tabs/media-tab.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F171",
@@ -4447,7 +4702,8 @@
     "meaning": "Existing components products tabs pricing-tab display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/products/tabs/pricing-tab.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/products/tabs/pricing-tab.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F172",
@@ -4459,7 +4715,8 @@
     "meaning": "Existing components products tabs seo-tab display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/products/tabs/seo-tab.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/products/tabs/seo-tab.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F173",
@@ -4471,7 +4728,8 @@
     "meaning": "Existing components roles AddUsersToRoleDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/roles/AddUsersToRoleDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/roles/AddUsersToRoleDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F174",
@@ -4483,7 +4741,8 @@
     "meaning": "Existing components roles CloneRoleDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/roles/CloneRoleDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/roles/CloneRoleDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F175",
@@ -4495,7 +4754,8 @@
     "meaning": "Existing components roles DeleteRoleDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/roles/DeleteRoleDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/roles/DeleteRoleDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F176",
@@ -4507,7 +4767,8 @@
     "meaning": "Existing components roles PermissionGrid display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/roles/PermissionGrid.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/roles/PermissionGrid.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F177",
@@ -4519,7 +4780,8 @@
     "meaning": "Existing components roles RoleCard display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/roles/RoleCard.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/roles/RoleCard.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F178",
@@ -4531,7 +4793,8 @@
     "meaning": "Existing components roles RoleFormDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/roles/RoleFormDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/roles/RoleFormDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F179",
@@ -4543,7 +4806,8 @@
     "meaning": "Existing components shared UserSearchPicker display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/shared/UserSearchPicker.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/shared/UserSearchPicker.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F180",
@@ -4555,7 +4819,8 @@
     "meaning": "Existing components studios AddStudioMemberDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/studios/AddStudioMemberDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/studios/AddStudioMemberDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F181",
@@ -4567,7 +4832,8 @@
     "meaning": "Existing components studios CreateStudioDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/studios/CreateStudioDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/studios/CreateStudioDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F182",
@@ -4579,7 +4845,8 @@
     "meaning": "Existing components studios EditStudioDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/studios/EditStudioDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/studios/EditStudioDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F183",
@@ -4591,7 +4858,8 @@
     "meaning": "Existing components studios EditStudioMemberDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/studios/EditStudioMemberDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/studios/EditStudioMemberDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F184",
@@ -4603,7 +4871,8 @@
     "meaning": "Existing components studios InviteStudioMemberDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/studios/InviteStudioMemberDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/studios/InviteStudioMemberDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F185",
@@ -4615,7 +4884,8 @@
     "meaning": "Existing components studios StaffRoleSelect display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/studios/StaffRoleSelect.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/studios/StaffRoleSelect.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F186",
@@ -4627,7 +4897,8 @@
     "meaning": "Existing components studios StudioActivityFeed display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/studios/StudioActivityFeed.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/studios/StudioActivityFeed.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F187",
@@ -4639,7 +4910,8 @@
     "meaning": "Existing components studios StudioRoster display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/studios/StudioRoster.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/studios/StudioRoster.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F188",
@@ -4651,7 +4923,8 @@
     "meaning": "Existing components studios StudioStatusDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/studios/StudioStatusDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/studios/StudioStatusDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F189",
@@ -4663,7 +4936,8 @@
     "meaning": "Existing components ui accessible-modal display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/ui/accessible-modal.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/ui/accessible-modal.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F190",
@@ -4675,7 +4949,8 @@
     "meaning": "Existing components ui confirm-dialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/ui/confirm-dialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/ui/confirm-dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F191",
@@ -4687,7 +4962,8 @@
     "meaning": "Existing components ui dialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/ui/dialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/ui/dialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F192",
@@ -4699,7 +4975,8 @@
     "meaning": "Existing components ui sheet display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/ui/sheet.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/ui/sheet.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F193",
@@ -4711,7 +4988,8 @@
     "meaning": "Existing components ui tabs display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/ui/tabs.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/ui/tabs.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F194",
@@ -4723,7 +5001,8 @@
     "meaning": "Existing components ui toast display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/ui/toast.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/ui/toast.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F195",
@@ -4735,7 +5014,8 @@
     "meaning": "Existing components users BanUserDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/users/BanUserDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/users/BanUserDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F196",
@@ -4747,7 +5027,8 @@
     "meaning": "Existing components users CreateUserDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/users/CreateUserDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/users/CreateUserDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F197",
@@ -4759,7 +5040,8 @@
     "meaning": "Existing components users EditUserDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/users/EditUserDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/users/EditUserDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F198",
@@ -4771,7 +5053,8 @@
     "meaning": "Existing components users InviteDesignerDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/users/InviteDesignerDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/users/InviteDesignerDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F199",
@@ -4783,7 +5066,8 @@
     "meaning": "Existing components users SessionList display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/users/SessionList.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/users/SessionList.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F200",
@@ -4795,7 +5079,8 @@
     "meaning": "Existing components users UserRoleManager display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/users/UserRoleManager.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/users/UserRoleManager.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F201",
@@ -4807,7 +5092,8 @@
     "meaning": "Existing components users UserSecurityPanel display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/users/UserSecurityPanel.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/users/UserSecurityPanel.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F202",
@@ -4819,7 +5105,8 @@
     "meaning": "Existing components users UserStudiosTab display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/users/UserStudiosTab.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/users/UserStudiosTab.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F203",
@@ -4831,7 +5118,8 @@
     "meaning": "Existing components users VerifyEmailDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/users/VerifyEmailDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/users/VerifyEmailDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F204",
@@ -4843,7 +5131,8 @@
     "meaning": "Existing components waitlist ActivityTimeline display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/waitlist/ActivityTimeline.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/waitlist/ActivityTimeline.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F205",
@@ -4855,7 +5144,8 @@
     "meaning": "Existing components waitlist ConvertToUserDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/waitlist/ConvertToUserDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/waitlist/ConvertToUserDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F206",
@@ -4867,7 +5157,8 @@
     "meaning": "Existing components waitlist TaskList display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/waitlist/TaskList.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/waitlist/TaskList.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F207",
@@ -4879,7 +5170,8 @@
     "meaning": "Existing components waitlist WaitlistDetailDialog display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/waitlist/WaitlistDetailDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/waitlist/WaitlistDetailDialog.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F208",
@@ -4891,7 +5183,8 @@
     "meaning": "Existing components waitlist WaitlistDetailPanel display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/components/waitlist/WaitlistDetailPanel.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/components/waitlist/WaitlistDetailPanel.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F209",
@@ -4903,7 +5196,8 @@
     "meaning": "Existing contexts breadcrumb-context display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/contexts/breadcrumb-context.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/contexts/breadcrumb-context.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F210",
@@ -4915,7 +5209,8 @@
     "meaning": "Existing contexts command-palette-context display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/contexts/command-palette-context.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/contexts/command-palette-context.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   },
   {
     "id": "AD-F211",
@@ -4927,6 +5222,7 @@
     "meaning": "Existing features catalog USAGE_EXAMPLE display copy retains its task and audience.",
     "owner": "P2",
     "verify": "Review apps/admin-portal/src/features/catalog/USAGE_EXAMPLE.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/admin-portal/src/features/catalog/USAGE_EXAMPLE.tsx — File-level or grouped inventory retained; no unproven replacement asserted."
   }
 ]

@@ -13,11 +13,9 @@ export default function ManufacturerHome() {
         Welcome to Patina.
       </h1>
       <p style={{ fontSize: '0.95rem', lineHeight: 1.6, color: '#5C4A3C' }}>
-        A designer nominated your studio to the Patina Catalog. We&rsquo;ll walk
-        you through the short onboarding flow — your trade terms, your lead
-        times, and the photos you&rsquo;d like represented — so designers
-        across the platform can specify your work without you chasing each
-        one.
+        A designer nominated your studio to the Patina Catalog. Manufacturer
+        onboarding is not available yet. We&rsquo;ll follow up by email when it is
+        ready. No action is needed from you right now.
       </p>
       <Link
         href="/onboarding"
@@ -34,7 +32,7 @@ export default function ManufacturerHome() {
           textTransform: 'uppercase',
         }}
       >
-        Start onboarding
+        About onboarding
       </Link>
       <p
         style={{

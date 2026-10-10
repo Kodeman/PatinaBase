@@ -122,7 +122,7 @@ export default function FulfillmentComposerPage({
                   data-testid="composer-settle-open"
                   className="type-btn-text bg-[var(--accent-primary)] px-4 py-2 text-[var(--bg-surface)] transition-colors hover:bg-[var(--accent-hover)]"
                 >
-                  Settle this PO
+                  Review purchase order settlement
                 </button>
               </section>
             )}

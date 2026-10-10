@@ -129,7 +129,7 @@ function RowActionsDropdown({
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-amber-600 hover:bg-amber-50 transition-colors"
             >
               <XCircle className="w-3.5 h-3.5" />
-              Cancel Send
+              Cancel send
             </button>
           )}
           {canArchive && (
@@ -283,7 +283,7 @@ export default function CampaignsListPage() {
             className="flex items-center gap-2 px-4 py-2.5 bg-patina-mocha-brown text-white rounded-lg text-sm font-medium hover:bg-patina-charcoal transition-colors"
           >
             <Plus className="w-4 h-4" />
-            New Campaign
+            New campaign
           </button>
         </div>
       </div>

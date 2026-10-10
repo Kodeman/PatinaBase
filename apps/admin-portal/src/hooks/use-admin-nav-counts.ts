@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ZoneKey } from '@/config/navigation';
 
 interface NavCounts {
-  [label: string]: number;
+  [href: string]: number;
 }
 
 async function fetchJson(url: string): Promise<any> {
@@ -18,7 +18,7 @@ async function fetchJson(url: string): Promise<any> {
 }
 
 /**
- * Returns count badges keyed by sub-nav item label for the given zone.
+ * Returns count badges keyed by sub-nav destination for the given zone.
  * Silently returns an empty map if data isn't available yet.
  */
 export function useNavCounts(zone: ZoneKey | null): NavCounts {
@@ -34,15 +34,15 @@ export function useNavCounts(zone: ZoneKey | null): NavCounts {
       const counts: NavCounts = {};
       const verificationCount =
         verification?.count ?? verification?.pagination?.total ?? verification?.total;
-      if (typeof verificationCount === 'number') counts['Verification'] = verificationCount;
+      if (typeof verificationCount === 'number') counts['/verification'] = verificationCount;
 
       const applicationsCount =
         applications?.count ?? applications?.pagination?.total ?? applications?.total;
-      if (typeof applicationsCount === 'number') counts['Applications'] = applicationsCount;
+      if (typeof applicationsCount === 'number') counts['/applications'] = applicationsCount;
 
       const waitlistCount =
         waitlist?.total ?? waitlist?.count ?? waitlist?.pending;
-      if (typeof waitlistCount === 'number') counts['Waitlist'] = waitlistCount;
+      if (typeof waitlistCount === 'number') counts['/waitlist'] = waitlistCount;
 
       // No Studios badge: nothing ever writes organizations.status =
       // 'pending_approval', so the count was permanently 0.

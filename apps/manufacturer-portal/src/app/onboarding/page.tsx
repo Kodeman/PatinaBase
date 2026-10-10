@@ -26,7 +26,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
           margin: 0,
         }}
       >
-        Onboarding flow coming soon
+        Manufacturer onboarding is not available yet
       </h1>
       <p style={{ fontSize: '0.95rem', lineHeight: 1.6, color: '#5C4A3C' }}>
         We&rsquo;re finishing the onboarding experience and will follow up by

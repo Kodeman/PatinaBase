@@ -71,7 +71,7 @@ export default function AdminNominationsPage() {
   return (
     <div className="flex flex-col gap-5">
       <header className="flex flex-col gap-2">
-        <h1 className="type-section-head">Catalog Nominations</h1>
+        <h1 className="type-section-head">Catalog nominations</h1>
         <p className="font-body text-[0.85rem] leading-relaxed text-[var(--text-muted)]">
           Drive vendor nominations through the pipeline. The state machine in
           migration 00158 enforces legal transitions server-side — illegal

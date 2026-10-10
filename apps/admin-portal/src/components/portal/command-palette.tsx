@@ -61,7 +61,7 @@ export function CommandPalette() {
             <LayoutDashboard className="mr-2 h-4 w-4" /> Overview
           </CommandItem>
           <CommandItem onSelect={() => navigate('/users')}>
-            <Users className="mr-2 h-4 w-4" /> People
+            <Users className="mr-2 h-4 w-4" /> Users and studios
           </CommandItem>
           <CommandItem onSelect={() => navigate('/catalog')}>
             <Package className="mr-2 h-4 w-4" /> Content

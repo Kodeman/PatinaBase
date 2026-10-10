@@ -3,7 +3,7 @@ import Script from 'next/script';
 
 export const metadata: Metadata = {
   title: 'Patina · Manufacturer',
-  description: 'Patina Catalog manufacturer onboarding and catalog management.',
+  description: 'Manufacturer information and onboarding availability.',
 };
 
 // Workstream D-B2 (docs/engineering/repoint-b0-audit.md): server-read so a
@@ -72,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               color: '#8B7355',
             }}
           >
-            Scaffold · Sprint 3 deliverable
+            Manufacturer preview
           </div>
         </header>
         <main style={{ padding: '40px 24px', maxWidth: 720, margin: '0 auto' }}>

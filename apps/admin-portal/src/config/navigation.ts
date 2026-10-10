@@ -48,7 +48,7 @@ export const ZONES: ZoneConfig[] = [
   },
   {
     key: 'people',
-    label: 'People',
+    label: 'Users and studios',
     href: '/users',
     paths: [
       '/users',
@@ -170,7 +170,7 @@ export interface SubNavAction {
 }
 
 export const ZONE_ACTIONS: Partial<Record<ZoneKey, SubNavAction>> = {
-  content: { label: '+ Add Product', href: '/catalog/new' },
+  content: { label: 'Add product', href: '/catalog/new' },
 };
 
 // ─── Profile Menu Items ──────────────────────────────────────────────────────

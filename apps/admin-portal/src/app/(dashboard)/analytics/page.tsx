@@ -133,7 +133,7 @@ export default function AnalyticsPage() {
             </div>
           ) : (
             <p className="type-body-small italic text-[var(--text-muted)]">
-              No comms data available.
+              No communications data available.
             </p>
           )}
         </Section>
