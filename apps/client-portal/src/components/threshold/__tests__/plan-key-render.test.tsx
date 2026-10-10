@@ -80,7 +80,7 @@ describe('PlanKey — a key on a drawing', () => {
       />,
     );
 
-    expect(screen.getByRole('group', { name: 'The whole house' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Project rooms' })).toBeInTheDocument();
   });
 
   it('gives one link to each room and one to the road', () => {
@@ -232,7 +232,7 @@ describe('PlanKey — a key on a drawing', () => {
     );
 
     const road = Array.from(container.querySelectorAll('svg text')).find(
-      (node) => node.textContent === 'The road',
+      (node) => node.textContent === 'Orders in progress',
     );
     expect(road).toBeDefined();
     expect(road).toHaveAttribute('text-anchor', 'end');

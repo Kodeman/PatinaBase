@@ -96,7 +96,7 @@ describe('HouseLedger — the house in figures, with its words', () => {
 
     const sentence = screen.getByTestId('house-ledger-reconcile');
     expect(sentence).toHaveTextContent(
-      '$11,100.00 agreed · $0.00 paid · $4,060.00 owed on INV-2026-0301.',
+      '$11,100.00 agreed · $0.00 paid · $4,060.00 unpaid on invoice INV-2026-0301.',
     );
     expect(
       [...sentence.querySelectorAll('.t-money')].map((node) => node.textContent),
@@ -116,7 +116,7 @@ describe('HouseLedger — the house in figures, with its words', () => {
     const sentence = screen.getByTestId('house-ledger-reconcile');
     expect(sentence).not.toHaveTextContent('agreed');
     expect(sentence).toHaveTextContent('$0.00 paid');
-    expect(sentence).toHaveTextContent('$9,125.00 owed');
+    expect(sentence).toHaveTextContent('$9,125.00 unpaid');
   });
 
   it('notes the room standing past its target, and the one absorbing it', () => {
@@ -144,7 +144,7 @@ describe('HouseLedger — the house in figures, with its words', () => {
 
     expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('$9,125.00');
     expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
-      'owed on the open invoice',
+      'unpaid on the open invoice',
     );
     expect(screen.getByTestId('house-ledger-held')).toHaveTextContent('$1,440.00');
     expect(screen.getByTestId('house-ledger-awaiting')).toHaveTextContent('$6,890.00');
@@ -154,13 +154,13 @@ describe('HouseLedger — the house in figures, with its words', () => {
   it('counts the invoices the owed figure is spread across', () => {
     const { unmount } = render(<HouseLedger ledger={ledger({ owedInvoiceCount: 1 })} />);
     expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
-      'owed on the open invoice',
+      'unpaid on the open invoice',
     );
     unmount();
 
     render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3 })} />);
     expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
-      'owed across three open invoices',
+      'unpaid across three open invoices',
     );
   });
 
@@ -170,7 +170,7 @@ describe('HouseLedger — the house in figures, with its words', () => {
     );
 
     expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
-      'owed on INV-2026-0301',
+      'unpaid on invoice INV-2026-0301',
     );
   });
 
@@ -182,7 +182,7 @@ describe('HouseLedger — the house in figures, with its words', () => {
       <HouseLedger ledger={ledger({ owedInvoiceCount: 1, owedStudioCount: 1 })} />,
     );
     expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
-      'owed on the open invoice from the studio, not for this house',
+      'unpaid on the open invoice from the studio, not for this house',
     );
     unmount();
 
@@ -190,13 +190,13 @@ describe('HouseLedger — the house in figures, with its words', () => {
       <HouseLedger ledger={ledger({ owedInvoiceCount: 2, owedStudioCount: 2 })} />,
     );
     expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
-      'owed across two open invoices from the studio, not for this house',
+      'unpaid across two open invoices from the studio, not for this house',
     );
     second.unmount();
 
     render(<HouseLedger ledger={ledger({ owedInvoiceCount: 3, owedStudioCount: 1 })} />);
     expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
-      'owed across three open invoices, one from the studio',
+      'unpaid across three open invoices, one from the studio',
     );
   });
 
@@ -218,7 +218,7 @@ describe('HouseLedger — the house in figures, with its words', () => {
     render(<HouseLedger ledger={ledger({ owedInvoiceCount: 2, owedStudioCount: 0 })} />);
 
     const sentence = screen.getByTestId('house-ledger-reconcile');
-    expect(sentence).toHaveTextContent('owed across two open invoices');
+    expect(sentence).toHaveTextContent('unpaid across two open invoices');
     expect(sentence).not.toHaveTextContent('studio');
   });
 

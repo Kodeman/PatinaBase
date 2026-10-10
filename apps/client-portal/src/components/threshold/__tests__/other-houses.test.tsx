@@ -131,7 +131,7 @@ describe('Mat — the other houses column', () => {
     render(<Mat {...matProps(HOUSES)} />);
 
     const column = screen.getByTestId('mat-other-houses');
-    expect(within(column).getByText('Your other houses')).toBeInTheDocument();
+    expect(within(column).getByText('Your other projects')).toBeInTheDocument();
     expect(within(column).getByRole('link', { name: /The Linden house/ })).toBeInTheDocument();
   });
 

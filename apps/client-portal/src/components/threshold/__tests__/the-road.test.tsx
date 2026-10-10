@@ -50,7 +50,7 @@ describe('TheRoad', () => {
     const section = container.querySelector('section');
     expect(section).toHaveAttribute('id', 'road');
     expect(section).toHaveAttribute('data-threshold-unit', 'road');
-    expect(screen.getByRole('heading', { level: 2, name: 'The road' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Orders in progress' })).toBeInTheDocument();
     expect(screen.getByTestId('road-lintel')).toHaveTextContent('What is not home yet');
   });
 
@@ -129,7 +129,7 @@ describe('TheRoad', () => {
   it('says so plainly when nothing is on the road', () => {
     render(<TheRoad pieces={[]} />);
 
-    expect(screen.getByText('Nothing on the road.')).toBeInTheDocument();
+    expect(screen.getByText('No orders in progress.')).toBeInTheDocument();
     expect(screen.queryByTestId('road-pieces')).not.toBeInTheDocument();
   });
 
@@ -155,7 +155,7 @@ describe('TheRoad', () => {
     });
 
     render(<TheRoad pieces={[]} orders={[LAMP]} />);
-    expect(screen.queryByText('Nothing on the road.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No orders in progress.')).not.toBeInTheDocument();
     expect(screen.queryByTestId('road-pieces')).not.toBeInTheDocument();
     expect(screen.getByTestId('road-orders')).toBeInTheDocument();
   });
@@ -186,7 +186,7 @@ describe('TheRoad', () => {
 
     // The empty-state sentence and the list under it contradicted each other:
     // silence never has to take anything back.
-    expect(screen.queryByText('Nothing on the road.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No orders in progress.')).not.toBeInTheDocument();
     expect(screen.getByTestId('road-orders-closed')).toHaveTextContent('Flatweave rug');
   });
 });

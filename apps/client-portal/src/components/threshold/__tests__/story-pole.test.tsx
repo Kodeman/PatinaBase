@@ -87,9 +87,9 @@ const ASPEN: MilestoneDetail[] = [
 ];
 
 const SECTIONS = [
-  { id: 'doorstep', label: 'You stand at the doorstep', short: 'the doorstep' },
-  { id: 'key', label: 'You are reading the key', short: 'the whole house' },
-  { id: 'mat', label: 'You stand on the mat', short: 'the mat' },
+  { id: 'doorstep', label: 'Project status', short: 'project status' },
+  { id: 'key', label: 'You are reading the key', short: 'project rooms' },
+  { id: 'mat', label: 'Project details and documents', short: 'project details and documents' },
 ];
 
 function pole(sections = SECTIONS) {
@@ -220,7 +220,7 @@ describe('StoryPole — six graduations, and one caret that moves', () => {
     try {
       render(pole());
       expect(screen.getByTestId('story-pole-here')).toHaveTextContent(
-        'You stand at the doorstep',
+        'Project status',
       );
     } finally {
       Object.defineProperty(window, 'IntersectionObserver', {
@@ -249,7 +249,7 @@ describe('StoryPole — six graduations, and one caret that moves', () => {
         io.fire([{ isIntersecting: true, target: screen.getByTestId('s-mat') }]);
       });
 
-      expect(screen.getByTestId('story-pole-here')).toHaveTextContent('You stand on the mat');
+      expect(screen.getByTestId('story-pole-here')).toHaveTextContent('Project details and documents');
       // The pole is struck once and never re-struck.
       expect(screen.getByTestId('story-pole-graduation-ph4')).toHaveAttribute(
         'data-held',
@@ -265,13 +265,13 @@ describe('StoryPole — six graduations, and one caret that moves', () => {
 
 describe('StoryPole — the pole navigates', () => {
   const HOUSE = [
-    { id: 'doorstep', label: 'You stand at the doorstep', short: 'the doorstep' },
-    { id: 'letterbox', label: 'The letterbox', short: 'the letterbox' },
+    { id: 'doorstep', label: 'Project status', short: 'project status' },
+    { id: 'letterbox', label: 'Invoices and payments', short: 'invoices and payments' },
     { id: 'wall', label: 'What needs you', short: 'the wall' },
-    { id: 'key', label: 'The whole house', short: 'the whole house' },
+    { id: 'key', label: 'Project rooms', short: 'project rooms' },
     { id: 'study', label: 'The study', short: 'The study' },
-    { id: 'road', label: 'The road', short: 'the road' },
-    { id: 'mat', label: 'You stand on the mat', short: 'the mat' },
+    { id: 'road', label: 'Orders in progress', short: 'orders in progress' },
+    { id: 'mat', label: 'Project details and documents', short: 'project details and documents' },
   ];
 
   /** The house draws its first band as the study — installation's place (SF-03). */
@@ -321,8 +321,8 @@ describe('StoryPole — the pole navigates', () => {
     // A house with no road and no key: neither chapter has a place to stand.
     render(
       house([
-        { id: 'doorstep', label: 'You stand at the doorstep' },
-        { id: 'mat', label: 'You stand on the mat' },
+        { id: 'doorstep', label: 'Project status' },
+        { id: 'mat', label: 'Project details and documents' },
       ]),
     );
 
@@ -376,8 +376,8 @@ describe('StoryPole — the pole navigates', () => {
     const toggle = screen.getByTestId('story-pole-toggle');
     // The bar supplies the verb, so the section gives it a noun and nothing
     // more — never "You are in: You stand at the doorstep".
-    expect(toggle).toHaveTextContent('You are in: the doorstep');
-    expect(toggle).not.toHaveTextContent('You are in: You stand');
+    expect(toggle).toHaveTextContent('You are in: project status');
+    expect(toggle).not.toHaveTextContent('You are in: Project status');
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(toggle).toHaveAttribute('aria-controls', 'story-pole-rail');
     expect(screen.getByTestId('story-pole-rail')).toHaveAttribute('id', 'story-pole-rail');

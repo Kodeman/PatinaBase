@@ -293,7 +293,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
+    await userEvent.click(screen.getByRole('button', { name: /open invoice details/i }));
     await userEvent.click(screen.getByRole('radio', { name: /check/i }));
 
     expect(
@@ -400,7 +400,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
 
     expect(screen.getByTestId('letterbox-body')).toHaveTextContent('due 15 January 2027');
 
-    await userEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
+    await userEvent.click(screen.getByRole('button', { name: /open invoice details/i }));
     expect(within(screen.getByTestId('spine-toll')).getByTestId('spine-toll-due')).toHaveTextContent(
       'due 15 January 2027',
     );
@@ -419,30 +419,30 @@ describe('Letterbox — one letter, half out of the slot', () => {
 
     expect(screen.queryByTestId('settlement')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
+    await userEvent.click(screen.getByRole('button', { name: /open invoice details/i }));
 
     expect(screen.getByTestId('settlement')).toBeInTheDocument();
     const toll = screen.getByTestId('spine-toll');
     expect(toll).toHaveAttribute('data-invoice-id', 'b0000000-0000-0000-0000-0000000000i4');
     expect(screen.getByTestId('threshold-payment-methods')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /close the letterbox/i }),
+      screen.getByRole('button', { name: /close invoice details/i }),
     ).toHaveAttribute('aria-expanded', 'true');
 
-    await userEvent.click(screen.getByRole('button', { name: /close the letterbox/i }));
+    await userEvent.click(screen.getByRole('button', { name: /close invoice details/i }));
 
     expect(screen.queryByTestId('settlement')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /open the letterbox/i }),
+      screen.getByRole('button', { name: /open invoice details/i }),
     ).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('stands empty, and says so, when nothing has come', () => {
     render(<Letterbox invoice={null} />);
 
-    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('Nothing in the letterbox.');
+    expect(screen.getByTestId('letterbox-body')).toHaveTextContent('No current invoice.');
     expect(
-      screen.queryByRole('button', { name: /open the letterbox/i }),
+      screen.queryByRole('button', { name: /open invoice details/i }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole('img', { name: 'An empty letterbox' }),
@@ -616,7 +616,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
       await user.click(pay);
     });
     // Pressing it opens the letter, where Settlement is.
-    expect(screen.getByRole('button', { name: 'Close the letterbox' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close invoice details' })).toBeInTheDocument();
   });
 
   /* PP-2 · R139 — money moves here, so the act carries the figure it is for
@@ -654,7 +654,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: 'Open the letterbox' }));
+      await user.click(screen.getByRole('button', { name: 'Open invoice details' }));
     });
     const pay = screen.getByRole('button', { name: /^Pay / });
     expect(pay).toBeInTheDocument();
@@ -678,7 +678,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
     // never on document.body.
     expect(screen.getByRole('button', { name: /^Pay / })).toBe(pay);
     expect(document.activeElement).not.toBe(document.body);
-    const till = screen.getByRole('group', { name: 'Settle this invoice' });
+    const till = screen.getByRole('group', { name: 'Pay this invoice' });
     expect(document.activeElement).toBe(till);
     expect(screen.getByRole('status')).toHaveTextContent(
       /Payment for .* is open\. Nothing is charged until you choose how to pay\./,
@@ -728,10 +728,10 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(screen.getByRole('button', { name: 'Pay $9,125.00' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
 
-    const toggle = screen.getByRole('button', { name: 'Open the letterbox' });
+    const toggle = screen.getByRole('button', { name: 'Open invoice details' });
     await act(async () => {
       await user.click(toggle);
     });
-    expect(screen.getByRole('button', { name: 'Close the letterbox' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close invoice details' })).toBeInTheDocument();
   });
 });

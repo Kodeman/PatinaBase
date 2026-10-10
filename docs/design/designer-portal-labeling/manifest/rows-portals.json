@@ -9,7 +9,8 @@
     "meaning": "Current project standing and actions, not a new portal home.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold rail / project standing; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:118 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-002",
@@ -21,8 +22,9 @@
     "meaning": "A signature gate, not a locked room; keep cardinality and link target.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/lib/threshold/standing.ts in Threshold standing sentence; check visible and accessible wording without changing destination or effect.",
-    "status": "exception",
-    "exception": "The sentence is parsed by doorstep.tsx into linked objects. Replace its phrase patterns and semantic tests together; confirm whether the explicit signature wording may replace the metaphor without changing the gate."
+    "status": "implemented",
+    "exception": "Signature sentence targets the document, not an abstract door; standing.ts:63 and doorstep.tsx:94 retain the signature-door parser target.",
+    "evidence": "apps/client-portal/src/lib/threshold/standing.ts: Signature sentence targets the document, not an abstract door; standing.ts:63 and doorstep.tsx:94 retain the signature-door parser target."
   },
   {
     "id": "CL-003",
@@ -34,7 +36,8 @@
     "meaning": "The toggle changes the reading, not the underlying project state.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/doorstep.tsx in Threshold standing sentence; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/doorstep.tsx:203 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-004",
@@ -46,8 +49,9 @@
     "meaning": "Linked sentence objects must still point to acceptance, signature, or invoice.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/doorstep.tsx in Threshold status links; check visible and accessible wording without changing destination or effect.",
-    "status": "exception",
-    "exception": "SENTENCE_OBJECTS regex matches the generated wording; coordinate with CL-002 and its tests, retaining links and accessible reading."
+    "status": "implemented",
+    "exception": "The document fragment targets the signature door and finished work still targets acceptance; doorstep.tsx:93-95.",
+    "evidence": "apps/client-portal/src/components/threshold/doorstep.tsx: The document fragment targets the signature door and finished work still targets acceptance; doorstep.tsx:93-95."
   },
   {
     "id": "CL-005",
@@ -59,7 +63,8 @@
     "meaning": "Current invoice and payment history.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold invoice rail; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:319 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-006",
@@ -71,7 +76,8 @@
     "meaning": "Invoice detail and the payment action, not correspondence.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/letterbox.tsx in Threshold invoice heading; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/letterbox.tsx:28 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-007",
@@ -83,8 +89,9 @@
     "meaning": "Opens payment choice; nothing is charged until the choice and checkout.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/letterbox.tsx in Threshold invoice action; check visible and accessible wording without changing destination or effect.",
-    "status": "exception",
-    "exception": "Settle might include non-card/manual resolution. Confirm button destination and consequence before changing the action verb; preserve the no-charge-until-choice explanation."
+    "status": "implemented",
+    "exception": "The payment region is labeled by its purpose; letterbox.tsx:343-364 only opens the chooser and line 339 explicitly says nothing is charged until a method is chosen.",
+    "evidence": "apps/client-portal/src/components/threshold/letterbox.tsx: The payment region is labeled by its purpose; letterbox.tsx:343-364 only opens the chooser and line 339 explicitly says nothing is charged until a method is chosen."
   },
   {
     "id": "CL-008",
@@ -96,7 +103,8 @@
     "meaning": "Payment consequence must remain explicit.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/letterbox.tsx in Threshold payment explanation; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/letterbox.tsx:339 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-009",
@@ -108,7 +116,8 @@
     "meaning": "Prior invoice history; separate from the current payable invoice.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/earlier-invoices.tsx in Threshold invoices / history; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/earlier-invoices.tsx:168 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-010",
@@ -120,8 +129,9 @@
     "meaning": "Client balance, not vendor payouts.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/house-ledger.tsx in Threshold money summary; check visible and accessible wording without changing destination or effect.",
-    "status": "exception",
-    "exception": "Inspect all ledger figures and whether this line combines studio invoices before changing the label; retain cents and scope."
+    "status": "implemented",
+    "exception": "Unpaid invoice rollup includes adopted studio invoices: derive.ts:537-572; house-ledger.tsx:74-84 identifies studio amounts separately.",
+    "evidence": "apps/client-portal/src/components/threshold/house-ledger.tsx: Unpaid invoice rollup includes adopted studio invoices: derive.ts:537-572; house-ledger.tsx:74-84 identifies studio amounts separately."
   },
   {
     "id": "CL-011",
@@ -133,7 +143,8 @@
     "meaning": "Selected furnishings in logistics stages, not project schedule.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold project progress rail; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:1098 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-012",
@@ -145,7 +156,8 @@
     "meaning": "Physical furnishing progress with six distinct stops.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/the-road.tsx in Threshold project progress heading; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/the-road.tsx:93 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-013",
@@ -157,7 +169,8 @@
     "meaning": "Accessible stage depiction, not completion of the whole project.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/the-road.tsx in Threshold project progress accessibility; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/the-road.tsx:110 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-014",
@@ -169,7 +182,8 @@
     "meaning": "Error specifically for direct-purchase items.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/the-road.tsx in Threshold project progress error; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/the-road.tsx:59 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-015",
@@ -181,7 +195,8 @@
     "meaning": "Map link points to the existing road anchor, unchanged.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/plan-key.tsx in Threshold project progress map; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/plan-key.tsx:169 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-016",
@@ -193,7 +208,8 @@
     "meaning": "Room drawing and selection marks, not all studio records.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold project map; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:414 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-017",
@@ -205,7 +221,8 @@
     "meaning": "Accessible link to the room drawing.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/plan-key.tsx in Threshold project map accessibility; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/plan-key.tsx:145 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-018",
@@ -217,8 +234,9 @@
     "meaning": "No open marks on this drawing, not project completion.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/lib/threshold/standing.ts in Threshold project map state; check visible and accessible wording without changing destination or effect.",
-    "status": "exception",
-    "exception": "Marks include signature and finished-work acceptance; confirm generic request wording and preserve zero/one/many counts."
+    "status": "implemented",
+    "exception": "standing.ts:187-191 counts drawing marks (signature doors and finished-work acceptance); the zero case is scoped to the room drawing, not project completion.",
+    "evidence": "apps/client-portal/src/lib/threshold/standing.ts: standing.ts:187-191 counts drawing marks (signature doors and finished-work acceptance); the zero case is scoped to the room drawing, not project completion."
   },
   {
     "id": "CL-019",
@@ -230,7 +248,8 @@
     "meaning": "End-of-page details, paperwork and return routes.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold return rail; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:169 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-020",
@@ -242,7 +261,8 @@
     "meaning": "Section has details and papers rather than studio administration.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/mat.tsx in Threshold return heading; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/mat.tsx:12 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-021",
@@ -254,7 +274,8 @@
     "meaning": "Opens homeowner preferences/details, not a studio profile.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/mat.tsx in Threshold details control; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/mat.tsx:155 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-022",
@@ -266,7 +287,8 @@
     "meaning": "A standing designer note, not the full message inbox.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold note rail; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:319 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-023",
@@ -278,7 +300,8 @@
     "meaning": "Accessible name for the standing note.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/the-note.tsx in Threshold note accessibility; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/the-note.tsx:114 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-024",
@@ -290,7 +313,8 @@
     "meaning": "Navigation rail and narrow-screen section indicator.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/story-pole.tsx in Threshold navigation accessibility; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/story-pole.tsx:21 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-025",
@@ -303,7 +327,8 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/landmark-ledger.tsx in Threshold navigation landmarks; check visible and accessible wording without changing destination or effect.",
     "status": "exception",
-    "exception": "What you owe may be debt rather than only invoices; check the branch condition and target against letterbox and ledger before final wording."
+    "exception": "landmark-ledger.tsx:58-65 always links to #letterbox when the section renders, even without unpaid invoices; preserve What you owe rather than promise an unpaid-only destination. Other index labels are updated.",
+    "evidence": "apps/client-portal/src/components/threshold/landmark-ledger.tsx: landmark-ledger.tsx:58-65 always links to #letterbox when the section renders, even without unpaid invoices; preserve What you owe rather than promise an unpaid-only destination. Other index labels are updated."
   },
   {
     "id": "CL-026",
@@ -315,7 +340,8 @@
     "meaning": "Reading and asking do not sign, send, or decline; preserve distinct acts.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/door-acts.tsx in Threshold signature controls; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/door-acts.tsx:7 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-027",
@@ -327,7 +353,8 @@
     "meaning": "Distinct recorded decisions; do not soften consent or substitute preview for approval.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/approval-ask.tsx in Threshold approval decision; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/approval-ask.tsx:103 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-028",
@@ -339,7 +366,8 @@
     "meaning": "Historical decision state and budget effect remain distinct.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/scope-change-ask.tsx in Threshold scope-change status; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/scope-change-ask.tsx:475 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-029",
@@ -351,7 +379,8 @@
     "meaning": "Display status map, not persisted state or permission.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/instruments/stamp.tsx in Threshold document stamps; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/instruments/stamp.tsx:78 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-030",
@@ -363,7 +392,8 @@
     "meaning": "Method options and fee disclosure remain exact.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/payment-method-chooser.tsx in Threshold payment method; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/payment-method-chooser.tsx:83 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-031",
@@ -375,7 +405,8 @@
     "meaning": "Room-specific accessible summary; do not assert dimensions were verified.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/room-band.tsx in Threshold room section accessibility; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/room-band.tsx:175 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-032",
@@ -387,7 +418,8 @@
     "meaning": "Visibility permission must remain explicit.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/room-capture.tsx in Threshold room visibility; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/room-capture.tsx:332 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-033",
@@ -399,7 +431,8 @@
     "meaning": "Read versus download; document titles are dynamic and not copy.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/papers-sheet.tsx in Threshold paper sheet controls; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/papers-sheet.tsx:251 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-034",
@@ -411,7 +444,8 @@
     "meaning": "Profile and communication preferences, not project approvals.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/details-sheet.tsx in Threshold profile preferences; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/details-sheet.tsx:25 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-035",
@@ -423,7 +457,8 @@
     "meaning": "A pending page and a failed room feed are different states; never imply all clear.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/threshold.tsx in Threshold empty/loading/error; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/threshold.tsx:1306 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-036",
@@ -435,7 +470,8 @@
     "meaning": "Branches determine which sections render; no invented room names or action labels.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/lib/threshold/derive.ts in Threshold empty room model; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/lib/threshold/derive.ts:13 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-039",
@@ -447,7 +483,8 @@
     "meaning": "Homeowner wrapper retains contextual explanation without changing shared auth defaults.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/auth/ClientPortalLogin.tsx in Client auth sign-in; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/auth/ClientPortalLogin.tsx:34 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-040",
@@ -459,7 +496,8 @@
     "meaning": "Recovery disclosure stays neutral and does not enumerate accounts.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/auth/forgot-password/page.tsx in Client auth recovery; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/auth/forgot-password/page.tsx:55 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-041",
@@ -471,7 +509,8 @@
     "meaning": "Loading and error branches remain explicit.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/auth/callback/page.tsx in Client auth callback; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/auth/callback/page.tsx:146 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-042",
@@ -483,7 +522,8 @@
     "meaning": "Distinguish pending link from completed reset.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/auth/reset-password/page.tsx in Client auth reset; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/auth/reset-password/page.tsx:109 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-043",
@@ -495,7 +535,8 @@
     "meaning": "Audience wrapper error and loading state.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/auth/verify-otp/page.tsx in Client auth one-time code; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/auth/verify-otp/page.tsx:71 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-044",
@@ -507,7 +548,8 @@
     "meaning": "Auth error title supplied from local error mapping; preserve recovery path.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/auth/error/page.tsx in Client auth errors; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/auth/error/page.tsx:63 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-045",
@@ -519,7 +561,8 @@
     "meaning": "Access distinction; do not imply a homeowner can enter studio/admin.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/wrong-portal/page.tsx in Wrong audience; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/wrong-portal/page.tsx:53 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-046",
@@ -531,7 +574,8 @@
     "meaning": "Preserve access distinction from empty or loading.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/unauthorized/page.tsx in Project inaccessible; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/unauthorized/page.tsx:9 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-050",
@@ -543,7 +587,8 @@
     "meaning": "Error not a zero balance; printed record untouched.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/invoices/[invoiceId]/print/page.tsx in Client invoice print; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/invoices/[invoiceId]/print/page.tsx:52 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-051",
@@ -555,7 +600,8 @@
     "meaning": "Communications preference, not access revocation.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/preferences/unsubscribe/page.tsx in Client preferences unsubscribe; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/preferences/unsubscribe/page.tsx:2 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-052",
@@ -567,7 +613,8 @@
     "meaning": "Accessible revision labels and unverified measurements remain distinct.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/plans/[token]/page.tsx in Client plan share; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/plans/[token]/page.tsx:33 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-055",
@@ -579,7 +626,8 @@
     "meaning": "Individual selection status distinct from order state.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/piece/[id]/page.tsx in Client piece detail; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/piece/[id]/page.tsx:148 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-056",
@@ -591,7 +639,8 @@
     "meaning": "Field/trade guest task, not homeowner Threshold.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/field/[token]/page.tsx in Field public task; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/field/[token]/page.tsx:61 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-057",
@@ -603,7 +652,8 @@
     "meaning": "Completion and evidence controls for invited trade.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/field/[token]/field-actions.tsx in Field public action; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/field/[token]/field-actions.tsx:133 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-058",
@@ -615,19 +665,21 @@
     "meaning": "Guest acknowledgment and evidence workflow.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/field/[token]/site-request-guest.tsx in Field guest site request; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/field/[token]/site-request-guest.tsx:673 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-059",
-    "audience": "trade",
+    "audience": "shared",
     "surface": "Field spec-book share",
     "source": "apps/client-portal/src/app/field/spec-book/[token]/page.tsx",
     "current": "Patina · Spec Book / View-only document",
     "proposed": "Patina · Shared specification book / View-only document",
-    "meaning": "Field recipient reads project specification; not homeowner approval.",
+    "meaning": "Issued view-only specification book can be a client, vendor, installer, internal, or care edition; no approval action.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/field/spec-book/[token]/page.tsx in Field spec-book share; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/app/field/spec-book/[token]/page.tsx:59 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-060",
@@ -639,7 +691,8 @@
     "meaning": "Contract recipient and signature permissions.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/trade/[token]/page.tsx in Trade agreement; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/trade/[token]/page.tsx:59 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-061",
@@ -651,7 +704,8 @@
     "meaning": "Signature is legally consequential; no preview/sent substitution.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/trade/[token]/trade-agreement-signature.tsx in Trade signature; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/trade/[token]/trade-agreement-signature.tsx:121 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-062",
@@ -663,7 +717,8 @@
     "meaning": "Trade recipient rather than homeowner.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/rfq/[token]/page.tsx in Supplier quotation; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/rfq/[token]/page.tsx:95 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-063",
@@ -675,7 +730,8 @@
     "meaning": "Quote submission and its state; not purchase-order issuance.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/rfq/[token]/rfq-response-form.tsx in Supplier quotation response; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/rfq/[token]/rfq-response-form.tsx:79 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-064",
@@ -687,7 +743,8 @@
     "meaning": "Trade/vendor compliance upload, not homeowner project documents.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/paperwork/[token]/page.tsx in Paperwork request; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/paperwork/[token]/page.tsx:2 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-065",
@@ -699,7 +756,8 @@
     "meaning": "Identifies documents required from a trade recipient.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/paperwork/paperwork-sheet.tsx in Paperwork upload; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/paperwork/paperwork-sheet.tsx:19 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-066",
@@ -711,7 +769,8 @@
     "meaning": "Local selection, uploading, success and failure must stay distinct.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/paperwork/paperwork-upload-form.tsx in Paperwork upload state; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/paperwork/paperwork-upload-form.tsx:27 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-067",
@@ -723,7 +782,8 @@
     "meaning": "Guest trade evidence submission, not homeowner review.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/evidence/[token]/page.tsx in Evidence request; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/evidence/[token]/page.tsx:57 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-068",
@@ -735,20 +795,22 @@
     "meaning": "Upload and confirmation stages remain truthful.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/evidence/[token]/evidence-uploader.tsx in Evidence upload state; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/evidence/[token]/evidence-uploader.tsx:78 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-070",
-    "audience": "homeowner",
+    "audience": "shared",
     "surface": "Invoice payment sheet",
     "source": "apps/client-portal/src/app/pay/[token]/invoice-sheet.tsx",
     "current": "Invoice",
     "proposed": "Invoice",
-    "meaning": "Tokenized invoice payment for its named payer; charging, method, balance and receipt consequences must remain exact.",
+    "meaning": "Tokenized invoice can name a project or studio payer; retain invoice responsibility and payment disclosures without assuming a homeowner.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/pay/[token]/invoice-sheet.tsx in Invoice payment sheet; check visible and accessible wording without changing destination or effect.",
     "status": "exception",
-    "exception": "Resolver carries client_display_name and distinguishes studio invoices; confirm payee audience at issuance rather than inferring homeowner from host. Preserve all payment-consequence text."
+    "exception": "invoice-link.ts:72 permits a studio invoice; invoice-sheet.tsx:599-606 can resolve its payment link. Keep payer-neutral Invoice and all payment disclosures.",
+    "evidence": "apps/client-portal/src/app/pay/[token]/invoice-sheet.tsx: invoice-link.ts:72 permits a studio invoice; invoice-sheet.tsx:599-606 can resolve its payment link. Keep payer-neutral Invoice and all payment disclosures."
   },
   {
     "id": "CL-071",
@@ -760,7 +822,8 @@
     "meaning": "In-progress, withdrawn and dead links remain distinct.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/pay/[token]/settling-sheet.tsx in Invoice payment terminal states; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/pay/[token]/settling-sheet.tsx:45 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-072",
@@ -772,7 +835,8 @@
     "meaning": "Completed/reused link is not payment pending.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/pay/used/page.tsx in Invoice link used; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/pay/used/page.tsx:35 — existing wording or protected consequence retained."
   },
   {
     "id": "AD-001",
@@ -1679,7 +1743,8 @@
     "meaning": "Opens a distinct deposit payment; no charge is implied by viewing the offer.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/deposit-offer.tsx in Threshold deposit payment; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/deposit-offer.tsx:76 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-075",
@@ -1691,7 +1756,8 @@
     "meaning": "Direct purchase and cancellation states must not be confused.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/road-orders.tsx in Threshold order payment; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/road-orders.tsx:140 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-076",
@@ -1704,7 +1770,8 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/instruments/spine-toll.tsx in Threshold balance control; check visible and accessible wording without changing destination or effect.",
     "status": "exception",
-    "exception": "Confirm whether this control chooses a payment method or commits payment before replacing Settle with Pay."
+    "exception": "spine-toll.tsx retains Settle the balance; settlement.tsx:150-190 opens a method chooser without charging. Figures remain Total/Paid/Balance.",
+    "evidence": "apps/client-portal/src/components/threshold/instruments/spine-toll.tsx: spine-toll.tsx retains Settle the balance; settlement.tsx:150-190 opens a method chooser without charging. Figures remain Total/Paid/Balance."
   },
   {
     "id": "CL-077",
@@ -1716,7 +1783,8 @@
     "meaning": "Signature and outbound confirmation are different states.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/door-gate.tsx in Threshold document delivery; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/door-gate.tsx:760 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-078",
@@ -1728,7 +1796,8 @@
     "meaning": "Do not call a draft sent before delivery confirms.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/correspondence.tsx in Threshold correspondence send; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/correspondence.tsx:107 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-079",
@@ -1740,11 +1809,12 @@
     "meaning": "Read failure must not imply an approval changed.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/letterbox-door.tsx in Threshold receipt error; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/letterbox-door.tsx:197 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-080",
-    "audience": "homeowner",
+    "audience": "shared",
     "surface": "Client shared-board reaction",
     "source": "apps/client-portal/src/app/share/[token]/board-reactions.tsx",
     "current": "Approve / Pass / Add a note for the studio",
@@ -1752,7 +1822,8 @@
     "meaning": "Recorded guest reaction rather than a purchase authorization.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/app/share/[token]/board-reactions.tsx in Client shared-board reaction; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/share/[token]/board-reactions.tsx:169 — existing wording or protected consequence retained."
   },
   {
     "id": "CL-081",
@@ -1764,7 +1835,8 @@
     "meaning": "Historical signed record remains immutable.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/record/record-sheet.tsx in Client record of agreement; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/record/record-sheet.tsx:248 — existing wording or protected consequence retained."
   },
   {
     "id": "AD-060",
@@ -1932,7 +2004,8 @@
     "meaning": "Switches among homeowner projects inside the mat, not designer navigation.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/other-houses.tsx in Other project link; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/other-houses.tsx:9 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-083",
@@ -1944,8 +2017,9 @@
     "meaning": "Acceptance requires the studio paper; a photo alone is not verified completion.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/wall-gate.tsx in Finished-work acceptance; check visible and accessible wording without changing destination or effect.",
-    "status": "exception",
-    "exception": "Confirm the heading and acceptance instrument appear together before replacing the wall metaphor; preserve read-only states."
+    "status": "implemented",
+    "exception": "wall-gate.tsx:156-226 places finished-work heading alongside the named acceptance and its release consequence; this is not a photo-verification claim.",
+    "evidence": "apps/client-portal/src/components/threshold/wall-gate.tsx: wall-gate.tsx:156-226 places finished-work heading alongside the named acceptance and its release consequence; this is not a photo-verification claim."
   },
   {
     "id": "CL-084",
@@ -1957,7 +2031,8 @@
     "meaning": "Timeline stage indicator, not a studio overview.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/threshold/instruments/making-spine.tsx in Project delivery timeline; check visible and accessible wording without changing destination or effect.",
-    "status": "planned"
+    "status": "implemented",
+    "evidence": "apps/client-portal/src/components/threshold/instruments/making-spine.tsx:570 — rendered label updated; anchors and behavior retained."
   },
   {
     "id": "CL-085",
@@ -1970,7 +2045,8 @@
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/letter/StaleLetterForm.tsx in Client stale letter; check visible and accessible wording without changing destination or effect.",
     "status": "exception",
-    "exception": "Confirm whether a fresh request is actually queued before promising it is on its way."
+    "exception": "StaleLetterForm.tsx:17-40 requests refresh but does not inspect response delivery; retain stale/refresh wording rather than promise a newly queued request.",
+    "evidence": "apps/client-portal/src/components/letter/StaleLetterForm.tsx: StaleLetterForm.tsx:17-40 requests refresh but does not inspect response delivery; retain stale/refresh wording rather than promise a newly queued request."
   },
   {
     "id": "CL-086",
@@ -1982,7 +2058,8 @@
     "meaning": "No accessible project is not project completion.",
     "owner": "P1",
     "verify": "Inspect apps/client-portal/src/components/projects/ProjectsEmptyState.tsx in Homeowner no-project state; check visible and accessible wording without changing destination or effect.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/projects/ProjectsEmptyState.tsx:111 — existing wording or protected consequence retained."
   },
   {
     "id": "AD-072",
@@ -2060,7 +2137,8 @@
     "meaning": "Existing app auth invite [token] CapabilityLetterForm display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/auth/invite/[token]/CapabilityLetterForm.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/auth/invite/[token]/CapabilityLetterForm.tsx:62 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F002",
@@ -2072,7 +2150,8 @@
     "meaning": "Existing app auth invite [token] page display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/auth/invite/[token]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/auth/invite/[token]/page.tsx:104 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F003",
@@ -2084,7 +2163,8 @@
     "meaning": "Existing app auth signin page display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/auth/signin/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/auth/signin/page.tsx:23 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F004",
@@ -2096,7 +2176,8 @@
     "meaning": "Existing app decisions [id] record page display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/decisions/[id]/record/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/decisions/[id]/record/page.tsx:1 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F005",
@@ -2108,7 +2189,8 @@
     "meaning": "Existing app error display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/error.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/error.tsx:20 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F006",
@@ -2120,7 +2202,8 @@
     "meaning": "Existing app field [token] error display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/field/[token]/error.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/field/[token]/error.tsx:25 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F007",
@@ -2132,7 +2215,8 @@
     "meaning": "Existing app global-error display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/global-error.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/global-error.tsx:1 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F008",
@@ -2144,7 +2228,8 @@
     "meaning": "Existing app loading display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/loading.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/loading.tsx:6 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F009",
@@ -2156,7 +2241,8 @@
     "meaning": "Existing app not-found display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/not-found.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/not-found.tsx:9 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F010",
@@ -2168,7 +2254,8 @@
     "meaning": "Existing app page display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/page.tsx:1 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F011",
@@ -2180,7 +2267,8 @@
     "meaning": "Existing app pay [token] payment-method-chooser display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/pay/[token]/payment-method-chooser.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/pay/[token]/payment-method-chooser.tsx:1 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F012",
@@ -2192,7 +2280,8 @@
     "meaning": "Existing app projects [projectId] error display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/projects/[projectId]/error.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/projects/[projectId]/error.tsx:36 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F013",
@@ -2204,7 +2293,8 @@
     "meaning": "Existing app proposals [id] record page display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/proposals/[id]/record/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/proposals/[id]/record/page.tsx:1 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F014",
@@ -2216,7 +2306,8 @@
     "meaning": "Existing app quiz quiz-flow display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/quiz/quiz-flow.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/quiz/quiz-flow.tsx:116 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F015",
@@ -2228,7 +2319,8 @@
     "meaning": "Existing app quiz results results-view display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/quiz/results/results-view.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/quiz/results/results-view.tsx:87 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F016",
@@ -2240,7 +2332,8 @@
     "meaning": "Existing app share [token] page display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/app/share/[token]/page.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/app/share/[token]/page.tsx:1 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F017",
@@ -2252,7 +2345,8 @@
     "meaning": "Existing components account AvatarUploadField display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/account/AvatarUploadField.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/account/AvatarUploadField.tsx:128 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F018",
@@ -2264,7 +2358,8 @@
     "meaning": "Existing components agreement-parts-body display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/agreement-parts-body.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/agreement-parts-body.tsx:101 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F019",
@@ -2276,7 +2371,8 @@
     "meaning": "Existing components board-block display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/board-block.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/board-block.tsx:74 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F020",
@@ -2288,7 +2384,8 @@
     "meaning": "Existing components commercial design-build-body display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/commercial/design-build-body.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/commercial/design-build-body.tsx:299 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F021",
@@ -2300,7 +2397,8 @@
     "meaning": "Existing components commercial-document-shell display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/commercial-document-shell.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/commercial-document-shell.tsx:209 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F022",
@@ -2312,7 +2410,8 @@
     "meaning": "Existing components proposal-document display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/proposal-document.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/proposal-document.tsx:217 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F023",
@@ -2324,7 +2423,8 @@
     "meaning": "Existing components proposal-line-feedback display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/proposal-line-feedback.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/proposal-line-feedback.tsx:106 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F024",
@@ -2336,7 +2436,8 @@
     "meaning": "Existing components query-failure display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/query-failure.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/query-failure.tsx:1 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F025",
@@ -2348,7 +2449,8 @@
     "meaning": "Existing components reviews ReviewsIndex display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/reviews/ReviewsIndex.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/reviews/ReviewsIndex.tsx:34 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F026",
@@ -2360,7 +2462,8 @@
     "meaning": "Existing components reviews StarRatingInput display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/reviews/StarRatingInput.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/reviews/StarRatingInput.tsx:26 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F027",
@@ -2372,7 +2475,8 @@
     "meaning": "Existing components reviews SubmitReviewDialog display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/reviews/SubmitReviewDialog.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/reviews/SubmitReviewDialog.tsx:70 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F028",
@@ -2384,7 +2488,8 @@
     "meaning": "Existing components scans ClientViewerLoadingOverlay display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/scans/ClientViewerLoadingOverlay.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/scans/ClientViewerLoadingOverlay.tsx:14 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F029",
@@ -2396,7 +2501,8 @@
     "meaning": "Existing components threshold doorplate display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/threshold/doorplate.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/doorplate.tsx:1 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F030",
@@ -2408,7 +2514,8 @@
     "meaning": "Existing components threshold ground-floor display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/threshold/ground-floor.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/ground-floor.tsx:1 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F031",
@@ -2420,7 +2527,8 @@
     "meaning": "Existing components threshold instrument-reading display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/threshold/instrument-reading.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/instrument-reading.tsx:9 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F032",
@@ -2432,7 +2540,8 @@
     "meaning": "Existing components threshold instruments scored-action display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/threshold/instruments/scored-action.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/instruments/scored-action.tsx:89 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F033",
@@ -2444,7 +2553,8 @@
     "meaning": "Existing components threshold instruments signature-line display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/threshold/instruments/signature-line.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/instruments/signature-line.tsx:1 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F034",
@@ -2456,7 +2566,8 @@
     "meaning": "Existing components threshold previously display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/threshold/previously.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/previously.tsx:1 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F035",
@@ -2468,7 +2579,8 @@
     "meaning": "Existing components threshold review-ask display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/threshold/review-ask.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/review-ask.tsx:183 — file-level copy retained for this workflow."
   },
   {
     "id": "CL-F036",
@@ -2480,7 +2592,8 @@
     "meaning": "Existing components threshold settlement display copy retains its task and audience.",
     "owner": "P1",
     "verify": "Review apps/client-portal/src/components/threshold/settlement.tsx rendered text, labels, and conditional states in its existing workflow; no copy change proposed.",
-    "status": "unchanged"
+    "status": "unchanged",
+    "evidence": "apps/client-portal/src/components/threshold/settlement.tsx:53 — file-level copy retained for this workflow."
   },
   {
     "id": "AD-F001",

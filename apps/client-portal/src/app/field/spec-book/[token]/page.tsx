@@ -9,7 +9,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Shared Spec Book · Patina",
+  title: "Shared specification book · Patina",
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };
@@ -35,7 +35,7 @@ function DeadLink() {
       className="mx-auto flex min-h-[70vh] max-w-md flex-col items-center justify-center px-6 text-center"
       data-testid="spec-book-dead-link"
     >
-      <p className="type-meta">Patina · Spec Book</p>
+      <p className="type-meta">Patina · Specification book</p>
       <h1 className="type-page-title mt-3">This link isn’t available</h1>
       <p className="type-body-small mt-3 text-[var(--text-muted)]">
         The share link may have expired or been turned off. Ask the studio for a
@@ -56,7 +56,7 @@ function SpecBookShareView({
   return (
     <main className="mx-auto min-h-screen max-w-3xl px-5 py-10 sm:px-8">
       <header className="border-b border-[var(--border-subtle)] pb-7">
-        <p className="type-meta">Patina · Shared Spec Book</p>
+        <p className="type-meta">Patina · Shared specification book</p>
         <h1 className="type-page-title mt-3">{share.title}</h1>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <span className="type-body-small rounded-full bg-[var(--color-pearl)] px-3 py-1">

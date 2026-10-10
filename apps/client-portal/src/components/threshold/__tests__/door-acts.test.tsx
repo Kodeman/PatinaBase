@@ -104,7 +104,7 @@ describe('DoorActs', () => {
   it('offers the four answers the old proposal page took', () => {
     renderActs();
 
-    expect(act('Read it in full')).toBeInTheDocument();
+    expect(act('Read document')).toBeInTheDocument();
     expect(act('Ask a question')).toBeInTheDocument();
     expect(act('Request a change')).toBeInTheDocument();
     expect(act('Decline')).toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('DoorActs', () => {
   it('gives the reading more weight than the three answers', () => {
     renderActs();
 
-    expect(act('Read it in full')).toHaveAttribute('data-action-variant', 'secondary');
+    expect(act('Read document')).toHaveAttribute('data-action-variant', 'secondary');
     for (const label of ['Ask a question', 'Request a change', 'Decline']) {
       expect(act(label)).toHaveAttribute('data-action-variant', 'tertiary');
     }
@@ -127,13 +127,13 @@ describe('DoorActs', () => {
   it('offers no reading of a legacy row, which has no instrument to print', () => {
     renderActs({ kind: 'legacy' });
 
-    expect(screen.queryByRole('button', { name: 'Read it in full' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Read document' })).not.toBeInTheDocument();
     expect(act('Decline')).toBeInTheDocument();
   });
 
   it('unfolds the instrument in place, and folds it back', () => {
     renderActs();
-    const control = act('Read it in full');
+    const control = act('Read document');
     expect(control).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.click(control);
@@ -238,7 +238,7 @@ describe('DoorActs', () => {
     await screen.findByTestId('door-declined');
     expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ask a question' })).not.toBeInTheDocument();
-    expect(act('Read it in full')).toBeInTheDocument();
+    expect(act('Read document')).toBeInTheDocument();
   });
 
   // The refusal is said in the house's own words. The cause is a PostgREST or
@@ -280,7 +280,7 @@ describe('DoorActs', () => {
     renderActs({ projectId: null, studioProfileId: 'designer-nora' });
 
     expect(act('Ask a question')).toBeInTheDocument();
-    expect(act('Read it in full')).toBeInTheDocument();
+    expect(act('Read document')).toBeInTheDocument();
     expect(act('Request a change')).toBeInTheDocument();
     expect(act('Decline')).toBeInTheDocument();
   });
@@ -344,7 +344,7 @@ describe('DoorActs', () => {
     // An unresolved kind is not a legacy row: declining it here would take the
     // legacy rail and skip the route that resolves the kind fail-closed.
     expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Read it in full' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Read document' })).not.toBeInTheDocument();
     expect(act('Ask a question')).toBeInTheDocument();
     expect(act('Request a change')).toBeInTheDocument();
   });
@@ -352,7 +352,7 @@ describe('DoorActs', () => {
   it('takes no answer on a paper whose date has passed, but still reads it', () => {
     renderActs({ validUntil: '2020-01-01T00:00:00.000Z' });
 
-    expect(act('Read it in full')).toBeInTheDocument();
+    expect(act('Read document')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ask a question' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Request a change' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
@@ -450,7 +450,7 @@ describe('DoorActs', () => {
     expect(document.getElementById(panelId as string)).toContainElement(
       screen.getByTestId('door-decline-panel'),
     );
-    expect(act('Read it in full')).not.toHaveAttribute('aria-controls');
+    expect(act('Read document')).not.toHaveAttribute('aria-controls');
     expect(act('Decline document')).toHaveAttribute('data-action-variant', 'danger');
   });
 

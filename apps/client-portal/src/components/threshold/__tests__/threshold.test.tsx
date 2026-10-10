@@ -769,7 +769,7 @@ describe('Threshold — which house', () => {
     renderThreshold();
 
     expect(screen.getByTestId('road-orders-error')).toBeInTheDocument();
-    expect(screen.queryByText('Nothing on the road.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No orders in progress.')).not.toBeInTheDocument();
   });
 
   it('says nothing at all while the queries are in flight', () => {
@@ -1328,10 +1328,10 @@ describe('Threshold — the acts the house owes', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /what changed since yesterday/i }));
     expect(
-      screen.getByRole('button', { name: /show the whole house/i }),
+      screen.getByRole('button', { name: /show all project updates/i }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /show the whole house/i }));
+    fireEvent.click(screen.getByRole('button', { name: /show all project updates/i }));
     expect(
       screen.getByRole('button', { name: /what changed since yesterday/i }),
     ).toBeInTheDocument();
@@ -1700,7 +1700,7 @@ describe('Threshold — never reverse', () => {
     renderThreshold();
 
     expect(screen.getByTestId('papers-unread')).toHaveTextContent(
-      'Your papers could not be drawn just now. Nothing on them has changed.',
+      'Your documents could not load just now. Nothing on them has changed.',
     );
     expect(
       screen.getByRole('button', { name: 'Try again' }),
@@ -2390,7 +2390,7 @@ describe("Threshold — the studio's own letters", () => {
 
     expect(screen.getByTestId('doorplate-line')).toHaveTextContent('Quist Interiors');
 
-    fireEvent.click(screen.getByRole('button', { name: /open the letterbox/i }));
+    fireEvent.click(screen.getByRole('button', { name: /open invoice details/i }));
     fireEvent.click(screen.getByRole('radio', { name: /check/i }));
 
     expect(
@@ -2421,7 +2421,7 @@ describe("Threshold — the studio's own letters", () => {
     renderThreshold();
 
     expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
-      'owed across two open invoices, one from the studio',
+      'unpaid across two open invoices, one from the studio',
     );
   });
 
@@ -2431,7 +2431,7 @@ describe("Threshold — the studio's own letters", () => {
     renderThreshold(MILESTONES, [{ id: 'proj-ash', name: 'The Ash cottage' }]);
 
     const sentence = screen.getByTestId('house-ledger-reconcile');
-    expect(sentence).toHaveTextContent('owed on');
+    expect(sentence).toHaveTextContent('unpaid on');
     expect(sentence).not.toHaveTextContent('studio');
   });
 
@@ -3022,7 +3022,7 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
     renderDoor();
 
     expect(screen.getByTestId('papers-unread')).toHaveTextContent(
-      'Your papers could not be drawn just now. Nothing on them has changed.',
+      'Your documents could not load just now. Nothing on them has changed.',
     );
     expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
     expect(screen.queryByText('Nothing is waiting for you.')).not.toBeInTheDocument();
@@ -3238,10 +3238,10 @@ describe('Threshold — the landmark ledger and the story pole’s sections', ()
 
     expect(landmarks(container)).toEqual(
       expect.arrayContaining([
-        ['Where we are', '#doorstep'],
+        ['Project status', '#doorstep'],
         ['What you owe', '#letterbox'],
         ['What needs you', '#wall'],
-        ['The papers', '#mat-papers'],
+        ['Documents', '#mat-papers'],
       ]),
     );
     expect(

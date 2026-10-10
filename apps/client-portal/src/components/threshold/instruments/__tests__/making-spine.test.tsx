@@ -207,7 +207,7 @@ describe('MakingSpine — the marker', () => {
     render(<MakingSpine milestones={VALE_PHASES} today={TODAY} />);
 
     const marker = screen.getByTestId('spine-marker');
-    expect(marker).toHaveTextContent('You are here');
+    expect(marker).toHaveTextContent('Current project stage');
     expect(marker).toHaveTextContent('Procurement — the open chapter, July through September.');
     expect(marker).toHaveTextContent('5 August');
     expect(ink(marker)).toBe('var(--phase-procurement)');
@@ -239,7 +239,7 @@ describe('MakingSpine — the marker', () => {
     );
 
     const marker = screen.getByTestId('spine-marker');
-    expect(marker).toHaveTextContent('You are here');
+    expect(marker).toHaveTextContent('Current project stage');
     expect(marker).not.toHaveTextContent('Discovery');
     expect(marker).not.toHaveTextContent('open chapter');
   });
@@ -264,7 +264,7 @@ describe('MakingSpine — the marker', () => {
     render(<MakingSpine milestones={[]} />);
 
     const marker = screen.getByTestId('spine-marker');
-    expect(marker).toHaveTextContent('You are here');
+    expect(marker).toHaveTextContent('Current project stage');
     expect(marker).not.toHaveTextContent('open chapter');
     // Not Discovery blue — normalizePhaseSlug is never called on nothing.
     expect(ink(marker)).toBe('var(--border-default)');

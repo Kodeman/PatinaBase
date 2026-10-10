@@ -59,7 +59,7 @@ export function LandmarkLedger({
       ? [
           {
             key: 'what_you_owe',
-            label: 'Unpaid invoices',
+            label: 'What you owe',
             anchor: 'letterbox',
             neverDim: true as const,
           },

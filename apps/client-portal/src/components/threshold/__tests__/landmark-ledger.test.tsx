@@ -25,11 +25,11 @@ describe('LandmarkLedger — five names, each a jump to the place it names', () 
     render(<LandmarkLedger {...ledger()} />);
 
     expect(struck()).toEqual([
-      ['Where we are', '#doorstep'],
+      ['Project status', '#doorstep'],
       ['What changed', '#changed'],
       ['What you owe', '#letterbox'],
       ['What needs you', '#wall'],
-      ['The papers', '#mat-papers'],
+      ['Documents', '#mat-papers'],
     ]);
   });
 
@@ -51,8 +51,8 @@ describe('LandmarkLedger — five names, each a jump to the place it names', () 
     );
 
     expect(struck()).toEqual([
-      ['Where we are', '#doorstep'],
-      ['The papers', '#mat-papers'],
+      ['Project status', '#doorstep'],
+      ['Documents', '#mat-papers'],
     ]);
     expect(screen.queryByText('What changed')).not.toBeInTheDocument();
     expect(screen.queryByText('What you owe')).not.toBeInTheDocument();
@@ -66,7 +66,7 @@ describe('LandmarkLedger — five names, each a jump to the place it names', () 
     render(<LandmarkLedger {...ledger()} />);
 
     expect(screen.getByText('What you owe').closest('a')).toHaveAttribute('data-never-dim');
-    expect(screen.getByText('Where we are').closest('a')).not.toHaveAttribute('data-never-dim');
+    expect(screen.getByText('Project status').closest('a')).not.toHaveAttribute('data-never-dim');
   });
 
   it('sends "What needs you" to whichever ask actually drew', () => {
