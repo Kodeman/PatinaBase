@@ -8,6 +8,7 @@
     "proposed": "Open Work / Open Camera",
     "meaning": "Two realms, not a renamed route or analytics event",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -25,6 +26,7 @@
     "proposed": "Today",
     "meaning": "Personal daily field work, not a studio-wide overview",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -41,9 +43,10 @@
     "proposed": "Projects · Current projects",
     "meaning": "Project browsing tile and subtitle; preserve destination",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "planned"
+    "status": "implemented"
   },
   {
     "id": "FD-004",
@@ -54,6 +57,7 @@
     "proposed": "Messages · Conversations",
     "meaning": "Received conversations, not an outbound capture queue",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -67,10 +71,11 @@
     "proposed": "Log time · Log an hour",
     "meaning": "This tile opens an hour-entry sheet, not studio timesheets",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "exception",
-    "exception": "browseAct derives analytics section from the rendered title. Recommend an explicit stable existing event value before relabeling; do not change taxonomy as a side effect."
+    "status": "implemented",
+    "exception": "Resolved: rendered tile now says Log time while work.open_browse retains section=hours."
   },
   {
     "id": "FD-006",
@@ -81,6 +86,7 @@
     "proposed": "Site scan / Capture a room",
     "meaning": "LiDAR entry is a scan, not Photos & notes; F2 owns destination wording and requests F1 handoff here",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -94,6 +100,7 @@
     "proposed": "Some work couldn’t load / Retry <source>",
     "meaning": "Partial feed failure must not become an all-clear",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -107,6 +114,7 @@
     "proposed": "Projects couldn’t load / Leads couldn’t load / Decisions couldn’t load / Messages couldn’t load / Receiving couldn’t load",
     "meaning": "Per-source failure remains visible and retryable",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -120,6 +128,7 @@
     "proposed": "Start a visit / Resume / End visit",
     "meaning": "Visit actions and offline line remain daily context",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -133,6 +142,7 @@
     "proposed": "Projects / No projects yet",
     "meaning": "Project list, including empty and retry states",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -149,6 +159,7 @@
     "proposed": "Everyone on this job / FF&E / Rooms",
     "meaning": "Project record, purchasing selections, and rooms are distinct",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -165,6 +176,7 @@
     "proposed": "Couldn’t load this / Retry",
     "meaning": "Project card error state",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -178,6 +190,7 @@
     "proposed": "Leads / No open leads.",
     "meaning": "Inquiry list is not a capture queue",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -194,6 +207,7 @@
     "proposed": "The ask / Status",
     "meaning": "Read inquiry and status without changing its stored value",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -210,6 +224,7 @@
     "proposed": "New lead",
     "meaning": "Field lead status display; do not infer the designer creation-action rename changes a stored status",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -223,6 +238,7 @@
     "proposed": "Decisions / Nothing waiting on clients.",
     "meaning": "Read-only client choices, empty and load-error states",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -239,6 +255,7 @@
     "proposed": "Client chose this / Not yet viewed by client",
     "meaning": "A choice is read-only; do not imply Field can approve it",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -255,6 +272,7 @@
     "proposed": "Messages / No conversations yet.",
     "meaning": "Keep the Messages heading and conversation empty state; type/file identifier is protected",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -271,6 +289,7 @@
     "proposed": "Conversation / Couldn’t send. Try again.",
     "meaning": "Sending failure differs from no messages",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -287,6 +306,7 @@
     "proposed": "Direct message / Message removed",
     "meaning": "Fallbacks visible in conversation; do not edit transport",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -300,6 +320,7 @@
     "proposed": "Receiving / Nothing arriving right now.",
     "meaning": "Physical arrivals, not issuing a purchase order",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -316,6 +337,7 @@
     "proposed": "Inspection / Outcome / Photo uploading / Photo upload failed",
     "meaning": "Inspection evidence, upload status, and recorded outcome stay distinct",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -333,6 +355,7 @@
     "proposed": "\"Refused\" can't be recorded from the field app yet — choose Damaged or Partial and note the refusal in the description.",
     "meaning": "Do not promise an unsupported refused outcome",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -346,9 +369,10 @@
     "proposed": "Project directory",
     "meaning": "Project-scoped people and contact paths, not a shooting schedule",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "planned",
+    "status": "implemented",
     "screens": [
       "screen.PR1.roster"
     ]
@@ -362,6 +386,7 @@
     "proposed": "Couldn’t reach the studio / Try again",
     "meaning": "Roster network failure must not imply no contacts",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -375,6 +400,7 @@
     "proposed": "Person / Contact rule / Authority on this job",
     "meaning": "Contact, consent and job authority are not interchangeable",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -391,6 +417,7 @@
     "proposed": "Site access / Will send when you have signal.",
     "meaning": "Site instructions and queued notification, not confirmed delivery",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -407,9 +434,10 @@
     "proposed": "Met on site / Add them and create a link",
     "meaning": "Creates a roster contact and shareable link, not consent",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "planned"
+    "status": "implemented"
   },
   {
     "id": "FD-029",
@@ -420,6 +448,7 @@
     "proposed": "Someone on this job",
     "meaning": "Fallback name without changing wire keys",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -433,6 +462,7 @@
     "proposed": "Write <contact> / Call <contact>",
     "meaning": "Contact channel actions preserve destination",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -446,6 +476,7 @@
     "proposed": "Site request / Open Site Binder / Request unavailable",
     "meaning": "SR01–SR20: composer, assignee, site proof, review, binder, guest return, offline and errors",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -481,6 +512,7 @@
     "proposed": "Consent required before link dispatch / Request created · awaiting SMS consent",
     "meaning": "An unsent request must not claim delivery or consent",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -494,6 +526,7 @@
     "proposed": "No deliveries are queued on this phone. / Waiting to retry automatically.",
     "meaning": "Local queue, retry, terminal failure and server receipt remain distinct",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -507,6 +540,7 @@
     "proposed": "Redo instructions for measurements / Redo instructions for photos / <label>, preview unavailable",
     "meaning": "Screen-reader instructions and missing-media states on site proof",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -520,6 +554,7 @@
     "proposed": "Log an hour / It’s kept on this phone and sent when there’s signal.",
     "meaning": "Non-visit hour, local retention and later send—not a server receipt",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -536,6 +571,7 @@
     "proposed": "Captures still on this device / Sign out anyway",
     "meaning": "Outstanding uploads remain local after sign-out; warning cannot promise arrival",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -552,6 +588,7 @@
     "proposed": "Default save / Sync on Wi-Fi / Sync immediately",
     "meaning": "Preferences, not transfer completion or permission grant",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -568,9 +605,10 @@
     "proposed": "Resource library / Search your resource library",
     "meaning": "Searchable captured pieces and saved resource records",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "planned",
+    "status": "implemented",
     "screens": [
       "screen.U2.library-search"
     ]
@@ -584,6 +622,7 @@
     "proposed": "Piece / Add what matters / Save",
     "meaning": "Captured piece and local edit, not a site scan",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -600,6 +639,7 @@
     "proposed": "Where does this belong? / FF&E schedule",
     "meaning": "Assign project, room and furnishing schedule without creating a confirmed upload",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -616,6 +656,7 @@
     "proposed": "New project / Create & assign",
     "meaning": "Create and assign is distinct from opening an existing project",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -632,9 +673,10 @@
     "proposed": "Resource library — ready to use / Hold it — finish later",
     "meaning": "Choose reusable library vs locally held item; not proof of server confirmation",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "planned",
+    "status": "implemented",
     "screens": [
       "screen.S3.destination"
     ]
@@ -645,16 +687,17 @@
     "surface": "Route/S4SavedTerminalScreen",
     "source": "apps/mobile/Capture/Capture/Features/Route/S4SavedTerminalScreen.swift#S4SavedTerminalScreen.transferLabel",
     "current": "Uploading / Awaiting confirmation / Retry needed / Destination unconfirmed / Queued to sync",
-    "proposed": "Uploading / Awaiting confirmation / Retry needed / Destination unconfirmed / Queued to sync",
-    "meaning": "Five different transfer phases; inspect local default separately before promising queue status",
+    "proposed": "Saved on this device / Queued for upload / Uploading / Awaiting confirmation / Retry needed / Transfer rejected / Destination unconfirmed",
+    "meaning": "Distinct local, queued, active, awaiting receipt, failed, rejected, and complete-without-destination phases; no raw phase changes",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "exception",
+    "status": "implemented",
     "screens": [
       "screen.S4.saved"
     ],
-    "exception": "Default label covers local and queued states. Recommend separate local-saved and queued-to-upload presentation after checking CaptureTransferState phase; never call local save confirmed."
+    "exception": "Resolved: local, queued, uploading, awaiting confirmation, retryable failure, rejected, and destination-unconfirmed complete now have distinct display copy; raw phases unchanged."
   },
   {
     "id": "FD-044",
@@ -665,9 +708,10 @@
     "proposed": "Kept to your resource library / Saved on this device",
     "meaning": "Confirmed destination vs local save; raw CaptureDestination unchanged",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
-    "status": "planned"
+    "status": "implemented"
   },
   {
     "id": "FD-045",
@@ -678,6 +722,7 @@
     "proposed": "Held for you / Held on this device / Awaiting confirmation",
     "meaning": "Held-capture terminal is not Messages and not necessarily synced",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -694,6 +739,7 @@
     "proposed": "This piece is no longer here. / It may have already been routed.",
     "meaning": "Missing or previously routed item is not an empty library",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -707,6 +753,7 @@
     "proposed": "Where are you today? / No workspace yet",
     "meaning": "Visit scope and local project-room availability",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -723,9 +770,10 @@
     "proposed": "Placed · not yet confirmed",
     "meaning": "Placement may be locally recorded before the server receipt; do not imply transfer is in progress",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
-    "status": "planned",
+    "status": "implemented",
     "screens": [
       "screen.V1.session-tray"
     ]
@@ -739,6 +787,7 @@
     "proposed": "Swipe to sort / Some captures still need routing.",
     "meaning": "Sorting vs routing; captures remain in the session",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -755,6 +804,7 @@
     "proposed": "Untitled capture / Saved / Save changes",
     "meaning": "Saved edits must not be described as server-confirmed",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -771,6 +821,7 @@
     "proposed": "Visit review / Nothing captured on this visit.",
     "meaning": "Visit-close review and empty state, not a project-wide summary",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged",
@@ -787,6 +838,7 @@
     "proposed": "Patina companion / Review next steps",
     "meaning": "Suggestion is not an automated action or proof of completion",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -800,6 +852,7 @@
     "proposed": "Everything’s confirmed / Sending your work / Confirming your work / A transfer needs review",
     "meaning": "Confirmed, uploading, awaiting receipt, retryable and rejected scan states stay distinct",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged",
@@ -817,6 +870,7 @@
     "proposed": "Next steps",
     "meaning": "Default companion label",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -830,6 +884,7 @@
     "proposed": "Waiting for confirmation / Unread message / Arriving today",
     "meaning": "Attention cards distinguish receipt, conversations, arrivals",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -843,6 +898,7 @@
     "proposed": "This visit / No visit open / Start a visit",
     "meaning": "Daily visit strip stays distinct from studio overview",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -856,6 +912,7 @@
     "proposed": "This visit",
     "meaning": "Scope label, not persisted session key",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -869,6 +926,7 @@
     "proposed": "Start visit / Change",
     "meaning": "Visit entry action",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -882,6 +940,7 @@
     "proposed": "You filed <count> pieces to <project> from right here",
     "meaning": "Location-based suggestion wording is not an asserted assignment",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -895,6 +954,7 @@
     "proposed": "Key held by <name> / Consent by text",
     "meaning": "Key custody and contact consent, not inferred authority",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -908,6 +968,7 @@
     "proposed": "Wide context / Straight on / Left return / Close detail",
     "meaning": "Four guided proof angles; preserve kit codes and requirements",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -921,6 +982,7 @@
     "proposed": "Activity not set",
     "meaning": "Unspecified activity is not billable status",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -934,6 +996,7 @@
     "proposed": "Drive / Site visit / Sourcing / Client / Design / Admin",
     "meaning": "Activity and seat labels; no duration algorithm edits",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -947,6 +1010,7 @@
     "proposed": "More ways to file this / Add / Not now",
     "meaning": "Secondary capture filing actions",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "Capture UI walkthrough at narrow width, Dynamic Type, and VoiceOver; compare named state and destination",
     "status": "unchanged"
@@ -960,6 +1024,7 @@
     "proposed": "Source: <label>",
     "meaning": "Display provenance without changing underlying source taxonomy",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -973,6 +1038,7 @@
     "proposed": "Make it a note in the Document / Make it a task / Make it a punch item",
     "meaning": "General action menu; preserve action identifiers and filed state",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -986,6 +1052,7 @@
     "proposed": "Next steps",
     "meaning": "Companion surface title",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -999,6 +1066,7 @@
     "proposed": "Next steps / <progress> complete",
     "meaning": "Status is a hint, not an automatic completion claim",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"
@@ -1012,6 +1080,7 @@
     "proposed": "<person> will get a text. / Filed. <person> was texted.",
     "meaning": "Queued vs confirmed external notification; no send-path changes",
     "owner": "F1",
+    "evidence": "Direction C F1 source/copy reconciliation; same-candidate Capture gate and simulator evidence in SQ-766 verification record.",
     "dependencies": [],
     "verify": "CaptureKit focused test and screen walkthrough; check the state condition",
     "status": "unchanged"

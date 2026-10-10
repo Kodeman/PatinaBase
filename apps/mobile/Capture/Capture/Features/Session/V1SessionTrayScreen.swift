@@ -169,13 +169,13 @@ struct V1SessionTrayScreen: View {
 
     /// §13.5: a suggestion accepted on a capture that already committed needs
     /// the server to learn the project on the next drain. `placedJustNow`
-    /// marks that gap so it reads as "placed · syncing" instead of looking
-    /// stuck — and clears itself the moment `reload()` finds the record
+    /// marks that gap without claiming an upload is already active, and clears
+    /// itself the moment `reload()` finds the record complete (Task 27's
     /// complete (Task 27's placement call site is where it's raised).
     @ViewBuilder
     private func placedSyncingLine(_ piece: Piece) -> some View {
         if placedJustNow.contains(piece.id), piece.transferState.phase != .complete {
-            Text("placed · syncing")
+            Text("Placed · not yet confirmed")
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.inkSoft)
                 .padding(.bottom, 8)

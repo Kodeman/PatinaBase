@@ -31,8 +31,22 @@ final class PeopleRoomUITests: XCTestCase {
                           .waitForExistence(timeout: 5),
                       "PR1 did not come up")
         XCTAssertTrue(app.staticTexts["Okonkwo residence"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Project directory"].exists)
         XCTAssertTrue(app.staticTexts["On the job · this week"].exists)
         XCTAssertTrue(app.staticTexts["Luis Ochoa"].exists)
+    }
+
+    func testFieldLinkSheetUsesPlainActionAndProjectDirectory() {
+        let app = launch(screen: "PR1.roster")
+        let opener = app.descendants(matching: .any)["people.mintLink"]
+        XCTAssertTrue(opener.waitForExistence(timeout: 20))
+        opener.tap()
+        let submit = app.descendants(matching: .any)["people.mint.submit"]
+        XCTAssertTrue(submit.waitForExistence(timeout: 10))
+        XCTAssertEqual(submit.label, "Add them and create a link")
+        XCTAssertTrue(app.staticTexts
+            .containing(NSPredicate(format: "label CONTAINS 'project directory'"))
+            .firstMatch.exists)
     }
 
     func testTheSiteAccessCardOpensFromTheRosterAndHoldsNoCode() {

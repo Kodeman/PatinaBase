@@ -64,7 +64,7 @@ struct MintFieldLinkSheet: View {
                 field("TRADE", text: $trade, identifier: "people.mint.trade")
                 field("MOBILE", text: $phone, identifier: "people.mint.phone")
                 kindPicker
-                Text("This puts them on the roster and opens the Call Sheet and the "
+                Text("This puts them on the roster and opens the project directory and the "
                      + "site access card for the job's window. It never opens billing "
                      + "or the agreement.")
                     .font(CaptureType.footnote)
@@ -77,7 +77,7 @@ struct MintFieldLinkSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Button { Task { await mint() } } label: {
-                    Text("Add them and mint a link")
+                    Text("Add them and create a link")
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                         .contentShape(Rectangle())
                 }

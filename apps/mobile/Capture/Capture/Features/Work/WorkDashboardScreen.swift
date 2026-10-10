@@ -369,7 +369,7 @@ struct WorkDashboardScreen: View {
             ) {
                 browseTile(
                     title: "Projects",
-                    subtitle: "Current spaces",
+                    subtitle: "Current projects",
                     symbol: "square.stack.3d.up",
                     accessory: browseAccessory(model.projects),
                     route: .projectList
@@ -413,9 +413,10 @@ struct WorkDashboardScreen: View {
                 // rather than pushing a screen: logging a drive interrupts
                 // whatever she was doing and has to hand her back to it.
                 browseAct(
-                    title: "Hours",
+                    title: "Log time",
                     subtitle: "Log an hour",
-                    symbol: "clock"
+                    symbol: "clock",
+                    analyticsSection: "hours"
                 ) {
                     coordinator.present(.logTime)
                 }
@@ -488,14 +489,14 @@ struct WorkDashboardScreen: View {
     /// A tile that takes an act rather than a destination. `browseTile` keys its
     /// analytics off a route; this one has none to key off.
     private func browseAct(title: String, subtitle: String, symbol: String,
-                           action: @escaping () -> Void) -> some View {
+                           analyticsSection: String, action: @escaping () -> Void) -> some View {
         WorkBrowseTile(
             title: title,
             subtitle: subtitle,
             symbol: symbol,
             accessory: .none
         ) {
-            analytics.event("work.open_browse", ["section": title.lowercased()])
+            analytics.event("work.open_browse", ["section": analyticsSection])
             action()
         }
     }

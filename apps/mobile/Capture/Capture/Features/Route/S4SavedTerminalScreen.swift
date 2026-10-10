@@ -117,7 +117,7 @@ struct S4SavedTerminalScreen: View {
 
     private var title: String {
         switch confirmedDestination {
-        case .library: return "Kept to your library"
+        case .library: return "Kept to your resource library"
         case .inbox: return "Held for you"
         case .undecided, nil: return "Saved on this device"
         }
@@ -138,10 +138,15 @@ struct S4SavedTerminalScreen: View {
         case .inbox:
             return "It's held safely for review, before it joins the library."
         case .undecided, nil:
-            if transfer.phase == .complete {
-                return "Patina has the receipt, but the destination still needs confirmation."
+            switch transfer.phase {
+            case .local: return "Saved on this device. Not yet queued for upload."
+            case .queued: return "Saved on this device. Queued for upload."
+            case .uploading: return "Sending this capture."
+            case .awaitingConfirmation: return "Upload finished. Waiting for confirmation."
+            case .retryableFailure: return "The transfer failed. Retry to send this capture."
+            case .rejected: return "The transfer was rejected. Review this capture before trying again."
+            case .complete: return "Patina has the receipt, but the destination still needs confirmation."
             }
-            return "Nothing is lost. Patina will finish sending this capture and confirm when it lands."
         }
     }
 
@@ -155,18 +160,20 @@ struct S4SavedTerminalScreen: View {
 
     private var transferLabel: String {
         switch transfer.phase {
+        case .local: return "Saved on this device"
+        case .queued: return "Queued for upload"
         case .uploading: return "Uploading"
         case .awaitingConfirmation: return "Awaiting confirmation"
         case .retryableFailure: return "Retry needed"
+        case .rejected: return "Transfer rejected"
         case .complete: return "Destination unconfirmed"
-        default: return "Queued to sync"
         }
     }
 
     private var landed: String? {
         var parts: [String] = []
         switch confirmedDestination {
-        case .library: parts.append("Library")
+        case .library: parts.append("Resource library")
         case .inbox: parts.append("Held")
         case .undecided, nil: break
         }

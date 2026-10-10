@@ -141,7 +141,7 @@ struct ProjectRosterScreen: View {
             CaptureColor.paper.ignoresSafeArea()
             content
         }
-        .navigationTitle("Call sheet")
+        .navigationTitle("Project directory")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.appear() }
         .sheet(isPresented: $isMinting) {

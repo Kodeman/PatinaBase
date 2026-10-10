@@ -48,7 +48,7 @@ struct LibrarySearchScreen: View {
             content
         }
         .background(CaptureColor.paper)
-        .navigationTitle("Library")
+        .navigationTitle("Resource library")
         .navigationBarTitleDisplayMode(.large)
         .task {
             analytics.screen(CaptureScreenID.u2LibrarySearch.rawValue)
@@ -156,7 +156,7 @@ struct LibrarySearchScreen: View {
                 Image(systemName: queryText.isEmpty ? "books.vertical" : "magnifyingglass")
                     .font(.largeTitle)
                     .foregroundStyle(CaptureColor.line2)
-                Text(queryText.isEmpty ? "Search your library" : "No matches — capture it fresh")
+                Text(queryText.isEmpty ? "Search your resource library" : "No matches — capture it fresh")
                     .font(CaptureType.body)
                     .foregroundStyle(CaptureColor.inkSoft)
             }
