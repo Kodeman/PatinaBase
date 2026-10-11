@@ -25,6 +25,8 @@ let mockPendingRead:
   | 'line'
   | null = null;
 let mockMemberLineFlags = true;
+let mockViewerStudioId: string | null = null;
+let mockLeadsRead = true;
 
 jest.mock('@patina/supabase', () => ({
   useProfile: () => ({ data: { display_name: 'Leah Warner' } }),
@@ -37,8 +39,9 @@ jest.mock('@patina/supabase', () => ({
       : mockPendingRead === 'members'
         ? { data: undefined, isLoading: true, isPending: true }
         : { data: mockMembers(), isLoading: false, isPending: false },
-  useProjectLeads: () => ({ data: new Map() }),
+  useProjectLeads: () => ({ data: new Map(), isSuccess: mockLeadsRead }),
   useNeedStates: () => ({ data: new Map() }),
+  useNeedStateProjectIds: () => ({ data: new Set<string>() }),
   useSetNeedState: () => ({ mutate: jest.fn(), isPending: false }),
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
@@ -87,7 +90,7 @@ jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
 jest.mock('@/hooks/use-viewer-studio', () => ({
   useViewerStudio: () => ({
     organizations: [],
-    studio: null,
+    studio: mockViewerStudioId ? { id: mockViewerStudioId } : null,
     candidates: [],
     selectStudio: jest.fn(),
     isOwnerOrAdmin: false,
@@ -186,6 +189,8 @@ beforeEach(() => {
   resetDeskVisit();
   mockDeskRead = settledDeskRead();
   mockPendingRead = null;
+  mockViewerStudioId = null;
+  mockLeadsRead = true;
   mockMemberLineFlags = true;
   mockOrgs.mockReturnValue([studio()]);
   // Own title set; nobody else on the crew (one open step).
@@ -223,6 +228,20 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
     render(<DeskPage />);
     expect(screen.queryByText('No current action alerts.')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('day-sheet')).getByText('Not checked: purchase orders.')).toBeInTheDocument();
+  });
+
+  it('never says nothing needs her while her studio’s project leads are unread (SQ-751 F5)', () => {
+    mockViewerStudioId = 'studio-1';
+    mockLeadsRead = false;
+    render(<DeskPage />);
+    expect(screen.queryByText('No current action alerts.')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('day-sheet')).getByText('Not checked: project leads.')).toBeInTheDocument();
+  });
+
+  it('says nothing needs her once her studio’s project leads answer (SQ-751 F5)', () => {
+    mockViewerStudioId = 'studio-1';
+    render(<DeskPage />);
+    expect(screen.getAllByText('No current action alerts.')).toHaveLength(1);
   });
 
   it('opens on Mine and holds the scope per person', () => {

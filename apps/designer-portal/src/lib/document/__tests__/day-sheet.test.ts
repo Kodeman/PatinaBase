@@ -274,3 +274,47 @@ describe('one head need per job — roster line, band and sheet agree', () => {
     expect(sheetHead?.key).toBe(rosterKey);
   });
 });
+
+describe('deriveDaySheet — an aggregate acts one record at a time (SQ-751 F7)', () => {
+  const twoPos = (): DeskNeed => {
+    const base = entry(1, {
+      kind: 'po_unacknowledged' as NeedKind,
+      key: 'po_unacknowledged:po-1',
+      recordId: 'po-1',
+      text: '2 POs sent — no acknowledgment',
+      at: '2026-10-01T09:00:00.000Z',
+      records: [
+        { recordId: 'po-1', at: '2026-10-01T09:00:00.000Z', dueOn: '2026-10-01T09:00:00.000Z' },
+        { recordId: 'po-2', at: '2026-10-03T09:00:00.000Z', dueOn: '2026-10-03T09:00:00.000Z' },
+      ],
+    });
+    return { ...base, key: base.need.key };
+  };
+
+  it('chasing the first PO leaves the line standing for the second, under its own key', () => {
+    const result = sheet({
+      needs: [twoPos()],
+      states: new Map([
+        ['po_unacknowledged:po-1', state('po_unacknowledged:po-1', { actedAt: '2026-10-09T08:00:00.000Z' })],
+      ]),
+    });
+    expect(result.lines).toHaveLength(1);
+    expect(result.lines[0]).toMatchObject({
+      key: 'po_unacknowledged:po-2',
+      need: { key: 'po_unacknowledged:po-2', recordId: 'po-2', at: '2026-10-03T09:00:00.000Z' },
+    });
+    expect(result.waitingOn).toEqual([]);
+  });
+
+  it('waits once every record is acted on', () => {
+    const result = sheet({
+      needs: [twoPos()],
+      states: new Map([
+        ['po_unacknowledged:po-1', state('po_unacknowledged:po-1', { actedAt: '2026-10-09T08:00:00.000Z' })],
+        ['po_unacknowledged:po-2', state('po_unacknowledged:po-2', { actedAt: '2026-10-09T09:00:00.000Z' })],
+      ]),
+    });
+    expect(result.lines).toEqual([]);
+    expect(result.waitingOn.map((w) => w.need.key)).toEqual(['po_unacknowledged:po-1']);
+  });
+});

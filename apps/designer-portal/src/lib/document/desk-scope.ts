@@ -80,6 +80,22 @@ export function custodyFor(
   return `With ${firstName(lead.leadName) ?? 'the project lead'}`;
 }
 
+/**
+ * SQ-751 F9 — a hand-off is read only when she read it at or after the
+ * assignment that stands now. The key stays `handoff:<projectId>`, so a read
+ * from an earlier hand-off of the same job never silences a later one.
+ */
+export function handoffReadFor(
+  state: Pick<NeedState, 'actedAt'> | undefined,
+  assignedAt: string | null | undefined,
+): boolean {
+  if (!state?.actedAt) return false;
+  const read = Date.parse(state.actedAt);
+  const assigned = assignedAt ? Date.parse(assignedAt) : Number.NaN;
+  if (!Number.isFinite(assigned)) return true;
+  return Number.isFinite(read) && read >= assigned;
+}
+
 /** Derive unread hand-offs for projects now led by this viewer. */
 export function deriveHandoffNeeds(
   live: readonly DocumentStateRow[],
@@ -102,10 +118,11 @@ export function deriveHandoffNeeds(
     const row = rowsByProject.get(projectId);
     if (!row) continue;
     const key = `handoff:${projectId}`;
-    if (states.get(key)?.actedAt) continue;
+    if (handoffReadFor(states.get(key), lead.assignedAt)) continue;
     const assigned = new Date(lead.assignedAt);
     if (!Number.isFinite(assigned.getTime())) continue;
-    const previous = lead.previousLeadName.trim();
+    // Walk W-D7 — "Leah handed you …", the full name only when it has no first.
+    const previous = firstName(lead.previousLeadName) ?? lead.previousLeadName.trim();
     const date = new Intl.DateTimeFormat('en-US', {
       weekday: 'long', month: 'long', day: 'numeric',
     }).format(assigned);

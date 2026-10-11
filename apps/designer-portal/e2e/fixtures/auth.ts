@@ -37,10 +37,11 @@ async function setupAuthentication(page: Page): Promise<void> {
 
       // Open the password panel. The golden-hour auth restyle (2026-08-06)
       // made sign-in email-first and renamed this disclosure from "Sign in
-      // with email" to "Use email and password instead" (PortalAuth.tsx); both
-      // spellings are matched so the fixture spans the change.
+      // with email" to "Use email and password instead" (PortalAuth.tsx); the
+      // Direction C labeling made it "Use a password instead" (walk W-D10).
+      // Every spelling is matched so the fixture spans the changes.
       const disclosure = page.getByRole('button', {
-        name: /sign in with email|use email and password instead/i,
+        name: /sign in with email|use email and password instead|use a password instead/i,
       });
       await disclosure.first().waitFor({ state: 'visible', timeout: 15_000 });
       await disclosure.first().click();

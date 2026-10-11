@@ -31,6 +31,7 @@ import {
 } from './desk-schedule';
 // dates.ts imports nothing either, so the one date idiom costs this module no
 // dependency (PP-2 / R140).
+import { calendarDaysPast } from '@patina/supabase';
 import { dayMonth } from './dates';
 import { needKeyOf, type NeedKey } from './need-key';
 // Type-only, so it is erased at compile time and buys no runtime dependency:
@@ -604,6 +605,17 @@ export interface DeskLiveSignals {
   pulseCount?: number | null;
 }
 
+/** One record an aggregate need speaks for (SQ-751 F7). */
+export interface NeedRecord {
+  recordId: string;
+  at?: string;
+  dueOn?: string | null;
+}
+
+/** The records an aggregate speaks for, only when there is more than one. */
+const recordsOf = (records: readonly NeedRecord[]): { records?: readonly NeedRecord[] } =>
+  records.length > 1 ? { records } : {};
+
 export interface NeedLine {
   /** N1 — the need's stable identity: `${kind}:${recordId}`, or
    *  `${kind}:project:${projectId}` for an aggregate (need-key.ts). Stamped by
@@ -618,6 +630,10 @@ export interface NeedLine {
    *  not a deadline: it orders an undated need by age (W3-R1's standingSince)
    *  and is what a time word reads. */
   at?: string;
+  /** SQ-751 F7 — every record an aggregate speaks for ("2 POs sent"), oldest
+   *  first; `recordId` is the first. The Day Sheet acts on the first of these
+   *  not yet acted on, each by its own key. Absent with one record. */
+  records?: readonly NeedRecord[];
   kind: NeedKind;
   text: string;
   /** Explicit, non-PII next-act copy printed on the whole-card folio footer.
@@ -1113,25 +1129,28 @@ const isLiveJob = (row: DocumentStateRow) => row.engagement_kind === 'project';
 const byOutcomeAt = (a: DeskProposalOutcomeSignal, b: DeskProposalOutcomeSignal) =>
   (a.at ?? '').localeCompare(b.at ?? '');
 
-// Signed on a live job: the act is ordering what it carried. It clears with the
-// first of those lines on a purchase order; a proposal with no pieces is a
+// Signed on a live job: the act is ordering what it carried. It stands while
+// any of those lines is not yet on a purchase order — "Order the remaining
+// pieces" once some are (SQ-751 F12 ruling); a proposal with no pieces is a
 // receipt.
 const needLiveProposalSigned: NeedRule = ({ row, proposalOutcomes }) => {
   if (!isLiveJob(row)) return null;
   const open = (proposalOutcomes ?? [])
-    .filter((p) => p.status === 'accepted' && p.lineCount > 0 && p.orderedCount === 0)
+    .filter((p) => p.status === 'accepted' && p.lineCount > 0 && p.orderedCount < p.lineCount)
     .sort(byOutcomeAt);
   const first = open[0];
   if (!first) return null;
+  const pieces = first.orderedCount > 0 ? 'the remaining pieces' : 'the pieces';
   return {
     kind: 'proposal_signed',
     recordId: first.proposalId,
     ...(first.at ? { at: first.at } : {}),
+    ...recordsOf(open.map((p) => ({ recordId: p.proposalId, ...(p.at ? { at: p.at } : {}) }))),
     text:
       open.length > 1
-        ? `${open.length} proposals signed — order the pieces`
-        : `${first.title} signed — order the pieces`,
-    actionLabel: 'Order the pieces',
+        ? `${open.length} proposals signed — order ${pieces}`
+        : `${first.title} signed — order ${pieces}`,
+    actionLabel: `Order ${pieces}`,
     namedAct: true,
     stamp: { label: 'SIGNED', ...STAMP.mocha },
     urgent: false,
@@ -1153,6 +1172,7 @@ const needLiveProposalDeclined: NeedRule = ({ row, proposalOutcomes }) => {
     kind: 'proposal_declined',
     recordId: first.proposalId,
     ...(first.at ? { at: first.at } : {}),
+    ...recordsOf(open.map((p) => ({ recordId: p.proposalId, ...(p.at ? { at: p.at } : {}) }))),
     text:
       open.length > 1
         ? `${open.length} proposals declined — follow up`
@@ -1493,12 +1513,9 @@ const needPaymentDue: NeedRule = ({ row, payments }) => {
   };
 };
 
-/** Whole local calendar days from `now` to a bare `YYYY-MM-DD` date. */
-const calendarDaysTo = (ymd: string, now: Date) => {
-  const due = new Date(`${ymd.slice(0, 10)}T00:00:00`);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.round((due.getTime() - today.getTime()) / DAY_MS);
-};
+/** Whole local calendar days from `now` to a date: the shared day-count
+ *  helper, read forward (SQ-751 F10). */
+const calendarDaysTo = (ymd: string, now: Date) => -calendarDaysPast(ymd, now);
 
 // C-20 (D1-08): the vendor's claim window, one need the day before it closes.
 // It reads the claim_window_closing notice (the cron decides the day) and
@@ -1904,6 +1921,9 @@ const needPoUnacknowledged: NeedRule = ({ row, now, purchaseOrders }) => {
     return {
       kind: 'po_unacknowledged',
       recordId: first.purchaseOrderId,
+      ...recordsOf(
+        open.map((po) => ({ recordId: po.purchaseOrderId, at: po.sentAt, dueOn: po.sentAt })),
+      ),
       text:
         open.length === 1
           ? `${first.poLabel ?? 'A purchase order'} sent — no acknowledgment`

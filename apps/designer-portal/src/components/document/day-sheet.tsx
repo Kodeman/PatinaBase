@@ -44,22 +44,29 @@ function backOn(day: string): string {
   return date ? `Back ${WEEKDAY_FORMAT.format(date)} ${dayMonth(date)}` : 'Back soon';
 }
 
+/** Walk W-D8 — the line joins the job and its fact with one em dash, so the
+ *  fact's own dashes read as commas rather than a chain of dashes. */
+const asOneClause = (fact: string) => fact.replace(/\s+—\s+/g, ', ');
+
 function SheetLine({
   entry,
   index,
   oneVoice,
   now,
+  canHoldState,
 }: {
   entry: DeskNeed;
   index: number;
   oneVoice: boolean;
   now: Date;
+  /** The need's job can carry a need state (a project with a studio). */
+  canHoldState: boolean;
 }) {
   const acts = useNeedActSheet();
   const setNeedState = useSetNeedState();
   const { need } = entry;
   const handoff = need.kind === 'handoff';
-  const sentence = deskNeedText(need, oneVoice);
+  const sentence = handoff ? deskNeedText(need, oneVoice) : asOneClause(deskNeedText(need, oneVoice));
   const when = timeWord(need.at, now);
   // A hand-off names its own act: one-voice's kind name ("Read the note")
   // would promise a note the hire's invite never carried.
@@ -68,6 +75,12 @@ function SheetLine({
   const top = index === 0;
 
   const act = (event: MouseEvent<HTMLAnchorElement>) => {
+    // Walk W-D6 — opening the hand-off is reading it: the same `acted` mark
+    // the Document's MARK READ writes.
+    if (handoff) {
+      setNeedState.mutate({ needKey: entry.key, projectId: entry.projectId, action: 'acted' });
+      return;
+    }
     if (acts.open(entry)) {
       event.preventDefault();
       return;
@@ -112,7 +125,10 @@ function SheetLine({
         >
           {label}
         </DocumentAction>
-        {!handoff && (
+        {/* SQ-751 F6 / walk W-D3 — no "Not today" where the server could not
+            keep it: an inquiry or proposal with no project, a project with no
+            studio. */}
+        {!handoff && canHoldState && (
           <DocumentAction
             actionKey="day-sheet-not-today"
             variant="tertiary"
@@ -131,6 +147,11 @@ function SheetLine({
           </DocumentAction>
         )}
       </div>
+      {!handoff && setNeedState.isError && (
+        <p role="alert" data-day-sheet-failed className="doc-type-body text-[var(--text-primary)]">
+          Not today did not save. Try again.
+        </p>
+      )}
     </li>
   );
 }
@@ -141,12 +162,16 @@ export function DaySheet({
   onScope,
   oneVoice = false,
   now,
+  stateProjects = null,
 }: {
   sheet: DaySheetModel;
   scope: DeskScope;
   onScope: (scope: DeskScope) => void;
   oneVoice?: boolean;
   now: Date;
+  /** The projects a need state can be filed on (`useNeedStateProjectIds`);
+   *  null until read, and then no line offers "Not today". */
+  stateProjects?: ReadonlySet<string> | null;
 }) {
   const quiet = sheet.lines.length === 0;
   const notChecked =
@@ -185,7 +210,14 @@ export function DaySheet({
         <DocumentActionGroup surfaceKey="desk" regionKey="day-sheet" aria-label="Day Sheet actions">
           <ol className="day-sheet-lines">
             {sheet.lines.map((entry, index) => (
-              <SheetLine key={entry.key} entry={entry} index={index} oneVoice={oneVoice} now={now} />
+              <SheetLine
+                key={entry.key}
+                entry={entry}
+                index={index}
+                oneVoice={oneVoice}
+                now={now}
+                canHoldState={Boolean(stateProjects?.has(entry.projectId))}
+              />
             ))}
           </ol>
         </DocumentActionGroup>

@@ -175,6 +175,7 @@ import {
   type PoSilenceNeed,
 } from '@/lib/document/po-silences';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
+import { handoffReadFor } from '@/lib/document/desk-scope';
 import { useNeedActSheet } from '@/components/document/acts/need-act-sheet';
 import { silencePoId } from '@/components/document/acts/act-sheet-kind';
 import { familyLabel } from '@/lib/document/family-label';
@@ -1034,8 +1035,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const proposalId = row?.proposal_id ?? '';
   const handoffLead = projectLeads?.get(projectId);
   const handoffNeedKey = projectId ? `handoff:${projectId}` : null;
+  // SQ-751 F9 — read only against the hand-off that stands now.
   const handoffRead = handoffNeedKey
-    ? Boolean(needStates?.get(handoffNeedKey)?.actedAt)
+    ? handoffReadFor(needStates?.get(handoffNeedKey), handoffLead?.assignedAt)
     : false;
   const handoffNote = myMembership?.handoff_note?.trim();
   const showHandoffNote = Boolean(

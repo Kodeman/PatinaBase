@@ -17,6 +17,7 @@ import {
   useStudioUnbilledTime,
   useProjectLeads,
   useNeedStates,
+  useNeedStateProjectIds,
 } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useViewerStudio } from '@/hooks/use-viewer-studio';
@@ -99,8 +100,10 @@ export default function DeskPage() {
     isLoading: studioMembersLoading,
     isPending: studioMembersPending,
   } = useOrganizationMembers(studio?.id ?? '');
-  const { data: projectLeads } = useProjectLeads(studio?.id ?? '');
+  const studioId = studio?.id ?? '';
+  const { data: projectLeads, isSuccess: projectLeadsRead } = useProjectLeads(studioId);
   const { data: needStates } = useNeedStates(studio?.id ?? '');
+  const { data: needStateProjects } = useNeedStateProjectIds();
   // N4 — Mine by default, held per person in this browser.
   const [deskScope, setDeskScopeState] = useState<DeskScope>('mine');
   const scopeStoreKey = user?.id ? `patina.desk.scope.${user.id}` : null;
@@ -243,11 +246,16 @@ export default function DeskPage() {
       needStates,
       Boolean(myHandoffNote),
     );
+    // SQ-751 F8 — the person scope runs before the studio errands collapse to
+    // one line, so her own Pulse survives in Mine.
     const needs = deriveDeskNeedList(
       {
         folders: data?.folders ?? [],
         chips: data?.chips ?? [],
         live: data?.live ?? [],
+        scope: deskScope,
+        leads: projectLeads ?? new Map(),
+        meUserId: user?.id,
       },
       at,
       handoffs,
@@ -259,10 +267,15 @@ export default function DeskPage() {
       meUserId: user?.id,
       scope: deskScope,
       designers: deskDesignersOf(data?.live ?? []),
-      unreadFeeds: data?.unreadFeeds ?? [],
+      // SQ-751 F5 — who leads each job is a feed: until a studio's leads
+      // answer, Mine is not known to be empty. A seat with no studio has none.
+      unreadFeeds: [
+        ...(data?.unreadFeeds ?? []),
+        ...(studioId && !projectLeadsRead ? ['project leads'] : []),
+      ],
       now: at,
     });
-  }, [data, projectLeads, user?.id, needStates, myHandoffNote, deskScope]);
+  }, [data, projectLeads, projectLeadsRead, studioId, user?.id, needStates, myHandoffNote, deskScope]);
 
   // The Desk arbiter (return-teaching §2): these four lines keep their own
   // conditions, and at most one of them, or the teaching note, renders per
@@ -408,6 +421,7 @@ export default function DeskPage() {
           onScope={setDeskScope}
           oneVoice={oneVoice}
           now={now}
+          stateProjects={needStateProjects ?? null}
         />
         <DeskRoster
           roster={roster}

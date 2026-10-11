@@ -11,8 +11,9 @@ import { deriveDaySheet, nextWorkingDay } from '@/lib/document/day-sheet';
 import { DaySheet, NOTHING_NEEDS_YOU_TONIGHT, THE_REST } from './day-sheet';
 
 const mockMutate = jest.fn();
+let mockSaveFailed = false;
 jest.mock('@patina/supabase', () => ({
-  useSetNeedState: () => ({ mutate: mockMutate, isPending: false }),
+  useSetNeedState: () => ({ mutate: mockMutate, isPending: false, isError: mockSaveFailed }),
 }));
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
@@ -42,7 +43,12 @@ function entry(i: number, over: Partial<NeedLine> = {}): DeskNeed {
   };
 }
 
-function renderSheet(needs: DeskNeed[], over: Partial<Parameters<typeof deriveDaySheet>[0]> = {}) {
+function renderSheet(
+  needs: DeskNeed[],
+  over: Partial<Parameters<typeof deriveDaySheet>[0]> = {},
+  // Every job here can hold a need state unless a test says otherwise.
+  stateProjects: ReadonlySet<string> | null = new Set(needs.map((n) => n.projectId)),
+) {
   const sheet = deriveDaySheet({
     needs,
     states: new Map(),
@@ -54,14 +60,19 @@ function renderSheet(needs: DeskNeed[], over: Partial<Parameters<typeof deriveDa
     ...over,
   });
   const onScope = jest.fn();
-  const utils = render(<DaySheet sheet={sheet} scope="studio" onScope={onScope} now={NOW} />);
+  const utils = render(
+    <DaySheet sheet={sheet} scope="studio" onScope={onScope} now={NOW} stateProjects={stateProjects} />,
+  );
   return { ...utils, onScope };
 }
 
 const lines = (container: HTMLElement) =>
   container.querySelectorAll<HTMLElement>('[data-day-sheet-line]');
 
-beforeEach(() => mockMutate.mockReset());
+beforeEach(() => {
+  mockMutate.mockReset();
+  mockSaveFailed = false;
+});
 
 describe('DaySheet', () => {
   it('renders five lines of eight, and says the rest are on their jobs — never a count', () => {
@@ -110,6 +121,61 @@ describe('DaySheet', () => {
       until: nextWorkingDay(NOW),
     });
     expect(nextWorkingDay(NOW)).toBe('2026-10-12');
+  });
+
+  it('offers no “Not today” where the job cannot hold a need state (SQ-751 F6, walk W-D3)', () => {
+    const { container } = renderSheet([entry(1), entry(2)], {}, new Set(['p1']));
+    const [held, unheld] = lines(container);
+    expect(within(held).getByRole('button', { name: 'Not today — Job 1' })).toBeInTheDocument();
+    expect(within(unheld).queryByRole('button', { name: /Not today/ })).not.toBeInTheDocument();
+    // Until the projects are read, no line offers it.
+    const unread = renderSheet([entry(3)], {}, null);
+    expect(within(unread.container).queryByRole('button', { name: /Not today/ })).not.toBeInTheDocument();
+  });
+
+  it('says so when “Not today” did not save (SQ-751 F6)', () => {
+    mockSaveFailed = true;
+    renderSheet([entry(1)]);
+    expect(screen.getByRole('alert')).toHaveTextContent('Not today did not save. Try again.');
+  });
+
+  it('marks a hand-off read when she opens it (walk W-D6)', async () => {
+    const handoff: DeskNeed = {
+      key: 'handoff:p9',
+      projectId: 'p9',
+      projectName: 'Ridge House',
+      need: {
+        key: 'handoff:p9',
+        kind: 'handoff',
+        text: 'Leah handed you Ridge House on Thursday, October 8',
+        actionLabel: 'Open project file',
+        stamp: { label: 'HAND-OFF', color: 'var(--color-dusty-blue)' },
+        urgent: false,
+        owner: 'designer',
+        deepLink: '/doc/p9',
+      } as NeedLine,
+    };
+    renderSheet([handoff]);
+    expect(screen.queryByRole('button', { name: /Not today/ })).not.toBeInTheDocument();
+    await act(async () => {
+      await userEvent
+        .setup()
+        .click(screen.getByRole('link', { name: 'Open project file — Ridge House' }));
+    });
+    expect(mockMutate).toHaveBeenCalledWith({
+      needKey: 'handoff:p9',
+      projectId: 'p9',
+      action: 'acted',
+    });
+  });
+
+  it('joins the job and its fact with one dash; the fact’s own dashes read as commas (walk W-D8)', () => {
+    const { container } = renderSheet([
+      entry(1, { text: '2 POs sent — no acknowledgment' }),
+    ]);
+    expect(lines(container)[0].querySelector('p')).toHaveTextContent(
+      /^Job 1 — 2 POs sent, no acknowledgment$/,
+    );
   });
 
   it('says nothing needs her once when empty, then what waits on others with dates', () => {

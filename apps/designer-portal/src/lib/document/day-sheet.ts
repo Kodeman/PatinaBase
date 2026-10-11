@@ -89,6 +89,33 @@ function waitingWho(entry: DeskNeed, state: NeedState): string {
   return entry.projectName;
 }
 
+/**
+ * SQ-751 F7 — an aggregate ("2 POs sent") is acted on one record at a time,
+ * each under its own key. The line stands for the first record not yet acted
+ * on, re-keyed to it, so chasing the first PO never quiets the second; once
+ * every record is acted on, it reads as the first.
+ */
+function nextUnacted(entry: DeskNeed, states: ReadonlyMap<string, NeedState>): DeskNeed {
+  const records = entry.need.records;
+  if (!records || !states.get(entry.key)?.actedAt) return entry;
+  const next = records.find(
+    (record) => !states.get(`${entry.need.kind}:${record.recordId}`)?.actedAt,
+  );
+  if (!next) return entry;
+  const key = `${entry.need.kind}:${next.recordId}`;
+  return {
+    ...entry,
+    key,
+    need: {
+      ...entry.need,
+      key,
+      recordId: next.recordId,
+      at: next.at,
+      ...(next.dueOn !== undefined ? { dueOn: next.dueOn } : {}),
+    },
+  };
+}
+
 export function deriveDaySheet(input: DaySheetInput): DaySheet {
   const today = localDay(input.now);
   const scoped = scopeDeskNeeds(
@@ -102,7 +129,8 @@ export function deriveDaySheet(input: DaySheetInput): DaySheet {
   const waitingOn: DaySheetWaiting[] = [];
   const setAside: DaySheetSetAside[] = [];
 
-  for (const entry of scoped) {
+  for (const aggregate of scoped) {
+    const entry = nextUnacted(aggregate, input.states);
     const state = input.states.get(entry.key);
     if (state?.actedAt) {
       waitingOn.push({ need: entry, who: waitingWho(entry, state), since: state.actedAt });

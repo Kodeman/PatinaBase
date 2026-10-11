@@ -6,6 +6,7 @@
  * Desk card and `document_state` keep the aggregate.
  */
 import type { NeedLine } from './desk-derivation';
+import { needKeyOf } from './need-key';
 
 /** The PO a line rides, as `useProjectFFEItems` embeds it. */
 export interface PoSilencePo {
@@ -72,6 +73,11 @@ export function expandPoSilences({
     .sort((a, b) => String(a.po.sent_at).localeCompare(String(b.po.sent_at)))
     .map(({ po, lineId }) => ({
       ...need,
+      // SQ-751 F11 — each row is its own PO: its own record and key, so the
+      // second row opens and chases the second PO.
+      key: needKeyOf({ ...need, kind: 'po_unacknowledged', recordId: po.id! }, ''),
+      recordId: po.id!,
+      records: undefined,
       kind: 'po_unacknowledged',
       text: `${po.po_number ?? po.vendor_po_number} sent — no acknowledgment`,
       stamp: { ...need.stamp, label: 'NO ACK' },

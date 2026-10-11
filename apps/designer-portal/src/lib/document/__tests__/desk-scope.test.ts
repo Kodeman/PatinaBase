@@ -1,4 +1,10 @@
-import { custodyFor, deriveHandoffNeeds, scopeDeskNeeds, type DeskLeads } from '../desk-scope';
+import {
+  custodyFor,
+  deriveHandoffNeeds,
+  handoffReadFor,
+  scopeDeskNeeds,
+  type DeskLeads,
+} from '../desk-scope';
 import type { NeedState } from '@patina/supabase';
 import type { DeskNeed } from '../desk-need-list';
 import type { DocumentStateRow, NeedLine } from '../desk-derivation';
@@ -94,7 +100,8 @@ describe('Desk scope and custody', () => {
     const unread = deriveHandoffNeeds(live, handoffLeads, 'u-me');
 
     expect(unread).toHaveLength(1);
-    expect(unread[0].need.text).toMatch(/Nina Park handed you Oak House/);
+    // Walk W-D7 — the previous lead by first name.
+    expect(unread[0].need.text).toMatch(/^Nina handed you Oak House on .* · Read Nina's note$/);
     expect(unread[0].need.actionLabel).toBe('Read the note');
     const noNote = deriveHandoffNeeds(live, handoffLeads, 'u-me', new Map(), false);
     expect(noNote[0].need.text).not.toMatch(/note/);
@@ -105,5 +112,40 @@ describe('Desk scope and custody', () => {
       'u-me',
       new Map([['handoff:project-1', { actedAt: '2026-10-10T12:00:00.000Z' } as NeedState]]),
     )).toEqual([]);
+  });
+
+  it('never lets a read of an earlier hand-off silence a later one of the same job (SQ-751 F9)', () => {
+    const leads: DeskLeads = new Map([
+      ['project-1', {
+        leadUserId: 'u-me',
+        leadName: 'Maya Lee',
+        previousLeadUserId: 'u-old',
+        previousLeadName: 'Nina Park',
+        assignedAt: '2026-10-10T12:00:00.000Z',
+      }],
+    ]);
+    const live = [{ project_id: 'project-1', title: 'Oak House' } as DocumentStateRow];
+    const readOct1 = new Map([
+      ['handoff:project-1', { actedAt: '2026-10-01T12:00:00.000Z' } as NeedState],
+    ]);
+    expect(deriveHandoffNeeds(live, leads, 'u-me', readOct1)).toHaveLength(1);
+    expect(handoffReadFor({ actedAt: '2026-10-01T12:00:00.000Z' }, '2026-10-10T12:00:00.000Z')).toBe(false);
+    expect(handoffReadFor({ actedAt: '2026-10-10T12:00:00.000Z' }, '2026-10-10T12:00:00.000Z')).toBe(true);
+    expect(handoffReadFor(undefined, '2026-10-10T12:00:00.000Z')).toBe(false);
+  });
+
+  it('names a previous lead with no first name in full (walk W-D7)', () => {
+    const leads: DeskLeads = new Map([
+      ['project-1', {
+        leadUserId: 'u-me',
+        leadName: 'Maya Lee',
+        previousLeadUserId: 'u-old',
+        previousLeadName: 'Nina',
+        assignedAt: '2026-10-10T12:00:00.000Z',
+      }],
+    ]);
+    const live = [{ project_id: 'project-1', title: 'Oak House' } as DocumentStateRow];
+    expect(deriveHandoffNeeds(live, leads, 'u-me', new Map(), false)[0].need.text)
+      .toMatch(/^Nina handed you Oak House on /);
   });
 });

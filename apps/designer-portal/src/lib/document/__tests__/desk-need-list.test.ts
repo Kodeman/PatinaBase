@@ -163,4 +163,31 @@ describe('deriveDeskNeedList', () => {
     ]);
     expect(list[0].projectId).toBe('p-holloway');
   });
+
+  it('Mine keeps her own job’s Pulse when another job’s shares its key (SQ-751 F8)', () => {
+    const theirs = mkRow({
+      engagement_id: 'e-b',
+      project_id: 'p-b',
+      title: 'Bayview',
+      unsent_pulse_count: 1,
+      pulse_week_of: '2026-09-14',
+    });
+    const mine = mkRow({
+      engagement_id: 'e-a',
+      project_id: 'p-a',
+      title: 'Alder House',
+      unsent_pulse_count: 1,
+      pulse_week_of: '2026-09-14',
+    });
+    const live = [theirs, mine];
+    const { folders } = partitionDesk(live, NOW);
+    const leads = new Map([
+      ['p-a', { leadUserId: 'me', leadName: 'Leah', previousLeadUserId: null, previousLeadName: null, assignedAt: daysAgo(30) }],
+      ['p-b', { leadUserId: 'u-b', leadName: 'Sam', previousLeadUserId: null, previousLeadName: null, assignedAt: daysAgo(30) }],
+    ]);
+    const studio = deriveDeskNeedList({ folders, chips: [], live, scope: 'studio', leads, meUserId: 'me' }, NOW);
+    expect(studio.map((n) => n.projectId)).toEqual(['p-b']);
+    const mineList = deriveDeskNeedList({ folders, chips: [], live, scope: 'mine', leads, meUserId: 'me' }, NOW);
+    expect(mineList.map((n) => [n.projectId, n.key])).toEqual([['p-a', 'pulse_due:week:2026-09-14']]);
+  });
 });

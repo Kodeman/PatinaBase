@@ -2275,9 +2275,38 @@ describe('N3 — live-job events become needs, above the seals', () => {
     expect(needs.map((n) => n.kind)).toEqual(['proposal_signed', 'po_unsent', 'pulse_due']);
   });
 
-  it('a signed proposal whose pieces are ordered, or that carried none, is a receipt', () => {
-    expect(needsWith(live, { proposalOutcomes: [outcome({ orderedCount: 1 })] })).toEqual([]);
+  it('a signed proposal whose pieces are all ordered, or that carried none, is a receipt', () => {
+    expect(needsWith(live, { proposalOutcomes: [outcome({ orderedCount: 3 })] })).toEqual([]);
     expect(needsWith(live, { proposalOutcomes: [outcome({ lineCount: 0 })] })).toEqual([]);
+  });
+
+  it('a signed proposal with some pieces ordered asks for the rest (SQ-751 F12 ruling)', () => {
+    const [need] = needsWith(live, { proposalOutcomes: [outcome({ orderedCount: 1 })] });
+    expect(need).toMatchObject({
+      kind: 'proposal_signed',
+      key: 'proposal_signed:prop-1',
+      text: 'Living room signed — order the remaining pieces',
+      actionLabel: 'Order the remaining pieces',
+    });
+  });
+
+  it('an aggregate names every record it speaks for, oldest first (SQ-751 F7)', () => {
+    const [need] = needsWith(live, {
+      proposalOutcomes: [
+        outcome({ proposalId: 'prop-2', title: 'Bedroom', at: daysAgo(1) }),
+        outcome({ proposalId: 'prop-1', at: daysAgo(3) }),
+      ],
+    });
+    expect(need).toMatchObject({
+      kind: 'proposal_signed',
+      recordId: 'prop-1',
+      records: [
+        { recordId: 'prop-1', at: daysAgo(3) },
+        { recordId: 'prop-2', at: daysAgo(1) },
+      ],
+    });
+    const [single] = needsWith(live, { proposalOutcomes: [outcome()] });
+    expect(single.records).toBeUndefined();
   });
 
   it('a proposal declined on a live job asks to follow up, in the client’s words', () => {

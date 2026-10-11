@@ -27,6 +27,7 @@ jest.mock('@patina/supabase', () => ({
   useOrganizationMembers: () => ({ data: undefined }),
   useProjectLeads: () => ({ data: [] }),
   useNeedStates: () => ({ data: [] }),
+  useNeedStateProjectIds: () => ({ data: new Set<string>() }),
   useProjects: () => ({ data: undefined }),
   useStudioContacts: () => ({ data: undefined }),
   useBoardsReactionRollup: () => ({

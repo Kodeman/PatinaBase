@@ -14,6 +14,7 @@ import type { NeedKind, NeedLine } from './desk-derivation';
 import type { DeskRosterInput } from './desk-roster-derivation';
 import { rankStanding } from './lens-band-derivation';
 import { compareForNext } from './need-class';
+import { deskDesignersOf, scopeDeskNeeds } from './desk-scope';
 import type { NeedKey } from './need-key';
 import { needTieBreakRank } from './need-tie-break';
 
@@ -86,7 +87,10 @@ export function rankDeskNeeds(needs: readonly DeskNeed[], now: Date): DeskNeed[]
 }
 
 /** Every need of every live job — the whole chain each folder carries, setup
- *  and act-less needs included — ranked by `rankDeskNeeds`. */
+ *  and act-less needs included — ranked by `rankDeskNeeds`. With `scope:
+ *  'mine'` only her jobs' needs are kept, BEFORE one line per key is chosen:
+ *  a studio errand (the week's Pulse) shared by several jobs keeps one of
+ *  hers, not whichever job came first (SQ-751 F8). */
 export function deriveDeskNeedList(
   input: DeskRosterInput,
   now: Date,
@@ -104,5 +108,10 @@ export function deriveDeskNeedList(
       needs.push({ key: need.key, projectId, projectName: row.title, need });
     }
   }
-  return rankDeskNeeds([...needs, ...handoffs], now);
+  const all = [...needs, ...handoffs];
+  const scoped =
+    input.scope === 'mine'
+      ? scopeDeskNeeds(all, input.leads ?? new Map(), input.meUserId, 'mine', deskDesignersOf(input.live))
+      : all;
+  return rankDeskNeeds(scoped, now);
 }

@@ -66,6 +66,19 @@ describe('expandPoSilences (F9-1)', () => {
     }
   });
 
+  it('each row is its own PO: its own record and key, so the second row chases the second PO (SQ-751 F11)', () => {
+    const lines = [line('line-pendant', po031), line('line-vase', po032)];
+    const rows = expandPoSilences({
+      need: { ...AGGREGATE, key: 'po_unacknowledged:po-031', recordId: 'po-031' },
+      lines,
+      unackedPoCount: 2,
+    });
+    expect(rows.map((row) => [row.recordId, row.key])).toEqual([
+      ['po-031', 'po_unacknowledged:po-031'],
+      ['po-032', 'po_unacknowledged:po-032'],
+    ]);
+  });
+
   it('the studio’s number comes first where both are set', () => {
     const [first] = expandPoSilences({
       need: AGGREGATE,
