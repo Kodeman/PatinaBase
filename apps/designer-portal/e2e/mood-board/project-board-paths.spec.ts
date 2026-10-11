@@ -304,16 +304,16 @@ test.describe("Project-owned board save path", () => {
     );
     await openProjectBoard(page);
 
-    await page.getByRole("button", { name: "Share", exact: true }).click();
+    await page.getByRole("button", { name: "Share design board", exact: true }).click();
     await expect(
       page.getByRole("heading", {
         name: "Share Project leg acceptance board",
       }),
     ).toBeVisible({ timeout: 15_000 });
 
-    await page.getByLabel(/^Label/).fill("Client preview");
+    await page.getByLabel(/^Review link name/).fill("Client preview");
     await page
-      .getByRole("button", { name: "Create and copy link" })
+      .getByRole("button", { name: "Create and copy share link" })
       .click();
 
     const linkField = page.getByLabel("Board share link");
@@ -385,7 +385,7 @@ test.describe("Project-owned board save path", () => {
     );
     await openProjectBoard(page);
 
-    await page.getByRole("button", { name: "Share", exact: true }).click();
+    await page.getByRole("button", { name: "Share design board", exact: true }).click();
     await expect(
       page.getByRole("heading", {
         name: "Share Project leg acceptance board",
@@ -465,7 +465,7 @@ test.describe("Project-owned board save path", () => {
     );
     await openProjectBoard(page);
 
-    await page.getByRole("button", { name: "Share", exact: true }).click();
+    await page.getByRole("button", { name: "Share design board", exact: true }).click();
     await expect(
       page.getByRole("heading", {
         name: "Share Project leg acceptance board",

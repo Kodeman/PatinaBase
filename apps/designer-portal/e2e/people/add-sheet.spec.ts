@@ -52,7 +52,7 @@ test.describe("the add sheet writes the studio’s book", () => {
       await page
         .getByLabel("How to reach them")
         .fill("Text only. The email on file bounces.");
-      await page.getByRole("button", { name: "Add to the roster" }).click();
+      await page.getByRole("button", { name: "Add to directory" }).click();
 
       // The seat, the card, the channel and the rule — one act, four rows.
       await expect
@@ -136,7 +136,7 @@ test.describe("the add sheet writes the studio’s book", () => {
 
       await page.getByLabel("Authority").fill("Signs money to $2,500");
 
-      await page.getByRole("button", { name: "Add to the roster" }).click();
+      await page.getByRole("button", { name: "Add to directory" }).click();
 
       await expect
         .poll(async () => (await seatByName(name))?.party_kind ?? null, {
@@ -165,7 +165,7 @@ test.describe("the add sheet writes the studio’s book", () => {
     await page.getByRole("button", { name: "a sub" }).click();
     await page.getByLabel("Project").selectOption({ index: 1 });
     await page.getByLabel("Full name").fill(uniqueName("No Trade"));
-    await page.getByRole("button", { name: "Add to the roster" }).click();
+    await page.getByRole("button", { name: "Add to directory" }).click();
     // Scoped to the SHEET. Next's own `__next-route-announcer__` is a
     // `<div role="alert">` living at the end of <body>, so an unscoped
     // `getByRole('alert')` resolves to two elements and dies on strict mode.

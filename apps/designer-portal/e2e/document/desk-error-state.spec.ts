@@ -66,10 +66,10 @@ test.describe('Desk — whole-desk error state', () => {
     // No half-desk: none of the healthy/quiet-desk surfaces coexist with the
     // error banner — this is exactly the bug the whole-desk error state fixes.
     await expect(page.getByText('No current action alerts.')).toHaveCount(0);
-    // B2 — `Needs your hand` is `Every job · n live · m overdue` now: one
+    // B2 — `Needs your hand` is `Studio workload · n live · m overdue` now: one
     // roster of every live job, grouped by stage.
     await expect(page.getByTestId('desk-roster')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: /Every job/ })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: /Studio workload/ })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'In motion' })).toHaveCount(0);
     await expect(page.getByText('This is your Desk.')).toHaveCount(0);
 
@@ -80,7 +80,7 @@ test.describe('Desk — whole-desk error state', () => {
     await retry.click();
 
     await expect(errorState).toHaveCount(0, { timeout: 20_000 });
-    await expect(page.getByRole('heading', { name: /Every job/ })).toBeVisible({
+    await expect(page.getByRole('heading', { name: /Studio workload/ })).toBeVisible({
       timeout: 20_000,
     });
 
@@ -97,7 +97,7 @@ test.describe('Desk — whole-desk error state', () => {
       // Every load resolves to exactly one of: the roster's job lines, or the
       // empty-state line — never neither, never both, and never the error
       // surface (this loop runs against the real local stack, no interception).
-      const everyJob = page.getByRole('heading', { name: /Every job/ });
+      const everyJob = page.getByRole('heading', { name: /Studio workload/ });
       await expect(everyJob).toBeVisible({ timeout: 20_000 });
 
       const emptyLine = page.getByText('No current action alerts. The work is in motion.');

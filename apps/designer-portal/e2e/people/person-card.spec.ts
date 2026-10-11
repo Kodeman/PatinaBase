@@ -68,7 +68,7 @@ async function addSub(
   await page
     .getByLabel("Email")
     .fill(`${name.split(" ")[0].toLowerCase()}@twincitiesdrywall.com`);
-  await page.getByRole("button", { name: "Add to the roster" }).click();
+  await page.getByRole("button", { name: "Add to directory" }).click();
   await expect
     .poll(async () => (await cardByName(name))?.id ?? null, { timeout: 15_000 })
     .not.toBeNull();

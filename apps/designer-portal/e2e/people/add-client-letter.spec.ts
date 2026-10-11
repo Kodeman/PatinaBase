@@ -53,7 +53,7 @@ test('a letter goes to a new client, and only one', async ({ authenticatedPage: 
   await page.getByRole('button', { name: /Add contact/i }).first().click();
   await page.getByRole('button', { name: 'a client' }).click();
   await page.getByLabel('Full name (optional)').fill('Dave Okonkwo');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Email address').fill(email);
   await page.getByLabel('A line for Dave').fill('Dave — the drawings are in.');
   await page.getByRole('button', { name: 'ADD AND SEND THE LETTER' }).click();
 
@@ -130,7 +130,7 @@ test('the roster still works with no letter, and nothing is sent', async ({
   await page.goto('/people');
   await page.getByRole('button', { name: /Add contact/i }).first().click();
   await page.getByRole('button', { name: 'a client' }).click();
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Email address').fill(email);
   await page.getByLabel('Send them the letter').uncheck();
   await page.getByRole('button', { name: 'ADD TO YOUR PEOPLE' }).click();
 

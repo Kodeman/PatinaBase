@@ -54,15 +54,15 @@ test.describe("the Directory", () => {
   }) => {
     await page.goto("/people");
     await expect(
-      page.getByRole("group", { name: "Narrow by trade" }),
+      page.getByRole("group", { name: "Filter by trade" }),
     ).toHaveCount(0);
     await page.getByRole("button", { name: "Trades & contractors" }).click();
     await expect(
-      page.getByRole("group", { name: "Narrow by trade" }),
+      page.getByRole("group", { name: "Filter by trade" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Clients" }).click();
     await expect(
-      page.getByRole("group", { name: "Narrow by trade" }),
+      page.getByRole("group", { name: "Filter by trade" }),
     ).toHaveCount(0);
   });
 
