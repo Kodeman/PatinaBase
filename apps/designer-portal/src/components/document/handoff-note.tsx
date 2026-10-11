@@ -14,11 +14,14 @@ import { HANDOFF_NOTE_ANCHOR } from '@/lib/document/desk-scope';
 export function HandoffNote({
   read,
   pending = false,
+  failed = false,
   onMarkRead,
   children,
 }: {
   read: boolean;
   pending?: boolean;
+  /** SQ-777 F2 — the last Mark read failed; said here, never in a toast. */
+  failed?: boolean;
   onMarkRead: () => void;
   children: ReactNode;
 }) {
@@ -52,6 +55,11 @@ export function HandoffNote({
         >
           Mark read
         </button>
+      )}
+      {!read && failed && (
+        <p role="alert" className="mt-1 doc-type-body text-[var(--text-primary)]">
+          Couldn’t mark it read. Try again.
+        </p>
       )}
     </section>
   );

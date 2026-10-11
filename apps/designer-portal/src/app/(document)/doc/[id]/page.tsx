@@ -1009,7 +1009,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const { data: myStudioMembers } = useOrganizationMembers(myStudio?.id ?? '');
   const myMembership = myStudioMembers?.find((m) => m.user_id === user?.id);
   const { data: needStates } = useNeedStates(myStudio?.id ?? '');
-  const setNeedState = useSetNeedState();
+  // SQ-777 F2 — Mark read prints its own failure (HandoffNote), never a toast.
+  const setNeedState = useSetNeedState({ errorSurface: 'inline' });
   const markFirstDocumentOpened = useMarkFirstDocumentOpened();
   useEffect(() => {
     if (!myStudio || !myMembership) return;
@@ -1044,13 +1045,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     ? handoffReadFor(needStates?.get(handoffNeedKey), handoffLead?.assignedAt)
     : false;
   const handoffNote = handoffNoteFor(handoffLead, user?.id, jobSeat);
+  // SQ-777 F5 — the hand-off is who led it, never whether a name is on record.
   const showHandoffNote = Boolean(
     row?.engagement_kind === 'project' &&
       handoffLead?.leadUserId === user?.id &&
       handoffLead?.previousLeadUserId &&
-      handoffLead?.previousLeadName &&
       handoffLead?.assignedAt,
   );
+  const handedBy = handoffLead?.previousLeadName?.trim() || null;
 
   const { data: project, isLoading: projectIsLoading, isError: projectIsError } = useProjectV2(projectId) as {
     data: AnyRecord;
@@ -3528,6 +3530,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           <HandoffNote
             read={handoffRead}
             pending={setNeedState.isPending}
+            failed={setNeedState.isError}
             onMarkRead={() =>
               setNeedState.mutate({
                 needKey: handoffNeedKey,
@@ -3537,8 +3540,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             }
           >
             {handoffNote
-              ? `From ${handoffLead?.previousLeadName}: ${handoffNote}`
-              : `${handoffLead?.previousLeadName} handed you this job.`}
+              ? `From ${handedBy ?? 'the previous lead'}: ${handoffNote}`
+              : `${handedBy ?? 'The previous lead'} handed you this job.`}
           </HandoffNote>
         )}
         {row.engagement_kind === 'project' && row.project_id && <ClientNoteComposer projectId={row.project_id} clientFirstName={row.client_name?.split(' ')[0]} />}

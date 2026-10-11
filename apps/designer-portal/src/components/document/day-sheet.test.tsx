@@ -12,8 +12,12 @@ import { DaySheet, NOTHING_NEEDS_YOU_TONIGHT, THE_REST } from './day-sheet';
 
 const mockMutate = jest.fn();
 let mockSaveFailed = false;
+const mockSetNeedStateOptions: unknown[] = [];
 jest.mock('@patina/supabase', () => ({
-  useSetNeedState: () => ({ mutate: mockMutate, isPending: false, isError: mockSaveFailed }),
+  useSetNeedState: (options?: unknown) => {
+    mockSetNeedStateOptions.push(options);
+    return { mutate: mockMutate, isPending: false, isError: mockSaveFailed };
+  },
 }));
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -147,6 +151,13 @@ describe('DaySheet', () => {
     mockSaveFailed = true;
     renderSheet([entry(1)]);
     expect(screen.getByRole('alert')).toHaveTextContent('Not today did not save. Try again.');
+  });
+
+  it('opts every line’s mark into the inline error surface, never a toast (SQ-777 F2)', () => {
+    mockSetNeedStateOptions.length = 0;
+    renderSheet([entry(1), entry(2)]);
+    expect(mockSetNeedStateOptions.length).toBeGreaterThan(0);
+    expect(mockSetNeedStateOptions.every((o) => (o as { errorSurface?: string })?.errorSurface === 'inline')).toBe(true);
   });
 
   const handoff: DeskNeed = {

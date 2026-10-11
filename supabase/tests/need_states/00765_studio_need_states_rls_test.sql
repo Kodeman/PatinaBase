@@ -259,4 +259,71 @@ BEGIN
   PERFORM pg_temp.reset_role();
 END $$;
 
+-- ── SQ-777 F4: only a design studio is a shared studio ──────────────────────
+-- A manufacturer, a contractor and an admin team, each below every studio id.
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES
+  ('00000000-0700-4000-8000-000000000001', 'manufacturer', '00765 Maker', '00765-maker', 'active'),
+  ('00000000-0700-4000-8000-000000000002', 'contractor', '00765 Contractor', '00765-contractor', 'active'),
+  ('00000000-0700-4000-8000-000000000003', 'admin_team', '00765 Admin Team', '00765-admin-team', 'active');
+
+DO $$
+DECLARE
+  v_org uuid;
+  v_type text;
+  v_state text;
+  v_message text;
+  v_absent_state text;
+  v_absent_message text;
+BEGIN
+  -- The missing-record denial, to compare each refusal against.
+  PERFORM pg_temp.assume_user('cf100000-0000-4000-8000-000000000001');
+  BEGIN
+    PERFORM public.set_need_state('fixture:typed-absent', NULL, 'acted', p_engagement_id => 'ffffffff-ffff-4fff-8fff-ffffffffffff');
+  EXCEPTION WHEN OTHERS THEN v_absent_state := SQLSTATE; v_absent_message := SQLERRM;
+  END;
+  PERFORM pg_temp.reset_role();
+  ASSERT v_absent_state = '42501' AND v_absent_message = 'not permitted', 'baseline: the missing-record denial';
+
+  -- An overlap only through a non-studio organization is no shared studio.
+  FOR v_org, v_type IN
+    SELECT id, type::text FROM public.organizations
+    WHERE id IN ('00000000-0700-4000-8000-000000000001', '00000000-0700-4000-8000-000000000002', '00000000-0700-4000-8000-000000000003')
+    ORDER BY id
+  LOOP
+    INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+    VALUES
+      ('cf100000-0000-4000-8000-000000000001', v_org, 'member', 'active', now()),
+      ('a0000000-0000-0000-0000-000000000004', v_org, 'member', 'active', now());
+
+    PERFORM pg_temp.assume_user('cf100000-0000-4000-8000-000000000001');
+    v_state := NULL; v_message := NULL;
+    BEGIN
+      PERFORM public.set_need_state('fixture:typed-' || v_type, NULL, 'acted', p_engagement_id => 'b0000000-0000-0000-0000-000000000001');
+    EXCEPTION WHEN OTHERS THEN v_state := SQLSTATE; v_message := SQLERRM;
+    END;
+    PERFORM pg_temp.reset_role();
+    ASSERT v_state IS NOT DISTINCT FROM v_absent_state AND v_message IS NOT DISTINCT FROM v_absent_message,
+      format('a %s overlap is refused exactly as a missing record (got %s %s)', v_type, v_state, v_message);
+    ASSERT NOT EXISTS (SELECT 1 FROM public.studio_need_states WHERE need_key = 'fixture:typed-' || v_type),
+      format('a %s overlap writes no state', v_type);
+
+    DELETE FROM public.organization_members
+    WHERE organization_id = v_org
+      AND user_id IN ('cf100000-0000-4000-8000-000000000001', 'a0000000-0000-0000-0000-000000000004');
+  END LOOP;
+
+  -- A lower-id manufacturer overlap never outranks a design studio she shares.
+  INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+  VALUES
+    ('a0000000-0000-0000-0000-000000000003', '00000000-0700-4000-8000-000000000001', 'member', 'active', now()),
+    ('a0000000-0000-0000-0000-000000000004', '00000000-0700-4000-8000-000000000001', 'member', 'active', now());
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  PERFORM public.set_need_state('fixture:typed-studio', NULL, 'acted', p_engagement_id => 'b0000000-0000-0000-0000-000000000001');
+  ASSERT (SELECT organization_id FROM public.studio_need_states WHERE user_id = auth.uid() AND need_key = 'fixture:typed-studio')
+    = '00000000-0765-4000-8000-000000000001',
+    'a shared design studio is chosen over a lower-id manufacturer';
+  PERFORM pg_temp.reset_role();
+END $$;
+
 ROLLBACK;

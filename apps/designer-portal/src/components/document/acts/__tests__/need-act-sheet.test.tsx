@@ -128,7 +128,14 @@ jest.mock('@patina/supabase', () => ({
 
 import { NeedActSheetProvider, useNeedActSheet } from '../need-act-sheet';
 import { silencePoId } from '../act-sheet-kind';
-import { SAVE_FAILED, SEND_FAILED } from '../act-draft';
+import {
+  RELEASED_UNRECORDED,
+  SAVE_FAILED,
+  SAVED_UNRECORDED,
+  SEND_FAILED,
+  SEND_UNCONFIRMED,
+  SENT_UNRECORDED,
+} from '../act-draft';
 
 function deskNeed(kind: string, recordId: string | undefined, extra: Record<string, unknown> = {}): DeskNeed {
   const key = recordId ? `${kind}:${recordId}` : `${kind}:project:proj-1`;
@@ -200,7 +207,10 @@ beforeEach(() => {
   mockSendDraft.mockResolvedValue({ draftId: 'draft-1', messageId: 'm-1' });
   mockSendInvoice.mockResolvedValue({ ok: true });
   mockChase.mockResolvedValue('2026-10-10T12:00:00Z');
-  mockSendNote.mockResolvedValue(undefined);
+  // The note mutation runs the sheet's last check just before it writes.
+  mockSendNote.mockImplementation(async (note: { confirm?: () => Promise<void> }) => {
+    await note.confirm?.();
+  });
   mockRelease.mockResolvedValue({ id: 'po-1' });
   mockSetNeedState.mockResolvedValue(undefined);
 });
@@ -417,25 +427,60 @@ describe('Chase this PO', () => {
     expect(mockSendDraft).not.toHaveBeenCalled();
   });
 
-  it('a failed send says nothing went out, never the transport error (SQ-778 N1)', async () => {
+  it('a failure before the outward send says nothing went out, never the transport error (SQ-778 N1 · SQ-777 F1)', async () => {
     const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
-    mockSendDraft.mockRejectedValue(new Error('Edge Function returned a non-2xx status code'));
+    mockCompose.mockRejectedValue(new Error('Edge Function returned a non-2xx status code'));
     openSheet(PO_NEED);
     fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
     expect(await screen.findByText(SEND_FAILED)).toBeInTheDocument();
     expect(screen.queryByText(/non-2xx/)).toBeNull();
+    expect(mockSendDraft).not.toHaveBeenCalled();
+    expect(mockSetNeedState).not.toHaveBeenCalled();
+    // Nothing went, so the send is offered again.
+    expect(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' })).toBeInTheDocument();
+    quiet.mockRestore();
+  });
+
+  it('a failed outward send cannot be confirmed, and offers no second send (SQ-777 F1)', async () => {
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockSendDraft.mockRejectedValue(new Error('Edge Function returned a non-2xx status code'));
+    openSheet(PO_NEED);
+    fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
+    expect(await screen.findByText(SEND_UNCONFIRMED)).toHaveAttribute('role', 'alert');
+    expect(screen.queryByText(SEND_FAILED)).toBeNull();
+    expect(screen.queryByText(/non-2xx/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^(Send|Save|Mark)/ })).toBeNull();
+    expect(mockSendDraft).toHaveBeenCalledTimes(1);
     expect(mockSetNeedState).not.toHaveBeenCalled();
     quiet.mockRestore();
   });
 
-  it('a failed save for the lead says nothing was saved, never the transport error (SQ-778 N1)', async () => {
+  it('a failed draft insert says nothing was saved, never the transport error (SQ-778 N1 · SQ-777 F1)', async () => {
     const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockLeadUserId = 'lead-1';
-    mockUpdate.mockRejectedValue(new Error('Edge Function returned a non-2xx status code'));
+    mockCompose.mockRejectedValue(new Error('Edge Function returned a non-2xx status code'));
     openSheet(PO_NEED);
     fireEvent.click(screen.getByRole('button', { name: 'Save the draft for Leah' }));
     expect(await screen.findByText(SAVE_FAILED)).toBeInTheDocument();
     expect(screen.queryByText(/non-2xx/)).toBeNull();
+    expect(mockUpdate).not.toHaveBeenCalled();
+    quiet.mockRestore();
+  });
+
+  it('a draft that saved before a later step failed says so, and retries only that step (SQ-777 F1)', async () => {
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockLeadUserId = 'lead-1';
+    mockUpdate.mockRejectedValueOnce(new Error('Edge Function returned a non-2xx status code'));
+    openSheet(PO_NEED);
+    fireEvent.click(screen.getByRole('button', { name: 'Save the draft for Leah' }));
+    expect(await screen.findByText(SAVED_UNRECORDED)).toBeInTheDocument();
+    expect(screen.queryByText(SAVE_FAILED)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Save/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark it again' }));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText(SAVED_UNRECORDED)).toBeNull());
+    expect(mockCompose).toHaveBeenCalledTimes(1);
+    expect(mockSendDraft).not.toHaveBeenCalled();
     quiet.mockRestore();
   });
 
@@ -450,15 +495,28 @@ describe('Chase this PO', () => {
     );
   });
 
-  it('a mark that fails after the send says so instead of staying silent (SQ-751 F6)', async () => {
-    mockSetNeedState.mockRejectedValue(new Error('not permitted'));
+  it('a mark that fails after the send says it went, and retries only the mark (SQ-751 F6 · SQ-777 F1)', async () => {
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockSetNeedState.mockRejectedValueOnce(new Error('not permitted'));
     openSheet(PO_NEED);
     fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
-    await screen.findByText('It went. The Day Sheet could not record it, so this line may still show there.');
+    expect(await screen.findByText(SENT_UNRECORDED)).toHaveAttribute('role', 'status');
+    expect(screen.queryByText(/not permitted/)).toBeNull();
     expect(mockSendDraft).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: /^Send/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark it again' }));
+    await waitFor(() => expect(mockSetNeedState).toHaveBeenCalledTimes(2));
+    expect(mockSendDraft).toHaveBeenCalledTimes(1);
+    expect(mockCompose).toHaveBeenCalledTimes(1);
+    quiet.mockRestore();
   });
 
+  it('prints the hand-off note when the previous lead has no name on record (SQ-777 F5)', () => {
+    mockHandoffNote = 'Start with the Olsen lake house';
+    mockPreviousLead = { id: 'owner-1', name: '' };
+    openSheet(PO_NEED);
+    expect(screen.getByText(/From the previous lead: Start with the Olsen lake house/)).toBeInTheDocument();
+  });
 });
 
 describe('silencePoId', () => {
@@ -529,6 +587,37 @@ describe('Remind this invoice', () => {
     expect(mockChase).not.toHaveBeenCalled();
     expect(mockSetNeedState).not.toHaveBeenCalled();
   });
+
+  // SQ-777 F1 — the review input: the reminder goes, the chase stamp rejects.
+  it('a chase stamp that fails after the reminder went says Sent, and retries only the recording', async () => {
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockChase.mockRejectedValueOnce(new Error('Could not find the function public.chase_invoice'));
+    openSheet(INVOICE_NEED);
+    fireEvent.click(screen.getByRole('button', { name: 'Send the reminder to Mara Olsen' }));
+    expect(await screen.findByText(SENT_UNRECORDED)).toBeInTheDocument();
+    expect(screen.queryByText(SEND_FAILED)).toBeNull();
+    expect(screen.queryByText(/chase_invoice/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Send/ })).toBeNull();
+    expect(mockSendInvoice).toHaveBeenCalledTimes(1);
+    expect(mockSetNeedState).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark it again' }));
+    await waitFor(() => expect(mockSetNeedState).toHaveBeenCalledTimes(1));
+    expect(mockChase).toHaveBeenCalledTimes(2);
+    expect(mockSendInvoice).toHaveBeenCalledTimes(1);
+    quiet.mockRestore();
+  });
+
+  it('a reminder whose send fails cannot be confirmed, and offers no second send (SQ-777 F1)', async () => {
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockSendInvoice.mockRejectedValue(new TypeError('Failed to fetch'));
+    openSheet(INVOICE_NEED);
+    fireEvent.click(screen.getByRole('button', { name: 'Send the reminder to Mara Olsen' }));
+    expect(await screen.findByText(SEND_UNCONFIRMED)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Send|Mark)/ })).toBeNull();
+    expect(mockChase).not.toHaveBeenCalled();
+    expect(mockSetNeedState).not.toHaveBeenCalled();
+    quiet.mockRestore();
+  });
 });
 
 describe('Follow up this proposal', () => {
@@ -545,7 +634,9 @@ describe('Follow up this proposal', () => {
     openSheet(PROPOSAL_NEED);
     fireEvent.click(screen.getByRole('button', { name: 'Send the follow-up to Mara Olsen' }));
     await waitFor(() => expect(mockSetNeedState).toHaveBeenCalled());
-    expect(mockSendNote).toHaveBeenCalledWith(expect.stringMatching(/^Mara,/));
+    expect(mockSendNote).toHaveBeenCalledWith(
+      expect.objectContaining({ body: expect.stringMatching(/^Mara,/), confirm: expect.any(Function) }),
+    );
     expect(mockSetNeedState).toHaveBeenCalledWith(
       expect.objectContaining({ needKey: 'proposal_declined:prop-1', action: 'acted', waitingOn: 'Mara Olsen' }),
     );
@@ -599,5 +690,20 @@ describe("Approve this order's release", () => {
       ),
     ).toHaveAttribute('role', 'status');
     expect(screen.queryByRole('button', { name: 'Approve release' })).toBeNull();
+  });
+
+  it('a mark that fails after the release says it was approved, not sent (SQ-777 F1)', async () => {
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockSetNeedState.mockRejectedValueOnce(new Error('not permitted'));
+    openSheet(RELEASE_NEED);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve release' }));
+    expect(await screen.findByText(RELEASED_UNRECORDED)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve release' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark it again' }));
+    expect(
+      await screen.findByText('Release approved. The order is ready to send to Fenmoor Joinery from its purchase order.'),
+    ).toBeInTheDocument();
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    quiet.mockRestore();
   });
 });

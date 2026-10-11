@@ -11,7 +11,7 @@
  * draft is shown read-only. Either way it reads "<Lead> sees this first".
  */
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useSetNeedState } from '@patina/supabase';
 import { Input, Textarea } from '@/components/ui/controls';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
@@ -29,9 +29,15 @@ const LABEL_CLS =
 const capitalised = (words: string) => words.charAt(0).toUpperCase() + words.slice(1);
 
 /** SQ-778 N1 — a failed act says what happened and what to do, in one plain
- *  line; the transport's own words stay in the console. */
+ *  line; the transport's own words stay in the console. SQ-777 F1 — the line
+ *  says how far the act got, so a partial success never invites a second
+ *  send: before the outward call, during it, or after it answered. */
 export const SEND_FAILED = 'Couldn’t send — nothing went out. Try again, or check your connection.';
+export const SEND_UNCONFIRMED = 'We couldn’t confirm it went out. Check the thread before sending again.';
+export const SENT_UNRECORDED = 'Sent. It didn’t record here — try marking it again.';
+export const RELEASED_UNRECORDED = 'Release approved. It didn’t record here — try marking it again.';
 export const SAVE_FAILED = 'Couldn’t save the draft — nothing was saved. Try again, or check your connection.';
+export const SAVED_UNRECORDED = 'Draft saved. It didn’t record here — try marking it again.';
 
 /** The send boundary answered no: nothing went (SQ-751 F2 · SQ-774 R3). */
 class SendWithdrawn extends Error {
@@ -46,6 +52,14 @@ class SendWithdrawn extends Error {
  * write that prepares it; `draftHeld` says such a write left a held draft.
  */
 export type ConfirmSend = (prepared?: { draftHeld: boolean }) => Promise<void>;
+
+/**
+ * SQ-777 F1 — what an act returns once its outward call (or, for a save, the
+ * draft's insert) has answered: the steps that only record it here, such as
+ * the invoice's chase stamp. Each runs once; a failed one, and those after
+ * it, are what "Mark it again" retries. The need's own `acted` mark follows.
+ */
+export type RecordAct = () => Promise<void>;
 
 export function ActDraft({
   need,
@@ -77,10 +91,12 @@ export function ActDraft({
   /** The named send control, e.g. "Send the chase to Fenmoor Joinery". */
   sendLabel: string;
   /** The existing send path. Called only by the named control; it awaits
-   *  `confirmSend` immediately before its outward send (SQ-774 R3). */
-  onSend: (text: ActDraftText, confirmSend: ConfirmSend) => Promise<void>;
-  /** Q11 — saves the draft for the lead. Absent: a non-lead reads only. */
-  onSaveForLead?: (text: ActDraftText) => Promise<void>;
+   *  `confirmSend` immediately before its outward send (SQ-774 R3), so a
+   *  failure before that sent nothing and one after it may have. */
+  onSend: (text: ActDraftText, confirmSend: ConfirmSend) => Promise<RecordAct | void>;
+  /** Q11 — saves the draft for the lead. Absent: a non-lead reads only. It
+   *  resolves once the draft is inserted; what follows only records it. */
+  onSaveForLead?: (text: ActDraftText) => Promise<RecordAct | void>;
   onDone: () => void;
 }) {
   const [subject, setSubject] = useState(initial?.subject ?? '');
@@ -90,9 +106,15 @@ export function ActDraft({
   // SQ-751 F2 — the lead changed between open and send; nothing went. 'held':
   // the change came after her draft was held, so it waits for the lead.
   const [revoked, setRevoked] = useState<'unsent' | 'held' | null>(null);
-  // The act went but the Day Sheet could not record it (never silent).
-  const [unmarked, setUnmarked] = useState(false);
-  const setNeedState = useSetNeedState();
+  // SQ-777 F1 — the outward call failed or never answered: it may have gone,
+  // so the sheet offers no second send.
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  // The act went (or the draft saved) but recording it here failed; the line
+  // says which, and only the recording is offered again (never silent).
+  const [unrecorded, setUnrecorded] = useState<string | null>(null);
+  // The recording steps still to run, in order; a done step leaves the list.
+  const recordings = useRef<RecordAct[]>([]);
+  const setNeedState = useSetNeedState({ errorSurface: 'inline' });
 
   const mode: 'reading' | 'send' | 'save' | 'read-only' = !viewer.ready
     ? 'reading'
@@ -118,50 +140,92 @@ export function ActDraft({
     }
   };
 
-  const run = async (
-    act: (text: ActDraftText, confirm: ConfirmSend) => Promise<void>,
-    acted: boolean,
-  ) => {
-    setError(null);
+  // Runs what is left of the recording; a failure keeps the rest for retry.
+  const runRecordings = async (failed: string) => {
     setPending(true);
     try {
-      await act(text(), confirmSend);
-    } catch (e) {
-      if (e instanceof SendWithdrawn) setRevoked(e.draftHeld ? 'held' : 'unsent');
-      else {
-        console.error('[act-sheet] act failed', e);
-        setError(acted ? SEND_FAILED : SAVE_FAILED);
+      while (recordings.current.length > 0) {
+        await recordings.current[0]();
+        recordings.current.shift();
       }
+    } catch (e) {
+      console.error('[act-sheet] recording failed', e);
+      setUnrecorded(failed);
       setPending(false);
       return;
-    }
-    // SQ-778 N5 — every line holds a state, a pre-project one included: the
-    // need's engagement names its studio.
-    if (acted) {
-      // Q8 — the act is taken; the need now waits on the counterpart. The
-      // send already went, so a failed mark never reads as a failed send.
-      try {
-        await setNeedState.mutateAsync({
-          needKey: need.key,
-          engagementId: need.projectId,
-          action: 'acted',
-          ...(counterpart ? { waitingOn: counterpart } : {}),
-        });
-      } catch {
-        setUnmarked(true);
-        setPending(false);
-        return;
-      }
     }
     setPending(false);
     onDone();
   };
 
-  if (unmarked) {
+  const run = async (
+    act: (text: ActDraftText, confirm: ConfirmSend) => Promise<RecordAct | void>,
+    acted: boolean,
+  ) => {
+    setError(null);
+    setPending(true);
+    // Set once the lead is confirmed: from then on the outward call is under way.
+    const progress = { outward: false };
+    let recordAct: RecordAct | void = undefined;
+    try {
+      recordAct = await act(text(), async (prepared) => {
+        await confirmSend(prepared);
+        progress.outward = true;
+      });
+    } catch (e) {
+      setPending(false);
+      if (e instanceof SendWithdrawn) {
+        setRevoked(e.draftHeld ? 'held' : 'unsent');
+        return;
+      }
+      console.error('[act-sheet] act failed', e);
+      if (acted && progress.outward) setUnconfirmed(true);
+      else setError(acted ? SEND_FAILED : SAVE_FAILED);
+      return;
+    }
+    // SQ-778 N5 — every line holds a state, a pre-project one included: the
+    // need's engagement names its studio. Q8 — the act is taken; the need now
+    // waits on the counterpart.
+    const markActed: RecordAct = async () => {
+      await setNeedState.mutateAsync({
+        needKey: need.key,
+        engagementId: need.projectId,
+        action: 'acted',
+        ...(counterpart ? { waitingOn: counterpart } : {}),
+      });
+    };
+    recordings.current = [...(recordAct ? [recordAct] : []), ...(acted ? [markActed] : [])];
+    await runRecordings(
+      !acted ? SAVED_UNRECORDED : regionKey === 'act-release-order' ? RELEASED_UNRECORDED : SENT_UNRECORDED,
+    );
+  };
+
+  if (unconfirmed) {
     return (
-      <p role="status" data-act-unmarked className="mx-auto w-full max-w-[34rem] text-[14px] text-[var(--color-charcoal)]">
-        It went. The Day Sheet could not record it, so this line may still show there.
+      <p role="alert" data-act-unconfirmed className="mx-auto w-full max-w-[34rem] border-l-2 border-[var(--color-terracotta)] pl-3 text-[14px] text-[var(--color-charcoal)]">
+        {SEND_UNCONFIRMED}
       </p>
+    );
+  }
+
+  if (unrecorded) {
+    return (
+      <div data-act-unmarked className="mx-auto w-full max-w-[34rem] space-y-3">
+        <p role="status" className="text-[14px] text-[var(--color-charcoal)]">
+          {unrecorded}
+        </p>
+        <DocumentActionGroup surfaceKey="open-document" regionKey={regionKey} aria-label="Mark it again">
+          <DocumentAction
+            actionKey={`${regionKey}-mark-again`}
+            variant="primary"
+            loading={pending}
+            loadingLabel="Marking…"
+            onClick={() => void runRecordings(unrecorded)}
+          >
+            Mark it again
+          </DocumentAction>
+        </DocumentActionGroup>
+      </div>
     );
   }
 
@@ -192,7 +256,8 @@ export function ActDraft({
       )}
       {viewer.handoff && (
         <p data-act-handoff className="text-[13px] text-[var(--color-mocha)]">
-          {viewer.handoff.from ? `From ${viewer.handoff.from}: ` : ''}
+          {/* SQ-777 F5 — a hand-off with no name on record is still hers. */}
+          {`From ${viewer.handoff.from ?? 'the previous lead'}: `}
           {viewer.handoff.note}
         </p>
       )}

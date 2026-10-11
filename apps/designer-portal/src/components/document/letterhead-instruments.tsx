@@ -263,14 +263,24 @@ function useClientScans(clientProfileId: string | null, projectId: string | null
  * document (proposal / relationship) has no project, so it routes to the
  * designer↔client 1:1 DIRECT thread keyed on the client's profile id
  * (rpc_start_direct_thread, 00103) — which needs no project_id.
+ *
+ * SQ-777 F3 — a note may carry `confirm`, the act sheet's last check: it runs
+ * once the thread is open, immediately before the message is written, and a
+ * throw there writes nothing. `{ errorSurface: 'inline' }` is for a caller
+ * that prints its own failure (R83, F2).
  */
+export type DocumentNote = string | { body: string; confirm?: () => Promise<void> };
+
 export function useSendDocumentNote(
   projectId: string | null,
   counterpartProfileId: string | null,
+  options?: { errorSurface?: 'inline' },
 ) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: string) => {
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async (note: DocumentNote) => {
+      const { body, confirm } = typeof note === 'string' ? { body: note, confirm: undefined } : note;
       const supabase = getSupabase();
       let threadId: string | null = null;
       if (projectId) {
@@ -291,6 +301,7 @@ export function useSendDocumentNote(
         throw new Error('No counterpart to send a note to.');
       }
       const { data: auth } = await supabase.auth.getUser();
+      if (confirm) await confirm();
       const { error: mErr } = await supabase.from('comms_messages').insert({
         thread_id: threadId,
         sender_id: auth?.user?.id ?? null,

@@ -34653,5 +34653,165 @@
     "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
     "status": "implemented",
     "evidence": "apps/designer-portal/src/components/document/acts/act-sheets.tsx:110 display copy changed; apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx; SQ-778 (SQ-775 re-walk)"
+  },
+  {
+    "id": "C-30012",
+    "audience": "designer",
+    "surface": {
+      "area": "Act sheet",
+      "route": "/desk → act sheet",
+      "element": "Unconfirmed send"
+    },
+    "state": "error",
+    "source": "apps/designer-portal/src/components/document/acts/act-draft.tsx:36",
+    "current": "Couldn’t send — nothing went out. Try again, or check your connection.",
+    "proposed": "We couldn’t confirm it went out. Check the thread before sending again.",
+    "meaning": "The outward call failed or never answered, so it may have gone; the sheet offers no second send. SQ-777 F1.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/act-send-outcome.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-draft.tsx:36 display copy added; apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx; SQ-780 (SQ-777 F1)"
+  },
+  {
+    "id": "C-30013",
+    "audience": "designer",
+    "surface": {
+      "area": "Act sheet",
+      "route": "/desk → act sheet",
+      "element": "Sent, not recorded"
+    },
+    "state": "error",
+    "source": "apps/designer-portal/src/components/document/acts/act-draft.tsx:37",
+    "current": "It went. The Day Sheet could not record it, so this line may still show there.",
+    "proposed": "Sent. It didn’t record here — try marking it again.",
+    "meaning": "The send is confirmed but its chase stamp or need-state mark failed; only the recording is offered again, never the send. SQ-777 F1.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-draft.tsx:37 display copy changed; apps/designer-portal/src/components/document/acts/__tests__/act-send-outcome.test.tsx; SQ-780 (SQ-777 F1)"
+  },
+  {
+    "id": "C-30014",
+    "audience": "designer",
+    "surface": {
+      "area": "Act sheet",
+      "route": "/desk → Approve this order's release",
+      "element": "Release approved, not recorded"
+    },
+    "state": "error",
+    "source": "apps/designer-portal/src/components/document/acts/act-draft.tsx:38",
+    "current": "It went. The Day Sheet could not record it, so this line may still show there.",
+    "proposed": "Release approved. It didn’t record here — try marking it again.",
+    "meaning": "A release is not a send, so its recording failure says it was approved, not sent. SQ-777 F1.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-draft.tsx:38 display copy changed; SQ-780 (SQ-777 F1)"
+  },
+  {
+    "id": "C-30015",
+    "audience": "designer",
+    "surface": {
+      "area": "Act sheet",
+      "route": "/desk → Chase this PO",
+      "element": "Draft saved, not recorded"
+    },
+    "state": "error",
+    "source": "apps/designer-portal/src/components/document/acts/act-draft.tsx:40",
+    "current": "Couldn’t save the draft — nothing was saved. Try again, or check your connection.",
+    "proposed": "Draft saved. It didn’t record here — try marking it again.",
+    "meaning": "The draft was inserted for the lead but storing her words on it failed; only that step is offered again. The nothing-saved line stays for a failed insert. SQ-777 F1.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-draft.tsx:40 display copy added; SQ-780 (SQ-777 F1)"
+  },
+  {
+    "id": "C-30016",
+    "audience": "designer",
+    "surface": {
+      "area": "Act sheet",
+      "route": "/desk → act sheet",
+      "element": "Recording retry control"
+    },
+    "state": "error",
+    "source": "apps/designer-portal/src/components/document/acts/act-draft.tsx:225",
+    "current": "{none: no retry was offered}",
+    "proposed": "Mark it again (loading: Marking…)",
+    "meaning": "Retries only the recording steps that failed, never the send. SQ-777 F1.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-draft.tsx:225 display copy added; apps/designer-portal/src/components/document/acts/__tests__/act-send-outcome.test.tsx; SQ-780 (SQ-777 F1)"
+  },
+  {
+    "id": "C-30017",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → Hand-off",
+      "element": "Mark read failure"
+    },
+    "state": "error",
+    "source": "apps/designer-portal/src/components/document/handoff-note.tsx:61",
+    "current": "{raw transport error in the global toast}",
+    "proposed": "Couldn’t mark it read. Try again.",
+    "meaning": "A failed Mark read says so on the note; the transport error stays in the console. SQ-777 F2.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/app/(document)/doc/[id]/page.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/handoff-note.tsx:61 display copy added; SQ-780 (SQ-777 F2)"
+  },
+  {
+    "id": "C-30018",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → Hand-off · /desk → act sheet",
+      "element": "Hand-off writer, no name on record"
+    },
+    "state": "conditional",
+    "source": "apps/designer-portal/src/app/(document)/doc/[id]/page.tsx:3543",
+    "current": "{the hand-off was hidden on the project file; the act sheet printed the note with no writer}",
+    "proposed": "From the previous lead: {note} · The previous lead handed you this job.",
+    "meaning": "A hand-off is who led the job, never whether a name is on record; with no name the writer is the previous lead. Also act-draft.tsx:260. SQ-777 F5.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/app/(document)/doc/[id]/page.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/app/(document)/doc/[id]/page.tsx:3543 display copy added; apps/designer-portal/src/components/document/acts/act-draft.tsx:260; apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx; SQ-780 (SQ-777 F5)"
+  },
+  {
+    "id": "C-30019",
+    "audience": "designer",
+    "surface": {
+      "area": "Day Sheet",
+      "route": "/desk → Day Sheet",
+      "element": "Hand-off line, no name on record"
+    },
+    "state": "conditional",
+    "source": "apps/designer-portal/src/lib/document/desk-scope.ts:156",
+    "current": "{the hand-off line was dropped}",
+    "proposed": "The previous lead handed you {job} on {date} · Read the previous lead's note",
+    "meaning": "The Day Sheet keeps the hand-off when the previous lead's profile has no name. SQ-777 F5.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/day-sheet.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/desk-scope.ts:156 display copy added; SQ-780 (SQ-777 F5)"
   }
 ]

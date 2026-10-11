@@ -10,9 +10,10 @@
 --   * otherwise the engagement row the need list keys on
 --     (`project_id ?? engagement_id`, document_state 00590): a legacy project
 --     with no studio, a proposal chain root, a lead or a designer_clients row.
---     None of those carries a studio column, so the studio is the active seat
---     the caller shares with the engagement's designer (the caller may be the
---     designer). When they share several studios, the lowest organization id
+--     None of those carries a studio column, so the studio is the active
+--     design studio seat the caller shares with the engagement's designer (the
+--     caller may be the designer); a manufacturer, contractor or admin team
+--     overlap is no shared studio (SQ-777 F4). When they share several studios, the lowest organization id
 --     wins, so the choice is deterministic; when they share none, the denial
 --     is the same "not permitted" 42501 as for a missing record.
 -- project_id is stored only for a real project; NULL for an engagement row.
@@ -112,7 +113,10 @@ BEGIN
      AND d.user_id = v_designer_id
      AND d.status = 'active'
      AND d.role <> 'guest'
-    JOIN public.organizations o ON o.id = me.organization_id AND o.status = 'active'
+    -- SQ-777 F4 — only a design studio is a shared studio: an overlap through a
+    -- manufacturer, a contractor or an admin team is no standing here.
+    JOIN public.organizations o
+      ON o.id = me.organization_id AND o.status = 'active' AND o.type = 'design_studio'
     WHERE me.user_id = v_uid
       AND me.status = 'active'
       AND me.role <> 'guest'

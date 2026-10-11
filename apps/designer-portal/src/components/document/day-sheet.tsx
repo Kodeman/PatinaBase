@@ -62,7 +62,8 @@ function SheetLine({
 }) {
   const acts = useNeedActSheet();
   const router = useRouter();
-  const setNeedState = useSetNeedState();
+  // SQ-777 F2 — a failed mark says so on its line, never in a toast.
+  const setNeedState = useSetNeedState({ errorSurface: 'inline' });
   const { need } = entry;
   const handoff = need.kind === 'handoff';
   const sentence = handoff ? deskNeedText(need, oneVoice) : asOneClause(deskNeedText(need, oneVoice));

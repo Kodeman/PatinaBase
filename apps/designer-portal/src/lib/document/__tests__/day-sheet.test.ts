@@ -417,3 +417,45 @@ describe('deriveDaySheet — a later hand-off survives the composed Desk pipelin
     expect(after.waitingOn).toEqual([]);
   });
 });
+
+describe('deriveDaySheet — a hand-off with no name on record (SQ-777 F5)', () => {
+  it('keeps the hand-off line and its note, naming "the previous lead"', () => {
+    const now = new Date(2026, 9, 12, 10, 0, 0);
+    // Valid ids, a note its writer left, and a standing assignment; the
+    // previous lead's profile has no full_name, which the resolver maps to ''.
+    const leads: DeskLeads = new Map([
+      ['p1', {
+        leadUserId: 'me',
+        leadName: 'Bea Lund',
+        previousLeadUserId: 'leah',
+        previousLeadName: '',
+        assignedAt: '2026-10-10T09:00:00.000Z',
+      }],
+    ]);
+    const live = [
+      { project_id: 'p1', engagement_id: 'e1', title: 'Ridge House', designer_id: 'leah' } as DocumentStateRow,
+    ];
+    const seat = { handoff_note: 'Ridge House is yours from today', invited_by: 'leah' };
+    const handoffs = deriveHandoffNeeds(live, leads, 'me', new Map(), seat);
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0].need.text).toMatch(
+      /^The previous lead handed you Ridge House on .+ · Read the previous lead's note$/,
+    );
+    expect(handoffs[0].need.actionLabel).toBe('Read the note');
+    const result = deriveDaySheet({
+      needs: deriveDeskNeedList(
+        { folders: [], chips: [], live, scope: 'mine', leads, meUserId: 'me' },
+        now,
+        handoffs,
+      ),
+      states: new Map(),
+      leads,
+      meUserId: 'me',
+      scope: 'mine',
+      designers: deskDesignersOf(live),
+      unreadFeeds: [],
+      now,
+    });
+    expect(result.lines.filter((line) => line.key.startsWith('handoff:'))).toHaveLength(1);
+  });
+});

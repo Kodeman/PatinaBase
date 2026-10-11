@@ -94,11 +94,10 @@ export function PoChaseSheet({ need, onDone }: SheetProps) {
   const po = order.label ? `purchase order ${order.label}` : 'the purchase order';
   const sent = order.po?.sent_at ? fmtDay(order.po.sent_at) : null;
   // The draft path's own route: compose the chase, then store her words on it.
-  const hold = async ({ subject, body }: ActDraftText) => {
-    const draft = await compose.mutateAsync({ kind: 'ack_chase', purchaseOrderId });
-    await update.mutateAsync({ draftId: draft.id, request: { subject, body } });
+  const composeChase = () => compose.mutateAsync({ kind: 'ack_chase', purchaseOrderId });
+  const storeWords = (draftId: string, { subject, body }: ActDraftText) => async () => {
+    await update.mutateAsync({ draftId, request: { subject, body } });
     void queryClient.invalidateQueries({ queryKey: ['document-state'] });
-    return draft;
   };
 
   return (
@@ -118,14 +117,18 @@ export function PoChaseSheet({ need, onDone }: SheetProps) {
       }}
       sendLabel={`Send the chase to ${order.maker ?? 'the maker'}`}
       onSend={async (text, confirmSend) => {
-        const draft = await hold(text);
+        const draft = await composeChase();
+        await storeWords(draft.id, text)();
         // SQ-774 R3 — the lead is read again after the draft is held, just
         // before it goes; if she may no longer send, it stays held for the lead.
         await confirmSend({ draftHeld: true });
         await send.mutateAsync(draft.id);
       }}
       onSaveForLead={async (text) => {
-        await hold(text);
+        const draft = await composeChase();
+        // SQ-777 F1 — the draft is saved; storing her words on it is recorded
+        // after, and only that is offered again if it fails.
+        return storeWords(draft.id, text);
       }}
       onDone={onDone}
     />
@@ -171,8 +174,11 @@ export function InvoiceReminderSheet({ need, onDone }: SheetProps) {
       onSend={async ({ body }, confirmSend) => {
         await confirmSend();
         await sendInvoice.mutateAsync({ invoiceId, projectId, type: 'reminder', message: body });
-        await chase.mutateAsync({ invoiceId, projectId });
-        void queryClient.invalidateQueries({ queryKey: ['document-state'] });
+        // SQ-777 F1 — the reminder went; the chase stamp only records it.
+        return async () => {
+          await chase.mutateAsync({ invoiceId, projectId });
+          void queryClient.invalidateQueries({ queryKey: ['document-state'] });
+        };
       }}
       onDone={onDone}
     />
@@ -197,7 +203,9 @@ export function ProposalFollowUpSheet({ need, onDone }: SheetProps) {
   const proposalId = need.need.recordId!;
   const { data: proposal, isSuccess } = useProposal(proposalId);
   const viewer = useActViewer(proposal?.project_id ?? need.projectId);
-  const sendNote = useSendDocumentNote(proposal?.project_id ?? null, proposal?.client?.id ?? null);
+  const sendNote = useSendDocumentNote(proposal?.project_id ?? null, proposal?.client?.id ?? null, {
+    errorSurface: 'inline',
+  });
   if (!isSuccess) return <Reading />;
   if (!proposal) return <Missing />;
 
@@ -221,9 +229,10 @@ export function ProposalFollowUpSheet({ need, onDone }: SheetProps) {
       quote={declined ? `${who} declined the proposal${reason ? `: “${reason}”` : '.'}` : null}
       initial={{ subject: null, body: proposalNote(kind, client ? firstNameOf(client) : 'Hello') }}
       sendLabel={`Send the follow-up to ${client ?? 'the client'}`}
+      // SQ-777 F3 — the lead is read again once the thread is open, right
+      // before the message is written; a reassignment meanwhile writes nothing.
       onSend={async ({ body }, confirmSend) => {
-        await confirmSend();
-        await sendNote.mutateAsync(body);
+        await sendNote.mutateAsync({ body, confirm: () => confirmSend() });
       }}
       onDone={onDone}
     />

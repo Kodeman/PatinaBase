@@ -69,6 +69,9 @@ let mockMyStudioMembers: Array<Record<string, unknown>> = [];
 let mockProjectLeadRead: Record<string, unknown> | null = null;
 let mockNeedStates = new Map<string, Record<string, unknown>>();
 const mockSetNeedStateMutate = jest.fn();
+// SQ-777 F2 — the mark's last outcome, and the options the page opts in with.
+let mockSetNeedStateFailed = false;
+let mockSetNeedStateOptions: unknown;
 const mockMarkFirstDocumentOpenedMutate = jest.fn();
 /** R4 — the letterhead subject's one write. */
 const mockUpdateEngagementSubject = jest.fn().mockResolvedValue(undefined);
@@ -221,7 +224,10 @@ jest.mock('@patina/supabase', () => ({
   useInstallWindow: () => ({ data: null, isSuccess: true }),
   useProjectLead: () => ({ data: mockProjectLeadRead }),
   useNeedStates: () => ({ data: mockNeedStates }),
-  useSetNeedState: () => ({ mutate: mockSetNeedStateMutate, isPending: false }),
+  useSetNeedState: (options?: unknown) => {
+    mockSetNeedStateOptions = options;
+    return { mutate: mockSetNeedStateMutate, isPending: false, isError: mockSetNeedStateFailed };
+  },
   useProjectContextualHandoffs: () => mockContextualHandoffsQuery,
   useProjectParties: () => ({ data: [] }),
   useCoordinationItems: () => ({ data: [] }),
@@ -666,6 +672,8 @@ beforeEach(() => {
   mockProjectLeadRead = null;
   mockNeedStates = new Map();
   mockSetNeedStateMutate.mockClear();
+  mockSetNeedStateFailed = false;
+  mockSetNeedStateOptions = undefined;
   mockMarkFirstDocumentOpenedMutate.mockClear();
   mockAuthUser = { id: 'owner-user' };
   mockSectionGates = [];
@@ -3576,6 +3584,30 @@ describe('DocumentPage guide activation', () => {
       openJob();
       expect(handoff()).toBeNull();
       expect(document.body).not.toHaveTextContent(NOTE);
+    });
+
+    // SQ-777 F5 — the identity predicate gates it, never the display name.
+    it('prints the hand-off and its note when the previous lead has no name on record', () => {
+      mockProjectLeadRead = handedBy('leah', '');
+      openJob();
+      expect(handoff()).toHaveAttribute('data-handoff-note', 'unread');
+      expect(handoff()).toHaveTextContent(`From the previous lead: ${NOTE}`);
+    });
+
+    it('names "the previous lead" on a hand-off with no note and no name', () => {
+      mockProjectLeadRead = handedBy('sam', '');
+      openJob();
+      expect(handoff()).toHaveTextContent('The previous lead handed you this job.');
+    });
+
+    // SQ-777 F2 — a failed Mark read says so on the note; no toast.
+    it('opts Mark read into the inline error surface and prints its failure plainly', () => {
+      mockProjectLeadRead = handedBy('leah', 'Leah Moreau');
+      mockSetNeedStateFailed = true;
+      openJob();
+      expect(mockSetNeedStateOptions).toEqual({ errorSurface: 'inline' });
+      expect(within(handoff()!).getByRole('alert')).toHaveTextContent('Couldn’t mark it read. Try again.');
+      expect(within(handoff()!).getByRole('button', { name: 'Mark read' })).toBeInTheDocument();
     });
   });
 

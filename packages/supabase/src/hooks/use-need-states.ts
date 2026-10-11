@@ -75,9 +75,12 @@ export type SetNeedStateInput = (
   reason?: string;
 };
 
-export function useSetNeedState() {
+/** `{ errorSurface: 'inline' }` — the caller prints the failure at the act
+ *  (R83, SQ-777 F2); the transport's own words never reach a toast. */
+export function useSetNeedState(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (input: SetNeedStateInput) => {
       const supabase = createBrowserClient();
       const { error } = await supabase.rpc('set_need_state', {

@@ -138,29 +138,26 @@ export function deriveHandoffNeeds(
   );
   const needs: DeskNeed[] = [];
   for (const [projectId, lead] of leads) {
-    if (
-      lead.leadUserId !== meUserId ||
-      !lead.previousLeadName?.trim() ||
-      !lead.previousLeadUserId
-    ) continue;
+    // SQ-777 F5 — the hand-off is who led it, never whether a name is on record.
+    if (lead.leadUserId !== meUserId || !lead.previousLeadUserId) continue;
     const row = rowsByProject.get(projectId);
     if (!row) continue;
     const key = `handoff:${projectId}`;
     if (handoffReadFor(states.get(key), lead.assignedAt)) continue;
     const assigned = new Date(lead.assignedAt);
     if (!Number.isFinite(assigned.getTime())) continue;
-    // Walk W-D7 — "Leah handed you …", the full name only when it has no first.
-    const previous = firstName(lead.previousLeadName) ?? lead.previousLeadName.trim();
+    // Walk W-D7 — "Leah handed you …", the full name only when it has no first;
+    // no name on record reads "The previous lead".
+    const previous = firstName(lead.previousLeadName) ?? (lead.previousLeadName?.trim() || null);
     const date = new Intl.DateTimeFormat('en-US', {
       weekday: 'long', month: 'long', day: 'numeric',
     }).format(assigned);
     const hasNote = handoffNoteFor(lead, meUserId, seat) !== null;
+    const handed = `${previous ?? 'The previous lead'} handed you ${row.title} on ${date}`;
     const need: NeedLine = {
       key,
       kind: 'handoff',
-      text: hasNote
-        ? `${previous} handed you ${row.title} on ${date} · Read ${previous}'s note`
-        : `${previous} handed you ${row.title} on ${date}`,
+      text: hasNote ? `${handed} · Read ${previous ?? 'the previous lead'}'s note` : handed,
       actionLabel: hasNote ? 'Read the note' : 'Open project file',
       stamp: { label: 'HAND-OFF', color: 'var(--color-dusty-blue)' },
       urgent: false,
