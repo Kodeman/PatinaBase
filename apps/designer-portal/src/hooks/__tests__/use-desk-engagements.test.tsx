@@ -613,6 +613,41 @@ describe('useDeskEngagements — fix-now 6: at rest only when every feed answere
     expect(line.custody).toBe('Not checked');
   });
 
+  it('one failed flag read leaves flagged lines unread, though the board read answered empty (SQ-751 F4)', async () => {
+    let feedbackReads = 0;
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'document_state') return chainResult({ data: [QUIET_PROJECT_ROW], error: null });
+      // The first item_feedback read is the line flags; the second, board pins.
+      if (table === 'item_feedback') {
+        feedbackReads += 1;
+        return chainResult(feedbackReads === 1 ? { data: null, error: { message: 'boom' } } : { data: [], error: null });
+      }
+      return chainResult({ data: [], error: null });
+    });
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.unreadFeeds).toEqual(['flagged lines']);
+    expect(rosterOf(result.current.data as never).notChecked).toBe('Not checked: flagged lines.');
+  });
+
+  it.each(['schedule_milestones', 'projects'])(
+    'a failed %s read leaves schedules unread (SQ-751 F4)',
+    async (failing) => {
+      mockFrom.mockImplementation((table: string) =>
+        chainResult(
+          table === 'document_state'
+            ? { data: [QUIET_PROJECT_ROW], error: null }
+            : table === failing
+              ? { data: null, error: { message: 'boom' } }
+              : { data: [], error: null },
+        ),
+      );
+      const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data!.unreadFeeds).toEqual(['schedules']);
+    },
+  );
+
   it('an empty invoices answer (an empty map) is the one state that prints at rest', async () => {
     mockFrom.mockImplementation((table: string) =>
       chainResult(table === 'document_state' ? { data: [QUIET_PROJECT_ROW], error: null } : { data: [], error: null }),

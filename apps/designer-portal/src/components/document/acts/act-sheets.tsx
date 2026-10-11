@@ -250,7 +250,7 @@ export function ReleaseOrderSheet({ need }: SheetProps) {
   }
 
   // Q11 does not apply: the held order rose only for a seat that can release.
-  const viewer: ActViewer = { ...lead, ready: true, canSend: true, leadFirstName: null };
+  const viewer: ActViewer = { ...lead, ready: true, canSend: true, leadFirstName: null, recheck: undefined };
 
   return (
     <ActDraft

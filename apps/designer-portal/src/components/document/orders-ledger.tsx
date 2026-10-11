@@ -19,8 +19,6 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useHeldPurchaseOrders,
-  useOrganizations,
-  useProjectLeads,
   usePurchaseOrders,
   useUpdatePurchaseOrderETA,
   useVendors,
@@ -53,8 +51,7 @@ import { DocSheetHead } from './overlays/doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { DocumentAction } from './document-action';
-import { useAuth } from '@/hooks/use-auth';
-import { useCanSeeMargin } from '@/hooks/use-can-see-margin';
+import { useStudioMoney } from '@/hooks/use-studio-money';
 
 type BookPage = 'ledger' | 'week' | 'receiving' | 'vendors';
 
@@ -144,21 +141,14 @@ export function OrdersLedger({
     data: AnyRecord[] | undefined;
     isLoading: boolean;
   };
-  const { user } = useAuth();
-  const canSeeMargin = useCanSeeMargin();
-  const { data: organizations } = useOrganizations();
-  const studio = organizations?.find((org) => org.type === 'design_studio') ?? organizations?.[0] ?? null;
-  const { data: projectLeads } = useProjectLeads(studio?.id ?? '');
-  const moneyProjectIds = useMemo(
-    () => new Set(
-      [...(projectLeads ?? new Map()).entries()]
-        .filter(([, lead]) => lead.leadUserId === user?.id)
-        .map(([projectId]) => projectId),
-    ),
-    [projectLeads, user?.id],
-  );
+  // Q10 (walk W-D5): studio totals are an owner's or admin's; any other seat
+  // sees the money on the jobs she leads. Vendors applies the same rule
+  // (SQ-751 F3).
+  const money = useStudioMoney();
+  const canSeeMargin = money.all;
+  const moneyProjectIds = { has: (projectId: string) => money.canSeeProject(projectId) };
   const canSeePoMoney = (po: AnyRecord) =>
-    canSeeMargin || moneyProjectIds.has(po.project_id ?? po.project?.id ?? '');
+    money.canSeeProject(po.project_id ?? po.project?.id ?? null);
   // useVendors returns { data, pagination } — unwrap, and ask for the
   // whole directory (the vendor pane is a book, not a feed).
   const { data: vendorsPage } = useVendors(undefined, {
@@ -419,6 +409,7 @@ export function OrdersLedger({
           initialVendorPage={initialContext?.vendorPage ?? null}
           focusField={initialContext?.focus ?? null}
           briefProjectId={initialContext?.projectId ?? null}
+          canSeePoMoney={canSeePoMoney}
           onOpenDocument={openDocument}
         />
       )}

@@ -21,13 +21,10 @@ import {
   useArAging,
   useEarningsStats,
   useInvoices,
-  useOrganizations,
-  useProjectLeads,
 } from '@patina/supabase';
 import { LedgerFrontMatter } from '../ledger-front-matter';
 import { useStudioMargin } from '@/hooks/use-studio-accounts';
-import { useCanSeeMargin } from '@/hooks/use-can-see-margin';
-import { useAuth } from '@/hooks/use-auth';
+import { useStudioMoney } from '@/hooks/use-studio-money';
 import { mixedCurrenciesText } from '@/lib/currency-totals';
 import { collectedCents } from '@/lib/document/account-summary';
 import { fmtUsd } from '@/lib/document/format';
@@ -66,24 +63,15 @@ export function AccountsBook({
   const { aging } = useArAging();
   const { data: earnings } = useEarningsStats();
   const margin = useStudioMargin();
-  const canSeeMargin = useCanSeeMargin();
-  const { user } = useAuth();
-  const { data: organizations } = useOrganizations();
-  const studio = organizations?.find((org) => org.type === 'design_studio') ?? organizations?.[0] ?? null;
-  const { data: projectLeads } = useProjectLeads(studio?.id ?? '');
-  const leadProjectIds = useMemo(
-    () => new Set(
-      [...(projectLeads ?? new Map()).entries()]
-        .filter(([, lead]) => lead.leadUserId === user?.id)
-        .map(([projectId]) => projectId),
-    ),
-    [projectLeads, user?.id],
-  );
+  // Q10 (walk W-D5): the whole book is an owner's or admin's; any other seat
+  // sees the invoices on the jobs she leads and no studio totals.
+  const money = useStudioMoney();
+  const canSeeMargin = money.all;
   const visibleInvoices = useMemo(
     () => canSeeMargin
       ? invoices ?? []
-      : (invoices ?? []).filter((invoice) => leadProjectIds.has(invoice.project_id ?? '')),
-    [canSeeMargin, invoices, leadProjectIds],
+      : (invoices ?? []).filter((invoice) => money.canSeeProject(invoice.project_id)),
+    [canSeeMargin, invoices, money],
   );
   const visibleAging = useMemo(
     () => canSeeMargin ? aging : computeArAging(visibleInvoices),
@@ -181,6 +169,7 @@ export function AccountsBook({
           {page === 'ledger' && (
             <AccountsLedgerPage
               invoices={visibleInvoices}
+              canExport={canSeeMargin}
               highlightInvoiceId={initialContext?.invoiceId ?? null}
               onOpenDocument={openDocument}
             />

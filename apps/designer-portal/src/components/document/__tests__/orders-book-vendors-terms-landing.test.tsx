@@ -17,6 +17,10 @@ jest.mock('@patina/supabase', () => ({
   useStudioPaymentMethods: () => ({ data: [] }),
   useUpsertStudioVendorAccount: () => ({ mutate: jest.fn(), isPending: false }),
   useStartVendorBrief: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useProcurementItems: () => ({ data: [] }),
+}));
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
 }));
 jest.mock('@/hooks/use-viewer-studio', () => ({
   useInternalTimeStudio: () => ({ studio: { id: 'studio-1' } }),
@@ -57,10 +61,31 @@ const page = (props: Partial<Parameters<typeof VendorsBookPage>[0]> = {}) => (
     orders={[]}
     initialVendorId="vendor-hewn"
     briefProjectId={null}
+    canSeePoMoney={() => true}
     onOpenDocument={jest.fn()}
     {...props}
   />
 );
+
+describe('VendorsBookPage — Orders keeps the ledger’s money rule (SQ-751 F3)', () => {
+  const ORDERS = [
+    { id: 'po-mine', vendor_id: 'vendor-hewn', status: 'sent', po_number: 'PO-1', total_cents: 125_000, project_id: 'project-mine', project: { name: 'Marsh Street' } },
+    { id: 'po-theirs', vendor_id: 'vendor-hewn', status: 'sent', po_number: 'PO-2', total_cents: 242_000, project_id: 'project-theirs', project: { name: 'Holloway Den' } },
+  ];
+
+  it('a seat that fails the own-led rule sees no PO total on a job she does not lead', () => {
+    renderWithQuery(
+      page({
+        orders: ORDERS,
+        initialVendorPage: 'orders',
+        canSeePoMoney: (po) => po.project_id === 'project-mine',
+      }),
+    );
+    expect(screen.getByText(/Marsh Street · \$1,250/)).toBeInTheDocument();
+    expect(screen.getByText('Holloway Den · —')).toBeInTheDocument();
+    expect(screen.queryByText(/2,420/)).toBeNull();
+  });
+});
 
 describe('VendorsBookPage — the Add an address landing (517-1)', () => {
   it('opens on terms with focus on the Orders email field', async () => {

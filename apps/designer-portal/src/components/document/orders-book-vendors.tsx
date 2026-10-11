@@ -987,10 +987,14 @@ export function VendorsBookPage({
   initialVendorPage = null,
   focusField = null,
   briefProjectId,
+  canSeePoMoney,
   onOpenDocument,
 }: {
   vendors: AnyRecord[];
   orders: AnyRecord[];
+  /** Q10 (SQ-751 F3) — the Orders ledger's own money rule: a seat sees a PO's
+   *  total only on a job she may see money for. */
+  canSeePoMoney: (po: AnyRecord) => boolean;
   initialVendorId: string | null;
   /** US-19 F3-22 (517-1): the sub-page the vendor opens on; `thread` otherwise. */
   initialVendorPage?: string | null;
@@ -1186,7 +1190,7 @@ export function VendorsBookPage({
                     <p className="doc-type-meta min-w-[12rem] flex-1 uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
                       {[
                         po.project?.name ?? 'Project',
-                        po.total_cents != null ? fmtUsd(po.total_cents) : '—',
+                        po.total_cents != null && canSeePoMoney(po) ? fmtUsd(po.total_cents) : '—',
                       ]
                         .filter(Boolean)
                         .join(' · ')}

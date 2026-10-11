@@ -73,8 +73,14 @@ jest.mock('../ledger-front-matter', () => ({
 }));
 
 jest.mock('./accounts-ledger-page', () => ({
-  AccountsLedgerPage: ({ invoices = [] }: { invoices?: { id: string }[] }) => (
-    <div data-testid="accounts-ledger" data-invoice-ids={invoices.map((invoice) => invoice.id).join(',')}>Ledger rows</div>
+  AccountsLedgerPage: ({ invoices = [], canExport = false }: { invoices?: { id: string }[]; canExport?: boolean }) => (
+    <div
+      data-testid="accounts-ledger"
+      data-invoice-ids={invoices.map((invoice) => invoice.id).join(',')}
+      data-can-export={String(canExport)}
+    >
+      Ledger rows
+    </div>
   ),
 }));
 
@@ -149,6 +155,8 @@ describe('designer Accounts query failures', () => {
     render(<AccountsBook onClose={jest.fn()} />);
 
     expect(screen.getByTestId('accounts-ledger')).toHaveAttribute('data-invoice-ids', 'invoice-1');
+    // Q10 (walk W-D5): no studio-wide export for a member.
+    expect(screen.getByTestId('accounts-ledger')).toHaveAttribute('data-can-export', 'false');
     expect(screen.getByTestId('ledger-front-matter')).toBeEmptyDOMElement();
     expect(screen.queryByRole('button', { name: 'Earnings' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Receivables' }));

@@ -42,9 +42,12 @@ const INVOICE_STAMP: Record<
 export function AccountsLedgerPage({
   invoices,
   highlightInvoiceId = null,
+  canExport = false,
   onOpenDocument,
 }: {
   invoices: Invoice[];
+  /** Q10 (walk W-D5) — the studio-wide export is an owner's or admin's. */
+  canExport?: boolean;
   /** The invoice named by the /desk?book=accounts&page=ledger&invoiceId=…
    *  doorway (desk-doorway.tsx) — e.g. the print page's "Back to invoice". */
   highlightInvoiceId?: string | null;
@@ -88,7 +91,7 @@ export function AccountsLedgerPage({
 
       {/* P3 — and the book learns to LEAVE: the studio's own billing register
           as one spreadsheet, so "your data exports" is a fact. */}
-      <AccountsExportAction />
+      {canExport && <AccountsExportAction />}
 
       {invoices.length === 0 ? (
         /* The zero-invoice state (help-desk Wave 1, copy §E.3) — the old

@@ -39,6 +39,18 @@ jest.mock('@patina/supabase', () => ({
 
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'viewer' } }) }));
 jest.mock('@/hooks/use-can-see-margin', () => ({ useCanSeeMargin: () => mockCanSeeMargin() }));
+// Q10 (walk W-D5): the ledger reads the studio-money rule; `mockCanSeeMargin`
+// stands for an owner/admin seat, `mockProjectLeads` for the jobs she leads.
+jest.mock('@/hooks/use-studio-money', () => ({
+  useStudioMoney: () => {
+    const all = mockCanSeeMargin();
+    return {
+      all,
+      canSeeProject: (projectId: string | null | undefined) =>
+        all || mockProjectLeads.data.get(projectId ?? '')?.leadUserId === 'viewer',
+    };
+  },
+}));
 
 // The paper's own suites live under order-paper/__tests__.
 jest.mock('@/components/portal/procurement/order-paper', () => ({

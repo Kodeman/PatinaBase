@@ -13,7 +13,7 @@
  * quietly omitted rows is worse than no file. A failed read prints the step
  * that failed and writes nothing.
  *
- * The studio is the one this viewer's account answers for (`useAccountStudio`,
+ * The studio is one this viewer holds as owner or admin (`useViewerStudio`,
  * the same choice the Hours sheet's studio picker writes), and it is NAMED on
  * the act, so an owner of two studios cannot export the wrong book in silence.
  */
@@ -21,7 +21,7 @@
 import { useState } from "react";
 
 import { DocumentAction, DocumentActionGroup } from "../document-action";
-import { useAccountStudio } from "@/hooks/use-viewer-studio";
+import { useViewerStudio } from "@/hooks/use-viewer-studio";
 import {
   downloadStudioBillingExport,
   StudioBillingExportError,
@@ -67,7 +67,10 @@ function withheldSentence(manifest: StudioBillingManifest): string | null {
 }
 
 export function AccountsExportAction() {
-  const { studio, isSettled } = useAccountStudio();
+  // Q10 (walk W-D5): only a studio she holds as owner or admin is hers to
+  // export — `useViewerStudio` names no studio for a plain member, where
+  // `useAccountStudio` fell back to the studio she merely belongs to.
+  const { studio, isSettled } = useViewerStudio();
   const [running, setRunning] = useState(false);
   const [manifest, setManifest] = useState<StudioBillingManifest | null>(null);
   const [failure, setFailure] = useState<string | null>(null);

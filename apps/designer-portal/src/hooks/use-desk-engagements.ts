@@ -1029,13 +1029,20 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       const purchaseOrders = sentPoRowsError ? undefined : buildDeskPurchaseOrders(sentPoRows);
       const leads = leadRowsError ? undefined : buildDeskLeads(leadRows);
 
-      // Fix-now 6: name every modelled feed this read could not answer.
+      // Fix-now 6: name every modelled feed this read could not answer. Any one
+      // failed contributing read leaves its feed unread, even where the other
+      // half answered and still prints what it found (SQ-751 F4).
       const unreadFeeds = [
         ...(invoicesError || paidInvoicesError ? ['invoices'] : []),
         ...(eventsError ? ['deliveries'] : []),
-        ...(flaggedError && boardFlaggedError ? ['flagged lines'] : []),
+        ...(flaggedError || boardFlaggedError ? ['flagged lines'] : []),
         ...(ceremoniesError ? ['introductions'] : []),
-        ...(deskPhasesError || phasesTruncated || deskProposalsError || proposalsTruncated
+        ...(deskPhasesError ||
+        phasesTruncated ||
+        deskMilestonesError ||
+        deskProjectStartsError ||
+        deskProposalsError ||
+        proposalsTruncated
           ? ['schedules']
           : []),
         ...(liveProposalsError || liveProposalsTruncated ? ['proposals'] : []),

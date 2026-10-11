@@ -12,7 +12,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
-import { useSetNeedState } from '@patina/supabase';
+import { useNeedStateProjectIds, useSetNeedState } from '@patina/supabase';
 import { Input, Textarea } from '@/components/ui/controls';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
@@ -67,11 +67,18 @@ export function ActDraft({
   const [body, setBody] = useState(initial?.body ?? '');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // SQ-751 F2 — the lead changed between open and send; nothing went.
+  const [revoked, setRevoked] = useState(false);
+  // The act went but the Day Sheet could not record it (never silent).
+  const [unmarked, setUnmarked] = useState(false);
   const setNeedState = useSetNeedState();
+  // SQ-751 F6 / walk W-D3 — a need state is filed only on a project with a
+  // studio; an inquiry or proposal has none, so its act marks nothing.
+  const stateProjects = useNeedStateProjectIds();
 
   const mode: 'reading' | 'send' | 'save' | 'read-only' = !viewer.ready
     ? 'reading'
-    : viewer.canSend
+    : viewer.canSend && !revoked
       ? 'send'
       : onSaveForLead
         ? 'save'
@@ -87,27 +94,46 @@ export function ActDraft({
     setError(null);
     setPending(true);
     try {
+      // SQ-751 F2 — the send boundary reads the job's lead again: a sheet
+      // opened before a reassignment never sends on the old answer.
+      if (acted && viewer.recheck && !(await viewer.recheck())) {
+        setRevoked(true);
+        setPending(false);
+        return;
+      }
       await act(text());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not go through. Try again.');
       setPending(false);
       return;
     }
-    if (acted) {
+    if (acted && stateProjects.data?.has(need.projectId)) {
       // Q8 — the act is taken; the need now waits on the counterpart. The
       // send already went, so a failed mark never reads as a failed send.
-      await setNeedState
-        .mutateAsync({
+      try {
+        await setNeedState.mutateAsync({
           needKey: need.key,
           projectId: need.projectId,
           action: 'acted',
           ...(counterpart ? { waitingOn: counterpart } : {}),
-        })
-        .catch(() => undefined);
+        });
+      } catch {
+        setUnmarked(true);
+        setPending(false);
+        return;
+      }
     }
     setPending(false);
     onDone();
   };
+
+  if (unmarked) {
+    return (
+      <p role="status" data-act-unmarked className="mx-auto w-full max-w-[34rem] text-[14px] text-[var(--color-charcoal)]">
+        It went. The Day Sheet could not record it, so this line may still show there.
+      </p>
+    );
+  }
 
   return (
     <div data-act-draft={mode} className="mx-auto w-full max-w-[34rem] space-y-5">
@@ -167,6 +193,11 @@ export function ActDraft({
           className="border-l-2 border-[var(--color-terracotta)] pl-3 text-[14px] text-[var(--color-charcoal)]"
         >
           {error}
+        </p>
+      )}
+      {revoked && (
+        <p role="status" data-act-revoked className="text-[14px] text-[var(--color-charcoal)]">
+          Who leads this project changed since this opened, so nothing was sent.
         </p>
       )}
       {(mode === 'save' || mode === 'read-only') && (

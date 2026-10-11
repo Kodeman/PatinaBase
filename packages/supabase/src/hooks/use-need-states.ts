@@ -36,6 +36,12 @@ export function mapNeedStateRows(rows: NeedStateRow[]): Map<NeedKey, NeedState> 
   }]));
 }
 
+/**
+ * The viewer's own need states, across every studio she sits in. RLS returns
+ * only her rows, and `set_need_state` files each under the PROJECT's studio, so
+ * a read filtered by the Desk's studio missed every state a member of two
+ * studios wrote (walk W-D1). `organizationId` only gates the read.
+ */
 export function useNeedStates(organizationId: string) {
   return useQuery({
     queryKey: ['need-states', organizationId],
@@ -43,12 +49,32 @@ export function useNeedStates(organizationId: string) {
       const supabase = createBrowserClient();
       const { data, error } = await supabase
         .from('studio_need_states')
-        .select('need_key, project_id, deferred_until, acted_at, waiting_on, set_aside_until, set_aside_reason')
-        .eq('organization_id', organizationId);
+        .select('need_key, project_id, deferred_until, acted_at, waiting_on, set_aside_until, set_aside_reason');
       if (error) throw error;
       return mapNeedStateRows((data ?? []) as NeedStateRow[]);
     },
     enabled: Boolean(organizationId),
+  });
+}
+
+/**
+ * The projects a need state can be filed on: `set_need_state` needs a real
+ * project that belongs to a studio. An inquiry or proposal has no project yet
+ * (SQ-751 F6) and a legacy project may carry no studio (walk W-D3), so neither
+ * is offered a state the server would refuse.
+ */
+export function useNeedStateProjectIds() {
+  return useQuery({
+    queryKey: ['need-state-projects'],
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id')
+        .not('studio_id', 'is', null);
+      if (error) throw error;
+      return new Set(((data ?? []) as Array<{ id: string }>).map((project) => project.id));
+    },
   });
 }
 
