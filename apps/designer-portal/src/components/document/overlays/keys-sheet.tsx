@@ -118,7 +118,7 @@ export function KeysSheet() {
     <DocSheet
       open={open}
       onClose={() => setOpen(false)}
-      title="The keys"
+      title="Keyboard shortcuts"
       pageLabel="Reference"
       icon={Keyboard}
       helpKey={THE_KEYS_SURFACE_KEY}

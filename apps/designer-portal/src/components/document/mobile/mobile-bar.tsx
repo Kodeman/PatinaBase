@@ -45,14 +45,14 @@ const STRATA = (
 );
 
 function surfaceLabel(pathname: string | null): string {
-  if (!pathname || pathname === '/desk') return 'The Desk';
-  if (pathname.startsWith('/library')) return 'The Library';
-  if (pathname.startsWith('/people')) return 'The People Room';
+  if (!pathname || pathname === '/desk') return 'Studio overview';
+  if (pathname.startsWith('/library')) return 'Resource library';
+  if (pathname.startsWith('/people')) return 'Studio contacts';
   if (pathname.startsWith('/rooms') || pathname.startsWith('/room/'))
-    return 'The Scans';
-  if (pathname.startsWith('/drafting')) return 'Drafting';
-  if (pathname.startsWith('/compose')) return 'Composing';
-  return 'The Studio';
+    return 'Measured rooms';
+  if (pathname.startsWith('/drafting')) return 'Proposal workspace';
+  if (pathname.startsWith('/compose')) return 'Compose a piece';
+  return 'Studio';
 }
 
 /** US-19 D7 / F2-15 — the dock's short place word, where it differs from the
@@ -197,17 +197,17 @@ export function MobileBar() {
           },
           {
             key: 'specbook',
-            label: 'Spec book',
+            label: 'Specification book',
             href: `/doc/${documentProjectId}/spec-book`,
           },
           {
             key: 'boards',
-            label: 'Boards',
+            label: 'Design boards',
             href: boardsRoutePath(documentProjectId),
           },
           ...(callSheetOrdered
             ? []
-            : [{ key: 'callsheet', label: 'Call sheet', open: openCallSheet }]),
+            : [{ key: 'callsheet', label: 'Project directory', open: openCallSheet }]),
         ]
       : []),
   ];

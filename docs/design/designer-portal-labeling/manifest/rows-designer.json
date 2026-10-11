@@ -576,16 +576,16 @@
       "element": "Section heading"
     },
     "state": "default",
-    "source": "apps/designer-portal/src/components/document/desk-roster.tsx:1",
+    "source": "apps/designer-portal/src/lib/document/desk-roster-derivation.ts:643",
     "current": "Every job · {count} live · {count} overdue",
-    "proposed": "Studio workload · {count} active · {count} overdue",
-    "meaning": "section heading in Home & project roster (/desk); names this displayed state or content, without changing its behavior.",
+    "proposed": "Studio workload · {count} live · {count} overdue",
+    "meaning": "Roster heading in the plan §3 noun \"Studio workload\"; SQ-752 renamed the noun only (SQ-759 residue), the count words stay.",
     "owner": "D1",
     "depends": [],
-    "exception": "source gone: searched \"Every job · {count} live · {count} overdue\" in apps/designer-portal/src/components/document/desk-roster.tsx",
-    "verify": "manual rendered-copy check at apps/designer-portal/src/components/document/desk-roster.tsx",
-    "status": "exception",
-    "evidence": "US-25 line roster replaces the prior Desk card; old branch does not render at baseline 4b5285d0a."
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/desk-roster.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/desk-roster-derivation.ts:643 display copy changed; desk-roster tests; SQ-752 (c_mv3t581p_d194c8)"
   },
   {
     "id": "C-0029",
@@ -863,16 +863,16 @@
       "element": "Action link"
     },
     "state": "default",
-    "source": "apps/designer-portal/src/components/document/desk-roster.tsx:1",
+    "source": "apps/designer-portal/src/lib/document/act-names.ts:564",
     "current": "Send the pulse",
-    "proposed": "Review progress update",
-    "meaning": "action link in Home & project roster (/desk); names this destination or user action, without changing its behavior.",
+    "proposed": "Open the progress update",
+    "meaning": "pulse_due act. Not \"Review progress update\": FR1 forbids a leading \"Review\" (act-names.test.ts, document-guide.test.ts) and the act only navigates (SQ-760 po_unsent precedent).",
     "owner": "D1",
     "depends": [],
-    "exception": "source gone: searched \"Send the pulse\" in apps/designer-portal/src/components/document/desk-roster.tsx",
-    "verify": "manual rendered-copy check at apps/designer-portal/src/components/document/desk-roster.tsx",
-    "status": "exception",
-    "evidence": "US-25 line roster replaces the prior Desk card; old branch does not render at baseline 4b5285d0a."
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/act-names.ts:564 (ACT_TIER :155, document-guide.ts:644) display copy changed; direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
   },
   {
     "id": "C-0042",
@@ -884,16 +884,16 @@
       "element": "Status"
     },
     "state": "default",
-    "source": "apps/designer-portal/src/components/document/desk-roster.tsx:1",
+    "source": "apps/designer-portal/src/lib/document/desk-derivation.ts:1277",
     "current": "Sent {date} — not yet opened",
     "proposed": "Issued {date} · not yet viewed",
     "meaning": "status in Home & project roster (/desk); names this displayed state or content, without changing its behavior.",
     "owner": "D1",
     "depends": [],
-    "exception": "source gone: searched \"Sent {date} — not yet opened\" in apps/designer-portal/src/components/document/desk-roster.tsx",
-    "verify": "manual rendered-copy check at apps/designer-portal/src/components/document/desk-roster.tsx",
-    "status": "exception",
-    "evidence": "US-25 line roster replaces the prior Desk card; old branch does not render at baseline 4b5285d0a."
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/desk-derivation.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/desk-derivation.ts:1277 display copy changed; desk-derivation tests; SQ-752 (c_mv3t581p_d194c8)"
   },
   {
     "id": "C-0043",
@@ -905,16 +905,16 @@
       "element": "Action link"
     },
     "state": "default",
-    "source": "apps/designer-portal/src/components/document/desk-roster.tsx:1",
+    "source": "apps/designer-portal/src/lib/document/act-names.ts:545",
     "current": "Nudge {clientFirstName}",
     "proposed": "Contact {clientFirstName}",
     "meaning": "action link in Home & project roster (/desk); names this destination or user action, without changing its behavior.",
     "owner": "D1",
     "depends": [],
-    "exception": "source gone: searched \"Nudge {clientFirstName}\" in apps/designer-portal/src/components/document/desk-roster.tsx",
-    "verify": "manual rendered-copy check at apps/designer-portal/src/components/document/desk-roster.tsx",
-    "status": "exception",
-    "evidence": "US-25 line roster replaces the prior Desk card; old branch does not render at baseline 4b5285d0a."
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/act-names.ts:545,556 (ACT_TIER :109; old key kept) display copy changed; direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
   },
   {
     "id": "C-0044",
@@ -2513,7 +2513,7 @@
       "element": "Responsibility status"
     },
     "state": "error",
-    "source": "apps/designer-portal/src/lib/document/desk-roster-derivation.ts:218",
+    "source": "apps/designer-portal/src/lib/document/desk-scope.ts:72",
     "current": "With the maker",
     "proposed": "Awaiting supplier",
     "meaning": "responsibility status in Home errors & lifecycle (/desk); names this displayed state or content, without changing its behavior.",
@@ -2524,7 +2524,7 @@
     "exception": null,
     "verify": "manual rendered-copy check at apps/designer-portal/src/lib/document/desk-roster-derivation.ts",
     "status": "implemented",
-    "evidence": "US-25 Day Sheet already uses Direction C custody via desk-scope.ts; old literal retired."
+    "evidence": "apps/designer-portal/src/lib/document/desk-scope.ts:72 (custodyFor, consumed by desk-roster-derivation.ts:251) display copy; SQ-752 repointed from desk-roster-derivation.ts:218 (c_mv3t581p_d194c8)"
   },
   {
     "id": "C-0120",
@@ -22975,16 +22975,16 @@
       "element": "Sheet title"
     },
     "state": "default",
-    "source": "apps/designer-portal/src/components/document/people/directory/rolodex-seed-sheet.tsx:190",
+    "source": "apps/designer-portal/src/components/document/people/directory/rolodex-seed-sheet.tsx:195",
     "current": "Seed the rolodex",
-    "proposed": "Set up studio directory",
+    "proposed": "Add your studio contacts",
     "meaning": "sheet title in Studio setup (Account → Studio); names this displayed state or content, without changing its behavior.",
     "owner": "D1",
     "depends": [],
     "exception": null,
     "verify": "apps/designer-portal/src/components/document/people/__tests__/people-navigation.test.tsx",
     "status": "implemented",
-    "evidence": "apps/designer-portal/src/components/document/people/directory/rolodex-seed-sheet.tsx:190 display copy changed; apps/designer-portal/src/components/document/people/__tests__/people-navigation.test.tsx"
+    "evidence": "apps/designer-portal/src/components/document/people/directory/rolodex-seed-sheet.tsx:195 (studio-setup.ts:72 same words) display copy changed; SQ-759 residue, plan §3 \"Studio contacts\"; SQ-752 (c_mv3t581p_d194c8)"
   },
   {
     "id": "C-1092",
@@ -28548,18 +28548,18 @@
       "element": "Day Sheet status or act label"
     },
     "state": "conditional",
-    "source": "apps/designer-portal/src/lib/document/desk-derivation.ts:1208",
+    "source": "apps/designer-portal/src/lib/document/desk-derivation.ts:1407",
     "current": "NEW LEAD",
-    "proposed": "NEW LEAD",
+    "proposed": "NEW INQUIRY",
     "meaning": "Day Sheet status or act label in apps/designer-portal/src/lib/document/desk-derivation.ts; presentation copy only, with existing behavior and access unchanged.",
     "owner": "D1",
     "depends": [
       "US-25 Day Sheet"
     ],
     "exception": null,
-    "verify": "manual rendered-copy check at apps/designer-portal/src/lib/document/desk-derivation.ts",
-    "status": "unchanged",
-    "evidence": "Direction C identical to baseline; verified source apps/designer-portal/src/lib/document/desk-derivation.ts:1208; manual rendered-copy check at apps/designer-portal/src/lib/document/desk-derivation.ts"
+    "verify": "apps/designer-portal/src/lib/document/__tests__/desk-derivation.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/desk-derivation.ts:1407 display copy changed; desk-derivation tests; SQ-752 (c_mv3t581p_d194c8)"
   },
   {
     "id": "C-10020",
@@ -29010,18 +29010,18 @@
       "element": "Day Sheet status or act label"
     },
     "state": "conditional",
-    "source": "apps/designer-portal/src/lib/document/act-names.ts:102",
+    "source": "apps/designer-portal/src/lib/document/act-names.ts:608",
     "current": "Nudge {first name}",
-    "proposed": "Nudge {first name}",
+    "proposed": "Contact {first name}",
     "meaning": "Day Sheet status or act label in apps/designer-portal/src/lib/document/act-names.ts; presentation copy only, with existing behavior and access unchanged.",
     "owner": "D1",
     "depends": [
       "US-25 Day Sheet"
     ],
     "exception": null,
-    "verify": "manual rendered-copy check at apps/designer-portal/src/lib/document/act-names.ts",
-    "status": "unchanged",
-    "evidence": "Direction C identical to baseline; verified source apps/designer-portal/src/lib/document/act-names.ts:102; manual rendered-copy check at apps/designer-portal/src/lib/document/act-names.ts"
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/act-names.ts:608-609 (old ACT_TIER key :102 kept for classification) display copy changed; direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
   },
   {
     "id": "C-10041",
@@ -29098,16 +29098,16 @@
       "element": "aria display copy"
     },
     "state": "aria",
-    "source": "apps/designer-portal/src/components/document/desk-roster.tsx:356",
+    "source": "apps/designer-portal/src/components/document/desk-roster.tsx:86",
     "current": "Every job actions",
-    "proposed": "Every job actions",
+    "proposed": "Studio workload actions",
     "meaning": "aria display copy in apps/designer-portal/src/components/document/desk-roster.tsx; presentation copy only, with existing behavior and access unchanged.",
     "owner": "D1",
     "depends": [],
     "exception": null,
-    "verify": "manual rendered-copy check at apps/designer-portal/src/components/document/desk-roster.tsx",
-    "status": "unchanged",
-    "evidence": "Direction C identical to baseline; verified source apps/designer-portal/src/components/document/desk-roster.tsx:356; manual rendered-copy check at apps/designer-portal/src/components/document/desk-roster.tsx"
+    "verify": "apps/designer-portal/src/components/document/desk-roster.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/desk-roster.tsx:86 display copy changed; desk-roster tests; SQ-752 (c_mv3t581p_d194c8)"
   },
   {
     "id": "C-10045",
@@ -30104,14 +30104,14 @@
     "state": "aria",
     "source": "apps/designer-portal/src/components/document/rooms/library/library-card.tsx:324",
     "current": "Quick teaching actions",
-    "proposed": "Quick teaching actions",
+    "proposed": "Quick attribution actions",
     "meaning": "aria display copy in apps/designer-portal/src/components/document/rooms/library/library-card.tsx; presentation copy only, with existing behavior and access unchanged.",
     "owner": "D3",
     "depends": [],
     "exception": null,
-    "verify": "apps/designer-portal/src/components/document/rooms/library/__tests__/library-entrances.test.tsx",
-    "status": "unchanged",
-    "evidence": "apps/designer-portal/src/components/document/rooms/library/library-card.tsx existing label retained as proposed."
+    "verify": "apps/designer-portal/src/components/document/rooms/library/__tests__/library-card-provenance.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/rooms/library/library-card.tsx:324 display copy changed; library card tests; SQ-752 (c_mv3t581p_d194c8)"
   },
   {
     "id": "C-10093",
@@ -30664,14 +30664,14 @@
     "state": "aria",
     "source": "apps/designer-portal/src/components/document/people/compare-merge-sheet.tsx:602",
     "current": "Merge these two cards",
-    "proposed": "Merge these two cards",
+    "proposed": "Merge duplicate records",
     "meaning": "aria display copy in apps/designer-portal/src/components/document/people/compare-merge-sheet.tsx; presentation copy only, with existing behavior and access unchanged.",
     "owner": "D1",
     "depends": [],
     "exception": null,
-    "verify": "apps/designer-portal/src/components/document/people/__tests__/people-navigation.test.tsx",
-    "status": "unchanged",
-    "evidence": "Direction C identical to baseline; verified source apps/designer-portal/src/components/document/people/compare-merge-sheet.tsx:602; apps/designer-portal/src/components/document/people/__tests__/people-navigation.test.tsx"
+    "verify": "apps/designer-portal/src/components/document/people/__tests__/compare-merge-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/people/compare-merge-sheet.tsx:602 display copy changed; matches the visible button :525; SQ-752 (c_mv3t581p_d194c8)"
   },
   {
     "id": "C-10121",
@@ -31945,7 +31945,7 @@
     "source": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:420",
     "current": "{amount} OUT · {amount} UNDRAWN",
     "proposed": "{amount} RECEIVABLE · {amount} UNDISBURSED",
-    "meaning": "The rail value for Money, in the C-0332/C-0333 rung words; the undisbursed amount is client-price based. Capped at 30 characters by dropping the trailing figure whole, never mid-word. SQ-764 F28 ruling.",,
+    "meaning": "The rail value for Money, in the C-0332/C-0333 rung words; the undisbursed amount is client-price based. Capped at 30 characters by dropping the trailing figure whole, never mid-word. SQ-764 F28 ruling.",
     "owner": "D2",
     "depends": [],
     "exception": null,
@@ -31965,7 +31965,7 @@
     "source": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:421",
     "current": "{amount} out · {amount} not drawn",
     "proposed": "{amount} receivable · {amount} undisbursed",
-    "meaning": "The rail count line for Money, in the C-0332/C-0333 rung words; the undisbursed amount is client-price based. Capped at 40 characters by dropping the trailing figure whole, never mid-word. SQ-764 F28 ruling.",,
+    "meaning": "The rail count line for Money, in the C-0332/C-0333 rung words; the undisbursed amount is client-price based. Capped at 40 characters by dropping the trailing figure whole, never mid-word. SQ-764 F28 ruling.",
     "owner": "D2",
     "depends": [],
     "exception": null,
@@ -33493,5 +33493,985 @@
     "verify": "apps/designer-portal/src/lib/help-system/help-topics.test.ts",
     "status": "implemented",
     "evidence": "Reconciled unowned rendered Help description to Direction C and R82 supersession."
+  },
+  {
+    "id": "C-22001",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio shell",
+      "route": "/desk",
+      "element": "Browser tab title"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/app/(document)/layout.tsx:35",
+    "current": "The Desk · Patina",
+    "proposed": "Studio overview · Patina",
+    "meaning": "Tab title in the plan §3 noun for the Desk (SQ-764 residue).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/app/(document)/layout.tsx (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/app/(document)/layout.tsx:35 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22002",
+    "audience": "designer",
+    "surface": {
+      "area": "Room navigation",
+      "route": "Any room → back link",
+      "element": "Back-link fallback for an unknown origin"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/room-origin.ts:54",
+    "current": "back",
+    "proposed": "back",
+    "meaning": "Unknown origins keep the generic \"back\"; the checkpoint had changed it to \"Project file\", which misnamed every non-document origin, and SQ-752 reverted it.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "unchanged",
+    "evidence": "apps/designer-portal/src/lib/document/room-origin.ts:54 kept; apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22003",
+    "audience": "designer",
+    "surface": {
+      "area": "Resource library",
+      "route": "/library/judgments",
+      "element": "Back link"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/app/(document)/library/judgments/page.tsx:113",
+    "current": "the Library",
+    "proposed": "Resource library",
+    "meaning": "Back link names its destination in the plan §3 noun.",
+    "owner": "D3",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/app/(document)/library/judgments/page.tsx (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/app/(document)/library/judgments/page.tsx:113 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22004",
+    "audience": "designer",
+    "surface": {
+      "area": "Resource library",
+      "route": "/compose",
+      "element": "Back link"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/compose/composing-page.tsx:204",
+    "current": "the Library",
+    "proposed": "Resource library",
+    "meaning": "Back link names its destination in the plan §3 noun.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/compose/composing-page.tsx (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/compose/composing-page.tsx:204 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22005",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio shell",
+      "route": "Any → ? keys sheet",
+      "element": "Sheet title"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/overlays/keys-sheet.tsx:121",
+    "current": "The keys",
+    "proposed": "Keyboard shortcuts",
+    "meaning": "Sheet title matches the command-bar entry that opens it (C-0075).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/overlays/keys-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/overlays/keys-sheet.tsx:121 display copy changed; apps/designer-portal/src/components/document/overlays/keys-sheet.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22006",
+    "audience": "designer",
+    "surface": {
+      "area": "Help",
+      "route": "/desk walkthrough",
+      "element": "Step heading fallback (two steps, :141 and :204)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/help/desk-walkthrough.tsx:141",
+    "current": "The Desk",
+    "proposed": "Studio overview",
+    "meaning": "Fallback heading when Sanity sends none; Sanity copy still wins.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/help/desk-walkthrough.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/help/desk-walkthrough.tsx:141 display copy changed; apps/designer-portal/src/components/document/help/desk-walkthrough.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22007",
+    "audience": "designer",
+    "surface": {
+      "area": "Help",
+      "route": "/desk walkthrough",
+      "element": "CTA fallback (two steps, :188 and :227)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/help/desk-walkthrough.tsx:188",
+    "current": "Capture a lead",
+    "proposed": "Record an inquiry",
+    "meaning": "Fallback CTA when Sanity sends none; opens the same capture sheet.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/help/desk-walkthrough.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/help/desk-walkthrough.tsx:188 display copy changed; apps/designer-portal/src/components/document/help/desk-walkthrough.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22008",
+    "audience": "designer",
+    "surface": {
+      "area": "Help",
+      "route": "/desk walkthrough",
+      "element": "Walkthrough title"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/help/desk-walkthrough.tsx:564",
+    "current": "This is your Desk",
+    "proposed": "This is your Studio overview",
+    "meaning": "Walkthrough title in the plan §3 noun.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/help/desk-walkthrough.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/help/desk-walkthrough.tsx:564 display copy changed; apps/designer-portal/src/components/document/help/desk-walkthrough.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22009",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → lens ladder",
+      "element": "Shelf rung"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:709",
+    "current": "Spec book",
+    "proposed": "Specification book",
+    "meaning": "Rung matches its shelf title; key \"specbook\" unchanged.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:709 display copy changed; apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22010",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → lens ladder",
+      "element": "Shelf rung"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:739",
+    "current": "Call sheet",
+    "proposed": "Project directory",
+    "meaning": "Rung matches its shelf title; key \"callsheet\" unchanged.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:739 display copy changed; apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22011",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → lens ladder",
+      "element": "Room focus reset"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:749",
+    "current": "Put down the room",
+    "proposed": "Clear room focus",
+    "meaning": "Says what the control does: clears the room focus.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:749 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22012",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → guide",
+      "element": "Care headline and reason (:208-209)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/document-guide.ts:208",
+    "current": "Close the book on this one",
+    "proposed": "Close out project",
+    "meaning": "Closeout in the plan §3 noun; reason ends \"close out the project.\"",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/document-guide.ts (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/document-guide.ts:208 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22013",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → guide",
+      "element": "Care action label"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/document-guide.ts:239",
+    "current": "Close the book",
+    "proposed": "Close out project",
+    "meaning": "Same act as the care-band Close out project control (C-1293).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/document-guide.ts (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/document-guide.ts:239 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22014",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → guide",
+      "element": "Need verb (po_unsent)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/document-guide.ts:642",
+    "current": "Send the purchase order",
+    "proposed": "Open the purchase order",
+    "meaning": "The act only navigates to the order; nothing is sent (SQ-760 precedent).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/document-guide.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/document-guide.ts:642 display copy changed; apps/designer-portal/src/lib/document/__tests__/document-guide.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22015",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → guide",
+      "element": "Need verb (pulse_due)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/document-guide.ts:644",
+    "current": "Send the pulse",
+    "proposed": "Open the progress update",
+    "meaning": "Matches C-0041. Not \"Review progress update\": FR1 forbids a leading \"Review\" (act-names.test.ts, document-guide.test.ts); the act only navigates.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/document-guide.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/document-guide.ts:644 display copy changed; apps/designer-portal/src/lib/document/__tests__/document-guide.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22016",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → send wall",
+      "element": "Nudge label (:917-918)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/document-guide.ts:917",
+    "current": "Nudge {clientName}",
+    "proposed": "Contact {clientName}",
+    "meaning": "Contact, never Nudge (C-0043); falls back to \"Contact the client\".",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/document-guide.ts (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/document-guide.ts:917 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22017",
+    "audience": "designer",
+    "surface": {
+      "area": "Project schedule",
+      "route": "/doc/[id] → schedule",
+      "element": "Phase fold toggle"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/schedule/phase-section.tsx:184",
+    "current": "Fold / Unfold",
+    "proposed": "Collapse / Expand",
+    "meaning": "Plain disclosure verbs.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/schedule/__tests__/phase-section-row-overflow.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/schedule/phase-section.tsx:184 display copy changed; apps/designer-portal/src/components/document/schedule/__tests__/phase-section-row-overflow.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22018",
+    "audience": "designer",
+    "surface": {
+      "area": "Tester notes",
+      "route": "Any → feedback widget",
+      "element": "screen_name context"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/feedback.ts:167",
+    "current": "{screenNameFromPath(route)}",
+    "proposed": "{screenNameFromPath(route)}",
+    "meaning": "Persisted feedback context, not display copy; renaming it would split stored history, so it stays unchanged.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/feedback.ts (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "unchanged",
+    "evidence": "apps/designer-portal/src/lib/document/feedback.ts:167 kept; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22019",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview",
+      "route": "/desk → Day Sheet",
+      "element": "Column heading"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/day-sheet.tsx:213",
+    "current": "Coming back",
+    "proposed": "Awaiting",
+    "meaning": "Same word as the Awaiting {client} custody phrases.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/day-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/day-sheet.tsx:213 display copy changed; apps/designer-portal/src/components/document/day-sheet.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22020",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → act sheet",
+      "element": "Loading line"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/acts/act-sheets.tsx:48",
+    "current": "Reading the record…",
+    "proposed": "Loading the record…",
+    "meaning": "Plain loading state.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-sheets.tsx:48 display copy changed; apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22021",
+    "audience": "designer",
+    "surface": {
+      "area": "Search",
+      "route": "Any → ⌘K",
+      "element": "No-results note on a project file"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/command-bar.tsx:1525",
+    "current": "Nothing on this paper matches \"{query}\".",
+    "proposed": "No results in this project file for \"{query}\".",
+    "meaning": "Project file in the plan §3 noun (SQ-764 F2).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/__tests__/command-bar-paper.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/command-bar.tsx:1525 display copy changed; apps/designer-portal/src/components/document/__tests__/command-bar-paper.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22022",
+    "audience": "designer",
+    "surface": {
+      "area": "Search",
+      "route": "/doc/[id] → ⌘K",
+      "element": "Paper keys row"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/command-bar.tsx:1480",
+    "current": "Keys",
+    "proposed": "Keyboard shortcuts",
+    "meaning": "Same label as the studio row (C-0075).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/__tests__/command-bar-paper.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/command-bar.tsx:1480 display copy changed; apps/designer-portal/src/components/document/__tests__/command-bar-paper.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22023",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → lens band",
+      "element": "Client custody phrase"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/lens-band-derivation.ts:1240",
+    "current": "Waiting on {clientFirstName}: {sentence}",
+    "proposed": "Awaiting {clientFirstName}: {sentence}",
+    "meaning": "Custody words match the roster (C-0033) (SQ-764 F3).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/__tests__/lens-band.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/lens-band-derivation.ts:1240 display copy changed; apps/designer-portal/src/components/document/__tests__/lens-band.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22024",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → lens band",
+      "element": "Supplier custody phrase"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/lens-band-derivation.ts:1241",
+    "current": "With the maker: {sentence}",
+    "proposed": "Awaiting supplier: {sentence}",
+    "meaning": "Custody words match C-0119 (SQ-764 F3).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/__tests__/lens-band.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/lens-band-derivation.ts:1241 display copy changed; apps/designer-portal/src/components/document/__tests__/lens-band.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22025",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → lens band",
+      "element": "Standing door accessible name"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/lens-band-derivation.ts:1047",
+    "current": "Everything open on this job, {count}",
+    "proposed": "All open · {count} — everything open on this job",
+    "meaning": "Accessible name starts with the visible label (WCAG 2.5.3; SQ-759 residue).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/lens-band-derivation.ts:1047 display copy changed; apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22026",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview",
+      "route": "/desk → contents",
+      "element": "Proposal entry (one-voice off)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/desk-contents.tsx:410",
+    "current": "Open the Contract Room",
+    "proposed": "Open the proposal workspace",
+    "meaning": "Flag-off branch in the plan §3 noun; flag-on stays C-0059.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/desk-contents.tsx (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/desk-contents.tsx:410 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22027",
+    "audience": "designer",
+    "surface": {
+      "area": "Project finances",
+      "route": "/doc/[id] → money ticket",
+      "element": "Receivable clause (:608-609)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/ticket-derivation.ts:608",
+    "current": "{amount} owed you, {days}",
+    "proposed": "{amount} receivable, {days}",
+    "meaning": "Same word as the Client receivables rung (C-0332).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/ticket-derivation.ts (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/ticket-derivation.ts:608 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22028",
+    "audience": "designer",
+    "surface": {
+      "area": "Project finances",
+      "route": "/doc/[id] → money ticket",
+      "element": "Undrawn clause"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/ticket-derivation.ts:614",
+    "current": "{amount} {kind} not drawn",
+    "proposed": "{amount} {kind} undisbursed",
+    "meaning": "Same word as the Undisbursed vendor payments rung (C-0333).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/ticket-derivation.ts (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/ticket-derivation.ts:614 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22029",
+    "audience": "designer",
+    "surface": {
+      "area": "Project finances",
+      "route": "/doc/[id] → money ticket",
+      "element": "Load failure line"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/ticket-derivation.ts:619",
+    "current": "Money could not be read",
+    "proposed": "Project financials couldn't load",
+    "meaning": "Names the region and says it did not load.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/ticket-derivation.ts (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/ticket-derivation.ts:619 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22030",
+    "audience": "designer",
+    "surface": {
+      "area": "Project finances",
+      "route": "/doc/[id] → money ticket",
+      "element": "Exception phrase"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/ticket-derivation.ts:637",
+    "current": "{amount} owed you",
+    "proposed": "{amount} receivable",
+    "meaning": "Same word as C-0332.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/ticket-derivation.ts (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/ticket-derivation.ts:637 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22031",
+    "audience": "designer",
+    "surface": {
+      "area": "Project finances",
+      "route": "/doc/[id] → money ticket",
+      "element": "Ticket label"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/ticket-derivation.ts:647",
+    "current": "Money",
+    "proposed": "Project financials",
+    "meaning": "Same noun as the money region (C-0324).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/ticket-derivation.ts (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/ticket-derivation.ts:647 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22032",
+    "audience": "designer",
+    "surface": {
+      "area": "Help",
+      "route": "Help → topics",
+      "element": "Terminology description"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/help-system/help-topics.ts:73",
+    "current": "The words Patina uses on purpose — stamps, courts, the margin, the Engine — and why.",
+    "proposed": "The terms Patina uses on purpose, and what each one means.",
+    "meaning": "Drops the retired metaphors (SQ-764 F35).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/help-system/help-topics.ts:73 display copy changed; apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22033",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio administration",
+      "route": "Studio → Accounts",
+      "element": "Book title"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/accounts/accounts-book.tsx:126",
+    "current": "Accounts",
+    "proposed": "Studio accounts",
+    "meaning": "Studio-scoped noun, beside Purchase orders.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/accounts/accounts-query-states.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/accounts/accounts-book.tsx:126 display copy changed; apps/designer-portal/src/components/document/accounts/accounts-query-states.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22034",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio setup",
+      "route": "Account → Studio",
+      "element": "Setup step"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/studio-setup.ts:72",
+    "current": "Seed the rolodex",
+    "proposed": "Add your studio contacts",
+    "meaning": "Same words as the sheet title (C-1091), plan §3 \"Studio contacts\".",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/people/__tests__/rolodex-seed-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/studio-setup.ts:72 display copy changed; apps/designer-portal/src/components/document/people/__tests__/rolodex-seed-sheet.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22035",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio shell",
+      "route": "Any (phone) → document bar",
+      "element": "Surface label (:48-55)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/mobile/mobile-bar.tsx:48",
+    "current": "The Desk / The Library / The People Room / The Scans / Drafting / Composing / The Studio",
+    "proposed": "Studio overview / Resource library / Studio contacts / Measured rooms / Proposal workspace / Compose a piece / Studio",
+    "meaning": "Surface names in the plan §3 nouns.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/mobile/mobile-bar.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/mobile/mobile-bar.tsx:48 display copy changed; apps/designer-portal/src/components/document/mobile/mobile-bar.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22036",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio shell",
+      "route": "/doc/[id] (phone) → More",
+      "element": "Shelf entries (:200-210)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/mobile/mobile-bar.tsx:200",
+    "current": "Spec book / Boards / Call sheet",
+    "proposed": "Specification book / Design boards / Project directory",
+    "meaning": "Entries match their shelf titles; keys unchanged.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/mobile/mobile-bar.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/mobile/mobile-bar.tsx:200 display copy changed; apps/designer-portal/src/components/document/mobile/mobile-bar.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22037",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio shell",
+      "route": "Any → studio drawer",
+      "element": "Breadcrumb (:112-119)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/studio-drawer.tsx:112",
+    "current": "Library / People / Rooms / Drafting / Document",
+    "proposed": "Resource library / Studio contacts / Measured rooms / Proposal workspace / Project file",
+    "meaning": "Breadcrumbs in the plan §3 nouns.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/__tests__/studio-drawer.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/studio-drawer.tsx:112 display copy changed; apps/designer-portal/src/components/document/__tests__/studio-drawer.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22038",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → shelf",
+      "element": "Shelf title and eyebrow"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/shelves.ts:57",
+    "current": "Spec book",
+    "proposed": "Specification book",
+    "meaning": "Plan §3 noun; key \"specbook\" unchanged.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/shelves.ts:57 display copy changed; apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22039",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → shelf",
+      "element": "Shelf title and eyebrow"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/shelves.ts:67",
+    "current": "Boards",
+    "proposed": "Design boards",
+    "meaning": "Plan §3 noun; key \"moodboards\" unchanged.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/shelves.ts:67 display copy changed; apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22040",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → shelf",
+      "element": "Shelf title and eyebrow"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/shelves.ts:75",
+    "current": "Call sheet",
+    "proposed": "Project directory",
+    "meaning": "Plan §3 noun; key \"callsheet\" unchanged.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/shelves.ts:75 display copy changed; apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22041",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → index",
+      "element": "Index entry"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/document-index.ts:71",
+    "current": "Money",
+    "proposed": "Project financials",
+    "meaning": "Same noun as the region (C-0324).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/document-index.ts (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/document-index.ts:71 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22042",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → index",
+      "element": "Index entry"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/document-index.ts:76",
+    "current": "Closing the book",
+    "proposed": "Project closeout",
+    "meaning": "Same noun as the band (C-1292).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/care-band.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/document-index.ts:76 display copy changed; apps/designer-portal/src/components/document/care-band.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22043",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → care band",
+      "element": "Section names and eyebrow (:383, :444-445, :476)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/care-band.tsx:383",
+    "current": "Closing the book / Care · closing the book",
+    "proposed": "Project closeout / Care · project closeout",
+    "meaning": "Same noun as C-1292 everywhere the band names itself.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/care-band.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/care-band.tsx:383 display copy changed; apps/designer-portal/src/components/document/care-band.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22044",
+    "audience": "designer",
+    "surface": {
+      "area": "Purchasing",
+      "route": "/doc/[id] → Delivery table",
+      "element": "Release lift"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/worktable/release-lift.tsx:45",
+    "current": "Release for authorization",
+    "proposed": "Prepare purchasing authorization",
+    "meaning": "Same ceremony as C-1288; \"Approve release\" stays on the held-PO act only. actionKey \"release-for-authorization\" unchanged. Ruling c_mv3u14n5_9097d9, confirmed by the orchestrator.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/worktable/release-lift.tsx (no render test; pnpm --filter @patina/designer-portal type-check)",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/worktable/release-lift.tsx:45 display copy changed; type-check; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22045",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview",
+      "route": "/desk → needs",
+      "element": "Held release need (:1603-1606)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/desk-derivation.ts:1603",
+    "current": "Release {holder's|the} order to {vendor} · {total}",
+    "proposed": "Approve the release of {holder's|the} order to {vendor} · {total}",
+    "meaning": "Same act as \"Approve release\" (C-21012); multi-order text says \"for your release approval\".",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/desk-derivation.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/desk-derivation.ts:1603 display copy changed; apps/designer-portal/src/lib/document/__tests__/desk-derivation.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22046",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview",
+      "route": "/desk → needs",
+      "element": "Held release action (one-voice off)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/desk-derivation.ts:1610",
+    "current": "Release",
+    "proposed": "Approve release",
+    "meaning": "Flag-off label matches the flag-on act (C-21013).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/desk-derivation.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/desk-derivation.ts:1610 display copy changed; apps/designer-portal/src/lib/document/__tests__/desk-derivation.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22047",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview",
+      "route": "/desk → needs",
+      "element": "New inquiry need (:1395-1400)"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/desk-derivation.ts:1395",
+    "current": "New lead — respond [by {date}]",
+    "proposed": "New inquiry — respond [by {date}]",
+    "meaning": "Inquiry in the plan §3 noun, beside the NEW INQUIRY stamp (C-10019).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/desk-derivation.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/desk-derivation.ts:1395 display copy changed; apps/designer-portal/src/lib/document/__tests__/desk-derivation.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22048",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → own act",
+      "element": "Proposal follow-up act"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/document/act-names.ts:487",
+    "current": "Nudge {first name}",
+    "proposed": "Contact {first name}",
+    "meaning": "Contact, never Nudge (C-0043); \"Contact the client\" without a name; old ACT_TIER key kept for classification.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/act-names.ts:487 display copy changed; apps/designer-portal/src/lib/document/__tests__/direction-c-residue.test.ts; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-22049",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview",
+      "route": "/desk → roster",
+      "element": "Section eyebrow"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/desk-roster.tsx:65",
+    "current": "Every job",
+    "proposed": "Studio workload",
+    "meaning": "Same noun as the roster heading (C-0028) and its actions (C-10044).",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/desk-roster.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/desk-roster.tsx:65 display copy changed; apps/designer-portal/src/components/document/desk-roster.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
   }
 ]

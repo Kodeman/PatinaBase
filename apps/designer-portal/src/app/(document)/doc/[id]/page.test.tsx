@@ -1277,14 +1277,14 @@ describe('DocumentPage guide activation', () => {
     expect(pulse).toHaveAttribute('aria-expanded', 'false');
 
     // First activation unfolds it.
-    fireEvent.click(screen.getByRole('button', { name: 'Send the pulse' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open the progress update' }));
     expect(document.getElementById('document-pulse-control-desktop')).toHaveAttribute(
       'aria-expanded', 'true',
     );
     expect(screen.getByText('Pulse body')).toBeInTheDocument();
 
     // Second activation must leave it open, not toggle it shut.
-    fireEvent.click(screen.getByRole('button', { name: 'Send the pulse' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open the progress update' }));
     expect(document.getElementById('document-pulse-control-desktop')).toHaveAttribute(
       'aria-expanded', 'true',
     );
@@ -2607,9 +2607,9 @@ describe('DocumentPage guide activation', () => {
         const events = listen(true);
         try {
           render(<DocumentPage params={fulfilledParams} />);
-          fireEvent.click(screen.getByRole('button', { name: 'Nudge Avery' }));
+          fireEvent.click(screen.getByRole('button', { name: 'Contact Avery' }));
           expect(events.heard).toEqual([
-            { type: 'document:compose-message', detail: { named: ['Primary bedroom rug'], act: 'Nudge Avery' } },
+            { type: 'document:compose-message', detail: { named: ['Primary bedroom rug'], act: 'Contact Avery' } },
           ]);
         } finally {
           events.stop();
@@ -2678,7 +2678,7 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(bandSentence()).toMatch(/^Waiting on .+: Primary bedroom approval overdue 6 days/);
+      expect(bandSentence()).toMatch(/^Awaiting .+: Primary bedroom approval overdue 6 days/);
     });
 
     // US-19 FR2 F2-1 / 499-1 (SQ-512) — line 1 is the job's name, never the
@@ -2705,7 +2705,7 @@ describe('DocumentPage guide activation', () => {
       const identity = document.querySelector('[data-lens-identity]')?.textContent ?? '';
       expect(identity).toBe('Project · Stone Residence');
       expect(identity).not.toContain('Avery');
-      expect(screen.getByRole('button', { name: 'Nudge Avery' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Contact Avery' })).toBeInTheDocument();
     });
 
     // US-19 FR3 F3-11 — Cedar: the install reading reaches line 2 as Next's
@@ -2740,7 +2740,7 @@ describe('DocumentPage guide activation', () => {
       render(<DocumentPage params={fulfilledParams} />);
 
       expect(bandLine2()?.getAttribute('data-lens-line2-kind')).toBe('next');
-      expect(screen.getByRole('button', { name: 'Everything open on this job, 2' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'All open · 2 — everything open on this job' })).toBeInTheDocument();
       // FR6 F6-10 (D20) — no maker is recorded, so the held ask's repair is
       // Next: `Add the maker`, quoting the reading. The shorter act leaves room
       // for the long reading at 1440.
@@ -2912,7 +2912,7 @@ describe('DocumentPage guide activation', () => {
       // reach the page one paint after the first, and L-1 turns the sentence
       // over 90ms rather than swapping it under the reader's eye.
       await waitFor(() => expect(bandLine2Kind()).toBe('standing'));
-      expect(bandSentence()).toContain('$17,500 owed you');
+      expect(bandSentence()).toContain('$17,500 receivable');
     });
 
     it('B2 — stops naming a row once its data is gone', () => {

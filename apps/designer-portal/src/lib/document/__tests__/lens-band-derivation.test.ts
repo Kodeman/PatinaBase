@@ -559,7 +559,7 @@ describe('the door counts what the sheet holds (N-02)', () => {
     // is not discounted and the door stands. `standingCount − 1` printed none.
     const model = deriveLensBand(
       input({
-        guide: { text: 'Sent Aug 23 — not yet opened', act: null },
+        guide: { text: 'Issued Aug 23 · not yet viewed', act: null },
         inputs: [
           {
             key: 'signature',
@@ -873,7 +873,7 @@ describe('deriveLensBand · the open inputs (W3-R2)', () => {
     const model = deriveLensBand(
       input({
         inputs: [INPUT_ITEM],
-        guide: { text: 'Sent Aug 23 — not yet opened', act: null },
+        guide: { text: 'Issued Aug 23 · not yet viewed', act: null },
       }),
     );
     expect(model.line2.kind).toBe('guide');
@@ -1407,9 +1407,9 @@ describe('deriveNext · D2’s order', () => {
         clientFirstName: first,
         closed: false,
       })?.sentence;
-    expect(custody('client', 'Chen')).toBe('Waiting on Chen: Fabric overdue');
-    expect(custody('client', null)).toBe('Waiting on the client: Fabric overdue');
-    expect(custody('maker', 'Chen')).toBe('With the maker: Fabric overdue');
+    expect(custody('client', 'Chen')).toBe('Awaiting Chen: Fabric overdue');
+    expect(custody('client', null)).toBe('Awaiting the client: Fabric overdue');
+    expect(custody('maker', 'Chen')).toBe('Awaiting supplier: Fabric overdue');
     expect(custody('designer', 'Chen')).toBe('Fabric overdue');
     expect(custody(undefined, 'Chen')).toBe('Fabric overdue');
   });
@@ -1493,19 +1493,19 @@ describe('deriveNext · the band names the client’s first name (499-1)', () =>
     { ...need('d', 'overdue_decision', 'Bedroom approval overdue 6 days', 'Send a reminder', '2026-08-23'), owner: 'client' as const },
   ];
 
-  it('prints Nudge Mei, and the client only as the family fallback', () => {
+  it('prints Contact Mei, and the client only as the family fallback', () => {
     const named = deriveNext({ standing: standingOf(decision), ownAct: null, clientFirstName: 'Mei', closed: false });
-    expect(named?.act.label).toBe('Nudge Mei');
+    expect(named?.act.label).toBe('Contact Mei');
     const unnamed = deriveNext({ standing: standingOf(decision), ownAct: null, clientFirstName: null, closed: false });
-    expect(unnamed?.act.label).toBe('Nudge the client');
+    expect(unnamed?.act.label).toBe('Contact the client');
   });
 
   it('names the sheet rows from the first name the caller passes', () => {
     const { voice } = deriveLensBand(
       input({ needs: decision, household: 'Client User', clientFirstName: 'Mei', now: NOW, ownAct: null }),
     );
-    expect(voice.next?.act.label).toBe('Nudge Mei');
-    expect(voice.standing[0].act?.label).toBe('Nudge Mei');
+    expect(voice.next?.act.label).toBe('Contact Mei');
+    expect(voice.standing[0].act?.label).toBe('Contact Mei');
   });
 });
 
@@ -1706,7 +1706,7 @@ describe('deriveLensBand · the voice (D1 eyebrow, D2 band)', () => {
     const act = (key: string) => voice.standing.find((item) => item.key === key)?.act?.label;
     expect(act('ticket:spec')).toBe('Fill the 3 placeholders');
     expect(act('ticket:pieces')).toBe('Follow up with the maker');
-    expect(voice.inputs[0].act?.label).toBe('Nudge Mei');
+    expect(voice.inputs[0].act?.label).toBe('Contact Mei');
     // Borrowed acts never choose Next.
     expect(voice.next?.rowKey).toBe('need:pay-0');
   });
@@ -1875,8 +1875,8 @@ describe('deriveLensBand · FR3: every row carries its act (F3-8, 512-6)', () =>
 
   it.each([
     ['pieces', '1 damaged', 'File the claim', 'document-act-pieces-head'],
-    ['pieces', '2 awaiting a decision', 'Nudge Mei', null],
-    ['money', '$4,200 owed you', 'Nudge Mei', null],
+    ['pieces', '2 awaiting a decision', 'Contact Mei', null],
+    ['money', '$4,200 owed you', 'Contact Mei', null],
     ['dates', 'Install day has passed', 'Set dates', 'document-act-install-window'],
     ['pieces', 'NA-2026-077 unanswered, 6 days', 'Follow up with the maker', 'document-act-pieces-head'],
   ] as const)('%s `%s` carries `%s`, landing on %s', (key, phrase, label, target) => {
@@ -1922,7 +1922,7 @@ describe('deriveLensBand · FR3: every row carries its act (F3-8, 512-6)', () =>
       needs: [decision],
     });
     const row = voice.standing.find((item) => item.key === 'ticket:pieces');
-    expect(row?.act?.label).toBe('Nudge Mei');
+    expect(row?.act?.label).toBe('Contact Mei');
     row?.act?.onAct();
     expect(decision.onAct).toHaveBeenCalled();
     expect(landOn).not.toHaveBeenCalled();
@@ -2842,15 +2842,15 @@ describe('deriveLensBand · FR7 F7-2 / F7-3: a sent proposal with no act prints 
     expect(voice.sentence).toBe('Opened 7 October.');
   });
 
-  it('sent five days ago: unchanged, `Sent 3 October — not yet opened · NUDGE MEI`', () => {
+  it('sent five days ago: unchanged, `Issued 3 October · not yet viewed · NUDGE MEI`', () => {
     const fiveDays = '2026-10-03T12:00:00Z';
     const voice = band(
       tanakaRow({ proposal_sent_at: fiveDays }),
       tanakaProposal({ sent_at: fiveDays }),
     );
     expect(voice.lead).toBe('Next ─');
-    expect(voice.sentence).toBe('Sent 3 October — not yet opened');
-    expect(voice.next?.act.label).toBe('Nudge Mei');
+    expect(voice.sentence).toBe('Issued 3 October · not yet viewed');
+    expect(voice.next?.act.label).toBe('Contact Mei');
     expect(voice.next?.act.targetId).toBe(ACT_TARGET_IDS.proposalNudge);
   });
 
@@ -2873,7 +2873,7 @@ describe('deriveLensBand · FR7 F7-2 / F7-3: a sent proposal with no act prints 
     );
     expect(voice.next?.act.label).toBe('Send a reminder');
     expect(voice.next?.act.targetId).toBe('document-act-proposal-reminder');
-    expect(voice.sentence).toBe('Sent 3 October — not yet opened');
+    expect(voice.sentence).toBe('Issued 3 October · not yet viewed');
   });
 
   it('no login, sent today, never reminded: the threshold holds, `Sent 8 October.`', () => {

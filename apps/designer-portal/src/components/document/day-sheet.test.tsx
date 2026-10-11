@@ -135,6 +135,27 @@ describe('DaySheet', () => {
     expect(screen.getByText('Awaiting Fenmoor Joinery since 3 October')).toBeInTheDocument();
   });
 
+  it('heads the waiting block "Awaiting" (SQ-752)', () => {
+    const waiting = entry(1, { owner: 'maker' });
+    renderSheet([waiting], {
+      states: new Map([
+        [
+          waiting.key,
+          {
+            needKey: waiting.key,
+            projectId: 'p1',
+            deferredUntil: null,
+            actedAt: new Date(2026, 9, 3, 12).toISOString(),
+            waitingOn: 'Fenmoor Joinery',
+            setAsideUntil: null,
+            setAsideReason: null,
+          },
+        ],
+      ]),
+    });
+    expect(screen.getByRole('heading', { level: 3, name: 'Awaiting' })).toBeInTheDocument();
+  });
+
   it('never says nothing needs her while a feed went unread', () => {
     renderSheet([], { unreadFeeds: ['purchase orders'] });
     expect(screen.queryByText(NOTHING_NEEDS_YOU_TONIGHT)).toBeNull();

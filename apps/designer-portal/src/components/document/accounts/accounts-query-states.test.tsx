@@ -89,7 +89,7 @@ jest.mock('./accounts-earnings-page', () => ({
 }));
 
 jest.mock('../overlays/doc-sheet', () => ({
-  DocSheetHead: () => <div>Accounts header</div>,
+  DocSheetHead: ({ title }: { title?: string }) => <div data-sheet-title={title}>Accounts header</div>,
 }));
 
 jest.mock('@/lib/document/registry', () => ({
@@ -153,6 +153,19 @@ describe('designer Accounts query failures', () => {
     expect(screen.queryByRole('button', { name: 'Earnings' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Receivables' }));
     expect(screen.getByTestId('accounts-receivables')).toHaveTextContent('Receivables 100');
+  });
+
+  it('titles the book "Studio accounts" (SQ-752)', () => {
+    mockUseInvoices.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+    });
+
+    render(<AccountsBook onClose={jest.fn()} />);
+
+    expect(screen.getByText('Accounts header')).toHaveAttribute('data-sheet-title', 'Studio accounts');
   });
 
   it('distinguishes an invoice-folio query failure from invoice not found', () => {

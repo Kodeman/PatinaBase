@@ -123,7 +123,7 @@ export function AccountsBook({
     <div ref={sheetRef} className="mx-auto max-w-3xl">
       <DocSheetHead
         icon={ACCOUNTS_ICON}
-        title="Accounts"
+        title="Studio accounts"
         pageLabel={PAGES.find((p) => p.key === page)?.label}
         onClose={onClose}
         helpKey={DOCUMENT_SURFACE_KEYS.accounts}

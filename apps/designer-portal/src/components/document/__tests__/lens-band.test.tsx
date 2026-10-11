@@ -394,7 +394,7 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
 
     const panel = screen.getByRole('dialog');
     expect(panel).toHaveAttribute('data-doc-sheet-kind', 'standing');
-    expect(panel).toHaveAccessibleName('Everything open on this job, 4');
+    expect(panel).toHaveAccessibleName('All open · 4 — everything open on this job');
     const rows = screen.getAllByRole('listitem');
     expect(rows).toHaveLength(4);
     for (const label of [
@@ -428,7 +428,7 @@ describe('LensBand · line 2, the sentence that changes (L-1, L-11)', () => {
     // Four exceptions + one input, minus the one line 2 is naming.
     fireEvent.click(screen.getByRole('button', { name: '+4 MORE' }));
     const panel = screen.getByRole('dialog');
-    expect(panel).toHaveAccessibleName('Everything open on this job, 5');
+    expect(panel).toHaveAccessibleName('All open · 5 — everything open on this job');
     expect(panel).toHaveTextContent('INPUT NEEDED · 1');
     expect(
       panel.querySelectorAll('[data-standing-input-row]'),
@@ -937,7 +937,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         onStandingOpened={onStandingOpened}
       />,
     );
-    const word = screen.getByRole('button', { name: 'Everything open on this job, 3' });
+    const word = screen.getByRole('button', { name: 'All open · 3 — everything open on this job' });
     word.focus();
     fireEvent.click(word);
     expect(onStandingOpened).toHaveBeenCalledTimes(1);
@@ -954,7 +954,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     // Deadline order inside the group: the dated decision before the silence.
     const needsYou = Array.from(group('needs-you').querySelectorAll('[data-standing-row]'));
     expect(needsYou.map((row) => row.querySelector('button')?.textContent)).toEqual([
-      'Nudge Mei',
+      'Contact Mei',
       'Follow up with the maker',
     ]);
     // SETUP stays clay and plain.
@@ -969,7 +969,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Everything open on this job, 3' })).toHaveFocus(),
+      expect(screen.getByRole('button', { name: 'All open · 3 — everything open on this job' })).toHaveFocus(),
     );
   });
 
@@ -982,7 +982,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         docId="doc-1"
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job, 3' }));
+    fireEvent.click(screen.getByRole('button', { name: 'All open · 3 — everything open on this job' }));
     const needsYou = screen
       .getByRole('dialog')
       .querySelector('[data-standing-group="needs-you"]') as HTMLElement;
@@ -1016,7 +1016,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
       },
     };
     render(<LensBand model={gated} docId="doc-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job, 2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'All open · 2 — everything open on this job' }));
 
     const held = screen.getByRole('button', { name: 'Follow up with the maker' });
     expect(held).toHaveAttribute('aria-disabled', 'true');
@@ -1288,9 +1288,9 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
 
   it('F2-6 — the sheet’s title is the door’s count, and Next’s row stands first under NEXT', () => {
     render(<LensBand model={chen()} docId="doc-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job, 2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'All open · 2 — everything open on this job' }));
     const panel = screen.getByRole('dialog');
-    expect(panel).toHaveAccessibleName('Everything open on this job, 2');
+    expect(panel).toHaveAccessibleName('All open · 2 — everything open on this job');
     const money = panel.querySelector('[data-standing-group="money"]') as HTMLElement;
     const first = money.querySelector('[data-standing-row]') as HTMLElement;
     expect(first).toHaveAttribute('data-standing-next');
@@ -1326,7 +1326,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(sentence()).toHaveTextContent('Paused — nothing moves until it resumes.');
     expect(line('2').querySelector('[data-lens-next-lead]')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Record the payment' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Everything open on this job, 3' }));
+    fireEvent.click(screen.getByRole('button', { name: 'All open · 3 — everything open on this job' }));
     expect(screen.getByRole('dialog').querySelector('[data-standing-group="setup"]')).toBeNull();
   });
 

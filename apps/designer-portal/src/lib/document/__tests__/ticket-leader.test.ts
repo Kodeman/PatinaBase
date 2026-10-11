@@ -95,7 +95,7 @@ describe('deriveTicketLeader — the fourteen states', () => {
     // The dated form is the guide's to substitute — only it holds the
     // schedule facts — so the leader states the vocabulary's own row.
     ['install', 'Install day is {Weekday}, {Month d}.', 'Hold the window', 'install'],
-    ['care', 'Everything is settled.', 'Close the book', 'care'],
+    ['care', 'Everything is settled.', 'Close out project', 'care'],
   ] as const)(
     'prints %s its rest sentence and act when no row is unclear',
     (stage, headline, label, section) => {

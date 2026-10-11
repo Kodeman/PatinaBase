@@ -45,7 +45,7 @@ interface SheetProps {
 }
 
 function Reading() {
-  return <p className="text-[13px] text-[var(--text-muted)]">Reading the record…</p>;
+  return <p className="text-[13px] text-[var(--text-muted)]">Loading the record…</p>;
 }
 
 function Missing() {

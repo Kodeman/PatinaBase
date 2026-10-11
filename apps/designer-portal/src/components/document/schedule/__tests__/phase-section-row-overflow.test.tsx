@@ -95,3 +95,34 @@ describe("PhaseSection row-verb overflow", () => {
     expect(screen.getByRole("button", { name: "verb b" })).toBeInTheDocument();
   });
 });
+
+describe("PhaseSection fold control", () => {
+  const foldedPhase = (expanded: boolean) => (
+    <PhaseSection
+      phase={phase("phase-a", "2026-08-01", "2026-08-10")}
+      name="Design development"
+      state="active"
+      expanded={expanded}
+      onToggle={() => {}}
+      metaLine=""
+      milestones={[]}
+      items={[]}
+      tasks={[]}
+      parties={[]}
+      clientName="Winky Loft"
+      threads={[]}
+      onOpenItem={() => {}}
+      today="2026-08-14"
+    />
+  );
+
+  it("reads Collapse when expanded and Expand when collapsed (SQ-752)", () => {
+    const { rerender } = render(foldedPhase(true));
+    expect(screen.getByText("Collapse")).toBeInTheDocument();
+    expect(screen.queryByText("Expand")).toBeNull();
+
+    rerender(foldedPhase(false));
+    expect(screen.getByText("Expand")).toBeInTheDocument();
+    expect(screen.queryByText("Collapse")).toBeNull();
+  });
+});

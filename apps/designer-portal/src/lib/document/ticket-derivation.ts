@@ -605,18 +605,18 @@ function moneyRow(input: TicketInput): TicketRow {
   if (owed.cents != null && owed.cents > 0) {
     owedClause =
       owedDays != null && owedDays > 0
-        ? `${money(owed.cents)} owed you, ${plural(owedDays, 'day', 'days')}`
-        : `${money(owed.cents)} owed you`;
+        ? `${money(owed.cents)} receivable, ${plural(owedDays, 'day', 'days')}`
+        : `${money(owed.cents)} receivable`;
     parts.push(owedClause);
   }
   if (notDrawn.cents != null && notDrawn.cents > 0) {
     parts.push(
-      `${money(notDrawn.cents)} ${undrawnKind ? `${undrawnKind} ` : ''}not drawn`,
+      `${money(notDrawn.cents)} ${undrawnKind ? `${undrawnKind} ` : ''}undisbursed`,
     );
   }
 
   const value = failed
-    ? 'Money could not be read'
+    ? "Project financials couldn't load"
     : !settled
       ? READING
       : parts.length === 0
@@ -634,7 +634,7 @@ function moneyRow(input: TicketInput): TicketRow {
   const exception: TicketException | null = standing
     ? {
         rank: 'promise-past-due',
-        phrase: `${money(owedCents)} owed you`,
+        phrase: `${money(owedCents)} receivable`,
         // The invoice's own due date, never a day count run backwards through
         // millisecond arithmetic: this is weighed against a real install date
         // inside the same rank.
@@ -644,7 +644,7 @@ function moneyRow(input: TicketInput): TicketRow {
 
   return {
     key: 'money',
-    label: 'Money',
+    label: 'Project financials',
     value,
     emphasis: standing ? owedClause : null,
     door: regionDoor(input, 'money'),

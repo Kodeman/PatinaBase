@@ -153,7 +153,7 @@ describe('StudioSetupChecklist — row 4, the rolodex SKIP affordance', () => {
 describe('StudioSetupChecklist — row 4, Call Sheet Wave 2 live behavior', () => {
   it('the label stays plain text (not a button) when onOpenSeedReview is omitted', () => {
     render(<StudioSetupChecklist {...INCOMPLETE} onInvite={jest.fn()} />);
-    const label = screen.getByText('Seed the rolodex');
+    const label = screen.getByText('Add your studio contacts');
     expect(label.closest('button')).toBeNull();
   });
 
@@ -167,7 +167,7 @@ describe('StudioSetupChecklist — row 4, Call Sheet Wave 2 live behavior', () =
       />,
     );
 
-    fireEvent.click(screen.getByText('Seed the rolodex'));
+    fireEvent.click(screen.getByText('Add your studio contacts'));
     expect(onOpenSeedReview).toHaveBeenCalledTimes(1);
   });
 
@@ -208,7 +208,7 @@ describe('StudioSetupChecklist — row 4, Call Sheet Wave 2 live behavior', () =
       />,
     );
     expect(screen.queryByRole('button', { name: 'Skip' })).not.toBeInTheDocument();
-    expect(screen.getByText('Seed the rolodex').closest('button')).toBeNull();
+    expect(screen.getByText('Add your studio contacts').closest('button')).toBeNull();
   });
 });
 
@@ -226,7 +226,7 @@ describe('StudioSetupChecklist — row 4, SKIP is owner/admin-gated (RLS)', () =
       screen.queryByTitle('coming with the rolodex'),
     ).not.toBeInTheDocument();
     // The row (and its scored open-review label) still renders for the member.
-    expect(screen.getByText('Seed the rolodex')).toBeInTheDocument();
+    expect(screen.getByText('Add your studio contacts')).toBeInTheDocument();
   });
 
   it('still shows the Wave-1 disabled placeholder when the flag itself is off (neither handler present)', () => {

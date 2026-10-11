@@ -68,12 +68,12 @@ export const PROJECT_PAPER_ORDER: readonly ProjectPaperRegion[] = [
   },
   {
     key: 'money',
-    label: 'Money',
+    label: 'Project financials',
     headingId: () => 'money-region-heading',
   },
   {
     key: 'care',
-    label: 'Closing the book',
+    label: 'Project closeout',
     headingId: () => 'care-region-heading',
   },
   {

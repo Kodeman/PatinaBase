@@ -70,7 +70,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     label: 'Terminology',
-    description: 'The words Patina uses on purpose — stamps, courts, the margin, the Engine — and why.',
+    description: 'The terms Patina uses on purpose, and what each one means.',
     prefixes: ['designer-portal/document/concept'],
   },
   {

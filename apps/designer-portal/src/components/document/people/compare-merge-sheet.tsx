@@ -599,7 +599,7 @@ export function CompareMergeSheet({
           surfaceKey="people-room"
           regionKey="compare-merge"
           className="mt-3"
-          aria-label="Merge these two cards"
+          aria-label="Merge duplicate records"
         >
           <DocumentAction
             actionKey="merge-studio-contacts"

@@ -119,8 +119,8 @@ describe('deriveLadderSegments · the Vandersteen specimen', () => {
       'Client approvals',
       'Project schedule',
       'Pieces',
-      'Money',
-      'Closing the book',
+      'Project financials',
+      'Project closeout',
       'The record',
     ]);
   });
@@ -361,10 +361,10 @@ describe('deriveLadderDoors', () => {
     const doors = deriveLadderDoors({ ticket: ticket(), held: false });
     expect(doors.map((door) => door.label)).toEqual([
       'Drawing sets',
-      'Spec book',
+      'Specification book',
       // D-B8/F62 — one name for one thing; the key stays `moodboards`.
       'Boards',
-      'Call sheet',
+      'Project directory',
     ]);
   });
 
@@ -406,7 +406,7 @@ describe('deriveLadderDoors', () => {
     const doors = deriveLadderDoors({ ticket: ticket(), held: true });
     expect(doors.map((door) => door.key)).toContain('release-room');
     expect(doors.find((d) => d.key === 'release-room')?.label).toBe(
-      'Put down the room',
+      'Clear room focus',
     );
     expect(
       deriveLadderDoors({ ticket: ticket(), held: false }).map((d) => d.key),

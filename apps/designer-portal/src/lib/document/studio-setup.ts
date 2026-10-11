@@ -69,7 +69,7 @@ const STEP_LABELS: Record<StudioSetupStepKey, string> = {
   'named-and-branded': 'Name & brand the studio',
   'own-title-set': 'Set your own title',
   'crew-invited': 'Invite your crew',
-  'rolodex-seeded': 'Seed the rolodex',
+  'rolodex-seeded': 'Add your studio contacts',
   'first-project': 'Open the first project',
   'first-hire-opened': 'Your first hire opened a document',
 };

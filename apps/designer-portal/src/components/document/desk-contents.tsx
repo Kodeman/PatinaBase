@@ -407,7 +407,7 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
                 exports rather than a doorway string (C-AF-01). */}
             <ContentsRow
               icon={PenTool}
-              label={oneVoice ? 'Prepare a design proposal' : 'Open the Contract Room'}
+              label={oneVoice ? 'Prepare a design proposal' : 'Open the proposal workspace'}
               subLabel="Prepare sections in any order"
               variant="verb"
               prominent={prominent}

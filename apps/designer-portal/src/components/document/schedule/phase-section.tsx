@@ -181,7 +181,7 @@ export function PhaseSection({
         {(() => {
           // The unfold mark stays visible — never hover-revealed (touch exists;
           // a hidden affordance on a closed chapter is a lie).
-          const foldLabel = expanded ? 'Fold' : 'Unfold';
+          const foldLabel = expanded ? 'Collapse' : 'Expand';
           const foldCls =
             'ml-4 font-mono text-[11px] font-normal uppercase tracking-[0.08em] text-[var(--color-clay-ink)]';
           // An unpinnable anchor chip renders a real <button>; it must never

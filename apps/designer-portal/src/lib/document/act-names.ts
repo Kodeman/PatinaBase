@@ -105,6 +105,8 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   'Add the {essential}': 'scored',
   'Write the proposal': 'scored',
   'Nudge {first name}': 'scored',
+  // C-0043 (SQ-764 F25/F30) — the Direction C name; the old one still classifies.
+  'Contact {first name}': 'scored',
   'Open the project': 'scored',
   'Fill the {N} placeholders': 'scored',
   'Open the pieces': 'scored',
@@ -120,6 +122,8 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   "Preview the client's copy": 'plain',
   Sharing: 'plain',
   'Call sheet': 'plain',
+  // SQ-764 F13 — the lens ladder door's Direction C name; the old one still classifies.
+  'Project directory': 'plain',
   Fold: 'plain',
   'Open the record': 'plain',
   // The Money head (commercial/money-region.tsx, manifest C-0326, D2) still
@@ -147,6 +151,8 @@ export const ACT_TIER: Readonly<Record<string, ActTier>> = {
   'Open the schedule': 'plain',
   'Follow up with the maker': 'plain',
   'Send the pulse': 'plain',
+  // C-0041 (SQ-764 F25) — the Direction C name; the old one still classifies.
+  'Open the progress update': 'plain',
   'Answer the maker': 'plain',
   'Reconfirm the price': 'plain',
   // FR1 R7 — plain at rest, scored only while it is Next; never filled.
@@ -476,9 +482,9 @@ export function ownAct(stage: SectionKey, facts: OwnActFacts): OwnAct | null {
           }
           const first = facts.clientFirstName?.trim();
           return act(
-            first ? `Nudge ${first}` : 'Nudge the client',
+            first ? `Contact ${first}` : 'Contact the client',
             ACT_TARGET_IDS.proposalNudge,
-            'Nudge {first name}',
+            'Contact {first name}',
           );
         }
         case 'accepted':
@@ -536,7 +542,7 @@ export function ownAct(stage: SectionKey, facts: OwnActFacts): OwnAct | null {
  * `{first name}`; print them through `needActLabel`.
  */
 export const NEED_ACT_LABELS: Record<NeedKind, string> = {
-  overdue_decision: 'Nudge {first name}',
+  overdue_decision: 'Contact {first name}',
   overdue_invoice: 'Send reminder',
   proposal_signed: 'Open the project',
   claim_window: 'Notify the maker',
@@ -547,7 +553,7 @@ export const NEED_ACT_LABELS: Record<NeedKind, string> = {
   new_lead: 'Respond to the inquiry',
   ceremony_pending: 'Continue the introduction',
   reconnect_due: 'Message {first name}',
-  hesitating_proposal: 'Nudge {first name}',
+  hesitating_proposal: 'Contact {first name}',
   awaiting_inspection: 'Inspect the delivery',
   schedule_conflict: 'Resolve the schedule',
   schedule_proposal: 'Open the proposed date',
@@ -555,7 +561,7 @@ export const NEED_ACT_LABELS: Record<NeedKind, string> = {
   schedule_unconfigured: 'Open the schedule',
   po_unsent: 'Open the purchase order',
   po_unacknowledged: 'Follow up with the maker',
-  pulse_due: 'Send the pulse',
+  pulse_due: 'Open the progress update',
   payment_due: 'Record the payment',
   payment_failed: 'Pay again',
   ack_discrepancy: 'Answer the maker',
@@ -599,8 +605,8 @@ export const STANDING_ROW_ACTS: Readonly<
   Record<StandingRowKind, { label: string; targetId: ActTargetId | null }>
 > = {
   damaged: { label: NAMED_ACTS.fileClaim, targetId: ACT_TARGET_IDS.piecesHead },
-  awaiting_decision: { label: 'Nudge {first name}', targetId: null },
-  owed: { label: 'Nudge {first name}', targetId: null },
+  awaiting_decision: { label: 'Contact {first name}', targetId: null },
+  owed: { label: 'Contact {first name}', targetId: null },
   install_passed: { label: 'Set dates', targetId: ACT_TARGET_IDS.installWindow },
   blocked: { label: 'Open the pieces', targetId: ACT_TARGET_IDS.piecesHead },
   unspecified: { label: 'Fill the {N} placeholders', targetId: ACT_TARGET_IDS.piecesHead },

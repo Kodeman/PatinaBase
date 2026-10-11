@@ -473,7 +473,7 @@ export interface LensBandInput {
   stageIndex: { position: number; of: number } | null;
   /** `SEP 15` — the install day, already formatted by the caller. */
   installDate: string | null;
-  /** `$17,500 OUT` — the money row's emphasis figure. */
+  /** `$17,500 receivable, 22 days` — the money row's emphasis figure. */
   moneyFigure: string | null;
   /** The proposal's own investment total (DL-01), not an FF&E budget. */
   proposalInvestment: string | null;
@@ -1041,8 +1041,10 @@ const shortSentenceOf = (item: LensStandingItem) =>
  *  short visible form keeps the old width, so the line-2 measure holds. */
 export const standingDoorLabel = (count: number) => `All open · ${count}`;
 
-/** The door's and the sheet's accessible name: the full phrase and the count. */
-export const standingDoorName = (count: number) => `Everything open on this job, ${count}`;
+/** The door's and the sheet's accessible name. It starts with the door's
+ *  visible label (WCAG 2.5.3), then the full phrase. */
+export const standingDoorName = (count: number) =>
+  `${standingDoorLabel(count)} — everything open on this job`;
 
 /** D1 — a need's act is named from the one table, whatever its source printed,
  *  with the client's first name where the act names her (499-1: `Nudge Mei`;
@@ -1235,8 +1237,8 @@ function withCustody(
   owner: LensNeedOwner | null | undefined,
   clientFirstName: string | null,
 ): string {
-  if (owner === 'client') return `Waiting on ${clientFirstName ?? 'the client'}: ${sentence}`;
-  if (owner === 'maker') return `With the maker: ${sentence}`;
+  if (owner === 'client') return `Awaiting ${clientFirstName ?? 'the client'}: ${sentence}`;
+  if (owner === 'maker') return `Awaiting supplier: ${sentence}`;
   return sentence;
 }
 

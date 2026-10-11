@@ -81,14 +81,14 @@ describe('C-32 — the held-for-release need', () => {
   it('under one-voice names the release control, Approve release', () => {
     const need = derive(held())!;
     expect(need.releaseHeld).toBe(true);
-    expect(deskActionLabel(need, false)).toBe('Release');
+    expect(deskActionLabel(need, false)).toBe('Approve release');
     expect(deskActionLabel(need, true)).toBe('Approve release');
   });
 
   it("asks the releasing seat to release Maya's order to Hewn, with the total", () => {
     const need = derive(held());
-    expect(need!.text).toBe("Release Maya's order to Hewn · $12,480");
-    expect(need!.actionLabel).toBe('Release');
+    expect(need!.text).toBe("Approve the release of Maya's order to Hewn · $12,480");
+    expect(need!.actionLabel).toBe('Approve release');
     expect(need!.stamp.label).toBe('HELD');
     expect(need!.ledger).toEqual({ name: 'orders', context: { page: 'ledger', projectId: 'p1' } });
   });
@@ -100,14 +100,14 @@ describe('C-32 — the held-for-release need', () => {
 
   it('gathers several held orders into one line over their total', () => {
     expect(derive(held(), held({ purchaseOrderId: 'po-2', totalCents: 252_000 }))!.text).toBe(
-      'Maya is holding 2 orders for your release · $15,000',
+      'Maya is holding 2 orders for your release approval · $15,000',
     );
     expect(
       derive(held(), held({ purchaseOrderId: 'po-2', heldByName: 'Ari Lund', totalCents: 252_000 }))!.text,
-    ).toBe('2 orders held for your release · $15,000');
+    ).toBe('2 orders held for your release approval · $15,000');
     // A held order this seat cannot release is not counted.
     expect(derive(held(), held({ purchaseOrderId: 'po-2', viewerCanRelease: false }))!.text).toBe(
-      "Release Maya's order to Hewn · $12,480",
+      "Approve the release of Maya's order to Hewn · $12,480",
     );
   });
 
@@ -131,6 +131,6 @@ describe('C-32 — the held-for-release need', () => {
     );
     expect(folders).toHaveLength(1);
     expect(folders[0].row.project_id).toBe('p2');
-    expect(folders[0].need.text).toBe("Release Maya's order to Hewn · $12,480");
+    expect(folders[0].need.text).toBe("Approve the release of Maya's order to Hewn · $12,480");
   });
 });

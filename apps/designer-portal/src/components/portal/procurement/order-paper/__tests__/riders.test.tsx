@@ -207,7 +207,7 @@ describe('<PoRiders>', () => {
     renderRiders('po-1');
     expect(screen.queryByRole('button', { name: /Record payment to Hale/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Record payment to Estes Express' }));
-    expect(screen.getByRole('textbox', { name: 'Reference' })).toHaveValue('Freight · Estes Express');
+    expect(screen.getByRole('textbox', { name: 'Payment reference' })).toHaveValue('Freight · Estes Express');
     fireEvent.click(screen.getByRole('button', { name: /Record the freight · \$465/ }));
     await waitFor(() => expect(mockRecordPayment).toHaveBeenCalledTimes(1));
     const input = mockRecordPayment.mock.calls[0][0];

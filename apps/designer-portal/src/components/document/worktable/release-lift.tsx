@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * "Release for authorization", lifted to the Delivery table's head (W4b).
+ * "Prepare purchasing authorization" (C-1288, the FF&E release ceremony),
+ * lifted to the Delivery table's head (W4b).
  *
  * The ceremony itself does not move: selection stays on the schedule, the
  * composition bar and the review sheet stay where they are. Only the leader
@@ -41,7 +42,7 @@ export function ReleaseLift() {
             );
           }}
         >
-          Release for authorization
+          Prepare purchasing authorization
         </DocumentAction>
       </DocumentActionRow>
     </div>

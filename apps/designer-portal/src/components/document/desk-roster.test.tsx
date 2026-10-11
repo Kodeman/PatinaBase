@@ -145,7 +145,7 @@ const linesIn = (container: HTMLElement, group: string) =>
 describe('DeskRoster — the head', () => {
   it('names the roster and prints no count, no overdue sentence', () => {
     render(<DeskRoster roster={roster()} />);
-    expect(screen.getByText('Every job')).toBeInTheDocument();
+    expect(screen.getByText('Studio workload')).toBeInTheDocument();
     expect(screen.queryByText(/\d+ live/)).not.toBeInTheDocument();
     expect(screen.queryByText(/overdue — Vandersteen/)).not.toBeInTheDocument();
   });
@@ -153,6 +153,13 @@ describe('DeskRoster — the head', () => {
   it('retires “Only what needs me” — the Day Sheet’s scope replaced it (fix-now 1)', () => {
     render(<DeskRoster roster={roster()} studioMembers={STUDIO} />);
     expect(screen.queryByRole('button', { name: 'Only what needs me' })).toBeNull();
+  });
+});
+
+describe('DeskRoster — the action group (SQ-752)', () => {
+  it('names the roster action group "Studio workload actions" (SQ-752)', () => {
+    render(<DeskRoster roster={roster()} />);
+    expect(screen.getByRole('group', { name: 'Studio workload actions' })).toBeInTheDocument();
   });
 });
 
@@ -444,7 +451,7 @@ describe('DeskRoster — the line act agrees with the paper (FR4 Fix 5)', () => 
     expect(within(wrightLine).getByText('New lead — respond by Aug 27')).toBeInTheDocument();
     expect(wrightLine.closest('[data-roster-group]')).toHaveAttribute('data-roster-group', 'owed');
 
-    const aspenAct = screen.getByRole('link', { name: 'Nudge the client — Aspen residence' });
+    const aspenAct = screen.getByRole('link', { name: 'Contact the client — Aspen residence' });
     expect(aspenAct).toHaveAttribute('href', '/doc/aspen');
     expect(aspenAct.closest('[data-roster-group]')).toHaveAttribute('data-roster-group', 'waiting');
     expect(linesIn(container, 'rest')).toEqual(['cedar']);

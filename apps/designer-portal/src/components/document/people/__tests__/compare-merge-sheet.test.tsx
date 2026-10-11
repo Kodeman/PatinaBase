@@ -473,4 +473,14 @@ describe("CompareMergeSheet", () => {
     );
     expect(props.onClose).not.toHaveBeenCalled();
   });
+
+  it("names the action row \"Merge duplicate records\" (SQ-752)", () => {
+    render(<CompareMergeSheet {...props} />);
+    expect(
+      screen.getByRole("group", { name: "Merge duplicate records" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", { name: "Merge these two cards" }),
+    ).toBeNull();
+  });
 });

@@ -105,13 +105,13 @@ describe('ownAct (D1 own-act table)', () => {
     ['Proposal, draft', 'proposal', { proposalState: 'draft' },
       { label: 'Send the proposal', targetId: ACT_TARGET_IDS.proposalSend, tier: 'filled' }],
     ['Proposal, sent, named', 'proposal', { proposalState: 'sent', clientFirstName: 'Mei' },
-      { label: 'Nudge Mei', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' }],
+      { label: 'Contact Mei', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' }],
     ['Proposal, sent, no name', 'proposal', { proposalState: 'sent', clientFirstName: null },
-      { label: 'Nudge the client', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' }],
+      { label: 'Contact the client', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' }],
     // FR6 F6-1 (D1-a) — Message reachable: the composer is the Nudge.
     ['Proposal, sent, Message reachable', 'proposal',
       { proposalState: 'sent', clientFirstName: 'Mei', clientMessageable: true },
-      { label: 'Nudge Mei', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' }],
+      { label: 'Contact Mei', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' }],
     // …held: the act follows the control that can reach her, by its name.
     ['Proposal, sent, Message held', 'proposal',
       { proposalState: 'sent', clientFirstName: 'Mei', clientMessageable: false },
@@ -166,9 +166,9 @@ describe('ownAct (D1 own-act table)', () => {
     expect(
       ownAct('proposal', facts({ ...sent, clientMessageable: false, proposalHesitating: false })),
     ).toBeNull();
-    expect(ownAct('proposal', facts({ ...sent, proposalHesitating: true }))?.label).toBe('Nudge Mei');
+    expect(ownAct('proposal', facts({ ...sent, proposalHesitating: true }))?.label).toBe('Contact Mei');
     // Unset reads as hesitating: every caller that never states it is unchanged.
-    expect(ownAct('proposal', facts(sent))?.label).toBe('Nudge Mei');
+    expect(ownAct('proposal', facts(sent))?.label).toBe('Contact Mei');
   });
 
   // FR7 F7-3 (D2, P-2) — a reminder that cannot be sent is not an act.
@@ -183,7 +183,7 @@ describe('ownAct (D1 own-act table)', () => {
     expect(
       ownAct('proposal', facts({ ...held, clientMessageable: true, reminderAvailable: false }))
         ?.label,
-    ).toBe('Nudge Mei');
+    ).toBe('Contact Mei');
   });
 
   // FR8 F8-4 (D2, §3-15) — the client has signed: the countersign is the act,
@@ -214,8 +214,8 @@ describe('ownAct (D1 own-act table)', () => {
 
   it('countersignPending false or unset leaves the sent proposal unchanged', () => {
     const sent = { proposalState: 'sent' as const, clientFirstName: 'Mei' };
-    expect(ownAct('proposal', facts({ ...sent, countersignPending: false }))?.label).toBe('Nudge Mei');
-    expect(ownAct('proposal', facts(sent))?.label).toBe('Nudge Mei');
+    expect(ownAct('proposal', facts({ ...sent, countersignPending: false }))?.label).toBe('Contact Mei');
+    expect(ownAct('proposal', facts(sent))?.label).toBe('Contact Mei');
     expect(NAMED_ACTS.countersign).toBe('Countersign agreement');
     expect(ACT_TARGET_IDS.countersign).toBe('document-act-countersign');
   });
@@ -318,8 +318,8 @@ describe('needActLabel (D1 rule of names)', () => {
   });
 
   it('fills {first name}, falling back to "the client", and never prints the braces', () => {
-    expect(needActLabel('overdue_decision', 'Mei')).toBe('Nudge Mei');
-    expect(needActLabel('overdue_decision')).toBe('Nudge the client');
+    expect(needActLabel('overdue_decision', 'Mei')).toBe('Contact Mei');
+    expect(needActLabel('overdue_decision')).toBe('Contact the client');
     expect(needActLabel('reconnect_due', '  ')).toBe('Message the client');
     for (const kind of Object.keys(NEED_ACT_LABELS) as (keyof typeof NEED_ACT_LABELS)[]) {
       expect(needActLabel(kind)).not.toMatch(/[{}]/);
@@ -330,7 +330,7 @@ describe('needActLabel (D1 rule of names)', () => {
     expect(needActLabel('po_unsent')).toBe('Open the purchase order');
     expect(needActLabel('lines_flagged')).toBe('Open the flagged lines');
     expect(needActLabel('schedule_proposal')).toBe('Open the proposed date');
-    expect(needActLabel('pulse_due')).toBe('Send the pulse');
+    expect(needActLabel('pulse_due')).toBe('Open the progress update');
     expect(Object.values(NEED_ACT_LABELS).filter((l) => /^(Review|Reach out)/.test(l))).toEqual([]);
   });
 });

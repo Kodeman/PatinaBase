@@ -1477,7 +1477,7 @@ export function CommandBar() {
           acts.push({
             kind: 'verb',
             key: 'paper-keys',
-            label: 'Keys',
+            label: 'Keyboard shortcuts',
             sub: '',
             icon: Keyboard,
             shortcut: ['?'],
@@ -1522,7 +1522,7 @@ export function CommandBar() {
         if (dry) {
           sections.push({
             eyebrow: null,
-            note: `Nothing on this paper matches "${typed}".`,
+            note: `No results in this project file for "${typed}".`,
             rows: closed
               ? []
               : [

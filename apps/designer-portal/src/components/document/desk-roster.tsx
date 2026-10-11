@@ -62,7 +62,7 @@ export function DeskRoster({
       {belowHead}
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
         <SectionEyebrow>
-          <span id="every-job">Every job</span>
+          <span id="every-job">Studio workload</span>
         </SectionEyebrow>
         {people.length > 0 && (
           // Labels never change with state (IX18) — `aria-pressed` carries it.
@@ -83,7 +83,7 @@ export function DeskRoster({
       <DocumentActionGroup
         surfaceKey="desk"
         regionKey="every-job"
-        aria-label="Every job actions"
+        aria-label="Studio workload actions"
       >
         <div className="w-full">
           {groups.map((group, position) => (

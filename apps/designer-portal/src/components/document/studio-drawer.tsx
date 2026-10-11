@@ -109,13 +109,13 @@ const RECENT_BOOK_KEY = 'patina.document.recentStudioBook';
  *  wordmark is the home affordance. */
 function breadcrumbFor(pathname: string | null): string | null {
   if (!pathname || pathname === '/desk') return null;
-  if (pathname.startsWith('/library')) return 'Library';
-  if (pathname.startsWith('/people')) return 'People';
+  if (pathname.startsWith('/library')) return 'Resource library';
+  if (pathname.startsWith('/people')) return 'Studio contacts';
   if (pathname.startsWith('/rooms') || pathname.startsWith('/room/'))
-    return 'Rooms';
+    return 'Measured rooms';
   if (pathname.startsWith('/drafting') || pathname.startsWith('/compose'))
-    return 'Drafting';
-  if (pathname.startsWith('/doc')) return 'Document';
+    return 'Proposal workspace';
+  if (pathname.startsWith('/doc')) return 'Project file';
   return null;
 }
 

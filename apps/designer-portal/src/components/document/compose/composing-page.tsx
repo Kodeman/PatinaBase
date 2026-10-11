@@ -201,7 +201,7 @@ export function ComposingPage() {
     <RoomShell
       title="Compose a piece"
       backTo="/library"
-      backLabel="the Library"
+      backLabel="Resource library"
       action={
         <DocumentActionGroup
           surfaceKey="compose"

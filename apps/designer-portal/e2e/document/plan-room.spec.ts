@@ -188,7 +188,7 @@ test('files a dropped set, then shares a sheet with the client', async ({
   ).toBe('ID-401,ID-501');
 
   // The room lands back on the set once the filing clears.
-  await expect(page.getByText('Current set', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: /^Current set/ })).toBeVisible({ timeout: 30_000 });
 
   // ── The same file again ─────────────────────────────────────────────────
   // A NEW staged table mints a NEW idempotency key, so this is a second batch,
@@ -239,7 +239,7 @@ test('files a dropped set, then shares a sheet with the client', async ({
   ).toBe(2);
 
   // ── Share one sheet with the client ─────────────────────────────────────
-  await expect(page.getByText('Current set', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: /^Current set/ })).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: /ID-401/ }).first().click();
   await expect(
     page.getByRole('heading', { name: 'Millwork Elevations - Study' }),

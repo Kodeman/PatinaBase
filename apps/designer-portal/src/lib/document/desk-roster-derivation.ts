@@ -187,7 +187,7 @@ export interface DeskRoster {
   groups: RosterGroup[];
   liveCount: number;
   overdueCount: number;
-  /** `Every job · 6 live · 2 overdue` */
+  /** `Studio workload · 6 live · 2 overdue` */
   heading: string;
   /** The one Inter line naming what is overdue. */
   overdueLine: string;
@@ -640,7 +640,7 @@ export function deriveDeskRoster(
     groups,
     liveCount,
     overdueCount: overdueNames.length,
-    heading: `Every job · ${liveCount} live · ${overdueNames.length} overdue`,
+    heading: `Studio workload · ${liveCount} live · ${overdueNames.length} overdue`,
     overdueLine: overdueSentence(overdueNames),
     unreadFeeds,
     notChecked,

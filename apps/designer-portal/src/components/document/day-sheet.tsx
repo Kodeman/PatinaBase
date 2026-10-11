@@ -210,7 +210,7 @@ export function DaySheet({
       )}
       {quiet && sheet.waitingOn.length > 0 && (
         <div className="day-sheet-block">
-          <h3 className="border-b border-[color:var(--text-primary)] pb-2 font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]">Waiting on</h3>
+          <h3 className="border-b border-[color:var(--text-primary)] pb-2 font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]">Awaiting</h3>
           <ul>
             {sheet.waitingOn.map(({ need: entry, who, since }) => (
               <li key={entry.key} data-day-sheet-waiting={entry.key} className="day-sheet-waiting">

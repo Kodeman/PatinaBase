@@ -445,10 +445,10 @@ describe('the doors', () => {
     expect(screen.getByText('Filed with this job')).toBeInTheDocument();
     expect(doorRows().map((door) => door.textContent)).toEqual([
       'Drawing sets',
-      'Spec book',
+      'Specification book',
       // D-B8/F62 — one name for one thing; the key stays `moodboards`.
       'Boards',
-      'Call sheet',
+      'Project directory',
     ]);
   });
 
@@ -713,7 +713,7 @@ describe('a stop the spread does not mount', () => {
       '[data-ladder-unmounted="care"]',
     ) as HTMLElement;
     expect(care).not.toBeNull();
-    expect(within(care).getByText('Closing the book')).toBeInTheDocument();
+    expect(within(care).getByText('Project closeout')).toBeInTheDocument();
     // No root to scroll to, no heading to land focus on — so no button.
     expect(
       screen.queryByRole('button', { name: /closing the book/i }),
@@ -990,14 +990,14 @@ describe('the rail around the ladder', () => {
       'Client approvals',
       'Project schedule',
       'Pieces',
-      'Money',
-      'Closing the book',
+      'Project financials',
+      'Project closeout',
       'The record',
       'Filed with this job',
       'Drawing sets',
-      'Spec book',
+      'Specification book',
       'Boards',
-      'Call sheet',
+      'Project directory',
     ]);
     expect(labels).toHaveLength(13);
 

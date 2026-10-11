@@ -248,7 +248,7 @@ describe('CareBand fold', () => {
     render(<CareBand projectId="project-1" />);
 
     expect(screen.getByRole('button', { name: 'Close out project' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /closing the book/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /project closeout/i })).not.toBeInTheDocument();
     // FR1 F8 / R13 — the full head's status line is the count alone, never
     // `N of M`.
     const head = document.querySelector('[data-region-head="closure"]')!;
@@ -323,7 +323,7 @@ describe('CareBand fold', () => {
     render(<CareBand projectId="project-1" />);
 
     expect(screen.queryByRole('button', { name: 'Close out project' })).not.toBeInTheDocument();
-    const seam = screen.getByRole('button', { name: /closing the book/i });
+    const seam = screen.getByRole('button', { name: /project closeout/i });
     expect(seam).toBeInTheDocument();
     // FR1 F8 / R13 — the 390 fold line repeats the head's count, never `N of M`.
     const seamRoot = document.querySelector('[data-fold-seam]')!;
@@ -414,7 +414,7 @@ describe('CareBand running index root (W2 C-2)', () => {
 
     const { container } = render(<CareBand projectId="project-1" indexRoot />);
 
-    expect(screen.getByRole('button', { name: /closing the book/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /project closeout/i })).toBeInTheDocument();
     const root = container.querySelector('[data-index-region="care"]');
     expect(root).not.toBeNull();
     expect(root).toHaveAttribute('id', 'care-region-heading');
@@ -544,7 +544,7 @@ describe('CareBand quiet body (W4)', () => {
       '--doc-quiet-reserve': 'var(--doc-quiet-reserve-min)',
     });
 
-    expect(screen.getByRole('heading', { name: 'Closing the book' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Project closeout' })).toBeInTheDocument();
     // W4-R1: the count line IS the head's status line.
     const head = container.querySelector('[data-region-head="closure"]')!;
     expect(head).toHaveTextContent('1 closed out');
@@ -554,7 +554,7 @@ describe('CareBand quiet body (W4)', () => {
     ).toHaveLength(0);
     expect(
       screen.getByText(
-        '1 closed out · not yet on the paper · press Closing the book on the index to open',
+        '1 closed out · not yet on the paper · press Project closeout on the index to open',
       ),
     ).toHaveClass('sr-only');
 
@@ -624,7 +624,7 @@ describe('CareBand quiet body (W4)', () => {
 
     const { container } = render(<CareBand projectId="project-1" indexRoot />);
 
-    expect(screen.getByRole('button', { name: /closing the book/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /project closeout/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Close out project' })).not.toBeInTheDocument();
     expect(
       screen.queryByText('Quiet — opens as you read'),

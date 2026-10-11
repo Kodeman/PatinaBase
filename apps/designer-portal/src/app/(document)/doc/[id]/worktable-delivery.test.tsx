@@ -369,7 +369,7 @@ describe('the Delivery table, tooled', () => {
 
       const lift = container.querySelector('[data-release-lift]');
       expect(lift).not.toBeNull();
-      expect(lift).toHaveTextContent('Release for authorization');
+      expect(lift).toHaveTextContent('Prepare purchasing authorization');
       // At the HEAD: above every region on the table.
       const table = container.querySelector('[data-table="delivery"]')!;
       const nodes = Array.from(table.querySelectorAll('*'));
@@ -407,7 +407,7 @@ describe('the Delivery table, tooled', () => {
       expect(mockFfeProps.current.releaseLeaderElsewhere).toBe(true);
       const inkedReleases = Array.from(
         container.querySelectorAll('[data-action-variant="inked"]'),
-      ).filter((el) => el.textContent?.includes('Release for authorization'));
+      ).filter((el) => el.textContent?.includes('Prepare purchasing authorization'));
       expect(inkedReleases).toHaveLength(1);
       expect(inkedReleases[0].closest('[data-release-lift]')).not.toBeNull();
     });
@@ -431,7 +431,7 @@ describe('the Delivery table, tooled', () => {
       render(<DocumentPage params={params} />);
 
       fireEvent.click(
-        screen.getByRole('button', { name: 'Release for authorization' }),
+        screen.getByRole('button', { name: 'Prepare purchasing authorization' }),
       );
 
       window.removeEventListener('document:start-release', heard);

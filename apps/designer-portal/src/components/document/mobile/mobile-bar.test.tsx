@@ -180,16 +180,16 @@ describe('the More menu · In this document (F49)', () => {
       Array.from(group.querySelectorAll('a, button')).map((row) =>
         row.textContent?.replace('→', ''),
       ),
-    ).toEqual(['Drawing sets', 'Spec book', 'Boards', 'Call sheet']);
+    ).toEqual(['Drawing sets', 'Specification book', 'Design boards', 'Project directory']);
 
     const labels = Array.from(menu.querySelectorAll('a, button')).map((row) =>
       row.textContent?.replace('→', ''),
     );
     expect(labels.slice(0, 5)).toEqual([
       'Drawing sets',
-      'Spec book',
-      'Boards',
-      'Call sheet',
+      'Specification book',
+      'Design boards',
+      'Project directory',
       'Find anything⌘K',
     ]);
   });
@@ -202,7 +202,7 @@ describe('the More menu · In this document (F49)', () => {
       'href',
       '/doc/proj-1/plans',
     );
-    expect(menu.getByRole('link', { name: 'Spec book' })).toHaveAttribute(
+    expect(menu.getByRole('link', { name: 'Specification book' })).toHaveAttribute(
       'href',
       '/doc/proj-1/spec-book',
     );
@@ -212,7 +212,7 @@ describe('the More menu · In this document (F49)', () => {
     mountBar();
     const menu = openMore();
 
-    expect(menu.getByRole('link', { name: 'Boards' })).toHaveAttribute(
+    expect(menu.getByRole('link', { name: 'Design boards' })).toHaveAttribute(
       'href',
       '/doc/proj-1/boards',
     );
@@ -223,7 +223,7 @@ describe('the More menu · In this document (F49)', () => {
     const opened = jest.fn();
     window.addEventListener('document:open-call-sheet', opened);
     mountBar();
-    fireEvent.click(openMore().getByRole('button', { name: 'Call sheet' }));
+    fireEvent.click(openMore().getByRole('button', { name: 'Project directory' }));
     expect(opened).toHaveBeenCalledTimes(1);
     window.removeEventListener('document:open-call-sheet', opened);
   });
@@ -459,7 +459,7 @@ describe('the left zone · household and the current stop (OD-11, A-08)', () => 
       [
         ['approvals', 'Section: Client approvals', 'Open project contents, at Client approvals'],
         ['schedule', 'Section: Project schedule', 'Open project contents, at Project schedule'],
-        ['money', 'Section: Money', 'Open project contents, at Money'],
+        ['money', 'Section: Project financials', 'Open project contents, at Project financials'],
       ] as const
     ).forEach(([readingIndex, line, ariaLabel]) => {
       const { unmount } = mountBar({
@@ -540,8 +540,8 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
       'Client approvals',
       'Project schedule',
       'Pieces',
-      'Money',
-      'Closing the book',
+      'Project financials',
+      'Project closeout',
       'The record',
     ].forEach((label) => {
       const row = within(panel).getByRole('button', { name: label });
@@ -565,7 +565,7 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     openSections();
     const panel = sectionsPanel();
     expect(
-      within(panel).getByRole('button', { name: 'Money' }),
+      within(panel).getByRole('button', { name: 'Project financials' }),
     ).toHaveAttribute('aria-current', 'true');
     expect(
       within(panel).getByRole('button', { name: 'Project schedule' }),
@@ -1032,7 +1032,7 @@ describe('the phone at 390 under one-voice (FR2 F2-5, F2-8, F2-15)', () => {
     mountPhone();
     fireEvent.click(openMore().getByRole('button', { name: 'Standing · 2' }));
     const sheet = await screen.findByRole('dialog');
-    expect(sheet).toHaveTextContent('Everything open on this job, 0');
+    expect(sheet).toHaveTextContent('All open · 0 — everything open on this job');
 
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -1085,5 +1085,22 @@ describe('the phone at 390 under one-voice (FR2 F2-5, F2-8, F2-15)', () => {
     });
     expect(screen.getByText('Elena Marlowe (no-login household)')).toBeInTheDocument();
     expect(screen.getByText('Section: Client approvals')).toBeInTheDocument();
+  });
+});
+
+describe('the studio surface label on the phone bar (SQ-752)', () => {
+  beforeEach(() => {
+    mockCallSheetOn = true;
+  });
+
+  it.each([
+    ['/desk', 'Studio overview'],
+    ['/library', 'Resource library'],
+    ['/people', 'Studio contacts'],
+    ['/rooms', 'Measured rooms'],
+  ])('prints %s as "%s" (SQ-752)', (path, label) => {
+    mockPathname = path;
+    mountBar({ doc: null });
+    expect(screen.getByText(label)).toBeInTheDocument();
   });
 });

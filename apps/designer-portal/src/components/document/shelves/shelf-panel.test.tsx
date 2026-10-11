@@ -140,7 +140,7 @@ describe('the shelf leaf at the full tier', () => {
 
   it('is the 320px aside beside the spine', () => {
     render(<Harness open />);
-    const leaf = screen.getByRole('region', { name: 'Spec book shelf' });
+    const leaf = screen.getByRole('region', { name: 'Specification book shelf' });
     expect(leaf.tagName).toBe('ASIDE');
     expect(leaf).toHaveClass('w-[320px]', 'min-[1440px]:left-[200px]');
   });
@@ -148,7 +148,7 @@ describe('the shelf leaf at the full tier', () => {
   it('is a region, not a dialog — the paper behind stays live', () => {
     render(<Harness open />);
     expect(
-      screen.getByRole('region', { name: 'Spec book shelf' }),
+      screen.getByRole('region', { name: 'Specification book shelf' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });

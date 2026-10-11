@@ -718,7 +718,7 @@ describe('the band’s Release for authorization lands on the head’s own entry
       </>,
     );
     // The head prints none: the lift's is the one entry on the page.
-    const entries = screen.getAllByRole('button', { name: 'Release for authorization' });
+    const entries = screen.getAllByRole('button', { name: 'Prepare purchasing authorization' });
     expect(entries).toHaveLength(1);
     const liftEntry = entries[0];
     expect(liftEntry.closest('[data-release-lift]')).not.toBeNull();

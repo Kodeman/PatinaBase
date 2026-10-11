@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { fieldProvenanceLabel, LibraryCard } from '../library-card';
 
 jest.mock('next/navigation', () => ({
@@ -98,5 +98,28 @@ describe('LibraryCard — the chip actually renders', () => {
       />,
     );
     expect(queryByText(/^Field/)).toBeNull();
+  });
+});
+
+describe('LibraryCard — the quick attribution row', () => {
+  it('names the opened action row "Quick attribution actions" (SQ-752)', () => {
+    render(
+      <LibraryCard
+        item={{
+          id: 'p-2',
+          name: 'Bouclé lounge',
+          brand: null,
+          images: null,
+          source_url: null,
+          category: 'seating',
+          layer: 'personal' as const,
+        }}
+        needsTeaching
+        onDeep={jest.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add style attribution' }));
+    expect(screen.getByRole('group', { name: 'Quick attribution actions' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Quick teaching actions' })).toBeNull();
   });
 });

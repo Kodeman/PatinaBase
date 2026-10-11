@@ -192,7 +192,7 @@ export function RolodexSeedSheet({
         Directory setup
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
-        Seed the rolodex
+        Add your studio contacts
       </h2>
       <p className="mb-4 mt-1 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
         Patina folded the people and companies from your studio&rsquo;s past

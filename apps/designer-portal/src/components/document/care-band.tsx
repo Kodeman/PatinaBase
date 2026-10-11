@@ -380,7 +380,7 @@ export function CareBand({
         <FoldSeam
           headingId={HEADING_ID}
           bodyId={BODY_ID}
-          name="Closing the book"
+          name="Project closeout"
           summary={careQuietStatus({ closed: done, total: items.length })}
           cause={fold.cause}
           onUnfold={() => {
@@ -441,8 +441,8 @@ export function CareBand({
         <div className="min-w-0 flex-1">
           <RegionHead
             headingId={HEADING_ID}
-            name="Closing the book"
-            eyebrow="Care · closing the book"
+            name="Project closeout"
+            eyebrow="Care · project closeout"
             status={
               // W4-R1 — at quiet the head's own status line IS the count line,
               // with no second paragraph under it. R13 (FR1 F8): `Nothing yet`
@@ -473,7 +473,7 @@ export function CareBand({
         <p className="sr-only">
           {quietStateSentence(
             careQuietStatus({ closed: done, total: items.length }),
-            'Closing the book',
+            'Project closeout',
           )}
         </p>
       ) : (

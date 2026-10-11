@@ -1274,7 +1274,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
       if (days >= SENT_UNOPENED_PROMOTE_DAYS) {
         return seal({
           kind: 'hesitating_proposal',
-          text: `Sent ${fmtDay(row.proposal_sent_at)} — not yet opened`,
+          text: `Issued ${fmtDay(row.proposal_sent_at)} · not yet viewed`,
           actionLabel: NEED_ACTION_LABELS.hesitating_proposal,
           stamp: { label: 'SENT', ...STAMP.dustyBlue },
           ...recordOf(row.proposal_id),
@@ -1392,19 +1392,19 @@ const needLead: NeedRule = ({ row, now, ceremony, lead }) => {
             ? `${person} wrote — respond by ${fmtDay(deadline)}, closing soon`
             : `${person} wrote — respond by ${fmtDay(deadline)}`
       : deadline === null
-        ? 'New lead — respond'
+        ? 'New inquiry — respond'
         : msLeft! < 0
           ? 'Response window passed — reply anyway'
           : closing
             ? `Respond by ${fmtDay(deadline)} — closing soon`
-            : `New lead — respond by ${fmtDay(deadline)}`;
+            : `New inquiry — respond by ${fmtDay(deadline)}`;
     return seal({
       kind: 'new_lead',
       ...recordOf(row.lead_id),
       ...(lead?.createdAt ? { at: lead.createdAt } : {}),
       text,
       actionLabel: NEED_ACTION_LABELS.new_lead,
-      stamp: { label: 'NEW LEAD', ...STAMP.clay },
+      stamp: { label: 'NEW INQUIRY', ...STAMP.clay },
       urgent: closing,
       dueOn: deadline,
       owner: 'designer',
@@ -1600,14 +1600,14 @@ const needHeldForRelease: NeedRule = ({ row, heldReleases }) => {
   const holder = holders.size === 1 && first.heldByName ? firstName(first.heldByName) : null;
   const text =
     held.length === 1
-      ? `Release ${holder ? `${holder}'s` : 'the'} order to ${first.vendorName ?? 'the maker'} · ${total}`
+      ? `Approve the release of ${holder ? `${holder}'s` : 'the'} order to ${first.vendorName ?? 'the maker'} · ${total}`
       : holder
-        ? `${holder} is holding ${held.length} orders for your release · ${total}`
-        : `${held.length} orders held for your release · ${total}`;
+        ? `${holder} is holding ${held.length} orders for your release approval · ${total}`
+        : `${held.length} orders held for your release approval · ${total}`;
   return {
     kind: 'po_unsent',
     text,
-    actionLabel: 'Release',
+    actionLabel: 'Approve release',
     releaseHeld: true,
     // Keyed on the held order, never the project: a held order and the
     // drafted-unsent aggregate are two needs that share the `po_unsent` kind.

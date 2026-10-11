@@ -110,7 +110,7 @@ export default function JudgmentsPage() {
     <RoomShell
       title="Style preferences"
       backTo="/library"
-      backLabel="the Library"
+      backLabel="Resource library"
     >
       <div className="mx-auto max-w-[900px] px-5 pb-24 pt-2 sm:px-8">
         {!hydrated || deck === null ? (

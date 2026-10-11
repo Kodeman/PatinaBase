@@ -145,7 +145,7 @@ describe('deriveDeskRoster — the header and the overdue line', () => {
       NOW,
     );
 
-    expect(roster.heading).toBe('Every job · 3 live · 1 overdue');
+    expect(roster.heading).toBe('Studio workload · 3 live · 1 overdue');
     expect(roster.liveCount).toBe(3);
     expect(roster.overdueCount).toBe(1);
   });
@@ -208,7 +208,7 @@ describe('deriveDeskRoster — the line', () => {
     );
 
     expect(roster.liveCount).toBe(1);
-    expect(roster.heading).toBe('Every job · 1 live · 0 overdue');
+    expect(roster.heading).toBe('Studio workload · 1 live · 0 overdue');
   });
 
   it('carries the motion when there is no need, and says so when there is neither', () => {
@@ -465,7 +465,7 @@ describe('deriveDeskRoster — eleven jobs', () => {
     );
 
     expect(roster.groups[0].lines).toHaveLength(11);
-    expect(roster.heading).toBe('Every job · 11 live · 0 overdue');
+    expect(roster.heading).toBe('Studio workload · 11 live · 0 overdue');
   });
 });
 
@@ -868,7 +868,7 @@ describe('D5 · a claim takes a card, a quiet job takes a line', () => {
     const quiet = row('quiet', 'project');
     const result = claimsOf({ live: [claimed, quiet], folders: [folder(claimed)] });
 
-    expect(result.heading).toBe('Every job · 2 live · 0 overdue');
+    expect(result.heading).toBe('Studio workload · 2 live · 0 overdue');
     expect(result.restHeading).toBe('No current alert · 1 job');
   });
 
@@ -1126,7 +1126,7 @@ describe('deriveDeskRoster — one voice (FR2 F2-2)', () => {
     const mei = row('aspen', 'project', { client_name: 'Mei Lin' });
     const cases: [NeedLine, string, string][] = [
       [need({ kind: 'payment_due', actionLabel: 'Record payment' }), 'Record payment', 'Record the payment'],
-      [need({ kind: 'overdue_decision', actionLabel: 'Review decisions' }), 'Review decisions', 'Nudge Mei'],
+      [need({ kind: 'overdue_decision', actionLabel: 'Review decisions' }), 'Review decisions', 'Contact Mei'],
       [need({ kind: 'damage_claim', actionLabel: 'Review the claim' }), 'Review the claim', 'File the claim'],
     ];
     for (const [n, before, after] of cases) {
@@ -1323,7 +1323,7 @@ describe('deriveDeskRoster — the card act agrees with the paper (FR4 Fix 5)', 
 
   const unopened = need({
     kind: 'hesitating_proposal',
-    text: 'Sent 5 October — not yet opened',
+    text: 'Issued 5 October · not yet viewed',
     actionLabel: 'Follow up',
     owner: 'client',
   });
@@ -1342,22 +1342,22 @@ describe('deriveDeskRoster — the card act agrees with the paper (FR4 Fix 5)', 
   it('a proposal with the client, not yet opened, prints Nudge {first}', () => {
     const aspen = sent('aspen', 'Mei Lin');
     const on = line(aspen, unopened, true);
-    expect(on.act.label).toBe('Nudge Mei');
+    expect(on.act.label).toBe('Contact Mei');
     expect(on.act.href).toBe('/doc/aspen');
-    expect(on.needText).toBe('Sent 5 October — not yet opened');
+    expect(on.needText).toBe('Issued 5 October · not yet viewed');
     expect(line(aspen, unopened, false).act.label).toBe('Follow up');
   });
 
-  it('the generic Client User is no name: Nudge the client', () => {
+  it('the generic Client User is no name: Contact the client', () => {
     const aspen = sent('aspen', 'Client User');
-    expect(line(aspen, unopened, true).act.label).toBe('Nudge the client');
-    expect(line(sent('blank', ''), unopened, true).act.label).toBe('Nudge the client');
+    expect(line(aspen, unopened, true).act.label).toBe('Contact the client');
+    expect(line(sent('blank', ''), unopened, true).act.label).toBe('Contact the client');
     expect(line(aspen, unopened, false).act.label).toBe('Follow up');
   });
 
   // FR5 531-1 (Fix F5-4) — the paper maps `viewed` to `sent`, so an opened,
   // unsigned proposal's card prints the same Nudge; the reason line stays.
-  it('a proposal opened and unsigned prints Nudge {first} / Nudge the client (FR5 F5-4)', () => {
+  it('a proposal opened and unsigned prints Nudge {first} / Contact the client (FR5 F5-4)', () => {
     const opened = (client_name: string) =>
       sent('opened', client_name, {
         proposal_status: 'viewed',
@@ -1370,10 +1370,10 @@ describe('deriveDeskRoster — the card act agrees with the paper (FR4 Fix 5)', 
       owner: 'client',
     });
     const on = line(opened('Mei Lin'), hesitating, true);
-    expect(on.act.label).toBe('Nudge Mei');
+    expect(on.act.label).toBe('Contact Mei');
     expect(on.act.href).toBe('/doc/opened');
     expect(on.needText).toBe('Opened Aug 21 — no signature yet');
-    expect(line(opened('Client User'), hesitating, true).act.label).toBe('Nudge the client');
+    expect(line(opened('Client User'), hesitating, true).act.label).toBe('Contact the client');
     // Flag off, today's Follow up.
     expect(line(opened('Mei Lin'), hesitating, false).act.label).toBe('Follow up');
   });
@@ -1385,7 +1385,7 @@ describe('deriveDeskRoster — the card act agrees with the paper (FR4 Fix 5)', 
     const on = line(noLogin, unopened, true);
     expect(on.act.label).toBe('Send a reminder');
     expect(on.act.href).toBe('/doc/aspen');
-    expect(on.needText).toBe('Sent 5 October — not yet opened');
+    expect(on.needText).toBe('Issued 5 October · not yet viewed');
     expect(line(noLogin, unopened, false).act.label).toBe('Follow up');
   });
 });
@@ -1411,7 +1411,7 @@ describe('sentProposalStandingLine (FR7 F7-2)', () => {
     expect(sentProposalReasonLine(tanaka(), now)).toBeNull();
     // Past it, the reason line is the same clause with its judgment.
     const fiveDays = tanaka({ proposal_sent_at: '2026-10-03T12:00:00Z' });
-    expect(sentProposalReasonLine(fiveDays, now)).toBe('Sent 3 October — not yet opened');
+    expect(sentProposalReasonLine(fiveDays, now)).toBe('Issued 3 October · not yet viewed');
     expect(sentProposalStandingLine(fiveDays)).toBe('Sent 3 October.');
   });
 

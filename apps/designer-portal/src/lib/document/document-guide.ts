@@ -205,8 +205,8 @@ export const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 't
   care: {
     state: 'actionable',
     eyebrow: 'Care · close the loop',
-    headline: 'Close the book on this one',
-    reason: 'Resolve the remaining care items, hand off the finished work, and close the book.',
+    headline: 'Close out project',
+    reason: 'Resolve the remaining care items, hand off the finished work, and close out the project.',
     action: { key: 'review-closeout', label: 'Run the closeout checklist', destination: { kind: 'anchor', section: 'care' } },
   },
 };
@@ -236,7 +236,7 @@ export const restCopy: Record<SectionKey, { headline: string; actionLabel: strin
   proposal: { headline: 'Signed. Open the project.', actionLabel: 'Open the project' },
   project: { headline: 'Everything ordered is moving.', actionLabel: 'Release the next room' },
   install: { headline: 'Install day is {Weekday}, {Month d}.', actionLabel: 'Hold the window' },
-  care: { headline: 'Everything is settled.', actionLabel: 'Close the book' },
+  care: { headline: 'Everything is settled.', actionLabel: 'Close out project' },
 };
 
 /**
@@ -639,9 +639,9 @@ function needVerb(kind: NeedKind): string {
     case 'schedule_proposal': return 'Open the proposed date';
     case 'task_due': return 'Open the task';
     case 'schedule_unconfigured': return 'Open the schedule';
-    case 'po_unsent': return 'Send the purchase order';
+    case 'po_unsent': return 'Open the purchase order';
     case 'po_unacknowledged': return 'Follow up with the maker';
-    case 'pulse_due': return 'Send the pulse';
+    case 'pulse_due': return 'Open the progress update';
     case 'payment_due': return 'Record payment';
     case 'payment_failed': return 'Pay again';
     case 'ack_discrepancy': return 'Answer the vendor';
@@ -912,10 +912,10 @@ function proposalGuide(
         ? {
             key: 'nudge-client',
             // `client_name` is typed non-null but arrives empty on rows the
-            // Desk's own derivation guards the same way; `Nudge ` is not an act.
+            // Desk's own derivation guards the same way; `Contact ` is not an act.
             label: row.client_name.trim()
-              ? `Nudge ${row.client_name.trim()}`
-              : 'Nudge the client',
+              ? `Contact ${row.client_name.trim()}`
+              : 'Contact the client',
             destination: {
               kind: 'anchor',
               section: 'proposal',

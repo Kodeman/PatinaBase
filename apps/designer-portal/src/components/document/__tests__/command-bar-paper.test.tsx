@@ -248,7 +248,7 @@ describe('⌘K on the paper (D4)', () => {
 
   it('prints the dry query: the sentence, Open the pieces first, Open Help last, never Help alone', () => {
     openAndType('zzz');
-    expect(screen.getByText('Nothing on this paper matches "zzz".')).toBeInTheDocument();
+    expect(screen.getByText('No results in this project file for "zzz".')).toBeInTheDocument();
     const options = optionNames();
     expect(options[0]).toBe('Open the pieces · 3 lines');
     expect(options).toContain('Search all project files for "zzz"');
@@ -386,7 +386,7 @@ describe('⌘K on the paper (D4)', () => {
   it('R30 — keys offers a Keys row with its ? hint under Project file actions; Enter opens Keys', () => {
     openAndType('keys');
     const acts = screen.getByRole('group', { name: 'Project file actions' });
-    const keys = within(acts).getByRole('option', { name: /^Keys/ });
+    const keys = within(acts).getByRole('option', { name: /^Keyboard shortcuts/ });
     expect(keys).toHaveTextContent('?');
     expect(within(acts).getAllByRole('option')[0]).toBe(keys);
 
@@ -397,10 +397,12 @@ describe('⌘K on the paper (D4)', () => {
     expect(opened).toHaveBeenCalledTimes(1);
   });
 
-  it('R31 — the Desk dry query: Nothing on this paper matches, Where the work stands, then one Open Help row', () => {
+  it('R31 — the Studio overview dry query: the visible no-results note, Project stages, then one Open Help row (SQ-764 F1)', () => {
     mockPathname.mockReturnValue('/desk');
     openAndType('zzz');
-    expect(screen.getByText('No matching results.')).toBeInTheDocument();
+    // The visible typed-echo note, not only the sr-only status line every dry query prints.
+    expect(screen.getByText('No results for "zzz". Refine your search.')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('No matching results.');
     expect(groupNames()).toEqual(['Results', 'Project stages', 'Results', 'Help']);
     expect(groupOptions('Help')).toEqual(['Open Help']);
     expect(screen.queryByText(/Browse the Help Center/)).not.toBeInTheDocument();
@@ -503,8 +505,8 @@ describe('one-voice ⌘K (FR2)', () => {
     mockRow = chenRow({ project_status: 'completed', active_section: 'care', title: 'Lindqvist' });
     mockUseProjectFFEItems.mockReturnValue({ data: [] });
     openAndType('zzz');
-    expect(screen.getAllByText('Nothing on this paper matches "zzz".')).toHaveLength(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Nothing on this paper matches "zzz".');
+    expect(screen.getAllByText('No results in this project file for "zzz".')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('No results in this project file for "zzz".');
     expect(screen.queryByText('Nothing on this paper matches.')).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Open the pieces/ })).not.toBeInTheDocument();
   });
@@ -519,7 +521,7 @@ describe('one-voice ⌘K (FR2)', () => {
   it('F2-23 / 507-5 — The keys is gone: Keys ? is the one door, printed once', () => {
     openAndType('keys');
     expect(screen.queryByText('The keys')).not.toBeInTheDocument();
-    const keys = screen.getAllByRole('option', { name: /^Keys/ });
+    const keys = screen.getAllByRole('option', { name: /^Keyboard shortcuts/ });
     expect(keys).toHaveLength(1);
     expect(keys[0]).toHaveTextContent('?');
   });
@@ -585,7 +587,7 @@ describe('one-voice ⌘K (FR3)', () => {
   ])('F3-5 %s — %s finds the band’s Next: its act over its sentence, landing as its press', (_job, query, label, sentence) => {
     const onPress = jest.fn();
     openWithNext({ label, sentence, onPress }, query);
-    expect(screen.queryByText(`Nothing on this paper matches "${query}".`)).not.toBeInTheDocument();
+    expect(screen.queryByText(`No results in this project file for "${query}".`)).not.toBeInTheDocument();
     const row = actRow(new RegExp(`^${label}`));
     expect(row.querySelector('.font-medium')?.textContent).toBe(label);
     expect(row).toHaveTextContent(sentence);

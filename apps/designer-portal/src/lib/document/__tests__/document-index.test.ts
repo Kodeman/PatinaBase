@@ -27,7 +27,7 @@ describe('the paper order', () => {
   });
 
   it('gives the closeout band and the record their names and their heading ids', () => {
-    expect(DOCUMENT_INDEX_LABELS.care).toBe('Closing the book');
+    expect(DOCUMENT_INDEX_LABELS.care).toBe('Project closeout');
     expect(DOCUMENT_INDEX_LABELS.record).toBe('The record');
     expect(regionHeadingId('care', 'proj-1')).toBe('care-region-heading');
     expect(regionHeadingId('record', 'proj-1')).toBe('previous-work-heading');

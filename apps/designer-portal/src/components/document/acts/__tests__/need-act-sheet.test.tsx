@@ -36,6 +36,7 @@ const mockSetNeedState = jest.fn();
 let mockLeadUserId = 'me';
 let mockHandoffNote: string | null = null;
 let mockRole = 'member';
+let mockInvoiceLoaded = true;
 
 const LINES = [
   {
@@ -86,7 +87,7 @@ jest.mock('@patina/supabase', () => ({
   useComposeProcurementDraft: () => ({ mutateAsync: mockCompose }),
   useUpdateProcurementDraft: () => ({ mutateAsync: mockUpdate }),
   useSendProcurementDraft: () => ({ mutateAsync: mockSendDraft }),
-  useInvoice: () => ({ isSuccess: true, data: INVOICE }),
+  useInvoice: () => ({ isSuccess: mockInvoiceLoaded, data: INVOICE }),
   useSendInvoice: () => ({ mutateAsync: mockSendInvoice }),
   useChaseInvoice: () => ({ mutateAsync: mockChase }),
   useProposal: () => ({ isSuccess: true, data: PROPOSAL }),
@@ -155,6 +156,7 @@ beforeEach(() => {
   mockLeadUserId = 'me';
   mockHandoffNote = null;
   mockRole = 'member';
+  mockInvoiceLoaded = true;
   mockCompose.mockResolvedValue({ id: 'draft-1' });
   mockUpdate.mockResolvedValue({ id: 'draft-1' });
   mockSendDraft.mockResolvedValue({ draftId: 'draft-1', messageId: 'm-1' });
@@ -185,6 +187,14 @@ describe('useNeedActSheet().open', () => {
   it('returns false for a drafted PO that is not held for this seat', () => {
     openSheet(deskNeed('po_unsent', 'po-1'));
     expect(opened).toBe(false);
+  });
+});
+
+describe('the act sheets while the record is read', () => {
+  it('prints "Loading the record…" until the record arrives (SQ-752)', () => {
+    mockInvoiceLoaded = false;
+    openSheet(INVOICE_NEED);
+    expect(screen.getByText('Loading the record…')).toBeInTheDocument();
   });
 });
 

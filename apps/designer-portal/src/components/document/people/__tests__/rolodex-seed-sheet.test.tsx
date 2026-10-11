@@ -93,6 +93,18 @@ beforeEach(() => {
   updateContactMutateAsync.mockResolvedValue(CONTACTS[0]);
 });
 
+describe('RolodexSeedSheet — heading', () => {
+  it('heads the sheet "Add your studio contacts" (SQ-752)', () => {
+    render(
+      <RolodexSeedSheet open onClose={jest.fn()} organizationId="org-1" />,
+    );
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Add your studio contacts' }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe('RolodexSeedSheet — archive/restore', () => {
   it('a live row calls the archive hook with its id', async () => {
     render(

@@ -257,7 +257,7 @@ describe('Desk — the roster is the Desk’s one population (B2-L2)', () => {
   it('prints the line roster under the Day Sheet', () => {
     render(<DeskPage />);
     expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
-    expect(screen.getByText('Every job')).toBeInTheDocument();
+    expect(screen.getByText('Studio workload')).toBeInTheDocument();
     expect(screen.queryByText(/\d+ live/)).not.toBeInTheDocument();
   });
 

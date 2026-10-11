@@ -236,7 +236,7 @@ describe('the release lift — the schedule’s half', () => {
     expect(offered).toHaveBeenLastCalledWith(true);
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Release for authorization' }),
+      screen.getByRole('button', { name: 'Prepare purchasing authorization' }),
     );
 
     // The lifted leader opens the section's own ceremony, unforked.

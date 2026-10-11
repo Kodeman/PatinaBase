@@ -321,7 +321,7 @@ function InlineQuickTags({
         surfaceKey="library"
         regionKey="quick-teaching"
         className="mt-3"
-        aria-label="Quick teaching actions"
+        aria-label="Quick attribution actions"
       >
         <DocumentAction
           actionKey="save-piece-teaching"

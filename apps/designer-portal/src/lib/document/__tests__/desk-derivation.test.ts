@@ -520,7 +520,23 @@ describe('deriveNeed', () => {
     );
     expect(need!.kind).toBe('new_lead');
     expect(need!.urgent).toBe(false);
-    expect(need!.stamp.label).toBe('NEW LEAD');
+    expect(need!.stamp.label).toBe('NEW INQUIRY');
+  });
+
+  it('new lead with no person reads "New inquiry — respond", dated "respond by {date}" when it has a deadline (SQ-752)', () => {
+    const base = {
+      engagement_kind: 'lead' as const,
+      active_section: 'brief' as const,
+      project_id: null,
+      lead_id: 'l1',
+      lead_status: 'new' as const,
+    };
+    expect(
+      deriveNeed(mkRow({ ...base, lead_response_deadline: null }), NOW)!.text,
+    ).toBe('New inquiry — respond');
+    expect(
+      deriveNeed(mkRow({ ...base, lead_response_deadline: daysAhead(5) }), NOW)!.text,
+    ).toBe(`New inquiry — respond by ${dayMonth(daysAhead(5))}`);
   });
 
   it('lead deadline inside 24h → urgent (R10)', () => {
@@ -616,7 +632,7 @@ describe('deriveNeed', () => {
       NOW,
     );
     expect(need!.kind).toBe('hesitating_proposal');
-    expect(need!.text).toMatch(/not yet opened/i);
+    expect(need!.text).toMatch(/not yet viewed/i);
     expect(need!.stamp.label).toBe('SENT');
   });
 

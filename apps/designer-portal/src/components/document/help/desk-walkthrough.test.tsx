@@ -53,7 +53,12 @@ jest.mock('./help-state-provider', () => ({
 const mockGetTourState = jest.fn(() => ({}));
 const mockSetTourState = jest.fn();
 const mockTourCaptured: {
-  steps?: Array<{ anchorSelector?: string; fallbackHeading?: string; fallbackBody?: string }>;
+  steps?: Array<{
+    anchorSelector?: string;
+    fallbackHeading?: string;
+    fallbackBody?: string;
+    fallbackCtaLabel?: string;
+  }>;
   persona?: string;
 } = {};
 const mockWelcomeCaptured: {
@@ -88,7 +93,12 @@ jest.mock('../../../../../../packages/help-system/src/index.ts', () => ({
     return null;
   },
   TourController: (props: {
-    steps: Array<{ anchorSelector?: string; fallbackHeading?: string; fallbackBody?: string }>;
+    steps: Array<{
+      anchorSelector?: string;
+      fallbackHeading?: string;
+      fallbackBody?: string;
+      fallbackCtaLabel?: string;
+    }>;
     persona?: string;
     onComplete?: () => void;
     children: (api: unknown) => React.ReactNode;
@@ -162,6 +172,15 @@ describe('DeskWalkthrough — step 6 acts', () => {
   });
 });
 
+describe('DeskWalkthrough — designer fallback copy (SQ-752)', () => {
+  it('ends the tour on "Record an inquiry" and welcomes with "This is your Studio overview" (SQ-752)', () => {
+    render(<DeskWalkthrough />);
+
+    expect(mockTourCaptured.steps?.[5]?.fallbackCtaLabel).toBe('Record an inquiry');
+    expect(mockWelcomeCaptured.fallbackTitle).toBe('This is your Studio overview');
+  });
+});
+
 // ─── L7 — teammate persona (flag `onboarding-teammate-persona`) ───────────────
 
 const MEMBER_ORG = {
@@ -185,7 +204,7 @@ describe('DeskWalkthrough — teammate persona (L7)', () => {
 
     expect(mockTourCaptured.persona).toBe('designer');
     expect(mockWelcomeCaptured.persona).toBe('designer');
-    expect(mockTourCaptured.steps?.[0]?.fallbackHeading).toBe('The Desk');
+    expect(mockTourCaptured.steps?.[0]?.fallbackHeading).toBe('Studio overview');
   });
 
   it('flag loading: a non-owner member still gets the designer steps and persona (unchanged behaviour)', () => {
@@ -228,7 +247,7 @@ describe('DeskWalkthrough — teammate persona (L7)', () => {
     // table row 1) — pins the fallback content swap. Its shape is
     // proposals/customer-success-lead.md §3's; R143 amended the description of
     // the Desk itself, which is two halves now.
-    expect(mockTourCaptured.steps?.[0]?.fallbackHeading).toBe('The Desk');
+    expect(mockTourCaptured.steps?.[0]?.fallbackHeading).toBe('Studio overview');
     expect(mockTourCaptured.steps?.[0]?.fallbackBody).toBe(
       "Every live job in the studio lands here — a card for each one with a claim on someone's hand, not always yours, and a line in the ledger below for the rest.",
     );

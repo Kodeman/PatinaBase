@@ -370,7 +370,7 @@ describe('the 13 cross-device contradictions, under one-voice', () => {
         clientFirstName: 'Mei',
         closed: false,
       });
-      expect(next?.act.label).toBe('Nudge Mei');
+      expect(next?.act.label).toBe('Contact Mei');
       expect(next?.act.label).toBe(guide);
       expect(next?.act.label).toBe(deskActionLabel(need, true, 'Mei'));
     });
@@ -411,7 +411,7 @@ describe('the 13 cross-device contradictions, under one-voice', () => {
     // At rest: the care band's closure gate stands ready.
     const care = row('care');
     expect(deriveDocumentGuide({ row: care, closureReady: true }).action?.label).toBe(
-      'Close the book',
+      'Close out project',
     );
     expect(
       deriveDocumentGuide({ row: care, closureReady: true, oneVoice: true }).action?.label,
@@ -485,7 +485,7 @@ describe('the Desk card speaks the band’s act (FR2 F2-2, 2-2)', () => {
     const decision = needOf('overdue_decision', { owner: 'client' });
     const first = voiceFirstName(aspen.client_name);
     expect(first).toBe('Mei');
-    expect(deskCard(aspen, decision)).toBe('Nudge Mei');
+    expect(deskCard(aspen, decision)).toBe('Contact Mei');
     expect(deskCard(aspen, decision)).toBe(needActLabel('overdue_decision', first));
     expect(deskCard(aspen, decision, false)).toBe('Review decisions');
   });
@@ -582,9 +582,9 @@ describe('the Desk leads with the band’s Next (FR3 F3-4)', () => {
 });
 
 // ── Tanaka (FR6 F6-1; `running_a_job_walk_dev.sql`): a proposal sent to Mei on
-// 3 October, never opened, two decisions overdue on it. One `Nudge Mei`, the
+// 3 October, never opened, two decisions overdue on it. One `Contact Mei`, the
 // composer; the reminder is `Send a reminder` (D1-a, D1-c, D1-d, X1).
-describe('Tanaka — one Nudge Mei on every surface (FR6 F6-1)', () => {
+describe('Tanaka — one Contact Mei on every surface (FR6 F6-1)', () => {
   const now = new Date('2026-10-07T12:00:00Z');
   const tanakaRow = (over: Partial<DocumentStateRow> = {}) =>
     row('proposal', {
@@ -617,18 +617,18 @@ describe('Tanaka — one Nudge Mei on every surface (FR6 F6-1)', () => {
       closed: false,
     })!;
 
-  it('band, dock, Desk card, sheet row and the need table all print Nudge Mei', () => {
+  it('band, dock, Desk card, sheet row and the need table all print Contact Mei', () => {
     expect(first).toBe('Mei');
     const hesitating = deriveNeed(tanaka, now)!;
     expect(hesitating.kind).toBe('hesitating_proposal');
     const next = band(tanaka);
-    expect(next.act.label).toBe('Nudge Mei');
+    expect(next.act.label).toBe('Contact Mei');
     expect(next.act.targetId).toBe(ACT_TARGET_IDS.proposalNudge);
     expect(next.act.tier).toBe('scored');
     // The dock registers this same LensNext (D7); the Desk prints the band's act.
     expect(card(tanaka).act.label).toBe(next.act.label);
     // X1 — the one-name table agrees with the Desk it feeds.
-    expect(NEED_ACT_LABELS.hesitating_proposal).toBe('Nudge {first name}');
+    expect(NEED_ACT_LABELS.hesitating_proposal).toBe('Contact {first name}');
     expect(needActLabel('hesitating_proposal', first)).toBe(next.act.label);
     expect(
       needGuideAction(hesitating, 'proposal', null, null, { oneVoice: true, clientFirstName: first })
@@ -638,7 +638,7 @@ describe('Tanaka — one Nudge Mei on every surface (FR6 F6-1)', () => {
   });
 
   it('the band’s sentence is the Desk card’s reason line, verbatim (D1-d)', () => {
-    expect(card(tanaka).needText).toBe('Sent 3 October — not yet opened');
+    expect(card(tanaka).needText).toBe('Issued 3 October · not yet viewed');
     expect(band(tanaka).sentence).toBe(card(tanaka).needText);
     const opened = tanakaRow({
       proposal_status: 'viewed',

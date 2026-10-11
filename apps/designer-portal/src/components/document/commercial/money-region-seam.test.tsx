@@ -108,7 +108,7 @@ describe('the Money seam, on the Delivery table', () => {
 
     const seam = screen.getByRole('button', { name: /expand/i });
     expect(seam).toHaveTextContent('$62,400 authorized of $80,000 budget');
-    expect(screen.queryByRole('heading', { name: 'Money' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Project financials' })).toBeNull();
   });
 
   it('unfolds in place to exactly the region that stands on the paper today', () => {
@@ -144,7 +144,7 @@ describe('the Money seam, on the Delivery table', () => {
       section.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
     ).toEqual(['mt-[var(--doc-region-gap)]']);
     expect(section.className).not.toMatch(/\bmb-/);
-    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Project financials' })).toBeVisible();
     expect(screen.getByText('$17,600 remaining · $62,400 authorized')).toBeVisible();
     expect(screen.getByText('Client budget · $80,000 approved')).toBeVisible();
     expect(screen.getByText('Account band')).toBeInTheDocument();
@@ -251,7 +251,7 @@ describe('the Money seam, on the Delivery table', () => {
     render(<MoneyRegion projectId="project-1" tableSeam />);
 
     expect(screen.queryByRole('button', { name: /expand/i })).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Project financials' })).toBeVisible();
     expect(screen.getByText('Account band')).toBeInTheDocument();
   });
 

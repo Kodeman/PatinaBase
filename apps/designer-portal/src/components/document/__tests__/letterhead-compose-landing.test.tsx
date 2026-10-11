@@ -321,7 +321,7 @@ describe('FR6 F6-1 — Tanaka: the sent proposal’s Nudge Mei is the composer',
 
   it('the band press lands in the composer’s note, the proposal clause first, under NUDGE MEI', async () => {
     const own = ownAct('proposal', facts({ clientMessageable: true }))!;
-    expect(own).toEqual({ label: 'Nudge Mei', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' });
+    expect(own).toEqual({ label: 'Contact Mei', targetId: ACT_TARGET_IDS.proposalNudge, tier: 'scored' });
     renderTanaka();
 
     expect(pressBandAct(own)).toBe(true);
@@ -330,7 +330,7 @@ describe('FR6 F6-1 — Tanaka: the sent proposal’s Nudge Mei is the composer',
     expect(document.querySelector('[data-message-named]')).toHaveTextContent(
       'Waiting on Mei: the proposal, sent 3 October · Daybed cushion — undyed linen vs moss wool · Rug size — 8x10 vs 9x12',
     );
-    expect(eyebrow()).toHaveTextContent(/^Nudge Mei$/);
+    expect(eyebrow()).toHaveTextContent(/^Contact Mei$/);
     expect(eyebrow()).toHaveClass('uppercase');
   });
 
@@ -346,7 +346,7 @@ describe('FR6 F6-1 — Tanaka: the sent proposal’s Nudge Mei is the composer',
     renderTanaka();
     nudge([]);
     await waitFor(() => expect(meiNote()).toHaveFocus());
-    expect(eyebrow()).toHaveTextContent(/^Nudge Mei$/);
+    expect(eyebrow()).toHaveTextContent(/^Contact Mei$/);
   });
 
   it('the act’s id is on Message Mei, so even an untaken press lands on a control', () => {

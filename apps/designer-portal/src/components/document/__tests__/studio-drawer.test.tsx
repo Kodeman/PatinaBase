@@ -7,6 +7,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
 let mockAskThePaper = true;
+let mockPathname = '/doc/doc-1';
 
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (name: string) => ({
@@ -21,7 +22,7 @@ jest.mock('@/hooks/use-teaching-note', () => ({
 jest.mock('next/navigation', () => ({
   // US-25 fix-now 12 — a Document view: on the Desk the drawer prints no
   // Find of its own (the header has one).
-  usePathname: () => '/doc/doc-1',
+  usePathname: () => mockPathname,
   useRouter: () => ({ push: jest.fn() }),
 }));
 
@@ -65,6 +66,7 @@ const findAnything = () =>
 
 beforeEach(() => {
   mockAskThePaper = true;
+  mockPathname = '/doc/doc-1';
   window.localStorage.clear();
 });
 
@@ -124,5 +126,20 @@ describe('StudioDrawer — Keys beside Find anything (F6, SQ-715)', () => {
     expect(screen.getByRole('navigation', { name: 'Studio drawer' })).toHaveClass(
       'grid-cols-[1fr_auto_1fr]',
     );
+  });
+});
+
+describe('StudioDrawer — breadcrumb copy (SQ-752)', () => {
+  it.each([
+    ['/library', 'Resource library'],
+    ['/people', 'Studio contacts'],
+    ['/rooms', 'Measured rooms'],
+    ['/drafting', 'Proposal workspace'],
+    ['/doc/x', 'Project file'],
+  ])('prints the %s breadcrumb as "%s" (SQ-752)', (path, label) => {
+    mockPathname = path;
+    const { container } = render(<StudioDrawer />);
+    const crumb = container.querySelector('span.truncate.font-mono');
+    expect(crumb).toHaveTextContent(label);
   });
 });

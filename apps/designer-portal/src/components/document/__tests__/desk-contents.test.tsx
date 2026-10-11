@@ -174,7 +174,7 @@ describe('DeskContents — Begin column', () => {
     renderContents();
 
     const row = screen.getByRole('button', {
-      name: /Open the Contract Room/,
+      name: /Open the proposal workspace/,
     });
     expect(row).toBeInTheDocument();
 

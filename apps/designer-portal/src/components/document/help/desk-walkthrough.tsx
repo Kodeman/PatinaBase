@@ -124,8 +124,8 @@ function scrollAnchorIntoView(
 // fallback copy makes the tour navigable with zero published CMS content; Sanity
 // copy (persona 'designer') wins when present. Step 6 now ends the tour by
 // acting, not describing (decisions #1) — `handleComplete` below opens the
-// capture-lead sheet after marking the tour complete. Its CTA reads "Capture
-// a lead" via `fallbackCtaLabel` below (Sanity's `ctaLabel` still wins when
+// capture-lead sheet after marking the tour complete. Its CTA reads "Record
+// an inquiry" via `fallbackCtaLabel` below (Sanity's `ctaLabel` still wins when
 // published); clicking it completes the tour and opens the sheet either way.
 const TOUR = SurfaceKeys.DesignerPortal.Tours.DeskWalkthrough;
 const STEPS: CoachmarkStep[] = [
@@ -138,7 +138,7 @@ const STEPS: CoachmarkStep[] = [
     anchorSelector: '[data-tour-anchor="desk-greeting"]',
     side: 'bottom',
     beforeShow: scrollAnchorIntoView('[data-tour-anchor="desk-greeting"]'),
-    fallbackHeading: 'The Desk',
+    fallbackHeading: 'Studio overview',
     fallbackBody:
       'Every live job lands here — a card for each one with a claim on your hand, and a line in the ledger below for the rest.',
   },
@@ -185,7 +185,7 @@ const STEPS: CoachmarkStep[] = [
     fallbackHeading: 'Begin with a lead',
     fallbackBody:
       'Every project begins as a captured lead — a name and a note, under a minute. The Desk takes it from there.',
-    fallbackCtaLabel: 'Capture a lead',
+    fallbackCtaLabel: 'Record an inquiry',
   },
 ];
 
@@ -201,7 +201,7 @@ const STEPS: CoachmarkStep[] = [
 const STEPS_TEAMMATE: CoachmarkStep[] = [
   {
     ...STEPS[0],
-    fallbackHeading: 'The Desk',
+    fallbackHeading: 'Studio overview',
     fallbackBody:
       "Every live job in the studio lands here — a card for each one with a claim on someone's hand, not always yours, and a line in the ledger below for the rest.",
   },
@@ -224,7 +224,7 @@ const STEPS_TEAMMATE: CoachmarkStep[] = [
     fallbackHeading: 'Begin with a lead',
     fallbackBody:
       "Anything you begin here belongs to the studio, not to you. Start where you're asked; the rest keeps.",
-    fallbackCtaLabel: 'Capture a lead',
+    fallbackCtaLabel: 'Record an inquiry',
   },
 ];
 
@@ -561,7 +561,7 @@ function DeskWalkthroughInner() {
         fallbackTitle={
           persona === 'teammate'
             ? `You're in — ${studio?.name ?? 'the studio'}.`
-            : 'This is your Desk'
+            : 'This is your Studio overview'
         }
         fallbackBody={
           persona === 'teammate'

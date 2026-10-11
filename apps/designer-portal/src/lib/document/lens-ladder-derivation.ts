@@ -706,7 +706,7 @@ const PROJECT_DOORS: readonly {
   label: string;
 }[] = [
   { key: 'planroom', label: 'Drawing sets' },
-  { key: 'specbook', label: 'Spec book' },
+  { key: 'specbook', label: 'Specification book' },
   // F62 / D-B8 — one name for one thing. The shelf registry, the leaf, the
   // page and ⌘K all read `Boards`; the key stays `moodboards` (it is an
   // address, `shelves.ts`).
@@ -736,7 +736,7 @@ export function deriveLadderDoors(input: LadderDoorsInput): LadderDoor[] {
     if (input.callSheetEnabled ?? true) {
       doors.push({
         key: 'callsheet',
-        label: 'Call sheet',
+        label: 'Project directory',
         href: href('callsheet'),
         onOpen: input.onOpenCallSheet ?? noop,
       });
@@ -746,7 +746,7 @@ export function deriveLadderDoors(input: LadderDoorsInput): LadderDoor[] {
   if (input.held) {
     doors.push({
       key: 'release-room',
-      label: 'Put down the room',
+      label: 'Clear room focus',
       href: null,
       onOpen: input.onReleaseRoom ?? noop,
     });

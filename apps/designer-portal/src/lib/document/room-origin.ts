@@ -51,7 +51,7 @@ export function originLabel(origin: string): string {
   if (origin === '/rooms' || origin.startsWith('/rooms/') || origin.startsWith('/room/')) {
     return 'Measured rooms';
   }
-  return 'Project file';
+  return 'back';
 }
 
 export function isRoomPath(pathname: string): boolean {

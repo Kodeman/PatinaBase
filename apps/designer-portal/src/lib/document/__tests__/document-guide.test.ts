@@ -77,7 +77,7 @@ describe('deriveDocumentGuide', () => {
     ['proposal', 'Wait for the client’s signature', 'Review signing controls', 'proposal'],
     ['project', 'Everything ordered is moving.', 'Release the next room', 'project'],
     ['install', 'Complete the installation', "Check what's arriving", 'install'],
-    ['care', 'Close the book on this one', 'Run the closeout checklist', 'care'],
+    ['care', 'Close out project', 'Run the closeout checklist', 'care'],
   ] as const)('gives %s its rest-state sentence and act', (section, headline, label, destination) => {
     const guide = deriveDocumentGuide({ row: row(section), now: new Date('2026-08-10T12:00:00Z') });
 
@@ -212,7 +212,7 @@ describe('deriveDocumentGuide', () => {
     expect(guide.headline).toBe('Sent 9 August · not opened yet');
     expect(guide.action).toEqual({
       key: 'nudge-client',
-      label: 'Nudge Avery Stone',
+      label: 'Contact Avery Stone',
       destination: { kind: 'anchor', section: 'proposal', focusId: 'proposal-send-wall' },
     });
   });
@@ -463,7 +463,7 @@ describe('deriveDocumentGuide', () => {
         projectId: null,
       },
     });
-    expect(guide.headline).toMatch(legacyStatus === 'sent' ? /not yet opened/ : /no signature yet/);
+    expect(guide.headline).toMatch(legacyStatus === 'sent' ? /not yet viewed/ : /no signature yet/);
     expect(guide.action?.label).toBe('Follow up');
   });
 
@@ -594,6 +594,15 @@ describe('deriveDocumentGuide', () => {
 
     expect(po.destination).toEqual({ kind: 'anchor', section: 'project', focusId: 'ffe-selection-line-7' });
     expect(claim.destination).toEqual({ kind: 'anchor', section: 'project', focusId: 'ffe-selection-line-7' });
+  });
+
+  it('flag off: an unsent purchase order prints "Open the purchase order" (SQ-752)', () => {
+    const po = needGuideAction(
+      { kind: 'po_unsent', text: 'Drafted', actionLabel: 'Review the purchase order', stamp: { label: 'DRAFT', color: 'x' }, urgent: false },
+      'project', 'project-1',
+    );
+
+    expect(po.label).toBe('Open the purchase order');
   });
 
   it('keeps a claim on the receiving page while no line id is carried', () => {
@@ -1296,7 +1305,7 @@ describe('the sixth rung derives from the ticket (B2-L3)', () => {
       ticketRows: ticketRows(),
     });
 
-    expect(guide.headline).toBe('Close the book on this one');
+    expect(guide.headline).toBe('Close out project');
   });
 
   it('leaves rung one — unavailable — standing', () => {

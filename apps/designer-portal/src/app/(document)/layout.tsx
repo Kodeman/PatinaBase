@@ -32,7 +32,7 @@ import { NeedActSheetProvider } from '@/components/document/acts/need-act-sheet'
 import '@/lib/arrival/arrival.css';
 
 export const metadata: Metadata = {
-  title: 'The Desk · Patina',
+  title: 'Studio overview · Patina',
 };
 
 /**

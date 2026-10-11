@@ -174,7 +174,19 @@
     "apps/designer-portal/src/lib/document/__tests__/desk-action-labels.test.ts",
     "apps/designer-portal/src/lib/document/__tests__/lens-ladder-derivation.test.ts",
     "apps/designer-portal/src/lib/document/__tests__/registry-match-surfaces.test.ts",
-    "apps/designer-portal/src/lib/help-system/help-topic-page.test.ts"
+    "apps/designer-portal/src/lib/help-system/help-topic-page.test.ts",
+    "apps/designer-portal/src/app/(document)/layout.tsx",
+    "apps/designer-portal/src/lib/document/room-origin.ts",
+    "apps/designer-portal/src/components/document/compose/composing-page.tsx",
+    "apps/designer-portal/src/components/document/overlays/keys-sheet.tsx",
+    "apps/designer-portal/src/components/document/help/desk-walkthrough.tsx",
+    "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts",
+    "apps/designer-portal/src/lib/document/document-guide.ts",
+    "apps/designer-portal/src/components/document/schedule/phase-section.tsx",
+    "apps/designer-portal/src/lib/document/feedback.ts",
+    "apps/designer-portal/src/components/document/accounts/accounts-book.tsx",
+    "apps/designer-portal/src/lib/document/studio-setup.ts",
+    "apps/designer-portal/src/components/document/worktable/release-lift.tsx"
   ],
   "D2": [
     "apps/designer-portal/src/app/(document)/doc/[id]/page.tsx",

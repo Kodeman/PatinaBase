@@ -160,7 +160,7 @@ describe('deriveTicket — eight rows, always', () => {
       'Drawings',
       'Spec',
       'Boards',
-      'Money',
+      'Project financials',
       'Dates',
       'People',
     ]);
@@ -522,7 +522,7 @@ describe('deriveTicket — the specimen reads as drawn', () => {
 
   it('reads the money ladder', () => {
     expect(valueOf(rows, 'money')).toBe(
-      '$141,600 ordered · $17,500 owed you, 22 days · $12,300 deposit not drawn',
+      '$141,600 ordered · $17,500 receivable, 22 days · $12,300 deposit undisbursed',
     );
   });
 
@@ -624,7 +624,7 @@ describe('deriveTicket — a row only opens what the spread prints', () => {
       paperRegions: ['approvals', 'ffe'],
     });
     expect(valueOf(rows, 'money')).toBe(
-      '$141,600 ordered · $17,500 owed you, 22 days · $12,300 deposit not drawn',
+      '$141,600 ordered · $17,500 receivable, 22 days · $12,300 deposit undisbursed',
     );
   });
 });
@@ -665,7 +665,7 @@ describe('deriveTicket — what is wrong is counted once, and named first', () =
     const rows = deriveTicket(specimenInput());
     expect(rows.find((row) => row.key === 'pieces')!.emphasis).toBe('1 damaged');
     expect(rows.find((row) => row.key === 'money')!.emphasis).toBe(
-      '$17,500 owed you, 22 days',
+      '$17,500 receivable, 22 days',
     );
     expect(rows.find((row) => row.key === 'rooms')!.emphasis).toBeNull();
   });
@@ -737,7 +737,7 @@ describe('deriveTicketSeam', () => {
     const seam = deriveTicketSeam(rows, deriveTicketIdentity(specimenInput()));
     // Rank two (a dated promise past its date) leads rank three (a piece that
     // cannot move), whatever order the rows print in.
-    expect(seam.exceptions).toBe('$17,500 owed you · 1 damaged');
+    expect(seam.exceptions).toBe('$17,500 receivable · 1 damaged');
   });
 
   it('drops a third exception whole, never abbreviated', () => {
