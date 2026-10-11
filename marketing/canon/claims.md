@@ -61,6 +61,7 @@ source. Keep `|` out of cells.
 | C30 | Leah will be at the Moll Drive house during the Fall Parade on ⟨day and hours⟩. | Kody, chat 2026-10-09: Leah or Kody will be present the second weekend. Promote once the day and hours are set and recorded in docs/marketing/partners/kippley.md | todo |
 | C31 | On Patina, everyone who acts on a job (the client's household, the contractor, the trades and the studio's own team) holds a seat on that job, and a seat's access ends when the job does. | docs/design/the-document/DECISIONS.md R151 (PR-c household + seat; PR-d grant ends with the engagement window; built and deployed in the People room program) | verified |
 | C32 | A trade sends its insurance certificate, W-9 and licence to the studio through a link, and the studio confirms them. | docs/design/the-document/DECISIONS.md R151 PR-a (tokened field-link page a trade writes to, unverified until a studio member confirms) | verified |
+| C33 | The Founding Circle is limited to 200 founding members. | Kody, chat 2026-10-11 (homepage review: keep the line, add this row). A founders' policy: nothing in the site code caps signups yet, so close the circle by hand at 200. | verified |
 
 ## Never claim (not ledger rows; lint cannot catch all of these)
 
