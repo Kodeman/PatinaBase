@@ -17,7 +17,7 @@ const DRAFT_PROPOSAL_ID = 'd0c10000-0000-0000-0000-0000000000b2';
  * every job, width and section).
  */
 const ROSTER_ACTION =
-  /Open the job|Review decisions|Send reminder|Open the project|Follow up|Revise proposal|Review flagged lines|Continue the introduction|Review the claim|Inspect the delivery|Resolve the schedule|Open the task|Review the purchase order|Follow up with the maker|Review and send/;
+  /Open the job|Review decisions|Send reminder|Signed, open the project|Follow up|Revise proposal|Review flagged lines|Continue the introduction|Review the claim|Inspect the delivery|Resolve the schedule|Open the task|Review the purchase order|Follow up with the maker|Review and send/;
 
 test.describe.configure({ mode: 'serial' });
 
@@ -154,7 +154,7 @@ test.describe('Inked Instruments action visibility', () => {
     await page.setViewportSize({ width: 1280, height: 900 });
 
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
-    await expectInlinePrimary(page, 'desk-head', 'Capture a lead');
+    await expectInlinePrimary(page, 'desk-head', 'Record an inquiry');
     await expect(page.getByTestId('mobile-bar')).toBeHidden();
 
     // B2 — the four-up folio grid is ONE roster of every live job now, grouped
@@ -222,7 +222,7 @@ test.describe('Inked Instruments action visibility', () => {
   // the Desk's mobile-dock primary: `src/app/(document)/desk/page.test.tsx`'s
   // "Desk — capture-lead affordance (A9)" holds
   // `expect(useMobilePrimaryAction).not.toHaveBeenCalled()` — "the header CTA
-  // is the only on-screen 'Capture a lead'" — and mobile-bar prints its
+  // is the only on-screen 'Record an inquiry'" — and mobile-bar prints its
   // documented "In hand / Today" glance in the empty primary slot
   // (mobile-bar.tsx:266-280). So the act this walk measures at 390 is the
   // head's, not the bar's. Both halves are asserted: the bar must NOT grow the
@@ -247,7 +247,7 @@ test.describe('Inked Instruments action visibility', () => {
 
       // The head keeps the act, at the same one-primary-per-region contract
       // the desktop walk asserts.
-      const headAct = await expectInlinePrimary(page, 'desk-head', 'Capture a lead');
+      const headAct = await expectInlinePrimary(page, 'desk-head', 'Record an inquiry');
 
       // The head act is the FIRST thing on this route, so under `next dev` a
       // press can land on server markup whose handler has not attached yet and
@@ -264,7 +264,7 @@ test.describe('Inked Instruments action visibility', () => {
       // sideways scrolling at the smallest supported phone width.
       await headAct.click();
       const captureLeadSheet = page.getByRole('dialog', {
-        name: 'Capture a lead',
+        name: 'Record an inquiry',
       });
       await expect(captureLeadSheet).toBeVisible({ timeout: COLD });
       for (const field of [

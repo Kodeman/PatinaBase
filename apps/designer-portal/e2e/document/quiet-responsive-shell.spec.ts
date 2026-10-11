@@ -418,7 +418,7 @@ test.describe('Quiet Work responsive document shell', () => {
     // W2 — the running index is the LADDER: a `nav` named `This paper`,
     // one button per stop.
     const ladder = page.getByRole('navigation', { name: 'This paper' });
-    await ladder.getByRole('button', { name: /^Money/i }).click();
+    await ladder.getByRole('button', { name: /^Project financials/i }).click();
 
     // The Money region ROOT (`[data-index-region="money"]`) is what
     // `globals.css`'s `scroll-margin-top: var(--doc-landing-clear)` targets.
