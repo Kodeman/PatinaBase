@@ -212,7 +212,7 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
   it('says nothing needs her, once, when every feed answered and no job needs her', () => {
     render(<DeskPage />);
     expect(screen.getByTestId('day-sheet')).toBeInTheDocument();
-    expect(screen.getAllByText('Nothing needs you tonight.')).toHaveLength(1);
+    expect(screen.getAllByText('No current action alerts.')).toHaveLength(1);
   });
 
   it('never says nothing needs her while a feed is unread (fix-now 6)', () => {
@@ -221,7 +221,7 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
       data: { folders: [], chips: [], live: [], unreadFeeds: ['purchase orders'] },
     };
     render(<DeskPage />);
-    expect(screen.queryByText('Nothing needs you tonight.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No current action alerts.')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('day-sheet')).getByText('Not checked: purchase orders.')).toBeInTheDocument();
   });
 

@@ -365,7 +365,7 @@ export function RecordPaymentForm({
         <label className="flex items-baseline gap-1.5">
           <span className={LABEL_CLS}>Payment reference</span>
           <input
-            aria-label="Reference"
+            aria-label="Payment reference"
             placeholder="check № or confirmation"
             value={reference}
             disabled={busy}
@@ -378,7 +378,7 @@ export function RecordPaymentForm({
         <span className={LABEL_CLS}>Payment receipt</span>
         <input
           type="file"
-          aria-label="Receipt"
+          aria-label="Payment receipt"
           accept="image/*,application/pdf"
           disabled={busy}
           onChange={(e) => setReceipt(e.target.files?.[0] ?? null)}
@@ -615,7 +615,7 @@ export function PoMoneyOut({
               regionKey="money-out"
               variant="tertiary"
               onClick={() => setVoidingId(r.id)}
-              aria-label={`Void the ${fmtUsd(r.amount_cents)} payment`}
+              aria-label={`Void payment record · ${fmtUsd(r.amount_cents)}`}
             >
               Void payment record
             </DocumentAction>
@@ -678,7 +678,7 @@ export function PoMoneyOut({
                     loading={payingRowId === p.id}
                     loadingLabel="Opening checkout…"
                     onClick={() => void payNow(p.id!)}
-                    aria-label={`Pay now · ${scheduleName(p)}`}
+                    aria-label={`Pay vendor now · ${scheduleName(p)}`}
                   >
                     Pay vendor now →
                   </DocumentAction>

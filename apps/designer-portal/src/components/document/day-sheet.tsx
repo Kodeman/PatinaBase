@@ -25,8 +25,8 @@ import { DocumentAction, DocumentActionGroup } from './document-action';
 import { useNeedActSheet } from './acts/need-act-sheet';
 import { openLedger } from './command-bar';
 
-export const NOTHING_NEEDS_YOU_TONIGHT = 'Nothing needs you tonight.';
-export const THE_REST = 'The rest are on their jobs.';
+export const NOTHING_NEEDS_YOU_TONIGHT = 'No current action alerts.';
+export const THE_REST = 'The rest are on their projects.';
 
 const SCOPES: readonly (readonly [DeskScope, string])[] = [
   ['mine', 'Mine'],
@@ -164,7 +164,7 @@ export function DaySheet({
         >
           {head}
         </p>
-        <div role="group" aria-label="Whose jobs" className="day-sheet-scope">
+        <div role="group" aria-label="Whose projects" className="day-sheet-scope">
           {SCOPES.map(([key, word], i) => (
             <span key={key} className="inline-flex items-baseline gap-2.5">
               {i > 0 && <span aria-hidden="true">·</span>}
@@ -215,7 +215,7 @@ export function DaySheet({
             {sheet.waitingOn.map(({ need: entry, who, since }) => (
               <li key={entry.key} data-day-sheet-waiting={entry.key} className="day-sheet-waiting">
                 <span className="text-[var(--text-primary)]">
-                  {`Waiting on ${who} since ${dayMonth(since) ?? 'today'}`}
+                  {`Awaiting ${who} since ${dayMonth(since) ?? 'today'}`}
                 </span>
                 <span className="text-[var(--text-muted)]">{entry.projectName}</span>
               </li>

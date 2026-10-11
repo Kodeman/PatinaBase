@@ -202,7 +202,7 @@ describe("BuildRoomShell — Price for a seat without money (R1, Q7)", () => {
 });
 
 describe("BuildRoomShell — the room rail", () => {
-  it("lists the rooms with their counts, then Not in a room yet, Removed and + ROOM", () => {
+  it("lists the rooms with their counts, then Unassigned to a room, Removed and + ROOM", () => {
     renderShell();
     const rail = screen.getByRole("navigation", { name: "Rooms" });
     const rows = within(rail)
@@ -217,7 +217,7 @@ describe("BuildRoomShell — the room rail", () => {
       "Primary Bath8",
       "Sunroom1",
       "Bedroom4",
-      "Not in a room yet0",
+      "Unassigned to a room0",
       "Removed1",
     ]);
     expect(
@@ -471,7 +471,10 @@ describe("BuildRoomShell — at 390 (a13)", () => {
     expect(picker).toHaveAttribute("aria-expanded", "true");
     const list = screen.getByRole("navigation", { name: "Choose a room" });
     expect(within(list).getAllByRole("link")[0]).toHaveTextContent(
-      "Whole job25",
+      "All project selections25",
+    );
+    expect(within(list).getByRole("link", { name: /Living Room/ })).toHaveTextContent(
+      picker.textContent?.replace(" ▾", "") ?? "Living Room",
     );
     fireEvent.click(within(list).getByRole("link", { name: /Kitchen/ }));
     expect(props.onNavigate).toHaveBeenCalledWith({

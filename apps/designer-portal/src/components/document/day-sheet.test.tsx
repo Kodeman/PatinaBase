@@ -132,7 +132,7 @@ describe('DaySheet', () => {
     });
     expect(screen.getAllByText(NOTHING_NEEDS_YOU_TONIGHT)).toHaveLength(1);
     expect(lines(container)).toHaveLength(0);
-    expect(screen.getByText('Waiting on Fenmoor Joinery since 3 October')).toBeInTheDocument();
+    expect(screen.getByText('Awaiting Fenmoor Joinery since 3 October')).toBeInTheDocument();
   });
 
   it('never says nothing needs her while a feed went unread', () => {
@@ -155,6 +155,7 @@ describe('DaySheet', () => {
 
   it('offers the scope as Mine · The studio’s', async () => {
     const { onScope } = renderSheet([entry(1)]);
+    expect(screen.getByRole('group', { name: 'Whose projects' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'The studio’s' })).toHaveAttribute('aria-pressed', 'true');
     await act(async () => {
       await userEvent.setup().click(screen.getByRole('button', { name: 'Mine' }));

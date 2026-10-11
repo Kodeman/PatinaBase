@@ -192,6 +192,7 @@ describe('Chase this PO', () => {
   it('opens prefilled, and nothing is composed or sent on open', () => {
     openSheet(PO_NEED);
     expect(opened).toBe(true);
+    expect(screen.getByText('Follow up on this purchase order')).toBeInTheDocument();
     expect(screen.getByText('Fenmoor Joinery')).toBeInTheDocument();
     expect(textbox('Subject').value).toBe('PO 1042: please acknowledge');
     expect(textbox('Note').value).toMatch(/^Hello Fenmoor Joinery,/);
@@ -262,6 +263,7 @@ describe('Remind this invoice', () => {
   it('opens prefilled with the client and the invoice', () => {
     openSheet(INVOICE_NEED);
     expect(opened).toBe(true);
+    expect(screen.getByText('Send an invoice reminder')).toBeInTheDocument();
     expect(screen.getByText('Mara Olsen')).toBeInTheDocument();
     expect(screen.getByText(/Invoice 0031 · \$9,200/)).toBeInTheDocument();
     expect(textbox('A note with the reminder').value).toMatch(/^Mara,/);
@@ -299,6 +301,7 @@ describe('Follow up this proposal', () => {
   it('opens prefilled and quotes the decline reason', () => {
     openSheet(PROPOSAL_NEED);
     expect(opened).toBe(true);
+    expect(screen.getByText('Follow up on this proposal')).toBeInTheDocument();
     expect(screen.getByText('Mara Olsen declined the proposal: “The sofa is over budget”')).toBeInTheDocument();
     expect(textbox('Note').value).toMatch(/^Mara,/);
     expect(mockSendNote).not.toHaveBeenCalled();
@@ -330,8 +333,17 @@ describe("Approve this order's release", () => {
     expect(opened).toBe(true);
     expect(screen.getByText("Approve this order's release")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Approve release' })).toBeInTheDocument();
+    expect(screen.getByText('Vendor:')).toBeInTheDocument();
+    expect(screen.getByText('Fenmoor Joinery')).toBeInTheDocument();
     expect(screen.getByText("Release Ana's order to Fenmoor Joinery · $4,800")).toBeInTheDocument();
     expect(mockRelease).not.toHaveBeenCalled();
+  });
+
+  it('labels the in-flight release as approval, not a send', () => {
+    mockRelease.mockReturnValue(new Promise(() => {}));
+    openSheet(RELEASE_NEED);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve release' }));
+    expect(screen.getByText('Approving…')).toBeInTheDocument();
   });
 
   it('releases through the release hook, then marks acted', async () => {

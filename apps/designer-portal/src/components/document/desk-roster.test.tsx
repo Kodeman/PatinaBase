@@ -322,7 +322,7 @@ describe('DeskRoster — an empty desk', () => {
   it('says the work is in motion and keeps the walkthrough anchor', () => {
     const { container } = render(<DeskRoster roster={roster({ groups: [], liveCount: 0 })} />);
     expect(
-      screen.getByText('No current action alerts. The work is in motion.'),
+      screen.getByText('The work is in motion.'),
     ).toBeInTheDocument();
     expect(container.querySelector('[data-tour-anchor="desk-folio"]')).not.toBeNull();
   });

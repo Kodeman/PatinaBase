@@ -373,7 +373,7 @@ export function MoneyRegion({
       <RegionRule />
       <RegionHead
         headingId={HEADING_ID}
-        name="Money"
+        name="Project financials"
         status={quiet ? quietStatus : headStatus}
         eyebrow="Project financial summary"
         surfaceKey="accounts"
@@ -412,14 +412,14 @@ export function MoneyRegion({
             meaning="What the plan intends to spend"
           />
           <Rung
-            name="Vendor commitments"
+            name="Client-authorized purchases"
             figure={figureOf(ladder.authorized)}
-            meaning="What is contractually owed to makers"
+            meaning="What the client has signed off to buy, at client price"
           />
           <Rung
-            name="Outstanding order payments"
+            name="Authorized, not yet paid to vendors"
             figure={figureOf(ladder.moved)}
-            meaning="Committed, not yet paid out"
+            meaning="Client-authorized purchases less vendor payments so far; includes the studio's margin"
           />
           <Rung name="Client receivables" figure={figureOf(ladder.owed)} meaning="The receivable" />
           <Rung
@@ -430,9 +430,9 @@ export function MoneyRegion({
         </ol>
 
         <p className="mt-3 max-w-2xl text-[11px] leading-relaxed text-[var(--text-muted)]">
-          Client budget &rarr; planned expenditure &rarr; vendor commitments &rarr; outstanding
-          order payments. Outstanding order payments are what is ordered and not yet paid out
-          &mdash; not the contractually owed total above it.
+          Client budget &rarr; planned expenditure &rarr; client-authorized purchases &rarr; authorized,
+          not yet paid to vendors. The latter is client-authorized purchases less vendor payments so
+          far; it includes the studio&apos;s margin.
           {committedSettled && draftScopeCount > 0
             ? ` ${draftScopeCount} trade ${draftScopeCount === 1 ? 'scope' : 'scopes'} still in draft, counted in neither.`
             : ''}

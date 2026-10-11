@@ -175,14 +175,17 @@ describe('MoneyRegion', () => {
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Project financials' })).toBeVisible();
+    expect(screen.getByRole('group', { name: 'Project financials actions' })).toBeVisible();
     expect(screen.getByText('$18,000 remaining · $13,772 authorized')).toBeVisible();
     expect(screen.getByText('Client budget · $100,000 approved')).toBeVisible();
     expect(screen.getByText('Planned expenditure · $86,540 specified')).toBeVisible();
-    expect(screen.getByText('Vendor commitments · $13,772 ordered')).toBeVisible();
+    expect(screen.getByText('Client-authorized purchases · $13,772 ordered')).toBeVisible();
+    expect(screen.getByText('What the client has signed off to buy, at client price')).toBeVisible();
     expect(
-      screen.getByText('Outstanding order payments · $9,772 in motion — ordered $13,772 less $4,000 paid out'),
+      screen.getByText('Authorized, not yet paid to vendors · $9,772 in motion — ordered $13,772 less $4,000 paid out'),
     ).toBeVisible();
+    expect(screen.getByText("Client-authorized purchases less vendor payments so far; includes the studio's margin")).toBeVisible();
     expect(
       screen.getByText(/^Client receivables · \$1,750 out · Invoice 2026-114, \d+ days · \$1,750 billed to date$/),
     ).toBeVisible();
@@ -201,8 +204,8 @@ describe('MoneyRegion', () => {
     expect(rungs).toEqual([
       'Client budget',
       'Planned expenditure',
-      'Vendor commitments',
-      'Outstanding order payments',
+      'Client-authorized purchases',
+      'Authorized, not yet paid to vendors',
       'Client receivables',
       'Undisbursed vendor payments',
     ]);
@@ -235,9 +238,9 @@ describe('MoneyRegion', () => {
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByText('Vendor commitments · $10,000 ordered')).toBeVisible();
+    expect(screen.getByText('Client-authorized purchases · $10,000 ordered')).toBeVisible();
     expect(
-      screen.getByText('Outstanding order payments · $7,500 in motion — ordered $10,000 less $2,500 paid out'),
+      screen.getByText('Authorized, not yet paid to vendors · $7,500 in motion — ordered $10,000 less $2,500 paid out'),
     ).toBeVisible();
   });
 
@@ -267,8 +270,8 @@ describe('MoneyRegion', () => {
 
     expect(screen.getByText('Client budget · could not be read')).toBeVisible();
     expect(screen.getByText('Planned expenditure · could not be read')).toBeVisible();
-    expect(screen.getByText('Vendor commitments · could not be read')).toBeVisible();
-    expect(screen.getByText('Outstanding order payments · could not be read')).toBeVisible();
+    expect(screen.getByText('Client-authorized purchases · could not be read')).toBeVisible();
+    expect(screen.getByText('Authorized, not yet paid to vendors · could not be read')).toBeVisible();
     expect(screen.getByText('Client receivables · could not be read')).toBeVisible();
     expect(screen.getByText('Undisbursed vendor payments · could not be read')).toBeVisible();
   });
@@ -281,8 +284,8 @@ describe('MoneyRegion', () => {
     expect(screen.queryByText(/remaining/)).not.toBeInTheDocument();
     expect(screen.getByText('Client budget · nothing approved yet')).toBeVisible();
     expect(screen.getByText('Planned expenditure · no working budget yet')).toBeVisible();
-    expect(screen.getByText('Vendor commitments · nothing executed yet')).toBeVisible();
-    expect(screen.getByText('Outstanding order payments · nothing in motion yet')).toBeVisible();
+    expect(screen.getByText('Client-authorized purchases · nothing executed yet')).toBeVisible();
+    expect(screen.getByText('Authorized, not yet paid to vendors · nothing in motion yet')).toBeVisible();
     expect(screen.getByText('Client receivables · nothing owed yet')).toBeVisible();
     expect(screen.getByText('Undisbursed vendor payments · nothing standing undrawn')).toBeVisible();
     expect(container).not.toHaveTextContent('$0');
@@ -295,10 +298,10 @@ describe('MoneyRegion', () => {
     render(<MoneyRegion projectId="project-1" />);
 
     expect(screen.getByText('Planned expenditure')).toBeVisible();
-    expect(screen.getByText('Outstanding order payments')).toBeVisible();
+    expect(screen.getByText('Authorized, not yet paid to vendors')).toBeVisible();
     expect(screen.getByText('Undisbursed vendor payments')).toBeVisible();
     expect(screen.queryByText(/Plan · /)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Outstanding order payments · /)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Authorized, not yet paid to vendors · /)).not.toBeInTheDocument();
     expect(screen.queryByText(/Undisbursed vendor payments · /)).not.toBeInTheDocument();
   });
 
@@ -315,9 +318,9 @@ describe('MoneyRegion', () => {
     const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
 
-    const caption = screen.getByText(/Outstanding order payments are what is ordered/);
+    const caption = screen.getByText(/Client budget → planned expenditure/);
     expect(caption).toHaveTextContent(
-      'Client budget → planned expenditure → vendor commitments → outstanding order payments. Outstanding order payments are what is ordered and not yet paid out — not the contractually owed total above it.',
+      "Client budget → planned expenditure → client-authorized purchases → authorized, not yet paid to vendors. The latter is client-authorized purchases less vendor payments so far; it includes the studio's margin.",
     );
     // SP-05 — the migration note naming UI that no longer exists is gone.
     expect(container).not.toHaveTextContent('Absorbs today’s four separate bands');
@@ -335,7 +338,7 @@ describe('MoneyRegion', () => {
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByText(/Outstanding order payments are what is ordered/)).toHaveTextContent(
+    expect(screen.getByText(/Client budget → planned expenditure/)).toHaveTextContent(
       '1 trade scope still in draft, counted in neither.',
     );
   });
@@ -367,7 +370,7 @@ describe('MoneyRegion', () => {
 
     expect(document.querySelector('[data-fold-seam]')).toBeNull();
     expect(document.querySelector('[data-region-head]')).not.toBeNull();
-    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Project financials' })).toBeVisible();
   });
 
   // F-2. `get_project_authority_summary` returns `billing_ceiling_cents` for
@@ -405,7 +408,7 @@ describe('MoneyRegion', () => {
     render(<MoneyRegion projectId="project-1" />);
 
     expect(
-      screen.queryByRole('heading', { name: 'Money' }),
+      screen.queryByRole('heading', { name: 'Project financials' }),
     ).not.toBeInTheDocument();
     expect(screen.getByText('no budget yet · $0 authorized')).toBeVisible();
     expect(screen.getByRole('button', { name: /expand/i })).toBeInTheDocument();
@@ -433,7 +436,7 @@ describe('MoneyRegion', () => {
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Project financials' })).toBeVisible();
     expect(screen.queryByRole('button', { name: /expand/i })).not.toBeInTheDocument();
   });
 
@@ -464,7 +467,7 @@ describe('MoneyRegion', () => {
     const { unmount } = render(<MoneyRegion projectId="project-1" />);
 
     expect(screen.queryByRole('button', { name: /expand/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Project financials' })).toBeVisible();
 
     unmount();
     window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
@@ -493,14 +496,14 @@ describe('MoneyRegion', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /expand/i }));
 
-    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Project financials' })).toBeVisible();
     expect(screen.getByText('Account band')).toBeVisible();
     expect(screen.getByRole('button', { name: /collapse/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /collapse/i }));
 
     expect(
-      screen.queryByRole('heading', { name: 'Money' }),
+      screen.queryByRole('heading', { name: 'Project financials' }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /expand/i })).toBeInTheDocument();
   });
@@ -588,7 +591,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     liveMoney();
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Project financials' })).toBeInTheDocument();
     // W4-R1: the two figures the rail's value line prints, on the head's own
     // status line. The PO count belongs to the ledger, not to this line.
     const head = document.querySelector('[data-region-head="money-head"]')!;
@@ -642,7 +645,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
   it('says Nothing yet when it holds neither figure', () => {
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByRole('heading', { name: 'Money' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Project financials' })).toBeInTheDocument();
     const head = document.querySelector('[data-region-head="money-head"]')!;
     expect(head).toHaveTextContent('No recorded activity');
     expect(head).not.toHaveTextContent(/receivable|undisbursed/);
@@ -667,7 +670,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     const quietBox = regionBoxSignature(
       document.querySelector('[data-index-region="money"]'),
     );
-    const heading = screen.getByRole('heading', { name: 'Money' });
+    const heading = screen.getByRole('heading', { name: 'Project financials' });
 
     act(() => {
       __setDensityForTest('full');
@@ -675,7 +678,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     rerender(<MoneyRegion projectId="project-1" />);
 
     expect(document.querySelector('[data-region-head="money-head"]')).toBe(head);
-    expect(screen.getByRole('heading', { name: 'Money' })).toBe(heading);
+    expect(screen.getByRole('heading', { name: 'Project financials' })).toBe(heading);
     expect(
       document.querySelector('[data-index-region="money"]'),
     ).toHaveAttribute('data-density', 'full');
@@ -700,7 +703,7 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     render(<MoneyRegion projectId="project-1" />);
 
     expect(document.querySelector('[data-fold-seam]')).not.toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Money' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Project financials' })).not.toBeInTheDocument();
     expect(
       document.querySelector('[data-index-region="money"]'),
     ).toHaveAttribute('data-density', 'full');

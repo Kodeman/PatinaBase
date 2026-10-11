@@ -112,7 +112,9 @@ export function ActDraft({
   return (
     <div data-act-draft={mode} className="mx-auto w-full max-w-[34rem] space-y-5">
       <p className="text-[14px] text-[var(--color-charcoal)]">
-        <span className="mr-2 font-mono text-[12px] uppercase tracking-[0.1em]">To</span>
+        <span className="mr-2 font-mono text-[12px] uppercase tracking-[0.1em]">
+          {regionKey === 'act-release-order' ? 'Vendor:' : 'To'}
+        </span>
         {counterpart ?? 'No one is recorded for this.'}
       </p>
       <p data-act-record className="text-[14px] text-[var(--color-charcoal)]">
@@ -173,7 +175,7 @@ export function ActDraft({
         </p>
       )}
       {mode === 'reading' && (
-        <p className="text-[13px] text-[var(--text-muted)]">Reading who leads this job…</p>
+        <p className="text-[13px] text-[var(--text-muted)]">Loading who leads this project…</p>
       )}
       {(mode === 'send' || mode === 'save') && (
         <DocumentActionGroup surfaceKey="open-document" regionKey={regionKey} aria-label={sendLabel}>
@@ -184,7 +186,7 @@ export function ActDraft({
               disabled={!complete}
               held={!complete}
               loading={pending}
-              loadingLabel="Sending…"
+              loadingLabel={regionKey === 'act-release-order' ? 'Approving…' : 'Sending…'}
               onClick={() => void run(onSend, true)}
             >
               {sendLabel}

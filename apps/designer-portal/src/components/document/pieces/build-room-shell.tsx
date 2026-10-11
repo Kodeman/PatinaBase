@@ -316,7 +316,7 @@ export function BuildRoomShell({
       : []),
     {
       place: UNASSIGNED_PLACE,
-      label: "Not in a room yet",
+      label: "Unassigned to a room",
       count: counts.unassigned.lines,
     },
     { place: REMOVED_PLACE, label: "Removed", count: removedCount },
@@ -466,7 +466,7 @@ export function BuildRoomShell({
           >
             <ul>
               {placeLink(
-                { place: null, label: "Whole job", count: counts.job.lines },
+                { place: null, label: "All project selections", count: counts.job.lines },
                 "picker",
               )}
               {places.map((row) => placeLink(row, "picker"))}

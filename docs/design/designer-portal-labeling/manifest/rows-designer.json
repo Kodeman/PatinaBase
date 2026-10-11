@@ -6956,14 +6956,14 @@
     "state": "default",
     "source": "apps/designer-portal/src/components/document/commercial/money-region.tsx:414",
     "current": "Authorized",
-    "proposed": "Vendor commitments",
-    "meaning": "metric in Project finances; preserve the named document, counterparty and action stage without granting new financial authority.",
+    "proposed": "Client-authorized purchases",
+    "meaning": "What the client has signed off to buy, at client price.",
     "owner": "D2",
     "depends": [],
     "exception": null,
     "verify": "apps/designer-portal/src/components/document/commercial/money-region.test.tsx",
     "status": "implemented",
-    "evidence": "apps/designer-portal/src/components/document/commercial/money-region.tsx:414 display copy changed; apps/designer-portal/src/components/document/commercial/money-region.test.tsx"
+    "evidence": "SQ-752, accepted finding SQ-770 F6 (orchestrator ruling, comment c_mv3t4n5y_ca6be0): source copy and meaning corrected; regression assertion in apps/designer-portal/src/components/document/commercial/money-region.test.tsx."
   },
   {
     "id": "C-0331",
@@ -6977,14 +6977,14 @@
     "state": "default",
     "source": "apps/designer-portal/src/components/document/commercial/money-region.tsx:419",
     "current": "Moved",
-    "proposed": "Outstanding order payments",
-    "meaning": "Ordered commitments less vendor payments already made; not total cash transferred.",
+    "proposed": "Authorized, not yet paid to vendors",
+    "meaning": "Client-authorized purchases less vendor payments so far; includes the studio's margin.",
     "owner": "D2",
     "depends": [],
     "exception": null,
     "verify": "apps/designer-portal/src/components/document/commercial/money-region.test.tsx",
     "status": "implemented",
-    "evidence": "apps/designer-portal/src/components/document/commercial/money-region.tsx:419 display copy changed; apps/designer-portal/src/components/document/commercial/money-region.test.tsx"
+    "evidence": "SQ-752, accepted finding SQ-770 F6 (orchestrator ruling, comment c_mv3t4n5y_ca6be0): source copy and meaning corrected; regression assertion in apps/designer-portal/src/components/document/commercial/money-region.test.tsx."
   },
   {
     "id": "C-0332",
@@ -31945,7 +31945,7 @@
     "source": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:420",
     "current": "{amount} OUT · {amount} UNDRAWN",
     "proposed": "{amount} RECEIVABLE · {amount} UNDISBURSED",
-    "meaning": "The rail value for Money, in the C-0332/C-0333 rung words. Capped at 30 characters by dropping the trailing figure whole, never mid-word. SQ-764 F28 ruling (lens-ladder-derivation.ts:401-418 authorization).",
+    "meaning": "The rail value for Money, in the C-0332/C-0333 rung words; the undisbursed amount is client-price based. Capped at 30 characters by dropping the trailing figure whole, never mid-word. SQ-764 F28 ruling.",,
     "owner": "D2",
     "depends": [],
     "exception": null,
@@ -31965,7 +31965,7 @@
     "source": "apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:421",
     "current": "{amount} out · {amount} not drawn",
     "proposed": "{amount} receivable · {amount} undisbursed",
-    "meaning": "The rail count line for Money, in the C-0332/C-0333 rung words. Capped at 40 characters by dropping the trailing figure whole, never mid-word. SQ-764 F28 ruling.",
+    "meaning": "The rail count line for Money, in the C-0332/C-0333 rung words; the undisbursed amount is client-price based. Capped at 40 characters by dropping the trailing figure whole, never mid-word. SQ-764 F28 ruling.",,
     "owner": "D2",
     "depends": [],
     "exception": null,

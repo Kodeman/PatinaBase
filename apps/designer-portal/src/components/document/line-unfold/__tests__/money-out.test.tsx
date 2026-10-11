@@ -205,6 +205,7 @@ describe('PoMoneyOut · record what we paid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Record vendor payment · Balance' }));
     expect(screen.getByLabelText('Amount paid')).toHaveValue('4410.00');
     expect(screen.getByLabelText('Paid with')).toHaveValue('pm:pm-amex');
+    expect(screen.getByLabelText('Payment reference')).toBeVisible();
     fireEvent.change(screen.getByLabelText('Payment reference'), {
       target: { value: ' conf 88123 ' },
     });
@@ -256,7 +257,7 @@ describe('PoMoneyOut · record what we paid', () => {
     renderBand();
     fireEvent.click(screen.getByRole('button', { name: 'Record vendor payment · Balance' }));
     const file = new File(['%PDF'], 'receipt.pdf', { type: 'application/pdf' });
-    fireEvent.change(screen.getByLabelText('Receipt'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Payment receipt'), { target: { files: [file] } });
     fireEvent.click(screen.getByRole('button', { name: 'Record the balance · $4,410' }));
 
     await waitFor(() => expect(mockRecord).toHaveBeenCalledTimes(1));
@@ -377,7 +378,7 @@ describe('PoMoneyOut · void, never edit', () => {
     renderBand();
     const rec = screen.getByTestId('vendor-payment-record');
     expect(rec).toHaveTextContent('$2,000 · Amex · Leah ••4471');
-    fireEvent.click(within(rec).getByRole('button', { name: 'Void the $2,000 payment' }));
+    fireEvent.click(within(rec).getByRole('button', { name: 'Void payment record · $2,000' }));
 
     const act = screen.getByRole('button', { name: 'Void payment' });
     expect(act).toBeDisabled();
@@ -445,7 +446,7 @@ describe('PoMoneyOut · a catalog row still owed pays through checkout (C-22)', 
     mockCheckout.mockResolvedValue({ url: '#checkout' });
     setup({ schedule: [{ ...BALANCE, kind: 'full_upfront', state: 'due' }] });
     renderBand({ isPatinaCatalog: true });
-    fireEvent.click(screen.getByRole('button', { name: 'Pay now · Payment in full' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pay vendor now · Payment in full' }));
     await waitFor(() =>
       expect(mockCheckout).toHaveBeenCalledWith({ poPaymentId: 'pay-bal' }),
     );
@@ -455,7 +456,7 @@ describe('PoMoneyOut · a catalog row still owed pays through checkout (C-22)', 
     mockCheckout.mockRejectedValue(new Error('po_payment_already_paid'));
     setup({ schedule: [{ ...BALANCE, kind: 'full_upfront', state: 'due' }] });
     renderBand({ isPatinaCatalog: true });
-    fireEvent.click(screen.getByRole('button', { name: 'Pay now · Payment in full' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pay vendor now · Payment in full' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('po_payment_already_paid');
   });
 

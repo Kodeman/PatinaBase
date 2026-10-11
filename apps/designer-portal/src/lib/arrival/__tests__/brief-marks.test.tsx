@@ -134,7 +134,7 @@ describe('the Desk marks', () => {
     expect(parts(container, 'headline')).toHaveLength(1);
     const headline = part(container, 'headline');
     expectPrinted(headline);
-    expect(headline.textContent).toBe('Nothing needs you tonight.');
+    expect(headline.textContent).toBe('No current action alerts.');
     expect(parts(container, 'settle')).toEqual([headline]);
     expect(parts(container, 'act')).toHaveLength(0);
   });

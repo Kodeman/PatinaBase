@@ -43,15 +43,15 @@ export function clearRoomOrigin(): void {
   }
 }
 
-/** A human label for the leave affordance ("← the Desk", "← the document"). */
+/** A human label for the leave affordance. */
 export function originLabel(origin: string): string {
-  if (origin.startsWith('/doc/')) return 'the document';
-  if (origin === '/desk' || origin === '') return 'the Desk';
-  if (origin === '/library' || origin.startsWith('/library/')) return 'the Library';
+  if (origin.startsWith('/doc/')) return 'Project file';
+  if (origin === '/desk' || origin === '') return 'Studio overview';
+  if (origin === '/library' || origin.startsWith('/library/')) return 'Resource library';
   if (origin === '/rooms' || origin.startsWith('/rooms/') || origin.startsWith('/room/')) {
-    return 'the Scans';
+    return 'Measured rooms';
   }
-  return 'back';
+  return 'Project file';
 }
 
 export function isRoomPath(pathname: string): boolean {

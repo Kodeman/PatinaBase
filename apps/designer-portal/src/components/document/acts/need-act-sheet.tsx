@@ -37,9 +37,9 @@ const SHEETS: Record<
   ActSheetKind,
   { title: string; icon: LucideIcon; Body: (props: { need: DeskNeed; onDone: () => void }) => ReactNode }
 > = {
-  'po-chase': { title: 'Chase this PO', icon: Send, Body: PoChaseSheet },
-  'invoice-reminder': { title: 'Remind this invoice', icon: Receipt, Body: InvoiceReminderSheet },
-  'proposal-follow-up': { title: 'Follow up this proposal', icon: MessageSquare, Body: ProposalFollowUpSheet },
+  'po-chase': { title: 'Follow up on this purchase order', icon: Send, Body: PoChaseSheet },
+  'invoice-reminder': { title: 'Send an invoice reminder', icon: Receipt, Body: InvoiceReminderSheet },
+  'proposal-follow-up': { title: 'Follow up on this proposal', icon: MessageSquare, Body: ProposalFollowUpSheet },
   'release-order': { title: "Approve this order's release", icon: PackageCheck, Body: ReleaseOrderSheet },
 };
 

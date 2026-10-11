@@ -108,7 +108,7 @@ export function DeskRoster({
           data-tour-anchor="desk-folio"
           className="mt-4 font-heading text-[15px] italic text-[var(--text-muted)]"
         >
-          {roster.notChecked ?? 'No current action alerts. The work is in motion.'}
+          {roster.notChecked ?? 'The work is in motion.'}
         </p>
       )}
     </section>
