@@ -490,7 +490,7 @@ These are side journeys from the studio buying review (`artifacts/procurement-bu
 
 ## Ruled — 2026-10-10 (US-24/US-25 Day Sheet and Direction C)
 
-### V16 · US-24/US-25 Day Sheet rulings + Direction C labeling, Kody 2026-10-10
+### V18 · US-24/US-25 Day Sheet rulings + Direction C labeling, Kody 2026-10-10
 
 **Decision:** Kody ruled all fourteen US-24 founder questions to their recommended answers in `artifacts/designer-portal-uplift-2026-10-09/synthesis/direction.md` §6. The Day Sheet ships to every studio with the following binding Q1 guards:
 
@@ -522,4 +522,4 @@ These are side journeys from the studio buying review (`artifacts/procurement-bu
 
 **Source:** Kody's 2026-10-10 rulings and the US-25 story log; US-24 synthesis §6; Direction C implementation plan and manifest.
 
-*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · V14 · V15 · V16 · last id = V16*
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · V14 · V15 · V18 (V16–V17 reserved on the website-copy branch) · last id = V18*
