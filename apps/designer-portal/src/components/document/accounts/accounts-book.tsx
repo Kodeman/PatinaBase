@@ -18,7 +18,6 @@ import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   computeArAging,
-  useArAging,
   useEarningsStats,
   useInvoices,
 } from '@patina/supabase';
@@ -60,22 +59,26 @@ export function AccountsBook({
   const router = useRouter();
   const sheetRef = useRef<HTMLDivElement>(null);
   const { data: invoices, isLoading, isError, refetch } = useInvoices();
-  const { aging } = useArAging();
   const { data: earnings } = useEarningsStats();
-  const margin = useStudioMargin();
-  // Q10 (walk W-D5): the whole book is an owner's or admin's; any other seat
-  // sees the invoices on the jobs she leads and no studio totals.
+  // Q10 (walk W-D5): a studio's whole book is its owner's or admin's; any
+  // other seat sees the invoices on the jobs she leads and no studio totals.
+  // SQ-774 R1 — judged per invoice by its own studio, and the totals sum only
+  // the studios whose book is hers.
   const money = useStudioMoney();
-  const canSeeMargin = money.all;
+  const canSeeMargin = money.bookStudioIds.length > 0;
+  const margin = useStudioMargin(money.bookStudioIds);
   const visibleInvoices = useMemo(
-    () => canSeeMargin
-      ? invoices ?? []
-      : (invoices ?? []).filter((invoice) => money.canSeeProject(invoice.project_id)),
-    [canSeeMargin, invoices, money],
+    () => (invoices ?? []).filter((invoice) => money.canSeeRecord(invoice.studio_id, invoice.project_id)),
+    [invoices, money],
   );
-  const visibleAging = useMemo(
-    () => canSeeMargin ? aging : computeArAging(visibleInvoices),
-    [aging, canSeeMargin, visibleInvoices],
+  const bookInvoices = useMemo(
+    () => (invoices ?? []).filter((invoice) => money.canSeeStudio(invoice.studio_id)),
+    [invoices, money],
+  );
+  const visibleAging = useMemo(() => computeArAging(visibleInvoices), [visibleInvoices]);
+  const bookArCents = useMemo(
+    () => computeArAging(bookInvoices).totalBalanceCents,
+    [bookInvoices],
   );
 
   // page is a free string on the shared context — narrow it to this book.
@@ -93,8 +96,8 @@ export function AccountsBook({
 
   const stats = !isLoading && canSeeMargin
     ? [
-        { label: 'revenue', value: fmtUsd(collectedCents(invoices ?? [])) },
-        { label: 'A/R', value: fmtUsd(aging.totalBalanceCents) },
+        { label: 'revenue', value: fmtUsd(collectedCents(bookInvoices)) },
+        { label: 'A/R', value: fmtUsd(bookArCents) },
         {
           label: 'margin',
           value: margin.data?.mixedCurrencies

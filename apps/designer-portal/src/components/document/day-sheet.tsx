@@ -15,6 +15,7 @@
  */
 
 import type { MouseEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSetNeedState } from '@patina/supabase';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
 import type { DeskScope } from '@/lib/document/desk-scope';
@@ -63,6 +64,7 @@ function SheetLine({
   canHoldState: boolean;
 }) {
   const acts = useNeedActSheet();
+  const router = useRouter();
   const setNeedState = useSetNeedState();
   const { need } = entry;
   const handoff = need.kind === 'handoff';
@@ -76,9 +78,14 @@ function SheetLine({
 
   const act = (event: MouseEvent<HTMLAnchorElement>) => {
     // Walk W-D6 — opening the hand-off is reading it: the same `acted` mark
-    // the Document's MARK READ writes.
+    // the Document's MARK READ writes. SQ-774 R7 — she leaves once the mark
+    // has landed; a refused or offline mark stays here and says so.
     if (handoff) {
-      setNeedState.mutate({ needKey: entry.key, projectId: entry.projectId, action: 'acted' });
+      event.preventDefault();
+      setNeedState.mutate(
+        { needKey: entry.key, projectId: entry.projectId, action: 'acted' },
+        { onSuccess: () => router.push(href) },
+      );
       return;
     }
     if (acts.open(entry)) {
@@ -147,9 +154,9 @@ function SheetLine({
           </DocumentAction>
         )}
       </div>
-      {!handoff && setNeedState.isError && (
+      {setNeedState.isError && (
         <p role="alert" data-day-sheet-failed className="doc-type-body text-[var(--text-primary)]">
-          Not today did not save. Try again.
+          {handoff ? 'The hand-off was not marked read. Try again.' : 'Not today did not save. Try again.'}
         </p>
       )}
     </li>

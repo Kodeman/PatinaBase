@@ -144,11 +144,13 @@ export function OrdersLedger({
   // Q10 (walk W-D5): studio totals are an owner's or admin's; any other seat
   // sees the money on the jobs she leads. Vendors applies the same rule
   // (SQ-751 F3).
+  // SQ-774 R1 — each PO is judged by its own job's studio, and the book's
+  // totals sum only the studios whose book is hers.
   const money = useStudioMoney();
-  const canSeeMargin = money.all;
-  const moneyProjectIds = { has: (projectId: string) => money.canSeeProject(projectId) };
+  const canSeeMargin = money.bookStudioIds.length > 0;
   const canSeePoMoney = (po: AnyRecord) =>
-    money.canSeeProject(po.project_id ?? po.project?.id ?? null);
+    money.canSeeRecord(po.project?.studio_id ?? null, po.project_id ?? po.project?.id ?? null);
+  const inBook = (po: AnyRecord) => money.canSeeStudio(po.project?.studio_id ?? null);
   // useVendors returns { data, pagination } — unwrap, and ask for the
   // whole directory (the vendor pane is a book, not a feed).
   const { data: vendorsPage } = useVendors(undefined, {
@@ -435,7 +437,7 @@ export function OrdersLedger({
           {!isLoading && canSeeMargin && (
             <LedgerFrontMatter
               caption="throughput"
-              stats={ordersThroughput((orders ?? []) as POForThroughput[])}
+              stats={ordersThroughput((orders ?? []).filter(inBook) as POForThroughput[])}
             />
           )}
           {isLoading && (
@@ -522,7 +524,7 @@ export function OrdersLedger({
           {!isLoading && canSeeMargin && paymentLens === 'due' && (
             <LedgerFrontMatter
               caption="due to makers this week"
-              stats={dueToMakers(groups.flatMap((g) => g.pos))}
+              stats={dueToMakers(groups.flatMap((g) => g.pos).filter(inBook))}
             />
           )}
           {!isLoading &&
@@ -576,7 +578,7 @@ export function OrdersLedger({
                         </p>
                         <p className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
                           {[
-                            canSeeMargin || moneyProjectIds.has(h.projectId)
+                            money.canSeeRecord(h.studioId, h.projectId)
                               ? fmtUsd(h.totalCents)
                               : null,
                             h.heldAt ? `held ${fmtDay(h.heldAt)}` : 'held',

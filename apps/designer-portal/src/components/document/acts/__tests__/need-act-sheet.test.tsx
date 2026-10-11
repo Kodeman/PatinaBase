@@ -38,14 +38,30 @@ let mockHandoffNote: string | null = null;
 let mockRole = 'member';
 let mockInvoiceLoaded = true;
 let mockDesignerId: string | null = null;
-let mockStateProjects = new Set(['proj-1']);
-const mockLeadsMap = () =>
-  new Map(
-    mockLeadUserId
-      ? [['proj-1', { leadUserId: mockLeadUserId, leadName: 'Leah Moreau', assignedAt: '2026-10-01T00:00:00Z' }]]
-      : [],
-  );
+let mockStateProjects: Set<string> | undefined = new Set(['proj-1']);
+// The target job's own studio (SQ-774 R2): its lead and the seat that counts.
+let mockStudioId: string | null = 'org-1';
+const mockLeadRead = () => ({
+  studioId: mockStudioId,
+  lead: mockLeadUserId
+    ? { leadUserId: mockLeadUserId, leadName: 'Leah Moreau', assignedAt: '2026-10-01T00:00:00Z' }
+    : null,
+});
 const mockRefetchLeads = jest.fn();
+const mockMember = (role: string, handoffNote: string | null = null) => ({
+  user_id: 'me', role, handoff_note: handoffNote, invited_by: 'owner-1', profiles: { full_name: 'Ana Ruiz' },
+});
+const MOCK_OWNER = { user_id: 'owner-1', role: 'owner', handoff_note: null, invited_by: null, profiles: { full_name: 'Leah Moreau' } };
+/** Each studio's members: her seat in `org-1` is `mockRole`; she owns her own
+ *  `personal` studio and is a member of her `employer`'s. */
+const mockMembersOf = (orgId: string) =>
+  orgId === 'org-1'
+    ? [mockMember(mockRole, mockHandoffNote), MOCK_OWNER]
+    : orgId === 'employer'
+      ? [mockMember('member'), MOCK_OWNER]
+      : orgId === 'personal'
+        ? [mockMember('owner')]
+        : [];
 
 jest.mock('@/hooks/use-document-state', () => ({
   useDocumentEngagement: () => ({
@@ -86,15 +102,11 @@ const PROPOSAL = {
 
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
-  useOrganizations: () => ({ data: [{ id: 'org-1', type: 'design_studio' }] }),
-  useOrganizationMembers: () => ({
-    isSuccess: true,
-    data: [
-      { user_id: 'me', role: mockRole, handoff_note: mockHandoffNote, invited_by: 'owner-1', profiles: { full_name: 'Ana Ruiz' } },
-      { user_id: 'owner-1', role: 'owner', handoff_note: null, invited_by: null, profiles: { full_name: 'Leah Moreau' } },
-    ],
+  useOrganizationMembers: (orgId: string) => ({
+    isSuccess: Boolean(orgId),
+    data: orgId ? mockMembersOf(orgId) : undefined,
   }),
-  useProjectLeads: () => ({ isSuccess: true, data: mockLeadsMap(), refetch: mockRefetchLeads }),
+  useProjectLead: () => ({ isSuccess: true, data: mockLeadRead(), refetch: mockRefetchLeads }),
   useSetNeedState: () => ({ mutateAsync: mockSetNeedState }),
   useNeedStateProjectIds: () => ({ data: mockStateProjects }),
   useProjectFFEItems: () => ({ isSuccess: true, data: LINES }),
@@ -173,7 +185,8 @@ beforeEach(() => {
   mockInvoiceLoaded = true;
   mockDesignerId = null;
   mockStateProjects = new Set(['proj-1']);
-  mockRefetchLeads.mockImplementation(async () => ({ isError: false, data: mockLeadsMap() }));
+  mockStudioId = 'org-1';
+  mockRefetchLeads.mockImplementation(async () => ({ isError: false, data: mockLeadRead() }));
   mockCompose.mockResolvedValue({ id: 'draft-1' });
   mockUpdate.mockResolvedValue({ id: 'draft-1' });
   mockSendDraft.mockResolvedValue({ draftId: 'draft-1', messageId: 'm-1' });
@@ -289,20 +302,67 @@ describe('Chase this PO', () => {
     expect(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' })).toBeInTheDocument();
   });
 
-  it('a reassignment after the sheet opened stops the send and says so (SQ-751 F2)', async () => {
+  it('reads authority in the job’s own studio: owning her own studio is no standing on her employer’s job (SQ-774 R2)', () => {
+    // The review input: the job is her employer's, where she is a member and
+    // another member now leads it; she owns her personal studio and was the
+    // job's original designer.
+    mockStudioId = 'employer';
+    mockLeadUserId = 'lead-1';
+    mockDesignerId = 'me';
+    openSheet(PO_NEED);
+    expect(screen.queryByRole('button', { name: /^Send/ })).toBeNull();
+    expect(screen.getByText('Leah sees this first.')).toBeInTheDocument();
+  });
+
+  it('with no lead, the designer falls back only while she holds a seat in the job’s studio (SQ-774 R2)', () => {
+    mockStudioId = 'elsewhere';
+    mockLeadUserId = null;
+    mockDesignerId = 'me';
+    openSheet(PO_NEED);
+    expect(screen.queryByRole('button', { name: /^Send/ })).toBeNull();
+  });
+
+  it('a reassignment after the sheet opened holds the draft for the lead and sends nothing (SQ-751 F2)', async () => {
     openSheet(PO_NEED);
     mockRefetchLeads.mockImplementation(async () => {
       mockLeadUserId = 'lead-1';
-      return { isError: false, data: mockLeadsMap() };
+      return { isError: false, data: mockLeadRead() };
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
-    await screen.findByText('Who leads this project changed since this opened, so nothing was sent.');
+    await screen.findByText(/^Who leads this project changed, so nothing was sent\. The draft is held for /);
     expect(mockRefetchLeads).toHaveBeenCalledTimes(1);
-    expect(mockCompose).not.toHaveBeenCalled();
+    expect(mockCompose).toHaveBeenCalledTimes(1);
     expect(mockSendDraft).not.toHaveBeenCalled();
     expect(mockSetNeedState).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: /^Send/ })).toBeNull();
-    expect(screen.getByRole('button', { name: /^Save the draft for/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Send|Save)/ })).toBeNull();
+  });
+
+  it('a reassignment while the draft is held is read before the send, and nothing goes (SQ-774 R3)', async () => {
+    // The review input: the check passes at the click, the job moves to B
+    // while the chase is composed and stored, then the outward send.
+    const order: string[] = [];
+    mockCompose.mockImplementation(async () => {
+      order.push('compose');
+      return { id: 'draft-1' };
+    });
+    mockUpdate.mockImplementation(async () => {
+      order.push('update');
+      mockLeadUserId = 'lead-1';
+      return { id: 'draft-1' };
+    });
+    mockRefetchLeads.mockImplementation(async () => {
+      order.push('recheck');
+      return { isError: false, data: mockLeadRead() };
+    });
+    mockSendDraft.mockImplementation(async () => {
+      order.push('send');
+    });
+    openSheet(PO_NEED);
+    fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
+    await screen.findByText(/^Who leads this project changed, so nothing was sent\. The draft is held for /);
+    expect(order).toEqual(['compose', 'update', 'recheck']);
+    expect(mockSendDraft).toHaveBeenCalledTimes(0);
+    expect(mockSetNeedState).not.toHaveBeenCalled();
   });
 
   it('a failed lead re-read sends nothing and says so (SQ-751 F2)', async () => {
@@ -329,6 +389,18 @@ describe('Chase this PO', () => {
     await screen.findByText('It went. The Day Sheet could not record it, so this line may still show there.');
     expect(mockSendDraft).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: /^Send/ })).toBeNull();
+  });
+
+  it('an unread eligibility answer is not "no": the sent act says it was not recorded, never offering a resend (SQ-774 R6)', async () => {
+    // The review input: a real studio project whose eligibility read has not answered.
+    mockStateProjects = undefined;
+    openSheet(PO_NEED);
+    fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
+    await screen.findByText('It went. The Day Sheet could not record it, so this line may still show there.');
+    expect(mockSendDraft).toHaveBeenCalledTimes(1);
+    expect(mockSetNeedState).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /^(Send|Save)/ })).toBeNull();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
 
@@ -385,6 +457,20 @@ describe('Remind this invoice', () => {
     expect(textbox('A note with the reminder')).toHaveAttribute('readonly');
     expect(mockSendInvoice).toHaveBeenCalledTimes(0);
     expect(mockChase).toHaveBeenCalledTimes(0);
+  });
+
+  it('reads the lead again just before the reminder goes; a reassignment sends nothing (SQ-751 F2)', async () => {
+    openSheet(INVOICE_NEED);
+    mockRefetchLeads.mockImplementation(async () => {
+      mockLeadUserId = 'lead-1';
+      return { isError: false, data: mockLeadRead() };
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send the reminder to Mara Olsen' }));
+    await screen.findByText('Who leads this project changed since this opened, so nothing was sent.');
+    expect(mockRefetchLeads).toHaveBeenCalledTimes(1);
+    expect(mockSendInvoice).not.toHaveBeenCalled();
+    expect(mockChase).not.toHaveBeenCalled();
+    expect(mockSetNeedState).not.toHaveBeenCalled();
   });
 });
 

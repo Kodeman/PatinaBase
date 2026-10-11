@@ -25,7 +25,13 @@ interface ItemSlice {
   quantity: number | null;
   status: string;
   currency: string | null;
+  project?: { studio_id: string | null } | { studio_id: string | null }[] | null;
 }
+
+const studioOf = (item: ItemSlice): string | null => {
+  const project = Array.isArray(item.project) ? item.project[0] : item.project;
+  return project?.studio_id ?? null;
+};
 
 export interface StudioMargin {
   clientValueCents: number;
@@ -37,19 +43,29 @@ export interface StudioMargin {
   coverage: { withTrade: number; total: number };
 }
 
-export function useStudioMargin() {
+/**
+ * SQ-774 R1 — the margin of the studios named, and no other: RLS also admits
+ * the lines of a studio where she is only a member, and those never reach a
+ * book that is not hers (`useStudioMoney().bookStudioIds`).
+ */
+export function useStudioMargin(studioIds: readonly string[]) {
   return useQuery<StudioMargin>({
-    queryKey: ['studio-margin'],
+    queryKey: ['studio-margin', [...studioIds].sort()],
+    enabled: studioIds.length > 0,
     queryFn: async () => {
       const supabase = getSupabase();
       const { data, error } = await supabase
         .from('project_ffe_items')
-        .select('unit_price_cents, trade_price_cents, quantity, status, currency');
+        .select(
+          'unit_price_cents, trade_price_cents, quantity, status, currency, project:projects!project_ffe_items_project_id_fkey(studio_id)',
+        );
       if (error) throw error;
 
-      const committed = ((data ?? []) as ItemSlice[]).filter((i) =>
-        COMMITTED_STATUSES.has(i.status),
-      );
+      const books = new Set(studioIds);
+      const committed = ((data ?? []) as ItemSlice[]).filter((i) => {
+        const studioId = studioOf(i);
+        return COMMITTED_STATUSES.has(i.status) && studioId !== null && books.has(studioId);
+      });
       const withTrade = committed.filter((i) => i.trade_price_cents != null);
       // A blended margin across currencies would divide a sum of mixed
       // units — unavailable instead (SQ-207).

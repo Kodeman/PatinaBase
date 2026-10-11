@@ -41,12 +41,15 @@ jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'viewer' } 
 jest.mock('@/hooks/use-can-see-margin', () => ({ useCanSeeMargin: () => mockCanSeeMargin() }));
 // Q10 (walk W-D5): the ledger reads the studio-money rule; `mockCanSeeMargin`
 // stands for an owner/admin seat, `mockProjectLeads` for the jobs she leads.
+// SQ-774 R1: an owner/admin seat holds the book of every studio in this
+// fixture, which names none on its POs.
 jest.mock('@/hooks/use-studio-money', () => ({
   useStudioMoney: () => {
     const all = mockCanSeeMargin();
     return {
-      all,
-      canSeeProject: (projectId: string | null | undefined) =>
+      bookStudioIds: all ? ['studio-1'] : [],
+      canSeeStudio: () => all,
+      canSeeRecord: (_studioId: string | null | undefined, projectId: string | null | undefined) =>
         all || mockProjectLeads.data.get(projectId ?? '')?.leadUserId === 'viewer',
     };
   },

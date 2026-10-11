@@ -115,7 +115,8 @@ export interface PurchaseOrder {
     orders_email?: string | null;
     contact_info?: Record<string, unknown> | null;
   };
-  project?: { id: string; name: string };
+  /** `studio_id` — whose book the PO's money belongs to (SQ-774 R1). */
+  project?: { id: string; name: string; studio_id?: string | null };
   payments?: POPayment[];
 }
 
@@ -325,7 +326,7 @@ export function usePurchaseOrders(filters?: POFilters) {
           `
           *,
           vendor:vendors!purchase_orders_vendor_id_fkey(id, name, default_payment_terms, is_patina_catalog, orders_email, contact_info),
-          project:projects!purchase_orders_project_id_fkey(id, name),
+          project:projects!purchase_orders_project_id_fkey(id, name, studio_id),
           payments:po_payments(*)
         `
         )

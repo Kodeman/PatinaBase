@@ -15,10 +15,12 @@ function realDay(match: RegExpExecArray | null): [number, number, number] | null
  * The calendar day a source date names in the viewer's zone. A bare
  * `YYYY-MM-DD` is a DATE: that day, wherever she is. A timestamp is an
  * instant, so it is the local day she was living when it happened (SQ-751 F10).
+ * A bare DATE that names no day ('2026-02-30') is no day, never a timestamp
+ * the clock rolls into March (SQ-774 R8).
  */
 function localCalendarDay(date: string): [number, number, number] | null {
-  const bare = realDay(BARE_DATE.exec(date));
-  if (bare) return bare;
+  const bare = BARE_DATE.exec(date);
+  if (bare) return realDay(bare);
   const instant = new Date(date);
   if (Number.isFinite(instant.getTime())) {
     return [instant.getFullYear(), instant.getMonth() + 1, instant.getDate()];

@@ -11,9 +11,10 @@
  */
 
 import type { NeedState } from '@patina/supabase';
-import type { DeskNeed } from './desk-need-list';
+import { rankDeskNeeds, type DeskNeed } from './desk-need-list';
 import { classOfNeed } from './need-class';
 import {
+  handoffReadFor,
   scopeDeskNeeds,
   type DeskDesigners,
   type DeskLeads,
@@ -132,7 +133,12 @@ export function deriveDaySheet(input: DaySheetInput): DaySheet {
   for (const aggregate of scoped) {
     const entry = nextUnacted(aggregate, input.states);
     const state = input.states.get(entry.key);
-    if (state?.actedAt) {
+    // SQ-774 R4 — a hand-off is read only for the assignment that stands now
+    // (`handoffReadFor`, as `deriveHandoffNeeds` reads it): a read of an
+    // earlier hand-off of the same job never silences this one.
+    if (entry.need.kind === 'handoff') {
+      if (handoffReadFor(state, input.leads.get(entry.projectId)?.assignedAt)) continue;
+    } else if (state?.actedAt) {
       waitingOn.push({ need: entry, who: waitingWho(entry, state), since: state.actedAt });
       continue;
     }
@@ -146,7 +152,10 @@ export function deriveDaySheet(input: DaySheetInput): DaySheet {
     candidates.push(entry);
   }
 
-  const lines = candidates.slice(0, DAY_SHEET_LINES);
+  // SQ-774 R5 — an aggregate re-keyed to its next record carries that
+  // record's age and due day, so the candidates are ranked again by the one
+  // shared order before the five are taken.
+  const lines = rankDeskNeeds(candidates, input.now).slice(0, DAY_SHEET_LINES);
   const unchecked = [...input.unreadFeeds];
   return {
     lines,

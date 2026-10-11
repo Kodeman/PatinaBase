@@ -28,6 +28,20 @@ const LABEL_CLS =
 
 const capitalised = (words: string) => words.charAt(0).toUpperCase() + words.slice(1);
 
+/** The send boundary answered no: nothing went (SQ-751 F2 · SQ-774 R3). */
+class SendWithdrawn extends Error {
+  constructor(readonly draftHeld: boolean) {
+    super('Who leads this project changed, so nothing was sent.');
+  }
+}
+
+/**
+ * Reads the job's lead again and throws `SendWithdrawn` if she may no longer
+ * send. A send path calls it immediately before its outward send, after any
+ * write that prepares it; `draftHeld` says such a write left a held draft.
+ */
+export type ConfirmSend = (prepared?: { draftHeld: boolean }) => Promise<void>;
+
 export function ActDraft({
   need,
   viewer,
@@ -57,8 +71,9 @@ export function ActDraft({
   bodyLabel?: string;
   /** The named send control, e.g. "Send the chase to Fenmoor Joinery". */
   sendLabel: string;
-  /** The existing send path. Called only by the named control. */
-  onSend: (text: ActDraftText) => Promise<void>;
+  /** The existing send path. Called only by the named control; it awaits
+   *  `confirmSend` immediately before its outward send (SQ-774 R3). */
+  onSend: (text: ActDraftText, confirmSend: ConfirmSend) => Promise<void>;
   /** Q11 — saves the draft for the lead. Absent: a non-lead reads only. */
   onSaveForLead?: (text: ActDraftText) => Promise<void>;
   onDone: () => void;
@@ -67,8 +82,9 @@ export function ActDraft({
   const [body, setBody] = useState(initial?.body ?? '');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // SQ-751 F2 — the lead changed between open and send; nothing went.
-  const [revoked, setRevoked] = useState(false);
+  // SQ-751 F2 — the lead changed between open and send; nothing went. 'held':
+  // the change came after her draft was held, so it waits for the lead.
+  const [revoked, setRevoked] = useState<'unsent' | 'held' | null>(null);
   // The act went but the Day Sheet could not record it (never silent).
   const [unmarked, setUnmarked] = useState(false);
   const setNeedState = useSetNeedState();
@@ -90,20 +106,35 @@ export function ActDraft({
     (body.trim().length > 0 && (initial.subject === null || subject.trim().length > 0));
   const text = (): ActDraftText => ({ subject: subject.trim(), body: body.trim() });
 
-  const run = async (act: (text: ActDraftText) => Promise<void>, acted: boolean) => {
+  // SQ-751 F2 · SQ-774 R3 — the send boundary reads the job's lead again,
+  // immediately before the outward send: neither a sheet opened before a
+  // reassignment nor a job reassigned while its draft was held sends on the
+  // old answer.
+  const confirmSend: ConfirmSend = async (prepared) => {
+    if (viewer.recheck && !(await viewer.recheck())) {
+      throw new SendWithdrawn(prepared?.draftHeld ?? false);
+    }
+  };
+
+  const run = async (
+    act: (text: ActDraftText, confirm: ConfirmSend) => Promise<void>,
+    acted: boolean,
+  ) => {
     setError(null);
     setPending(true);
     try {
-      // SQ-751 F2 — the send boundary reads the job's lead again: a sheet
-      // opened before a reassignment never sends on the old answer.
-      if (acted && viewer.recheck && !(await viewer.recheck())) {
-        setRevoked(true);
-        setPending(false);
-        return;
-      }
-      await act(text());
+      await act(text(), confirmSend);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'That did not go through. Try again.');
+      if (e instanceof SendWithdrawn) setRevoked(e.draftHeld ? 'held' : 'unsent');
+      else setError(e instanceof Error ? e.message : 'That did not go through. Try again.');
+      setPending(false);
+      return;
+    }
+    // SQ-774 R6 — where a state can be filed is unknown until that read
+    // answers; unknown is not "nowhere", so the act is never left unrecorded
+    // in silence, and the sent act is never offered again.
+    if (acted && !stateProjects.data) {
+      setUnmarked(true);
       setPending(false);
       return;
     }
@@ -131,6 +162,14 @@ export function ActDraft({
     return (
       <p role="status" data-act-unmarked className="mx-auto w-full max-w-[34rem] text-[14px] text-[var(--color-charcoal)]">
         It went. The Day Sheet could not record it, so this line may still show there.
+      </p>
+    );
+  }
+
+  if (revoked === 'held') {
+    return (
+      <p role="status" data-act-revoked="held" className="mx-auto w-full max-w-[34rem] text-[14px] text-[var(--color-charcoal)]">
+        {`Who leads this project changed, so nothing was sent. The draft is held for ${lead}.`}
       </p>
     );
   }

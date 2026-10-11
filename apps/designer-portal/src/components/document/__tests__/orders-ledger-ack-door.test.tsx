@@ -23,7 +23,7 @@ jest.mock('@patina/supabase', () => ({
   useSession: () => ({ session: null, isLoading: false }),
   useProfile: () => ({ data: undefined }),
   useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
-  useProjectLeads: () => ({ data: [] }),
+  useLedProjectIds: () => ({ data: new Set<string>() }),
   useNeedStates: () => ({ data: [] }),
   usePurchaseOrders: () => ({
     data: [

@@ -48,6 +48,70 @@ export function mapProjectLeadRows(rows: ProjectLeadRow[]): Map<string, ProjectL
   return leads;
 }
 
+const LEAD_ROW_COLUMNS =
+  'project_id, user_id, role, assigned_at, updated_at, removed_at, user:profiles!user_id(full_name)';
+
+export interface ProjectLeadRead {
+  /** The project's own studio; null when it has none or is not a project yet. */
+  studioId: string | null;
+  /** Its active lead, read for this project alone; null when it has none. */
+  lead: ProjectLead | null;
+}
+
+/**
+ * SQ-774 R2 — one project's own studio and its own lead, read directly. Not a
+ * look-up in a studio's map: a project of another studio is absent from that
+ * map, and absent is not "no lead". Under ['project-leads'], so every
+ * hand-off that refreshes the studio maps refreshes this too.
+ */
+export function useProjectLead(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['project-leads', 'project', projectId ?? ''],
+    queryFn: async (): Promise<ProjectLeadRead> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const client = createBrowserClient() as any;
+      const [project, team] = await Promise.all([
+        client.from('projects').select('studio_id').eq('id', projectId).maybeSingle(),
+        client
+          .from('project_team_members')
+          .select(LEAD_ROW_COLUMNS)
+          .eq('project_id', projectId)
+          .in('role', ['lead_designer', 'previous_lead']),
+      ]);
+      if (project.error) throw project.error;
+      if (team.error) throw team.error;
+      return {
+        studioId: (project.data?.studio_id as string | null | undefined) ?? null,
+        lead: mapProjectLeadRows((team.data ?? []) as ProjectLeadRow[]).get(projectId as string) ?? null,
+      };
+    },
+    enabled: Boolean(projectId),
+  });
+}
+
+/**
+ * SQ-774 R1 — every project this viewer leads now, in whichever studio: the
+ * jobs whose money she sees per record (Q10), whatever studio is selected.
+ */
+export function useLedProjectIds(userId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['project-leads', 'led-by', userId ?? ''],
+    queryFn: async (): Promise<Set<string>> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const client = createBrowserClient() as any;
+      const { data, error } = await client
+        .from('project_team_members')
+        .select('project_id')
+        .eq('user_id', userId)
+        .eq('role', 'lead_designer')
+        .is('removed_at', null);
+      if (error) throw error;
+      return new Set(((data ?? []) as Array<{ project_id: string }>).map((row) => row.project_id));
+    },
+    enabled: Boolean(userId),
+  });
+}
+
 export function useProjectLeads(organizationId: string) {
   return useQuery({
     queryKey: ['project-leads', organizationId],
@@ -65,7 +129,7 @@ export function useProjectLeads(organizationId: string) {
 
       const { data, error } = await client
         .from('project_team_members')
-        .select('project_id, user_id, role, assigned_at, updated_at, removed_at, user:profiles!user_id(full_name)')
+        .select(LEAD_ROW_COLUMNS)
         .in('project_id', projectIds)
         .in('role', ['lead_designer', 'previous_lead'])
         .order('assigned_at', { ascending: false });

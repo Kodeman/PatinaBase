@@ -121,8 +121,11 @@ export function PoChaseSheet({ need, onDone }: SheetProps) {
         ].join('\n\n'),
       }}
       sendLabel={`Send the chase to ${order.maker ?? 'the maker'}`}
-      onSend={async (text) => {
+      onSend={async (text, confirmSend) => {
         const draft = await hold(text);
+        // SQ-774 R3 — the lead is read again after the draft is held, just
+        // before it goes; if she may no longer send, it stays held for the lead.
+        await confirmSend({ draftHeld: true });
         await send.mutateAsync(draft.id);
       }}
       onSaveForLead={async (text) => {
@@ -169,7 +172,8 @@ export function InvoiceReminderSheet({ need, onDone }: SheetProps) {
       sendLabel={`Send the reminder to ${client ?? 'the client'}`}
       // The Receivables dunning act's two writes, in its order: the overdue
       // notice, then the chase stamp the Desk reads (00209).
-      onSend={async ({ body }) => {
+      onSend={async ({ body }, confirmSend) => {
+        await confirmSend();
         await sendInvoice.mutateAsync({ invoiceId, projectId, type: 'reminder', message: body });
         await chase.mutateAsync({ invoiceId, projectId });
         void queryClient.invalidateQueries({ queryKey: ['document-state'] });
@@ -221,7 +225,8 @@ export function ProposalFollowUpSheet({ need, onDone }: SheetProps) {
       quote={declined ? `${who} declined the proposal${reason ? `: “${reason}”` : '.'}` : null}
       initial={{ subject: null, body: proposalNote(kind, client ? firstNameOf(client) : 'Hello') }}
       sendLabel={`Send the follow-up to ${client ?? 'the client'}`}
-      onSend={async ({ body }) => {
+      onSend={async ({ body }, confirmSend) => {
+        await confirmSend();
         await sendNote.mutateAsync(body);
       }}
       onDone={onDone}

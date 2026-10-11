@@ -15,6 +15,8 @@ let mockSaveFailed = false;
 jest.mock('@patina/supabase', () => ({
   useSetNeedState: () => ({ mutate: mockMutate, isPending: false, isError: mockSaveFailed }),
 }));
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
@@ -71,6 +73,7 @@ const lines = (container: HTMLElement) =>
 
 beforeEach(() => {
   mockMutate.mockReset();
+  mockPush.mockReset();
   mockSaveFailed = false;
 });
 
@@ -103,7 +106,9 @@ describe('DaySheet', () => {
       entry(1, { at: new Date(2026, 9, 9, 8, 0).toISOString() }),
       entry(2, { at: new Date(2026, 9, 1, 8, 0).toISOString() }),
     ]);
-    const [fresh, old] = lines(container);
+    // Found by key: the sheet ranks its lines (SQ-774 R5), oldest first.
+    const fresh = container.querySelector('[data-day-sheet-line="task_due:t1"]')!;
+    const old = container.querySelector('[data-day-sheet-line="task_due:t2"]')!;
     expect(fresh).toHaveTextContent('2 hours ago');
     expect(old.textContent).not.toMatch(/ago|yesterday/);
     expect(container.textContent).not.toContain('•');
@@ -139,34 +144,51 @@ describe('DaySheet', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Not today did not save. Try again.');
   });
 
-  it('marks a hand-off read when she opens it (walk W-D6)', async () => {
-    const handoff: DeskNeed = {
+  const handoff: DeskNeed = {
+    key: 'handoff:p9',
+    projectId: 'p9',
+    projectName: 'Ridge House',
+    need: {
       key: 'handoff:p9',
-      projectId: 'p9',
-      projectName: 'Ridge House',
-      need: {
-        key: 'handoff:p9',
-        kind: 'handoff',
-        text: 'Leah handed you Ridge House on Thursday, October 8',
-        actionLabel: 'Open project file',
-        stamp: { label: 'HAND-OFF', color: 'var(--color-dusty-blue)' },
-        urgent: false,
-        owner: 'designer',
-        deepLink: '/doc/p9',
-      } as NeedLine,
-    };
-    renderSheet([handoff]);
-    expect(screen.queryByRole('button', { name: /Not today/ })).not.toBeInTheDocument();
+      kind: 'handoff',
+      text: 'Leah handed you Ridge House on Thursday, October 8',
+      actionLabel: 'Open project file',
+      stamp: { label: 'HAND-OFF', color: 'var(--color-dusty-blue)' },
+      urgent: false,
+      owner: 'designer',
+      deepLink: '/doc/p9',
+    } as NeedLine,
+  };
+  const openHandoff = async () => {
     await act(async () => {
       await userEvent
         .setup()
         .click(screen.getByRole('link', { name: 'Open project file — Ridge House' }));
     });
-    expect(mockMutate).toHaveBeenCalledWith({
-      needKey: 'handoff:p9',
-      projectId: 'p9',
-      action: 'acted',
-    });
+  };
+
+  it('marks a hand-off read when she opens it, then opens the job (walk W-D6)', async () => {
+    mockMutate.mockImplementation((_vars, options) => options?.onSuccess?.());
+    renderSheet([handoff]);
+    expect(screen.queryByRole('button', { name: /Not today/ })).not.toBeInTheDocument();
+    await openHandoff();
+    expect(mockMutate).toHaveBeenCalledWith(
+      { needKey: 'handoff:p9', projectId: 'p9', action: 'acted' },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+    expect(mockPush).toHaveBeenCalledWith('/doc/p9');
+  });
+
+  it('a hand-off read that did not save stays on the sheet and says so (SQ-774 R7)', async () => {
+    // The mark is refused: no onSuccess, and the mutation reports its error.
+    const refused = renderSheet([handoff]);
+    await openHandoff();
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalled();
+    refused.unmount();
+    mockSaveFailed = true;
+    renderSheet([handoff]);
+    expect(screen.getByRole('alert')).toHaveTextContent('The hand-off was not marked read. Try again.');
   });
 
   it('joins the job and its fact with one dash; the fact’s own dashes read as commas (walk W-D8)', () => {

@@ -1,16 +1,21 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { useProjectLeads } from '@patina/supabase';
+import { useLedProjectIds, useOrganizations } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
-import { useInternalTimeStudio } from '@/hooks/use-viewer-studio';
 
 export interface StudioMoney {
-  /** An owner or admin seat: the studio's whole book, its totals and export. */
-  all: boolean;
-  /** Whether this seat may see the money on one job: every job for an owner
-   *  or admin, otherwise only the jobs she leads. */
-  canSeeProject: (projectId: string | null | undefined) => boolean;
+  /** The studios whose whole book is this seat's: she is owner or admin there.
+   *  Studio totals, Earnings and the export exist only when there is one. */
+  bookStudioIds: readonly string[];
+  /** This studio's whole book — its totals, every invoice and PO total. */
+  canSeeStudio: (studioId: string | null | undefined) => boolean;
+  /** The money on one record: its own studio's book is hers, or she leads
+   *  its job. */
+  canSeeRecord: (
+    studioId: string | null | undefined,
+    projectId: string | null | undefined,
+  ) => boolean;
 }
 
 /**
@@ -18,28 +23,38 @@ export interface StudioMoney {
  * PO total and the book's export belong to an owner or admin seat; any other
  * member sees money only on the jobs she leads (walk W-D5, SQ-751 F3).
  *
+ * SQ-774 R1 — judged by each RECORD's own studio, never by the one selected:
+ * owning her own solo studio is no seat over her employer's book, where she is
+ * a member. So a seat holds the book of each studio she owns or administers,
+ * and beyond those only the records of jobs she leads, in any studio.
+ *
  * Not `useCanSeeMargin`: that is the R1 margin grant, which defaults to every
  * member (organizations.margin_visibility = 'everyone'), so a hire passed it
- * and read the whole book. The studio is the one `useCanSeeMargin` follows.
+ * and read the whole book.
  */
 export function useStudioMoney(): StudioMoney {
   const { user } = useAuth();
-  const { studio } = useInternalTimeStudio();
-  const role = studio?.membership?.role;
-  const all = role === 'owner' || role === 'admin';
-  const { data: projectLeads } = useProjectLeads(studio?.id ?? '');
-  const led = useMemo(
+  const { data: organizations } = useOrganizations();
+  const { data: led } = useLedProjectIds(user?.id);
+  const bookStudioIds = useMemo(
     () =>
-      new Set(
-        [...(projectLeads ?? new Map())]
-          .filter(([, lead]) => Boolean(user?.id) && lead.leadUserId === user?.id)
-          .map(([projectId]) => projectId),
-      ),
-    [projectLeads, user?.id],
+      (organizations ?? [])
+        .filter(
+          (org) =>
+            org.type === 'design_studio' &&
+            (org.membership?.role === 'owner' || org.membership?.role === 'admin'),
+        )
+        .map((org) => org.id),
+    [organizations],
   );
-  const canSeeProject = useCallback(
-    (projectId: string | null | undefined) => all || (Boolean(projectId) && led.has(projectId!)),
-    [all, led],
+  const canSeeStudio = useCallback(
+    (studioId: string | null | undefined) => Boolean(studioId) && bookStudioIds.includes(studioId!),
+    [bookStudioIds],
   );
-  return { all, canSeeProject };
+  const canSeeRecord = useCallback(
+    (studioId: string | null | undefined, projectId: string | null | undefined) =>
+      canSeeStudio(studioId) || (Boolean(projectId) && Boolean(led?.has(projectId!))),
+    [canSeeStudio, led],
+  );
+  return { bookStudioIds, canSeeStudio, canSeeRecord };
 }

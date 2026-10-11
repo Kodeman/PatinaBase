@@ -13,10 +13,10 @@ import type {
   NeedLine,
 } from '@/lib/document/desk-derivation';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
-import { deriveDeskNeedList } from '@/lib/document/desk-need-list';
+import { deriveDeskNeedList, rankDeskNeeds } from '@/lib/document/desk-need-list';
 import { deriveDeskRoster } from '@/lib/document/desk-roster-derivation';
 import { classOfNeed, deskLeadNeed } from '@/lib/document/need-class';
-import type { DeskLeads } from '@/lib/document/desk-scope';
+import { deriveHandoffNeeds, deskDesignersOf, type DeskLeads } from '@/lib/document/desk-scope';
 import {
   DAY_SHEET_LINES,
   deriveDaySheet,
@@ -316,5 +316,104 @@ describe('deriveDaySheet — an aggregate acts one record at a time (SQ-751 F7)'
     });
     expect(result.lines).toEqual([]);
     expect(result.waitingOn.map((w) => w.need.key)).toEqual(['po_unacknowledged:po-1']);
+  });
+
+  it('ranks the re-keyed line by its own record before the five are taken (SQ-774 R5)', () => {
+    // The review input: aggregate P1 Oct 1 / P2 Oct 10, independent P3 Oct 5; P1 acted.
+    const monday = new Date(2026, 9, 12, 10, 0, 0);
+    const po = (recordId: string, at: string) => ({ recordId, at, dueOn: at });
+    const aggregate = entry(1, {
+      kind: 'po_unacknowledged' as NeedKind,
+      key: 'po_unacknowledged:p1',
+      recordId: 'p1',
+      text: '2 POs sent — no acknowledgment',
+      at: '2026-10-01T09:00:00.000Z',
+      dueOn: '2026-10-01T09:00:00.000Z',
+      records: [po('p1', '2026-10-01T09:00:00.000Z'), po('p2', '2026-10-10T09:00:00.000Z')],
+    });
+    const independent = entry(3, {
+      kind: 'po_unacknowledged' as NeedKind,
+      key: 'po_unacknowledged:p3',
+      recordId: 'p3',
+      text: 'PO sent — no acknowledgment',
+      at: '2026-10-05T09:00:00.000Z',
+      dueOn: '2026-10-05T09:00:00.000Z',
+    });
+    const needs = [
+      { ...aggregate, key: aggregate.need.key },
+      { ...independent, key: independent.need.key },
+    ];
+    const result = sheet({
+      // As the Desk hands them in: already ranked by the one shared order.
+      needs: rankDeskNeeds(needs, monday),
+      states: new Map([
+        ['po_unacknowledged:p1', state('po_unacknowledged:p1', { actedAt: '2026-10-09T08:00:00.000Z' })],
+      ]),
+      now: monday,
+    });
+    expect(result.lines.map((line) => line.key)).toEqual([
+      'po_unacknowledged:p3',
+      'po_unacknowledged:p2',
+    ]);
+  });
+});
+
+describe('deriveDaySheet — a later hand-off survives the composed Desk pipeline (SQ-774 R4)', () => {
+  it('a read of the Oct 1 hand-off never silences the Oct 10 one on the final sheet', () => {
+    const now = new Date(2026, 9, 12, 10, 0, 0);
+    const leads: DeskLeads = new Map([
+      ['p1', {
+        leadUserId: 'me',
+        leadName: 'Bea Lund',
+        previousLeadUserId: 'leah',
+        previousLeadName: 'Leah Hartwell',
+        assignedAt: '2026-10-10T09:00:00.000Z',
+      }],
+    ]);
+    const live = [
+      { project_id: 'p1', engagement_id: 'e1', title: 'Ridge House', designer_id: 'leah' } as DocumentStateRow,
+    ];
+    // B read the earlier hand-off on Oct 1; the job was handed to her again Oct 10.
+    const states = new Map([
+      ['handoff:p1', state('handoff:p1', { projectId: 'p1', actedAt: '2026-10-01T09:00:00.000Z' })],
+    ]);
+    // The Desk page's own composition: hand-offs → the ranked list → the sheet.
+    const handoffs = deriveHandoffNeeds(live, leads, 'me', states);
+    expect(handoffs).toHaveLength(1);
+    const needs = deriveDeskNeedList(
+      { folders: [], chips: [], live, scope: 'mine', leads, meUserId: 'me' },
+      now,
+      handoffs,
+    );
+    const result = deriveDaySheet({
+      needs,
+      states,
+      leads,
+      meUserId: 'me',
+      scope: 'mine',
+      designers: deskDesignersOf(live),
+      unreadFeeds: [],
+      now,
+    });
+    expect(result.lines.map((line) => line.key)).toEqual(['handoff:p1']);
+    expect(result.waitingOn).toEqual([]);
+    expect(result.empty).toBe(false);
+
+    // Read at or after the standing assignment, it is gone from the sheet.
+    const readNow = new Map([
+      ['handoff:p1', state('handoff:p1', { projectId: 'p1', actedAt: '2026-10-11T09:00:00.000Z' })],
+    ]);
+    const after = deriveDaySheet({
+      needs: rankDeskNeeds(handoffs, now),
+      states: readNow,
+      leads,
+      meUserId: 'me',
+      scope: 'mine',
+      designers: deskDesignersOf(live),
+      unreadFeeds: [],
+      now,
+    });
+    expect(after.lines).toEqual([]);
+    expect(after.waitingOn).toEqual([]);
   });
 });

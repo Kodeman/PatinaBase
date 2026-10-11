@@ -9,7 +9,14 @@ export {
   useCreateDraftProduct,
 } from "./use-products";
 export { useNeedStates, useNeedStateProjectIds, useSetNeedState,mapNeedStateRows, type NeedKey, type NeedState, type NeedStateAction, type SetNeedStateInput } from './use-need-states';
-export { useProjectLeads, mapProjectLeadRows, type ProjectLead } from './use-project-leads';
+export {
+  useLedProjectIds,
+  useProjectLead,
+  useProjectLeads,
+  mapProjectLeadRows,
+  type ProjectLead,
+  type ProjectLeadRead,
+} from './use-project-leads';
 export {
   productConfigurationKeys,
   useProductConfigurationDefinition,

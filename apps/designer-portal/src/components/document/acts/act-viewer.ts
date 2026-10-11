@@ -15,12 +15,17 @@
  * lead (or, with no lead, its designer) are all read, so no send control prints
  * on a guess. `recheck` reads the job's lead again at the send boundary, so a
  * reassignment since the sheet opened stops the send (SQ-751 F2).
+ *
+ * SQ-774 R2 — every answer is the TARGET job's own: its studio and its lead
+ * are read for that project alone, and the owner/admin role and the designer
+ * fallback are judged by her seat in that studio. Owning or administering
+ * another studio is no standing here, and a lead held in another studio is
+ * never read as "no lead".
  */
 
 import {
   useOrganizationMembers,
-  useOrganizations,
-  useProjectLeads,
+  useProjectLead,
   type ProjectLead,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
@@ -40,62 +45,69 @@ export interface ActViewer {
 }
 
 /** Q11 with the F1 fallback: the active lead sends; with no lead, the job's
- *  designer; the owner or admin always. */
+ *  designer while she holds a seat in the job's studio; the owner or admin of
+ *  the job's studio always. `role` and `inStudio` are her seat in THAT studio. */
 export function mayActSend({
   lead,
   meUserId,
   role,
   designerId,
+  inStudio,
 }: {
-  lead: Pick<ProjectLead, 'leadUserId'> | undefined;
+  lead: Pick<ProjectLead, 'leadUserId'> | null | undefined;
   meUserId: string | null | undefined;
   role: string | null | undefined;
   designerId: string | null | undefined;
+  inStudio: boolean;
 }): boolean {
   if (!meUserId) return false;
   if (role === 'owner' || role === 'admin') return true;
   if (lead) return lead.leadUserId === meUserId;
-  return Boolean(designerId) && designerId === meUserId;
+  return inStudio && Boolean(designerId) && designerId === meUserId;
 }
 
 export function useActViewer(projectId: string | null): ActViewer {
   const { user } = useAuth();
-  const { data: orgs } = useOrganizations();
-  const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
-  const members = useOrganizationMembers(studio?.id ?? '');
-  const leads = useProjectLeads(studio?.id ?? '');
+  // SQ-774 R2 — the job's own studio and lead, read for this project alone.
+  const target = useProjectLead(projectId);
+  const studioId = target.data?.studioId ?? null;
+  const members = useOrganizationMembers(studioId ?? '');
   // The job's designer, for a job no one leads yet: the document_state row the
   // Desk's Mine reads it from (deskDesignersOf).
   const engagement = useDocumentEngagement(projectId ?? '');
 
-  const me = members.data?.find((m) => m.user_id === user?.id) ?? null;
-  const lead = projectId ? leads.data?.get(projectId) : undefined;
+  // Her seat in the job's studio; a job with no studio has no seat to hold.
+  const me = studioId ? (members.data?.find((m) => m.user_id === user?.id) ?? null) : null;
+  // A job with no studio is her own record, with no studio to seat her in.
+  const inStudio = studioId ? Boolean(me) : true;
+  const lead = target.data?.lead ?? null;
   const designerId =
     engagement.data?.kind === 'engagement' ? engagement.data.row.designer_id : null;
   const authority = me?.role === 'owner' || me?.role === 'admin';
   const ready =
     Boolean(user?.id) &&
-    members.isSuccess &&
-    leads.isSuccess &&
+    target.isSuccess &&
+    (!studioId || members.isSuccess) &&
     (Boolean(lead) || authority || engagement.isSuccess);
   const isLead = lead ? lead.leadUserId === user?.id : Boolean(designerId) && designerId === user?.id;
   const canSend =
-    ready && mayActSend({ lead, meUserId: user?.id, role: me?.role, designerId });
+    ready && mayActSend({ lead, meUserId: user?.id, role: me?.role, designerId, inStudio });
   const note = me?.handoff_note?.trim();
   const writer = me?.invited_by
     ? members.data?.find((m) => m.user_id === me.invited_by)
     : undefined;
 
   const recheck = async (): Promise<boolean> => {
-    const fresh = await leads.refetch();
+    const fresh = await target.refetch();
     if (fresh.isError || !fresh.data) {
       throw new Error('Who leads this project could not be confirmed, so nothing was sent. Try again.');
     }
     return mayActSend({
-      lead: projectId ? fresh.data.get(projectId) : undefined,
+      lead: fresh.data.lead,
       meUserId: user?.id,
       role: me?.role,
       designerId,
+      inStudio,
     });
   };
 

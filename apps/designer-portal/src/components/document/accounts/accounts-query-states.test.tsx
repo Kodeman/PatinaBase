@@ -17,7 +17,10 @@ jest.mock('@/hooks/use-teaching-note', () => ({
   useTeachingNoteFor: () => ({ note: null, bind: null }),
 }));
 
-const mockProjectLeads = new Map<string, { leadUserId: string; leadName: string }>();
+// The jobs the viewer leads (SQ-774 R1: in any studio) and her seats.
+const mockLedProjectIds = new Set<string>();
+type MockOrg = { id: string; type: string; membership?: { role: string } };
+let mockOrganizations: MockOrg[] = [{ id: 'studio-1', type: 'design_studio' }];
 
 jest.mock('@patina/supabase', () => ({
   useEmailDelivery: () => ({ byRef: {}, isLoading: false, isError: false }),
@@ -29,8 +32,8 @@ jest.mock('@patina/supabase', () => ({
   useInvoice: jest.fn(),
   useInvoices: jest.fn(),
   useIssueInvoice: () => ({ isPending: false, mutateAsync: jest.fn() }),
-  useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
-  useProjectLeads: () => ({ data: mockProjectLeads }),
+  useOrganizations: () => ({ data: mockOrganizations }),
+  useLedProjectIds: () => ({ data: mockLedProjectIds }),
   useRecordPayment: () => ({ isPending: false, mutateAsync: jest.fn() }),
   useSendInvoice: () => ({ isPending: false, mutateAsync: jest.fn() }),
   useVoidInvoice: () => ({ isPending: false, mutateAsync: jest.fn() }),
@@ -48,8 +51,12 @@ jest.mock('../command-bar', () => ({
   openLedger: jest.fn(),
 }));
 
+const mockMarginStudios: (readonly string[])[] = [];
 jest.mock('@/hooks/use-studio-accounts', () => ({
-  useStudioMargin: () => ({ data: null }),
+  useStudioMargin: (studioIds: readonly string[]) => {
+    mockMarginStudios.push(studioIds);
+    return { data: null };
+  },
 }));
 
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'viewer' } }) }));
@@ -111,7 +118,9 @@ const mockUseDesignerTeachingStats = useDesignerTeachingStats as jest.Mock;
 
 describe('designer Accounts query failures', () => {
   beforeEach(() => {
-    mockProjectLeads.clear();
+    mockLedProjectIds.clear();
+    mockMarginStudios.length = 0;
+    mockOrganizations = [{ id: 'studio-1', type: 'design_studio' }];
     mockUseArAging.mockReturnValue({
       aging: { totalBalanceCents: 0, buckets: [] },
     });
@@ -140,11 +149,12 @@ describe('designer Accounts query failures', () => {
   });
 
   it('limits a person to led-project invoices and hides studio money totals', () => {
-    mockProjectLeads.set('project-1', { leadUserId: 'viewer', leadName: 'Maya Lee' });
+    mockOrganizations = [{ id: 'studio-1', type: 'design_studio', membership: { role: 'member' } }];
+    mockLedProjectIds.add('project-1');
     mockUseInvoices.mockReturnValue({
       data: [
-        { id: 'invoice-1', project_id: 'project-1' },
-        { id: 'invoice-2', project_id: 'project-2' },
+        { id: 'invoice-1', project_id: 'project-1', studio_id: 'studio-1' },
+        { id: 'invoice-2', project_id: 'project-2', studio_id: 'studio-1' },
       ],
       isLoading: false,
       isError: false,
@@ -161,6 +171,38 @@ describe('designer Accounts query failures', () => {
     expect(screen.queryByRole('button', { name: 'Earnings' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Receivables' }));
     expect(screen.getByTestId('accounts-receivables')).toHaveTextContent('Receivables 100');
+  });
+
+  it('owning her solo studio is no seat over her employer’s book (SQ-774 R1)', () => {
+    // The review input: the hire owns her automatically created solo studio
+    // and is a plain member of her employer's; she leads one employer job.
+    mockOrganizations = [
+      { id: 'solo', type: 'design_studio', membership: { role: 'owner' } },
+      { id: 'employer', type: 'design_studio', membership: { role: 'member' } },
+    ];
+    mockLedProjectIds.add('employer-led');
+    mockUseInvoices.mockReturnValue({
+      data: [
+        { id: 'solo-1', project_id: 'solo-job', studio_id: 'solo', amount_paid_cents: 50_000 },
+        { id: 'employer-1', project_id: 'employer-unled', studio_id: 'employer', amount_paid_cents: 900_000 },
+        { id: 'employer-2', project_id: 'employer-led', studio_id: 'employer', amount_paid_cents: 700_000 },
+        { id: 'employer-3', project_id: null, studio_id: 'employer', amount_paid_cents: 300_000 },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+    });
+
+    render(<AccountsBook onClose={jest.fn()} />);
+
+    // Her own studio's book, and on her employer's only the job she leads.
+    expect(screen.getByTestId('accounts-ledger')).toHaveAttribute('data-invoice-ids', 'solo-1,employer-2');
+    // The studio totals sum her own studio's records alone.
+    const frontMatter = screen.getByTestId('ledger-front-matter');
+    expect(frontMatter).toHaveTextContent('revenue: $500');
+    expect(frontMatter).toHaveTextContent('A/R: $1');
+    expect(frontMatter).not.toHaveTextContent(/\$9,000|\$7,000|\$3,000|\$19,000/);
+    expect(mockMarginStudios.at(-1)).toEqual(['solo']);
   });
 
   it('titles the book "Studio accounts" (SQ-752)', () => {
