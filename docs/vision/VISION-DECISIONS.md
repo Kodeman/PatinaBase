@@ -509,6 +509,18 @@ These are side journeys from the studio buying review (`artifacts/procurement-bu
 
 **Source:** founders' website-review deck (https://claude.ai/artifact/UX9NXrBbjQK27QvRg8ztPA); PatinaWebsite `docs/launch/2026-10-website-review.html`.
 
+## Ruled — 2026-10-11 (homeowner homepage)
+
+### V17 · The patina.cloud homepage speaks to homeowners — amends V16/V3 for the homepage only — 2026-10-11
+
+**Decision (Kody, 2026-10-11):** "the home is reading more towards designers. I want the home page to read for the homeowners." Asked how far it goes, Kody chose the homepage only.
+
+- **Homepage (`/`) only:** copy may address homeowners directly about their own home. The Founding Circle is the homepage's main door, and the studio door ("For designers" → /designers) becomes the quieter second door there.
+- **Everywhere else is unchanged:** /designers, /makers, campaigns, The Press and email stay studio-first under voice.md §1 and V16. §2's drift line ("consumer-first thinking") is acknowledged; this is a scoped exception for the site's front door, not a change of customer.
+- **Still binding on the homepage:** lexicon bans, claims, no price (V2 interim), names not titles (V4 interim), the tagline at most once (V5), pre-launch honesty, art direction.
+
+**Recorded in:** `marketing/canon/voice.md` §1 (homepage exception); PatinaWebsite `docs/messaging/patina-messaging-system.md`.
+
 ---
 
-*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · V14 · V15 · V16 (V3, V5 ruled) · last id = V16*
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · V14 · V15 · V16 (V3, V5 ruled) · V17 (V3 amended, homepage) · last id = V17*

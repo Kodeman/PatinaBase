@@ -20,6 +20,10 @@ already spoken for twice. The one thing she cannot afford is a new system to lea
 - **Makers are the studio's vendors.** Patina qualifies them and carries the order. Copy may honor
   a maker's craft; it never sells Patina to a maker or sells a maker to a homeowner directly.
 - **No consumer push.** No "shop now", no homeowner sign-up, no funnel copy.
+- **Homepage exception (Kody, 2026-10-11, VISION-DECISIONS V17).** On patina.cloud's homepage only,
+  copy may speak to the homeowner directly about her own home, and the Founding Circle is the main
+  door; the studio door is the quieter second one. Every other rule on this page still holds there,
+  and everywhere else the studio comes first.
 
 ## 2. The promise
 
