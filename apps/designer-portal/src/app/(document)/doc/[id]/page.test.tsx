@@ -65,6 +65,10 @@ let mockProjectQuery: Record<string, unknown> = { data: undefined, isLoading: fa
 // the effect a no-op (no studio) for every suite that doesn't touch them.
 let mockMyOrgs: Array<Record<string, unknown>> = [];
 let mockMyStudioMembers: Array<Record<string, unknown>> = [];
+// SQ-778 N2/N3 — the job's own lead read, her need states, and the mark.
+let mockProjectLeadRead: Record<string, unknown> | null = null;
+let mockNeedStates = new Map<string, Record<string, unknown>>();
+const mockSetNeedStateMutate = jest.fn();
 const mockMarkFirstDocumentOpenedMutate = jest.fn();
 /** R4 — the letterhead subject's one write. */
 const mockUpdateEngagementSubject = jest.fn().mockResolvedValue(undefined);
@@ -215,9 +219,9 @@ jest.mock('@patina/supabase', () => ({
   // SQ-520 own-act lines and SQ-523 held-Pieces lines; each test fills one.
   useProjectFFEItems: () => ({ data: [...mockOwnActFfeItems, ...mockProjectFfeItems] }),
   useInstallWindow: () => ({ data: null, isSuccess: true }),
-  useProjectLeads: () => ({ data: new Map() }),
-  useNeedStates: () => ({ data: new Map() }),
-  useSetNeedState: () => ({ mutate: jest.fn() }),
+  useProjectLead: () => ({ data: mockProjectLeadRead }),
+  useNeedStates: () => ({ data: mockNeedStates }),
+  useSetNeedState: () => ({ mutate: mockSetNeedStateMutate, isPending: false }),
   useProjectContextualHandoffs: () => mockContextualHandoffsQuery,
   useProjectParties: () => ({ data: [] }),
   useCoordinationItems: () => ({ data: [] }),
@@ -659,6 +663,9 @@ beforeEach(() => {
   // block below sets these per test.
   mockMyOrgs = [];
   mockMyStudioMembers = [];
+  mockProjectLeadRead = null;
+  mockNeedStates = new Map();
+  mockSetNeedStateMutate.mockClear();
   mockMarkFirstDocumentOpenedMutate.mockClear();
   mockAuthUser = { id: 'owner-user' };
   mockSectionGates = [];
@@ -3498,6 +3505,77 @@ describe('DocumentPage guide activation', () => {
           head.getByRole('button', { name: 'Add a subject line' }),
         ).toBeInTheDocument();
       });
+    });
+  });
+
+  // SQ-778 N2/N3 — the invite's note prints only on the job its writer handed
+  // her, and it stays on that job once read; the Day Sheet lands on it.
+  describe('the hand-off note on the project file (SQ-778 N2/N3)', () => {
+    const NOTE = 'Marsh Street is yours from today';
+    const openJob = () => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: {
+          kind: 'engagement',
+          row: { ...current, engagement_kind: 'project', active_section: 'project', engagement_id: 'marsh', project_id: 'marsh', lead_id: null },
+        },
+      };
+      render(<DocumentPage params={fulfilledParams} />);
+    };
+    const handedBy = (previousLeadUserId?: string, previousLeadName?: string) => ({
+      studioId: 'studio-1',
+      lead: {
+        leadUserId: 'jordan',
+        leadName: 'Jordan Pike',
+        assignedAt: '2026-10-10T12:00:00Z',
+        ...(previousLeadUserId ? { previousLeadUserId, previousLeadName } : {}),
+      },
+    });
+    const handoff = () => document.getElementById('hand-off');
+
+    beforeEach(() => {
+      mockAuthUser = { id: 'jordan' };
+      mockMyStudioMembers = [{
+        user_id: 'jordan', role: 'member', status: 'active', handoff_note: NOTE, invited_by: 'leah',
+        first_document_opened_at: '2026-08-01T00:00:00Z',
+      }];
+    });
+
+    it('prints the note unread, with Mark read, on the job its writer handed her', () => {
+      mockProjectLeadRead = handedBy('leah', 'Leah Moreau');
+      openJob();
+      expect(handoff()).toHaveAttribute('data-handoff-note', 'unread');
+      expect(handoff()).toHaveTextContent(`From Leah Moreau: ${NOTE}`);
+      fireEvent.click(within(handoff()!).getByRole('button', { name: 'Mark read' }));
+      expect(mockSetNeedStateMutate).toHaveBeenCalledWith({
+        needKey: 'handoff:marsh',
+        projectId: 'marsh',
+        action: 'acted',
+      });
+    });
+
+    it('keeps the note on the job once read, with no Mark read (N2)', () => {
+      mockProjectLeadRead = handedBy('leah', 'Leah Moreau');
+      mockNeedStates = new Map([['handoff:marsh', { actedAt: '2026-10-10T13:00:00Z' }]]);
+      openJob();
+      expect(handoff()).toHaveAttribute('data-handoff-note', 'read');
+      expect(handoff()).toHaveTextContent(NOTE);
+      expect(within(handoff()!).queryByRole('button', { name: 'Mark read' })).toBeNull();
+    });
+
+    it('prints no note on a job handed over by someone other than its writer', () => {
+      mockProjectLeadRead = handedBy('sam', 'Sam Ortiz');
+      openJob();
+      expect(handoff()).toHaveTextContent('Sam Ortiz handed you this job.');
+      expect(document.body).not.toHaveTextContent(NOTE);
+    });
+
+    it('prints no hand-off and no note on a job she leads with no hand-off', () => {
+      mockProjectLeadRead = handedBy();
+      openJob();
+      expect(handoff()).toBeNull();
+      expect(document.body).not.toHaveTextContent(NOTE);
     });
   });
 

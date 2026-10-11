@@ -31,6 +31,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { firstNameOf } from '@/lib/document/account-identity';
+import { handoffNoteFor } from '@/lib/document/desk-scope';
 
 export interface ActViewer {
   ready: boolean;
@@ -38,7 +39,8 @@ export interface ActViewer {
   canSend: boolean;
   /** The job's active lead's first name, when another member leads it. */
   leadFirstName: string | null;
-  /** The owner's line to this member on her invite (L8), with its writer. */
+  /** The owner's line to this member on her invite (L8), with its writer —
+   *  only on a job that writer handed her (SQ-778 N3, `handoffNoteFor`). */
   handoff: { from: string | null; note: string } | null;
   /** Reads the job's lead again and answers whether she may still send. */
   recheck?: () => Promise<boolean>;
@@ -54,7 +56,7 @@ export function mayActSend({
   designerId,
   inStudio,
 }: {
-  lead: Pick<ProjectLead, 'leadUserId'> | null | undefined;
+  lead: Pick<ProjectLead, 'leadUserId' | 'fromProject'> | null | undefined;
   meUserId: string | null | undefined;
   role: string | null | undefined;
   designerId: string | null | undefined;
@@ -62,7 +64,9 @@ export function mayActSend({
 }): boolean {
   if (!meUserId) return false;
   if (role === 'owner' || role === 'admin') return true;
-  if (lead) return lead.leadUserId === meUserId;
+  // A lead read off the project (no team row) is its designer of record, so
+  // she keeps the F1 rule: she sends while she holds a seat in its studio.
+  if (lead) return lead.leadUserId === meUserId && (!lead.fromProject || inStudio);
   return inStudio && Boolean(designerId) && designerId === meUserId;
 }
 
@@ -92,10 +96,8 @@ export function useActViewer(projectId: string | null): ActViewer {
   const isLead = lead ? lead.leadUserId === user?.id : Boolean(designerId) && designerId === user?.id;
   const canSend =
     ready && mayActSend({ lead, meUserId: user?.id, role: me?.role, designerId, inStudio });
-  const note = me?.handoff_note?.trim();
-  const writer = me?.invited_by
-    ? members.data?.find((m) => m.user_id === me.invited_by)
-    : undefined;
+  // SQ-778 N3 — this job's hand-off only: never her seat's note on every job.
+  const note = handoffNoteFor(lead, user?.id, me);
 
   const recheck = async (): Promise<boolean> => {
     const fresh = await target.refetch();
@@ -115,9 +117,7 @@ export function useActViewer(projectId: string | null): ActViewer {
     ready,
     canSend,
     leadFirstName: lead && !isLead ? (nameOf(lead.leadName) ?? 'the lead') : null,
-    handoff: note
-      ? { from: nameOf(writer?.profiles?.full_name || writer?.profiles?.display_name), note }
-      : null,
+    handoff: note ? { from: nameOf(lead?.previousLeadName), note } : null,
     recheck,
   };
 }

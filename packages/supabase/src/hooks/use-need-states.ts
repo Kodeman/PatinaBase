@@ -58,34 +58,22 @@ export function useNeedStates(organizationId: string) {
 }
 
 /**
- * The projects a need state can be filed on: `set_need_state` needs a real
- * project that belongs to a studio. An inquiry or proposal has no project yet
- * (SQ-751 F6) and a legacy project may carry no studio (walk W-D3), so neither
- * is offered a state the server would refuse.
+ * A state names its line's record one of two ways (00765, SQ-778 N5):
+ * `projectId` for a known project, or `engagementId` for a Day Sheet line,
+ * whose id is `project_id ?? engagement_id` — a project, or an inquiry,
+ * proposal or relationship with no project yet. The server finds the studio
+ * from either, so every line can hold a state.
  */
-export function useNeedStateProjectIds() {
-  return useQuery({
-    queryKey: ['need-state-projects'],
-    queryFn: async () => {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase
-        .from('projects')
-        .select('id')
-        .not('studio_id', 'is', null);
-      if (error) throw error;
-      return new Set(((data ?? []) as Array<{ id: string }>).map((project) => project.id));
-    },
-  });
-}
-
-export interface SetNeedStateInput {
+export type SetNeedStateInput = (
+  | { projectId: string; engagementId?: undefined }
+  | { engagementId: string; projectId?: undefined }
+) & {
   needKey: NeedKey;
-  projectId: string;
   action: NeedStateAction;
   waitingOn?: string;
   until?: string;
   reason?: string;
-}
+};
 
 export function useSetNeedState() {
   const queryClient = useQueryClient();
@@ -94,11 +82,13 @@ export function useSetNeedState() {
       const supabase = createBrowserClient();
       const { error } = await supabase.rpc('set_need_state', {
         p_need_key: input.needKey,
-        p_project_id: input.projectId,
+        // A plpgsql argument is nullable; the generated type cannot say so.
+        p_project_id: (input.projectId ?? null) as unknown as string,
         p_action: input.action,
         p_waiting_on: input.waitingOn,
         p_until: input.until,
         p_reason: input.reason,
+        ...(input.engagementId ? { p_engagement_id: input.engagementId } : {}),
       });
       if (error) throw error;
     },

@@ -34473,5 +34473,185 @@
     "verify": "apps/designer-portal/src/components/document/desk-roster.test.tsx",
     "status": "implemented",
     "evidence": "apps/designer-portal/src/components/document/desk-roster.tsx:65 display copy changed; apps/designer-portal/src/components/document/desk-roster.test.tsx; SQ-752 (c_mv3t581p_d194c8)"
+  },
+  {
+    "id": "C-30003",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview",
+      "route": "/desk",
+      "element": "Header action"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/app/(document)/desk/page.tsx:480",
+    "current": "Capture a lead",
+    "proposed": "Record an inquiry",
+    "meaning": "Header act on the studio overview; same words as the global action (C-0015). N8.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/app/(document)/desk/page.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/app/(document)/desk/page.tsx:480 display copy changed; apps/designer-portal/src/app/(document)/desk/page.test.tsx; SQ-778 (SQ-775 re-walk)"
+  },
+  {
+    "id": "C-30004",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview",
+      "route": "/desk",
+      "element": "Header action"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/app/(document)/desk/page.tsx:497",
+    "current": "Open a project",
+    "proposed": "Create a project file",
+    "meaning": "Header act that creates a project file; same words as the global action (C-0017) and its sheet title (C-1252). N8.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/app/(document)/desk/page.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/app/(document)/desk/page.tsx:497 display copy changed; apps/designer-portal/src/app/(document)/desk/page.test.tsx; SQ-778 (SQ-775 re-walk)"
+  },
+  {
+    "id": "C-30005",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio overview",
+      "route": "/desk → roster",
+      "element": "Roster line"
+    },
+    "state": "conditional",
+    "source": "apps/designer-portal/src/lib/document/desk-derivation.ts:1236",
+    "current": "Signed — open the project",
+    "proposed": "Signed, open the project",
+    "meaning": "D8 single separator: the line carries one dash at most, so the fact takes a comma. N8.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/lib/document/__tests__/desk-derivation.test.ts",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/lib/document/desk-derivation.ts:1236 display copy changed; apps/designer-portal/src/lib/document/__tests__/desk-derivation.test.ts; SQ-778 (SQ-775 re-walk)"
+  },
+  {
+    "id": "C-30006",
+    "audience": "designer",
+    "surface": {
+      "area": "Project finances",
+      "route": "/doc/[id] → Project financials",
+      "element": "Quiet-state sentence (screen reader)"
+    },
+    "state": "conditional",
+    "source": "apps/designer-portal/src/components/document/commercial/money-region.tsx:396",
+    "current": "press Money on the index to open",
+    "proposed": "press Project financials on the index to open",
+    "meaning": "Names the index entry by its label (C-0324). N6.",
+    "owner": "D2",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/commercial/money-region.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/commercial/money-region.tsx:396 display copy changed; apps/designer-portal/src/components/document/commercial/money-region.test.tsx; SQ-778 (SQ-775 re-walk)"
+  },
+  {
+    "id": "C-30007",
+    "audience": "designer",
+    "surface": {
+      "area": "Project file",
+      "route": "/doc/[id] → kickoff",
+      "element": "Kickoff prompt"
+    },
+    "state": "conditional",
+    "source": "apps/designer-portal/src/components/document/roster/kickoff-band.tsx:86",
+    "current": "– You’re on the call sheet as lead. Who else is on the job?",
+    "proposed": "– You’re on the call sheet as lead. Who else is on the job? (lead) · – Who else is on the job? (anyone else)",
+    "meaning": "The lead claim is printed only to the job’s lead. N7.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/roster/__tests__/kickoff-band.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/roster/kickoff-band.tsx:86 display copy changed; apps/designer-portal/src/components/document/roster/__tests__/kickoff-band.test.tsx; SQ-778 (SQ-775 re-walk)"
+  },
+  {
+    "id": "C-30008",
+    "audience": "designer",
+    "surface": {
+      "area": "Studio administration",
+      "route": "Studio → Accounts",
+      "element": "Book subtitle"
+    },
+    "state": "conditional",
+    "source": "apps/designer-portal/src/components/document/accounts/accounts-book.tsx:133",
+    "current": "· the studio’s book",
+    "proposed": "· the studio’s book (money seat) · · your projects’ invoices (any other seat)",
+    "meaning": "A seat without the studio’s money is not told she reads the studio book; its subline and STUDIO EYES ONLY print only to a money seat. N4.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/accounts/accounts-query-states.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/accounts/accounts-book.tsx:133 display copy changed; apps/designer-portal/src/components/document/accounts/accounts-query-states.test.tsx; SQ-778 (SQ-775 re-walk)"
+  },
+  {
+    "id": "C-30009",
+    "audience": "designer",
+    "surface": {
+      "area": "Act sheet",
+      "route": "/desk → act sheet",
+      "element": "Send failure"
+    },
+    "state": "error",
+    "source": "apps/designer-portal/src/components/document/acts/act-draft.tsx:33",
+    "current": "{raw transport error, e.g. Edge Function returned a non-2xx status code}",
+    "proposed": "Couldn’t send — nothing went out. Try again, or check your connection.",
+    "meaning": "Says whether anything reached the counterpart and what to do next; the transport error goes to the console. N1.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-draft.tsx:33 display copy changed; apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx; SQ-778 (SQ-775 re-walk)"
+  },
+  {
+    "id": "C-30010",
+    "audience": "designer",
+    "surface": {
+      "area": "Act sheet",
+      "route": "/desk → act sheet",
+      "element": "Save failure"
+    },
+    "state": "error",
+    "source": "apps/designer-portal/src/components/document/acts/act-draft.tsx:34",
+    "current": "{raw transport error}",
+    "proposed": "Couldn’t save the draft — nothing was saved. Try again, or check your connection.",
+    "meaning": "Same plain failure line for the save-for-the-lead path. N1.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-draft.tsx:34 display copy changed; apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx; SQ-778 (SQ-775 re-walk)"
+  },
+  {
+    "id": "C-30011",
+    "audience": "designer",
+    "surface": {
+      "area": "Act sheet",
+      "route": "/desk → Chase this PO",
+      "element": "Record line and draft subject"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/components/document/acts/act-sheets.tsx:110",
+    "current": "The purchase order — no acknowledgment · PO {n}: please acknowledge · We sent The purchase order…",
+    "proposed": "Purchase order {n}, sent {date} — no acknowledgment · Purchase order {n}: please acknowledge · We sent purchase order {n}…",
+    "meaning": "The order is named by its own number, read off the purchase order record. N3.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-sheets.tsx:110 display copy changed; apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx; SQ-778 (SQ-775 re-walk)"
   }
 ]

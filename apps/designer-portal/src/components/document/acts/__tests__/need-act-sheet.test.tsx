@@ -38,13 +38,24 @@ let mockHandoffNote: string | null = null;
 let mockRole = 'member';
 let mockInvoiceLoaded = true;
 let mockDesignerId: string | null = null;
-let mockStateProjects: Set<string> | undefined = new Set(['proj-1']);
+// The job's previous lead (a hand-off) and whether the lead was read off the
+// project itself (no team lead row, SQ-778 N3).
+let mockPreviousLead: { id: string; name: string } | null = null;
+let mockFromProject = false;
 // The target job's own studio (SQ-774 R2): its lead and the seat that counts.
 let mockStudioId: string | null = 'org-1';
 const mockLeadRead = () => ({
   studioId: mockStudioId,
   lead: mockLeadUserId
-    ? { leadUserId: mockLeadUserId, leadName: 'Leah Moreau', assignedAt: '2026-10-01T00:00:00Z' }
+    ? {
+        leadUserId: mockLeadUserId,
+        leadName: 'Leah Moreau',
+        assignedAt: '2026-10-01T00:00:00Z',
+        ...(mockPreviousLead
+          ? { previousLeadUserId: mockPreviousLead.id, previousLeadName: mockPreviousLead.name }
+          : {}),
+        ...(mockFromProject ? { fromProject: true } : {}),
+      }
     : null,
 });
 const mockRefetchLeads = jest.fn();
@@ -70,17 +81,13 @@ jest.mock('@/hooks/use-document-state', () => ({
   }),
 }));
 
-const LINES = [
+// SQ-778 N3 — the order is read off the purchase order record itself.
+const ORDERS = [
   {
-    id: 'line-1',
-    removed_at: null,
-    vendor_name: null,
-    purchase_order: {
-      id: 'po-1',
-      po_number: '1042',
-      sent_at: '2026-09-28T15:00:00Z',
-      vendor: { name: 'Fenmoor Joinery' },
-    },
+    id: 'po-1',
+    po_number: '1042',
+    sent_at: '2026-09-28T15:00:00Z',
+    vendor: { name: 'Fenmoor Joinery' },
   },
 ];
 const INVOICE = {
@@ -108,8 +115,7 @@ jest.mock('@patina/supabase', () => ({
   }),
   useProjectLead: () => ({ isSuccess: true, data: mockLeadRead(), refetch: mockRefetchLeads }),
   useSetNeedState: () => ({ mutateAsync: mockSetNeedState }),
-  useNeedStateProjectIds: () => ({ data: mockStateProjects }),
-  useProjectFFEItems: () => ({ isSuccess: true, data: LINES }),
+  usePurchaseOrders: () => ({ isSuccess: true, data: ORDERS }),
   useComposeProcurementDraft: () => ({ mutateAsync: mockCompose }),
   useUpdateProcurementDraft: () => ({ mutateAsync: mockUpdate }),
   useSendProcurementDraft: () => ({ mutateAsync: mockSendDraft }),
@@ -122,6 +128,7 @@ jest.mock('@patina/supabase', () => ({
 
 import { NeedActSheetProvider, useNeedActSheet } from '../need-act-sheet';
 import { silencePoId } from '../act-sheet-kind';
+import { SAVE_FAILED, SEND_FAILED } from '../act-draft';
 
 function deskNeed(kind: string, recordId: string | undefined, extra: Record<string, unknown> = {}): DeskNeed {
   const key = recordId ? `${kind}:${recordId}` : `${kind}:project:proj-1`;
@@ -184,7 +191,8 @@ beforeEach(() => {
   mockRole = 'member';
   mockInvoiceLoaded = true;
   mockDesignerId = null;
-  mockStateProjects = new Set(['proj-1']);
+  mockPreviousLead = null;
+  mockFromProject = false;
   mockStudioId = 'org-1';
   mockRefetchLeads.mockImplementation(async () => ({ isError: false, data: mockLeadRead() }));
   mockCompose.mockResolvedValue({ id: 'draft-1' });
@@ -234,8 +242,11 @@ describe('Chase this PO', () => {
     expect(opened).toBe(true);
     expect(screen.getByText('Follow up on this purchase order')).toBeInTheDocument();
     expect(screen.getByText('Fenmoor Joinery')).toBeInTheDocument();
-    expect(textbox('Subject').value).toBe('PO 1042: please acknowledge');
+    expect(textbox('Subject').value).toBe('Purchase order 1042: please acknowledge');
     expect(textbox('Note').value).toMatch(/^Hello Fenmoor Joinery,/);
+    // SQ-778 N3 — named by its number, never "We sent The purchase order".
+    expect(textbox('Note').value).toMatch(/We sent purchase order 1042 on /);
+    expect(screen.getByText(/^Purchase order 1042, sent .+ — no acknowledgment$/)).toBeInTheDocument();
     expect(mockCompose).not.toHaveBeenCalled();
     expect(mockSendDraft).not.toHaveBeenCalled();
   });
@@ -247,12 +258,12 @@ describe('Chase this PO', () => {
     expect(mockCompose).toHaveBeenCalledWith({ kind: 'ack_chase', purchaseOrderId: 'po-1' });
     expect(mockUpdate).toHaveBeenCalledWith({
       draftId: 'draft-1',
-      request: { subject: 'PO 1042: please acknowledge', body: expect.stringMatching(/^Hello Fenmoor Joinery,/) },
+      request: { subject: 'Purchase order 1042: please acknowledge', body: expect.stringMatching(/^Hello Fenmoor Joinery,/) },
     });
     expect(mockSendDraft).toHaveBeenCalledWith('draft-1');
     expect(mockSetNeedState).toHaveBeenCalledWith({
       needKey: 'po_unacknowledged:po-1',
-      projectId: 'proj-1',
+      engagementId: 'proj-1',
       action: 'acted',
       waitingOn: 'Fenmoor Joinery',
     });
@@ -264,12 +275,45 @@ describe('Chase this PO', () => {
     openSheet(PO_NEED);
     expect(screen.queryByRole('button', { name: /^Send/ })).toBeNull();
     expect(screen.getByText('Leah sees this first.')).toBeInTheDocument();
-    expect(screen.getByText(/From Leah: Start with the Olsen lake house/)).toBeInTheDocument();
+    // SQ-778 N3 — her invite's note belongs to the job its writer handed her,
+    // never to a job someone else leads.
+    expect(screen.queryByText(/Start with the Olsen lake house/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Save the draft for Leah' }));
     await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
     expect(mockCompose).toHaveBeenCalledWith({ kind: 'ack_chase', purchaseOrderId: 'po-1' });
     expect(mockSendDraft).toHaveBeenCalledTimes(0);
     expect(mockSetNeedState).toHaveBeenCalledTimes(0);
+  });
+
+  it('prints the hand-off note on the job its writer handed her (SQ-778 N3)', () => {
+    mockHandoffNote = 'Start with the Olsen lake house';
+    mockPreviousLead = { id: 'owner-1', name: 'Leah Moreau' };
+    openSheet(PO_NEED);
+    expect(screen.getByText(/From Leah: Start with the Olsen lake house/)).toBeInTheDocument();
+  });
+
+  it('prints no hand-off note on a job she leads with no hand-off (SQ-778 N3)', () => {
+    mockHandoffNote = 'Start with the Olsen lake house';
+    openSheet(PO_NEED);
+    expect(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' })).toBeInTheDocument();
+    expect(screen.queryByText(/Start with the Olsen lake house/)).toBeNull();
+  });
+
+  it('prints no hand-off note on a job handed over by someone other than its writer (SQ-778 N3)', () => {
+    mockHandoffNote = 'Start with the Olsen lake house';
+    mockPreviousLead = { id: 'lead-2', name: 'Sam Ortiz' };
+    openSheet(PO_NEED);
+    expect(screen.queryByText(/Start with the Olsen lake house/)).toBeNull();
+  });
+
+  it('names a lead read off the project, and holds the draft for her (SQ-778 N3)', () => {
+    // Holloway: led by projects.lead_designer_id, with no team lead row.
+    mockLeadUserId = 'lead-1';
+    mockFromProject = true;
+    openSheet(PO_NEED);
+    expect(screen.queryByRole('button', { name: /^Send/ })).toBeNull();
+    expect(screen.getByText('Leah sees this first.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save the draft for Leah' })).toBeInTheDocument();
   });
 
   it('the owner sends even on a job another member leads', () => {
@@ -373,13 +417,37 @@ describe('Chase this PO', () => {
     expect(mockSendDraft).not.toHaveBeenCalled();
   });
 
-  it('a job with no project files no need state on its act (SQ-751 F6)', async () => {
-    mockStateProjects = new Set();
+  it('a failed send says nothing went out, never the transport error (SQ-778 N1)', async () => {
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockSendDraft.mockRejectedValue(new Error('Edge Function returned a non-2xx status code'));
     openSheet(PO_NEED);
     fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
-    await waitFor(() => expect(mockSendDraft).toHaveBeenCalledWith('draft-1'));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await screen.findByText(SEND_FAILED)).toBeInTheDocument();
+    expect(screen.queryByText(/non-2xx/)).toBeNull();
     expect(mockSetNeedState).not.toHaveBeenCalled();
+    quiet.mockRestore();
+  });
+
+  it('a failed save for the lead says nothing was saved, never the transport error (SQ-778 N1)', async () => {
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockLeadUserId = 'lead-1';
+    mockUpdate.mockRejectedValue(new Error('Edge Function returned a non-2xx status code'));
+    openSheet(PO_NEED);
+    fireEvent.click(screen.getByRole('button', { name: 'Save the draft for Leah' }));
+    expect(await screen.findByText(SAVE_FAILED)).toBeInTheDocument();
+    expect(screen.queryByText(/non-2xx/)).toBeNull();
+    quiet.mockRestore();
+  });
+
+  it('a pre-project job’s act marks its need by the engagement (SQ-778 N5)', async () => {
+    // The need's projectId is the engagement id: a proposal or lead before
+    // any project exists. The act is recorded all the same.
+    openSheet({ ...PO_NEED, projectId: 'proposal-7' });
+    fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
+    await waitFor(() => expect(mockSetNeedState).toHaveBeenCalled());
+    expect(mockSetNeedState).toHaveBeenCalledWith(
+      expect.objectContaining({ needKey: 'po_unacknowledged:po-1', engagementId: 'proposal-7', action: 'acted' }),
+    );
   });
 
   it('a mark that fails after the send says so instead of staying silent (SQ-751 F6)', async () => {
@@ -391,17 +459,6 @@ describe('Chase this PO', () => {
     expect(screen.queryByRole('button', { name: /^Send/ })).toBeNull();
   });
 
-  it('an unread eligibility answer is not "no": the sent act says it was not recorded, never offering a resend (SQ-774 R6)', async () => {
-    // The review input: a real studio project whose eligibility read has not answered.
-    mockStateProjects = undefined;
-    openSheet(PO_NEED);
-    fireEvent.click(screen.getByRole('button', { name: 'Send the chase to Fenmoor Joinery' }));
-    await screen.findByText('It went. The Day Sheet could not record it, so this line may still show there.');
-    expect(mockSendDraft).toHaveBeenCalledTimes(1);
-    expect(mockSetNeedState).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: /^(Send|Save)/ })).toBeNull();
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-  });
 });
 
 describe('silencePoId', () => {

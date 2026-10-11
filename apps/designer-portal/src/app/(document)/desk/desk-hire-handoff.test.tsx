@@ -27,7 +27,6 @@ jest.mock('@patina/supabase', () => ({
   useOrganizationMembers: () => ({ data: mockMembers() }),
   useProjectLeads: () => ({ data: mockLeads() }),
   useNeedStates: () => ({ data: mockNeedStates() }),
-  useNeedStateProjectIds: () => ({ data: new Set<string>() }),
   useSetNeedState: () => ({ mutate: jest.fn(), isPending: false }),
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
@@ -207,10 +206,22 @@ describe('Desk — the hire\'s hand-off', () => {
     expect(line).toHaveTextContent(/^Leah handed you Olsen Lake House/);
     expect(line).toHaveTextContent("Read Leah's note");
     const act = within(line).getByRole('link', { name: /Olsen Lake House/ });
-    expect(act).toHaveAttribute('href', '/doc/project-olsen');
+    // SQ-778 N2 — the act lands on the note itself.
+    expect(act).toHaveAttribute('href', '/doc/project-olsen#hand-off');
     expect(act).toHaveTextContent('Read the note');
     // A hand-off is read, not put off: it carries no "Not today".
     expect(within(line).queryByText('Not today')).not.toBeInTheDocument();
+  });
+
+  it('does not promise the note on a job someone other than its writer handed her (SQ-778 N3)', () => {
+    mockLeads.mockReturnValue(new Map([
+      ['project-olsen', { ...HANDED_OFF.get('project-olsen')!, previousLeadUserId: 'member-2', previousLeadName: 'Sam' }],
+    ]));
+    render(<DeskPage />);
+    const line = handoffLine()!;
+    expect(line).toHaveTextContent(/^Sam handed you Olsen Lake House/);
+    expect(line).not.toHaveTextContent('note');
+    expect(within(line).getByRole('link', { name: /Olsen Lake House/ })).toHaveTextContent('Open project file');
   });
 
   it.each([false, true])(

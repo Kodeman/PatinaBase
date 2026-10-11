@@ -17,7 +17,6 @@ import {
   useStudioUnbilledTime,
   useProjectLeads,
   useNeedStates,
-  useNeedStateProjectIds,
 } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useViewerStudio } from '@/hooks/use-viewer-studio';
@@ -103,7 +102,6 @@ export default function DeskPage() {
   const studioId = studio?.id ?? '';
   const { data: projectLeads, isSuccess: projectLeadsRead } = useProjectLeads(studioId);
   const { data: needStates } = useNeedStates(studio?.id ?? '');
-  const { data: needStateProjects } = useNeedStateProjectIds();
   // N4 — Mine by default, held per person in this browser.
   const [deskScope, setDeskScopeState] = useState<DeskScope>('mine');
   const scopeStoreKey = user?.id ? `patina.desk.scope.${user.id}` : null;
@@ -232,9 +230,9 @@ export default function DeskPage() {
   // space — larger, and earlier in the composition — rather than sitting as
   // bottom front matter. Only known once the read resolves.
   const deskEmpty = !!data && roster.liveCount === 0;
-  const myHandoffNote = studioMembers
-    ?.find((m) => m.user_id === user?.id)
-    ?.handoff_note?.trim();
+  // SQ-778 N3 — her seat (the invite note and its writer); handoffNoteFor
+  // decides per job whether the note is that job's.
+  const mySeat = studioMembers?.find((m) => m.user_id === user?.id) ?? null;
   // The Day Sheet (slice 4): the top five of the one ranked need list, the
   // hand-offs riding it like any other need.
   const sheet = useMemo(() => {
@@ -244,7 +242,7 @@ export default function DeskPage() {
       projectLeads ?? new Map(),
       user?.id,
       needStates,
-      Boolean(myHandoffNote),
+      mySeat,
     );
     // SQ-751 F8 — the person scope runs before the studio errands collapse to
     // one line, so her own Pulse survives in Mine.
@@ -275,7 +273,7 @@ export default function DeskPage() {
       ],
       now: at,
     });
-  }, [data, projectLeads, projectLeadsRead, studioId, user?.id, needStates, myHandoffNote, deskScope]);
+  }, [data, projectLeads, projectLeadsRead, studioId, user?.id, needStates, mySeat, deskScope]);
 
   // The Desk arbiter (return-teaching §2): these four lines keep their own
   // conditions, and at most one of them, or the teaching note, renders per
@@ -421,7 +419,6 @@ export default function DeskPage() {
           onScope={setDeskScope}
           oneVoice={oneVoice}
           now={now}
-          stateProjects={needStateProjects ?? null}
         />
         <DeskRoster
           roster={roster}
@@ -480,7 +477,7 @@ export default function DeskPage() {
               data-tour-anchor="desk-capture-lead"
               onClick={() => setCaptureOpen(true)}
             >
-              Capture a lead
+              Record an inquiry
             </DocumentAction>
             {CAPTURE_LEAD_SUBLABEL && (
               <span className="doc-type-meta uppercase tracking-[0.08em] text-[var(--text-muted)]">
@@ -497,7 +494,7 @@ export default function DeskPage() {
               leading="＋"
               onClick={() => setOpenProjectOpen(true)}
             >
-              Open a project
+              Create a project file
             </DocumentAction>
             {OPEN_PROJECT_SUBLABEL && (
               <span className="doc-type-meta uppercase tracking-[0.08em] text-[var(--text-muted)]">

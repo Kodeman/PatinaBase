@@ -7,6 +7,9 @@ export interface ProjectLead {
   previousLeadUserId?: string;
   previousLeadName?: string;
   assignedAt: string;
+  /** SQ-778 N3 — read off the project itself (`lead_designer_id`, else its
+   *  designer) because its team has no lead row. */
+  fromProject?: boolean;
 }
 
 interface ProjectLeadRow {
@@ -51,6 +54,47 @@ export function mapProjectLeadRows(rows: ProjectLeadRow[]): Map<string, ProjectL
 const LEAD_ROW_COLUMNS =
   'project_id, user_id, role, assigned_at, updated_at, removed_at, user:profiles!user_id(full_name)';
 
+/** The project columns the lead falls back to. */
+const PROJECT_LEAD_COLUMNS = 'id, studio_id, lead_designer_id, designer_id, created_at';
+
+interface ProjectLeadSourceRow {
+  id: string;
+  studio_id?: string | null;
+  lead_designer_id: string | null;
+  designer_id: string | null;
+  created_at: string | null;
+}
+
+/**
+ * SQ-778 N3 — the one lead resolver. A project whose team has no active lead
+ * row is led by `projects.lead_designer_id`, else by its designer, so a sheet
+ * names her ("Leah sees this first") instead of "the lead". The studio map and
+ * the single-project read both run it, so they never disagree.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function withProjectLeads(client: any, leads: Map<string, ProjectLead>, projects: ProjectLeadSourceRow[]) {
+  const missing = projects.flatMap((project) => {
+    const userId = project.lead_designer_id ?? project.designer_id;
+    return !leads.has(project.id) && userId ? [{ project, userId }] : [];
+  });
+  if (missing.length === 0) return leads;
+  const { data, error } = await client
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', [...new Set(missing.map((entry) => entry.userId))]);
+  if (error) throw error;
+  const names = new Map(((data ?? []) as Array<{ id: string; full_name: string | null }>).map((p) => [p.id, p.full_name ?? '']));
+  for (const { project, userId } of missing) {
+    leads.set(project.id, {
+      leadUserId: userId,
+      leadName: names.get(userId) ?? '',
+      assignedAt: project.created_at ?? '',
+      fromProject: true,
+    });
+  }
+  return leads;
+}
+
 export interface ProjectLeadRead {
   /** The project's own studio; null when it has none or is not a project yet. */
   studioId: string | null;
@@ -71,7 +115,7 @@ export function useProjectLead(projectId: string | null | undefined) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const client = createBrowserClient() as any;
       const [project, team] = await Promise.all([
-        client.from('projects').select('studio_id').eq('id', projectId).maybeSingle(),
+        client.from('projects').select(PROJECT_LEAD_COLUMNS).eq('id', projectId).maybeSingle(),
         client
           .from('project_team_members')
           .select(LEAD_ROW_COLUMNS)
@@ -80,9 +124,11 @@ export function useProjectLead(projectId: string | null | undefined) {
       ]);
       if (project.error) throw project.error;
       if (team.error) throw team.error;
+      const row = (project.data ?? null) as ProjectLeadSourceRow | null;
+      const leads = await withProjectLeads(client, mapProjectLeadRows((team.data ?? []) as ProjectLeadRow[]), row ? [row] : []);
       return {
-        studioId: (project.data?.studio_id as string | null | undefined) ?? null,
-        lead: mapProjectLeadRows((team.data ?? []) as ProjectLeadRow[]).get(projectId as string) ?? null,
+        studioId: row?.studio_id ?? null,
+        lead: leads.get(projectId as string) ?? null,
       };
     },
     enabled: Boolean(projectId),
@@ -121,7 +167,7 @@ export function useProjectLeads(organizationId: string) {
       const client = supabase as any;
       const { data: projects, error: projectsError } = await client
         .from('projects')
-        .select('id')
+        .select(PROJECT_LEAD_COLUMNS)
         .eq('studio_id', organizationId);
       if (projectsError) throw projectsError;
       const projectIds = (projects ?? []).map((project: { id: string }) => project.id);
@@ -134,7 +180,7 @@ export function useProjectLeads(organizationId: string) {
         .in('role', ['lead_designer', 'previous_lead'])
         .order('assigned_at', { ascending: false });
       if (error) throw error;
-      return mapProjectLeadRows((data ?? []) as ProjectLeadRow[]);
+      return withProjectLeads(client, mapProjectLeadRows((data ?? []) as ProjectLeadRow[]), projects as ProjectLeadSourceRow[]);
     },
     enabled: Boolean(organizationId),
   });

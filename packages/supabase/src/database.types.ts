@@ -44577,6 +44577,7 @@ export type Database = {
       set_need_state: {
         Args: {
           p_action: string
+          p_engagement_id?: string
           p_need_key: string
           p_project_id: string
           p_reason?: string

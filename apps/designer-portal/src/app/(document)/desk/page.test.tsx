@@ -41,7 +41,6 @@ jest.mock('@patina/supabase', () => ({
         : { data: mockMembers(), isLoading: false, isPending: false },
   useProjectLeads: () => ({ data: new Map(), isSuccess: mockLeadsRead }),
   useNeedStates: () => ({ data: new Map() }),
-  useNeedStateProjectIds: () => ({ data: new Set<string>() }),
   useSetNeedState: () => ({ mutate: jest.fn(), isPending: false }),
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
@@ -257,10 +256,13 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
 });
 
 describe('Desk — capture-lead affordance (A9)', () => {
-  it('registers no mobile-dock primary action; the header CTA is the only on-screen "Capture a lead"', () => {
+  it('registers no mobile-dock primary action; the header CTA is the only on-screen "Record an inquiry"', () => {
     render(<DeskPage />);
     expect(useMobilePrimaryAction).not.toHaveBeenCalled();
-    expect(screen.getAllByText('Capture a lead')).toHaveLength(1);
+    // SQ-778 N8 — Direction C header acts (C-0015, C-0017).
+    expect(screen.getAllByText('Record an inquiry')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /Create a project file/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Capture a lead|Open a project/)).toBeNull();
   });
 });
 
@@ -415,7 +417,7 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
       expect(held(container)?.getAttribute('data-arrival-held')).toBe('desk');
       expect(held(container)).toContainElement(skeleton(container) as HTMLElement);
       expect(held(container)).not.toContainElement(
-        screen.getByRole('button', { name: /Capture a lead/ }),
+        screen.getByRole('button', { name: /Record an inquiry/ }),
       );
       expect(skeleton(container)).not.toBeNull();
       expect(screen.queryByTestId('desk-roster')).toBeNull();

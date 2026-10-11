@@ -55,7 +55,7 @@ const ITEMS = [
 
 jest.mock('@patina/supabase', () => ({
   useInstallWindow: () => ({ data: null, isSuccess: true }),
-  useProjectLeads: () => ({ data: new Map() }),
+  useProjectLead: () => ({ data: null }),
   useNeedStates: () => ({ data: new Map() }),
   useSetNeedState: () => ({ mutate: jest.fn() }),
   /* B2 — the ticket now stands on the proposal spread too, and its Money row

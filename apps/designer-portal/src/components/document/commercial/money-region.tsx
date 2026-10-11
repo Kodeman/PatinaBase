@@ -393,7 +393,7 @@ export function MoneyRegion({
           {refundCents > 0 ? (
             <p className="text-sm text-[var(--text-muted)]">A payment of {money(refundCents)} needs a refund.</p>
           ) : null}
-          <p className="sr-only">{quietStateSentence(quietStatus, 'Money')}</p>
+          <p className="sr-only">{quietStateSentence(quietStatus, 'Project financials')}</p>
         </div>
       ) : (
       <div id={BODY_ID}>

@@ -606,7 +606,8 @@ describe('MoneyRegion quiet body — the lens has not reached this stop', () => 
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        '$1,750 receivable · not yet on the paper · press Money on the index to open',
+        // SQ-778 N6 — the index entry by its own label.
+        '$1,750 receivable · not yet on the paper · press Project financials on the index to open',
       ),
     ).toHaveClass('sr-only');
 

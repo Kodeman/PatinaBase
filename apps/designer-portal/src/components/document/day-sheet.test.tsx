@@ -48,8 +48,6 @@ function entry(i: number, over: Partial<NeedLine> = {}): DeskNeed {
 function renderSheet(
   needs: DeskNeed[],
   over: Partial<Parameters<typeof deriveDaySheet>[0]> = {},
-  // Every job here can hold a need state unless a test says otherwise.
-  stateProjects: ReadonlySet<string> | null = new Set(needs.map((n) => n.projectId)),
 ) {
   const sheet = deriveDaySheet({
     needs,
@@ -63,7 +61,7 @@ function renderSheet(
   });
   const onScope = jest.fn();
   const utils = render(
-    <DaySheet sheet={sheet} scope="studio" onScope={onScope} now={NOW} stateProjects={stateProjects} />,
+    <DaySheet sheet={sheet} scope="studio" onScope={onScope} now={NOW} />,
   );
   return { ...utils, onScope };
 }
@@ -121,21 +119,28 @@ describe('DaySheet', () => {
     });
     expect(mockMutate).toHaveBeenCalledWith({
       needKey: 'task_due:t1',
-      projectId: 'p1',
+      engagementId: 'p1',
       action: 'not_today',
       until: nextWorkingDay(NOW),
     });
     expect(nextWorkingDay(NOW)).toBe('2026-10-12');
   });
 
-  it('offers no “Not today” where the job cannot hold a need state (SQ-751 F6, walk W-D3)', () => {
-    const { container } = renderSheet([entry(1), entry(2)], {}, new Set(['p1']));
-    const [held, unheld] = lines(container);
-    expect(within(held).getByRole('button', { name: 'Not today — Job 1' })).toBeInTheDocument();
-    expect(within(unheld).queryByRole('button', { name: /Not today/ })).not.toBeInTheDocument();
-    // Until the projects are read, no line offers it.
-    const unread = renderSheet([entry(3)], {}, null);
-    expect(within(unread.container).queryByRole('button', { name: /Not today/ })).not.toBeInTheDocument();
+  it('offers “Not today” on a pre-project line too, keyed by its engagement (SQ-778 N5)', async () => {
+    // Chen's unpaid invoice and Aspen Loft's unviewed proposal: needs of an
+    // engagement with no project yet. Each can be put off like any other.
+    const chen = entry(1, { kind: 'overdue_invoice', text: '$3,400 due 12 May' });
+    const aspen = { ...entry(2, { kind: 'proposal_unviewed', text: 'Issued 2 October · not yet viewed' }), projectId: 'proposal-aspen' };
+    const { container } = renderSheet([chen, aspen]);
+    for (const line of Array.from(lines(container))) {
+      expect(within(line).getByRole('button', { name: /^Not today — / })).toBeInTheDocument();
+    }
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Not today — Job 2' }));
+    });
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ needKey: 'task_due:t2', engagementId: 'proposal-aspen', action: 'not_today' }),
+    );
   });
 
   it('says so when “Not today” did not save (SQ-751 F6)', () => {

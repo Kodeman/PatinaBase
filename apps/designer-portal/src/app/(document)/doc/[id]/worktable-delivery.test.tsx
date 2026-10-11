@@ -38,7 +38,7 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@patina/supabase', () => ({
   useInstallWindow: () => ({ data: null, isSuccess: true }),
-  useProjectLeads: () => ({ data: new Map() }),
+  useProjectLead: () => ({ data: null }),
   useNeedStates: () => ({ data: new Map() }),
   useSetNeedState: () => ({ mutate: jest.fn() }),
   /* B1 — the job ticket's own reads. The ticket is mounted by every

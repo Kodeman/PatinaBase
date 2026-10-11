@@ -83,6 +83,18 @@ describe('KickoffBand — the two roster doorways', () => {
     window.removeEventListener('document:open-call-sheet', opened);
   });
 
+  // SQ-778 N7 — "as lead" is said only to the job's lead.
+  it('tells the lead she is on the call sheet as lead', () => {
+    render(<KickoffBand projectId="proj-1" rows={[row({ kind: 'team', display_name: 'Leah' })]} isLead />);
+    expect(screen.getByText('– You’re on the call sheet as lead. Who else is on the job?')).toBeInTheDocument();
+  });
+
+  it('asks anyone else only who else is on the job', () => {
+    render(<KickoffBand projectId="proj-1" rows={[row({ kind: 'team', display_name: 'Leah' })]} />);
+    expect(screen.getByText('– Who else is on the job?')).toBeInTheDocument();
+    expect(screen.queryByText(/as lead/)).toBeNull();
+  });
+
   it('LATER marks the note seen and hides the band without dispatching anything', async () => {
     const opened = jest.fn();
     window.addEventListener('document:open-call-sheet', opened);

@@ -12,7 +12,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
-import { useNeedStateProjectIds, useSetNeedState } from '@patina/supabase';
+import { useSetNeedState } from '@patina/supabase';
 import { Input, Textarea } from '@/components/ui/controls';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
@@ -27,6 +27,11 @@ const LABEL_CLS =
   'mb-1.5 block font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]';
 
 const capitalised = (words: string) => words.charAt(0).toUpperCase() + words.slice(1);
+
+/** SQ-778 N1 — a failed act says what happened and what to do, in one plain
+ *  line; the transport's own words stay in the console. */
+export const SEND_FAILED = 'Couldn’t send — nothing went out. Try again, or check your connection.';
+export const SAVE_FAILED = 'Couldn’t save the draft — nothing was saved. Try again, or check your connection.';
 
 /** The send boundary answered no: nothing went (SQ-751 F2 · SQ-774 R3). */
 class SendWithdrawn extends Error {
@@ -88,9 +93,6 @@ export function ActDraft({
   // The act went but the Day Sheet could not record it (never silent).
   const [unmarked, setUnmarked] = useState(false);
   const setNeedState = useSetNeedState();
-  // SQ-751 F6 / walk W-D3 — a need state is filed only on a project with a
-  // studio; an inquiry or proposal has none, so its act marks nothing.
-  const stateProjects = useNeedStateProjectIds();
 
   const mode: 'reading' | 'send' | 'save' | 'read-only' = !viewer.ready
     ? 'reading'
@@ -126,25 +128,22 @@ export function ActDraft({
       await act(text(), confirmSend);
     } catch (e) {
       if (e instanceof SendWithdrawn) setRevoked(e.draftHeld ? 'held' : 'unsent');
-      else setError(e instanceof Error ? e.message : 'That did not go through. Try again.');
+      else {
+        console.error('[act-sheet] act failed', e);
+        setError(acted ? SEND_FAILED : SAVE_FAILED);
+      }
       setPending(false);
       return;
     }
-    // SQ-774 R6 — where a state can be filed is unknown until that read
-    // answers; unknown is not "nowhere", so the act is never left unrecorded
-    // in silence, and the sent act is never offered again.
-    if (acted && !stateProjects.data) {
-      setUnmarked(true);
-      setPending(false);
-      return;
-    }
-    if (acted && stateProjects.data?.has(need.projectId)) {
+    // SQ-778 N5 — every line holds a state, a pre-project one included: the
+    // need's engagement names its studio.
+    if (acted) {
       // Q8 — the act is taken; the need now waits on the counterpart. The
       // send already went, so a failed mark never reads as a failed send.
       try {
         await setNeedState.mutateAsync({
           needKey: need.key,
-          projectId: need.projectId,
+          engagementId: need.projectId,
           action: 'acted',
           ...(counterpart ? { waitingOn: counterpart } : {}),
         });

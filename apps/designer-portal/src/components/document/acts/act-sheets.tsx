@@ -24,8 +24,8 @@ import {
   useChaseInvoice,
   useComposeProcurementDraft,
   useInvoice,
-  useProjectFFEItems,
   useProposal,
+  usePurchaseOrders,
   useReleasePurchaseOrder,
   useSendInvoice,
   useSendProcurementDraft,
@@ -56,32 +56,27 @@ function Missing() {
   );
 }
 
-/** The PO a paper line rides, as the lifecycle embed returns it. */
-interface OrderLine {
-  vendor_name?: string | null;
-  removed_at?: string | null;
-  purchase_order?: {
-    id?: string | null;
-    po_number?: string | null;
-    vendor_po_number?: string | null;
-    sent_at?: string | null;
-    vendor?: { name?: string | null } | null;
-  } | null;
+const capitalised = (words: string) => words.charAt(0).toUpperCase() + words.slice(1);
+
+/** The purchase order as its own record returns it. */
+interface OrderRecord {
+  id: string;
+  po_number?: string | null;
+  vendor_po_number?: string | null;
+  sent_at?: string | null;
+  vendor?: { name?: string | null } | null;
 }
 
-/** The order the need names, read off the paper's own lines (the cache entry
- *  Pieces and the band's silences read). */
+/** SQ-778 N3 — the order the need names, read off the purchase order itself:
+ *  a PO need not ride a live paper line, and its number is on the record. */
 function useOrder(projectId: string, purchaseOrderId: string) {
-  const lines = useProjectFFEItems(projectId, undefined, { withLifecycle: true });
-  const line = (lines.data as OrderLine[] | undefined)?.find(
-    (l) => l.removed_at == null && l.purchase_order?.id === purchaseOrderId,
-  );
-  const po = line?.purchase_order ?? null;
+  const orders = usePurchaseOrders({ projectId });
+  const po = (orders.data as OrderRecord[] | undefined)?.find((o) => o.id === purchaseOrderId) ?? null;
   return {
-    loaded: lines.isSuccess,
+    loaded: orders.isSuccess,
     po,
-    maker: po?.vendor?.name?.trim() || line?.vendor_name?.trim() || null,
-    label: po?.po_number ?? po?.vendor_po_number ?? null,
+    maker: po?.vendor?.name?.trim() || null,
+    label: po?.po_number?.trim() || po?.vendor_po_number?.trim() || null,
   };
 }
 
@@ -95,7 +90,8 @@ export function PoChaseSheet({ need, onDone }: SheetProps) {
   const send = useSendProcurementDraft({ errorSurface: 'inline' });
   if (!order.loaded) return <Reading />;
 
-  const po = order.label ? `PO ${order.label}` : 'The purchase order';
+  // "Purchase order PO-HD-0412": the record's own number, never a bare "The".
+  const po = order.label ? `purchase order ${order.label}` : 'the purchase order';
   const sent = order.po?.sent_at ? fmtDay(order.po.sent_at) : null;
   // The draft path's own route: compose the chase, then store her words on it.
   const hold = async ({ subject, body }: ActDraftText) => {
@@ -111,9 +107,9 @@ export function PoChaseSheet({ need, onDone }: SheetProps) {
       viewer={viewer}
       regionKey="act-chase-po"
       counterpart={order.maker}
-      record={`${po}${sent ? `, sent ${sent}` : ''} — no acknowledgment`}
+      record={`${capitalised(po)}${sent ? `, sent ${sent}` : ''} — no acknowledgment`}
       initial={{
-        subject: `${po}: please acknowledge`,
+        subject: `${capitalised(po)}: please acknowledge`,
         body: [
           `Hello ${order.maker ?? 'there'},`,
           `We sent ${po}${sent ? ` on ${sent}` : ''} and have not yet received your acknowledgment. Please confirm the order, pricing and ship date when you can.`,

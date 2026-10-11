@@ -1233,7 +1233,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
       return seal({
         kind: 'proposal_signed',
         ...recordOf(row.proposal_id),
-        text: 'Signed — open the project',
+        text: 'Signed, open the project',
         actionLabel: NEED_ACTION_LABELS.proposal_signed,
         stamp: { label: 'SIGNED', ...STAMP.mocha },
         urgent: false,

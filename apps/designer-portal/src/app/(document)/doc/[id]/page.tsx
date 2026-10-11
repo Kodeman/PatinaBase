@@ -38,7 +38,7 @@ import {
   useOrganizationMembers,
   useMarkFirstDocumentOpened,
   useInstallWindow,
-  useProjectLeads,
+  useProjectLead,
   useNeedStates,
   useSetNeedState,
 } from '@patina/supabase';
@@ -142,7 +142,7 @@ import type { CallSheetOpenMode } from '@/components/document/roster/call-sheet'
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
 import { FolioLetterhead, ProposalFolioStrip } from '@/components/document/folio-strip';
-import { MarginNote } from '@/components/document/margin-note';
+import { HandoffNote } from '@/components/document/handoff-note';
 import { DocColophon } from '@/components/document/doc-colophon';
 import { useDocumentRooms } from '@/hooks/use-document-rooms';
 import { gateState, useSectionGates } from '@/hooks/use-section-work';
@@ -175,7 +175,7 @@ import {
   type PoSilenceNeed,
 } from '@/lib/document/po-silences';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
-import { handoffReadFor } from '@/lib/document/desk-scope';
+import { handoffNoteFor, handoffReadFor } from '@/lib/document/desk-scope';
 import { useNeedActSheet } from '@/components/document/acts/need-act-sheet';
 import { silencePoId } from '@/components/document/acts/act-sheet-kind';
 import { familyLabel } from '@/lib/document/family-label';
@@ -1008,7 +1008,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const myStudio = myOrgs?.find((o) => o.type === 'design_studio') ?? myOrgs?.[0] ?? null;
   const { data: myStudioMembers } = useOrganizationMembers(myStudio?.id ?? '');
   const myMembership = myStudioMembers?.find((m) => m.user_id === user?.id);
-  const { data: projectLeads } = useProjectLeads(myStudio?.id ?? '');
   const { data: needStates } = useNeedStates(myStudio?.id ?? '');
   const setNeedState = useSetNeedState();
   const markFirstDocumentOpened = useMarkFirstDocumentOpened();
@@ -1033,20 +1032,24 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const row = resolution?.kind === 'engagement' ? resolution.row : null;
   const projectId = row?.project_id ?? '';
   const proposalId = row?.proposal_id ?? '';
-  const handoffLead = projectLeads?.get(projectId);
+  // SQ-778 N2/N3 — the job's own lead and her seat in the job's own studio
+  // (the SQ-774 R2 target read), never the first studio's map.
+  const { data: handoffTarget } = useProjectLead(projectId || null);
+  const handoffLead = handoffTarget?.lead ?? undefined;
+  const { data: jobStudioMembers } = useOrganizationMembers(handoffTarget?.studioId ?? '');
+  const jobSeat = jobStudioMembers?.find((m) => m.user_id === user?.id) ?? null;
   const handoffNeedKey = projectId ? `handoff:${projectId}` : null;
   // SQ-751 F9 — read only against the hand-off that stands now.
   const handoffRead = handoffNeedKey
     ? handoffReadFor(needStates?.get(handoffNeedKey), handoffLead?.assignedAt)
     : false;
-  const handoffNote = myMembership?.handoff_note?.trim();
+  const handoffNote = handoffNoteFor(handoffLead, user?.id, jobSeat);
   const showHandoffNote = Boolean(
     row?.engagement_kind === 'project' &&
       handoffLead?.leadUserId === user?.id &&
       handoffLead?.previousLeadUserId &&
       handoffLead?.previousLeadName &&
-      handoffLead?.assignedAt &&
-      !handoffRead,
+      handoffLead?.assignedAt,
   );
 
   const { data: project, isLoading: projectIsLoading, isError: projectIsError } = useProjectV2(projectId) as {
@@ -3522,25 +3525,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           <FolioLetterhead projectId={row.project_id} />
         )}
         {showHandoffNote && handoffNeedKey && row.project_id && (
-          <MarginNote
-            noteKey={`document-handoff:${row.project_id}`}
-            label="HAND-OFF"
-            act={{ label: 'Mark read' }}
-            seen={handoffRead}
-            onSeen={(how) => {
-              if (how === 'acted') {
-                setNeedState.mutate({
-                  needKey: handoffNeedKey,
-                  projectId: row.project_id!,
-                  action: 'acted',
-                });
-              }
-            }}
+          <HandoffNote
+            read={handoffRead}
+            pending={setNeedState.isPending}
+            onMarkRead={() =>
+              setNeedState.mutate({
+                needKey: handoffNeedKey,
+                projectId: row.project_id!,
+                action: 'acted',
+              })
+            }
           >
             {handoffNote
               ? `From ${handoffLead?.previousLeadName}: ${handoffNote}`
               : `${handoffLead?.previousLeadName} handed you this job.`}
-          </MarginNote>
+          </HandoffNote>
         )}
         {row.engagement_kind === 'project' && row.project_id && <ClientNoteComposer projectId={row.project_id} clientFirstName={row.client_name?.split(' ')[0]} />}
 
@@ -3914,7 +3913,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 collapse. The first-staffing nudge has no other home and stays
                 here, ungated: it self-silences on the flag, a staffed sheet, or
                 its own dismissal. */}
-            <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
+            <KickoffBand
+              projectId={row.project_id}
+              rows={rosterRows ?? []}
+              isLead={Boolean(user?.id) && handoffLead?.leadUserId === user?.id}
+            />
           </>
         )}
 

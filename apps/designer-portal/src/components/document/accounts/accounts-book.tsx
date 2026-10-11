@@ -124,16 +124,26 @@ export function AccountsBook({
       <div className="min-w-0">
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <div>
+          {/* SQ-778 N4 — the studio's book is claimed only to a seat that
+              holds the studio's money; any other seat reads her projects'
+              invoices, with no studio-book claim and no STUDIO EYES ONLY. */}
           <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
-            Accounts <em className="italic text-[var(--color-clay-ink)]">· the studio&apos;s book</em>
+            Accounts{' '}
+            <em className="italic text-[var(--color-clay-ink)]">
+              {canSeeMargin ? '· the studio’s book' : '· your projects’ invoices'}
+            </em>
           </h2>
-          <p className="mt-0.5 text-[11px] text-[var(--color-aged-oak)]">
-            Revenue, what&apos;s owed, what you earn — the sum of every engagement&apos;s account.
-          </p>
+          {canSeeMargin && (
+            <p className="mt-0.5 text-[11px] text-[var(--color-aged-oak)]">
+              Revenue, what&apos;s owed, what you earn — the sum of every engagement&apos;s account.
+            </p>
+          )}
         </div>
-        <span className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-          Studio eyes only
-        </span>
+        {canSeeMargin && (
+          <span className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+            Studio eyes only
+          </span>
+        )}
       </div>
 
       {/* R28: the book's pages — DM-mono links, never tabs. */}

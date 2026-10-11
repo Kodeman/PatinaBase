@@ -54,14 +54,11 @@ function SheetLine({
   index,
   oneVoice,
   now,
-  canHoldState,
 }: {
   entry: DeskNeed;
   index: number;
   oneVoice: boolean;
   now: Date;
-  /** The need's job can carry a need state (a project with a studio). */
-  canHoldState: boolean;
 }) {
   const acts = useNeedActSheet();
   const router = useRouter();
@@ -132,10 +129,10 @@ function SheetLine({
         >
           {label}
         </DocumentAction>
-        {/* SQ-751 F6 / walk W-D3 — no "Not today" where the server could not
-            keep it: an inquiry or proposal with no project, a project with no
-            studio. */}
-        {!handoff && canHoldState && (
+        {/* SQ-778 N5 — every line can be set aside for today, an inquiry or a
+            proposal with no project and a legacy project with no studio
+            included: the line's engagement names its studio. */}
+        {!handoff && (
           <DocumentAction
             actionKey="day-sheet-not-today"
             variant="tertiary"
@@ -144,7 +141,7 @@ function SheetLine({
             onClick={() =>
               setNeedState.mutate({
                 needKey: entry.key,
-                projectId: entry.projectId,
+                engagementId: entry.projectId,
                 action: 'not_today',
                 until: nextWorkingDay(now),
               })
@@ -169,16 +166,12 @@ export function DaySheet({
   onScope,
   oneVoice = false,
   now,
-  stateProjects = null,
 }: {
   sheet: DaySheetModel;
   scope: DeskScope;
   onScope: (scope: DeskScope) => void;
   oneVoice?: boolean;
   now: Date;
-  /** The projects a need state can be filed on (`useNeedStateProjectIds`);
-   *  null until read, and then no line offers "Not today". */
-  stateProjects?: ReadonlySet<string> | null;
 }) {
   const quiet = sheet.lines.length === 0;
   const notChecked =
@@ -223,7 +216,6 @@ export function DaySheet({
                 index={index}
                 oneVoice={oneVoice}
                 now={now}
-                canHoldState={Boolean(stateProjects?.has(entry.projectId))}
               />
             ))}
           </ol>

@@ -45,9 +45,13 @@ function dispatchOpenCallSheet(mode: CallSheetOpenMode) {
 export function KickoffBand({
   projectId,
   rows,
+  isLead = false,
 }: {
   projectId: string;
   rows: ProjectRosterRow[];
+  /** SQ-778 N7 — the viewer leads this job; only she is told she is on the
+   *  call sheet as lead. */
+  isLead?: boolean;
 }) {
   const noteKey = kickoffNoteKey(projectId);
   const [revealed, setRevealed] = useState(false);
@@ -78,7 +82,9 @@ export function KickoffBand({
     >
       <div className="min-w-0">
         <p className="text-[0.8rem] text-[var(--color-charcoal)]">
-          – You&rsquo;re on the call sheet as lead. Who else is on the job?
+          {isLead
+            ? '– You’re on the call sheet as lead. Who else is on the job?'
+            : '– Who else is on the job?'}
         </p>
         {grown && (
           <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">

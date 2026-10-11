@@ -171,6 +171,11 @@ describe('designer Accounts query failures', () => {
     expect(screen.queryByRole('button', { name: 'Earnings' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Receivables' }));
     expect(screen.getByTestId('accounts-receivables')).toHaveTextContent('Receivables 100');
+    // SQ-778 N4 — her header claims her projects' invoices, never the studio book.
+    expect(screen.getByText('· your projects’ invoices')).toBeInTheDocument();
+    expect(screen.queryByText(/the studio’s book/)).toBeNull();
+    expect(screen.queryByText(/sum of every engagement/)).toBeNull();
+    expect(screen.queryByText('Studio eyes only')).toBeNull();
   });
 
   it('owning her solo studio is no seat over her employer’s book (SQ-774 R1)', () => {
@@ -206,6 +211,7 @@ describe('designer Accounts query failures', () => {
   });
 
   it('titles the book "Studio accounts" (SQ-752)', () => {
+    mockOrganizations = [{ id: 'studio-1', type: 'design_studio', membership: { role: 'owner' } }];
     mockUseInvoices.mockReturnValue({
       data: [],
       isLoading: false,
@@ -216,6 +222,9 @@ describe('designer Accounts query failures', () => {
     render(<AccountsBook onClose={jest.fn()} />);
 
     expect(screen.getByText('Accounts header')).toHaveAttribute('data-sheet-title', 'Studio accounts');
+    // SQ-778 N4 — a seat that holds the studio's money reads the studio book.
+    expect(screen.getByText('· the studio’s book')).toBeInTheDocument();
+    expect(screen.getByText('Studio eyes only')).toBeInTheDocument();
   });
 
   it('distinguishes an invoice-folio query failure from invoice not found', () => {

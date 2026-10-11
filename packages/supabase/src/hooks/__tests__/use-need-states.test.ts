@@ -6,7 +6,7 @@ let result: { data: unknown; error: unknown } = { data: [], error: null };
 
 function builder() {
   const chain: Record<string, unknown> = {};
-  for (const method of ['from', 'select', 'eq', 'not', 'in']) {
+  for (const method of ['from', 'select', 'eq', 'not', 'in', 'rpc']) {
     chain[method] = vi.fn((...args: unknown[]) => {
       calls.push({ method, args });
       return chain;
@@ -23,7 +23,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
-import { useNeedStateProjectIds, useNeedStates } from '../use-need-states';
+import { useNeedStates, useSetNeedState, type SetNeedStateInput } from '../use-need-states';
 
 type QueryConfig<T> = { queryFn: () => Promise<T>; enabled?: boolean };
 
@@ -54,19 +54,33 @@ describe('useNeedStates (walk W-D1)', () => {
   });
 });
 
-describe('useNeedStateProjectIds (SQ-751 F6, walk W-D3)', () => {
-  it('names only projects that belong to a studio', async () => {
-    result = { data: [{ id: 'project-1' }], error: null };
-    const query = useNeedStateProjectIds() as unknown as QueryConfig<Set<string>>;
-    const ids = await query.queryFn();
-    expect(calls.find((c) => c.method === 'from')?.args).toEqual(['projects']);
-    expect(calls.find((c) => c.method === 'not')?.args).toEqual(['studio_id', 'is', null]);
-    expect([...ids]).toEqual(['project-1']);
+describe('useSetNeedState (SQ-778 N5)', () => {
+  type MutationConfig = { mutationFn: (input: SetNeedStateInput) => Promise<void> };
+  const rpcArgs = () => calls.find((c) => c.method === 'rpc')?.args;
+
+  it('names a Day Sheet line by its engagement, with no project id', async () => {
+    const mutation = useSetNeedState() as unknown as MutationConfig;
+    await mutation.mutationFn({ needKey: 'proposal_viewed:prop-1', engagementId: 'prop-1', action: 'not_today', until: '2026-10-12' });
+    expect(rpcArgs()).toEqual(['set_need_state', expect.objectContaining({
+      p_need_key: 'proposal_viewed:prop-1',
+      p_project_id: null,
+      p_engagement_id: 'prop-1',
+      p_action: 'not_today',
+      p_until: '2026-10-12',
+    })]);
   });
 
-  it('throws on a failed read, so no control is offered on a guess', async () => {
-    result = { data: null, error: new Error('boom') };
-    const query = useNeedStateProjectIds() as unknown as QueryConfig<Set<string>>;
-    await expect(query.queryFn()).rejects.toThrow('boom');
+  it('names a known project as before, with no engagement id', async () => {
+    const mutation = useSetNeedState() as unknown as MutationConfig;
+    await mutation.mutationFn({ needKey: 'handoff:project-1', projectId: 'project-1', action: 'acted' });
+    const args = rpcArgs()?.[1] as Record<string, unknown>;
+    expect(args.p_project_id).toBe('project-1');
+    expect('p_engagement_id' in args).toBe(false);
+  });
+
+  it('throws a refused write, so the Day Sheet says it did not save', async () => {
+    result = { data: null, error: new Error('not permitted') };
+    const mutation = useSetNeedState() as unknown as MutationConfig;
+    await expect(mutation.mutationFn({ needKey: 'k', engagementId: 'e', action: 'acted' })).rejects.toThrow('not permitted');
   });
 });

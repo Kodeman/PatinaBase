@@ -96,13 +96,41 @@ export function handoffReadFor(
   return Number.isFinite(read) && read >= assigned;
 }
 
+/** The project file's hand-off note anchor; the Day Sheet press opens to it. */
+export const HANDOFF_NOTE_ANCHOR = 'hand-off';
+
+/** Her seat in the job's studio, as it bears on a hand-off: her invite's line
+ *  (L8, `organization_members.handoff_note`) and who wrote it. */
+export interface HandoffSeat {
+  handoff_note?: string | null;
+  invited_by?: string | null;
+}
+
+/**
+ * SQ-778 N2/N3 — the one rule for where the invite's note prints: the project
+ * file, the act sheet and the Day Sheet's "Read the note". The note is stored
+ * on her seat, not on a job, so it belongs only to a hand-off its writer made:
+ * she leads the job now, someone led it before her, and that previous lead
+ * wrote the note. Any other job carries no note.
+ */
+export function handoffNoteFor(
+  lead: Pick<ProjectLead, 'leadUserId' | 'previousLeadUserId'> | null | undefined,
+  meUserId: string | null | undefined,
+  seat: HandoffSeat | null | undefined,
+): string | null {
+  const note = seat?.handoff_note?.trim();
+  if (!note || !meUserId || !lead?.previousLeadUserId) return null;
+  if (lead.leadUserId !== meUserId) return null;
+  return seat?.invited_by === lead.previousLeadUserId ? note : null;
+}
+
 /** Derive unread hand-offs for projects now led by this viewer. */
 export function deriveHandoffNeeds(
   live: readonly DocumentStateRow[],
   leads: DeskLeads,
   meUserId: string | null | undefined,
   states: ReadonlyMap<string, NeedState> = new Map(),
-  hasNote = true,
+  seat: HandoffSeat | null = null,
 ): DeskNeed[] {
   if (!meUserId) return [];
   const rowsByProject = new Map(
@@ -126,6 +154,7 @@ export function deriveHandoffNeeds(
     const date = new Intl.DateTimeFormat('en-US', {
       weekday: 'long', month: 'long', day: 'numeric',
     }).format(assigned);
+    const hasNote = handoffNoteFor(lead, meUserId, seat) !== null;
     const need: NeedLine = {
       key,
       kind: 'handoff',
@@ -137,7 +166,8 @@ export function deriveHandoffNeeds(
       urgent: false,
       owner: 'designer',
       at: lead.assignedAt,
-      deepLink: `/doc/${projectId}`,
+      // SQ-778 N2 — the press lands on the note itself (HandoffNote's anchor).
+      deepLink: `/doc/${projectId}#${HANDOFF_NOTE_ANCHOR}`,
     };
     needs.push({ key, projectId, projectName: row.title, need });
   }
