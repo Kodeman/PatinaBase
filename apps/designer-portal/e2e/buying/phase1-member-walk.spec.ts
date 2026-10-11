@@ -255,7 +255,7 @@ async function signIn(page: Page, email: string): Promise<void> {
     timeout: 60_000,
   });
   const disclosure = page.getByRole("button", {
-    name: /sign in with email|use email and password instead/i,
+    name: /sign in with email|use email and password instead|use a password instead/i,
   });
   await disclosure.first().click({ timeout: 30_000 });
   await page.getByLabel(/email/i).first().fill(email);

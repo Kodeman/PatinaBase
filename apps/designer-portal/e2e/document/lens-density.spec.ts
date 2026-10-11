@@ -655,15 +655,15 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
     // P2-04 — a PRECONDITION, not a skip. `test.skip(true, …)` mid-body means
     // this case stops running the day the exit link changes shape, and a case
     // that proves the warm path should fail rather than vanish.
-    const putDown = page.locator('a[aria-label="Put down document"]');
+    const putDown = page.locator('a[aria-label="Back to Studio overview"]');
     expect(
       await putDown.count(),
-      'no "Put down document" exit at this width — the warm path has nothing to navigate with',
+      'no "Back to Studio overview" exit at this width — the warm path has nothing to navigate with',
     ).toBeGreaterThan(0);
     await page.evaluate(() =>
       (
         document.querySelector(
-          'a[aria-label="Put down document"]',
+          'a[aria-label="Back to Studio overview"]',
         ) as HTMLElement | null
       )?.click(),
     );

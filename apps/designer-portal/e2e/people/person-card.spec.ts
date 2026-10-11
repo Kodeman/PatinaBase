@@ -32,7 +32,7 @@ async function addSub(
   name: string,
   trade: string,
 ) {
-  await page.getByRole("button", { name: "Add person" }).click();
+  await page.getByRole("button", { name: "Add contact" }).click();
   await page.getByRole("button", { name: "a sub" }).click();
   // NAMED, NEVER POSITIONAL. `useProjects` orders the option list
   // `updated_at DESC` (use-projects.ts:130), so index 1 is "whichever project

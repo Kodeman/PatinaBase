@@ -201,7 +201,7 @@ test.describe('Inked Instruments action visibility', () => {
     await expectInlinePrimary(page, 'room-head', 'Capture');
 
     await page.goto('/people', { waitUntil: 'domcontentloaded' });
-    await expectInlinePrimary(page, 'room-head', 'Add person');
+    await expectInlinePrimary(page, 'room-head', 'Add contact');
 
     // The Drafting Room claims no primary, and has not since f74e20b88
     // ("legacy send retirement"): a project-bound furnishing draft now reaches
@@ -345,7 +345,7 @@ test.describe('Inked Instruments action visibility', () => {
     await expectMobileBar(page, 'capture-piece', 'Capture');
 
     await page.goto('/people', { waitUntil: 'domcontentloaded' });
-    await expectMobileBar(page, 'add-person', 'Add person');
+    await expectMobileBar(page, 'add-person', 'Add contact');
 
     // The Drafting Room is deliberately absent from this walk. Since f74e20b88
     // it registers `useMobilePrimaryAction(null)` — no act is promoted to the

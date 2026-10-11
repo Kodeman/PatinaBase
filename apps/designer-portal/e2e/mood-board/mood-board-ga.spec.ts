@@ -271,7 +271,7 @@ async function openBoard(page: AuthenticatedPage): Promise<void> {
   });
   await expect(
     page.getByRole("main", {
-      name: "GA browser acceptance board mood board room",
+      name: "GA browser acceptance board design board workspace",
     }),
   ).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("board-room-canvas")).toBeVisible();
@@ -415,7 +415,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await openBoard(page);
 
     const room = page.getByRole("main", {
-      name: "GA browser acceptance board mood board room",
+      name: "GA browser acceptance board design board workspace",
     });
     const viewport = page.viewportSize();
     expect(viewport).not.toBeNull();
@@ -480,7 +480,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
       .toBe("hidden");
 
     const focusedLastRoomControl = await page.evaluate(() => {
-      const room = document.querySelector<HTMLElement>('main[aria-label$="mood board room"]');
+      const room = document.querySelector<HTMLElement>('main[aria-label$="design board workspace"]');
       if (!room) return false;
       const controls = Array.from(room.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -496,7 +496,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await page.keyboard.press("Tab");
     expect(
       await page.evaluate(() => {
-        const room = document.querySelector<HTMLElement>('main[aria-label$="mood board room"]');
+        const room = document.querySelector<HTMLElement>('main[aria-label$="design board workspace"]');
         return Boolean(room?.contains(document.activeElement));
       }),
     ).toBe(true);
@@ -916,7 +916,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
       )
       .toBe(true);
     const room = page.getByRole("main", {
-      name: "GA browser acceptance board mood board room",
+      name: "GA browser acceptance board design board workspace",
     });
     await expect
       .poll(async () => {
@@ -1002,7 +1002,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("main", {
-        name: "GA browser acceptance board mood board room",
+        name: "GA browser acceptance board design board workspace",
       }),
     ).toBeVisible();
 
@@ -1037,7 +1037,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await expect(page.locator("[data-board-item-id]")).toHaveCount(6);
 
     const room = page.getByRole("main", {
-      name: "GA browser acceptance board mood board room",
+      name: "GA browser acceptance board design board workspace",
     });
     await dispatchFileDrop(page, room);
     await expect(page.locator("[data-board-item-id]")).toHaveCount(6);
@@ -1228,7 +1228,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await openBoard(page);
 
     const room = page.getByRole("main", {
-      name: "GA browser acceptance board mood board room",
+      name: "GA browser acceptance board design board workspace",
     });
 
     // Empty selection: first Escape only arms the guard, it must not exit.

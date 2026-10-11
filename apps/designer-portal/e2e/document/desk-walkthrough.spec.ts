@@ -75,7 +75,7 @@ async function gotoDesk(page: AuthenticatedPage, search = ''): Promise<void> {
 /** Open the ⌘K command palette via the (idempotent) "Find anything" affordance,
  *  retrying until it appears — the CommandBar listener can lag a cold compile. */
 async function openPalette(page: AuthenticatedPage) {
-  const palette = page.getByRole('dialog', { name: 'Command bar' });
+  const palette = page.getByRole('dialog', { name: 'Studio search' });
   const affordance = findAnything(page);
   await expect(async () => {
     await affordance.click();

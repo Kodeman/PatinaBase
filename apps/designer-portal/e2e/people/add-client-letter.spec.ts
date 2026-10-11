@@ -50,7 +50,7 @@ test('a letter goes to a new client, and only one', async ({ authenticatedPage: 
   await deleteAllMessages();
 
   await page.goto('/people');
-  await page.getByRole('button', { name: /Add person/i }).first().click();
+  await page.getByRole('button', { name: /Add contact/i }).first().click();
   await page.getByRole('button', { name: 'a client' }).click();
   await page.getByLabel('Full name (optional)').fill('Dave Okonkwo');
   await page.getByLabel('Email').fill(email);
@@ -128,7 +128,7 @@ test('the roster still works with no letter, and nothing is sent', async ({
   await deleteAllMessages();
 
   await page.goto('/people');
-  await page.getByRole('button', { name: /Add person/i }).first().click();
+  await page.getByRole('button', { name: /Add contact/i }).first().click();
   await page.getByRole('button', { name: 'a client' }).click();
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Send them the letter').uncheck();

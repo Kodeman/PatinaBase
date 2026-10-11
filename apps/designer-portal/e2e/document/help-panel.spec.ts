@@ -39,7 +39,7 @@ async function gotoDesk(page: AuthenticatedPage): Promise<void> {
 }
 
 async function openPalette(page: AuthenticatedPage) {
-  const palette = page.getByRole('dialog', { name: 'Command bar' });
+  const palette = page.getByRole('dialog', { name: 'Studio search' });
   const affordance = findAnything(page);
   // The affordance dispatches document:open-command-bar → setOpen(true) (an
   // idempotent open, so retrying is safe). Retry until the palette appears —

@@ -61,7 +61,7 @@ test.describe('Put-down lands the roster row', () => {
     await page.locator('.arr-skip').click();
     await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
 
-    await page.getByRole('link', { name: 'Put down document' }).click();
+    await page.getByRole('link', { name: 'Back to Studio overview' }).click();
     await page.waitForURL(/\/desk$/);
 
     await page.waitForFunction(

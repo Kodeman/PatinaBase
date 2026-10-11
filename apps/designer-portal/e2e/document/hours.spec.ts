@@ -157,7 +157,7 @@ test('the ⌘K "Log time" verb opens a dated form with nothing in hand (W3)', as
   await declineDeskWalkthrough(page);
 
   await page.keyboard.press('Meta+k');
-  const palette = page.getByRole('dialog', { name: 'Command bar' });
+  const palette = page.getByRole('dialog', { name: 'Studio search' });
   await expect(palette).toBeVisible({ timeout: COLD });
 
   // "This surface" is where an in-hand-gated verb would live; with nothing

@@ -118,7 +118,7 @@ test('the Day Sheet heads the Desk: five lines at most, and never a count', asyn
   const sheet = page.getByTestId('day-sheet');
   await expect(sheet).toBeVisible({ timeout: COLD });
   expect(await sheet.locator('[data-day-sheet-line]').count()).toBeLessThanOrEqual(5);
-  await expect(sheet.getByText('The rest are on their jobs.')).toBeVisible();
+  await expect(sheet.getByText('The rest are on their projects.')).toBeVisible();
   await expect(sheet).not.toContainText(/\d+ more|cleared today|streak/i);
   await expect(sheet.getByRole('button', { name: 'Mine' })).toHaveAttribute(
     'aria-pressed',

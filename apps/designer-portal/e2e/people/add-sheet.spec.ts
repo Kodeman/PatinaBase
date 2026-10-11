@@ -41,7 +41,7 @@ test.describe("the add sheet writes the studio’s book", () => {
     const name = uniqueName("Dana Kowalski");
     try {
       await page.goto("/people");
-      await page.getByRole("button", { name: "Add person" }).click();
+      await page.getByRole("button", { name: "Add contact" }).click();
       await page.getByRole("button", { name: "a sub" }).click();
 
       const project = page.getByLabel("Project");
@@ -107,7 +107,7 @@ test.describe("the add sheet writes the studio’s book", () => {
     const name = uniqueName("Chidi Okonkwo");
     try {
       await page.goto("/people");
-      await page.getByRole("button", { name: "Add person" }).click();
+      await page.getByRole("button", { name: "Add contact" }).click();
       await page.getByRole("button", { name: "a household member" }).click();
 
       // The eyebrow names the chosen kind (R-CE — kind clarity).
@@ -161,7 +161,7 @@ test.describe("the add sheet writes the studio’s book", () => {
     authenticatedPage: page,
   }) => {
     await page.goto("/people");
-    await page.getByRole("button", { name: "Add person" }).click();
+    await page.getByRole("button", { name: "Add contact" }).click();
     await page.getByRole("button", { name: "a sub" }).click();
     await page.getByLabel("Project").selectOption({ index: 1 });
     await page.getByLabel("Full name").fill(uniqueName("No Trade"));

@@ -59,7 +59,7 @@ test.describe('Desk — whole-desk error state', () => {
     // so a bare role query is ambiguous.
     const errorState = page.getByTestId('desk-error-state');
     await expect(errorState).toBeVisible({ timeout: 20_000 });
-    await expect(errorState.getByText('The desk could not be read.')).toBeVisible();
+    await expect(errorState.getByText("Your studio overview couldn't load.")).toBeVisible();
     const retry = errorState.getByRole('button', { name: /try again/i });
     await expect(retry).toBeVisible();
 

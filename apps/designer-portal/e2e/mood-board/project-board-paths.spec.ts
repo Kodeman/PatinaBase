@@ -131,7 +131,7 @@ async function openProjectBoard(page: AuthenticatedPage): Promise<void> {
   });
   await expect(
     page.getByRole("main", {
-      name: "Project leg acceptance board mood board room",
+      name: "Project leg acceptance board design board workspace",
     }),
   ).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("board-room-canvas")).toBeVisible();
