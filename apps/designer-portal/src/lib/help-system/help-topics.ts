@@ -25,7 +25,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   {
     label: 'Getting started',
     description:
-      'Your first hour with the Desk: what it is, and how a project moves from a lead to a signed proposal.',
+      'Your first hour in the studio overview: how a project moves from a lead to a signed proposal.',
     prefixes: ['designer-portal/document/guide'],
   },
   {
@@ -59,7 +59,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     label: 'Studio administration',
-    description: 'The books that slide over your work: Orders, Accounts, Hours, and The Post.',
+    description: 'Orders, Accounts, Hours, and the studio’s event history.',
     prefixes: [
       'designer-portal/document/orders',
       'designer-portal/document/accounts',

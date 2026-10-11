@@ -33457,5 +33457,41 @@
     "verify": "apps/designer-portal/src/components/document/__tests__/lens-band.test.tsx",
     "status": "implemented",
     "evidence": "lens-band.tsx:478 aria-label={standingDoorName(count)}. Orchestrator ruling 2026-10-10 (SQ-759 c_mv2jk2yt_6512c9, option A): the US-25 phrase \"Everything open on this job\" lives on in the sheet heading and the accessible names; \"All open · {count}\" is the short visible door form, the same length as \"Standing · N\", so the count and the lens-band line-2 measure are kept. Tests: lens-band.test.tsx (door button name with count), doc/[id]/page.test.tsx:2743."
+  },
+  {
+    "id": "C-30001",
+    "audience": "designer",
+    "surface": {
+      "area": "Help",
+      "route": "/help",
+      "element": "Topic description"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/help-system/help-topics.ts:28",
+    "current": "Your first hour with the Desk: what it is, and how a project moves from a lead to a signed proposal.",
+    "proposed": "Your first hour in the studio overview: how a project moves from a lead to a signed proposal.",
+    "meaning": "Help shelf description orienting designers to the portal starting place.",
+    "owner": "D1",
+    "verify": "apps/designer-portal/src/lib/help-system/help-topics.test.ts",
+    "status": "implemented",
+    "evidence": "Reconciled unowned rendered Help description to Direction C vocabulary."
+  },
+  {
+    "id": "C-30002",
+    "audience": "designer",
+    "surface": {
+      "area": "Help",
+      "route": "/help",
+      "element": "Topic description"
+    },
+    "state": "default",
+    "source": "apps/designer-portal/src/lib/help-system/help-topics.ts:62",
+    "current": "The books that slide over your work: Orders, Accounts, Hours, and The Post.",
+    "proposed": "Orders, Accounts, Hours, and the studio’s event history.",
+    "meaning": "Help shelf description identifying studio administration resources without making The Post the home of events.",
+    "owner": "D1",
+    "verify": "apps/designer-portal/src/lib/help-system/help-topics.test.ts",
+    "status": "implemented",
+    "evidence": "Reconciled unowned rendered Help description to Direction C and R82 supersession."
   }
 ]

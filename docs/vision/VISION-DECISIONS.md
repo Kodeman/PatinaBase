@@ -485,3 +485,41 @@ These are side journeys from the studio buying review (`artifacts/procurement-bu
 **Reopen when:** a studio asks for one of these at a named moment, in its own words, and it passes the feature test.
 
 *Entries add: Parked 2026-10-06 (no id) · last id = V14*
+
+---
+
+## Ruled — 2026-10-10 (US-24/US-25 Day Sheet and Direction C)
+
+### V16 · US-24/US-25 Day Sheet rulings + Direction C labeling, Kody 2026-10-10
+
+**Decision:** Kody ruled all fourteen US-24 founder questions to their recommended answers in `artifacts/designer-portal-uplift-2026-10-09/synthesis/direction.md` §6. The Day Sheet ships to every studio with the following binding Q1 guards:
+
+- at most five Day Sheet lines;
+- no overflow count;
+- no dots or badges;
+- no "cleared today" or streak;
+- "Not today" has no counter and lasts one working day (Mon–Fri);
+- nothing is pushed or emailed.
+
+**Q1–Q14 (recommended answers):**
+
+- **Q1:** The five-line cross-job Day Sheet is not a task manager under those guards; its rows are the jobs' own Next.
+- **Q2:** "Mine" names the signed-in person's jobs; "The studio's" is one press away. Custody names the holder; no need-level assignment.
+- **Q3:** Rank by consequence using the shared need-class order, so the Desk and paper agree.
+- **Q4:** Events that ask for an act become needs on their job; The Post retains letters and receipts only. Receipts without an act remain facts on the job.
+- **Q5:** Use the freshness time word only, with the need, and remove it once the job is opened; no dot.
+- **Q6:** "Not today" lasts one working day, without a counter. After an act, show waiting on whom and since when. A held item may be set aside with a date and reason; no indefinite snooze.
+- **Q7:** Demote stage plates to ink words in every direction; B carries urgency in ordering and words alone.
+- **Q8:** One filled act per view; on the Document the Next act is the only filled control.
+- **Q9:** Use Leah's own plain words where she has better ones; metadata alone keeps mono caps. Direction C's vocabulary governs where it conflicts with the US-24 list.
+- **Q10:** Studio-wide revenue and A/R are not visible to a non-owner by default; apply a rule, and allow Leah to grant a hire more access.
+- **Q11:** A non-lead never sends outward from an act sheet. PO chases can be saved as an awaiting-review draft for the lead, labeled "<Lead> sees this first". Invoice reminders and proposal follow-ups are read-only for the non-lead, with prefilled text, record, label and hand-off note, but no send or save control. Invoice and proposal drafts for the lead are deferred. Release remains restricted to seats allowed by `viewerCanRelease`.
+- **Q12:** Park the hire's end-of-day hand-back report; waiting-on covers most of its need.
+- **Q13:** Do not make C's structural moves now; revisit after B ships.
+- **Q14:** No push in this uplift; revisit only with a capped, reviewed interrupt list.
+
+**Direction C is the portal vocabulary.** See `docs/design/designer-portal-labeling/direction-c-implementation-plan.md` and `docs/design/designer-portal-labeling/manifest/README.md`. It supersedes US-24 Q9's rename list where they collide. It also supersedes US-19 D8 (scope), R143 D3/D5/D6/D7 (claim grid, custody words, day line), and R82 (The Post as events' home). By Kody's ruling this ships with no feature flag.
+
+**Source:** Kody's 2026-10-10 rulings and the US-25 story log; US-24 synthesis §6; Direction C implementation plan and manifest.
+
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · V14 · V15 · V16 · last id = V16*
