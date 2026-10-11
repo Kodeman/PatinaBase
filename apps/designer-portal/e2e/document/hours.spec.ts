@@ -22,8 +22,8 @@
  *    write path is pinned by the jest specs and by
  *    supabase/tests/billing/time_log_rpc_test.sql.
  */
-import type { Page } from '@playwright/test';
-import { test, expect } from '../fixtures/auth';
+import type { Page } from "@playwright/test";
+import { test, expect } from "../fixtures/auth";
 
 const COLD = 30_000;
 
@@ -39,37 +39,40 @@ const COLD = 30_000;
  */
 async function declineDeskWalkthrough(page: Page): Promise<void> {
   await page
-    .getByRole('dialog', { name: 'This is your Desk' })
-    .getByRole('button', { name: 'Skip for now' })
+    .getByRole("dialog", { name: "This is your Desk" })
+    .getByRole("button", { name: "Skip for now" })
     .click({ timeout: 10_000 })
     .catch(() => undefined);
 }
 
 /** The three widths the house sheet is read at. */
 const WIDTHS = [
-  { label: '1440', width: 1440, height: 1000 },
-  { label: '1024', width: 1024, height: 900 },
-  { label: '390', width: 390, height: 844 },
+  { label: "1440", width: 1440, height: 1000 },
+  { label: "1024", width: 1024, height: 900 },
+  { label: "390", width: 390, height: 844 },
 ] as const;
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: "serial" });
 // One seeded actor: the three browser projects would sign in as the same
 // designer and race each other's session.
-test.skip(({ browserName }) => browserName !== 'chromium', 'single seeded actor');
+test.skip(
+  ({ browserName }) => browserName !== "chromium",
+  "single seeded actor",
+);
 
-test('the sheet doorway opens the Hours book', async ({
+test("the sheet doorway opens the Hours book", async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('/desk?sheet=hours', { waitUntil: 'domcontentloaded' });
+  await page.goto("/desk?sheet=hours", { waitUntil: "domcontentloaded" });
 
-  await expect(page.getByRole('dialog', { name: 'Timesheets' })).toBeVisible({
+  await expect(page.getByRole("dialog", { name: "Timesheets" })).toBeVisible({
     timeout: COLD,
   });
   await declineDeskWalkthrough(page);
   // The doorway is a one-shot instruction: once carried out the address reads
   // `/desk` again, so a refresh shows the Desk's own state.
-  await expect.poll(() => new URL(page.url()).search).toBe('');
+  await expect.poll(() => new URL(page.url()).search).toBe("");
 });
 
 for (const { label, width, height } of WIDTHS) {
@@ -77,24 +80,26 @@ for (const { label, width, height } of WIDTHS) {
     authenticatedPage: page,
   }) => {
     await page.setViewportSize({ width, height });
-    await page.goto('/desk?sheet=hours', { waitUntil: 'domcontentloaded' });
+    await page.goto("/desk?sheet=hours", { waitUntil: "domcontentloaded" });
 
-    const sheet = page.getByRole('dialog', { name: 'Timesheets' });
+    const sheet = page.getByRole("dialog", { name: "Timesheets" });
     await expect(sheet).toBeVisible({ timeout: COLD });
     await declineDeskWalkthrough(page);
 
     // HT-8 — the admin's instrument. Two words with nothing in hand: her own
     // hours and the studio's. No tab bar, no leaderboard.
-    const lens = sheet.getByRole('group', { name: 'Time ledger scope' });
+    const lens = sheet.getByRole("group", { name: "Time ledger scope" });
     await expect(lens).toBeVisible({ timeout: COLD });
-    await expect(lens.getByRole('button', { name: 'My time' })).toHaveAttribute(
-      'aria-current',
-      'true',
+    await expect(lens.getByRole("button", { name: "My time" })).toHaveAttribute(
+      "aria-current",
+      "true",
     );
-    await expect(lens.getByRole('button', { name: 'the studio' })).toBeVisible();
+    await expect(
+      lens.getByRole("button", { name: "the studio" }),
+    ).toBeVisible();
 
     // Every word keeps the 44px floor, at every width.
-    const words = lens.getByRole('button');
+    const words = lens.getByRole("button");
     for (const word of await words.all()) {
       const box = await word.boundingBox();
       expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
@@ -104,15 +109,17 @@ for (const { label, width, height } of WIDTHS) {
     // the five tracks laid out at their intrinsic widths: Date began at x=383
     // in a 390px viewport and Add ended at x=683, with no sideways scroll to
     // reach either, so HT-13's date control was unreachable on a phone.
-    const dateField = sheet.getByLabel('Date');
+    const dateField = sheet.getByLabel("Date");
     await dateField.scrollIntoViewIfNeeded();
     await expect(dateField).toBeInViewport();
     const dateBox = await dateField.boundingBox();
     expect(dateBox?.width ?? 0).toBeGreaterThan(40);
     expect(dateBox?.x ?? -1).toBeGreaterThanOrEqual(0);
-    expect((dateBox?.x ?? 0) + (dateBox?.width ?? 0)).toBeLessThanOrEqual(width);
+    expect((dateBox?.x ?? 0) + (dateBox?.width ?? 0)).toBeLessThanOrEqual(
+      width,
+    );
 
-    const addAct = sheet.getByRole('button', { name: 'Log time', exact: true });
+    const addAct = sheet.getByRole("button", { name: "Log time", exact: true });
     const addBox = await addAct.boundingBox();
     expect((addBox?.x ?? 0) + (addBox?.width ?? 0)).toBeLessThanOrEqual(width);
 
@@ -124,82 +131,83 @@ for (const { label, width, height } of WIDTHS) {
   });
 }
 
-test('the studio scope answers with a total above its buckets', async ({
+test("the studio scope answers with a total above its buckets", async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('/desk?sheet=hours', { waitUntil: 'domcontentloaded' });
+  await page.goto("/desk?sheet=hours", { waitUntil: "domcontentloaded" });
 
-  const sheet = page.getByRole('dialog', { name: 'Timesheets' });
+  const sheet = page.getByRole("dialog", { name: "Timesheets" });
   await expect(sheet).toBeVisible({ timeout: COLD });
   await declineDeskWalkthrough(page);
 
-  await sheet.getByRole('button', { name: 'the studio' }).click();
+  await sheet.getByRole("button", { name: "the studio" }).click();
 
   // HT-30 — the total is the front matter of the rows; HT-36 — the buckets are
   // cut five ways and carry no free text.
   await expect(
-    sheet.getByRole('group', { name: 'Group time entries' }),
+    sheet.getByRole("group", { name: "Group time entries" }),
   ).toBeVisible({ timeout: COLD });
-  await expect(sheet.getByRole('button', { name: 'By team member' })).toHaveAttribute(
-    'aria-current',
-    'true',
-  );
+  await expect(
+    sheet.getByRole("button", { name: "By team member" }),
+  ).toHaveAttribute("aria-current", "true");
   // The entries are one act away, never the default reading.
-  await expect(sheet.getByRole('button', { name: 'The entries' })).toBeVisible();
+  await expect(
+    sheet.getByRole("button", { name: "The entries" }),
+  ).toBeVisible();
 });
 
 test('the ⌘K "Log time" verb opens a dated form with nothing in hand (W3)', async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+  await page.goto("/desk", { waitUntil: "domcontentloaded" });
   await declineDeskWalkthrough(page);
 
-  await page.keyboard.press('Meta+k');
-  const palette = page.getByRole('dialog', { name: 'Studio search' });
+  await page.keyboard.press("Meta+k");
+  const palette = page.getByRole("dialog", { name: "Studio search" });
   await expect(palette).toBeVisible({ timeout: COLD });
 
   // "This surface" is where an in-hand-gated verb would live; with nothing
   // open it is absent, and Log time is still offered under Begin.
   await expect(
-    palette.getByRole('group', { name: 'This surface' }),
+    palette.getByRole("group", { name: "This surface" }),
   ).toHaveCount(0);
   const verb = palette
-    .getByRole('group', { name: 'Begin' })
-    .getByRole('option', { name: /Log time/ });
+    .getByRole("group", { name: "Begin" })
+    .getByRole("option", { name: /Log time/ });
   await expect(verb).toBeVisible();
   await verb.click();
 
-  const form = page.getByRole('dialog', { name: 'Log time' });
+  const form = page.getByRole("dialog", { name: "Log time" });
   await expect(form).toBeVisible({ timeout: COLD });
   // HT-13's date field, HT-11's control, HT-24's honest activity default.
-  await expect(form.getByLabel('Date')).toBeVisible();
-  await expect(
-    form.getByRole('button', { name: /billable/i }),
-  ).toBeVisible();
-  await expect(form.getByRole('combobox', { name: 'Activity' })).toHaveValue('');
+  await expect(form.getByLabel("Date")).toBeVisible();
+  await expect(form.getByRole("button", { name: /billable/i })).toBeVisible();
+  await expect(form.getByRole("combobox", { name: "Activity" })).toHaveValue(
+    "",
+  );
 
   // Nothing is written: close it again.
-  await page.keyboard.press('Escape');
+  await page.keyboard.press("Escape");
   await expect(form).toHaveCount(0);
 });
 
-test('the bare t key opens the same form (W3)', async ({
+test("the bare t key opens the same form (W3)", async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+  await page.goto("/desk", { waitUntil: "domcontentloaded" });
   await declineDeskWalkthrough(page);
 
   // Focus must be on the page body, not in a field — the binding's own guard.
-  await page.locator('body').click({ position: { x: 5, y: 5 } });
-  await page.keyboard.press('t');
+  await page.locator("body").click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press("t");
 
-  await expect(page.getByRole('dialog', { name: 'Log time' })).toBeVisible({
+  await expect(page.getByRole("dialog", { name: "Log time" })).toBeVisible({
     timeout: COLD,
   });
-  await page.keyboard.press('Escape');
+  await page.keyboard.press("Escape");
 });
 
 /**
@@ -214,26 +222,24 @@ test('the bare t key opens the same form (W3)', async ({
  * The flags are the run's, not the file's, so the case SKIPS rather than
  * silently passing against the flag-off surface.
  */
-const FLAG_OVERRIDES = process.env.NEXT_PUBLIC_FLAG_OVERRIDES ?? '';
+const FLAG_OVERRIDES = process.env.NEXT_PUBLIC_FLAG_OVERRIDES ?? "";
 const flagOn = (name: string) =>
-  FLAG_OVERRIDES.split(',').some(
-    (pair) => pair.trim() === `${name}:true`,
-  );
+  FLAG_OVERRIDES.split(",").some((pair) => pair.trim() === `${name}:true`);
 
-test('the studio rate card stands on the Account sheet (HT-3/HT-4)', async ({
+test("the studio rate card stands on the Account sheet (HT-3/HT-4)", async ({
   authenticatedPage: page,
 }) => {
   test.skip(
-    !flagOn('studio-workspaces'),
-    'the STUDIO tab is gated on `studio-workspaces`; run this suite with ' +
-      'NEXT_PUBLIC_FLAG_OVERRIDES=studio-workspaces:true,agreement-parts:true',
+    !flagOn("studio-workspaces"),
+    "the STUDIO tab is gated on `studio-workspaces`; run this suite with " +
+      "NEXT_PUBLIC_FLAG_OVERRIDES=studio-workspaces:true,agreement-parts:true",
   );
 
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('/desk?account=studio', { waitUntil: 'domcontentloaded' });
+  await page.goto("/desk?account=studio", { waitUntil: "domcontentloaded" });
   await declineDeskWalkthrough(page);
 
-  const sheet = page.getByRole('dialog', { name: 'Account' });
+  const sheet = page.getByRole("dialog", { name: "Account" });
   await expect(sheet).toBeVisible({ timeout: COLD });
 
   // The tab exists AND the doorway landed on it — with the flag off the page
@@ -241,26 +247,26 @@ test('the studio rate card stands on the Account sheet (HT-3/HT-4)', async ({
   // `exact` matters: S-1's own switch reads "STUDIO 1 OF 2 · SWITCH" and would
   // otherwise make this a strict-mode collision with the tab.
   await expect(
-    sheet.getByRole('button', { name: 'Studio', exact: true }),
-  ).toHaveAttribute('aria-current', 'page', { timeout: COLD });
+    sheet.getByRole("button", { name: "Studio", exact: true }),
+  ).toHaveAttribute("aria-current", "page", { timeout: COLD });
 
   // HT-3 — a rate per member: what prices an hour when no signed agreement
   // names one. Gated on `studio-workspaces` alone.
   await expect(
-    sheet.getByRole('heading', { name: 'Studio rates' }),
+    sheet.getByRole("heading", { name: "Studio rates" }),
   ).toBeVisible({ timeout: COLD });
 
   // HT-4 — the rate card's ROLE picker sits inside the agreement-defaults card,
   // which needs the second flag as well.
-  if (flagOn('agreement-parts')) {
+  if (flagOn("agreement-parts")) {
     await expect(
-      sheet.getByRole('heading', { name: 'Agreement defaults' }),
+      sheet.getByRole("heading", { name: "Agreement defaults" }),
     ).toBeVisible({ timeout: COLD });
-    await expect(sheet.getByText('Rate card', { exact: true })).toBeVisible();
+    await expect(sheet.getByText("Rate card", { exact: true })).toBeVisible();
     // `+ Add a role`, not `Default role 1`: a studio whose card is still empty
     // renders no picker row, and the door is what HT-4 added.
     await expect(
-      sheet.getByRole('button', { name: '+ Add a role' }),
+      sheet.getByRole("button", { name: "+ Add a role" }),
     ).toBeVisible();
   }
 });

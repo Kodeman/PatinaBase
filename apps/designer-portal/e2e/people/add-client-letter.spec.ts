@@ -1,7 +1,7 @@
-import { expect } from '@playwright/test';
-import { test } from '../fixtures/auth';
-import { adminDb } from '../helpers/supabase-admin';
-import { deleteAllMessages, listMessagesTo } from '../helpers/mailpit';
+import { expect } from "@playwright/test";
+import { test } from "../fixtures/auth";
+import { adminDb } from "../helpers/supabase-admin";
+import { deleteAllMessages, listMessagesTo } from "../helpers/mailpit";
 
 /**
  * REQUIRES the local edge runtime container (`supabase_edge_runtime_supabase`)
@@ -40,22 +40,27 @@ import { deleteAllMessages, listMessagesTo } from '../helpers/mailpit';
  * and Playwright's three browser projects run in parallel as the same user.
  */
 test.skip(
-  ({ browserName }) => browserName !== 'chromium',
-  'single-actor: the three browser projects would race the same seeded designer',
+  ({ browserName }) => browserName !== "chromium",
+  "single-actor: the three browser projects would race the same seeded designer",
 );
 
-test('a letter goes to a new client, and only one', async ({ authenticatedPage: page }) => {
+test("a letter goes to a new client, and only one", async ({
+  authenticatedPage: page,
+}) => {
   const stamp = Date.now();
   const email = `dave.${stamp}@okonkwo.test`;
   await deleteAllMessages();
 
-  await page.goto('/people');
-  await page.getByRole('button', { name: /Add contact/i }).first().click();
-  await page.getByRole('button', { name: 'a client' }).click();
-  await page.getByLabel('Full name (optional)').fill('Dave Okonkwo');
-  await page.getByLabel('Email address').fill(email);
-  await page.getByLabel('A line for Dave').fill('Dave — the drawings are in.');
-  await page.getByRole('button', { name: 'ADD AND SEND THE LETTER' }).click();
+  await page.goto("/people");
+  await page
+    .getByRole("button", { name: /Add contact/i })
+    .first()
+    .click();
+  await page.getByRole("button", { name: "a client" }).click();
+  await page.getByLabel("Full name (optional)").fill("Dave Okonkwo");
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("A line for Dave").fill("Dave — the drawings are in.");
+  await page.getByRole("button", { name: "ADD AND SEND THE LETTER" }).click();
 
   // EVERY SENTENCE HERE IS PRINTED MORE THAN ONCE, BY DESIGN, so each assertion
   // names one element rather than matching text across the page. The
@@ -65,8 +70,8 @@ test('a letter goes to a new client, and only one', async ({ authenticatedPage: 
   // is the Add sheet's own `role="alert"`, the toaster, and the toaster's
   // announcer — three. Matched by text, `success.or(failure)` died on strict
   // mode instead of reporting the send.
-  const success = page.locator('[data-directory-notice]');
-  const failure = page.getByRole('dialog').getByRole('alert');
+  const success = page.locator("[data-directory-notice]");
+  const failure = page.getByRole("dialog").getByRole("alert");
   await expect(success.or(failure)).toBeVisible({ timeout: 20_000 });
   if (await failure.isVisible()) {
     throw new Error(`Letter send failed: "${await failure.textContent()}"`);
@@ -82,9 +87,9 @@ test('a letter goes to a new client, and only one', async ({ authenticatedPage: 
     .poll(
       async () => {
         const { count, error } = await adminDb
-          .from('client_invitations')
-          .select('id', { count: 'exact', head: true })
-          .eq('email', email);
+          .from("client_invitations")
+          .select("id", { count: "exact", head: true })
+          .eq("email", email);
         if (error) throw error;
         return count ?? 0;
       },
@@ -93,18 +98,20 @@ test('a letter goes to a new client, and only one', async ({ authenticatedPage: 
     .toBe(1);
 
   const { data: invitations, error } = await adminDb
-    .from('client_invitations')
-    .select('kind, rendered_subject, personal_message, designer_full_name, designer_given_name')
-    .eq('email', email);
+    .from("client_invitations")
+    .select(
+      "kind, rendered_subject, personal_message, designer_full_name, designer_given_name",
+    )
+    .eq("email", email);
   if (error) throw error;
   expect(invitations).toHaveLength(1);
   const [row] = invitations!;
 
   // A fresh email with no existing profile takes the 'invite' branch, not R13's
   // 'notice'.
-  expect(row.kind).toBe('invite');
+  expect(row.kind).toBe("invite");
   // The designer's own words, untouched (validateNote only trims).
-  expect(row.personal_message).toBe('Dave — the drawings are in.');
+  expect(row.personal_message).toBe("Dave — the drawings are in.");
   // R3 — the subject names the studio/designer, and never Patina.
   const designerName = row.designer_full_name ?? row.designer_given_name;
   expect(designerName).toBeTruthy();
@@ -120,31 +127,36 @@ test('a letter goes to a new client, and only one', async ({ authenticatedPage: 
     .toBe(0);
 });
 
-test('the roster still works with no letter, and nothing is sent', async ({
+test("the roster still works with no letter, and nothing is sent", async ({
   authenticatedPage: page,
 }) => {
   const stamp = Date.now();
   const email = `quiet.${stamp}@okonkwo.test`;
   await deleteAllMessages();
 
-  await page.goto('/people');
-  await page.getByRole('button', { name: /Add contact/i }).first().click();
-  await page.getByRole('button', { name: 'a client' }).click();
-  await page.getByLabel('Email address').fill(email);
-  await page.getByLabel('Send them the letter').uncheck();
-  await page.getByRole('button', { name: 'ADD TO YOUR PEOPLE' }).click();
+  await page.goto("/people");
+  await page
+    .getByRole("button", { name: /Add contact/i })
+    .first()
+    .click();
+  await page.getByRole("button", { name: "a client" }).click();
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Send them the letter").uncheck();
+  await page.getByRole("button", { name: "ADD TO YOUR PEOPLE" }).click();
 
   // The Directory's paper notice, not the sentence — the Room's sr-only
   // announcer carries the identical string (see the note in the test above).
-  await expect(page.locator('[data-directory-notice]')).toHaveText(
+  await expect(page.locator("[data-directory-notice]")).toHaveText(
     `${email} is on your roster. Nothing was sent.`,
   );
-  await expect.poll(async () => (await listMessagesTo(email)).length, { timeout: 8_000 }).toBe(0);
+  await expect
+    .poll(async () => (await listMessagesTo(email)).length, { timeout: 8_000 })
+    .toBe(0);
 
   const { count, error } = await adminDb
-    .from('client_invitations')
-    .select('id', { count: 'exact', head: true })
-    .eq('email', email);
+    .from("client_invitations")
+    .select("id", { count: "exact", head: true })
+    .eq("email", email);
   if (error) throw error;
   expect(count ?? 0).toBe(0);
 });

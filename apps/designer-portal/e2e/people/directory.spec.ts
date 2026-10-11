@@ -73,20 +73,18 @@ test.describe("the Directory", () => {
     await page.getByRole("button", { name: "Trades & contractors" }).click();
     await expect(page).toHaveURL(/role=crew/);
     await page.reload();
-    await expect(page.getByRole("button", { name: "Trades & contractors" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(
+      page.getByRole("button", { name: "Trades & contractors" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   test("a legacy ?role= link still lands somewhere true", async ({
     authenticatedPage: page,
   }) => {
     await page.goto("/people?role=sub");
-    await expect(page.getByRole("button", { name: "Trades & contractors" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(
+      page.getByRole("button", { name: "Trades & contractors" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   test("C11 — a row is a container, and its phone is a sibling control", async ({
@@ -108,7 +106,9 @@ test.describe("the Directory", () => {
     authenticatedPage: page,
   }) => {
     await page.goto("/people");
-    await page.getByLabel(/ask/i).first().fill("zzzzzz-nobody-by-this-name");
+    await page
+      .getByLabel("Search directory", { exact: true })
+      .fill("zzzzzz-nobody-by-this-name");
     await expect(
       page.getByText("Nobody under this narrowing yet."),
     ).toBeVisible();

@@ -444,7 +444,9 @@ async function openOrdersBookPaper(
   await page.getByRole("button", { name: "Vendor correspondence" }).click();
   const pages = page.getByRole("navigation", { name: "Order register views" });
   await expect(pages).toBeVisible({ timeout: 30_000 });
-  await pages.getByRole("button", { name: "Order register", exact: true }).click();
+  await pages
+    .getByRole("button", { name: "Order register", exact: true })
+    .click();
   // Rows sit under their maker's heading; a row names its job.
   await page
     .locator("[data-orders-po-row]")
@@ -620,7 +622,9 @@ WHERE vq.project_id = ${q(QUOTE.projectId)}`),
     const ackRecord = poCell.getByTestId("ack-record");
     await expect(ackRecord).toBeVisible({ timeout: 30_000 });
     await shot(page, testInfo, "b1-ack-difference");
-    await ackRecord.getByRole("button", { name: "Dispute acknowledgment" }).click();
+    await ackRecord
+      .getByRole("button", { name: "Dispute acknowledgment" })
+      .click();
     await expect(
       ackRecord.getByText(
         "Disputed. The reply to the maker is drafted for your review; nothing is sent until you send it.",
@@ -707,7 +711,9 @@ WHERE purchase_order_id = ${q(CHANGE_PO)}`),
       .getByLabel(`Install state for ${INSTALL_LINE.name}`)
       .selectOption("on_site");
     await shot(page, testInfo, "c1-manifest-filled");
-    await row.getByRole("button", { name: "Save installation details", exact: true }).click();
+    await row
+      .getByRole("button", { name: "Save installation details", exact: true })
+      .click();
     await expect
       .poll(
         () =>
@@ -719,7 +725,10 @@ FROM public.install_manifest_items WHERE ffe_item_id = ${q(INSTALL_LINE.id)}`),
       .toBe(`Hall, north wall|${installOn}|Hollis crew|on_site`);
     // Saved: the row re-reads its record, nothing left to save.
     await expect(
-      row.getByRole("button", { name: "Save installation details", exact: true }),
+      row.getByRole("button", {
+        name: "Save installation details",
+        exact: true,
+      }),
     ).toHaveCount(0, {
       timeout: 30_000,
     });
@@ -747,7 +756,9 @@ FROM public.install_punch_items WHERE ffe_item_id = ${q(INSTALL_LINE.id)}`),
     await shot(page, testInfo, "c2-punch-recorded");
     await punch.getByRole("button", { name: "Resolve punch item" }).click();
     await expect(punch).toContainText("resolved", { timeout: 30_000 });
-    await expect(punch.getByRole("button", { name: "Resolve punch item" })).toHaveCount(0);
+    await expect(
+      punch.getByRole("button", { name: "Resolve punch item" }),
+    ).toHaveCount(0);
     expect(
       psqlScalar(`
 SELECT (resolved_at IS NOT NULL) || '|' || (resolved_by = ${q(memberId)})

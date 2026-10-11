@@ -1,5 +1,5 @@
-import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
-import { psqlScalar, psqlRow } from '../helpers/psql';
+import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
+import { psqlScalar, psqlRow } from "../helpers/psql";
 
 /**
  * Room View (R107, W1–W3) — the full v1 acceptance walk against the seeded
@@ -26,7 +26,7 @@ import { psqlScalar, psqlRow } from '../helpers/psql';
  * and returns there" requires the SAME tab that actually clicked the card,
  * not a fresh `page` fixture re-navigated straight to `/room/[id]`.
  */
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: "serial" });
 
 // Headless Chromium's default sandboxed GPU setup fails WebGL context
 // creation outright (verified live: "BindToCurrentSequence failed", the
@@ -39,12 +39,16 @@ test.describe.configure({ mode: 'serial' });
 // separate browser per distinct `launchOptions`).
 test.use({
   launchOptions: {
-    args: ['--enable-unsafe-swiftshader', '--use-gl=swiftshader', '--ignore-gpu-blocklist'],
+    args: [
+      "--enable-unsafe-swiftshader",
+      "--use-gl=swiftshader",
+      "--ignore-gpu-blocklist",
+    ],
   },
 });
 
-const ELENA_EMAIL = 'elena.ruiz@example.com';
-const SCAN_NAME = 'Formal Dining Room';
+const ELENA_EMAIL = "elena.ruiz@example.com";
+const SCAN_NAME = "Formal Dining Room";
 
 /** Plan/mini-plan feet→SVG-user-space transform (plan-stage.tsx's
  *  PLAN_STAGE_SCALE/PLAN_STAGE_PAD) — duplicated here because Playwright
@@ -88,7 +92,8 @@ async function feetToScreenPoint(
       const svg = document.querySelector(svgSelector) as SVGSVGElement | null;
       if (!svg) throw new Error(`no element matched "${svgSelector}"`);
       const ctm = svg.getScreenCTM();
-      if (!ctm) throw new Error('SVG has no screen CTM (unmounted or zero-size)');
+      if (!ctm)
+        throw new Error("SVG has no screen CTM (unmounted or zero-size)");
       const pt = svg.createSVGPoint();
       pt.x = ftX * SCALE + PAD;
       pt.y = ftZ * SCALE + PAD;
@@ -139,7 +144,11 @@ interface Vec3 {
 }
 
 /** Rotate a plan point (x,z) by −θ (radians). Ported from photo-poses.ts's `rotateNeg`. */
-function rotateNeg(x: number, z: number, theta: number): { x: number; z: number } {
+function rotateNeg(
+  x: number,
+  z: number,
+  theta: number,
+): { x: number; z: number } {
   const c = Math.cos(theta);
   const s = Math.sin(theta);
   return { x: x * c + z * s, z: -x * s + z * c };
@@ -148,13 +157,22 @@ function rotateNeg(x: number, z: number, theta: number): { x: number; z: number 
 /** camera_transform (row-major 16 doubles) + provenance → plan-frame pose,
  *  feet. Ported from photo-poses.ts's `photoPlanPose` (position only — the
  *  click target is the marker's apex, so heading is not needed). */
-function photoPlanPose(t: number[], yawDeg: number, offX: number, offZ: number): Vec3 {
+function photoPlanPose(
+  t: number[],
+  yawDeg: number,
+  offX: number,
+  offZ: number,
+): Vec3 {
   const theta = (yawDeg * Math.PI) / 180;
   const wx = t[3];
   const wy = t[7];
   const wz = t[11];
   const rotated = rotateNeg(wx, wz, theta);
-  return { x: (rotated.x - offX) * M_TO_FT, y: wy * M_TO_FT, z: (rotated.z - offZ) * M_TO_FT };
+  return {
+    x: (rotated.x - offX) * M_TO_FT,
+    y: wy * M_TO_FT,
+    z: (rotated.z - offZ) * M_TO_FT,
+  };
 }
 
 /** Clamp a pose's x/z onto the floor bbox + 2ft margin when it falls
@@ -180,9 +198,16 @@ function clampToFloorBounds(
 
 /** orbit/controls.ts's frameRoom + sphericalPosition, ported — the DEFAULT
  *  (untouched) camera framing, since this spec never drags the Orbit view. */
-function orbitDefaultCamera(widthFt: number, depthFt: number): { position: Vec3; target: Vec3 } {
+function orbitDefaultCamera(
+  widthFt: number,
+  depthFt: number,
+): { position: Vec3; target: Vec3 } {
   const diag = Math.hypot(widthFt, depthFt);
-  const target: Vec3 = { x: widthFt / 2, y: ORBIT_TARGET_EYE_FT, z: depthFt / 2 };
+  const target: Vec3 = {
+    x: widthFt / 2,
+    y: ORBIT_TARGET_EYE_FT,
+    z: depthFt / 2,
+  };
   const radius = ORBIT_RADIUS_FIT * diag;
   const sinP = Math.sin(ORBIT_POLAR);
   const position: Vec3 = {
@@ -200,7 +225,11 @@ function dot(a: Vec3, b: Vec3): number {
   return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 function cross(a: Vec3, b: Vec3): Vec3 {
-  return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x };
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+  };
 }
 function normalize(v: Vec3): Vec3 {
   const len = Math.hypot(v.x, v.y, v.z) || 1;
@@ -239,7 +268,7 @@ function projectToCanvas(
   };
 }
 
-test('the Room View — roster, wall truth, measure, Orbit boundary, and the /rooms leave affordance (fix A)', async ({
+test("the Room View — roster, wall truth, measure, Orbit boundary, and the /rooms leave affordance (fix A)", async ({
   authenticatedPage: page,
 }) => {
   // ── seed-dependency guard (house pattern) ──────────────────────────────
@@ -252,28 +281,35 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
   test.skip(
     !scanId,
     `No PARSED "${SCAN_NAME}" scan for ${ELENA_EMAIL} — run ` +
-      '`pnpm dev:seed-room-fixture` locally first (CI has no parsed fixture).',
+      "`pnpm dev:seed-room-fixture` locally first (CI has no parsed fixture).",
   );
 
   const geometryRowCount = Number(
-    psqlScalar(`select count(*) from room_scan_geometry_elements where scan_id='${scanId}'`),
+    psqlScalar(
+      `select count(*) from room_scan_geometry_elements where scan_id='${scanId}'`,
+    ),
   );
-  test.skip(geometryRowCount === 0, `scan ${scanId} has a parsed header but zero geometry element rows.`);
+  test.skip(
+    geometryRowCount === 0,
+    `scan ${scanId} has a parsed header but zero geometry element rows.`,
+  );
 
   // Photos ride the same fixture but a SEPARATE seeding step (`pnpm
   // dev:seed-room-fixture` seeds them by default; `--photos-only` re-seeds
   // just these 6 rows) — guard independently so a geometry-only fixture run
   // skips the photo assertions below rather than failing red.
   const photoCount = Number(
-    psqlScalar(`select count(*) from room_scan_images where scan_id='${scanId}'`),
+    psqlScalar(
+      `select count(*) from room_scan_images where scan_id='${scanId}'`,
+    ),
   );
   test.skip(
     photoCount === 0,
     `scan ${scanId} has no seeded photos — run \`pnpm dev:seed-room-fixture\` ` +
-      '(or `--photos-only` to just add them) locally first.',
+      "(or `--photos-only` to just add them) locally first.",
   );
 
-  const roomCount = Number(psqlScalar('select count(*) from room_scans'));
+  const roomCount = Number(psqlScalar("select count(*) from room_scans"));
 
   // The wall this spec hovers AND measures against — position 0 is the
   // parser's own deterministic ordering (N,E,S,W then along-wall position;
@@ -285,41 +321,55 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
       order by position asc limit 1`,
   );
   const [label, x1s, z1s, x2s, z2s, confidence] = wallRow;
-  const x1 = Number(x1s), z1 = Number(z1s), x2 = Number(x2s), z2 = Number(z2s);
+  const x1 = Number(x1s),
+    z1 = Number(z1s),
+    x2 = Number(x2s),
+    z2 = Number(z2s);
   const wallTruth: WallTruth = {
     label,
-    x1, z1, x2, z2,
+    x1,
+    z1,
+    x2,
+    z2,
     lengthFt: Math.hypot(x2 - x1, z2 - z1),
   };
   const expectedTip =
     `${wallTruth.label} — ${ftIn(wallTruth.lengthFt)}` +
-    (confidence === 'low' ? ' · low confidence — verify on site' : '');
+    (confidence === "low" ? " · low confidence — verify on site" : "");
 
   // Track every request from here on — the Orbit-boundary assertion needs a
   // "before" slice (nothing three.js-shaped has loaded yet) and an "after"
   // slice (the Orbit click's lazy chunk landed).
   const requestUrls: string[] = [];
-  page.on('request', (req) => requestUrls.push(req.url()));
+  page.on("request", (req) => requestUrls.push(req.url()));
 
   // ── 1. The Rooms roster — card count + Elena's mini-plan ───────────────
-  await page.goto('/rooms', { waitUntil: 'domcontentloaded' });
+  await page.goto("/rooms", { waitUntil: "domcontentloaded" });
   // RoomShell's title is a plain <span> in its `<header>` — scoped via the
   // implicit "banner" landmark role, which also keeps this off any other
   // chrome that happens to print the roster's name. F17 renamed this door
   // everywhere it is spoken — the registry, the StudioDrawer, ⌘K, the mobile
   // bar's context chip AND the page's own banner (C20: one name).
-  await expect(page.getByRole('banner').getByText('Measured rooms', { exact: true })).toBeVisible({
+  await expect(
+    page.getByRole("banner").getByText("Measured rooms", { exact: true }),
+  ).toBeVisible({
     timeout: 20_000,
   });
 
-  const roomLinks = page.getByRole('link', { name: /^Open the room for/ });
+  const roomLinks = page.getByRole("link", { name: /^Open the room for/ });
   await expect(roomLinks).toHaveCount(roomCount, { timeout: 20_000 });
 
-  const elenaCardLink = page.getByRole('link', { name: 'Open the room for Elena Ruiz' });
+  const elenaCardLink = page.getByRole("link", {
+    name: "Open the room for Elena Ruiz",
+  });
   await expect(elenaCardLink).toBeVisible();
-  const elenaCard = elenaCardLink.locator('xpath=..');
-  await expect(elenaCard.locator('svg[aria-label="Room plan sketch"]')).toBeVisible();
-  await expect(elenaCard.locator('[data-testid="room-plan-thumb-placeholder"]')).toHaveCount(0);
+  const elenaCard = elenaCardLink.locator("xpath=..");
+  await expect(
+    elenaCard.locator('svg[aria-label="Room plan sketch"]'),
+  ).toBeVisible();
+  await expect(
+    elenaCard.locator('[data-testid="room-plan-thumb-placeholder"]'),
+  ).toHaveCount(0);
 
   const preClickRequestCount = requestUrls.length;
 
@@ -330,7 +380,9 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
 
   // ── 3. Facts rail — the Verify line (Elena's fixture carries exactly one
   //      low-confidence wall; facts-rail.tsx only renders this when ≥1) ───
-  await expect(page.getByText('Verify', { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Verify", { exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(page.getByText(/drawn dashed; confirm on site/)).toBeVisible();
 
   // ── 4. Photos — the facts-rail line reads the seeded count, and the
@@ -338,19 +390,23 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
   //      I76). Scope the facts-rail assertion to `<aside>`: PhotoStrip's own
   //      section header ALSO reads the bare text "Photos", so an unscoped
   //      locator would match both. ──────────────────────────────────────
-  const factsRail = page.locator('aside');
-  await expect(factsRail.getByText('Photos', { exact: true })).toBeVisible();
-  await expect(factsRail.getByRole('button', { name: /6 photos/ })).toBeVisible();
+  const factsRail = page.locator("aside");
+  await expect(factsRail.getByText("Photos", { exact: true })).toBeVisible();
+  await expect(
+    factsRail.getByRole("button", { name: /6 photos/ }),
+  ).toBeVisible();
 
-  const photoStrip = page.getByRole('list', { name: 'Room photos' });
-  await expect(photoStrip.getByRole('listitem')).toHaveCount(6);
+  const photoStrip = page.getByRole("list", { name: "Room photos" });
+  await expect(photoStrip.getByRole("listitem")).toHaveCount(6);
 
   // ── 5. Hover a wall → chip text matches independently-computed ftIn truth
   const planSvg = 'svg[aria-label="Room plan"]';
   const wallGroup = page.locator(`${planSvg} g[aria-label="${expectedTip}"]`);
   await expect(wallGroup).toHaveCount(1);
   await wallGroup.hover();
-  await expect(page.getByText(expectedTip, { exact: true })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText(expectedTip, { exact: true })).toBeVisible({
+    timeout: 5_000,
+  });
   // Move off so the hover chip doesn't linger and shadow later locators.
   await page.mouse.move(0, 0);
 
@@ -359,21 +415,21 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
   //      measure tool's catcher rect only occludes markers while ARMED
   //      (photo-markers.tsx's header) — this runs before arming, so no
   //      suppression is in play. ─────────────────────────────────────────
-  const firstPlanMarker = page.locator('[data-photo-marker]').first();
+  const firstPlanMarker = page.locator("[data-photo-marker]").first();
   await expect(firstPlanMarker).toHaveCount(1);
   await firstPlanMarker.click();
 
-  const photoDialog = page.getByRole('dialog');
+  const photoDialog = page.getByRole("dialog");
   await expect(photoDialog).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText(/photo \d+ of 6/i)).toBeVisible();
 
-  await page.keyboard.press('Escape');
+  await page.keyboard.press("Escape");
   await expect(photoDialog).toHaveCount(0);
   await expect(firstPlanMarker).toBeFocused();
 
   // ── 7. Measure the SAME wall's two endpoints → label within 1″ ─────────
   await page.locator(planSvg).scrollIntoViewIfNeeded();
-  await page.getByRole('button', { name: 'Measure', exact: true }).click();
+  await page.getByRole("button", { name: "Measure", exact: true }).click();
 
   const pA = await feetToScreenPoint(page, planSvg, wallTruth.x1, wallTruth.z1);
   await page.mouse.click(pA.x, pA.y);
@@ -383,9 +439,11 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
   const measureChip = page.locator(`${planSvg} foreignObject div`);
   await expect(measureChip).toBeVisible({ timeout: 5_000 });
   const measuredFt = parseFtIn(await measureChip.innerText());
-  expect(Math.abs(measuredFt - wallTruth.lengthFt)).toBeLessThanOrEqual(1 / 12 + 1e-6);
+  expect(Math.abs(measuredFt - wallTruth.lengthFt)).toBeLessThanOrEqual(
+    1 / 12 + 1e-6,
+  );
 
-  await page.getByRole('button', { name: 'Clear', exact: true }).click();
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
 
   // ── 8. Orbit — canvas mounts on click, and NOT a byte of three.js loaded
   //      beforehand (the lazy-boundary the whole shell is built around) ───
@@ -395,17 +453,16 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
     .some((u) => /three/i.test(u));
   expect(threeLoadedBeforeOrbit).toBe(false);
 
-  await page.getByRole('button', { name: 'Orbit', exact: true }).click();
-  const orbitCanvas = page.locator('canvas').first();
+  await page.getByRole("button", { name: "Orbit", exact: true }).click();
+  const orbitCanvas = page.locator("canvas").first();
   await expect(orbitCanvas).toBeVisible({ timeout: 20_000 });
 
   const threeLoadedAfterOrbit =
     requestUrls.slice(preOrbitClickCount).some((u) => /three/i.test(u)) ||
-    (await page.evaluate(
-      () =>
-        performance
-          .getEntriesByType('resource')
-          .some((r) => /three/i.test(r.name) || /orbit-canvas/i.test(r.name)),
+    (await page.evaluate(() =>
+      performance
+        .getEntriesByType("resource")
+        .some((r) => /three/i.test(r.name) || /orbit-canvas/i.test(r.name)),
     ));
   expect(threeLoadedAfterOrbit).toBe(true);
 
@@ -430,11 +487,16 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
        order by captured_at asc, id asc limit 1`,
   );
   const cameraTransform = earliestPhotoRow[0]
-    .replace(/^\{|\}$/g, '')
-    .split(',')
+    .replace(/^\{|\}$/g, "")
+    .split(",")
     .map(Number);
 
-  let bounds = { minX: 0, maxX: Math.max(0, widthFt), minZ: 0, maxZ: Math.max(0, depthFt) };
+  let bounds = {
+    minX: 0,
+    maxX: Math.max(0, widthFt),
+    minZ: 0,
+    maxZ: Math.max(0, depthFt),
+  };
   if (floorJson) {
     const floor = JSON.parse(floorJson) as Array<[number, number]>;
     if (floor.length > 0) {
@@ -449,25 +511,40 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
       );
     }
   }
-  const markerPose = clampToFloorBounds(photoPlanPose(cameraTransform, yawDeg, offset.x, offset.z), bounds);
-  const { position: orbitCameraPos, target: orbitTarget } = orbitDefaultCamera(widthFt, depthFt);
+  const markerPose = clampToFloorBounds(
+    photoPlanPose(cameraTransform, yawDeg, offset.x, offset.z),
+    bounds,
+  );
+  const { position: orbitCameraPos, target: orbitTarget } = orbitDefaultCamera(
+    widthFt,
+    depthFt,
+  );
 
   await orbitCanvas.scrollIntoViewIfNeeded();
   const canvasBox = await orbitCanvas.boundingBox();
-  if (!canvasBox) throw new Error('Orbit canvas has no bounding box — is it visible?');
-  const orbitClickPt = projectToCanvas(markerPose, orbitCameraPos, orbitTarget, canvasBox);
+  if (!canvasBox)
+    throw new Error("Orbit canvas has no bounding box — is it visible?");
+  const orbitClickPt = projectToCanvas(
+    markerPose,
+    orbitCameraPos,
+    orbitTarget,
+    canvasBox,
+  );
 
   await page.mouse.click(orbitClickPt.x, orbitClickPt.y);
-  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("dialog")).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText(/photo \d+ of 6/i)).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   // ── 10. Leave → "← the Scans" (fix A: room-card.tsx stashed /rooms as the
   //      origin on click) → actually returns to /rooms ────────────────────
   // exact + case-sensitive: RoomShell's leave affordance is the lowercase
   // originLabel(), distinct from the roster banner's capital-T "The Scans".
-  const leaveButton = page.getByRole('button', { name: 'Measured rooms', exact: true });
+  const leaveButton = page.getByRole("button", {
+    name: "Measured rooms",
+    exact: true,
+  });
   await expect(leaveButton).toBeVisible();
   await leaveButton.click();
   await page.waitForURL(/\/rooms$/, { timeout: 5_000 });
@@ -476,7 +553,9 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
   // chrome that happens to print the roster's name. F17 renamed this door
   // everywhere it is spoken — the registry, the StudioDrawer, ⌘K, the mobile
   // bar's context chip AND the page's own banner (C20: one name).
-  await expect(page.getByRole('banner').getByText('Measured rooms', { exact: true })).toBeVisible({
+  await expect(
+    page.getByRole("banner").getByText("Measured rooms", { exact: true }),
+  ).toBeVisible({
     timeout: 20_000,
   });
 });

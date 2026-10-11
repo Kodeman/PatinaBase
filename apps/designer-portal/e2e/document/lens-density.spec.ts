@@ -23,18 +23,18 @@
  * (no root ever carries `data-density="full"`) — that is this wave's honest
  * red, and it turns green the moment W4-L1/L2/L3 attach the observer.
  */
-import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
-import { quiet, scrollTo, scrollSteps, settle } from '../helpers/lens';
+import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
+import { quiet, scrollTo, scrollSteps, settle } from "../helpers/lens";
 import {
   LONG_PAPER_ID,
   PRE_WORK_ID,
   FOURTH_STOP_HEADING_ID,
   assertLongPaper,
-} from './lens-fixtures';
+} from "./lens-fixtures";
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: "serial" });
 test.skip(
-  ({ browserName }) => browserName === 'firefox',
+  ({ browserName }) => browserName === "firefox",
   'the lens specs run chromium + webkit (test-impact, "Browser ruling"); Firefox is not a shipped target for this portal',
 );
 
@@ -56,8 +56,8 @@ async function openPaper(
   path = `/doc/${LONG_PAPER_ID}`,
 ): Promise<void> {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(path, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('[data-document-shell]')).toBeVisible({
+  await page.goto(path, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("[data-document-shell]")).toBeVisible({
     timeout: 30_000,
   });
   await settle(page);
@@ -66,13 +66,13 @@ async function openPaper(
 async function regionRects(page: AuthenticatedPage): Promise<RegionRect[]> {
   return page.evaluate(() =>
     Array.from(
-      document.querySelectorAll('[data-document-paper] [data-index-region]'),
+      document.querySelectorAll("[data-document-paper] [data-index-region]"),
     ).map((el) => {
       const rect = el.getBoundingClientRect();
       return {
-        key: el.getAttribute('data-index-region'),
-        density: el.getAttribute('data-density'),
-        passed: el.hasAttribute('data-passed'),
+        key: el.getAttribute("data-index-region"),
+        density: el.getAttribute("data-density"),
+        passed: el.hasAttribute("data-passed"),
         top: rect.top,
         offsetTop: (el as HTMLElement).offsetTop,
       };
@@ -80,7 +80,7 @@ async function regionRects(page: AuthenticatedPage): Promise<RegionRect[]> {
   );
 }
 
-test.describe('the lens density — one direction (D-B16)', () => {
+test.describe("the lens density — one direction (D-B16)", () => {
   test.beforeAll(() => {
     assertLongPaper();
   });
@@ -95,38 +95,40 @@ test.describe('the lens density — one direction (D-B16)', () => {
       const rects = await regionRects(page);
       expect(
         rects.length,
-        'no [data-index-region] roots found on the long paper',
+        "no [data-index-region] roots found on the long paper",
       ).toBeGreaterThan(0);
 
       const quietTooClose = rects.filter(
-        (r) => r.density === 'quiet' && r.top <= innerHeight + LOOKAHEAD_PX,
+        (r) => r.density === "quiet" && r.top <= innerHeight + LOOKAHEAD_PX,
       );
       expect(
         quietTooClose,
         `(i) quiet roots inside the lookahead line: ${JSON.stringify(quietTooClose)}`,
       ).toEqual([]);
 
-      const passedNotFull = rects.filter((r) => r.passed && r.density !== 'full');
+      const passedNotFull = rects.filter(
+        (r) => r.passed && r.density !== "full",
+      );
       expect(
         passedNotFull,
         `(ii) passed roots that are not full: ${JSON.stringify(passedNotFull)}`,
       ).toEqual([]);
 
       const inFrame = rects.filter((r) => r.top < innerHeight);
-      const fullCount = rects.filter((r) => r.density === 'full').length;
+      const fullCount = rects.filter((r) => r.density === "full").length;
       expect(
         inFrame.length,
-        'no region is in frame at all at this offset — the invariant has nothing to check',
+        "no region is in frame at all at this offset — the invariant has nothing to check",
       ).toBeGreaterThan(0);
       expect(
         fullCount,
         `(iii) full count is ${fullCount} while ${inFrame.length} region(s) are in frame — ` +
-          'expected until the density observer (W4-L1/L2/L3) attaches `data-density`',
+          "expected until the density observer (W4-L1/L2/L3) attaches `data-density`",
       ).toBeGreaterThanOrEqual(1);
     });
   }
 
-  test('on a deep-landed load (native #-anchor to the fourth stop), the same invariant holds at first settle', async ({
+  test("on a deep-landed load (native #-anchor to the fourth stop), the same invariant holds at first settle", async ({
     authenticatedPage: page,
   }) => {
     // D-B16's own scenario: a root discovered already at or above the
@@ -138,7 +140,7 @@ test.describe('the lens density — one direction (D-B16)', () => {
     const rects = await regionRects(page);
 
     const quietTooClose = rects.filter(
-      (r) => r.density === 'quiet' && r.top <= innerHeight + LOOKAHEAD_PX,
+      (r) => r.density === "quiet" && r.top <= innerHeight + LOOKAHEAD_PX,
     );
     expect(quietTooClose, JSON.stringify(quietTooClose)).toEqual([]);
 
@@ -146,18 +148,18 @@ test.describe('the lens density — one direction (D-B16)', () => {
     // 400 / 1200 AND on a deep-landed load" — and the deep landing is the one
     // scenario where a passed-but-quiet root is actually reachable, because
     // everything above the frame is discovered and marked in the same commit.
-    const passedNotFull = rects.filter((r) => r.passed && r.density !== 'full');
+    const passedNotFull = rects.filter((r) => r.passed && r.density !== "full");
     expect(
       passedNotFull,
       `(ii) passed roots that are not full: ${JSON.stringify(passedNotFull)}`,
     ).toEqual([]);
 
     const inFrame = rects.filter((r) => r.top < innerHeight);
-    const fullCount = rects.filter((r) => r.density === 'full').length;
+    const fullCount = rects.filter((r) => r.density === "full").length;
     expect(inFrame.length).toBeGreaterThan(0);
     expect(
       fullCount,
-      'D-B16: a region discovered already in view must be promoted at once, not left quiet-with-data-passed',
+      "D-B16: a region discovered already in view must be promoted at once, not left quiet-with-data-passed",
     ).toBeGreaterThanOrEqual(1);
   });
 
@@ -215,7 +217,7 @@ test.describe('the lens density — one direction (D-B16)', () => {
     for (const b of before) {
       const a = after.find((r) => r.key === b.key);
       expect(a, `region "${b.key}" missing after the round trip`).toBeTruthy();
-      if (b.density === 'full') {
+      if (b.density === "full") {
         expect(
           a!.offsetTop,
           `region "${b.key}" was full at s0 and its offsetTop moved: ${b.offsetTop} -> ${a!.offsetTop}`,
@@ -229,7 +231,7 @@ test.describe('the lens density — one direction (D-B16)', () => {
     }
   });
 
-  test('scrollHeight never shrinks, and no root above the frame top ever moves, across a full forward walk', async ({
+  test("scrollHeight never shrinks, and no root above the frame top ever moves, across a full forward walk", async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page);
@@ -245,7 +247,7 @@ test.describe('the lens density — one direction (D-B16)', () => {
     await quiet(page);
     await settle(page);
     const anchorKey = (await regionRects(page))[0]?.key ?? null;
-    expect(anchorKey, 'no first region to anchor on').not.toBeNull();
+    expect(anchorKey, "no first region to anchor on").not.toBeNull();
 
     let lastScrollHeight = 0;
     let lastAnchorOffsetTop: number | null = null;
@@ -300,7 +302,7 @@ test.describe('the lens density — one direction (D-B16)', () => {
     }
   });
 
-  test('the first quiet→full boundary is crossed exactly once, in one direction (40px settled steps, ±24px around the crossing)', async ({
+  test("the first quiet→full boundary is crossed exactly once, in one direction (40px settled steps, ±24px around the crossing)", async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page);
@@ -317,12 +319,16 @@ test.describe('the lens density — one direction (D-B16)', () => {
     // however far down the paper it sits, and bisecting for a crossing it will
     // never make is a test that cannot pass for a reason that is not a defect.
     const candidate = rects
-      .filter((r) => r.top > innerHeight + LOOKAHEAD_PX && r.density !== 'full')
+      .filter((r) => r.top > innerHeight + LOOKAHEAD_PX && r.density !== "full")
       .sort((a, b) => a.top - b.top)[0];
     expect(
       candidate,
       `no region starts outside the initial lookahead window AND quiet at this viewport — nothing to bisect. rects: ${JSON.stringify(
-        rects.map((r) => ({ key: r.key, top: Math.round(r.top), density: r.density })),
+        rects.map((r) => ({
+          key: r.key,
+          top: Math.round(r.top),
+          density: r.density,
+        })),
       )}`,
     ).toBeTruthy();
     const target = candidate!.key!;
@@ -339,7 +345,7 @@ test.describe('the lens density — one direction (D-B16)', () => {
           // so an unscoped read is always `null` and can never reach 'full'.
           document
             .querySelector(`[data-document-paper] [data-index-region="${key}"]`)
-            ?.getAttribute('data-density') ?? null,
+            ?.getAttribute("data-density") ?? null,
         target,
       );
     }
@@ -358,7 +364,7 @@ test.describe('the lens density — one direction (D-B16)', () => {
     for (let y = 0; y <= totalHeight; y += 40) {
       const density = await densityAt(y);
       readings.push({ y, density });
-      if (density === 'full') {
+      if (density === "full") {
         sawFull = true;
         after += 1;
         // Three steps past the crossing is enough to catch a flap back.
@@ -373,8 +379,8 @@ test.describe('the lens density — one direction (D-B16)', () => {
     let transitions = 0;
     let sawFullToQuiet = false;
     for (let i = 1; i < readings.length; i += 1) {
-      const prevFull = readings[i - 1]!.density === 'full';
-      const curFull = readings[i]!.density === 'full';
+      const prevFull = readings[i - 1]!.density === "full";
+      const curFull = readings[i]!.density === "full";
       if (prevFull !== curFull) {
         transitions += 1;
         if (prevFull && !curFull) sawFullToQuiet = true;
@@ -382,25 +388,29 @@ test.describe('the lens density — one direction (D-B16)', () => {
     }
 
     expect(transitions, `readings: ${JSON.stringify(readings)}`).toBe(1);
-    expect(sawFullToQuiet, 'the boundary was crossed in the wrong direction (full -> quiet)').toBe(
-      false,
-    );
+    expect(
+      sawFullToQuiet,
+      "the boundary was crossed in the wrong direction (full -> quiet)",
+    ).toBe(false);
   });
 
-  test('data-reading-index on the shell and rail names the full region; at 390 the mobile bar carries it', async ({
+  test("data-reading-index on the shell and rail names the full region; at 390 the mobile bar carries it", async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page);
     await scrollTo(page, 1200);
 
     const shellIndex = await page
-      .locator('[data-document-shell]')
-      .getAttribute('data-reading-index');
-    expect(shellIndex, 'the shell publishes no data-reading-index while in view').not.toBeNull();
+      .locator("[data-document-shell]")
+      .getAttribute("data-reading-index");
+    expect(
+      shellIndex,
+      "the shell publishes no data-reading-index while in view",
+    ).not.toBeNull();
 
     const railIndex = await page
-      .getByRole('navigation', { name: 'This paper' })
-      .getAttribute('data-reading-index');
+      .getByRole("navigation", { name: "This paper" })
+      .getAttribute("data-reading-index");
     expect(railIndex).toBe(shellIndex);
 
     const density = await page.evaluate(
@@ -408,46 +418,48 @@ test.describe('the lens density — one direction (D-B16)', () => {
         // W4-C2: paper-scoped, as above.
         document
           .querySelector(`[data-document-paper] [data-index-region="${key}"]`)
-          ?.getAttribute('data-density') ?? null,
+          ?.getAttribute("data-density") ?? null,
       shellIndex,
     );
     expect(
       density,
       `the reading stop ("${shellIndex}") is not marked full`,
-    ).toBe('full');
+    ).toBe("full");
 
     await page.setViewportSize({ width: 390, height: 844 });
     await settle(page);
     const barIndex = await page
-      .getByRole('navigation', { name: 'Document bar' })
-      .getAttribute('data-reading-index');
+      .getByRole("navigation", { name: "Document bar" })
+      .getAttribute("data-reading-index");
     expect(barIndex).toBe(shellIndex);
   });
 
-  test('D-B36 — opening and closing the standing sheet at s2 changes neither the density map nor the lens state', async ({
+  test("D-B36 — opening and closing the standing sheet at s2 changes neither the density map nor the lens state", async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page);
     await scrollTo(page, 400);
 
     const readState = () =>
-      page
-        .locator('[data-document-shell]')
-        .getAttribute('data-lens-state');
+      page.locator("[data-document-shell]").getAttribute("data-lens-state");
     const readMap = async () =>
       (await regionRects(page)).map(
-        (region) => `${region.key}:${region.density}:${region.passed ? 'passed' : '-'}`,
+        (region) =>
+          `${region.key}:${region.density}:${region.passed ? "passed" : "-"}`,
       );
 
     const before = await readMap();
     const stateBefore = await readState();
 
-    const door = page.locator('[data-lens-more]');
+    const door = page.locator("[data-lens-more]");
     if ((await door.count()) === 0) {
       // The sheet's door only prints when a second standing item is withheld.
       // On a seed where it does not, there is no sheet to open and nothing to
       // assert — say so rather than passing quietly.
-      test.skip(true, 'no [data-lens-more] door on this paper — no standing sheet to open');
+      test.skip(
+        true,
+        "no [data-lens-more] door on this paper — no standing sheet to open",
+      );
     }
     await door.first().click();
     await expect(
@@ -460,10 +472,10 @@ test.describe('the lens density — one direction (D-B16)', () => {
     expect(await readState()).toBe(stateBefore);
     expect(await readMap()).toEqual(before);
 
-    await page.keyboard.press('Escape');
-    await expect(
-      page.locator('[data-doc-sheet-kind="standing"]'),
-    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.locator('[data-doc-sheet-kind="standing"]')).toHaveCount(
+      0,
+    );
     await settle(page);
 
     expect(await readState()).toBe(stateBefore);
@@ -476,17 +488,20 @@ test.describe('the lens density — one direction (D-B16)', () => {
   // W4-R1 is asserted directly: none of the six project-only stop keys ever
   // mount here — this paper's own regions (`proposal`, `scope`, `vision`,
   // `investment`) and the `record` stop are the whole set.
-  test('the pre-work paper (…d6): D-B16 holds on the proposal spread, and none of the six project keys ever mount', async ({
+  test("the pre-work paper (…d6): D-B16 holds on the proposal spread, and none of the six project keys ever mount", async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page, `/doc/${PRE_WORK_ID}`);
     const innerHeight = await page.evaluate(() => window.innerHeight);
     const rects = await regionRects(page);
-    expect(rects.length, 'no [data-index-region] roots found on the pre-work paper').toBeGreaterThan(0);
+    expect(
+      rects.length,
+      "no [data-index-region] roots found on the pre-work paper",
+    ).toBeGreaterThan(0);
 
     // W4-R1 — a quiet Pieces or Money head on a brief/proposal spread would
     // be a fiction; the spec asserts zero of the six stop bodies mount here.
-    const PROJECT_KEYS = ['approvals', 'schedule', 'ffe', 'money', 'care'];
+    const PROJECT_KEYS = ["approvals", "schedule", "ffe", "money", "care"];
     const mountedKeys = rects.map((r) => r.key);
     for (const key of PROJECT_KEYS) {
       expect(
@@ -497,7 +512,13 @@ test.describe('the lens density — one direction (D-B16)', () => {
     // `record` mounts on every pre-work spread (OD-2); the proposal spread's
     // own four stops are re-parented under it (W5-R2 item 1).
     expect(mountedKeys).toEqual(
-      expect.arrayContaining(['proposal', 'scope', 'vision', 'investment', 'record']),
+      expect.arrayContaining([
+        "proposal",
+        "scope",
+        "vision",
+        "investment",
+        "record",
+      ]),
     );
 
     // D-B16, the same three sentences the long-paper cases assert, at rest —
@@ -505,22 +526,25 @@ test.describe('the lens density — one direction (D-B16)', () => {
     // does; the C2 unscoped-rail-selector defect this file's review note
     // warns about lives in the rail, not in this paper-scoped query).
     const quietTooClose = rects.filter(
-      (r) => r.density === 'quiet' && r.top <= innerHeight + LOOKAHEAD_PX,
+      (r) => r.density === "quiet" && r.top <= innerHeight + LOOKAHEAD_PX,
     );
     expect(
       quietTooClose,
       `(i) quiet roots inside the lookahead line: ${JSON.stringify(quietTooClose)}`,
     ).toEqual([]);
 
-    const passedNotFull = rects.filter((r) => r.passed && r.density !== 'full');
+    const passedNotFull = rects.filter((r) => r.passed && r.density !== "full");
     expect(
       passedNotFull,
       `(ii) passed roots that are not full: ${JSON.stringify(passedNotFull)}`,
     ).toEqual([]);
 
     const inFrame = rects.filter((r) => r.top < innerHeight);
-    const fullCount = rects.filter((r) => r.density === 'full').length;
-    expect(inFrame.length, 'no region is in frame at all on the pre-work paper').toBeGreaterThan(0);
+    const fullCount = rects.filter((r) => r.density === "full").length;
+    expect(
+      inFrame.length,
+      "no region is in frame at all on the pre-work paper",
+    ).toBeGreaterThan(0);
     expect(
       fullCount,
       `(iii) full count is ${fullCount} while ${inFrame.length} region(s) are in frame`,
@@ -541,7 +565,7 @@ test.describe('the lens density — one direction (D-B16)', () => {
  *
  * The acceptance map is the lead's, verbatim (`w4-review-design.md` §1).
  */
-test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
+test.describe("the cold load — the lens waits for the paper (D-B46)", () => {
   test.beforeAll(() => {
     assertLongPaper();
   });
@@ -550,14 +574,14 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
     {
       width: 1440,
       height: 900,
-      full: ['approvals', 'schedule'],
-      quiet: ['ffe', 'money', 'care', 'record'],
+      full: ["approvals", "schedule"],
+      quiet: ["ffe", "money", "care", "record"],
     },
     {
       width: 390,
       height: 844,
-      full: ['approvals'],
-      quiet: ['schedule', 'ffe', 'money', 'care', 'record'],
+      full: ["approvals"],
+      quiet: ["schedule", "ffe", "money", "care", "record"],
     },
   ] as const;
 
@@ -571,7 +595,7 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
       // navigation starts with an empty one. The storage clear takes the
       // remembered folds with it, so no explicit choice can stand in for a
       // density the lens is supposed to be deciding.
-      await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+      await page.goto("/desk", { waitUntil: "domcontentloaded" });
       await page.evaluate(() => {
         try {
           window.localStorage.clear();
@@ -579,8 +603,10 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
           /* private mode — nothing was remembered anyway */
         }
       });
-      await page.goto(`/doc/${LONG_PAPER_ID}`, { waitUntil: 'domcontentloaded' });
-      await expect(page.locator('[data-document-shell]')).toBeVisible({
+      await page.goto(`/doc/${LONG_PAPER_ID}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await expect(page.locator("[data-document-shell]")).toBeVisible({
         timeout: 30_000,
       });
 
@@ -598,11 +624,14 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
 
       for (const key of cell.full) {
         const region = rects.find((r) => r.key === key);
-        expect(region, `no [data-index-region="${key}"] root on the paper`).toBeTruthy();
+        expect(
+          region,
+          `no [data-index-region="${key}"] root on the paper`,
+        ).toBeTruthy();
         expect(
           region!.density,
           `${key} should be full at the cold load — map: ${JSON.stringify(map)}`,
-        ).toBe('full');
+        ).toBe("full");
       }
       for (const key of cell.quiet) {
         const region = rects.find((r) => r.key === key);
@@ -611,28 +640,33 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
           region.density,
           `${key} sits ${Math.round(region.top)}px down and must be quiet on a cold load — ` +
             `map: ${JSON.stringify(map)}`,
-        ).toBe('quiet');
+        ).toBe("quiet");
       }
 
       // D-B16's invariants, at this settle too.
       const quietTooClose = rects.filter(
-        (r) => r.density === 'quiet' && r.top <= innerHeight + LOOKAHEAD_PX,
+        (r) => r.density === "quiet" && r.top <= innerHeight + LOOKAHEAD_PX,
       );
       expect(
         quietTooClose,
         `(i) quiet roots inside the lookahead line: ${JSON.stringify(quietTooClose)}`,
       ).toEqual([]);
-      const passedNotFull = rects.filter((r) => r.passed && r.density !== 'full');
+      const passedNotFull = rects.filter(
+        (r) => r.passed && r.density !== "full",
+      );
       expect(
         passedNotFull,
         `(ii) passed roots that are not full: ${JSON.stringify(passedNotFull)}`,
       ).toEqual([]);
-      const fullCount = rects.filter((r) => r.density === 'full').length;
-      expect(fullCount, '(iii) full count while roots are in frame').toBeGreaterThanOrEqual(1);
+      const fullCount = rects.filter((r) => r.density === "full").length;
+      expect(
+        fullCount,
+        "(iii) full count while roots are in frame",
+      ).toBeGreaterThanOrEqual(1);
     });
   }
 
-  test('a warm second navigation arrives with the first stop already full', async ({
+  test("a warm second navigation arrives with the first stop already full", async ({
     authenticatedPage: page,
   }) => {
     // W4F3-07 — CLIENT-SIDE, or the cache is not warm: React Query's cache
@@ -640,8 +674,8 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
     // case would prove nothing about the warm path. She puts the document down
     // and picks it up again, which is the journey the claim is about.
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`/doc/${LONG_PAPER_ID}`, { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('[data-document-shell]')).toBeVisible({
+    await page.goto(`/doc/${LONG_PAPER_ID}`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("[data-document-shell]")).toBeVisible({
       timeout: 30_000,
     });
     await settle(page);
@@ -672,7 +706,7 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
     const backIn = page.locator(`a[href*="/doc/${LONG_PAPER_ID}"]`);
     expect(
       await backIn.count(),
-      'the desk carries no link back to the long paper on this seed — the warm return cannot be walked',
+      "the desk carries no link back to the long paper on this seed — the warm return cannot be walked",
     ).toBeGreaterThan(0);
     await page.evaluate((id) => {
       (
@@ -680,18 +714,18 @@ test.describe('the cold load — the lens waits for the paper (D-B46)', () => {
       )?.click();
     }, LONG_PAPER_ID);
     await page.waitForURL(new RegExp(LONG_PAPER_ID), { timeout: 30_000 });
-    await expect(page.locator('[data-document-shell]')).toBeVisible({
+    await expect(page.locator("[data-document-shell]")).toBeVisible({
       timeout: 30_000,
     });
     await settle(page);
 
-    const shell = page.locator('[data-document-shell]');
-    await expect(shell).toHaveAttribute('data-lens-resolved', 'true');
+    const shell = page.locator("[data-document-shell]");
+    await expect(shell).toHaveAttribute("data-lens-resolved", "true");
     const approvals = await page.evaluate(() =>
       document
         .querySelector('[data-document-paper] [data-index-region="approvals"]')
-        ?.getAttribute('data-density'),
+        ?.getAttribute("data-density"),
     );
-    expect(approvals).toBe('full');
+    expect(approvals).toBe("full");
   });
 });

@@ -148,9 +148,9 @@ test.describe("the person card", () => {
 
       for (const head of [
         "Reach & access",
-        "Seats on projects",
-        "Past seats",
-        "History",
+        "Project assignments",
+        "Past assignments",
+        "Relationship history",
       ]) {
         await expect(page.getByRole("heading", { name: head })).toBeVisible();
       }

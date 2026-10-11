@@ -266,7 +266,9 @@ test.describe("Studio buying Phase 0 — the non-owner member walk", () => {
     // 1–2. The Document; the line unfold reads ready.
     let poCell = await openLine(page);
     await expect(page.getByTestId("line-order-readiness")).toHaveCount(0);
-    const order = page.getByRole("button", { name: "Order", exact: true }).first();
+    const order = page
+      .getByRole("button", { name: "Order", exact: true })
+      .first();
     await expect(order).toBeEnabled({ timeout: 30_000 });
     await expect(poCell).toContainText("Not yet ordered");
     await shot(page, testInfo, "01-line-ready");
@@ -380,7 +382,9 @@ test.describe("Studio buying Phase 0 — the non-owner member walk", () => {
       .poll(() => poState().status, { timeout: 20_000 })
       .toBe("in_production");
     await expect.poll(lineStatus, { timeout: 20_000 }).toBe("production");
-    await page.getByRole("button", { name: "Mark shipped", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Mark shipped", exact: true })
+      .click();
     await expect
       .poll(() => poState().status, { timeout: 20_000 })
       .toBe("shipped");
@@ -392,7 +396,9 @@ test.describe("Studio buying Phase 0 — the non-owner member walk", () => {
 
     // The Orders book opened from the project wears the project lens.
     await page.getByRole("button", { name: "Vendor correspondence" }).click();
-    const pages = page.getByRole("navigation", { name: "Order register views" });
+    const pages = page.getByRole("navigation", {
+      name: "Order register views",
+    });
     await expect(pages).toBeVisible({ timeout: 30_000 });
     await pages.getByRole("button", { name: "Receiving", exact: true }).click();
     await expect(

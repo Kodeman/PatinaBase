@@ -219,9 +219,7 @@ test.describe("Project-owned board save path", () => {
 
     // No revert banner: the whole point is that the project leg's RPC
     // accepted the group write rather than 400ing and rolling it back.
-    await expect(
-      page.getByText(/could not be saved/i),
-    ).toHaveCount(0);
+    await expect(page.getByText(/could not be saved/i)).toHaveCount(0);
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("board-room-canvas")).toBeVisible();
@@ -304,7 +302,9 @@ test.describe("Project-owned board save path", () => {
     );
     await openProjectBoard(page);
 
-    await page.getByRole("button", { name: "Share design board", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Share design board", exact: true })
+      .click();
     await expect(
       page.getByRole("heading", {
         name: "Share Project leg acceptance board",
@@ -385,7 +385,9 @@ test.describe("Project-owned board save path", () => {
     );
     await openProjectBoard(page);
 
-    await page.getByRole("button", { name: "Share design board", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Share design board", exact: true })
+      .click();
     await expect(
       page.getByRole("heading", {
         name: "Share Project leg acceptance board",
@@ -465,7 +467,9 @@ test.describe("Project-owned board save path", () => {
     );
     await openProjectBoard(page);
 
-    await page.getByRole("button", { name: "Share design board", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Share design board", exact: true })
+      .click();
     await expect(
       page.getByRole("heading", {
         name: "Share Project leg acceptance board",
@@ -513,7 +517,9 @@ test.describe("Project-owned board save path", () => {
     await openProjectBoard(page);
 
     const rpc = "**/rest/v1/rpc/apply_board_room_state";
-    const refuse = async (route: Parameters<Parameters<typeof page.route>[1]>[0]) => {
+    const refuse = async (
+      route: Parameters<Parameters<typeof page.route>[1]>[0],
+    ) => {
       await route.fulfill({
         status: 400,
         contentType: "application/json",

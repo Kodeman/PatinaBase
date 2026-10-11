@@ -1,6 +1,6 @@
-import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
+import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
 
-const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
+const SENT_PROPOSAL_ID = "b0000000-0000-0000-0000-000000000002";
 /**
  * The Drafting Room is for DRAFTS. `draftingEditability` (lib/document/
  * drafting-editability.ts) evicts any proposal whose `status !== 'draft'` to
@@ -9,7 +9,7 @@ const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
  * therefore drives the seeded DRAFT; `/doc/…` steps keep the sent proposal,
  * whose read-only document is what they are actually about.
  */
-const DRAFT_PROPOSAL_ID = 'd0c10000-0000-0000-0000-0000000000b2';
+const DRAFT_PROPOSAL_ID = "d0c10000-0000-0000-0000-0000000000b2";
 
 /**
  * The act at the right of a roster line: the job's own need act where it has
@@ -19,7 +19,7 @@ const DRAFT_PROPOSAL_ID = 'd0c10000-0000-0000-0000-0000000000b2';
 const ROSTER_ACTION =
   /Open the job|Review decisions|Send reminder|Signed, open the project|Follow up|Revise proposal|Review flagged lines|Continue the introduction|Review the claim|Inspect the delivery|Resolve the schedule|Open the task|Review the purchase order|Follow up with the maker|Review and send/;
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: "serial" });
 
 /**
  * Each of these two tests walks five routes, and under `next dev` every one of
@@ -40,14 +40,14 @@ const COLD = 30_000;
  * The action itself must still be visible; the halo is what the finger hits.
  */
 async function expectMinTarget(
-  action: ReturnType<AuthenticatedPage['locator']>,
+  action: ReturnType<AuthenticatedPage["locator"]>,
 ) {
   await expect(action).toBeVisible({ timeout: COLD });
   // Halo-or-self: a DocumentAction carries its 44px floor on the invisible
   // [data-action-hit] halo, but non-DocumentAction targets (the desk folio
   // card stamps data-action-variant="primary" on its whole ~200px surface)
   // have no halo, so fall back to measuring the action element itself.
-  const halo = action.locator('[data-action-hit]');
+  const halo = action.locator("[data-action-hit]");
   const haloCount = await halo.count();
   const target = haloCount >= 1 ? halo : action;
   await expect
@@ -66,7 +66,7 @@ async function expectMinTarget(
 
 /** Mobile-bar actions carry their own 44px row as well as Scored Ink's halo. */
 async function expectMinRow(
-  action: ReturnType<AuthenticatedPage['locator']>,
+  action: ReturnType<AuthenticatedPage["locator"]>,
   pixels: number,
 ) {
   await expect(action).toBeVisible({ timeout: COLD });
@@ -136,33 +136,33 @@ async function expectMobileBar(
   actionKey: string,
   label: string | RegExp,
 ) {
-  const bar = page.getByTestId('mobile-bar');
+  const bar = page.getByTestId("mobile-bar");
   await expect(bar).toBeVisible({ timeout: COLD });
-  await expect(page.locator('[data-mobile-edge-owner]')).toHaveCount(1);
-  await expect(bar).toHaveAttribute('data-mobile-edge-owner', 'document-bar');
+  await expect(page.locator("[data-mobile-edge-owner]")).toHaveCount(1);
+  await expect(bar).toHaveAttribute("data-mobile-edge-owner", "document-bar");
   const action = bar.locator(`[data-action-key="${actionKey}"]`);
   await expect(action).toHaveCount(1, { timeout: COLD });
   await expect(action).toContainText(label, { timeout: COLD });
   await expectMinRow(action, 44);
 }
 
-test.describe('Inked Instruments action visibility', () => {
-  test('desktop surfaces expose one legible primary per region', async ({
+test.describe("Inked Instruments action visibility", () => {
+  test("desktop surfaces expose one legible primary per region", async ({
     authenticatedPage: page,
   }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1280, height: 900 });
 
-    await page.goto('/desk', { waitUntil: 'domcontentloaded' });
-    await expectInlinePrimary(page, 'desk-head', 'Record an inquiry');
-    await expect(page.getByTestId('mobile-bar')).toBeHidden();
+    await page.goto("/desk", { waitUntil: "domcontentloaded" });
+    await expectInlinePrimary(page, "desk-head", "Record an inquiry");
+    await expect(page.getByTestId("mobile-bar")).toBeHidden();
 
     // B2 — the four-up folio grid is ONE roster of every live job now, grouped
     // by stage. Its acts are one region, and that region elects no leader: the
     // Desk's single inked act is the head's `Capture a lead`, asserted above.
     // C7 is kept honest in both directions — a roster that grew a leader back
     // would put two primaries on one screen.
-    const roster = page.getByTestId('desk-roster');
+    const roster = page.getByTestId("desk-roster");
     await expect(roster).toBeVisible({ timeout: COLD });
     const rosterActs = page.locator(
       '[role="group"][data-action-region="every-job"]',
@@ -177,7 +177,7 @@ test.describe('Inked Instruments action visibility', () => {
     // R143 — a card for a claim, a line for the rest. Both halves carry the
     // same one act per job at a real 44px target, and the region still elects
     // no leader.
-    const firstCard = roster.locator('[data-claim-card]').first();
+    const firstCard = roster.locator("[data-claim-card]").first();
     await expect(firstCard).toBeVisible({ timeout: COLD });
     const rosterAction = firstCard.locator('[data-action-key^="roster-"]');
     await expect(rosterAction).toHaveCount(1, { timeout: COLD });
@@ -185,7 +185,7 @@ test.describe('Inked Instruments action visibility', () => {
     await expectMinTarget(rosterAction);
 
     // The at-rest half's act is the same instrument at the same floor.
-    const firstRow = roster.locator('[data-ledger-row]').first();
+    const firstRow = roster.locator("[data-ledger-row]").first();
     await expect(firstRow).toBeVisible({ timeout: COLD });
     const ledgerAction = firstRow.locator('[data-action-key^="roster-"]');
     await expect(ledgerAction).toHaveCount(1, { timeout: COLD });
@@ -193,15 +193,15 @@ test.describe('Inked Instruments action visibility', () => {
     await expectMinTarget(ledgerAction);
 
     await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {
-      waitUntil: 'domcontentloaded',
+      waitUntil: "domcontentloaded",
     });
-    await expectInlinePrimary(page, 'proposal-watch-actions', 'Mark signed');
+    await expectInlinePrimary(page, "proposal-watch-actions", "Mark signed");
 
-    await page.goto('/library', { waitUntil: 'domcontentloaded' });
-    await expectInlinePrimary(page, 'room-head', 'Capture');
+    await page.goto("/library", { waitUntil: "domcontentloaded" });
+    await expectInlinePrimary(page, "room-head", "Capture");
 
-    await page.goto('/people', { waitUntil: 'domcontentloaded' });
-    await expectInlinePrimary(page, 'room-head', 'Add contact');
+    await page.goto("/people", { waitUntil: "domcontentloaded" });
+    await expectInlinePrimary(page, "room-head", "Add contact");
 
     // The Drafting Room claims no primary, and has not since f74e20b88
     // ("legacy send retirement"): a project-bound furnishing draft now reaches
@@ -213,9 +213,9 @@ test.describe('Inked Instruments action visibility', () => {
     // the ACT moved by ruling; role=group and data-action-region never did,
     // which is why the assertion below still queries the same region.
     await page.goto(`/drafting/${DRAFT_PROPOSAL_ID}`, {
-      waitUntil: 'domcontentloaded',
+      waitUntil: "domcontentloaded",
     });
-    await expectInlineQuietAct(page, 'room-head', 'share-proposal', 'Share');
+    await expectInlineQuietAct(page, "room-head", "share-proposal", "Share");
   });
 
   // RE-POINTED 2026-08-29, W0-fix (was QUARANTINED, Smart Lens W0). A9 retired
@@ -229,70 +229,75 @@ test.describe('Inked Instruments action visibility', () => {
   // dock act back, and the head act must still open a sheet that fits the
   // smallest supported phone — which is the regression this test was really
   // carrying.
-  test(
-    '390px desk promotes capture-lead from the head, not the edge (A9)',
-    async ({ authenticatedPage: page }) => {
-      test.setTimeout(120_000);
-      await page.setViewportSize({ width: 390, height: 844 });
+  test("390px desk promotes capture-lead from the head, not the edge (A9)", async ({
+    authenticatedPage: page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 390, height: 844 });
 
-      await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+    await page.goto("/desk", { waitUntil: "domcontentloaded" });
 
-      // The bar is still the one edge owner — it just carries no act here.
-      const bar = page.getByTestId('mobile-bar');
-      await expect(bar).toBeVisible({ timeout: COLD });
-      await expect(page.locator('[data-mobile-edge-owner]')).toHaveCount(1);
-      await expect(bar).toHaveAttribute('data-mobile-edge-owner', 'document-bar');
-      await expect(bar.locator('[data-action-key="capture-lead"]')).toHaveCount(0);
-      await expect(bar).toContainText(/In hand|Today/);
+    // The bar is still the one edge owner — it just carries no act here.
+    const bar = page.getByTestId("mobile-bar");
+    await expect(bar).toBeVisible({ timeout: COLD });
+    await expect(page.locator("[data-mobile-edge-owner]")).toHaveCount(1);
+    await expect(bar).toHaveAttribute("data-mobile-edge-owner", "document-bar");
+    await expect(bar.locator('[data-action-key="capture-lead"]')).toHaveCount(
+      0,
+    );
+    await expect(bar).toContainText(/In hand|Today/);
 
-      // The head keeps the act, at the same one-primary-per-region contract
-      // the desktop walk asserts.
-      const headAct = await expectInlinePrimary(page, 'desk-head', 'Record an inquiry');
+    // The head keeps the act, at the same one-primary-per-region contract
+    // the desktop walk asserts.
+    const headAct = await expectInlinePrimary(
+      page,
+      "desk-head",
+      "Record an inquiry",
+    );
 
-      // The head act is the FIRST thing on this route, so under `next dev` a
-      // press can land on server markup whose handler has not attached yet and
-      // be silently lost. The roster's jobs only exist once React has run and
-      // its query resolved, so waiting on one is the hydration barrier.
-      await expect(
-        page
-          .getByTestId('desk-roster')
-          .locator('[data-claim-card], [data-ledger-row]')
-          .first(),
-      ).toBeVisible({ timeout: COLD });
+    // The head act is the FIRST thing on this route, so under `next dev` a
+    // press can land on server markup whose handler has not attached yet and
+    // be silently lost. The roster's jobs only exist once React has run and
+    // its query resolved, so waiting on one is the hydration barrier.
+    await expect(
+      page
+        .getByTestId("desk-roster")
+        .locator("[data-claim-card], [data-ledger-row]")
+        .first(),
+    ).toBeVisible({ timeout: COLD });
 
-      // Regression: the first client-journey form must remain usable without
-      // sideways scrolling at the smallest supported phone width.
-      await headAct.click();
-      const captureLeadSheet = page.getByRole('dialog', {
-        name: 'Record an inquiry',
-      });
-      await expect(captureLeadSheet).toBeVisible({ timeout: COLD });
-      for (const field of [
-        captureLeadSheet.getByLabel('Email'),
-        captureLeadSheet.getByLabel('Phone'),
-        captureLeadSheet.getByLabel('The project (one line)'),
-      ]) {
-        await expect
-          .poll(async () => {
-            const box = await field.boundingBox();
-            return box !== null && box.x >= 0 && box.x + box.width <= 390;
-          })
-          .toBe(true);
-      }
-      // The sheet itself lays out inside the phone, panel and all — the claim
-      // this regression is actually about. The page-level scroll claim it used
-      // to make is split into its own quarantine below, because it fails for a
-      // reason that has nothing to do with this form.
+    // Regression: the first client-journey form must remain usable without
+    // sideways scrolling at the smallest supported phone width.
+    await headAct.click();
+    const captureLeadSheet = page.getByRole("dialog", {
+      name: "Record an inquiry",
+    });
+    await expect(captureLeadSheet).toBeVisible({ timeout: COLD });
+    for (const field of [
+      captureLeadSheet.getByLabel("Email"),
+      captureLeadSheet.getByLabel("Phone"),
+      captureLeadSheet.getByLabel("The project (one line)"),
+    ]) {
       await expect
         .poll(async () => {
-          const box = await captureLeadSheet.boundingBox();
+          const box = await field.boundingBox();
           return box !== null && box.x >= 0 && box.x + box.width <= 390;
         })
         .toBe(true);
-      await captureLeadSheet.getByRole('button', { name: 'Close sheet' }).click();
-      await expect(captureLeadSheet).toBeHidden();
-    },
-  );
+    }
+    // The sheet itself lays out inside the phone, panel and all — the claim
+    // this regression is actually about. The page-level scroll claim it used
+    // to make is split into its own quarantine below, because it fails for a
+    // reason that has nothing to do with this form.
+    await expect
+      .poll(async () => {
+        const box = await captureLeadSheet.boundingBox();
+        return box !== null && box.x >= 0 && box.x + box.width <= 390;
+      })
+      .toBe(true);
+    await captureLeadSheet.getByRole("button", { name: "Close sheet" }).click();
+    await expect(captureLeadSheet).toBeHidden();
+  });
 
   // QUARANTINED 2026-08-29, W0-fix. This was the last assertion of the test
   // above — split out rather than dropped, because the page-level claim is
@@ -309,16 +314,16 @@ test.describe('Inked Instruments action visibility', () => {
   // clipped. Pre-existing on main@dab057537 — no product file moved in this
   // wave. Un-fixme when: the roster line fits its own content box at 390.
   // Owner: desk roster / responsive.
-  test.fixme('390px desk lays out with no latent horizontal overflow', async ({
+  test.fixme("390px desk lays out with no latent horizontal overflow", async ({
     authenticatedPage: page,
   }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+    await page.goto("/desk", { waitUntil: "domcontentloaded" });
     await expect(
       page
-        .getByTestId('desk-roster')
-        .locator('[data-claim-card], [data-ledger-row]')
+        .getByTestId("desk-roster")
+        .locator("[data-claim-card], [data-ledger-row]")
         .first(),
     ).toBeVisible({ timeout: COLD });
     await expect
@@ -330,22 +335,22 @@ test.describe('Inked Instruments action visibility', () => {
       .toBe(true);
   });
 
-  test('390px surfaces place context, primary, and More in one edge owner', async ({
+  test("390px surfaces place context, primary, and More in one edge owner", async ({
     authenticatedPage: page,
   }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 390, height: 844 });
 
     await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {
-      waitUntil: 'domcontentloaded',
+      waitUntil: "domcontentloaded",
     });
-    await expectMobileBar(page, 'mark-proposal-signed', 'Mark signed');
+    await expectMobileBar(page, "mark-proposal-signed", "Mark signed");
 
-    await page.goto('/library', { waitUntil: 'domcontentloaded' });
-    await expectMobileBar(page, 'capture-piece', 'Capture');
+    await page.goto("/library", { waitUntil: "domcontentloaded" });
+    await expectMobileBar(page, "capture-piece", "Capture");
 
-    await page.goto('/people', { waitUntil: 'domcontentloaded' });
-    await expectMobileBar(page, 'add-person', 'Add contact');
+    await page.goto("/people", { waitUntil: "domcontentloaded" });
+    await expectMobileBar(page, "add-person", "Add contact");
 
     // The Drafting Room is deliberately absent from this walk. Since f74e20b88
     // it registers `useMobilePrimaryAction(null)` — no act is promoted to the

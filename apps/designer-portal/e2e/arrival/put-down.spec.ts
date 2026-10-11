@@ -18,28 +18,39 @@
  * The spine's "Put down document" link only renders `min-[1180px]:block`
  * (desktop) — this spec runs on `chromium`/`webkit` only.
  */
-import { test, expect } from '../fixtures/auth';
-import { seedWorkflowGateFixture, WORKFLOW_GATE_PROJECT_ID } from '../helpers/workflow-gate-fixture';
-import { ARRIVAL_PROJECT_ID, armE2EOptIn, installArrivalInstruments, settleDeskWalkthrough, CARD_SELECTOR } from './helpers';
+import { test, expect } from "../fixtures/auth";
+import {
+  seedWorkflowGateFixture,
+  WORKFLOW_GATE_PROJECT_ID,
+} from "../helpers/workflow-gate-fixture";
+import {
+  ARRIVAL_PROJECT_ID,
+  armE2EOptIn,
+  installArrivalInstruments,
+  settleDeskWalkthrough,
+  CARD_SELECTOR,
+} from "./helpers";
 
-test.describe('Put-down lands the roster row', () => {
+test.describe("Put-down lands the roster row", () => {
   test.beforeAll(() => {
     seedWorkflowGateFixture();
     settleDeskWalkthrough();
   });
 
-  test('putting the Document down scrolls its roster row into view', async ({
+  test("putting the Document down scrolls its roster row into view", async ({
     authenticatedPage: page,
   }, testInfo) => {
     test.skip(
-      testInfo.project.name === 'mobile-chrome',
+      testInfo.project.name === "mobile-chrome",
       'the spine "Put down document" link is desktop-only (min-[1180px]:block)',
     );
     await armE2EOptIn(page);
     await installArrivalInstruments(page);
     await page.addInitScript(() => {
       const calls: string[] = [];
-      (window as unknown as { __scrollIntoViewCalls: string[] }).__scrollIntoViewCalls = calls;
+      (
+        window as unknown as { __scrollIntoViewCalls: string[] }
+      ).__scrollIntoViewCalls = calls;
       const orig = Element.prototype.scrollIntoView;
       Element.prototype.scrollIntoView = function scrollIntoViewSpy(
         this: Element,
@@ -51,30 +62,39 @@ test.describe('Put-down lands the roster row', () => {
     });
 
     // The Desk briefs once a visit: spend it here so the put-down below declines `desk-shown`.
-    await page.goto('/desk', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });
-    await page.locator('.arr-skip').click();
+    await page.goto("/desk", { waitUntil: "domcontentloaded" });
+    await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.locator(".arr-skip").click();
     await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
 
-    await page.goto(`/doc/${ARRIVAL_PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
-    await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });
-    await page.locator('.arr-skip').click();
+    await page.goto(`/doc/${ARRIVAL_PROJECT_ID}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.locator(".arr-skip").click();
     await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
 
-    await page.getByRole('link', { name: 'Back to Studio overview' }).click();
+    await page.getByRole("link", { name: "Back to Studio overview" }).click();
     await page.waitForURL(/\/desk$/);
 
     await page.waitForFunction(
       (rowId) =>
-        ((window as unknown as { __scrollIntoViewCalls?: string[] }).__scrollIntoViewCalls ?? []).includes(
-          rowId,
-        ),
+        (
+          (window as unknown as { __scrollIntoViewCalls?: string[] })
+            .__scrollIntoViewCalls ?? []
+        ).includes(rowId),
       `roster-line-${WORKFLOW_GATE_PROJECT_ID}`,
       { timeout: 20_000 },
     );
 
     const calls = await page.evaluate(
-      () => (window as unknown as { __scrollIntoViewCalls?: string[] }).__scrollIntoViewCalls ?? [],
+      () =>
+        (window as unknown as { __scrollIntoViewCalls?: string[] })
+          .__scrollIntoViewCalls ?? [],
     );
     expect(calls).toContain(`roster-line-${WORKFLOW_GATE_PROJECT_ID}`);
 

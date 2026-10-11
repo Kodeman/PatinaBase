@@ -1,5 +1,5 @@
-import path from 'path';
-import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
+import path from "path";
+import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
 import {
   getDesignerId,
   readProfile,
@@ -7,7 +7,7 @@ import {
   clearHelpState,
   setTourCompleted,
   waitForTourRecord,
-} from '../helpers/help-state';
+} from "../helpers/help-state";
 
 /**
  * The Desk Walkthrough (R97) — the desk-first intro tour.
@@ -31,11 +31,11 @@ import {
  */
 
 // One shared actor → serialize; each test sets its own precondition.
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: "serial" });
 
 const SHOT_DIR = path.resolve(
   process.cwd(),
-  '../../docs/design/the-document/screenshots/help-walkthrough',
+  "../../docs/design/the-document/screenshots/help-walkthrough",
 );
 const shot = (page: AuthenticatedPage, name: string) =>
   page.screenshot({ path: path.join(SHOT_DIR, name) });
@@ -44,7 +44,7 @@ const shot = (page: AuthenticatedPage, name: string) =>
 // the gate treats the designer as a fresh signup. NB: NOW() (2026-07-10) still
 // PREDATES the placeholder ship date, so we cannot use it to exercise the
 // auto-modal path — we pin an explicit post-ship date instead.
-const FRESH_SIGNUP_CREATED_AT = '2026-07-12T00:00:00Z';
+const FRESH_SIGNUP_CREATED_AT = "2026-07-12T00:00:00Z";
 
 /** A timestamp strictly BEFORE the ship date, so the gate takes the "existing
  *  designer" branch (offer note, no auto-modal). This is pinned rather than
@@ -52,7 +52,7 @@ const FRESH_SIGNUP_CREATED_AT = '2026-07-12T00:00:00Z';
  *  own insert time, which on a freshly reset database is NOW() — after the
  *  placeholder ship date, not before it. The test that needs an existing
  *  designer must therefore state that precondition itself. */
-const EXISTING_DESIGNER_CREATED_AT = '2026-07-08T00:00:00Z';
+const EXISTING_DESIGNER_CREATED_AT = "2026-07-08T00:00:00Z";
 
 /** The DESK HEADER's own "Find anything" act. The Studio Drawer prints a second
  *  door with the same visible words (C-AP-05), so this is scoped to the desk
@@ -61,12 +61,12 @@ const EXISTING_DESIGNER_CREATED_AT = '2026-07-08T00:00:00Z';
 const findAnything = (page: AuthenticatedPage) =>
   page
     .locator('[role="group"][data-action-region="desk-head"]')
-    .getByRole('button', { name: 'Find anything', exact: true });
+    .getByRole("button", { name: "Find anything", exact: true });
 
 /** Go to /desk and wait for the desk chrome (the "Find anything" affordance is
  *  always present) — steadier than networkidle against realtime sockets. */
-async function gotoDesk(page: AuthenticatedPage, search = ''): Promise<void> {
-  await page.goto(`/desk${search}`, { waitUntil: 'domcontentloaded' });
+async function gotoDesk(page: AuthenticatedPage, search = ""): Promise<void> {
+  await page.goto(`/desk${search}`, { waitUntil: "domcontentloaded" });
   await expect(findAnything(page)).toBeVisible({
     timeout: 30_000,
   });
@@ -75,7 +75,7 @@ async function gotoDesk(page: AuthenticatedPage, search = ''): Promise<void> {
 /** Open the ⌘K command palette via the (idempotent) "Find anything" affordance,
  *  retrying until it appears — the CommandBar listener can lag a cold compile. */
 async function openPalette(page: AuthenticatedPage) {
-  const palette = page.getByRole('dialog', { name: 'Studio search' });
+  const palette = page.getByRole("dialog", { name: "Studio search" });
   const affordance = findAnything(page);
   await expect(async () => {
     await affordance.click();
@@ -87,17 +87,19 @@ async function openPalette(page: AuthenticatedPage) {
 /** Advance the six-step coachmark tour from step 1 through completion. */
 async function walkAllSixSteps(page: AuthenticatedPage): Promise<void> {
   for (let n = 1; n <= 5; n++) {
-    await expect(page.getByText(`Step ${n} of 6`)).toBeVisible({ timeout: 10_000 });
-    if (n === 4) await shot(page, 'step-4-drawer.png');
-    await page.getByTestId('tour-next').click();
+    await expect(page.getByText(`Step ${n} of 6`)).toBeVisible({
+      timeout: 10_000,
+    });
+    if (n === 4) await shot(page, "step-4-drawer.png");
+    await page.getByTestId("tour-next").click();
   }
-  await expect(page.getByText('Step 6 of 6')).toBeVisible({ timeout: 10_000 });
-  await page.getByTestId('tour-complete').click();
+  await expect(page.getByText("Step 6 of 6")).toBeVisible({ timeout: 10_000 });
+  await page.getByTestId("tour-complete").click();
   // The tour is gone once complete() fires.
-  await expect(page.getByText('Step 6 of 6')).toHaveCount(0);
+  await expect(page.getByText("Step 6 of 6")).toHaveCount(0);
 }
 
-test.describe('The Desk Walkthrough (R97)', () => {
+test.describe("The Desk Walkthrough (R97)", () => {
   let designerId: string;
   let originalCreatedAt: string;
 
@@ -112,7 +114,7 @@ test.describe('The Desk Walkthrough (R97)', () => {
     await clearHelpState(designerId);
   });
 
-  test('existing designer — no modal, the offer note starts the tour, it completes and persists', async ({
+  test("existing designer — no modal, the offer note starts the tour, it completes and persists", async ({
     authenticatedPage: page,
   }) => {
     // Existing designer: created_at < ship date. Pinned by the test, not
@@ -123,30 +125,39 @@ test.describe('The Desk Walkthrough (R97)', () => {
     await gotoDesk(page);
 
     // No auto welcome modal for an existing designer.
-    await expect(page.getByTestId('welcome-modal-content')).toHaveCount(0);
+    await expect(page.getByTestId("welcome-modal-content")).toHaveCount(0);
 
     // The quiet R94 offer note IS present, and its named act starts the tour.
-    await expect(page.getByText('New desk, same studio', { exact: false })).toBeVisible({
+    await expect(
+      page.getByText("New desk, same studio", { exact: false }),
+    ).toBeVisible({
       timeout: 20_000,
     });
-    await page.getByRole('button', { name: /six quick stops/i }).click();
+    await page.getByRole("button", { name: /six quick stops/i }).click();
 
     // Step 1 — heading "The Desk" (the coachmark's accessible name).
-    await expect(page.getByRole('dialog', { name: 'The Desk' })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('Step 1 of 6')).toBeVisible();
-    await shot(page, 'step-1-desk.png');
+    await expect(page.getByRole("dialog", { name: "The Desk" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByText("Step 1 of 6")).toBeVisible();
+    await shot(page, "step-1-desk.png");
 
     // Advance all six steps; step 6 CTA (testid tour-complete) completes it.
     await walkAllSixSteps(page);
 
     // Completion persisted cross-device (profiles.help_state).
-    const rec = await waitForTourRecord(designerId, (r) => r?.completed === true);
+    const rec = await waitForTourRecord(
+      designerId,
+      (r) => r?.completed === true,
+    );
     expect(rec?.completed).toBe(true);
 
     // Reload → no modal, and the offer note is gone (state persisted).
     await gotoDesk(page);
-    await expect(page.getByTestId('welcome-modal-content')).toHaveCount(0);
-    await expect(page.getByText('New desk, same studio', { exact: false })).toHaveCount(0);
+    await expect(page.getByTestId("welcome-modal-content")).toHaveCount(0);
+    await expect(
+      page.getByText("New desk, same studio", { exact: false }),
+    ).toHaveCount(0);
   });
 
   test('new signup — welcome modal; "explore" dismisses durably; then the walkthrough completes', async ({
@@ -159,38 +170,50 @@ test.describe('The Desk Walkthrough (R97)', () => {
     await gotoDesk(page);
 
     // The auto WelcomeModal ("This is your Desk").
-    await expect(page.getByTestId('welcome-modal-content')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText('This is your Desk')).toBeVisible();
-    await shot(page, 'welcome-modal.png');
+    await expect(page.getByTestId("welcome-modal-content")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText("This is your Desk")).toBeVisible();
+    await shot(page, "welcome-modal.png");
 
     // "Explore on my own" (secondary CTA) closes the modal.
-    await page.getByTestId('welcome-modal-secondary').click();
-    await expect(page.getByTestId('welcome-modal-content')).toHaveCount(0);
+    await page.getByTestId("welcome-modal-secondary").click();
+    await expect(page.getByTestId("welcome-modal-content")).toHaveCount(0);
 
     // Declining wrote abandoned@0 (the durable, cross-device welcome-shown marker).
-    const declined = await waitForTourRecord(designerId, (r) => r?.abandoned === true);
+    const declined = await waitForTourRecord(
+      designerId,
+      (r) => r?.abandoned === true,
+    );
     expect(declined?.abandoned).toBe(true);
     expect(declined?.atStep ?? 0).toBe(0);
 
     // Reload → the modal stays gone.
     await gotoDesk(page);
-    await expect(page.getByTestId('welcome-modal-content')).toHaveCount(0);
+    await expect(page.getByTestId("welcome-modal-content")).toHaveCount(0);
 
     // Clear help_state once more → the modal returns → "Take the walkthrough".
     await clearHelpState(designerId);
     await gotoDesk(page);
-    await expect(page.getByTestId('welcome-modal-content')).toBeVisible({ timeout: 20_000 });
-    await page.getByTestId('welcome-modal-primary').click();
+    await expect(page.getByTestId("welcome-modal-content")).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByTestId("welcome-modal-primary").click();
 
     // Six steps → complete.
-    await expect(page.getByRole('dialog', { name: 'The Desk' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("dialog", { name: "The Desk" })).toBeVisible({
+      timeout: 10_000,
+    });
     await walkAllSixSteps(page);
 
-    const rec = await waitForTourRecord(designerId, (r) => r?.completed === true);
+    const rec = await waitForTourRecord(
+      designerId,
+      (r) => r?.completed === true,
+    );
     expect(rec?.completed).toBe(true);
   });
 
-  test('replay — ⌘K row and ?tour= param restart at step 1 regardless of completed state', async ({
+  test("replay — ⌘K row and ?tour= param restart at step 1 regardless of completed state", async ({
     authenticatedPage: page,
   }) => {
     // Existing designer (no auto-modal) with a COMPLETED record — replay must
@@ -199,25 +222,29 @@ test.describe('The Desk Walkthrough (R97)', () => {
     await setTourCompleted(designerId);
 
     await gotoDesk(page);
-    await expect(page.getByTestId('welcome-modal-content')).toHaveCount(0);
+    await expect(page.getByTestId("welcome-modal-content")).toHaveCount(0);
 
     // ⌘K → "walkthrough" → the replay row.
     const palette = await openPalette(page);
-    await palette.getByRole('textbox').fill('walkthrough');
-    await palette.getByText('Take the walkthrough', { exact: true }).click();
+    await palette.getByRole("textbox").fill("walkthrough");
+    await palette.getByText("Take the walkthrough", { exact: true }).click();
 
     // Restarts at step 1 even though the record says completed.
-    await expect(page.getByRole('dialog', { name: 'The Desk' })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('Step 1 of 6')).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "The Desk" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByText("Step 1 of 6")).toBeVisible();
 
     // Leave the tour without completing it (skip).
-    await page.getByTestId('tour-skip').click();
-    await expect(page.getByText('Step 1 of 6')).toHaveCount(0);
+    await page.getByTestId("tour-skip").click();
+    await expect(page.getByText("Step 1 of 6")).toHaveCount(0);
 
     // Direct entry: /desk?tour=desk-walkthrough restarts too.
     await setTourCompleted(designerId);
-    await gotoDesk(page, '?tour=desk-walkthrough');
-    await expect(page.getByRole('dialog', { name: 'The Desk' })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('Step 1 of 6')).toBeVisible();
+    await gotoDesk(page, "?tour=desk-walkthrough");
+    await expect(page.getByRole("dialog", { name: "The Desk" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByText("Step 1 of 6")).toBeVisible();
   });
 });

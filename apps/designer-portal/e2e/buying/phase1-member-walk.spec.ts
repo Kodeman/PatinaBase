@@ -474,7 +474,9 @@ ON CONFLICT (id) DO NOTHING;`);
     // receiver first in the ship-to list, nothing preselected. Vendor B's
     // line is ordered from the overview in its own test below (SQ-444).
     await openLine(page);
-    const order = page.getByRole("button", { name: "Order", exact: true }).first();
+    const order = page
+      .getByRole("button", { name: "Order", exact: true })
+      .first();
     await expect(order).toBeEnabled({ timeout: 30_000 });
     await order.click();
     const paper = page.getByRole("dialog", { name: "The order paper" });
@@ -737,9 +739,9 @@ WHERE i.purchase_order_id = ${q(poId)} AND c.state = 'drafted'`),
       timeout: 30_000,
     });
     // A studio-lane PO, and the member is not its payer: no Pay now.
-    await expect(moneyOut.getByRole("button", { name: /Pay vendor now/ })).toHaveCount(
-      0,
-    );
+    await expect(
+      moneyOut.getByRole("button", { name: /Pay vendor now/ }),
+    ).toHaveCount(0);
 
     await moneyOut
       .getByRole("button", { name: "Record vendor payment · Deposit" })
@@ -832,7 +834,9 @@ WHERE i.purchase_order_id = ${q(poId)} AND c.state = 'drafted'`),
     await signIn(page, MEMBER_EMAIL);
     await openDocument(page);
     await page.getByText(LINE_B, { exact: true }).first().click();
-    const order = page.getByRole("button", { name: "Order", exact: true }).first();
+    const order = page
+      .getByRole("button", { name: "Order", exact: true })
+      .first();
     await expect(order).toBeEnabled({ timeout: 30_000 });
     await order.click();
     const paper = page.getByRole("dialog", { name: "The order paper" });

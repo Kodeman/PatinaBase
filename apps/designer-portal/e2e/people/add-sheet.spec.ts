@@ -47,7 +47,9 @@ test.describe("the add sheet writes the studio’s book", () => {
       const project = page.getByLabel("Project");
       await project.selectOption({ index: 1 });
       await page.getByLabel("Full name").fill(name);
-      await page.getByLabel("Trade", { exact: true }).selectOption("electrical");
+      await page
+        .getByLabel("Trade", { exact: true })
+        .selectOption("electrical");
       await page.getByLabel("Mobile").fill(mobileFor(name));
       await page
         .getByLabel("How to reach them")
@@ -130,9 +132,7 @@ test.describe("the add sheet writes the studio’s book", () => {
       await expect(
         page.getByText("Nothing defaulted from the agreement."),
       ).toBeVisible();
-      await page
-        .getByRole("button", { name: "Record the authority" })
-        .click();
+      await page.getByRole("button", { name: "Record the authority" }).click();
 
       await page.getByLabel("Authority").fill("Signs money to $2,500");
 

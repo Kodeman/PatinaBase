@@ -1,9 +1,9 @@
-import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
-import { adminDb } from '../helpers/supabase-admin';
-import { quiet, scrollTo, settle } from '../helpers/lens';
-import { psqlRun, psqlScalar } from '../helpers/psql';
+import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
+import { adminDb } from "../helpers/supabase-admin";
+import { quiet, scrollTo, settle } from "../helpers/lens";
+import { psqlRun, psqlScalar } from "../helpers/psql";
 
-const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
+const SENT_PROPOSAL_ID = "b0000000-0000-0000-0000-000000000002";
 /**
  * The Drafting Room is for DRAFTS. `draftingEditability` (lib/document/
  * drafting-editability.ts) evicts any proposal whose `status !== 'draft'` to
@@ -12,29 +12,30 @@ const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
  * therefore drives the seeded DRAFT; `/doc/…` steps keep the sent proposal,
  * whose read-only document is what they are actually about.
  */
-const DRAFT_PROPOSAL_ID = 'd0c10000-0000-0000-0000-0000000000b2';
+const DRAFT_PROPOSAL_ID = "d0c10000-0000-0000-0000-0000000000b2";
 
-
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: "serial" });
 
 async function openDocument(page: AuthenticatedPage, width: number) {
   await page.setViewportSize({ width, height: 900 });
   await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {
-    waitUntil: 'domcontentloaded',
+    waitUntil: "domcontentloaded",
   });
-  await expect(page.locator('[data-document-shell]')).toBeVisible();
+  await expect(page.locator("[data-document-shell]")).toBeVisible();
 }
 
 /** A project-kind spread — the only documents whose spine ever carried the two
  *  blocks B1 subtracted, and the ones the band's line 1 has facts for. A FIXED
  *  seed UUID, not one of the DB-generated project ids: those change on every
  *  `supabase:reset` and a spec pinned to one rots silently. */
-const PROJECT_ID = 'b0000000-0000-0000-0000-0000000000d4';
+const PROJECT_ID = "b0000000-0000-0000-0000-0000000000d4";
 
 async function openProject(page: AuthenticatedPage, width: number) {
   await page.setViewportSize({ width, height: 900 });
-  await page.goto(`/doc/${PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('[data-document-shell]')).toBeVisible({ timeout: 30_000 });
+  await page.goto(`/doc/${PROJECT_ID}`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("[data-document-shell]")).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 async function expectNoHorizontalOverflow(page: AuthenticatedPage) {
@@ -54,9 +55,9 @@ async function expectNoHorizontalOverflow(page: AuthenticatedPage) {
  *  therefore lays its own two lines down and takes them away again, rather
  *  than depending on a shared seed staying a particular shape — the same
  *  posture as the plan room's throwaway project. */
-const BULK_FIXTURE_MARK = 'quiet-responsive-shell fixture';
+const BULK_FIXTURE_MARK = "quiet-responsive-shell fixture";
 
-test.describe('Quiet Work responsive document shell', () => {
+test.describe("Quiet Work responsive document shell", () => {
   // `mode: 'serial'` shares ONE page across every case, so a case began at
   // whatever width the previous one left behind — `:204` inherited 1440 from
   // `:174` and then resized twice inside itself. Every case sets its own width
@@ -68,42 +69,45 @@ test.describe('Quiet Work responsive document shell', () => {
   });
 
   test.beforeAll(async () => {
-    const { error } = await adminDb.from('proposal_items').insert([
+    const { error } = await adminDb.from("proposal_items").insert([
       {
         proposal_id: DRAFT_PROPOSAL_ID,
-        name: 'Walnut sectional sofa',
+        name: "Walnut sectional sofa",
         description: BULK_FIXTURE_MARK,
         quantity: 1,
         unit_price: 650000,
         unit_sell_price: 650000,
         line_total_cents: 650000,
-        vendor_name: 'Lawson',
+        vendor_name: "Lawson",
         position: 0,
       },
       {
         proposal_id: DRAFT_PROPOSAL_ID,
-        name: 'Hand-knotted wool rug',
+        name: "Hand-knotted wool rug",
         description: BULK_FIXTURE_MARK,
         quantity: 1,
         unit_price: 420000,
         unit_sell_price: 420000,
         line_total_cents: 420000,
-        vendor_name: 'Beni Ourain Co.',
+        vendor_name: "Beni Ourain Co.",
         position: 1,
       },
     ]);
-    if (error) throw new Error(`could not seed the drafting fixture lines: ${error.message}`);
+    if (error)
+      throw new Error(
+        `could not seed the drafting fixture lines: ${error.message}`,
+      );
   });
 
   test.afterAll(async () => {
     await adminDb
-      .from('proposal_items')
+      .from("proposal_items")
       .delete()
-      .eq('proposal_id', DRAFT_PROPOSAL_ID)
-      .eq('description', BULK_FIXTURE_MARK);
+      .eq("proposal_id", DRAFT_PROPOSAL_ID)
+      .eq("description", BULK_FIXTURE_MARK);
   });
 
-  test('keeps drafting bulk actions above persistent bottom chrome', async ({
+  test("keeps drafting bulk actions above persistent bottom chrome", async ({
     authenticatedPage: page,
     browserName,
   }) => {
@@ -118,32 +122,32 @@ test.describe('Quiet Work responsive document shell', () => {
     // `document-lens/integration@e6da8bd76` with its own dev server before
     // this wave existed — pre-existing and environmental.
     test.skip(
-      browserName === 'webkit',
-      'WebKit scrollbar gutter: 1024 viewport measures a 1015px client width in webkit (9px scrollbar) vs 1024 in chromium, so bulkBox.x+width<=1009 is a coin toss unrelated to the lens (e2e-baseline.md W3-int)',
+      browserName === "webkit",
+      "WebKit scrollbar gutter: 1024 viewport measures a 1015px client width in webkit (9px scrollbar) vs 1024 in chromium, so bulkBox.x+width<=1009 is a coin toss unrelated to the lens (e2e-baseline.md W3-int)",
     );
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/drafting/${DRAFT_PROPOSAL_ID}`, {
-      waitUntil: 'domcontentloaded',
+      waitUntil: "domcontentloaded",
     });
-    const ffeFacet = page.getByRole('button', { name: /^FF&E / });
+    const ffeFacet = page.getByRole("button", { name: /^FF&E / });
     await expect(async () => {
-      if ((await ffeFacet.getAttribute('aria-expanded')) !== 'true') {
+      if ((await ffeFacet.getAttribute("aria-expanded")) !== "true") {
         await ffeFacet.click();
       }
-      await expect(ffeFacet).toHaveAttribute('aria-expanded', 'true', {
+      await expect(ffeFacet).toHaveAttribute("aria-expanded", "true", {
         timeout: 1_000,
       });
     }).toPass({ timeout: 10_000 });
 
     const firstScheduleItem = page
-      .getByRole('checkbox', { name: /^Select / })
+      .getByRole("checkbox", { name: /^Select / })
       .first();
     await expect(firstScheduleItem).toBeVisible();
     await firstScheduleItem.check();
 
-    const bulkActions = page.getByRole('region', { name: 'Bulk actions' });
-    const studioDrawer = page.getByRole('navigation', {
-      name: 'Studio drawer',
+    const bulkActions = page.getByRole("region", { name: "Bulk actions" });
+    const studioDrawer = page.getByRole("navigation", {
+      name: "Studio drawer",
     });
     await expect(bulkActions).toBeVisible();
     await expect(studioDrawer).toBeVisible();
@@ -160,7 +164,7 @@ test.describe('Quiet Work responsive document shell', () => {
       .toBe(true);
 
     await page.setViewportSize({ width: 1024, height: 900 });
-    const mobileBar = page.getByTestId('mobile-bar');
+    const mobileBar = page.getByTestId("mobile-bar");
     await expect(mobileBar).toBeVisible();
     await expect(studioDrawer).toBeHidden();
     await expect
@@ -182,18 +186,18 @@ test.describe('Quiet Work responsive document shell', () => {
   // for the wave: the rooms and the shelves left the rail for the paper at
   // every width, first as the ticket's rows and now (R127 Wave 3) as the
   // band's two lines above the paper and the ladder's stops inside the rail. ──
-  test('1440px leaves the spine one block and puts the map on the paper', async ({
+  test("1440px leaves the spine one block and puts the map on the paper", async ({
     authenticatedPage: page,
   }) => {
     await openProject(page, 1440);
 
-    const spine = page.locator('[data-document-spine]');
+    const spine = page.locator("[data-document-spine]");
     await expect(spine).toBeVisible();
     // W2 — the running index became the LADDER, and the ladder is the rail's
     // one block under its own accessible name.
-    await expect(
-      spine.locator('nav[aria-label="This paper"]'),
-    ).toBeVisible({ timeout: 20_000 });
+    await expect(spine.locator('nav[aria-label="This paper"]')).toBeVisible({
+      timeout: 20_000,
+    });
     // The two blocks B1 deleted are gone from the rail — headings first,
     // because those are what a reader would still see if either survived.
     await expect(spine.getByText(/^\s*Rooms\s*$/i)).toHaveCount(0);
@@ -204,15 +208,15 @@ test.describe('Quiet Work responsive document shell', () => {
     // R127 Wave 3 (W3-L5): the ticket's eight rows are gone and the BAND took
     // the position — two lines, one declared height, no rows. The claim this
     // keeps is the wave's own: the map is on the PAPER, not in the rail.
-    const band = page.locator('[data-lens-band]');
+    const band = page.locator("[data-lens-band]");
     await expect(band).toBeVisible();
     await expect(band.locator('[data-lens-line="1"]')).toHaveCount(1);
     await expect(band.locator('[data-lens-line="2"]')).toHaveCount(1);
-    await expect(page.locator('[data-ticket-row]')).toHaveCount(0);
+    await expect(page.locator("[data-ticket-row]")).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
   });
 
-  test('the band carries the map at 1280 and 390, where the spine never did', async ({
+  test("the band carries the map at 1280 and 390, where the spine never did", async ({
     authenticatedPage: page,
   }) => {
     await openProject(page, 1280);
@@ -222,7 +226,7 @@ test.describe('Quiet Work responsive document shell', () => {
     // was not there yet, and the same code passes alone every time. D-B28's
     // ruled precondition.
     await quiet(page);
-    const band = page.locator('[data-lens-band]');
+    const band = page.locator("[data-lens-band]");
     await expect(band).toBeVisible();
     await expect(band.locator('[data-lens-line="1"]')).toHaveCount(1);
     await expect(band.locator('[data-lens-line="2"]')).toHaveCount(1);
@@ -238,10 +242,8 @@ test.describe('Quiet Work responsive document shell', () => {
     await expect(band).toBeVisible();
     await expect(band.locator('[data-lens-line="1"]')).toHaveCount(1);
     await expect(band.locator('[data-lens-line="2"]')).toHaveCount(1);
-    await expect(
-      band.getByRole('button', { name: /Unfold/i }),
-    ).toHaveCount(0);
-    await expect(band).not.toHaveAttribute('data-unfolded', 'true');
+    await expect(band.getByRole("button", { name: /Unfold/i })).toHaveCount(0);
+    await expect(band).not.toHaveAttribute("data-unfolded", "true");
     // W4-N-05 / D-B35 — the LAYOUT box, not `boundingBox()`. The band is
     // `position: sticky`, and Playwright's quads come out of the compositor
     // carrying its fractional sticky offset (55.7204 at 1280) while
@@ -267,39 +269,39 @@ test.describe('Quiet Work responsive document shell', () => {
     // INTO the accessible name, so the name changes on every crossing and a
     // name-based locator races the scroll it is measuring.
     const sectionsDoor = page
-      .getByRole('navigation', { name: 'Document bar' })
-      .locator('[data-sections-door]');
+      .getByRole("navigation", { name: "Document bar" })
+      .locator("[data-sections-door]");
     await expect(sectionsDoor).toBeVisible({ timeout: 15_000 });
     await sectionsDoor.click();
     await expect(
-      page.getByRole('dialog', { name: /Sections of this document/i }),
+      page.getByRole("dialog", { name: /Sections of this document/i }),
     ).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 
-  test('1024px protects one paper canvas and one mobile edge', async ({
+  test("1024px protects one paper canvas and one mobile edge", async ({
     authenticatedPage: page,
   }) => {
     await openDocument(page, 1024);
 
-    await expect(page.getByTestId('mobile-bar')).toBeVisible();
-    await expect(page.locator('[data-mobile-edge-owner]')).toHaveCount(1);
-    await expect(page.locator('[data-document-spine]')).toBeHidden();
-    await expect(page.locator('[data-margin-trigger]')).toBeHidden();
-    await expect(page.locator('[data-margin-panel]')).toHaveAttribute(
-      'aria-hidden',
-      'true',
+    await expect(page.getByTestId("mobile-bar")).toBeVisible();
+    await expect(page.locator("[data-mobile-edge-owner]")).toHaveCount(1);
+    await expect(page.locator("[data-document-spine]")).toBeHidden();
+    await expect(page.locator("[data-margin-trigger]")).toBeHidden();
+    await expect(page.locator("[data-margin-panel]")).toHaveAttribute(
+      "aria-hidden",
+      "true",
     );
     await expectNoHorizontalOverflow(page);
   });
 
-  test('1280px uses the compact spine and an on-demand margin', async ({
+  test("1280px uses the compact spine and an on-demand margin", async ({
     authenticatedPage: page,
   }) => {
     await openDocument(page, 1280);
 
-    await expect(page.getByTestId('mobile-bar')).toBeHidden();
-    const spine = page.locator('[data-document-spine]');
+    await expect(page.getByTestId("mobile-bar")).toBeHidden();
+    const spine = page.locator("[data-document-spine]");
     await expect(spine).toBeVisible();
     await expect
       .poll(async () => (await spine.boundingBox())?.width ?? 0)
@@ -308,20 +310,20 @@ test.describe('Quiet Work responsive document shell', () => {
       .poll(async () => (await spine.boundingBox())?.width ?? 1000)
       .toBeLessThanOrEqual(137);
 
-    const trigger = page.locator('[data-margin-trigger]');
+    const trigger = page.locator("[data-margin-trigger]");
     await expect(trigger).toBeVisible();
     await trigger.click();
-    const margin = page.locator('[data-margin-panel]');
-    await expect(margin).toHaveAttribute('role', 'dialog');
-    await expect(margin).toHaveAttribute('data-margin-mode', 'sheet');
-    await expect(page.locator('[data-margin-close]')).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(margin).toHaveAttribute('aria-hidden', 'true');
+    const margin = page.locator("[data-margin-panel]");
+    await expect(margin).toHaveAttribute("role", "dialog");
+    await expect(margin).toHaveAttribute("data-margin-mode", "sheet");
+    await expect(page.locator("[data-margin-close]")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(margin).toHaveAttribute("aria-hidden", "true");
     await expect(trigger).toBeFocused();
     await expectNoHorizontalOverflow(page);
   });
 
-  test('1440px restores the full labelled spine and settled margin rail', async ({
+  test("1440px restores the full labelled spine and settled margin rail", async ({
     authenticatedPage: page,
     browserName,
   }) => {
@@ -333,22 +335,22 @@ test.describe('Quiet Work responsive document shell', () => {
     // `document-lens/integration@e6da8bd76` before this wave existed;
     // neither the band, the ladder nor the paper are implicated.
     test.skip(
-      browserName === 'webkit',
-      'WebKit scrollbar gutter: a 1440 viewport measures a 1431px layout viewport in webkit (9px scrollbar), so min-[1440px] never matches and the spine stays at the 136px tier (e2e-baseline.md W3-int)',
+      browserName === "webkit",
+      "WebKit scrollbar gutter: a 1440 viewport measures a 1431px layout viewport in webkit (9px scrollbar), so min-[1440px] never matches and the spine stays at the 136px tier (e2e-baseline.md W3-int)",
     );
     await openDocument(page, 1440);
 
-    await expect(page.getByTestId('mobile-bar')).toBeHidden();
-    const spine = page.locator('[data-document-spine]');
+    await expect(page.getByTestId("mobile-bar")).toBeHidden();
+    const spine = page.locator("[data-document-spine]");
     await expect(spine).toBeVisible();
     await expect
       .poll(async () => (await spine.boundingBox())?.width ?? 0)
       .toBeGreaterThanOrEqual(199);
-    await expect(page.locator('[data-margin-trigger]')).toBeHidden();
-    const margin = page.locator('[data-margin-panel]');
+    await expect(page.locator("[data-margin-trigger]")).toBeHidden();
+    const margin = page.locator("[data-margin-panel]");
     await expect(margin).toBeVisible();
-    await expect(margin).toHaveAttribute('data-margin-mode', 'rail');
-    await expect(margin).toHaveAttribute('aria-hidden', 'false');
+    await expect(margin).toHaveAttribute("data-margin-mode", "rail");
+    await expect(margin).toHaveAttribute("aria-hidden", "false");
     await expectNoHorizontalOverflow(page);
   });
 
@@ -361,7 +363,7 @@ test.describe('Quiet Work responsive document shell', () => {
   // lands at a constant rather than at whatever the seam happened to measure.
   // Nothing publishes `--doc-seam-height` any more, and this case asserts that
   // too: a stale publisher would put the old number back into the same rule.
-  test('at 1440, a running-index jump to Money lands clear of the band, at the declared 72px', async ({
+  test("at 1440, a running-index jump to Money lands clear of the band, at the declared 72px", async ({
     authenticatedPage: page,
   }) => {
     // PROJECT_ID (b0000000-…-d4, the seeded project-kind spread already used
@@ -377,17 +379,17 @@ test.describe('Quiet Work responsive document shell', () => {
     // off the declared 72, and passes alone every time.
     await quiet(page);
 
-    const band = page.locator('[data-lens-band]');
+    const band = page.locator("[data-lens-band]");
     await expect(band).toBeVisible();
 
     // The seam that measured itself is gone, and so is the property it wrote.
     expect(
       await page
-        .locator('[data-document-shell]')
+        .locator("[data-document-shell]")
         .evaluate((el) =>
-          getComputedStyle(el).getPropertyValue('--doc-seam-height').trim(),
+          getComputedStyle(el).getPropertyValue("--doc-seam-height").trim(),
         ),
-    ).toBe('');
+    ).toBe("");
 
     // 56 + 16. The token is a `calc()`, and `getPropertyValue` on an
     // unregistered custom property hands back the UNRESOLVED string
@@ -398,11 +400,11 @@ test.describe('Quiet Work responsive document shell', () => {
     // an absolute 16px rather than `1rem` because this route's root is 18px
     // (W1's measurement note): `1rem` computed to 74.
     const landingClear = await page
-      .locator('[data-document-shell]')
+      .locator("[data-document-shell]")
       .evaluate((el) => {
-        const probe = document.createElement('div');
+        const probe = document.createElement("div");
         probe.style.cssText =
-          'position:absolute;visibility:hidden;pointer-events:none;height:var(--doc-landing-clear)';
+          "position:absolute;visibility:hidden;pointer-events:none;height:var(--doc-landing-clear)";
         el.appendChild(probe);
         const height = probe.getBoundingClientRect().height;
         probe.remove();
@@ -413,12 +415,12 @@ test.describe('Quiet Work responsive document shell', () => {
     // Scroll the letterhead and the band's sentinel out of view, so the band
     // is pinned and the landing has something to clear.
     await scrollTo(page, 2000);
-    await expect(band).toHaveAttribute('data-lens-open', 'false');
+    await expect(band).toHaveAttribute("data-lens-open", "false");
 
     // W2 — the running index is the LADDER: a `nav` named `This paper`,
     // one button per stop.
-    const ladder = page.getByRole('navigation', { name: 'This paper' });
-    await ladder.getByRole('button', { name: /^Project financials/i }).click();
+    const ladder = page.getByRole("navigation", { name: "This paper" });
+    await ladder.getByRole("button", { name: /^Project financials/i }).click();
 
     // The Money region ROOT (`[data-index-region="money"]`) is what
     // `globals.css`'s `scroll-margin-top: var(--doc-landing-clear)` targets.
@@ -459,34 +461,36 @@ test.describe('Quiet Work responsive document shell', () => {
   // content-visibility reason — that has not happened yet, so it is not
   // applied here; see `e2e-baseline.md` for the note owed to whoever wires
   // Wave 4's density observer next.
-  test('find-in-page reaches a passed region’s content (OD-4)', async ({
+  test("find-in-page reaches a passed region’s content (OD-4)", async ({
     authenticatedPage: page,
   }) => {
     await openProject(page, 1440);
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight),
+    );
     await settle(page);
 
     const passedCount = await page
-      .locator('[data-document-paper] [data-index-region][data-passed]')
+      .locator("[data-document-paper] [data-index-region][data-passed]")
       .count();
     expect(
       passedCount,
-      'OD-4: no [data-index-region] carries data-passed after scrolling to the foot — ' +
-        'expected until the density observer (W4-L1/L2/L3) attaches it',
+      "OD-4: no [data-index-region] carries data-passed after scrolling to the foot — " +
+        "expected until the density observer (W4-L1/L2/L3) attaches it",
     ).toBeGreaterThan(0);
 
     const approvalsPassed = await page
       .locator('[data-document-paper] [data-index-region="approvals"]')
       .first()
-      .getAttribute('data-passed');
+      .getAttribute("data-passed");
     expect(
       approvalsPassed,
-      'the approvals region (mounted first, scrolled well past) never gains data-passed',
+      "the approvals region (mounted first, scrolled well past) never gains data-passed",
     ).not.toBeNull();
 
     // The needle lives once, in the approvals region's full body
     // (`project-approval-document.tsx`), on every project-kind document.
-    const NEEDLE = 'published budget checkpoint';
+    const NEEDLE = "published budget checkpoint";
     const found = await page.evaluate((needle) => window.find(needle), NEEDLE);
     expect(
       found,
@@ -501,7 +505,10 @@ test.describe('Quiet Work responsive document shell', () => {
       const rect = el.getBoundingClientRect();
       return rect.bottom > 0 && rect.top < window.innerHeight;
     });
-    expect(inView, 'window.find matched but the match did not scroll into view').toBe(true);
+    expect(
+      inView,
+      "window.find matched but the match did not scroll into view",
+    ).toBe(true);
   });
 });
 
@@ -514,13 +521,13 @@ test.describe('Quiet Work responsive document shell', () => {
  * publishes its own box on `html`, and both the shell's inset and the scroll
  * padding read it.
  */
-test.describe('the mobile bar publishes its height (D-B47)', () => {
-  test('at 390 the scroll padding is the bar\u2019s own box, and the last stop clears it', async ({
+test.describe("the mobile bar publishes its height (D-B47)", () => {
+  test("at 390 the scroll padding is the bar\u2019s own box, and the last stop clears it", async ({
     authenticatedPage: page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`/doc/${PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('[data-document-shell]')).toBeVisible({
+    await page.goto(`/doc/${PROJECT_ID}`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("[data-document-shell]")).toBeVisible({
       timeout: 30_000,
     });
     await settle(page);
@@ -528,10 +535,12 @@ test.describe('the mobile bar publishes its height (D-B47)', () => {
     const bar = page.locator('[data-testid="mobile-bar"]');
     await expect(bar).toBeVisible();
     const barHeight = (await bar.boundingBox())?.height ?? 0;
-    expect(barHeight, 'the bar has no box at 390').toBeGreaterThanOrEqual(72);
+    expect(barHeight, "the bar has no box at 390").toBeGreaterThanOrEqual(72);
 
     const padding = await page.evaluate(() =>
-      parseFloat(getComputedStyle(document.documentElement).scrollPaddingBottom),
+      parseFloat(
+        getComputedStyle(document.documentElement).scrollPaddingBottom,
+      ),
     );
     expect(
       Math.abs(padding - barHeight),
@@ -553,7 +562,7 @@ test.describe('the mobile bar publishes its height (D-B47)', () => {
     }
     const clears = await page.evaluate(() => {
       const roots = Array.from(
-        document.querySelectorAll('[data-document-paper] [data-index-region]'),
+        document.querySelectorAll("[data-document-paper] [data-index-region]"),
       );
       const last = roots[roots.length - 1] as HTMLElement | undefined;
       if (!last) return null;
@@ -563,23 +572,27 @@ test.describe('the mobile bar publishes its height (D-B47)', () => {
         : window.innerHeight;
       return { bottom: last.getBoundingClientRect().bottom, barTop };
     });
-    expect(clears, 'no region roots on this paper').not.toBeNull();
+    expect(clears, "no region roots on this paper").not.toBeNull();
     expect(
       clears!.bottom,
       `the last root ends at ${clears!.bottom}, the bar starts at ${clears!.barTop}`,
     ).toBeLessThanOrEqual(clears!.barTop + 1);
   });
 
-  test('at 1440 the bar publishes nothing and the inset is what it always was', async ({
+  test("at 1440 the bar publishes nothing and the inset is what it always was", async ({
     authenticatedPage: page,
   }) => {
     await openProject(page, 1440);
     await settle(page);
 
     const published = await page.evaluate(() =>
-      document.documentElement.style.getPropertyValue('--doc-mobile-bar-height'),
+      document.documentElement.style.getPropertyValue(
+        "--doc-mobile-bar-height",
+      ),
     );
-    expect(published, 'the desktop widths must not carry the bar token').toBe('');
+    expect(published, "the desktop widths must not carry the bar token").toBe(
+      "",
+    );
   });
 });
 
@@ -607,9 +620,9 @@ test.describe('the mobile bar publishes its height (D-B47)', () => {
  * with the timer on THIS project the strip's own rule is the other way, the
  * offer owns the edge, and the bar yields.
  */
-const OTHER_PROJECT_ID = 'b0000000-0000-0000-0000-0000000000d1';
-const LONG_PAPER_PROJECT_ID = 'b0000000-0000-0000-0000-0000000000d5';
-const DESIGNER_ID = 'a0000000-0000-0000-0000-000000000004'; // designer@patina.dev
+const OTHER_PROJECT_ID = "b0000000-0000-0000-0000-0000000000d1";
+const LONG_PAPER_PROJECT_ID = "b0000000-0000-0000-0000-0000000000d5";
+const DESIGNER_ID = "a0000000-0000-0000-0000-000000000004"; // designer@patina.dev
 
 /**
  * W7-C4 — a FIXED id per row, so teardown only ever removes what this file
@@ -628,8 +641,8 @@ const DESIGNER_ID = 'a0000000-0000-0000-0000-000000000004'; // designer@patina.d
  * complete answer; that needs a second auth fixture and its own seeded
  * documents, which is more than D-B54's falsifier is worth.
  */
-const SEEDED_ENTRY_ID = 'e7000000-0000-0000-0000-0000000000d1';
-const CONTROL_ENTRY_ID = 'e7000000-0000-0000-0000-0000000000d5';
+const SEEDED_ENTRY_ID = "e7000000-0000-0000-0000-0000000000d1";
+const CONTROL_ENTRY_ID = "e7000000-0000-0000-0000-0000000000d5";
 
 /** Free the per-user unique index without deleting anyone's row. One minute,
  *  the smallest the `duration_minutes > 0` check constraint allows. */
@@ -667,7 +680,7 @@ const dropSeeded = () =>
       WHERE id IN ('${SEEDED_ENTRY_ID}'::uuid, '${CONTROL_ENTRY_ID}'::uuid)`,
   );
 
-test.describe('D-B54 · who owns the thumb edge when an offer stands', () => {
+test.describe("D-B54 · who owns the thumb edge when an offer stands", () => {
   test.afterEach(() => {
     // This fixture's own rows go; the timer `hold()` opened on the paper under
     // test is CLOSED, not deleted — same rule as the setup (W7-C4).
@@ -675,18 +688,20 @@ test.describe('D-B54 · who owns the thumb edge when an offer stands', () => {
     closeForeignOpenTimers();
   });
 
-  test('a CROSS-project offer does not take the edge — the bar still prints at 390', async ({
+  test("a CROSS-project offer does not take the edge — the bar still prints at 390", async ({
     authenticatedPage: page,
   }) => {
     dropSeeded();
     seedTimer(SEEDED_ENTRY_ID, OTHER_PROJECT_ID);
-    expect(timerState(SEEDED_ENTRY_ID), 'the fixture did not seed').toBe('open');
+    expect(timerState(SEEDED_ENTRY_ID), "the fixture did not seed").toBe(
+      "open",
+    );
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/doc/${LONG_PAPER_PROJECT_ID}`, {
-      waitUntil: 'domcontentloaded',
+      waitUntil: "domcontentloaded",
     });
-    await expect(page.locator('[data-document-shell]')).toBeVisible({
+    await expect(page.locator("[data-document-shell]")).toBeVisible({
       timeout: 30_000,
     });
     await settle(page);
@@ -696,9 +711,9 @@ test.describe('D-B54 · who owns the thumb edge when an offer stands', () => {
     await expect
       .poll(() => timerState(SEEDED_ENTRY_ID), {
         timeout: 20_000,
-        message: 'the foreign timer was never chained out — no offer stood',
+        message: "the foreign timer was never chained out — no offer stood",
       })
-      .toBe('closed');
+      .toBe("closed");
 
     // (2) The strip REFUSED it — the other half of the state that used to
     // leave the phone with no bottom chrome at all.
@@ -706,23 +721,25 @@ test.describe('D-B54 · who owns the thumb edge when an offer stands', () => {
       page.locator('[data-mobile-edge-owner="log-offer"]'),
     ).toHaveCount(0);
     await expect(
-      page.getByRole('region', { name: 'Log time offer' }),
+      page.getByRole("region", { name: "Log time offer" }),
     ).toHaveCount(0);
 
     // (3) And so the bar keeps the edge, alone, publishing its box.
-    await expect(page.getByTestId('mobile-bar')).toBeVisible();
-    await expect(page.locator('[data-mobile-edge-owner]')).toHaveCount(1);
+    await expect(page.getByTestId("mobile-bar")).toBeVisible();
+    await expect(page.locator("[data-mobile-edge-owner]")).toHaveCount(1);
     const published = await page.evaluate(() =>
-      document.documentElement.style.getPropertyValue('--doc-mobile-bar-height'),
+      document.documentElement.style.getPropertyValue(
+        "--doc-mobile-bar-height",
+      ),
     );
     expect(
       published,
-      'the bar must publish its box — an unset token means no bottom chrome at all',
-    ).not.toBe('');
+      "the bar must publish its box — an unset token means no bottom chrome at all",
+    ).not.toBe("");
     await expectNoHorizontalOverflow(page);
   });
 
-  test('the control: a SAME-project timer is adopted, so no offer stands and the bar prints', async ({
+  test("the control: a SAME-project timer is adopted, so no offer stands and the bar prints", async ({
     authenticatedPage: page,
   }) => {
     // The other arm of the one variable. `hold()` adopts a timer already on
@@ -735,18 +752,18 @@ test.describe('D-B54 · who owns the thumb edge when an offer stands', () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/doc/${LONG_PAPER_PROJECT_ID}`, {
-      waitUntil: 'domcontentloaded',
+      waitUntil: "domcontentloaded",
     });
-    await expect(page.locator('[data-document-shell]')).toBeVisible({
+    await expect(page.locator("[data-document-shell]")).toBeVisible({
       timeout: 30_000,
     });
     await settle(page);
 
     expect(
       timerState(CONTROL_ENTRY_ID),
-      'a timer on the document in hand is adopted, never chained out',
-    ).toBe('open');
-    await expect(page.getByTestId('mobile-bar')).toBeVisible();
-    await expect(page.locator('[data-mobile-edge-owner]')).toHaveCount(1);
+      "a timer on the document in hand is adopted, never chained out",
+    ).toBe("open");
+    await expect(page.getByTestId("mobile-bar")).toBeVisible();
+    await expect(page.locator("[data-mobile-edge-owner]")).toHaveCount(1);
   });
 });

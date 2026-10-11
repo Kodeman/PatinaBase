@@ -5,24 +5,27 @@
  * gate is the past-due decision that gives the seeded studio a job with a
  * claim on its hand.
  */
-import { test, expect } from '../fixtures/auth';
-import { seedWorkflowGateFixture } from '../helpers/workflow-gate-fixture';
-import { psqlRun } from '../helpers/psql';
+import { test, expect } from "../fixtures/auth";
+import { seedWorkflowGateFixture } from "../helpers/workflow-gate-fixture";
+import { psqlRun } from "../helpers/psql";
 
 const COLD = 30_000;
 
 /** The seeded designer every fixture in this file writes as. */
-const SEEDED_DESIGNER = 'a0000000-0000-0000-0000-000000000004';
+const SEEDED_DESIGNER = "a0000000-0000-0000-0000-000000000004";
 /** The two fixture boards, seeded in beforeAll and deleted in afterAll. */
 const BOARD_IDS = [
-  'cb000000-0000-4000-8000-0000000000a1',
-  'cb000000-0000-4000-8000-0000000000a2',
+  "cb000000-0000-4000-8000-0000000000a1",
+  "cb000000-0000-4000-8000-0000000000a2",
 ] as const;
 
-test.describe.configure({ mode: 'serial' });
+test.describe.configure({ mode: "serial" });
 // Single actor on a shared studio row: the three browser projects would run as
 // the same seeded designer and race each other.
-test.skip(({ browserName }) => browserName !== 'chromium', 'single seeded actor');
+test.skip(
+  ({ browserName }) => browserName !== "chromium",
+  "single seeded actor",
+);
 
 // Synchronous by design — seedWorkflowGateFixture returns ids, not a promise.
 test.beforeAll(() => {
@@ -71,82 +74,96 @@ test.afterAll(() => {
   );
 });
 
-test('the line roster stands in three groups, one line and one act per job', async ({
+test("the line roster stands in three groups, one line and one act per job", async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+  await page.goto("/desk", { waitUntil: "domcontentloaded" });
 
-  const roster = page.getByTestId('desk-roster');
+  const roster = page.getByTestId("desk-roster");
   await expect(roster).toBeVisible({ timeout: COLD });
-  const rows = roster.locator('[data-ledger-row]');
+  const rows = roster.locator("[data-ledger-row]");
   await expect(rows.first()).toBeVisible({ timeout: COLD });
 
   // Owed by you · Waiting on others · at rest, in that order; no cards.
   const groups = await roster
-    .locator('[data-roster-group]')
-    .evaluateAll((els) => els.map((el) => el.getAttribute('data-roster-group')));
-  const order = ['owed', 'waiting', 'rest'];
+    .locator("[data-roster-group]")
+    .evaluateAll((els) =>
+      els.map((el) => el.getAttribute("data-roster-group")),
+    );
+  const order = ["owed", "waiting", "rest"];
   expect(groups.length).toBeGreaterThan(0);
   expect(groups).toEqual(order.filter((key) => groups.includes(key)));
-  await expect(roster.locator('[data-claim-card]')).toHaveCount(0);
-  await expect(roster.locator('[data-stage-tab]')).toHaveCount(0);
+  await expect(roster.locator("[data-claim-card]")).toHaveCount(0);
+  await expect(roster.locator("[data-stage-tab]")).toHaveCount(0);
   // fix-now 1 — the Day Sheet's scope replaced the facet.
-  await expect(page.getByRole('button', { name: 'Only what needs me' })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Only what needs me" }),
+  ).toHaveCount(0);
 
   // One act per line, named for its job, on a 44px floor.
   const firstAct = rows.first().locator('[data-action-key^="roster-"]');
   await expect(firstAct).toHaveCount(1);
-  expect(await firstAct.getAttribute('aria-label')).toMatch(/ — .+$/);
+  expect(await firstAct.getAttribute("aria-label")).toMatch(/ — .+$/);
   await expect
-    .poll(async () =>
-      (await firstAct.locator('[data-action-hit]').boundingBox())?.height ?? 0,
+    .poll(
+      async () =>
+        (await firstAct.locator("[data-action-hit]").boundingBox())?.height ??
+        0,
     )
     .toBeGreaterThanOrEqual(44);
 
   // Nothing folds on first paint.
-  await expect(roster.locator('[aria-expanded]')).toHaveCount(0);
-  await expect(roster.locator('[hidden]')).toHaveCount(0);
+  await expect(roster.locator("[aria-expanded]")).toHaveCount(0);
+  await expect(roster.locator("[hidden]")).toHaveCount(0);
 });
 
-test('the Day Sheet heads the Desk: five lines at most, and never a count', async ({
+test("the Day Sheet heads the Desk: five lines at most, and never a count", async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+  await page.goto("/desk", { waitUntil: "domcontentloaded" });
 
-  const sheet = page.getByTestId('day-sheet');
+  const sheet = page.getByTestId("day-sheet");
   await expect(sheet).toBeVisible({ timeout: COLD });
-  expect(await sheet.locator('[data-day-sheet-line]').count()).toBeLessThanOrEqual(5);
-  await expect(sheet.getByText('The rest are on their projects.')).toBeVisible();
+  expect(
+    await sheet.locator("[data-day-sheet-line]").count(),
+  ).toBeLessThanOrEqual(5);
+  await expect(
+    sheet.getByText("The rest are on their projects."),
+  ).toBeVisible();
   await expect(sheet).not.toContainText(/\d+ more|cleared today|streak/i);
-  await expect(sheet.getByRole('button', { name: 'Mine' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
+  await expect(sheet.getByRole("button", { name: "Mine" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
   );
 });
 
-test('the Desk does not scroll sideways at 390, and each act is a full-width row', async ({
+test("the Desk does not scroll sideways at 390, and each act is a full-width row", async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+  await page.goto("/desk", { waitUntil: "domcontentloaded" });
 
-  const roster = page.getByTestId('desk-roster');
-  await expect(roster.locator('[data-ledger-row]').first()).toBeVisible({
+  const roster = page.getByTestId("desk-roster");
+  await expect(roster.locator("[data-ledger-row]").first()).toBeVisible({
     timeout: COLD,
   });
 
-  const lines = page.getByTestId('day-sheet').locator('[data-day-sheet-line]');
+  const lines = page.getByTestId("day-sheet").locator("[data-day-sheet-line]");
   if ((await lines.count()) > 0) {
     const fit = await lines.first().evaluate((el) => {
-      const acts = el.querySelector('.day-sheet-acts') as HTMLElement;
-      const act = acts.querySelector('a') as HTMLElement;
+      const acts = el.querySelector(".day-sheet-acts") as HTMLElement;
+      const act = acts.querySelector("a") as HTMLElement;
       return {
         line: el.getBoundingClientRect().width,
         acts: acts.getBoundingClientRect().width,
         act: act.getBoundingClientRect().width,
-        below: acts.getBoundingClientRect().top >= (el.querySelector('p') as HTMLElement).getBoundingClientRect().bottom - 1,
+        below:
+          acts.getBoundingClientRect().top >=
+          (el.querySelector("p") as HTMLElement).getBoundingClientRect()
+            .bottom -
+            1,
       };
     });
     expect(fit.below).toBe(true);
@@ -163,14 +180,14 @@ test('the Desk does not scroll sideways at 390, and each act is a full-width row
     .toBe(true);
 });
 
-test('the ledger keeps its sentence column, and its act is never clipped', async ({
+test("the ledger keeps its sentence column, and its act is never clipped", async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+  await page.goto("/desk", { waitUntil: "domcontentloaded" });
 
-  const roster = page.getByTestId('desk-roster');
-  await expect(roster.locator('[data-ledger-row]').first()).toBeVisible({
+  const roster = page.getByTestId("desk-roster");
+  await expect(roster.locator("[data-ledger-row]").first()).toBeVisible({
     timeout: COLD,
   });
 
@@ -206,14 +223,14 @@ test('the ledger keeps its sentence column, and its act is never clipped', async
   }
 });
 
-test('the boards strip sits below the roster, and the Desk keeps its full width', async ({
+test("the boards strip sits below the roster, and the Desk keeps its full width", async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+  await page.goto("/desk", { waitUntil: "domcontentloaded" });
 
-  const roster = page.getByTestId('desk-roster');
-  const lastRow = roster.locator('[data-ledger-row]').last();
+  const roster = page.getByTestId("desk-roster");
+  const lastRow = roster.locator("[data-ledger-row]").last();
   await expect(lastRow).toBeVisible({ timeout: COLD });
 
   const strip = page.locator('section[aria-labelledby="recent-mood-boards"]');
@@ -228,12 +245,12 @@ test('the boards strip sits below the roster, and the Desk keeps its full width'
       '[data-testid="desk-roster"]',
     ) as HTMLElement;
     const rows = Array.from(
-      document.querySelectorAll('[data-ledger-row]'),
+      document.querySelectorAll("[data-ledger-row]"),
     ) as HTMLElement[];
     const strip = document.querySelector(
       'section[aria-labelledby="recent-mood-boards"]',
     ) as HTMLElement;
-    const main = document.querySelector('main') as HTMLElement;
+    const main = document.querySelector("main") as HTMLElement;
     const mainStyle = getComputedStyle(main);
     const contentWidth =
       main.getBoundingClientRect().width -

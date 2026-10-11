@@ -383,7 +383,9 @@ async function dispatchFileDrop(
 ): Promise<void> {
   const dataTransfer = await page.evaluateHandle(() => {
     const transfer = new DataTransfer();
-    transfer.items.add(new File(["stray"], "stray-drop.png", { type: "image/png" }));
+    transfer.items.add(
+      new File(["stray"], "stray-drop.png", { type: "image/png" }),
+    );
     return transfer;
   });
   try {
@@ -452,12 +454,17 @@ test.describe("MoodBoard GA browser acceptance", () => {
     ).toBeVisible();
 
     const visibleControlSizes = await page
-      .locator("header button:visible, header summary:visible, aside button:visible")
+      .locator(
+        "header button:visible, header summary:visible, aside button:visible",
+      )
       .evaluateAll((controls) =>
         controls.map((control) => {
           const rect = control.getBoundingClientRect();
           return {
-            label: control.getAttribute("aria-label") ?? control.textContent?.trim() ?? "control",
+            label:
+              control.getAttribute("aria-label") ??
+              control.textContent?.trim() ??
+              "control",
             width: rect.width,
             height: rect.height,
           };
@@ -465,28 +472,44 @@ test.describe("MoodBoard GA browser acceptance", () => {
       );
     expect(visibleControlSizes.length).toBeGreaterThan(0);
     expect(
-      visibleControlSizes.filter(({ width, height }) => width < 44 || height < 44),
+      visibleControlSizes.filter(
+        ({ width, height }) => width < 44 || height < 44,
+      ),
     ).toEqual([]);
 
-    await page.getByRole("button", { name: "Browse products", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Add a product" })).toBeVisible();
+    await page
+      .getByRole("button", { name: "Browse products", exact: true })
+      .click();
+    await expect(
+      page.getByRole("dialog", { name: "Add a product" }),
+    ).toBeVisible();
     await expect
       .poll(() => page.evaluate(() => document.body.style.overflow))
       .toBe("hidden");
     await page.getByRole("button", { name: "Close", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Add a product" })).toHaveCount(0);
+    await expect(
+      page.getByRole("dialog", { name: "Add a product" }),
+    ).toHaveCount(0);
     await expect
       .poll(() => page.evaluate(() => document.body.style.overflow))
       .toBe("hidden");
 
     const focusedLastRoomControl = await page.evaluate(() => {
-      const room = document.querySelector<HTMLElement>('main[aria-label$="design board workspace"]');
+      const room = document.querySelector<HTMLElement>(
+        'main[aria-label$="design board workspace"]',
+      );
       if (!room) return false;
-      const controls = Array.from(room.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      )).filter((control) => {
+      const controls = Array.from(
+        room.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((control) => {
         const style = window.getComputedStyle(control);
-        return style.display !== 'none' && style.visibility !== 'hidden' && control.getClientRects().length > 0;
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          control.getClientRects().length > 0
+        );
       });
       const last = controls.at(-1);
       last?.focus();
@@ -496,7 +519,9 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await page.keyboard.press("Tab");
     expect(
       await page.evaluate(() => {
-        const room = document.querySelector<HTMLElement>('main[aria-label$="design board workspace"]');
+        const room = document.querySelector<HTMLElement>(
+          'main[aria-label$="design board workspace"]',
+        );
         return Boolean(room?.contains(document.activeElement));
       }),
     ).toBe(true);
@@ -571,8 +596,12 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await expect(product).toHaveAttribute("aria-pressed", "false");
     const menu = page.getByRole("menu", { name: "Board item actions" });
     await expect(menu).toBeVisible();
-    await expect(page.getByText("Composition note", { exact: true })).toBeVisible();
-    await expect(menu.getByRole("menuitem", { name: "Duplicate" })).toBeVisible();
+    await expect(
+      page.getByText("Composition note", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      menu.getByRole("menuitem", { name: "Duplicate" }),
+    ).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(menu).toBeHidden();
 
@@ -747,7 +776,9 @@ test.describe("MoodBoard GA browser acceptance", () => {
   }) => {
     await openBoard(page);
 
-    await page.getByRole("button", { name: NOTE_PIN_NAME, exact: true }).click();
+    await page
+      .getByRole("button", { name: NOTE_PIN_NAME, exact: true })
+      .click();
     await expect(
       page.getByRole("complementary", {
         name: "Selected board item inspector",
@@ -796,15 +827,17 @@ test.describe("MoodBoard GA browser acceptance", () => {
 
     const product = page.locator(`[data-board-item-id="${PRODUCT_ID}"]`);
     const note = page.locator(`[data-board-item-id="${NOTE_ID}"]`);
-    await expect(
-      product.locator('[data-board-verdict="approved"]'),
-    ).toHaveText("Approved");
-    await expect(
-      note.locator('[data-board-verdict="rejected"]'),
-    ).toHaveText("Flagged");
+    await expect(product.locator('[data-board-verdict="approved"]')).toHaveText(
+      "Approved",
+    );
+    await expect(note.locator('[data-board-verdict="rejected"]')).toHaveText(
+      "Flagged",
+    );
 
     await page.getByRole("button", { name: "Present", exact: true }).click();
-    const presentCanvas = page.locator('[data-board-composition-canvas="true"]');
+    const presentCanvas = page.locator(
+      '[data-board-composition-canvas="true"]',
+    );
     await expect(
       presentCanvas
         .locator(`[data-board-item-id="${PRODUCT_ID}"]`)
@@ -875,7 +908,9 @@ test.describe("MoodBoard GA browser acceptance", () => {
       .toBe(0);
 
     await page.getByRole("button", { name: "Undo", exact: true }).click();
-    await expect(page.locator(`[data-board-item-id="${NOTE_ID}"]`)).toHaveCount(1);
+    await expect(page.locator(`[data-board-item-id="${NOTE_ID}"]`)).toHaveCount(
+      1,
+    );
     await expect
       .poll(
         () =>
@@ -1110,7 +1145,10 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await product.click();
     await expect(product).toHaveAttribute("aria-pressed", "true");
 
-    const handle = page.getByRole("button", { name: "Rotate item", exact: true });
+    const handle = page.getByRole("button", {
+      name: "Rotate item",
+      exact: true,
+    });
     await expect(handle).toBeVisible();
     const box = await handle.boundingBox();
     expect(box).not.toBeNull();
