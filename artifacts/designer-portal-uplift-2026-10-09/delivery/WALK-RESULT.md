@@ -107,3 +107,116 @@ The seed found two more things, both seed fidelity rather than product, and both
 - **Money rung names** ("Client-authorized purchases", "Authorized, not yet paid to vendors", "Prepare purchasing authorization" on the Delivery table): **not spot-checked.**
 - **Accounts day count; the empty-sheet false all-clear; the Q11 save/no-send with the Mailpit count:** UNVERIFIED (see §4–§6).
 - Screenshots are at 1440 for everything and at 390 for S1, S4, S5 and S6. There are no S2, S3 or S7 shots, because those lines never rendered.
+
+## Re-walk 2026-10-11 (SQ-775)
+
+Walked 2026-10-11, about 09:30–11:00 CDT (Sunday), on main `23290ab08` (SQ-773 parts 1 and 2 on top of the SQ-750 tree), from the SQ-775 worktree. Screenshots are in `delivery/rewalk/` (JPEG, `sips -Z 1600`). Probe logs and page text are in the board evidence dir `verification/SQ-775/`.
+
+**Setup.** Same method as SQ-750.
+- Local Supabase only (`http://127.0.0.1:54321`, checked by the start script). Never reset.
+- `walk/seed_uplift_walk_v2.sql` re-applied before the walk and again before e2e (exit 0 both times).
+- `next dev --webpack -p 3000`, with prod's on-for-everyone flag set through `NEXT_PUBLIC_FLAG_OVERRIDES`. No orders, media or projects service ran, and no edge runtime ran (the local stack has no `supabase_edge_runtime` container).
+- Headless Chromium, America/Chicago.
+- Seats:
+  - Leah = `designer@patina.dev`. She is owner of two studios: "Local Dev Studio" `b0000000…0001` and her solo studio "Leah Hartwell" `0df4cc7a…`.
+  - Jordan = `hire@patina.dev`. `organization_members.role = member` in `b0000000…0001` only. There is no `studio_members` table; membership is `organization_members`. That studio's `margin_visibility` is `everyone`, which is the column default.
+- Outbound baseline:
+  - `procurement_drafts` 2;
+  - `comms_messages` 3;
+  - `sms_messages` 0;
+  - `proposal_send_dispatches` 14;
+  - Mailpit 4.
+- Cleanup: the walk's own writes were deleted after the run, and `studio_need_states` is back to 0 rows. Those writes were the Q11 draft `840edfcc…` and the acted row on Walk INV-0007, which sits in Leah's solo studio, where the seed does not clean.
+
+### Pass/fail
+
+| # | Item | Result | Evidence |
+|---|---|---|---|
+| 1a | W-D1: Leah's Not today removes the line until the next working day | **PASS**. Holloway INV-2026-0721 (studio `b000…`) left the sheet at once and stayed gone after reload, with `deferred_until = 2026-10-12` (the Monday after this Sunday). The multi-studio split is fixed: an acted row on Walk INV-0007 in her *other* studio (`0df4…`) is honoured too. The sheet refilled to five (Linden's decline and Aspen Loft surfaced), and Q1 guards held: 5 lines, 0 dots, 0 badges, no count, no streak. | `w1-leah-after-not-today-1440.jpg`, `w1-leah-after-act-1440.jpg` |
+| 1b | An act moves a line to waiting-on | **PASS for the state and render, NOT exercised through a real send.** The send cannot succeed on this stack because there is no edge runtime: Leah's "Send the reminder to Client User" failed visibly, with nothing sent (Mailpit 4→4) and no state written. The `acted` state was then written through the same `set_need_state` RPC the act sheet calls. Leah's Walk line left her sheet, and on Jordan's quiet sheet the Marsh PO moved to "AWAITING · Awaiting the maker since 11 October · Marsh Street Kitchen". See N1 for the failure copy. | `w1-leah-send-attempt-1440.jpg`, `w6-jordan-quiet-awaiting-1440.jpg` |
+| 2 | W-D3: no Not today on lines without a studio project, and no silent failure | **PASS**. No Not today control on Chen ("Record the payment", project `studio_id` null), Tanaka, Okafor, Aspen Loft (proposals with no project), or Jordan's pre-project Wren Row signed line. It is offered only on lines whose project has a studio. No 403 was observed. | `leah-sheet-1440.jpg`, `jordan-sheet-1440.jpg` |
+| 3 | W-D5 + SQ-751 F3: Jordan's Accounts and Vendors withhold studio money | **PASS** under the DEFAULT `margin_visibility = everyone`, at 1440 and 390. Jordan's Accounts shows no revenue, A/R, margin, XLSX export or studio invoice book: only "No invoices drawn yet" plus Draw an invoice. Orders → Vendor accounts lists vendors and terms with no PO totals. Leah, as control, still sees REVENUE · A/R · MARGIN. See N4 for the copy. | `w5-jordan-accounts-{1440,390}.jpg`, `w5-jordan-vendors-{1440,390}.jpg` |
+| 4 | W-D6/D7/D8: hand-off line and Read the note | **PARTIAL**. The line reads "Leah handed you Marsh Street Kitchen on Friday, October 9 · Read Leah's note" (D7 fixed). The Day Sheet's Wren line is now "Wren Row Bath — design services — Signed, open the project" (D8 fixed: the second dash is a comma; the first is inside the proposal's title). "Read the note" writes `handoff:<marsh>` acted and the line is gone on return (D6 fixed). **New defect N2:** after the press, the note is nowhere on the page it opens. | `jordan-sheet-1440.jpg`, `w6-jordan-after-read-1440.jpg`, `w6-jordan-marsh-after-read-1440.jpg` |
+| 5 | Q11: Jordan saves the Holloway PO chase for Leah, and nothing is sent | **PASS on the no-send invariant, FAIL on copy (N3).** Path: `/doc/<holloway>` → "All open · 5" → FOLLOW UP WITH THE MAKER. The sheet has no send control, only SAVE THE DRAFT FOR THE LEAD. Pressing it gave `procurement_drafts` 2→3: the new row is `ack_chase`, `awaiting_review`, `purchase_order_id e7210000…0031` (PO-HD-0412), with `sent_at`, `sent_by` and `message_id` all null. `comms_messages` stayed 3→3, Mailpit 4→4, and no need state was written. The draft did not reach Leah's top five (crowded; see N5). | `q11-jordan-standing-1440.jpg`, `q11-jordan-act-sheet-1440.jpg`, `q11-jordan-after-save-1440.jpg`, `q11-leah-sheet-after-draft-1440.jpg` |
+| 6 | False all-clear, empty-sheet half | **PASS**. Jordan, 1440. Wren Row's pre-project signed line offers no deferral (W-D3 ruling), so the harness dropped that one proposal from REST responses, which keeps the proposals feed read. Marsh PO was acted. The quiet sheet's head was "No current action alerts." with the Awaiting block. Then both `rest/v1/invoices` requests were aborted: the head became **"Not checked: invoices."** and the empty sentence was absent. | `w6-jordan-quiet-awaiting-1440.jpg`, `w6-jordan-quiet-invoices-blocked-1440.jpg` |
+| 7 | Holloway INV-2026-0721 day count, Accounts against the band | **PASS** (Chicago, Sunday morning). The Receivables row reads "Overdue 12 days — Invoice INV-2026-0721 …" and the Holloway band reads "OVERDUE 12D · INV-2026-0721". | `w7-leah-receivables-1440.jpg`, `w7-leah-doc-holloway-1440.jpg` |
+| 8 | Money labels | **PASS for the labels.** Pell Court Dining → Project financials shows the rungs "Client-authorized purchases · nothing executed yet" and "Authorized, not yet paid to vendors · nothing in motion yet", with the new meaning line. "PREPARE PURCHASING AUTHORIZATION" shows on the FF&E selections head. The Delivery-table mount (`[data-release-lift]`) rendered on none of the walked jobs, so the label was seen on FF&E selections, not on the Delivery table. | `w8-leah-money-ladder-pell-court-dining-1440.jpg`, `w8-leah-release-lift-pell-court-dining-1440.jpg` |
+| 9 | e2e label reconciliation | see below | `verification/SQ-775/e2e-*.log` |
+
+### New and remaining defects
+
+| # | Sev | Defect | Evidence |
+|---|---|---|---|
+| N1 | S2 | **A failed send shows a raw transport error.** Leah's reminder printed "Edge Function returned a non-2xx status code" inside the act sheet. The failure is visible, but the words don't say whether anything reached the client or what to do next. | `w1-leah-send-attempt-1440.jpg` |
+| N2 | S2 | **"Read the note" marks the hand-off read before the hire sees the note.** The act is a link to `/doc/<marsh>`. The press writes `handoff:` acted, and Marsh's project file then prints no hand-off note at all (body search for "Marsh Street is yours" or "hand-off": none). The hire who presses "Read the note" never reads it. The note survives only on act sheets (N3). | `w6-jordan-marsh-after-read-1440.jpg`; `acts/act-viewer.ts:84,106` |
+| N3 | S2 | **Act sheets print the wrong job's hand-off note and an unnamed lead.** On *Holloway's* PO chase, Jordan's sheet prints "From Leah: Marsh Street is yours from today…". The note comes from the member's org-level `handoff_note`, not from that job's hand-off, so it shows on every job's sheet (contract: "prints on that job's act sheet"). The lead also reads "The lead sees this first. / SAVE THE DRAFT FOR THE LEAD", not Leah: Holloway's lead is `projects.lead_designer_id`, with no `project_team_members` lead row, so `useProjectLeads` has no entry. The same sheet says "ABOUT The purchase order — no acknowledgment" with no PO number, and the prefilled body says "We sent The purchase order…". | `q11-jordan-act-sheet-1440.jpg` |
+| N4 | S3 | **The hire's Accounts header still claims the studio book.** "Accounts · the studio's book", "Revenue, what's owed, what you earn — the sum of every engagement's account" and "STUDIO EYES ONLY" sit above "No invoices drawn yet". A member would read that as the studio having no invoices. | `w5-jordan-accounts-1440.jpg` |
+| N5 | S1 (carried D2/D4) | **Stale legacy needs still own Leah's five.** Chen "$3,400 due 12 May", Tanaka, Okafor and Aspen Loft (unviewed proposals) have no Not today (by the W-D3 ruling), so they can never be cleared from the Desk. Linden's decline only surfaced after deferring both invoices. Ines Calder, PO-HD-0412 and Jordan's Q11 draft never reach her sheet, and S8 is still unreachable for Leah. | `leah-sheet-1440.jpg`, `q11-leah-sheet-after-draft-1440.jpg` |
+| N6 | S4 | Holloway's project file says "press Money on the index to open", but the index entry is now "Project financials". | `verification/SQ-775/leah-doc-holloway.txt:98` |
+| N7 | S4 | Jordan, on Holloway, which Leah leads, reads "– You're on the call sheet as lead. Who else is on the job?". | `verification/SQ-775/q11-jordan-holloway-doc.txt` |
+| N8 | S4 | The Studio workload roster under the Day Sheet still prints "Signed — open the project" (the D8 em-dash chain) and the header acts "CAPTURE A LEAD" / "OPEN A PROJECT". | `w6-jordan-read-note-1440.jpg` |
+
+### Item 9: e2e against this local stack
+
+Run settings:
+- `playwright test --project=chromium --workers=2`, from the portal, against the dev server above (`reuseExistingServer`). The server had prod's flag set, not the config's three-flag set.
+- Local env came from `supabase status`. The seed was re-applied first.
+- Specs, with no spec or product source edited:
+  - **Named set:** SQ-764 c_mv2mpxqj_2826fd (F33), the SQ-759 hand-off list, `desk-claims` (decision #7) and `plan-room`.
+  - **D2/D3 set:** the specs on the D2 surfaces (buying, proposals, pieces, spec-book) and the D3 surfaces (mood-board, library-configuration, deck-import).
+- Report: `verification/SQ-775/e2e-*-summary.txt`.
+
+**Named set: 119 tests in 13 min. 33 passed, 46 failed, 40 skipped (skips are serial-chain followers of a failure, or flag-gated).** The auth fixture works now (D10 fixed): every spec signs in.
+
+**Fails only on a stale label.** The spec line and the label the product shows today:
+
+| Spec:line | Spec expects | Current label (source) |
+|---|---|---|
+| `e2e/arrival/put-down.spec.ts:64` | link "Put down document" | "Back to Studio overview" (doc-spine) |
+| `e2e/document/desk-claims.spec.ts:121` | "The rest are on their jobs." | "The rest are on their projects." (seen on the page) |
+| `e2e/document/desk-error-state.spec.ts:62` | "The desk could not be read." | "Your studio overview couldn't load." |
+| `e2e/document/help-panel.spec.ts:42/51` | dialog "Command bar" | "Studio search" |
+| `e2e/document/hours.spec.ts:160/161` | dialog "Command bar" | "Studio search" |
+| `e2e/people/directory.spec.ts:28` | heading "The People Room" | "Studio contacts" (`people-room.tsx:594`) |
+| `e2e/people/directory.spec.ts:38-39` | group "Narrow the book", with chips Everyone/Clients/Crew/… | group "Filter directory" (`directory-view.tsx:395`), with chips "All contacts", "Clients", "Trades & contractors", "Makers & suppliers", "Studio team", "Companies" (`lib/document/directory-roles.ts:61-68`) |
+| `e2e/people/directory.spec.ts:59,73,86` | button "Crew" | "Trades & contractors" |
+| `e2e/people/directory.spec.ts:111` | label /ask/ | the field's label is "Ask the Engine" (`ask-bar.tsx:87`), so it still matches. The test timed out on the earlier "Crew" press, not here. |
+| `e2e/people/add-sheet.spec.ts:44,110,164` | button "Add person" | "Add contact" (`people-room.tsx:618`) |
+| `e2e/people/add-client-letter.spec.ts:53,131` | button /Add person/ | "Add contact" |
+| `e2e/people/person-card.spec.ts:35` | button "Add person" | "Add contact" |
+
+**Fails for reasons other than a label** (environment or behavior; not reconciled here):
+- `field/field-coordination.spec.ts:47,166`: its own seed insert is refused, `studio_id_not_designer_studio`. This is a fixture or seed-data problem.
+- `document/lens-density.spec.ts`: the long-paper fixture `…00d5` is not seeded ("Run scripts/the-document-lens-seed.sql"). The same fixture gap causes `[data-document-shell]` to never mount in:
+  - `document/prework-regions.spec.ts:59`;
+  - `document/workflow-stage-responsive.spec.ts:85,115` (6 of 7).
+
+  The F33 `a[aria-label="Put down document"]` precondition (`:658,666`) was not reached.
+- `document/action-visibility.spec.ts:181`: `[data-claim-card]` is absent from the desk roster, a structural change. The F33 label lines (`:157,204,250,267,348`) were not reached.
+- `document/desk-walkthrough.spec.ts:129`: "New desk, same studio" is still in source (`desk/page.tsx:335`), so the offer note did not show for this seat (walkthrough state). The F33 `Command bar` line (`:78`) was not reached.
+- `document/quiet-release-contracts.spec.ts:211`: `[data-drawer-timer-doorway]` timed out.
+- `document/plan-room.spec.ts:159`: the filed-set count stayed 0 after `file-plan-prints` (needs the media service, which did not run).
+- `arrival/input-and-escape.spec.ts:88,167`: `html.arr-pre` was never set. The arrival pre-state did not engage under this flag set.
+- `responsive-review.spec.ts:250` (12 of 24): HIGH `overflowing_elements` on a page that rendered the sign-in card (`pa-auth-card`). The spec's own navigation lands unauthenticated; this is not a label.
+- **Passed:** `smoke-tests` 9/9 (so its F33 route-name line `:16` is a route label, not display text), `hours` 5/6 and `desk-claims` 1/2. `room-view`, `arrival-arc` and `touch-wait-gesture` were skipped (flag-gated or serial), so `room-view.spec.ts:311,479` "The Scans" was not exercised.
+
+**D2/D3 set: 93 tests in 11 min. 35 passed, 23 failed, 35 skipped.** These specs were chosen by surface (D2: buying, proposals, pieces, spec-book; D3: mood-board, library-configuration, deck-import), because the SQ-760/761 threads name no spec list.
+
+Fails only on a stale label:
+
+| Spec:line | Spec expects | Current label |
+|---|---|---|
+| `e2e/buying/phase0-member-walk.spec.ts:155-157` | its own sign-in regex `/sign in with email\|use email and password instead/` | "Use a password instead". The local copy of the D10 fixture fix was never applied here. |
+| `e2e/buying/phase1-member-walk.spec.ts:258-260` | same | same |
+| `e2e/buying/phase3-coverage-walk.spec.ts:320-322` (all 10 tests) | same | same |
+| `e2e/mood-board/mood-board-ga.spec.ts:276` | main "… mood board room" | "{name} design board workspace" (`board-room-shell.tsx:1263`) |
+| `e2e/mood-board/project-board-paths.spec.ts:136` | same | same |
+
+Other D2/D3 failures (not labels):
+- `buying/phase2-member-walk.spec.ts` (helpers/psql.ts:42): its profiles seed insert fails.
+- `library-configuration/*` (4 specs): seed RPC raises P0001.
+- `proposals/proposal-client-decline.spec.ts:42`: the client portal on :3002 was not running.
+- `document/spec-book-workspace.spec.ts:77`: nav "Spec book workspace" did not appear, but the label is unchanged in source (`spec-book-workspace.tsx:1198`).
+- `document/pieces-build-room.spec.ts` passed 35/37: S2 `:115` (URL hash) and S3 `:288` (count 3, expected 4) are behavior or seed issues, not labels.
+- `deck-import/*`: all skipped (flag-gated).
+
