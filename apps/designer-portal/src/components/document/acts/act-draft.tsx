@@ -40,7 +40,7 @@ export const SAVE_FAILED = 'Couldn’t save the draft — nothing was saved. Try
 export const SAVE_UNCONFIRMED = 'We couldn’t confirm the draft saved. Check the drafts before trying again.';
 export const SAVED_UNRECORDED = 'Draft saved. It didn’t record here — try marking it again.';
 export const NOT_SENT_SUPPRESSED =
-  'Not sent — this client’s email is turned off or suppressed. Nothing went out.';
+  'Not sent — email to this client is paused right now. Nothing went out.';
 
 /** The send boundary answered no: nothing went (SQ-751 F2 · SQ-774 R3). */
 class SendWithdrawn extends Error {

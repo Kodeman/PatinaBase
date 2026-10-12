@@ -34825,7 +34825,7 @@
     "state": "error",
     "source": "apps/designer-portal/src/components/document/acts/act-draft.tsx:42",
     "current": "{a suppressed reminder was treated as sent: the chase was stamped and the need marked acted}",
-    "proposed": "Not sent — this client’s email is turned off or suppressed. Nothing went out.",
+    "proposed": "Not sent — email to this client is paused right now. Nothing went out.",
     "meaning": "invoice-send answered ok with no email (a suppressed address); nothing went, so no chase stamp and no acted state, and the send stays offered. Also act-sheets.tsx:179. SQ-781 R2.",
     "owner": "D1",
     "depends": [],

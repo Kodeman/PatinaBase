@@ -99,7 +99,7 @@ import { queryClient } from '@/lib/react-query';
 import { NeedActSheetProvider, useNeedActSheet } from '../need-act-sheet';
 import { SAVE_FAILED, SEND_FAILED, SEND_UNCONFIRMED, SENT_UNRECORDED } from '../act-draft';
 
-const NOT_SENT = 'Not sent — this client’s email is turned off or suppressed. Nothing went out.';
+const NOT_SENT = 'Not sent — email to this client is paused right now. Nothing went out.';
 const SAVE_UNCONFIRMED = 'We couldn’t confirm the draft saved. Check the drafts before trying again.';
 
 function deskNeed(kind: string, recordId: string, owner: 'client' | 'maker'): DeskNeed {
