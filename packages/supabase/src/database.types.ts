@@ -45809,6 +45809,16 @@ export type Database = {
           total_minutes: number
         }[]
       }
+      studio_need_state_facts: {
+        Args: never
+        Returns: {
+          acted_at: string
+          need_key: string
+          organization_id: string
+          project_id: string
+          user_id: string
+        }[]
+      }
       studio_vendor_claim_windows: {
         Args: { p_org: string; p_vendor_id: string }
         Returns: {

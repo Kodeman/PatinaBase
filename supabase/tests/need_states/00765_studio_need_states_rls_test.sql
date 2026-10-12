@@ -51,12 +51,13 @@ VALUES
 
 DO $$
 DECLARE
+  v_count integer;
   v_state text;
 BEGIN
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
-  -- 00766 (U-Q4) also lets a studio member read a teammate's row; its test covers that.
-  ASSERT EXISTS (SELECT 1 FROM public.studio_need_states WHERE need_key = 'fixture:self' AND user_id = auth.uid()),
-    'own-row SELECT must expose own row';
+  SELECT count(*) INTO v_count FROM public.studio_need_states WHERE need_key LIKE 'fixture:%';
+  ASSERT v_count = 1 AND EXISTS (SELECT 1 FROM public.studio_need_states WHERE need_key = 'fixture:self'),
+    'own-row SELECT must expose own row and hide another member''s row';
 
   v_state := NULL;
   BEGIN

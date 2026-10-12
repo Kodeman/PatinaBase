@@ -27,3 +27,21 @@ U-Q4 was ruled as "facts only". The projection below honours that ruling literal
 - **F3:** the SQL tests add revocation negatives against an existing teammate row, covering suspension, membership deletion and an inactive organisation. Own-row retention is asserted separately.
 - **S3 hook split (SQ-828):** own rows come from the table with an explicit `.eq('user_id', me)`. Teammates' facts come from the RPC. Both consumers, the Desk and the Document hand-off, read own state only.
 - A second frontier pass on the rewrite runs before the integration gate.
+
+## Implementation (SQ-839)
+
+- **Migration.** `supabase/migrations/00766_studio_need_states_select_studio.sql` keeps its name and number. It drops the table policy, adds `public.studio_need_state_facts()` and restores 00765's table comment. EXECUTE is revoked from PUBLIC and anon and granted to authenticated. The file is idempotent: applied twice on local, the second run only skips the policy that is already gone.
+- **Tests.**
+  - `supabase/tests/need_states/00766_studio_need_states_select_studio_test.sql` asserts the catalog shape: one own-row policy, the five-column result, definer and STABLE, the pinned search_path, and the grants. It covers:
+    - the teammate's facts, exactly five keys;
+    - no own rows;
+    - no unacted rows;
+    - free text and dates rejected as columns (42703);
+    - the table read of a teammate's rows is 0;
+    - cross-studio, guest, never-member and anon;
+    - the F3 revocation negatives: suspended seat, deleted membership, inactive organisation, each with a control after rollback;
+    - own-row retention through the table;
+    - direct writes denied.
+  - The 00765 test's own-only assertion is restored to its pre-SQ-818 text.
+- **Types.** The function is in `packages/supabase/src/database.types.ts`, which is where the generated types actually live; the ticket named `packages/supabase/src/types/database.ts`. The entry is the package-local CLI 2.77.0 output for this function only. The generator types a RETURNS TABLE column as non-null, so `project_id` reads `string`, but it is NULL for an engagement row with no project. Consumers (SQ-828) must treat it as nullable.
+- **For the second pass.** The projection checks the caller's seat and the row's studio, not the row owner's seat. A former teammate's acted facts stay visible to the studio. The ruling does not ask for that check, and none was added.
