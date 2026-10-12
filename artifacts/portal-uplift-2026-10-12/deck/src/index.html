@@ -177,12 +177,14 @@ table.sheet tbody tr:last-child td, table.sheet tbody tr:last-child th { border-
 table.sheet td:last-child, table.sheet th:last-child { padding-right: 0; }
 table.sheet .id { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .04em; overflow-wrap: normal; }
 table.sheet tbody th { font-weight: 500; }
+table.sheet a[href^="#"] { display: inline-flex; align-items: center; min-height: 44px; margin-block: -11px; }
 table.sheet tr.group th { padding-top: 18px; font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
 @media (max-width: 760px) {
   .stackable table.sheet { display: block; }
   .stackable table.sheet thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .stackable table.sheet tbody, .stackable table.sheet tr, .stackable table.sheet td, .stackable table.sheet tbody th { display: block; width: 100%; }
   .stackable table.sheet tr { border-top: 1px solid var(--rule); padding: 12px 0; }
+  .stackable table.sheet a[href^="#"] { margin-block: 0; }
   .stackable table.sheet tbody tr:last-child { border-bottom: 1.5px solid var(--ink); }
   .stackable table.sheet td, .stackable table.sheet tbody th { border: 0 !important; padding: 0 0 6px; }
   .stackable table.sheet td[data-label]::before { content: attr(data-label); display: block; font-family: var(--font-meta); font-size: 12px; line-height: 1.5; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
@@ -554,7 +556,7 @@ pre.code { margin: 0; padding: 14px 16px; border: 1px solid var(--edge); border-
       <li class="box"><h3>5 &middot; Empty state <span>.empty-t</span></h3><p>The section's eyebrow, one sentence with its starting act inline, the closing rule. Never a dashed box, never a rule with nothing above it. One exception: a section of cards that empties keeps one card frame for its sentence.</p></li>
       <li class="box"><h3>6 &middot; Header line <span>.hline</span></h3><p>One 44 px row on <code>--paper</code>: a back act when nested, the title, acts at the right (a secondary &#xFF0B; creates; tertiary Find, with &#x2318;K shown only for a fine pointer), then the strong rule. Sticky only on long lists, and then opaque. At 390, two rows with full accessible names.</p></li>
       <li class="box"><h3>7 &middot; Stage edge <span>.st-*</span></h3><p>A 3 px rule on a job card's left side or a document's title block, or a 2 &times; 24 px tick beside a row's name. Only on a unit that stands for a job. The stage word always prints in ink beside it. <code>CanvasText</code> in forced colours.</p></li>
-      <li class="box box--quiet"><h3>Supporting parts</h3><p>Plate and caption (A10); the ink state word; the note edge <code>--edge-note</code>; facts as a <code>dl</code>; money rows; house fields and checks; the dock, an L1 bar on a <code>--hairline-strong</code> rule. <strong>Targets</strong> are 44 px for every act, filter word, name link, fold and Undo.</p></li>
+      <li class="box box--quiet"><h3>Supporting parts</h3><p>Plate and caption (A10), the plate a picture mat on a 1 px <code>--card-edge</code>, never a card; the ink state word; the note edge <code>--edge-note</code>; facts as a <code>dl</code>; money rows; house fields and checks; the dock, an L1 bar on a <code>--hairline-strong</code> rule. <strong>Targets</strong> are 44 px for every act, filter word, name link, fold and Undo.</p></li>
     </ol>
     <div class="cols-2">
       <div class="stack">

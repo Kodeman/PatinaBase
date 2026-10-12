@@ -65,7 +65,7 @@ Seven, reused unchanged; a variant needs a reason in its area. D1 §(b) holds fu
 6. **Header line.** One 44 px row on `--paper`: back act when nested, `.t-d2` title, acts at the right (secondary ＋ creates; tertiary Find, ⌘K shown only for a fine pointer), then `.doc-rule-strong`. Sticky only on long lists, then opaque. At 390, two rows with full accessible names (2.5.3).
 7. **Stage edge.** A 3 px rule on a job card's left side or a document's title block, or a 2 × 24 px tick beside a row's name. Only on a unit that stands for a job; `CanvasText` in forced colours.
 
-**Supporting parts:** plate and caption (A10), the ink state word, `--edge-note`, facts (`dl`), money rows, house fields and checks, the dock (an L1 bar on a `--hairline-strong` rule).
+**Supporting parts:** plate and caption (A10; the plate is a picture mat edged in 1 px `--card-edge` per rule 1, with no added fill, padding or radius, so it is not a card), the ink state word, `--edge-note`, facts (`dl`), money rows, house fields and checks, the dock (an L1 bar on a `--hairline-strong` rule).
 
 ### Tokens
 

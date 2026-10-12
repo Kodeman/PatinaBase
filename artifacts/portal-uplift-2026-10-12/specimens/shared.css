@@ -152,12 +152,12 @@ p, li, dd, dt, h1, h2, h3, h4, span, a, button, td, th, blockquote { overflow-wr
 .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; min-height: 44px; margin-top: 8px; margin-left: -6px; }
 .card-empty { padding: 24px 20px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
 
-/* ---- plate and caption: an image-led unit in a browsed collection. The plate's hairline is the edge; no box. ---- */
+/* ---- plate and caption: an image-led unit in a browsed collection. The plate's 1px --card-edge is the edge (a mat, not a card); no box. ---- */
 .plates-wrap { container-type: inline-size; }
 .plates { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
 @container (max-width: 899px) { .plates { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (max-width: 359px) { .plates { grid-template-columns: minmax(0, 1fr); } }
-.plate { display: block; width: 100%; aspect-ratio: 3 / 2; border: 1px solid var(--hairline-strong); border-radius: 3px; background: var(--paper-doc); overflow: hidden; }
+.plate { display: block; width: 100%; aspect-ratio: 3 / 2; border: 1px solid var(--card-edge); border-radius: 3px; background: var(--paper-doc); overflow: hidden; }
 .plate svg { display: block; width: 100%; height: 100%; }
 .cap { margin-top: 8px; }
 .cap .name { text-underline-offset: 4px; }
