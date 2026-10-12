@@ -200,6 +200,20 @@ describe('Follow up this proposal — failures stay on the sheet (SQ-777 F1 · F
     expect(mockCalls).not.toContain('set_need_state');
   });
 
+  it('a message insert that failed for the transport is written once, never again on its own (SQ-781 R1)', async () => {
+    // A network-shaped Error (a PostgrestError is one) meets the portal's
+    // default mutation retry; the second attempt would succeed.
+    let attempts = 0;
+    mockInsert = async () =>
+      ++attempts === 1 ? { error: Object.assign(new Error('TypeError: fetch failed'), { code: '' }) } : { error: null };
+    sendFollowUp();
+    expect(await screen.findByText(SEND_UNCONFIRMED)).toBeInTheDocument();
+    expect(inserts()).toBe(1);
+    expect(mockCalls.filter((call) => call === 'recheck')).toHaveLength(1);
+    expect(mockCalls).not.toContain('set_need_state');
+    expect(screen.queryByRole('button', SEND)).toBeNull();
+  });
+
   it('a need-state write that fails after the send says Sent, never toasts, and retries only the mark', async () => {
     mockNeedStateRpc = async () => ({ data: null, error: { code: 'P0001', message: 'not permitted' } });
     sendFollowUp();

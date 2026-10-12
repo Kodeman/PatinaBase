@@ -37,7 +37,10 @@ export const SEND_UNCONFIRMED = 'We couldn’t confirm it went out. Check the th
 export const SENT_UNRECORDED = 'Sent. It didn’t record here — try marking it again.';
 export const RELEASED_UNRECORDED = 'Release approved. It didn’t record here — try marking it again.';
 export const SAVE_FAILED = 'Couldn’t save the draft — nothing was saved. Try again, or check your connection.';
+export const SAVE_UNCONFIRMED = 'We couldn’t confirm the draft saved. Check the drafts before trying again.';
 export const SAVED_UNRECORDED = 'Draft saved. It didn’t record here — try marking it again.';
+export const NOT_SENT_SUPPRESSED =
+  'Not sent — this client’s email is turned off or suppressed. Nothing went out.';
 
 /** The send boundary answered no: nothing went (SQ-751 F2 · SQ-774 R3). */
 class SendWithdrawn extends Error {
@@ -45,6 +48,23 @@ class SendWithdrawn extends Error {
     super('Who leads this project changed, so nothing was sent.');
   }
 }
+
+/**
+ * SQ-781 R2 — the outward call answered, and its receipt says nothing went
+ * (a suppressed address). The act is not taken, so nothing records it; the
+ * message is the sheet's one plain line.
+ */
+export class NotSent extends Error {}
+
+/**
+ * SQ-781 R3 — what compose_ack_chase_draft raises before its insert (00706):
+ * no access to the order (42501), or an order not sent (23514). Only such a
+ * refusal says no draft was written; any other failure may follow an insert
+ * whose answer was lost, and the RPC does not de-duplicate.
+ */
+const REFUSED_BEFORE_WRITE = new Set(['42501', '23514']);
+const refusedBeforeWrite = (e: unknown): boolean =>
+  typeof e === 'object' && e !== null && REFUSED_BEFORE_WRITE.has(String((e as { code?: unknown }).code));
 
 /**
  * Reads the job's lead again and throws `SendWithdrawn` if she may no longer
@@ -107,8 +127,9 @@ export function ActDraft({
   // the change came after her draft was held, so it waits for the lead.
   const [revoked, setRevoked] = useState<'unsent' | 'held' | null>(null);
   // SQ-777 F1 — the outward call failed or never answered: it may have gone,
-  // so the sheet offers no second send.
-  const [unconfirmed, setUnconfirmed] = useState(false);
+  // so the sheet offers no second send. SQ-781 R3 — likewise a draft whose
+  // insert never answered. Holds the line that says which.
+  const [unconfirmed, setUnconfirmed] = useState<string | null>(null);
   // The act went (or the draft saved) but recording it here failed; the line
   // says which, and only the recording is offered again (never silent).
   const [unrecorded, setUnrecorded] = useState<string | null>(null);
@@ -178,8 +199,13 @@ export function ActDraft({
         setRevoked(e.draftHeld ? 'held' : 'unsent');
         return;
       }
+      if (e instanceof NotSent) {
+        setError(e.message);
+        return;
+      }
       console.error('[act-sheet] act failed', e);
-      if (acted && progress.outward) setUnconfirmed(true);
+      if (acted && progress.outward) setUnconfirmed(SEND_UNCONFIRMED);
+      else if (!acted && !refusedBeforeWrite(e)) setUnconfirmed(SAVE_UNCONFIRMED);
       else setError(acted ? SEND_FAILED : SAVE_FAILED);
       return;
     }
@@ -203,7 +229,7 @@ export function ActDraft({
   if (unconfirmed) {
     return (
       <p role="alert" data-act-unconfirmed className="mx-auto w-full max-w-[34rem] border-l-2 border-[var(--color-terracotta)] pl-3 text-[14px] text-[var(--color-charcoal)]">
-        {SEND_UNCONFIRMED}
+        {unconfirmed}
       </p>
     );
   }

@@ -1117,6 +1117,10 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
       teachingBoundary: true,
       boundaryKey: 'invoice_sent',
     },
+    // SQ-781 R1 — an email is not idempotent here (no key reaches the
+    // provider): a failure may follow a delivery whose answer was lost, so the
+    // send never goes again on its own. The caller decides what to say.
+    retry: 0,
     mutationFn: async ({
       invoiceId,
       message,

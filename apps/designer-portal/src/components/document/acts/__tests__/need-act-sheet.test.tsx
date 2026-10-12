@@ -131,6 +131,7 @@ import { silencePoId } from '../act-sheet-kind';
 import {
   RELEASED_UNRECORDED,
   SAVE_FAILED,
+  SAVE_UNCONFIRMED,
   SAVED_UNRECORDED,
   SEND_FAILED,
   SEND_UNCONFIRMED,
@@ -455,14 +456,29 @@ describe('Chase this PO', () => {
     quiet.mockRestore();
   });
 
-  it('a failed draft insert says nothing was saved, never the transport error (SQ-778 N1 · SQ-777 F1)', async () => {
+  it('a draft insert refused before writing says nothing was saved, never the error (SQ-778 N1 · SQ-781 R3)', async () => {
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockLeadUserId = 'lead-1';
+    mockCompose.mockRejectedValue({ code: '42501', message: 'purchase order po-1 not found or access denied' });
+    openSheet(PO_NEED);
+    fireEvent.click(screen.getByRole('button', { name: 'Save the draft for Leah' }));
+    expect(await screen.findByText(SAVE_FAILED)).toBeInTheDocument();
+    expect(screen.queryByText(/access denied/)).toBeNull();
+    expect(mockUpdate).not.toHaveBeenCalled();
+    quiet.mockRestore();
+  });
+
+  it('a draft insert that failed any other way cannot be confirmed, and offers no second save (SQ-781 R3)', async () => {
     const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockLeadUserId = 'lead-1';
     mockCompose.mockRejectedValue(new Error('Edge Function returned a non-2xx status code'));
     openSheet(PO_NEED);
     fireEvent.click(screen.getByRole('button', { name: 'Save the draft for Leah' }));
-    expect(await screen.findByText(SAVE_FAILED)).toBeInTheDocument();
+    expect(await screen.findByText(SAVE_UNCONFIRMED)).toHaveAttribute('role', 'alert');
+    expect(screen.queryByText(SAVE_FAILED)).toBeNull();
     expect(screen.queryByText(/non-2xx/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^(Save|Send|Mark)/ })).toBeNull();
+    expect(mockCompose).toHaveBeenCalledTimes(1);
     expect(mockUpdate).not.toHaveBeenCalled();
     quiet.mockRestore();
   });

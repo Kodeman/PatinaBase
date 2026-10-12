@@ -279,6 +279,9 @@ export function useSendDocumentNote(
   const qc = useQueryClient();
   return useMutation({
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    // SQ-781 R1 — the message insert is not idempotent: a failure may follow a
+    // written message whose answer was lost, so it never runs again on its own.
+    retry: 0,
     mutationFn: async (note: DocumentNote) => {
       const { body, confirm } = typeof note === 'string' ? { body: note, confirm: undefined } : note;
       const supabase = getSupabase();

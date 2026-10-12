@@ -34813,5 +34813,45 @@
     "verify": "apps/designer-portal/src/lib/document/__tests__/day-sheet.test.ts",
     "status": "implemented",
     "evidence": "apps/designer-portal/src/lib/document/desk-scope.ts:156 display copy added; SQ-780 (SQ-777 F5)"
+  },
+  {
+    "id": "C-30020",
+    "audience": "designer",
+    "surface": {
+      "area": "Act sheet",
+      "route": "/desk → Remind this invoice",
+      "element": "Reminder not sent (suppressed)"
+    },
+    "state": "error",
+    "source": "apps/designer-portal/src/components/document/acts/act-draft.tsx:42",
+    "current": "{a suppressed reminder was treated as sent: the chase was stamped and the need marked acted}",
+    "proposed": "Not sent — this client’s email is turned off or suppressed. Nothing went out.",
+    "meaning": "invoice-send answered ok with no email (a suppressed address); nothing went, so no chase stamp and no acted state, and the send stays offered. Also act-sheets.tsx:179. SQ-781 R2.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/act-receipt-outcome.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-draft.tsx:42 display copy added; apps/designer-portal/src/components/document/acts/act-sheets.tsx:179; SQ-782 (SQ-781 R2)"
+  },
+  {
+    "id": "C-30021",
+    "audience": "designer",
+    "surface": {
+      "area": "Act sheet",
+      "route": "/desk → Chase this PO",
+      "element": "Unconfirmed draft save"
+    },
+    "state": "error",
+    "source": "apps/designer-portal/src/components/document/acts/act-draft.tsx:40",
+    "current": "Couldn’t save the draft — nothing was saved. Try again, or check your connection.",
+    "proposed": "We couldn’t confirm the draft saved. Check the drafts before trying again.",
+    "meaning": "The draft's insert failed without a refusal the database gave before writing (42501 or 23514), so it may have saved; the sheet offers no second save. The nothing-saved line stays for those refusals. SQ-781 R3.",
+    "owner": "D1",
+    "depends": [],
+    "exception": null,
+    "verify": "apps/designer-portal/src/components/document/acts/__tests__/act-receipt-outcome.test.tsx",
+    "status": "implemented",
+    "evidence": "apps/designer-portal/src/components/document/acts/act-draft.tsx:40 display copy added; apps/designer-portal/src/components/document/acts/__tests__/need-act-sheet.test.tsx; SQ-782 (SQ-781 R3)"
   }
 ]

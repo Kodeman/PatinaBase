@@ -36,7 +36,7 @@ import { invoiceBalanceCents } from '@/lib/document/account-summary';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { useSendDocumentNote } from '../letterhead-instruments';
-import { ActDraft, type ActDraftText } from './act-draft';
+import { ActDraft, NOT_SENT_SUPPRESSED, NotSent, type ActDraftText } from './act-draft';
 import { useActViewer, type ActViewer } from './act-viewer';
 
 interface SheetProps {
@@ -173,7 +173,10 @@ export function InvoiceReminderSheet({ need, onDone }: SheetProps) {
       // notice, then the chase stamp the Desk reads (00209).
       onSend={async ({ body }, confirmSend) => {
         await confirmSend();
-        await sendInvoice.mutateAsync({ invoiceId, projectId, type: 'reminder', message: body });
+        const receipt = await sendInvoice.mutateAsync({ invoiceId, projectId, type: 'reminder', message: body });
+        // SQ-781 R2 — a suppressed address answers ok with no email: nothing
+        // went, so there is no chase to stamp and the need is not acted.
+        if (receipt?.emailSent === false) throw new NotSent(NOT_SENT_SUPPRESSED);
         // SQ-777 F1 — the reminder went; the chase stamp only records it.
         return async () => {
           await chase.mutateAsync({ invoiceId, projectId });
