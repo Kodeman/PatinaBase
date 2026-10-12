@@ -2,7 +2,8 @@
   background: white;
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  /* US-28 S1: no shadow; the 1px card edge is the boundary (house sheet §G). */
+  border: 1px solid var(--card-edge);
   margin-bottom: 24px;
   transition: opacity 0.3s ease-out, transform 0.3s ease-out;
 }

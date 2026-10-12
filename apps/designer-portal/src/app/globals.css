@@ -194,11 +194,9 @@
   --wash-golden-still: rgba(232, 197, 71, 0.18);
   --wash-terracotta-still: rgba(212, 160, 144, 0.12);
 
-  /* — The Life Review (R126): the one depth token —
-     D4 amended: one token, spent at exactly three sites (the margin chips, the
-     open ledger sheet, the studio drawer) and nowhere else. shadow-gate.test.ts
-     holds the budget at the CSS level, which the D4 ESLint rules cannot reach. */
-  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, 0.08);
+  /* R126's one depth token (`--elevation-sheet`) is retired (US-28 S1, V20
+     U-Q12; house sheet §G-2): depth is stock, edge and veil. shadow-gate.test.ts
+     holds the stylesheet half of zero at the CSS level. */
 
   /* — Animation Tokens — */
   --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
@@ -352,13 +350,6 @@
 }
 
 /* ===== The Life Review (R126) ===================================== */
-
-/* D4 as amended: the ONE depth declaration in this stylesheet, and the only
-   one shadow-gate.test.ts permits. Three sites spend it — the margin chips,
-   the open ledger sheet, the studio drawer. */
-.doc-elevated {
-  box-shadow: var(--elevation-sheet);
-}
 
 /* Three rule weights, three ranks. The strong rule is the double rule: the
    charcoal line the token holds, plus the fainter line under it. */
@@ -1958,7 +1949,13 @@ html:has([data-document-shell]) {
      Base pigments alias the shipped `--color-*` values. The two inks are
      LITERALS for the same reason --clay-ink above is one. --golden is aliased
      rather than named `--golden-hour`, because the house sheet and the
-     specimens both spend the short name. */
+     specimens both spend the short name.
+
+     REVERSED by V20 U-Q13 (US-28 S1, house sheet §G): state is an ink word
+     portal-wide. The grading map is replaced by @patina/types'
+     STATE_WORD_INKS and the `.word` classes in the US-28 S1 block below;
+     STATE_WORD_PIGMENTS stays a deprecated export, and these five names stay
+     resolvable, only until the People room (S10) moves onto the ink map. */
   --sage: var(--color-sage);
   --golden: var(--color-golden-hour);
   --terracotta: var(--color-terracotta);
@@ -2216,3 +2213,197 @@ html:has([data-document-shell]) {
   color: var(--sheet-ink-muted);
 }
 .studio-note > p { max-width: 56ch; }
+
+/* ═══ US-28 S1 system ══════════════════════════════════════════════════════
+   The shared surface every US-28 slice consumes (artifacts/portal-uplift-
+   2026-10-12/synthesis/uplift.md (b); house sheet §G). The class names and
+   rules follow specimens/shared.css. Area slices never edit this block; they
+   add their own fenced block named after the slice.
+
+   Where this block departs from shared.css, and why:
+   - A stage class is matched as a CLASS (`[class^="st-"]`, `[class*=" st-"]`),
+     not as the substring `st-`, which Tailwind's list-none, last-of-type and
+     first-letter all contain.
+   - The act is the portal's DocumentAction (`.da-act`), so the specimens'
+     `.act` tiers are not copied and `.lact` addresses `.da-act`.
+   - No `.group`: Tailwind's `group` marker is on dozens of elements here.
+   - `.name` keeps the one focus ring wherever it stands; a card draws it on
+     its upper block instead.
+   - `.plate img` fills the mat as `.plate svg` does: the portal's plates are
+     photographs and drawings, not the specimens' vector stand-ins.
+   - No dark rules. Dark is documented only (V20 U-Q9; house sheet §G-4):
+     card edge #77736E, lift #1C1A17, veil rgba(0, 0, 0, .60), note edge
+     2px solid #B39572, and the six stage edges --tab-brief-edge #7D9EC0,
+     --tab-discovery-edge #5FA08F, --tab-direction-edge #73A374,
+     --tab-proposal-edge #A3A75C, --tab-project-edge #B98F5A and
+     --tab-install-edge #CC7A70, which a dark set spends under the stage
+     names. No light value is written for them: in light the edge is --tab-*.
+   - No shadow anywhere (V20 U-Q12): depth is the order of the stocks, the
+     weight of the edge, and the veil. */
+:root {
+  /* the one boundary grey, by its house short name. Every Card and sheet
+     frame (§G-1); never a ledger row, never on --rail (2.62:1). */
+  --card-edge: var(--color-card-edge);
+  /* L3: the card whose sheet is open. White means "working", here only. */
+  --paper-lift: var(--bg-surface);
+  /* L4: the veil under every sheet, named from DocSheet's old literal. */
+  --veil: rgba(20, 18, 16, 0.55);
+  /* one width per form: a card's or title block's stage rule, a row's tick */
+  --edge-stage: 3px;
+  --tick-stage: 2px;
+  /* the one non-stage note edge (a hand-off, a quoted client word) */
+  --edge-note: 2px solid var(--oak);
+  /* the house short name the specimens spend for the clay ornament */
+  --clay: var(--color-clay);
+}
+
+/* ——— type: §G-7 adds the ledger-row name step ——— */
+.t-d4 { font-family: var(--font-display); font-size: 17px; line-height: 24px; font-weight: 500; letter-spacing: 0; }
+
+/* ——— the eyebrow and its ornament (Section, Card, Empty state) ——— */
+.eb { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-family: var(--font-meta); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.orn { width: 34px; height: 12px; flex: none; fill: none; stroke: var(--clay); stroke-width: 1.4; }
+
+/* ——— (b)7 Stage edge: the colour and the still wash. Only on a unit that
+   stands for a job; the stage word always prints in ink beside it. ——— */
+.st-brief { --st: var(--tab-brief); --wash: var(--wash-brief-still); }
+.st-discovery { --st: var(--tab-discovery); --wash: var(--wash-discovery-still); }
+.st-direction { --st: var(--tab-direction); --wash: var(--wash-direction-still); }
+.st-proposal { --st: var(--tab-proposal); --wash: var(--wash-proposal-still); }
+.st-project { --st: var(--tab-project); --wash: var(--wash-project-still); }
+.st-install { --st: var(--tab-install); --wash: var(--wash-install-still); }
+.tick { position: relative; padding-left: 14px; }
+.tick:is([class^="st-"], [class*=" st-"])::before { content: ''; position: absolute; left: 0; top: 0; width: var(--tick-stage); height: 24px; background: var(--st); }
+.title-rule:is([class^="st-"], [class*=" st-"]) { border-left: var(--edge-stage) solid var(--st); padding-left: 16px; }
+
+/* ——— (b)6 Header line: one 44px row on --paper, then the double rule ——— */
+.hline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 24px; min-height: 44px; padding: 24px 0 12px; }
+.hline-l { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; min-width: 0; }
+.hline-r { display: flex; flex-wrap: wrap; align-items: center; gap: 0 20px; }
+.rule-strong { height: 6px; border-top: var(--rule-strong); border-bottom: 1px solid var(--doc-ink-border); margin-bottom: 48px; }
+@media (max-width: 599px) { .rule-strong { margin-bottom: 24px; } }
+
+/* ——— (b)1 Section: eyebrow, optional title, body, its own closing rule.
+   Never a box; never inside a card or a sheet. ——— */
+.section { padding-bottom: 24px; border-bottom: var(--rule-mid); }
+.section + .section { margin-top: 72px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; margin-bottom: 12px; }
+.sec-head .eb { color: var(--text-primary); }
+.sec-title { margin-bottom: 12px; }
+@media (max-width: 599px) { .section + .section { margin-top: 48px; } }
+.filters { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; color: var(--text-muted); }
+.filters button { min-height: 44px; min-width: 44px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.filters button[aria-pressed="true"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.filters button:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* ——— (b)2 Card, L2: a --paper-doc face, a 1px --card-edge, a 2px radius;
+   a job card's left side is the stage rule. Lifted (L3) while its sheet is
+   open. At most six per Section; the rest are ledger rows beneath. ——— */
+.cards-wrap { container-type: inline-size; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch; }
+@container (max-width: 899px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 599px) { .cards { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
+.card { display: flex; flex-direction: column; min-width: 0; padding: 16px 20px 4px 18px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+.card:is([class^="st-"], [class*=" st-"]) { border-left: var(--edge-stage) solid var(--st); }
+.card:hover { background-image: linear-gradient(var(--bg-hover), var(--bg-hover)); }
+.card:is([class^="st-"], [class*=" st-"]):hover { background-image: linear-gradient(var(--wash), var(--wash)); }
+.card.is-lifted { background: var(--paper-lift); border-top-color: var(--ink-faint); border-right-color: var(--ink-faint); border-bottom-color: var(--ink-faint); }
+.card.is-lifted:not([class^="st-"]):not([class*=" st-"]) { border-left-color: var(--ink-faint); }
+.card-up { position: relative; display: flex; flex-direction: column; border-radius: 2px; }
+.card-up:has(.name:focus-visible), .card-up.is-focus { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.name { color: var(--text-primary); text-decoration: underline; text-decoration-color: var(--oak); text-decoration-thickness: 1px; text-underline-offset: 5px; }
+.name:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.card-up .name { outline: none; }
+.card-up .name::after { content: ''; position: absolute; inset: 0; }
+.card:hover .name { text-decoration-color: var(--clay); }
+.name-h { margin-top: 8px; }
+.person { margin-top: 4px; color: var(--text-muted); }
+.lines { display: flex; flex-direction: column; flex: 1; margin-top: 12px; }
+.ln-item { display: flex; flex-direction: column; }
+.ln-item + .ln-item { margin-top: 12px; padding-top: 12px; border-top: var(--rule-hair); }
+.ln-item:last-child { flex: 1; }
+.ln-item:last-child .foot { margin-top: auto; }
+.line { color: var(--text-muted); }
+.settled .line { color: var(--text-faint); }
+.od { color: var(--terracotta-ink); }
+.foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; min-height: 44px; margin-top: 8px; margin-left: -6px; }
+/* §G-10's one exception: a Section of Cards that empties keeps one frame. */
+.card-empty { padding: 24px 20px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+
+/* ——— plate and caption (A10): an image-led unit in a browsed collection.
+   The plate's 1px --card-edge is a mat, not a card: no fill, padding or box. ——— */
+.plates-wrap { container-type: inline-size; }
+.plates { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+@container (max-width: 899px) { .plates { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 359px) { .plates { grid-template-columns: minmax(0, 1fr); } }
+.plate { display: block; width: 100%; aspect-ratio: 3 / 2; border: 1px solid var(--card-edge); border-radius: 3px; background: var(--paper-doc); overflow: hidden; }
+.plate svg, .plate img { display: block; width: 100%; height: 100%; }
+.plate img { object-fit: cover; }
+.cap { margin-top: 8px; }
+.cap .name { text-underline-offset: 4px; }
+.cap .t-meta { color: var(--text-subtle); }
+
+/* ——— (b)3 Ledger row: name, sentence, when, one act. One column until its
+   container reaches 900px. Full-measure separators; the group closes on its
+   Section's rule. ——— */
+.ledger { container-type: inline-size; }
+.rows { border-top: 1px solid var(--doc-ink-border); }
+.lrow { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 4px; align-items: baseline; padding: 11px 0 10px; border-bottom: 1px solid var(--doc-ink-border); }
+.lrow:hover { background: var(--bg-hover); }
+.lname { position: relative; }
+.lname .name { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; }
+.lphase, .lwhen { color: var(--text-subtle); }
+.lsent { color: var(--text-muted); }
+.lrow.settled .lsent { color: var(--text-faint); }
+.lact { display: flex; justify-content: flex-start; margin: 0 0 0 -6px; }
+.lact .da-act { width: 100%; }
+.lfig { font-family: var(--font-meta); font-size: 15px; font-variant-numeric: tabular-nums; }
+@container (min-width: 900px) {
+  .lrow { grid-template-columns: 236px 96px minmax(200px, 1fr) 132px 150px; column-gap: 20px; row-gap: 0; }
+  .lrow.plain { grid-template-columns: 236px minmax(200px, 1fr) 132px 150px; }
+  .lwhen, .lact, .lfig { text-align: right; }
+  .lact { justify-content: flex-end; margin: -12px 0; }
+  .lact .da-act { width: auto; }
+}
+
+/* ——— the ink state word: the word is the state (V20 U-Q13). Never a chip,
+   never a pigment. Terracotta-ink only for overdue, blocked or do-not-
+   contact. @patina/types' STATE_WORD_INKS names these three classes. ——— */
+.word { font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
+.word--quiet { color: var(--text-subtle); }
+.word--od { color: var(--terracotta-ink); }
+/* avatars are ink initials (V20 U-Q15); the role is already a word */
+.avatar { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: none; border: 1px solid var(--doc-ink-border); border-radius: 50%; font-family: var(--font-meta); font-size: 12px; color: var(--text-muted); }
+
+/* ——— (b)5 Empty state: the Section's eyebrow, one sentence with its act
+   inline, the Section's close. Never dashed, never boxed (but §G-10). ——— */
+.empty-t { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 20px; line-height: 1.35; color: var(--text-primary); max-width: 56ch; }
+.empty-s { color: var(--text-subtle); }
+
+/* ——— (b)4 Sheet frame, popover, modal: L4, L4′, L5. One stock for every
+   sheet; never a sheet over a sheet. DocSheet is the sheet primitive and
+   wears the same stock; these classes serve frames DocSheet does not draw. ——— */
+.veil { background: var(--veil); }
+.sheet { width: 100%; max-width: 640px; padding: 28px 40px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; color: var(--text-primary); }
+.sheet.wide { max-width: 880px; }
+.modal { width: 100%; max-width: 480px; padding: 24px; background: var(--paper-doc); border: 1px solid var(--text-primary); border-radius: 2px; color: var(--text-primary); }
+.popover { display: inline-block; min-width: 240px; padding: 12px 16px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+.popover li { border-bottom: 1px solid var(--doc-ink-border); }
+.popover li:last-child { border-bottom: 0; }
+.popover a { display: flex; align-items: center; min-height: 44px; text-decoration: none; color: var(--text-primary); }
+.popover a:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.sh-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 16px; padding-bottom: 8px; border-bottom: var(--rule-hair); }
+.sh-title { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-family: var(--font-meta); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
+.sh-ic { width: 16px; height: 16px; fill: none; stroke: var(--clay-ink); stroke-width: 1.2; flex: none; }
+.sh-body { margin-top: 20px; }
+.sh-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 20px; margin-top: 16px; padding-top: 8px; border-top: var(--rule-hair); margin-left: -6px; }
+@media (max-width: 599px) {
+  .sheet, .sheet.wide { padding: 24px 16px; }
+}
+
+@media (forced-colors: active) {
+  .card:is([class^="st-"], [class*=" st-"]) { border-left-color: CanvasText; }
+  .tick:is([class^="st-"], [class*=" st-"])::before { background: CanvasText; }
+  .title-rule:is([class^="st-"], [class*=" st-"]) { border-left-color: CanvasText; }
+}
+/* ═══ end US-28 S1 system ══════════════════════════════════════════════════ */

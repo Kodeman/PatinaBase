@@ -134,8 +134,9 @@ export function RoomShell({
         style={{ background: PAPER_GRAIN }}
       />
 
-      {/* The thin band that frames a Room: leave · ident · one action. */}
-      <header className="sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-[var(--doc-ink-border)] bg-[rgba(252,250,246,0.85)] px-4 py-2 backdrop-blur-sm sm:px-6 min-[1180px]:py-3">
+      {/* The thin band that frames a Room: leave · ident · one action. Opaque
+          --paper (US-28 S1): a sticky head never shows the rows beneath it. */}
+      <header className="sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-[var(--doc-ink-border)] bg-[var(--paper)] px-4 py-2 sm:px-6 min-[1180px]:py-3">
         {/* The way out is a word, not a box (I107). The Room's own action sits
             at the other end of this same row as a scored DocumentAction, so the
             leave reads as its quietest relative: tertiary ink values, the score

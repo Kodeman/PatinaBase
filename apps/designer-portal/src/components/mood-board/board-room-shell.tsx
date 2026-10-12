@@ -171,11 +171,10 @@ function VerdictBadge({ feedback }: { feedback: ItemFeedback | undefined }) {
   const fromGuest = Boolean(feedback?.guest_share_id);
   return (
     <span
-      // Deviation from the D4 zero-shadow reconciliation above: this badge
-      // floats over uncontrolled photo imagery, not app chrome, so a
-      // minimal shadow is kept for legibility. The zero-shadow rule applies
-      // to chrome on app surfaces (toolbar, popovers, panels), not pins.
-      className="inline-flex items-center gap-1 rounded-full border border-black/15 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em] shadow-sm"
+      // Zero shadows (US-28 S1, house sheet §G-9): over uncontrolled photo
+      // imagery the badge's legibility comes from its near-opaque white face
+      // and its edge, never a shadow.
+      className="inline-flex items-center gap-1 rounded-full border border-black/15 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em]"
       style={{ color: chip.color }}
       data-board-verdict={feedback?.verdict}
       data-verdict-source={fromGuest ? 'guest' : 'client'}
@@ -200,7 +199,7 @@ function DirectionIndicator({ count }: { count: number }) {
   return (
     <span
       aria-label={`${count} unresolved direction note${count === 1 ? '' : 's'}`}
-      className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/10 bg-white/95 px-1 font-mono text-[8px] text-[var(--color-clay-ink)] shadow-sm"
+      className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/10 bg-white/95 px-1 font-mono text-[8px] text-[var(--color-clay-ink)]"
     >
       {count}
     </span>
@@ -1513,7 +1512,7 @@ function BoardRoomSurface({
                 <div
                   role="status"
                   aria-live="polite"
-                  className="pointer-events-none absolute bottom-3 right-3 z-40 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] shadow-sm"
+                  className="pointer-events-none absolute bottom-3 right-3 z-40 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]"
                 >
                   Loading images {presentPrefetchProgress.loaded}/{presentPrefetchProgress.total}
                 </div>
@@ -1522,7 +1521,7 @@ function BoardRoomSurface({
                 <div
                   role="status"
                   aria-live="polite"
-                  className="absolute bottom-3 right-3 z-40 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] shadow-sm"
+                  className="absolute bottom-3 right-3 z-40 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]"
                 >
                   <span>
                     {presentPrefetchResult.failed} image{presentPrefetchResult.failed === 1 ? '' : 's'} may load during presentation

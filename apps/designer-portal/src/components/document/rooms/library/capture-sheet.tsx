@@ -85,7 +85,7 @@ export function CaptureSheet({
         value={url}
         onChange={(e) => setUrl(e.target.value)}
         placeholder="https://…"
-        className="mb-4 w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+        className="mb-4 w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
       />
 
       <label className="mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
@@ -96,7 +96,7 @@ export function CaptureSheet({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="e.g. Heirloom oak dining table"
-        className="w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+        className="w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
       />
 
       <p className="mt-3 text-[0.66rem] italic text-[var(--color-aged-oak)]">

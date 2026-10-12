@@ -39,20 +39,21 @@ describe('MarginItem', () => {
     expect(screen.getByText('Pulse body')).toBeInTheDocument();
   });
 
-  it('is a lifted piece of the sheet on the rail’s deeper stock (R126)', () => {
-    // Ruled elevation site 1 of 3 — the margin chips, the ledger sheet, the
-    // studio drawer. Paper ground, ink border, the one --elevation-sheet token.
+  it('is a piece of the sheet on the rail’s deeper stock, and casts no shadow', () => {
+    // R126 laid the chip as paper on the rail; US-28 S1 (V20 U-Q12) retired
+    // the one --elevation-sheet token it wore. Depth is the stock step and the
+    // ink border, never a shadow.
     const { container } = render(<MarginItem row={row()} open={false} />);
 
     const chip = container.firstElementChild as HTMLElement;
     expect(chip).toHaveClass(
-      'doc-elevated',
       'bg-[var(--doc-paper)]',
       'border-[var(--doc-ink-border)]',
       'rounded-[4px]',
     );
-    // D4: elevation arrives only through the token's own class.
-    expect(chip.className.replace('doc-elevated', '')).not.toMatch(/shadow/);
+    expect(chip).not.toHaveClass('doc-elevated');
+    expect(chip.className).not.toMatch(/shadow/);
+    expect(chip.getAttribute('style') ?? '').not.toMatch(/shadow/);
   });
 
   it('prints where it is anchored — beside a region, or about the whole job', () => {

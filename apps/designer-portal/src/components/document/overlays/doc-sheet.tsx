@@ -7,9 +7,10 @@
  * converged onto the paper-folio treatment: a warm veil over the desk and a
  * laid-paper panel that centers when it fits and begins at the safe viewport
  * edge when it does not (D8), without ever unmounting the work beneath (D1).
- * Depth is value contrast, a single 1px rule edge, and — under D4 as amended
- * (R126) — the one `--elevation-sheet` token, worn as `doc-elevated`. The
- * panel is `--doc-paper`, so every sheet reads as ink on paper, not chrome.
+ * Depth is the ladder (US-28 S1, house sheet §G): the `--veil`, then one stock
+ * for every sheet — `--paper-doc`, a 1px `--card-edge`, a 2px radius — and no
+ * shadow (V20 U-Q12 retired `--elevation-sheet`). Every sheet reads as ink on
+ * paper, not chrome. The stock is set here once, never per caller.
  *
  * The `variant` prop is retained for backward compatibility (callers still pass
  * it) but no longer changes the ground — both are the same paper sheet. Ledgers
@@ -147,7 +148,7 @@ export function DocSheetHead({
   titleId?: string;
 }) {
   return (
-    <div className="mb-5 flex items-center justify-between gap-4 border-b border-[var(--color-pearl)] pb-3">
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 border-b border-[var(--color-pearl)] pb-3">
       <span className="flex min-w-0 items-center gap-2">
         <Icon
           className="h-[15px] w-[15px] shrink-0 text-[var(--color-aged-oak)]"
@@ -155,7 +156,7 @@ export function DocSheetHead({
           aria-hidden
         />
         <span
-          className="doc-type-meta truncate font-semibold uppercase tracking-[0.14em] text-[var(--color-charcoal)]"
+          className="doc-type-meta min-w-0 break-words font-semibold uppercase tracking-[0.14em] text-[var(--color-charcoal)]"
           data-doc-sheet-title-line
         >
           <span id={titleId} data-doc-sheet-title>
@@ -165,9 +166,10 @@ export function DocSheetHead({
               `hidden … sm:inline`, so every sheet that names a page (Orders,
               Accounts, Post, the trade scopes, and the People room's
               bring-forward picker) lost that name at 390 — and SPEC §5.7 #9's
-              rule is that the two widths carry identical facts. The title line
-              is `min-w-0 truncate`, so a long pair ellipses rather than pushing
-              the put-back hint off the sheet. */}
+              rule is that the two widths carry identical facts. US-28 S1: the
+              head wraps and never truncates — a long pair breaks onto a second
+              line, and the put-back act wraps under it rather than leaving the
+              sheet. */}
           {pageLabel ? (
             <span
               className="font-normal text-[var(--color-quiet-ink)]"
@@ -366,15 +368,15 @@ export function DocSheet({
       inert={isTopModal ? undefined : true}
       className="doc-sheet-layer fixed inset-0 z-50 box-border flex items-start justify-center overflow-hidden overscroll-contain pb-[var(--doc-sheet-inset-bottom)] pl-[var(--doc-sheet-inset-left)] pr-[var(--doc-sheet-inset-right)] pt-[var(--doc-sheet-inset-top)]"
     >
-      {/* Warm veil over the desk (matches the paper-folio scrim), a backdrop
-          button so a click in the margin puts the sheet back. */}
+      {/* The `--veil` over the desk (L4), a backdrop button so a click in the
+          margin puts the sheet back. */}
       <button
         type="button"
         aria-label="Close sheet backdrop"
         data-testid="doc-sheet-backdrop"
         tabIndex={-1}
         onClick={onClose}
-        className="absolute inset-0 h-full w-full cursor-default bg-[rgba(20,18,16,0.55)]"
+        className="absolute inset-0 h-full w-full cursor-default bg-[var(--veil)]"
       />
       <div
         ref={panelRef}
@@ -390,9 +392,9 @@ export function DocSheet({
         // is unlayered CSS declared after `@tailwind utilities` expands, so at
         // equal specificity it would win on source order. Reduced motion still
         // lands on that rule's own `animation: none`.
-        className={`doc-sheet-panel doc-elevated relative my-auto max-h-[calc(100dvh_-_var(--doc-sheet-inset-top)_-_var(--doc-sheet-inset-bottom))] min-w-0 w-full ${
+        className={`doc-sheet-panel relative my-auto max-h-[calc(100dvh_-_var(--doc-sheet-inset-top)_-_var(--doc-sheet-inset-bottom))] min-w-0 w-full ${
           wide ? 'max-w-[760px]' : 'max-w-[640px]'
-        } overflow-y-auto overscroll-contain rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none motion-safe:!animate-[doc-sheet-up_240ms_var(--ease-editorial)] sm:px-9`}
+        } overflow-y-auto overscroll-contain rounded-[2px] border border-[var(--card-edge)] bg-[var(--paper-doc)] px-6 pb-8 pt-6 outline-none motion-safe:!animate-[doc-sheet-up_240ms_var(--ease-editorial)] sm:px-9`}
       >
         {icon ? (
           <DocSheetHead

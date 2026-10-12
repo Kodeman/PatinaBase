@@ -30,10 +30,6 @@ interface NominateToCatalogModalProps {
   onClose: () => void;
   /** Fires after a successful submit so callers can re-route or toast. */
   onSubmitted?: (nominationId: string) => void;
-  /** D4: drop the box-shadow for any NON-sheet mount over a Document surface
-   *  (depth then reads from the scrim + the hairline border). The Library Room
-   *  now uses `asSheet` below; retained for other over-Document modal uses. */
-  shadowless?: boolean;
   /** R41 F4: render as a paper RoomSheet over the Room (doc grammar — paper,
    *  flat edges, no shadow, slide-up) instead of the portal-modal card. The
    *  form, timeline, and RPC are unchanged. Defaults off: portal callers keep
@@ -72,7 +68,6 @@ export function NominateToCatalogModal({
   studioId,
   onClose,
   onSubmitted,
-  shadowless = false,
   asSheet = false,
 }: NominateToCatalogModalProps) {
   const enabled = open && Boolean(vendorId);
@@ -425,10 +420,7 @@ export function NominateToCatalogModal({
     >
       <div
         className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-[var(--bg-surface)]"
-        style={{
-          ...(shadowless ? {} : { boxShadow: '0 32px 80px rgba(44, 41, 38, 0.3)' }),
-          border: '1px solid var(--border-default)',
-        }}
+        style={{ border: '1px solid var(--border-default)' }}
       >
         {body}
       </div>

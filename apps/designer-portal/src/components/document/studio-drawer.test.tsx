@@ -305,12 +305,12 @@ describe('StudioDrawer', () => {
   });
 });
 
-describe('StudioDrawer — the elevation gate (R126)', () => {
-  it('lifts the bar with the one elevation token, and no shadow utility', () => {
+describe('StudioDrawer — zero shadows (US-28 S1, V20 U-Q12)', () => {
+  it('casts no shadow: no elevation class and no shadow utility', () => {
     render(<StudioDrawer />);
 
     const bar = screen.getByRole('navigation', { name: 'Studio drawer' });
-    expect(bar.className).toContain('doc-elevated');
-    expect(bar.className).not.toMatch(/(^|[\s:])(drop-)?shadow-/);
+    expect(bar).not.toHaveClass('doc-elevated');
+    expect(bar.className).not.toMatch(/(^|[\s:])(drop-)?shadow(-|\s|$)/);
   });
 });
