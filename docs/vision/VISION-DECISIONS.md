@@ -539,3 +539,21 @@ These are side journeys from the studio buying review (`artifacts/procurement-bu
 **Source:** Kody's message of 2026-10-12; the US-26 deck https://claude.ai/artifact/C3E1iqzt3sAhA3brMHWREf.
 
 *Entries add: … · V18 · V19 · last id = V19*
+
+### V20 · US-27 portal uplift ruled; build to production — Kody 2026-10-12
+
+**Decision:** Kody rules all twenty US-27 founder questions (`artifacts/portal-uplift-2026-10-12/synthesis/uplift.md` §(g); deck https://claude.ai/artifact/F32gpb94VeHeDNGuuExxMY) and orders the full plan, slices S0–S12, built and shipped to production as US-28.
+
+**Ruled as recommended (18):** U-Q1 (a `--card-edge` box on every Card and sheet frame, on `--paper-doc` faces only) · U-Q12 (`--elevation-sheet` retired: zero shadows portal-wide) · U-Q9 (dark mode documented in the house sheet only, not shipped) · U-Q20 (the card test; unbounded image collections use plate and caption) · U-Q13 ("colour orients, never grades" portal-wide; state is an ink word; terracotta-ink only for overdue, blocked or do-not-contact; reverses PR-v) · U-Q10 (the 3 px rule means stage, never urgency) · U-Q14 (the stage once per page as a 3 px title rule on the job's paper) · U-Q15 (avatars are ink initials) · U-Q8 (no per-project colour; Direction C stays parked) · U-Q2 (settled lines stay in place, with Undo, and slots never refill) · U-Q3 (both creates stay in the header; the date moves to the Today eyebrow) · U-Q4 (the studio scope sees a teammate's acted state, facts only; a migration plus RLS) · U-Q5 (`SetAsideSheet`, date and reason required) · U-Q6 (Record a payment in a sheet scoped to one invoice, through the existing writer) · U-Q7 (Record an inquiry closes back onto the Desk with a visit line) · U-Q11 (what moved today survives a reload, read from the need-state rows) · U-Q16 (the invoice folio replaces Accounts inside one sheet, with "← Accounts") · U-Q19 (the Document's NEXT band wraps at 390).
+
+**Ruled beyond the recommendation (2):**
+- **U-Q17:** the board room takes the full uplift, **canvas included**: canvas items, zones and tools join the house system, not only the chrome.
+- **U-Q18:** the spec book takes the **full uplift now**, not only a token pass.
+
+Both start with a design spike: specimens, then the build.
+
+**Release:** no feature flag. One release at the end: the migration goes to Strata, then the designer portal through `deploy-portal.sh`. Verification is behaviour probes plus a signed-in prod walk at 1440 and 390, read-only.
+
+**Source:** Kody's multiple-choice interview of 2026-10-12.
+
+*Entries add: … · V19 · V20 · last id = V20*
