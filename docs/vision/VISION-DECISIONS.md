@@ -523,3 +523,19 @@ These are side journeys from the studio buying review (`artifacts/procurement-bu
 **Source:** Kody's 2026-10-10 rulings and the US-25 story log; US-24 synthesis §6; Direction C implementation plan and manifest.
 
 *Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · V14 · V15 · V18 (V16–V17 reserved on the website-copy branch) · last id = V18*
+
+### V19 · The Desk takes US-26 Direction A, "Restored and tightened" — Kody 2026-10-12
+
+**Decision:** Kody reports that the founding team agrees unanimously on US-26 Direction A (`artifacts/desk-redesign-2026-10-12/synthesis/direction.md` §3 A and §4).
+
+**Ruled with it (US-26 Q1–Q4, recommended answers):**
+- **Q1, amending V18 Q1.** The Desk may carry colour that orients; it never grades, counts or nags. Every other V18 Q1 guard stands word for word: five lines, no overflow count, no dots or badges, no "cleared today", nothing pushed.
+- **Q2.** The tag means stage. Whose move stays in words.
+- **Q3, amending V18 Q7 in part.** Stage colour returns as a 3 px edge rule, never a plate; the stage word stays ink. Urgency stays in order and words, and only an overdue clause prints in terracotta-ink.
+- **Q4.** A Desk card stands for a job, holding that job's lines from today's five.
+
+**Still open:** US-26 Q5–Q15 are not ruled by this entry. US-27, the portal-wide uplift, carries them to the founders with its own proposal, together with any house-sheet amendments that extending card separation and depth beyond the Desk needs. The house sheet's zero-shadow rule (`docs/design/house-sheet/SPEC.md` A4) stands unless the founders rule otherwise.
+
+**Source:** Kody's message of 2026-10-12; the US-26 deck https://claude.ai/artifact/C3E1iqzt3sAhA3brMHWREf.
+
+*Entries add: … · V18 · V19 · last id = V19*
