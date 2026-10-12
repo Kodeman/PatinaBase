@@ -216,7 +216,7 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
   it('says nothing needs her, once, when every feed answered and no job needs her', () => {
     render(<DeskPage />);
     expect(screen.getByTestId('day-sheet')).toBeInTheDocument();
-    expect(screen.getAllByText('No current action alerts.')).toHaveLength(1);
+    expect(screen.getAllByText('Nothing more needs you today.')).toHaveLength(1);
   });
 
   it('never says nothing needs her while a feed is unread (fix-now 6)', () => {
@@ -225,7 +225,7 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
       data: { folders: [], chips: [], live: [], unreadFeeds: ['purchase orders'] },
     };
     render(<DeskPage />);
-    expect(screen.queryByText('No current action alerts.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nothing more needs you today.')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('day-sheet')).getByText('Not checked: purchase orders.')).toBeInTheDocument();
   });
 
@@ -233,14 +233,14 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
     mockViewerStudioId = 'studio-1';
     mockLeadsRead = false;
     render(<DeskPage />);
-    expect(screen.queryByText('No current action alerts.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nothing more needs you today.')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('day-sheet')).getByText('Not checked: project leads.')).toBeInTheDocument();
   });
 
   it('says nothing needs her once her studio’s project leads answer (SQ-751 F5)', () => {
     mockViewerStudioId = 'studio-1';
     render(<DeskPage />);
-    expect(screen.getAllByText('No current action alerts.')).toHaveLength(1);
+    expect(screen.getAllByText('Nothing more needs you today.')).toHaveLength(1);
   });
 
   it('opens on Mine and holds the scope per person', () => {
@@ -266,11 +266,143 @@ describe('Desk — capture-lead affordance (A9)', () => {
   });
 });
 
-describe('Desk — header acts print their sub-labels (F24)', () => {
-  it('prints the registry sub-label under each header act', () => {
+describe('Desk — one header line (US-28 S0 F1)', () => {
+  it('prints no sub-labels under the header acts; ⌘K and Desk Contents keep those words', () => {
     render(<DeskPage />);
-    expect(screen.getByText('Create an inquiry brief')).toBeInTheDocument();
-    expect(screen.getByText('Direct project setup')).toBeInTheDocument();
+    expect(screen.queryByText('Create an inquiry brief')).toBeNull();
+    expect(screen.queryByText('Direct project setup')).toBeNull();
+  });
+
+  it('sets both creates as secondary acts: no filled act on the Desk', () => {
+    const { container } = render(<DeskPage />);
+    const head = container.querySelector<HTMLElement>('[data-action-region="desk-head"]')!;
+    expect(head.querySelector('[data-action-variant="primary"], [data-action-variant="inked"]')).toBeNull();
+    for (const key of ['capture-lead', 'open-project']) {
+      expect(head.querySelector(`[data-action-key="${key}"]`)).toHaveAttribute(
+        'data-action-variant',
+        'secondary',
+      );
+    }
+    expect(head.querySelector('[data-action-key="find-anything"]')).toHaveAttribute(
+      'data-action-variant',
+      'tertiary',
+    );
+  });
+
+  it('keeps the date out of the header: it moved to Today’s eyebrow (U-Q3)', () => {
+    const { container } = render(<DeskPage />);
+    const header = container.querySelector('header')!;
+    expect(header.querySelector('[data-part]')).toBeNull();
+    expect(header.textContent).not.toMatch(/Today|October|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/);
+    // The double rule opens the day under the header (F2).
+    expect(header.nextElementSibling).toHaveClass('doc-rule-strong');
+  });
+});
+
+describe('Desk — Back keeps the place (US-28 S0 F6)', () => {
+  const PLACE = 'patina.desk.place';
+  let scrollTo: jest.Mock;
+  const spies: jest.SpyInstance[] = [];
+  const spy = <T extends jest.SpyInstance>(made: T): T => {
+    spies.push(made);
+    return made;
+  };
+  const back = () => {
+    window.history.pushState({}, '', '/desk');
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+  };
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    scrollTo = jest.fn();
+    window.scrollTo = scrollTo as unknown as typeof window.scrollTo;
+  });
+  afterEach(() => {
+    spies.splice(0).forEach((made) => made.mockRestore());
+    window.history.pushState({}, '', '/');
+  });
+
+  it('holds the offset in this tab when she leaves the Desk', () => {
+    const { unmount } = render(<DeskPage />);
+    // jsdom keeps scrollY as a plain value.
+    Object.defineProperty(window, 'scrollY', { value: 1873, configurable: true });
+    try {
+      unmount();
+    } finally {
+      Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
+    }
+    expect(JSON.parse(window.sessionStorage.getItem(PLACE)!)).toEqual({ y: 1873, anchor: null });
+  });
+
+  it('puts the offset back when Back lands on the Desk', () => {
+    window.sessionStorage.setItem(PLACE, JSON.stringify({ y: 400, anchor: null }));
+    spy(jest.spyOn(document.documentElement, 'scrollHeight', 'get')).mockReturnValue(4624);
+    back();
+    render(<DeskPage />);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ top: 400, behavior: 'auto' });
+  });
+
+  it('leaves a fresh entry to the arrival: no restore without a history traversal', () => {
+    window.sessionStorage.setItem(PLACE, JSON.stringify({ y: 400, anchor: null }));
+    render(<DeskPage />);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('lands on the pressed row when the held offset no longer fits the page', () => {
+    window.sessionStorage.setItem(PLACE, JSON.stringify({ y: 9000, anchor: 'roster-line-e1' }));
+    const row = document.createElement('li');
+    row.id = 'roster-line-e1';
+    row.scrollIntoView = jest.fn();
+    document.body.appendChild(row);
+    back();
+    render(<DeskPage />);
+    expect(row.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
+    expect(scrollTo).not.toHaveBeenCalled();
+    row.remove();
+  });
+
+  it('waits for a roster still filling in, and puts the offset back once the page holds it', () => {
+    window.sessionStorage.setItem(PLACE, JSON.stringify({ y: 821, anchor: 'roster-line-late' }));
+    let grew: (() => void) | null = null;
+    const disconnect = jest.fn();
+    const Observer = global.ResizeObserver;
+    global.ResizeObserver = class {
+      constructor(callback: () => void) {
+        grew = callback;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect = disconnect;
+    } as unknown as typeof ResizeObserver;
+    const height = spy(jest.spyOn(document.documentElement, 'scrollHeight', 'get')).mockReturnValue(1096);
+    try {
+      back();
+      render(<DeskPage />);
+      // The page cannot hold 821 yet and the row is not there: no clamped jump.
+      expect(scrollTo).not.toHaveBeenCalled();
+      height.mockReturnValue(5225);
+      act(() => grew!());
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(scrollTo).toHaveBeenCalledWith({ top: 821, behavior: 'auto' });
+      expect(disconnect).toHaveBeenCalled();
+    } finally {
+      global.ResizeObserver = Observer;
+    }
+  });
+
+  it('stands down quietly when storage is unavailable', () => {
+    spy(jest.spyOn(Storage.prototype, 'getItem')).mockImplementation(() => {
+      throw new Error('denied');
+    });
+    spy(jest.spyOn(Storage.prototype, 'setItem')).mockImplementation(() => {
+      throw new Error('denied');
+    });
+    back();
+    const { unmount } = render(<DeskPage />);
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(() => unmount()).not.toThrow();
   });
 });
 
@@ -381,15 +513,15 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
   });
 
-  it('marks the date line as head — the landing focus, never the greeting', () => {
+  it('marks Today’s eyebrow date as head — the landing focus, never the greeting (U-Q3)', () => {
     const { container } = render(<DeskPage />);
     const heads = container.querySelectorAll<HTMLElement>('[data-part~="head"]');
     expect(heads).toHaveLength(1);
     const head = heads[0];
-    expect(head.tagName).toBe('P');
     expect(head.closest('h1')).toBeNull();
+    expect(head.closest('[data-testid="day-sheet"]')).not.toBeNull();
     expect(head.closest('main')).toHaveAttribute('data-arrival', 'desk');
-    expect(head.textContent).toMatch(/^[A-Z]+ · [0-9A-Z ]+$/);
+    expect(head.textContent).toMatch(/^[A-Z][a-z]+ \d{1,2} [A-Z][a-z]+ · Today$/);
     expect(head.tabIndex).toBe(-1);
     head.focus();
     expect(head).toHaveFocus();

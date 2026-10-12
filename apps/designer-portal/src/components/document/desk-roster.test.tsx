@@ -392,9 +392,11 @@ describe('DeskRoster — the line act agrees with the paper (FR4 Fix 5)', () => 
     }) as NeedLine;
 
   const cedar = docRow('cedar', 'Cedar house', { active_section: 'install' });
-  const wright = docRow('wright', 'Wright apartment', {
+  // F7 — a lead takes the person's name, not its subject.
+  const wright = docRow('wright', 'Consultation', {
     active_section: 'brief',
     engagement_kind: 'lead',
+    client_name: 'Ainsley Moore',
     lead_status: 'new',
   });
   const aspen = docRow('aspen', 'Aspen residence', {
@@ -444,7 +446,7 @@ describe('DeskRoster — the line act agrees with the paper (FR4 Fix 5)', () => 
     expect(screen.queryByText(/Name the phases for this project/)).toBeNull();
 
     const wrightAct = screen.getByRole('link', {
-      name: 'Respond to the inquiry — Wright apartment',
+      name: 'Respond to the inquiry — Ainsley Moore',
     });
     expect(wrightAct).toHaveAttribute('href', '/doc/wright');
     const wrightLine = wrightAct.closest<HTMLElement>('[data-ledger-row]')!;
@@ -460,7 +462,8 @@ describe('DeskRoster — the line act agrees with the paper (FR4 Fix 5)', () => 
   it('one-voice off: each line keeps its own act', () => {
     render(<DeskRoster roster={derived(false)} />);
     expect(screen.getByRole('link', { name: 'Open the schedule — Cedar house' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open project file — Wright apartment' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open project file — Ainsley Moore' })).toBeInTheDocument();
+    expect(screen.queryByText('Consultation')).toBeNull();
     expect(screen.getByRole('link', { name: 'Follow up — Aspen residence' })).toBeInTheDocument();
   });
 });

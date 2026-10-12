@@ -17,9 +17,12 @@ import type { RosterLine } from '@/lib/document/desk-roster-derivation';
 import { DocumentAction } from './document-action';
 import { openLedger } from './command-bar';
 
-const AT_REST_SENTENCE = 'No current action alerts.';
+/** F4 — the quiet row says what the roster's quiet state says
+ *  (desk-roster-derivation's QUIET_STATE). */
+const AT_REST_SENTENCE = 'No current alert';
 
-/** The id a link lands on — the put-down row lands on it after a return. */
+/** The id a link lands on — the put-down row lands on it after a return,
+ *  and F6's Back falls back to it when the held offset no longer fits. */
 export function rosterLineAnchorId(engagementId: string): string {
   return `roster-line-${engagementId}`;
 }

@@ -72,7 +72,7 @@ test.describe("Desk — whole-desk error state", () => {
 
     // No half-desk: none of the healthy/quiet-desk surfaces coexist with the
     // error banner — this is exactly the bug the whole-desk error state fixes.
-    await expect(page.getByText("No current action alerts.")).toHaveCount(0);
+    await expect(page.getByText("Nothing more needs you today.")).toHaveCount(0);
     // B2 — `Needs your hand` is `Studio workload · n live · m overdue` now: one
     // roster of every live job, grouped by stage.
     await expect(page.getByTestId("desk-roster")).toHaveCount(0);
@@ -113,9 +113,11 @@ test.describe("Desk — whole-desk error state", () => {
       const everyJob = page.getByRole("heading", { name: /Studio workload/ });
       await expect(everyJob).toBeVisible({ timeout: 20_000 });
 
-      const emptyLine = page.getByText(
-        "No current action alerts. The work is in motion.",
-      );
+      // The roster's own empty line (desk-roster.tsx); the Day Sheet's quiet
+      // sentence is a separate line above it (US-28 S0 F4).
+      const emptyLine = page
+        .getByTestId("desk-roster")
+        .getByText("The work is in motion.");
       // R143 — the Desk's jobs are cards and ledger rows now; this assertion
       // is about "did any job render at all", so it counts both halves.
       const jobLines = page.locator("[data-claim-card], [data-ledger-row]");

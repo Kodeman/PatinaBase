@@ -35,8 +35,11 @@ import {
 import { FeedbackForm } from './feedback-form';
 
 const YELLOW = '#ffd60a';
-/** Clears the Studio Drawer / MobileBar on document shells (globals.css). */
-const BOTTOM = 'var(--doc-shell-floating-bottom, 1rem)';
+/** F8 — sits above the MobileBar. The widget mounts in the root layout,
+ *  outside `.document-route-shell`, so the shell's floating-bottom token never
+ *  reached it and the pill sat on the dock's label. The bar publishes its own
+ *  height on `html` (mobile-bar.tsx) only while it is laid out. */
+const BOTTOM = 'calc(var(--doc-mobile-bar-height, 0px) + 1rem)';
 
 type Tab = 'new' | 'past';
 

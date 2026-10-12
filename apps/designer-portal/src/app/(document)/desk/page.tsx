@@ -7,7 +7,14 @@
  * No metric tiles, badges, feeds, or dashboard furniture.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import {
   useProfile,
   useOrganizations,
@@ -61,19 +68,49 @@ import {
   DocumentAction,
   DocumentActionGroup,
 } from '@/components/document/document-action';
+import { RegionRule } from '@/components/document/region/region-rule';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
-import { STUDIO_VERBS } from '@/lib/document/registry';
 
-// F24 — the two header acts print their registry sub-labels; the registry
-// (A3-L3's file) is the one place these strings are stored, so the header
-// reads the same words the Desk Contents' Begin column and ⌘K do.
-const CAPTURE_LEAD_SUBLABEL = STUDIO_VERBS.find(
-  (verb) => verb.key === 'capture-lead',
-)?.subLabel;
-const OPEN_PROJECT_SUBLABEL = STUDIO_VERBS.find(
-  (verb) => verb.key === 'open-project',
-)?.subLabel;
+// F6 — Back keeps the place. The Desk holds its scroll offset (and the row
+// last pressed) for this tab when it is left, and puts it back only when a
+// history traversal lands here; a fresh entry belongs to the arrival.
+const DESK_PLACE_KEY = 'patina.desk.place';
+
+interface DeskPlace {
+  y: number;
+  anchor: string | null;
+}
+
+let deskMounted = false;
+// Read when a Back lands on the Desk, before the Desk mounts and holds again.
+let placeToRestore: DeskPlace | null = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', () => {
+    placeToRestore =
+      !deskMounted && window.location.pathname === '/desk' ? heldDeskPlace() : null;
+  });
+}
+
+function holdDeskPlace(anchor: string | null): void {
+  try {
+    const place: DeskPlace = { y: window.scrollY, anchor };
+    window.sessionStorage.setItem(DESK_PLACE_KEY, JSON.stringify(place));
+  } catch {
+    /* storage disabled — Back lands where the browser puts it */
+  }
+}
+
+function heldDeskPlace(): DeskPlace | null {
+  try {
+    const raw = window.sessionStorage.getItem(DESK_PLACE_KEY);
+    const held = raw ? (JSON.parse(raw) as Partial<DeskPlace> | null) : null;
+    if (!held || typeof held.y !== 'number') return null;
+    return { y: held.y, anchor: typeof held.anchor === 'string' ? held.anchor : null };
+  } catch {
+    return null;
+  }
+}
 
 /** `desk-first-touch` is a first-hour line (return-teaching §2). */
 const FIRST_HOUR_MS = 60 * 60 * 1000;
@@ -195,11 +232,9 @@ export default function DeskPage() {
       : now.getHours() < 18
         ? 'Good afternoon'
         : 'Good evening';
-  // PP-2 — the Desk's one date style. The greeting says the same idiom the
-  // day's line says beneath it, and neither composes its own formatter.
-  const dateLabel = hydrated
-    ? `${WEEKDAY_FORMAT.format(now)} · ${dayMonth(now)}`.toUpperCase()
-    : '';
+  // PP-2 — the Desk's one date style. U-Q3 — it prints in Today's eyebrow,
+  // "Monday 12 October · Today"; the eyebrow sets the caps.
+  const dateLabel = hydrated ? `${WEEKDAY_FORMAT.format(now)} ${dayMonth(now)}` : '';
   const name =
     profile?.display_name || profile?.full_name || user?.name || null;
   // The Desk greeting uses the real first name; with none resolved we greet
@@ -407,6 +442,73 @@ export default function DeskPage() {
     if (arrivalRoot) arrivalRootShown.current = true;
   }, [arrivalRoot]);
 
+  // F6 — the row last pressed, held with the offset as its fallback.
+  const pressedAnchor = useRef<string | null>(null);
+  const deskRoot = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    deskMounted = true;
+    const onHide = () => holdDeskPlace(pressedAnchor.current);
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      // A layout cleanup runs before the Desk leaves the page, so the offset
+      // is still the Desk's own, whichever way she left.
+      holdDeskPlace(pressedAnchor.current);
+      window.removeEventListener('pagehide', onHide);
+      deskMounted = false;
+      // A real leave drops a place the Desk never got to put back; React's
+      // dev rehearsal of an unmount remounts before this runs.
+      window.setTimeout(() => {
+        if (!deskMounted) placeToRestore = null;
+      });
+    };
+  }, []);
+  // Restored once the root latches. The roster can still be filling in then,
+  // so a place the page cannot yet hold is tried again as the page grows,
+  // until it lands, her hand moves the page, or the wait runs out.
+  useLayoutEffect(() => {
+    const place = placeToRestore;
+    if (!arrivalRoot || !place) return;
+    const land = (): boolean => {
+      const room = document.documentElement.scrollHeight - window.innerHeight;
+      if (place.y <= room) {
+        window.scrollTo({ top: place.y, behavior: 'auto' });
+        return true;
+      }
+      const row = place.anchor ? document.getElementById(place.anchor) : null;
+      if (!row) return false;
+      row.scrollIntoView({ block: 'start', behavior: 'auto' });
+      return true;
+    };
+    if (land()) {
+      placeToRestore = null;
+      return;
+    }
+    const hands = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+    const grow = new ResizeObserver(() => {
+      if (land()) settle();
+    });
+    const wait = window.setTimeout(settle, 3000);
+    // A cleanup only stops watching: a dev rehearsal remount tries again.
+    function stop() {
+      grow.disconnect();
+      window.clearTimeout(wait);
+      hands.forEach((hand) => window.removeEventListener(hand, settle));
+    }
+    function settle() {
+      placeToRestore = null;
+      stop();
+    }
+    // The Desk's own root grows as the roster fills in; the body does not.
+    grow.observe(deskRoot.current ?? document.body);
+    hands.forEach((hand) => window.addEventListener(hand, settle, { passive: true }));
+    return stop;
+  }, [arrivalRoot]);
+  const notePress = (event: ReactMouseEvent<HTMLElement>) => {
+    const target = event.target as Element | null;
+    if (!target?.closest?.('a[href]')) return;
+    pressedAnchor.current = target.closest('[data-ledger-row]')?.id ?? null;
+  };
+
   const rosterBlock =
     (isLoading && !data) || arrivalHeld ? (
       <div
@@ -430,6 +532,7 @@ export default function DeskPage() {
           oneVoice={oneVoice}
           now={now}
           jobs={rosterJobs}
+          dateLabel={dateLabel}
         />
         <DeskRoster
           roster={roster}
@@ -444,82 +547,62 @@ export default function DeskPage() {
       data-arrival={arrivalRoot ? 'desk' : undefined}
       data-arrival-ready={arrivalReady ? '' : undefined}
       className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14"
+      ref={deskRoot}
+      onClickCapture={notePress}
     >
-      <header className="mb-12 flex items-baseline justify-between gap-4">
-        <div>
-          {/* The signature move: greeting in Playfair, the first name in
-              Playfair italic, Aged Oak. Kept modest so the folios lead. */}
-          <h1
+      {/* F1 — one header line: the greeting, then the acts on its baseline.
+          The date moved to Today's eyebrow (U-Q3). */}
+      <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 pb-3">
+        {/* The signature move: greeting in Playfair, the first name in
+            Playfair italic, Aged Oak. Kept modest so the folios lead. */}
+        <h1
             data-tour-anchor="desk-greeting"
-            className="font-heading text-[1.7rem] font-normal text-[var(--text-primary)]"
-          >
-            {firstName ? (
-              <>
-                {greetingWord},{' '}
-                <span className="italic text-[var(--text-muted)]">
-                  {firstName}
-                </span>
-              </>
-            ) : (
-              <>{greetingWord}.</>
-            )}
-          </h1>
-          {/* US-14 `head` is the arrival's landing focus on both surfaces
-              (the Document's is its letterhead header); here its text is
-              also the card's place line. */}
-          <p
-            data-part="head"
-            tabIndex={-1}
-            className="doc-type-meta mt-1 uppercase tracking-[0.09em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-          >
-            {dateLabel || ' '}
-          </p>
-        </div>
+          className="font-heading text-[1.7rem] font-normal text-[var(--text-primary)]"
+        >
+          {firstName ? (
+            <>
+              {greetingWord},{' '}
+              <span className="italic text-[var(--text-muted)]">
+                {firstName}
+              </span>
+            </>
+          ) : (
+            <>{greetingWord}.</>
+          )}
+        </h1>
+        {/* No filled act on the Desk: both creates are secondary (F1). */}
         <DocumentActionGroup
           surfaceKey="desk"
           regionKey="desk-head"
           aria-label="Desk actions"
         >
-          <div className="flex flex-col items-end gap-0.5">
-            <DocumentAction
-              actionKey="capture-lead"
-              variant="primary"
-              leading="＋"
-              data-tour-anchor="desk-capture-lead"
-              onClick={() => setCaptureOpen(true)}
-            >
-              Record an inquiry
-            </DocumentAction>
-            {CAPTURE_LEAD_SUBLABEL && (
-              <span className="doc-type-meta uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                {CAPTURE_LEAD_SUBLABEL}
-              </span>
-            )}
-          </div>
-          {/* R79 — the quiet secondary act beside capture: a project that
-              skips the proposal (a repeat client, handshake work). */}
-          <div className="flex flex-col items-end gap-0.5">
-            <DocumentAction
-              actionKey="open-project"
-              variant="secondary"
-              leading="＋"
-              onClick={() => setOpenProjectOpen(true)}
-            >
-              Create a project file
-            </DocumentAction>
-            {OPEN_PROJECT_SUBLABEL && (
-              <span className="doc-type-meta uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                {OPEN_PROJECT_SUBLABEL}
-              </span>
-            )}
-          </div>
+          <DocumentAction
+            actionKey="capture-lead"
+            variant="secondary"
+            leading="＋"
+            data-tour-anchor="desk-capture-lead"
+            onClick={() => setCaptureOpen(true)}
+          >
+            Record an inquiry
+          </DocumentAction>
+          {/* R79 — the quiet act beside capture: a project that skips the
+              proposal (a repeat client, handshake work). */}
+          <DocumentAction
+            actionKey="open-project"
+            variant="secondary"
+            leading="＋"
+            onClick={() => setOpenProjectOpen(true)}
+          >
+            Create a project file
+          </DocumentAction>
           <DocumentAction
             actionKey="find-anything"
             variant="tertiary"
             data-tour-anchor="desk-find-anything"
             onClick={() => openCommandBar()}
             trailing={
-              <kbd className="rounded-[3px] border border-[var(--border-default)] px-1 py-px font-mono">
+              // The ⌘K hint is for a fine pointer only.
+              <kbd className="hidden rounded-[3px] border border-[var(--border-default)] px-1 py-px font-mono [@media(hover:hover)_and_(pointer:fine)]:inline">
                 ⌘K
               </kbd>
             }
@@ -528,6 +611,8 @@ export default function DeskPage() {
           </DocumentAction>
         </DocumentActionGroup>
       </header>
+      {/* F2 — the double rule opens the day under the header. */}
+      <RegionRule weight="strong" className="mb-12 max-[599px]:mb-6" />
 
       {isError ? (
         // I64 whole-desk error state: one coherent surface, not a half-desk.

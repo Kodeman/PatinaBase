@@ -363,9 +363,7 @@ export function MobileBar() {
             </span>
             {household && (
               <span
-                className={`block font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)] ${
-                  oneVoice ? 'break-words' : 'truncate'
-                }`}
+                className="block break-words font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]"
               >
                 {household}
               </span>
@@ -382,9 +380,9 @@ export function MobileBar() {
                 dark-ground accent (see the elapsed-time text below). */}
             <span
               aria-hidden={stopLabel ? undefined : true}
-              className={`block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)] ${
-                oneVoice ? 'break-words' : 'truncate'
-              } ${stopLabel ? '' : 'invisible'}`}
+              className={`block break-words font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)] ${
+                stopLabel ? '' : 'invisible'
+              }`}
             >
               Section: {placeWord ?? '\u00a0'}
             </span>
@@ -397,7 +395,8 @@ export function MobileBar() {
             <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.58)]">
               Studio navigation
             </span>
-            <span className="block truncate font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
+            {/* F8 — the dock wraps, never truncates ("Studio overview"). */}
+            <span className="block break-words font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
               {context}
             </span>
           </span>

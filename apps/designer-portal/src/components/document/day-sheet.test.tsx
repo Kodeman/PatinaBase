@@ -67,7 +67,14 @@ function renderSheet(
   });
   const onScope = jest.fn();
   const utils = render(
-    <DaySheet sheet={sheet} scope="studio" onScope={onScope} now={NOW} jobs={jobs} />,
+    <DaySheet
+      sheet={sheet}
+      scope="studio"
+      onScope={onScope}
+      now={NOW}
+      jobs={jobs}
+      dateLabel="Friday 9 October"
+    />,
   );
   return { ...utils, onScope };
 }
@@ -93,6 +100,8 @@ describe('DaySheet', () => {
     const { container } = renderSheet([entry(1)]);
     const [line] = lines(container);
     expect(line.querySelector('p')).toHaveTextContent(/^Job 1 — Task 1 is due$/);
+    // F3 — the job name opens the job, on every line (the lone line included).
+    expect(within(line).getByRole('link', { name: 'Job 1' })).toHaveAttribute('href', '/doc/p1');
     expect(within(line).getByRole('link', { name: 'Open the task — Job 1' })).toHaveAttribute(
       'href',
       '/doc/p1#task-1',
@@ -241,6 +250,64 @@ describe('DaySheet', () => {
     expect(screen.getByText('Awaiting Fenmoor Joinery since 3 October')).toBeInTheDocument();
   });
 
+  it('heads Today with the day in its eyebrow, the arrival head and settle (U-Q3)', () => {
+    const { container } = renderSheet([entry(1)]);
+    const head = container.querySelector<HTMLElement>('[data-part~="head"]')!;
+    expect(head).toHaveTextContent(/^Friday 9 October · Today$/);
+    expect(head.getAttribute('data-part')).toBe('head settle');
+    expect(head.tabIndex).toBe(-1);
+    expect(head.closest('h2')).not.toBeNull();
+    expect(screen.getByRole('region', { name: 'Friday 9 October · Today' })).toBe(
+      screen.getByTestId('day-sheet'),
+    );
+    // No salutation at rest: the eyebrow says what the day is.
+    expect(container.textContent).not.toMatch(/these need you/);
+  });
+
+  it('prints what waits on others and what comes back beside open lines, not only when quiet (F4)', () => {
+    const waiting = entry(1, { owner: 'maker' });
+    const putOff = entry(2);
+    const open = entry(3);
+    const { container } = renderSheet([waiting, putOff, open], {
+      states: new Map([
+        [
+          waiting.key,
+          {
+            needKey: waiting.key,
+            projectId: 'p1',
+            deferredUntil: null,
+            actedAt: new Date(2026, 9, 3, 12).toISOString(),
+            waitingOn: 'Fenmoor Joinery',
+            setAsideUntil: null,
+            setAsideReason: null,
+          },
+        ],
+        [
+          putOff.key,
+          {
+            needKey: putOff.key,
+            projectId: 'p2',
+            deferredUntil: nextWorkingDay(NOW),
+            actedAt: null,
+            waitingOn: null,
+            setAsideUntil: null,
+            setAsideReason: null,
+          },
+        ],
+      ]),
+    });
+    expect(lines(container)).toHaveLength(1);
+    expect(screen.getByRole('heading', { level: 3, name: 'Awaiting' })).toBeInTheDocument();
+    expect(screen.getByText('Awaiting Fenmoor Joinery since 3 October')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'Coming back' })).toBeInTheDocument();
+    expect(container.querySelector('[data-day-sheet-back="task_due:t2"]')).toHaveTextContent(
+      'Back Monday 12 October',
+    );
+    // F4 — the caption closes Today, after its blocks.
+    const sheet = screen.getByTestId('day-sheet');
+    expect(sheet.lastElementChild).toHaveTextContent(THE_REST);
+  });
+
   it('heads the waiting block "Awaiting" (SQ-752)', () => {
     const waiting = entry(1, { owner: 'maker' });
     renderSheet([waiting], {
@@ -274,6 +341,8 @@ describe('DaySheet', () => {
       container.querySelector('[data-roster-mark], [data-mark-tone], [data-badge], [role="status"]'),
     ).toBeNull();
     for (const el of container.querySelectorAll('*')) {
+      // The eyebrow's strata ornament is the house section device, not a mark.
+      if (el.closest('[aria-hidden]')) continue;
       const cls = el.className.toString();
       expect(cls).not.toMatch(/\brounded-full\b|\bbg-(?!transparent)|terracotta|clay|sage|dusty/);
       expect(el.getAttribute('style') ?? '').not.toMatch(/color/);

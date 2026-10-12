@@ -9,12 +9,15 @@
  * Monochrome by rule (Q1): ink only, and no badge, dot, overflow count,
  * "cleared today" or streak anywhere on it.
  *
- * US-14 arrival marks moved here with the content they lifted: the head
- * sentence is `settle`, line one carries `headline` / `job` / `act`, and
- * lines two and three are the facts `f1` / `f2`.
+ * US-14 arrival marks moved here with the content they lifted: the eyebrow's
+ * date is the `head` (U-Q3 — the date left the Desk header for Today's
+ * eyebrow) and, on a working sheet, the `settle`; line one carries
+ * `headline` / `job` / `act`, and lines two and three are the facts
+ * `f1` / `f2`. A quiet sheet's one sentence is its `headline settle`.
  */
 
 import type { MouseEvent } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSetNeedState } from '@patina/supabase';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
@@ -28,20 +31,22 @@ import { useNeedActSheet } from './acts/need-act-sheet';
 import { actSheetKindOf } from './acts/act-sheet-kind';
 import { actLanding } from './desk-ledger-row';
 import { openLedger } from './command-bar';
+import { SectionEyebrow } from './section-eyebrow';
 
-export const NOTHING_NEEDS_YOU_TONIGHT = 'No current action alerts.';
+/** F4 — the quiet sheet's one sentence. */
+export const NOTHING_NEEDS_YOU_TONIGHT = 'Nothing more needs you today.';
+/** F4 — printed inside Today, above its closing rule: it captions the sheet. */
 export const THE_REST = 'The rest are on their projects.';
+
+/** F2 — a group head inside a section: the eyebrow's mono caps, no rule of
+ *  its own (the old ink underline read as the section's close). */
+export const DESK_GROUP_HEAD =
+  'font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]';
 
 const SCOPES: readonly (readonly [DeskScope, string])[] = [
   ['mine', 'Mine'],
   ['studio', 'The studio’s'],
 ];
-
-function salutation(now: Date): string {
-  const hour = now.getHours();
-  const part = hour < 12 ? 'This morning' : hour < 18 ? 'This afternoon' : 'This evening';
-  return `${part}, these need you.`;
-}
 
 function backOn(day: string): string {
   const date = parseSourceDate(day);
@@ -126,9 +131,15 @@ function SheetLine({
           sentence
         ) : (
           <>
-            <strong data-part={top ? 'job' : undefined} className="font-semibold">
+            {/* F3 — the job name opens the job, on every line. */}
+            <Link
+              href={job?.jobHref ?? `/doc/${entry.projectId}`}
+              data-part={top ? 'job' : undefined}
+              data-day-sheet-job
+              className="font-semibold text-[var(--text-primary)] no-underline hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--text-primary)]"
+            >
               {entry.projectName}
-            </strong>
+            </Link>
             {` — ${sentence}`}
           </>
         )}
@@ -185,6 +196,7 @@ export function DaySheet({
   oneVoice = false,
   now,
   jobs,
+  dateLabel,
 }: {
   sheet: DaySheetModel;
   scope: DeskScope;
@@ -193,23 +205,29 @@ export function DaySheet({
   now: Date;
   /** Each job's roster line, by the need's project id — where its act lands. */
   jobs?: ReadonlyMap<string, RosterLine>;
+  /** U-Q3 — the day, as "Monday 12 October"; blank until hydrated. */
+  dateLabel?: string;
 }) {
   const quiet = sheet.lines.length === 0;
   const notChecked =
     sheet.unchecked.length > 0 ? `Not checked: ${sheet.unchecked.join(', ')}.` : null;
   // Fix-now 6 — an unread feed never lets the sheet say nothing needs her.
-  const head = sheet.empty ? NOTHING_NEEDS_YOU_TONIGHT : quiet ? notChecked! : salutation(now);
+  const head = sheet.empty ? NOTHING_NEEDS_YOU_TONIGHT : notChecked;
 
   return (
     <section aria-labelledby="day-sheet-head" data-testid="day-sheet" className="day-sheet">
       <div className="day-sheet-head">
-        <p
-          id="day-sheet-head"
-          data-part={quiet ? 'headline settle' : 'settle'}
-          className="font-heading text-[22px] italic leading-[1.3] text-[var(--text-primary)]"
-        >
-          {head}
-        </p>
+        <SectionEyebrow>
+          {/* US-14 `head` — the arrival's landing focus and the card's place. */}
+          <span
+            id="day-sheet-head"
+            data-part={quiet ? 'head' : 'head settle'}
+            tabIndex={-1}
+            className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--text-primary)]"
+          >
+            {dateLabel ? `${dateLabel} · Today` : 'Today'}
+          </span>
+        </SectionEyebrow>
         <div role="group" aria-label="Whose projects" className="day-sheet-scope">
           {SCOPES.map(([key, word], i) => (
             <span key={key} className="inline-flex items-baseline gap-2.5">
@@ -226,6 +244,14 @@ export function DaySheet({
           ))}
         </div>
       </div>
+      {quiet && head && (
+        <p
+          data-part="headline settle"
+          className="font-heading text-[22px] italic leading-[1.3] text-[var(--text-primary)]"
+        >
+          {head}
+        </p>
+      )}
 
       {!quiet && (
         <DocumentActionGroup surfaceKey="desk" regionKey="day-sheet" aria-label="Day Sheet actions">
@@ -247,23 +273,11 @@ export function DaySheet({
         <p className="doc-type-body mt-4 text-[var(--text-muted)]">{notChecked}</p>
       )}
 
-      {quiet && sheet.setAside.length > 0 && (
+      {/* F4 — both blocks print whenever they hold a line, not only on a
+          quiet sheet: a line she acted on or put off never vanishes. */}
+      {sheet.waitingOn.length > 0 && (
         <div className="day-sheet-block">
-          <h3 className="border-b border-[color:var(--text-primary)] pb-2 font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]">Coming back</h3>
-          <ul>
-            {sheet.setAside.map(({ need: entry, until }) => (
-              <li key={entry.key} className="day-sheet-waiting">
-                <span className="font-heading text-[18px]">{entry.projectName}</span>
-                <span className="text-[var(--text-muted)]">{deskNeedText(entry.need, oneVoice)}</span>
-                <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-muted)]">{backOn(until)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {quiet && sheet.waitingOn.length > 0 && (
-        <div className="day-sheet-block">
-          <h3 className="border-b border-[color:var(--text-primary)] pb-2 font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]">Awaiting</h3>
+          <h3 className={DESK_GROUP_HEAD}>Awaiting</h3>
           <ul>
             {sheet.waitingOn.map(({ need: entry, who, since }) => (
               <li key={entry.key} data-day-sheet-waiting={entry.key} className="day-sheet-waiting">
@@ -276,7 +290,23 @@ export function DaySheet({
           </ul>
         </div>
       )}
+      {sheet.setAside.length > 0 && (
+        <div className="day-sheet-block">
+          <h3 className={DESK_GROUP_HEAD}>Coming back</h3>
+          <ul>
+            {sheet.setAside.map(({ need: entry, until }) => (
+              <li key={entry.key} data-day-sheet-back={entry.key} className="day-sheet-waiting">
+                <span className="font-heading text-[18px]">{entry.projectName}</span>
+                <span className="text-[var(--text-muted)]">{deskNeedText(entry.need, oneVoice)}</span>
+                <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-muted)]">{backOn(until)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
+      {/* F4 — above Today's closing rule, so it captions the sheet, not the
+          workload below it. */}
       <p className="mt-4 font-heading text-[17px] italic text-[var(--text-muted)]">{THE_REST}</p>
     </section>
   );

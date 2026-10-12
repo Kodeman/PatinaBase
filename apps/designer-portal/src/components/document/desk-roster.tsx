@@ -22,12 +22,10 @@ import {
 import { SectionEyebrow } from './section-eyebrow';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { DeskLedgerRow, rosterLineAnchorId } from './desk-ledger-row';
+import { DESK_GROUP_HEAD } from './day-sheet';
 
 /** Moved to desk-ledger-row.tsx; re-exported for this module's importers. */
 export { rosterLineAnchorId };
-
-const GROUP_HEAD =
-  'border-b border-[color:var(--text-primary)] pb-2 font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]';
 
 export function DeskRoster({
   roster,
@@ -57,7 +55,7 @@ export function DeskRoster({
       aria-labelledby="every-job"
       data-testid="desk-roster"
       data-tour-anchor="desk-needs-your-hand"
-      className="mt-10"
+      className="desk-roster"
     >
       {belowHead}
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
@@ -87,8 +85,8 @@ export function DeskRoster({
       >
         <div className="w-full">
           {groups.map((group, position) => (
-            <div key={group.key} data-roster-group={group.key} className="mt-7">
-              <h3 className={GROUP_HEAD}>{group.label}</h3>
+            <div key={group.key} data-roster-group={group.key} className="mt-6">
+              <h3 className={DESK_GROUP_HEAD}>{group.label}</h3>
               {/* The query container the rows' 899px collapse measures. */}
               <ul
                 className="desk-ledger-list"

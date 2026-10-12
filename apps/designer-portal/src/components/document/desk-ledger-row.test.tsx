@@ -87,7 +87,7 @@ describe('DeskLedgerRow — the roster line (US-25 slice 4)', () => {
     const sentence = () => container.querySelector('[data-ledger-cell="sentence"]');
     expect(sentence()).toHaveTextContent('With client since 4 Aug');
     rerender(<DeskLedgerRow line={line()} />);
-    expect(sentence()).toHaveTextContent('No current action alerts.');
+    expect(sentence()).toHaveTextContent('No current alert');
     rerender(<DeskLedgerRow line={line({ notChecked: 'Not checked: invoices.' })} />);
     expect(sentence()).toHaveTextContent('Not checked: invoices.');
   });

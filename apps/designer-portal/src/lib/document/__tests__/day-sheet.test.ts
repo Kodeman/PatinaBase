@@ -122,6 +122,15 @@ describe('deriveDaySheet — Not today lasts one working day', () => {
     expect(keys(new Date(2026, 9, 12, 8))).toEqual([a.key, b.key]); // Monday
   });
 
+  it('holds a deferred need in Coming back until the day it names (F4)', () => {
+    const [a, b] = EIGHT;
+    const until = nextWorkingDay(FRIDAY);
+    const states = new Map([[a.key, state(a.key, { deferredUntil: until })]]);
+    const result = sheet({ needs: [a, b], states });
+    expect(result.setAside).toEqual([{ need: a, until, reason: null }]);
+    expect(sheet({ needs: [a, b], states, now: new Date(2026, 9, 12, 8) }).setAside).toEqual([]);
+  });
+
   it('lets a sixth need step up when one is put off, never printing six', () => {
     const states = new Map([[EIGHT[0].key, state(EIGHT[0].key, { deferredUntil: '2026-10-12' })]]);
     const result = sheet({ needs: EIGHT, states });

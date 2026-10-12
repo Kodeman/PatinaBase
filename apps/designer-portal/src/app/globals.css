@@ -572,15 +572,29 @@
    container query, which Tailwind 3 cannot write; type and colour stay on the
    components as classes. ───────────────────────────────────────────────────── */
 
+/* US-28 S0 F2 — each Desk section closes on its own --rule-mid, every rule
+   runs the full measure, and the spacing sits on the 24px module (48 under
+   the header's double rule · 72 between sections · 24 above a group · 12/12
+   a row). The eyebrow (SectionEyebrow) carries no rule of its own. */
+.day-sheet,
+.desk-roster {
+  padding-bottom: 24px;
+  border-bottom: var(--rule-mid);
+}
+.desk-roster { margin-top: 72px; }
+@media (max-width: 599px) {
+  .desk-roster { margin-top: 48px; }
+}
 .day-sheet-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px 24px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--text-primary);
 }
+/* The action group is a flex row; without this the list shrinks to its
+   content and its hairlines stop short of the head rule. */
+.day-sheet-lines { width: 100%; }
 .day-sheet-scope {
   display: flex;
   align-items: baseline;
@@ -592,7 +606,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 8px 40px;
-  padding: 16px 0 15px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--doc-ink-border);
 }
 .day-sheet-line > p { max-width: 64ch; }
@@ -602,21 +616,21 @@
   justify-content: flex-end;
   gap: 16px;
 }
-.day-sheet-block { margin-top: 28px; }
+.day-sheet-block { margin-top: 24px; }
 .day-sheet-waiting {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 4px 24px;
-  padding: 11px 0 10px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--doc-ink-border);
   overflow-wrap: anywhere;
 }
-/* 390 — the sheet stacks: each act is a full-width row under its sentence. */
+/* 390 — the sheet stacks: the acts sit under the sentence, and the act and
+   Not today share one row when they fit (F3), wrapping when they do not. */
 @media (max-width: 639px) {
   .day-sheet-line { grid-template-columns: minmax(0, 1fr); }
-  .day-sheet-acts { flex-direction: column; align-items: stretch; gap: 0; }
-  .day-sheet-acts .da-act { width: 100%; justify-content: flex-start; }
+  .day-sheet-acts { flex-wrap: wrap; justify-content: flex-start; gap: 0 16px; }
   .day-sheet-waiting { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -634,7 +648,7 @@
   grid-template-columns: 220px 96px minmax(200px, 1fr) 132px 170px;
   align-items: baseline;
   column-gap: 20px;
-  padding: 11px 0 10px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--doc-ink-border);
 }
 .desk-ledger-row [data-ledger-cell='value'],

@@ -139,7 +139,9 @@ describe('StudioDrawer — breadcrumb copy (SQ-752)', () => {
   ])('prints the %s breadcrumb as "%s" (SQ-752)', (path, label) => {
     mockPathname = path;
     const { container } = render(<StudioDrawer />);
-    const crumb = container.querySelector('span.truncate.font-mono');
+    const crumb = container.querySelector('[data-drawer-crumb]');
     expect(crumb).toHaveTextContent(label);
+    // F8 — the crumb wraps, never truncates.
+    expect(crumb?.className).not.toMatch(/\btruncate\b|ellipsis|whitespace-nowrap/);
   });
 });

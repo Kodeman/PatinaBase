@@ -1,6 +1,7 @@
 import type { NeedState, ProjectLead } from '@patina/supabase';
 import type { DeskNeed } from './desk-need-list';
 import type { DocumentStateRow, NeedLine } from './desk-derivation';
+import { deskJobName } from './desk-job-name';
 
 export type DeskScope = 'mine' | 'studio';
 
@@ -153,7 +154,7 @@ export function deriveHandoffNeeds(
       weekday: 'long', month: 'long', day: 'numeric',
     }).format(assigned);
     const hasNote = handoffNoteFor(lead, meUserId, seat) !== null;
-    const handed = `${previous ?? 'The previous lead'} handed you ${row.title} on ${date}`;
+    const handed = `${previous ?? 'The previous lead'} handed you ${deskJobName(row)} on ${date}`;
     const need: NeedLine = {
       key,
       kind: 'handoff',
@@ -166,7 +167,7 @@ export function deriveHandoffNeeds(
       // SQ-778 N2 — the press lands on the note itself (HandoffNote's anchor).
       deepLink: `/doc/${projectId}#${HANDOFF_NOTE_ANCHOR}`,
     };
-    needs.push({ key, projectId, projectName: row.title, need });
+    needs.push({ key, projectId, projectName: deskJobName(row), need });
   }
   return needs;
 }

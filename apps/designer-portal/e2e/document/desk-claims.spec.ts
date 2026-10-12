@@ -139,7 +139,7 @@ test("the Day Sheet heads the Desk: five lines at most, and never a count", asyn
   );
 });
 
-test("the Desk does not scroll sideways at 390, and each act is a full-width row", async ({
+test("the Desk does not scroll sideways at 390, and a line's act and Not today share one row", async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -152,13 +152,26 @@ test("the Desk does not scroll sideways at 390, and each act is a full-width row
 
   const lines = page.getByTestId("day-sheet").locator("[data-day-sheet-line]");
   if ((await lines.count()) > 0) {
+    // US-28 S0 F3 — the acts sit under the sentence, and the act and Not
+    // today share one wrapping row when they fit, rather than a row each.
     const fit = await lines.first().evaluate((el) => {
       const acts = el.querySelector(".day-sheet-acts") as HTMLElement;
-      const act = acts.querySelector("a") as HTMLElement;
+      const [act, notToday] = Array.from(
+        acts.querySelectorAll<HTMLElement>("[data-action-key]"),
+      );
       return {
         line: el.getBoundingClientRect().width,
         acts: acts.getBoundingClientRect().width,
-        act: act.getBoundingClientRect().width,
+        sameRow: notToday
+          ? Math.abs(
+              act.getBoundingClientRect().top -
+                notToday.getBoundingClientRect().top,
+            ) <= 1 ||
+            act.getBoundingClientRect().width +
+              notToday.getBoundingClientRect().width +
+              16 >
+              acts.getBoundingClientRect().width
+          : true,
         below:
           acts.getBoundingClientRect().top >=
           (el.querySelector("p") as HTMLElement).getBoundingClientRect()
@@ -168,7 +181,7 @@ test("the Desk does not scroll sideways at 390, and each act is a full-width row
     });
     expect(fit.below).toBe(true);
     expect(Math.round(fit.acts)).toBe(Math.round(fit.line));
-    expect(fit.act).toBeGreaterThan(fit.line * 0.9);
+    expect(fit.sameRow).toBe(true);
   }
 
   await expect

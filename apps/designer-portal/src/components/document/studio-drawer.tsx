@@ -306,7 +306,11 @@ export function StudioDrawer() {
               <span aria-hidden className="text-[var(--border-default)]">
                 /
               </span>
-              <span className="truncate font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+              {/* F8 — wraps, never truncates. */}
+              <span
+                data-drawer-crumb
+                className="min-w-0 break-words font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
+              >
                 {breadcrumb}
               </span>
             </>
@@ -574,7 +578,7 @@ export function StudioDrawer() {
               data-drawer-presence
               /* Bounded so the right zone cannot grow into the centre the
                  way F03's `Find anything` words did at 1280. */
-              className="max-w-[18ch] truncate whitespace-nowrap px-2 font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
+              className="max-w-[18ch] break-words px-2 font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-muted)]"
             >
               {presence}
             </span>

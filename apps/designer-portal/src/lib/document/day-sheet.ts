@@ -34,7 +34,8 @@ export interface DaySheetWaiting {
 
 export interface DaySheetSetAside {
   need: DeskNeed;
-  /** The local day it comes back (`set_aside_until`). */
+  /** The local day it comes back (`set_aside_until`, or a "Not today"'s
+   *  `deferred_until`). */
   until: string;
   reason: string | null;
 }
@@ -146,7 +147,11 @@ export function deriveDaySheet(input: DaySheetInput): DaySheet {
       setAside.push({ need: entry, until: state.setAsideUntil!, reason: state.setAsideReason });
       continue;
     }
-    if (state && stillAhead(state.deferredUntil, today)) continue;
+    // F4 — a "Not today" comes back too: it waits in Coming back, never vanishes.
+    if (state && stillAhead(state.deferredUntil, today)) {
+      setAside.push({ need: entry, until: state.deferredUntil!, reason: null });
+      continue;
+    }
     // A setup chore never leads (FR4 ruling 521 (b), the band's selectNext).
     if (classOfNeed(entry.need.kind) === 3) continue;
     candidates.push(entry);

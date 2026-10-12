@@ -154,14 +154,20 @@ test.describe("Inked Instruments action visibility", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
 
     await page.goto("/desk", { waitUntil: "domcontentloaded" });
-    await expectInlinePrimary(page, "desk-head", "Record an inquiry");
+    // US-28 S0 F1 — no filled act on the Desk: the head's creates are
+    // secondary, so the head region elects no leader either.
+    await expectInlineQuietAct(
+      page,
+      "desk-head",
+      "capture-lead",
+      "Record an inquiry",
+    );
     await expect(page.getByTestId("mobile-bar")).toBeHidden();
 
     // B2 — the four-up folio grid is ONE roster of every live job now, grouped
-    // by stage. Its acts are one region, and that region elects no leader: the
-    // Desk's single inked act is the head's `Capture a lead`, asserted above.
+    // by stage. Its acts are one region, and that region elects no leader.
     // C7 is kept honest in both directions — a roster that grew a leader back
-    // would put two primaries on one screen.
+    // would put a filled act on a Desk that has none.
     const roster = page.getByTestId("desk-roster");
     await expect(roster).toBeVisible({ timeout: COLD });
     const rosterActs = page.locator(
@@ -247,11 +253,12 @@ test.describe("Inked Instruments action visibility", () => {
     );
     await expect(bar).toContainText(/In hand|Today/);
 
-    // The head keeps the act, at the same one-primary-per-region contract
+    // The head keeps the act, quiet (US-28 S0 F1), at the same 44px target
     // the desktop walk asserts.
-    const headAct = await expectInlinePrimary(
+    const headAct = await expectInlineQuietAct(
       page,
       "desk-head",
+      "capture-lead",
       "Record an inquiry",
     );
 
