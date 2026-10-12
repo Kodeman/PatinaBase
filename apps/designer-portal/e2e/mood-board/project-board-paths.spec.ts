@@ -394,9 +394,11 @@ test.describe("Project-owned board save path", () => {
       }),
     ).toBeVisible({ timeout: 15_000 });
 
-    await page.getByLabel(/^Label/).fill("Reaction link");
-    await page.getByRole("checkbox", { name: /Allow reactions/ }).check();
-    await page.getByRole("button", { name: "Create and copy link" }).click();
+    await page.getByLabel(/^Review link name/).fill("Reaction link");
+    await page.getByRole("checkbox", { name: /Enable item feedback/ }).check();
+    await page
+      .getByRole("button", { name: "Create and copy share link" })
+      .click();
 
     const linkField = page.getByLabel("Board share link");
     await expect(linkField).toBeVisible({ timeout: 15_000 });
@@ -478,9 +480,11 @@ test.describe("Project-owned board save path", () => {
 
     // The toggle is OFF by default — a designer has to ask for the capability.
     await expect(
-      page.getByRole("checkbox", { name: /Allow reactions/ }),
+      page.getByRole("checkbox", { name: /Enable item feedback/ }),
     ).not.toBeChecked();
-    await page.getByRole("button", { name: "Create and copy link" }).click();
+    await page
+      .getByRole("button", { name: "Create and copy share link" })
+      .click();
 
     const linkField = page.getByLabel("Board share link");
     await expect(linkField).toBeVisible({ timeout: 15_000 });

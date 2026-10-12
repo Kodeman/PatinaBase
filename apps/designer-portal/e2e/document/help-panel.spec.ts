@@ -90,7 +90,7 @@ test.describe("Reactive help — panel + Help Center", () => {
 
     const palette = await openPalette(page);
     await palette.getByRole("textbox").fill("help");
-    await palette.getByText("Help…", { exact: true }).click();
+    await palette.getByText("Page help", { exact: true }).click();
 
     // The shared panel is open.
     await expect(page.getByTestId("help-panel-content")).toBeVisible({

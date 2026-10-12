@@ -174,8 +174,8 @@ test('the ⌘K "Log time" verb opens a dated form with nothing in hand (W3)', as
     palette.getByRole("group", { name: "This surface" }),
   ).toHaveCount(0);
   const verb = palette
-    .getByRole("group", { name: "Begin" })
-    .getByRole("option", { name: /Log time/ });
+    .getByRole("group", { name: "New work" })
+    .getByRole("option", { name: /Record time/ });
   await expect(verb).toBeVisible();
   await verb.click();
 
