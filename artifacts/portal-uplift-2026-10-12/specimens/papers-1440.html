@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Making papers 1440</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style data-shared="uplift">
+/* US-27 shared specimen CSS. SPEC.md §5 owns it and check.mjs compares every copy to this file.
+   Copy it verbatim into the one style element marked data-shared=uplift in every specimen.
+   Never edit a copy: a specimen adds its own rules in a second style element after it.
+   Light: today's portal values (apps/designer-portal/src/app/globals.css). Dark: the house sheet's
+   documented dark set (docs/design/house-sheet/SPEC.md:89-108) plus d1-system.md (e). Dark is
+   documented, not shipped. No shadow anywhere: depth is stock, edge and veil (uplift.md (b)). */
+
+:root { --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif; --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; --font-meta: 'DM Mono', 'SF Mono', ui-monospace, Menlo, monospace; }
+
+/* ---- tokens: light (L0 ground, L0' rail, L1 laid document, L3 lift, L4 veil) ---- */
+:root, .theme-light {
+  color-scheme: light;
+  --paper: #FAF7F2; --paper-doc: #FCFAF6; --rail: #E8E3DB; --paper-lift: #FFFFFF;
+  --text-primary: #2C2926; --text-muted: #4E4339; --text-subtle: #5A4E43; --text-faint: #65594E; --ink-faint: #65594E; --ink-paper: #FAF7F2;
+  --oak: #8B7355; --clay: #C4A57B; --clay-ink: #7C5E30; --terracotta-ink: #9C5340;
+  --card-edge: #8F8C88; --doc-ink-border: rgba(44, 41, 38, .18); --hairline: #E8E3DB; --hairline-strong: #D8CCB8;
+  --rule-hair: 1px solid rgba(44, 41, 38, .10); --rule-mid: 1.5px solid #2C2926; --rule-strong: 2px solid #2C2926;
+  --veil: rgba(20, 18, 16, .55); --bg-hover: rgba(196, 165, 123, .06);
+  --edge-stage: 3px; --tick-stage: 2px; --edge-note: 2px solid var(--oak);
+  --tab-brief: #497093; --tab-discovery: #307063; --tab-direction: #366A3A; --tab-proposal: #575D1D; --tab-project: #6D4E24; --tab-install: #823832;
+  --wash-brief: rgba(73, 112, 147, .06); --wash-discovery: rgba(48, 112, 99, .06); --wash-direction: rgba(54, 106, 58, .06); --wash-proposal: rgba(87, 93, 29, .06); --wash-project: rgba(109, 78, 36, .06); --wash-install: rgba(130, 56, 50, .06);
+}
+
+/* ---- tokens: dark, documented only. The --tab-*-edge companions are spent under the stage names. ---- */
+.theme-dark {
+  color-scheme: dark;
+  --paper: #2A2622; --paper-doc: #26221E; --rail: #3A3530; --paper-lift: #1C1A17;
+  --text-primary: #F2EDE6; --text-muted: #D6CEC4; --text-subtle: #C7BEB3; --text-faint: #B8AEA2; --ink-faint: #B8AEA2; --ink-paper: #2A2622;
+  --oak: #B39572; --clay: #C4A57B; --clay-ink: #D8B98A; --terracotta-ink: #E2A895;
+  --card-edge: #77736E; --doc-ink-border: rgba(242, 237, 230, .22); --hairline: rgba(242, 237, 230, .14); --hairline-strong: #56524D;
+  --rule-hair: 1px solid rgba(242, 237, 230, .14); --rule-mid: 1.5px solid #F2EDE6; --rule-strong: 2px solid #F2EDE6;
+  --veil: rgba(0, 0, 0, .60); --bg-hover: rgba(196, 165, 123, .08);
+  --edge-note: 2px solid #B39572;
+  --tab-brief: #7D9EC0; --tab-discovery: #5FA08F; --tab-direction: #73A374; --tab-proposal: #A3A75C; --tab-project: #B98F5A; --tab-install: #CC7A70;
+  --wash-brief: transparent; --wash-discovery: transparent; --wash-direction: transparent; --wash-proposal: transparent; --wash-project: transparent; --wash-install: transparent;
+}
+
+/* ---- reset ---- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: #E8E3DB; color: #2C2926; font-family: var(--font-body); font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+p, h1, h2, h3, h4, ul, ol, dl, dd, figure, blockquote { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+h1, h2, h3, h4 { font-weight: 500; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: left; }
+a { color: inherit; }
+img, svg { max-width: 100%; }
+p, li, dd, dt, h1, h2, h3, h4, span, a, button, td, th, blockquote { overflow-wrap: break-word; }
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---- type steps (house sheet A2, with .t-d4 added by G-7 and .t-head at 12/16 by G-6) ---- */
+.t-d1 { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; }
+.t-d2 { font-family: var(--font-display); font-size: 26px; line-height: 1.2; font-weight: 500; }
+.t-d3 { font-family: var(--font-display); font-size: 20px; line-height: 26px; font-weight: 500; }
+.t-d4 { font-family: var(--font-display); font-size: 17px; line-height: 24px; font-weight: 500; }
+.t-body { font-size: 16px; line-height: 1.55; }
+.t-body-sm { font-size: 14px; line-height: 1.5; }
+.t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.5; letter-spacing: .08em; }
+.t-money { font-family: var(--font-meta); font-size: 15px; line-height: 1.5; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.t-authorship { font-family: var(--font-display); font-style: italic; font-weight: 400; }
+.eb { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-family: var(--font-meta); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.orn { width: 34px; height: 12px; flex: none; fill: none; stroke: var(--clay); stroke-width: 1.4; }
+
+/* ---- the three act tiers (house sheet A5) and the one filled act (V18 Q8) ---- */
+.act { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 44px; padding: 4px 6px 10px; font-family: var(--font-meta); font-size: 13px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; text-decoration: none; color: var(--text-subtle); }
+.act .lbl { position: relative; display: inline-block; line-height: 16px; }
+.act .lbl::before, .act .lbl::after { content: ''; position: absolute; left: 0; right: 0; }
+.act .lbl::before { bottom: -5px; height: 1px; background: var(--oak); }
+.act .lbl::after { bottom: -8.5px; height: 1px; content: none; }
+.act--secondary { color: var(--text-primary); }
+.act--secondary .lbl::before { height: 1.5px; background: var(--text-primary); }
+.act--secondary .lbl::after { content: ''; background: var(--clay); }
+.act--secondary:hover .lbl::after { height: 2px; }
+.act--tertiary:hover .lbl::before { background: var(--ink-faint); height: 1.5px; }
+.act--terminal { padding: 13px 22px; min-height: 48px; border-radius: 3px; background: var(--text-primary); color: var(--ink-paper); font-family: var(--font-body); font-size: 16px; letter-spacing: 0; text-transform: none; }
+.act--terminal .lbl::before, .act--terminal .lbl::after { content: none; }
+.act .plus { color: var(--clay-ink); }
+.act:focus-visible, .is-focus { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.kbd { margin-left: 4px; padding: 0 4px; border: 1px solid var(--doc-ink-border); border-radius: 2px; font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: 0; color: var(--text-faint); text-transform: none; }
+@media not ((hover: hover) and (pointer: fine)) { .kbd { display: none; } }
+.short { display: none; }
+@media (max-width: 599px) { .long { display: none; } .short { display: inline; } }
+
+/* ---- stage: the edge colour and the transient light wash. Only on a unit that stands for a job. ---- */
+.st-brief { --st: var(--tab-brief); --wash: var(--wash-brief); }
+.st-discovery { --st: var(--tab-discovery); --wash: var(--wash-discovery); }
+.st-direction { --st: var(--tab-direction); --wash: var(--wash-direction); }
+.st-proposal { --st: var(--tab-proposal); --wash: var(--wash-proposal); }
+.st-project { --st: var(--tab-project); --wash: var(--wash-project); }
+.st-install { --st: var(--tab-install); --wash: var(--wash-install); }
+.tick { position: relative; padding-left: 14px; }
+.tick[class*="st-"]::before { content: ''; position: absolute; left: 0; top: 0; width: var(--tick-stage); height: 24px; background: var(--st); }
+.title-rule[class*="st-"] { border-left: var(--edge-stage) solid var(--st); padding-left: 16px; }
+
+/* ---- the ladder's stocks: L0 ground, L0' rail, L1 laid document ---- */
+.ground { background: var(--paper); color: var(--text-primary); }
+.rail { background: var(--rail); color: var(--text-primary); }
+.paper { background: var(--paper-doc); color: var(--text-primary); }
+.measure { max-width: 976px; margin: 0 auto; }
+.measure-wide { max-width: 1200px; margin: 0 auto; }
+.gutter { padding-left: 24px; padding-right: 24px; }
+@media (max-width: 599px) { .gutter { padding-left: 16px; padding-right: 16px; } }
+
+/* ---- (b)6 Header line ---- */
+.hline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 24px; min-height: 44px; padding: 24px 0 12px; }
+.hline-l { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; min-width: 0; }
+.hline-r { display: flex; flex-wrap: wrap; align-items: center; gap: 0 20px; }
+.rule-strong { height: 6px; border-top: var(--rule-strong); border-bottom: 1px solid var(--doc-ink-border); margin-bottom: 48px; }
+@media (max-width: 599px) { .rule-strong { margin-bottom: 24px; } }
+
+/* ---- (b)1 Section: eyebrow, optional title, body, closing rule. Never a box. ---- */
+.section { padding-bottom: 24px; border-bottom: var(--rule-mid); }
+.section + .section { margin-top: 72px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; margin-bottom: 12px; }
+.sec-head .eb { color: var(--text-primary); }
+.sec-title { margin-bottom: 12px; }
+.group + .group { margin-top: 24px; }
+@media (max-width: 599px) { .section + .section { margin-top: 48px; } }
+.filters { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; color: var(--text-muted); }
+.filters button { min-height: 44px; min-width: 44px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.filters button[aria-pressed="true"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.filters button:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* ---- (b)2 Card: L2. A face on paper-doc, a 1px card edge, a 2px radius; a job card's left side is the stage rule. ---- */
+.cards-wrap { container-type: inline-size; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch; }
+@container (max-width: 899px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 599px) { .cards { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
+.card { display: flex; flex-direction: column; min-width: 0; padding: 16px 20px 4px 18px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+.card[class*="st-"] { border-left: var(--edge-stage) solid var(--st); }
+.card:hover { background-image: linear-gradient(var(--bg-hover), var(--bg-hover)); }
+.card[class*="st-"]:hover { background-image: linear-gradient(var(--wash), var(--wash)); }
+.theme-dark .card:hover { border-top-color: var(--ink-faint); border-right-color: var(--ink-faint); border-bottom-color: var(--ink-faint); background-image: none; }
+.theme-dark .card:not([class*="st-"]):hover { border-left-color: var(--ink-faint); }
+.card.is-lifted { background: var(--paper-lift); border-top-color: var(--ink-faint); border-right-color: var(--ink-faint); border-bottom-color: var(--ink-faint); }
+.card.is-lifted:not([class*="st-"]) { border-left-color: var(--ink-faint); }
+.card-up { position: relative; display: flex; flex-direction: column; border-radius: 2px; }
+.card-up:has(.name:focus-visible), .card-up.is-focus { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.name { color: var(--text-primary); text-decoration: underline; text-decoration-color: var(--oak); text-decoration-thickness: 1px; text-underline-offset: 5px; outline: none; }
+.card-up .name::after { content: ''; position: absolute; inset: 0; }
+.card:hover .name { text-decoration-color: var(--clay); }
+.name-h { margin-top: 8px; }
+.person { margin-top: 4px; color: var(--text-muted); }
+.lines { display: flex; flex-direction: column; flex: 1; margin-top: 12px; }
+.ln-item { display: flex; flex-direction: column; }
+.ln-item + .ln-item { margin-top: 12px; padding-top: 12px; border-top: var(--rule-hair); }
+.ln-item:last-child { flex: 1; }
+.ln-item:last-child .foot { margin-top: auto; }
+.line { color: var(--text-muted); }
+.settled .line { color: var(--text-faint); }
+.od { color: var(--terracotta-ink); }
+.foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; min-height: 44px; margin-top: 8px; margin-left: -6px; }
+.card-empty { padding: 24px 20px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+
+/* ---- plate and caption: an image-led unit in a browsed collection. The plate's hairline is the edge; no box. ---- */
+.plates-wrap { container-type: inline-size; }
+.plates { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+@container (max-width: 899px) { .plates { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 359px) { .plates { grid-template-columns: minmax(0, 1fr); } }
+.plate { display: block; width: 100%; aspect-ratio: 3 / 2; border: 1px solid var(--hairline-strong); border-radius: 3px; background: var(--paper-doc); overflow: hidden; }
+.plate svg { display: block; width: 100%; height: 100%; }
+.cap { margin-top: 8px; }
+.cap .name { text-underline-offset: 4px; }
+.cap .t-meta { color: var(--text-subtle); }
+
+/* ---- (b)3 Ledger row: name, sentence, when, one act. Single column until its container reaches 900px. ---- */
+.ledger { container-type: inline-size; }
+.rows { border-top: 1px solid var(--doc-ink-border); }
+.lrow { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 4px; align-items: baseline; padding: 11px 0 10px; border-bottom: 1px solid var(--doc-ink-border); }
+.lrow:hover { background: var(--bg-hover); }
+.lname { position: relative; }
+.lname .name { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; }
+.lname .name:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.lphase, .lwhen { color: var(--text-subtle); }
+.lsent { color: var(--text-muted); }
+.lrow.settled .lsent { color: var(--text-faint); }
+.lact { display: flex; justify-content: flex-start; margin: 0 0 0 -6px; }
+.lact .act { width: 100%; }
+.lfig { font-family: var(--font-meta); font-size: 15px; font-variant-numeric: tabular-nums; }
+@container (min-width: 900px) {
+  .lrow { grid-template-columns: 236px 96px minmax(200px, 1fr) 132px 150px; column-gap: 20px; row-gap: 0; }
+  .lrow.plain { grid-template-columns: 236px minmax(200px, 1fr) 132px 150px; }
+  .lwhen, .lact, .lfig { text-align: right; }
+  .lact { justify-content: flex-end; margin: -12px 0; }
+  .lact .act { width: auto; }
+}
+
+/* ---- status is one ink word, never a chip. Terracotta-ink only for overdue, blocked or do-not-contact. ---- */
+.word { font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
+.word--quiet { color: var(--text-subtle); }
+.word--od { color: var(--terracotta-ink); }
+.avatar { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: none; border: 1px solid var(--doc-ink-border); border-radius: 50%; font-family: var(--font-meta); font-size: 12px; color: var(--text-muted); }
+
+/* ---- the one note edge: a hand-off, a quoted client word. Never a stage hue. ---- */
+.note-edge { border-left: var(--edge-note); padding: 4px 0 4px 16px; }
+
+/* ---- facts and money ---- */
+.facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: baseline; }
+.facts dt { font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.facts dd { color: var(--text-primary); }
+.money-rows { border-top: 1px solid var(--hairline-strong); border-bottom: 1px solid var(--hairline-strong); }
+.money-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; padding: 10px 0; border-bottom: var(--rule-hair); }
+.money-row:last-child { border-bottom: 0; }
+.money-row.total { border-top: var(--rule-mid); border-bottom: 0; font-weight: 500; }
+
+/* ---- fields and house controls ---- */
+.field { display: block; width: 100%; min-height: 44px; padding: 10px 12px; background: var(--paper-lift); color: var(--text-primary); border: 1px solid var(--card-edge); border-radius: 2px; font: inherit; }
+.field:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.check { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.check-box { width: 20px; height: 20px; flex: none; border: 1px solid var(--card-edge); border-radius: 2px; background: var(--paper-doc); display: inline-flex; align-items: center; justify-content: center; }
+.check-box svg { width: 14px; height: 14px; fill: none; stroke: var(--text-primary); stroke-width: 1.6; }
+.keycap { font-family: var(--font-meta); font-size: 13px; color: var(--text-primary); }
+
+/* ---- (b)5 Empty state: the Section's eyebrow, one sentence, the Section's close. Never dashed, never boxed. ---- */
+.empty-t { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 20px; line-height: 1.35; color: var(--text-primary); max-width: 56ch; }
+.empty-s { color: var(--text-subtle); }
+
+/* ---- (b)4 Sheet frame, popover, modal: L4, L4', L5. A scene stacks the page and the overlay in one grid cell. ---- */
+.scene { display: grid; }
+.scene > * { grid-area: 1 / 1; min-width: 0; position: relative; z-index: 0; }
+.scene .veil { background: var(--veil); }
+.scene .over { display: flex; justify-content: center; align-items: flex-start; padding: 48px 24px; }
+.sheet { width: 100%; max-width: 640px; padding: 28px 40px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; color: var(--text-primary); }
+.sheet.wide { max-width: 880px; }
+.modal { width: 100%; max-width: 480px; padding: 24px; background: var(--paper-doc); border: 1px solid var(--text-primary); border-radius: 2px; color: var(--text-primary); }
+.popover { display: inline-block; min-width: 240px; padding: 12px 16px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+.popover li { border-bottom: 1px solid var(--doc-ink-border); }
+.popover li:last-child { border-bottom: 0; }
+.popover a { display: flex; align-items: center; min-height: 44px; text-decoration: none; color: var(--text-primary); }
+.popover a:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.sh-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 16px; padding-bottom: 8px; border-bottom: var(--rule-hair); }
+.sh-title { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-family: var(--font-meta); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
+.sh-ic { width: 16px; height: 16px; fill: none; stroke: var(--clay-ink); stroke-width: 1.2; flex: none; }
+.sh-body { margin-top: 20px; }
+.sh-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 20px; margin-top: 16px; padding-top: 8px; border-top: var(--rule-hair); margin-left: -6px; }
+@media (max-width: 599px) {
+  .sheet, .sheet.wide { padding: 24px 16px; }
+  .scene .over { padding: 24px 0; }
+}
+
+/* ---- the dock: a paper-doc bar on one hairline-strong rule. Its labels wrap. ---- */
+.dock { display: flex; flex-wrap: wrap; align-items: center; gap: 0 20px; padding: 0 24px; background: var(--paper-doc); border-top: 1px solid var(--hairline-strong); color: var(--text-primary); }
+.dock .act { color: var(--text-primary); }
+.dock-label { font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+@media (max-width: 599px) { .dock { padding: 0 16px; } }
+
+/* ---- specimen chrome: outside the design ---- */
+.specimen-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 10px 16px; background: #E8E3DB; color: #4E4339; font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; border-bottom: 1px solid #D8CCB8; }
+.specimen-meta h1 { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .04em; }
+.frame-bar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 0 12px; padding: 0 16px; background: #E8E3DB; border-bottom: 1px solid #D8CCB8; }
+.frame-bar button { min-height: 44px; font-family: var(--font-meta); font-size: 12px; color: #2C2926; }
+.frame { margin: 0 auto 72px; max-width: 1440px; }
+.frame-cap { padding: 12px 16px; font-family: var(--font-meta); font-size: 12px; line-height: 1.5; color: #4E4339; background: #E8E3DB; }
+.frame-cap b { font-weight: 500; color: #2C2926; }
+.canvas { position: relative; min-height: 844px; background: var(--paper); color: var(--text-primary); overflow: hidden; }
+.today { margin: 0; background: #E8E3DB; padding: 16px; }
+.today img { display: block; width: 100%; height: auto; border: 1px solid #D8CCB8; }
+.today figcaption { margin-top: 8px; font-family: var(--font-meta); font-size: 12px; line-height: 1.5; color: #4E4339; }
+.pin { position: absolute; z-index: 5; display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 6px; background: #2C2926; color: #FAF7F2; border-radius: 2px; font-family: var(--font-meta); font-size: 12px; }
+.pins-key { padding: 12px 16px; background: #E8E3DB; font-family: var(--font-meta); font-size: 12px; line-height: 1.5; color: #4E4339; }
+.pins-key li + li { margin-top: 4px; }
+.fixture-note { padding: 8px 16px; font-family: var(--font-meta); font-size: 12px; color: #4E4339; background: #E8E3DB; }
+.is-hidden { display: none; }
+
+@media (forced-colors: active) {
+  .card[class*="st-"] { border-left-color: CanvasText; }
+  .tick[class*="st-"]::before { background: CanvasText; }
+  .title-rule[class*="st-"] { border-left-color: CanvasText; }
+  .act .lbl::before, .act .lbl::after { forced-color-adjust: none; background: ButtonText; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+<style>
+.marks-line { padding: 8px 16px 0; background: #E8E3DB; font-family: var(--font-meta); font-size: 12px; line-height: 1.5; color: #4E4339; }
+.pa { position: relative; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-muted); }
+.faint { color: var(--text-faint); }
+.job { color: var(--text-primary); }
+.flabel { display: block; margin: 20px 0 6px; color: var(--text-subtle); }
+
+.w1440 .canvas { min-height: 900px; }
+.pagepad { padding-bottom: 72px; }
+.tblock { display: flex; flex-direction: column; gap: 6px; }
+.hnote { max-width: 30ch; }
+.drafted { margin: -24px 0 20px; color: var(--text-muted); }
+.ask { max-width: 64ch; margin-bottom: 40px; }
+.draft-grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 56px; align-items: start; }
+.facets { display: flex; flex-direction: column; gap: 16px; }
+.facet-money { margin-top: 12px; }
+.copy { padding: 28px 32px 32px; }
+.copy-title { margin: 12px 0 4px; }
+.copy-col > .eb { margin-bottom: 12px; }
+.cblock { margin-top: 16px; padding-top: 12px; border-top: var(--rule-hair); }
+.cblock h4 { margin-bottom: 6px; color: var(--text-subtle); }
+.doc3 { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 900px; }
+.rail-col { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 24px 20px; }
+.rail-name { margin-top: 20px; font-weight: 500; }
+.rail-list { align-self: stretch; margin-top: 20px; border-top: 1px solid var(--ink-faint); }
+.rail-list li { display: flex; flex-direction: column; padding: 10px 0 10px 12px; border-left: 2px solid transparent; }
+.rail-list li.cur { border-left-color: var(--ink-faint); }
+.doc3-paper { padding: 8px 120px 72px 96px; }
+.ines-facts { margin-top: 24px; max-width: 560px; }
+.acts-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0 24px; margin: 16px 0 0 -6px; }
+</style>
+</head>
+<body class="w1440">
+<header class="specimen-meta" data-chrome><h1>US-27 specimens · 7. Making papers · 1440</h1><span>US-27 · SPEC.md §2.2 · SQ-810 · static illustration; any time or click figure is est.</span></header>
+<nav class="frame-bar" data-chrome aria-label="Frames"><button type="button" data-go="frame-papers-t1" aria-pressed="false">papers-t1</button><button type="button" data-go="frame-papers-p1" aria-pressed="false">papers-p1</button><button type="button" data-go="frame-papers-p2" aria-pressed="false">papers-p2</button><button type="button" data-go="frame-papers-t2" aria-pressed="false">papers-t2</button><button type="button" data-go="frame-papers-p3" aria-pressed="false">papers-p3</button></nav>
+<main>
+
+<section class="frame" data-frame="frame-papers-t1" id="frame-papers-t1" aria-label="frame-papers-t1, today">
+  <p class="frame-cap"><b>frame-papers-t1</b> · 1440 · today · Proposal drafting today, Leah's seat. The eye reads the drafting ornament and title, then the rounded facet cards.</p>
+  <figure class="today">
+    <img src="../walk/a7-drafting-fold-1440.jpg" alt="Proposal drafting today: the title “Elena Marlowe — Living Room Direction” over “0% drafted” and a boxed OUTLINE tab; facet rows in rounded cards with checkboxes and short coloured section dashes; a boxed “+ Add Room” button; the client's copy at right in a rounded white card showing a total of $0." loading="lazy">
+    <figcaption>WALK §7 · marks at rest, 1440 fold: 45 · 10 · 12 · 48 † (counted on body; no &lt;main&gt;). 8 px-radius facet cards, coloured section dashes, “0 % drafted”, a boxed “+ Add Room”, a rounded client's copy.</figcaption>
+  </figure>
+  <p class="fixture-note">Walk capture on the local walk seed, not the Hartwell fixture. Its names are walk data.</p>
+</section>
+
+<section class="frame" data-frame="frame-papers-p1" id="frame-papers-p1" aria-label="frame-papers-p1, proposed">
+  <p class="frame-cap"><b>frame-papers-p1</b> · 1440 · proposed · Linden Place, Monday 12 October, est. 10:30 · Leah drafts the revised proposal, mid-draft: “draft it, starting anywhere”. Facets are Cards, the open one (Pieces) holds the clay ring; the client's copy is laid paper beside them. No filled act: the draft cannot send yet. Depends on U-Q1 (card edge), U-Q13 (state in ink words), U-Q14 (one 3 px title rule).</p>
+  <div class="canvas">
+    <div class="measure-wide gutter pagepad">
+      <header class="hline">
+        <div class="hline-l">
+          <a class="act act--tertiary" href="#"><span class="lbl">← Linden Place</span></a>
+          <div class="title-rule st-proposal tblock pa"><span class="pin" style="right:-40px;top:0" aria-hidden="true">1</span>
+            <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Proposal · revised draft</span></p>
+            <h2 class="t-d2">A second sofa option for Tom and Ellery</h2>
+          </div>
+        </div>
+        <div class="hline-r"><p class="t-body-sm muted hnote">Sends once pieces and fees are drafted.</p></div>
+      </header>
+      <div class="rule-strong" role="presentation"></div>
+      <p class="t-body-sm drafted pa">Drafted: scope, concept · To draft: pieces, fees</p>
+      <blockquote class="note-edge ask"><p class="t-body">“The sofa is over budget; can we see a second option under <span class="num">$6,000</span>?”</p><p class="t-body-sm muted">Tom and Ellery Vance</p></blockquote>
+      <div class="draft-grid">
+        <section class="section" aria-labelledby="fac-d">
+          <div class="sec-head"><p class="eb" id="fac-d"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>The proposal · four facets</span></p></div>
+          <div class="facets">
+        <article class="card pa"><span class="pin" style="left:-56px;bottom:12px" aria-hidden="true">3</span>
+          <div class="card-up"><p class="eb">Drafted</p><h3 class="name-h t-d3"><a class="name" href="#">Scope of work</a></h3></div>
+          <div class="lines"><div class="ln-item"><p class="line t-body">The living room: one seating group.</p><div class="foot"><button class="act act--secondary" type="button"><span class="lbl"><span class="plus" aria-hidden="true">＋</span> Add a room</span></button><button class="act act--tertiary" type="button"><span class="lbl">Open</span></button></div></div></div>
+        </article>
+        <article class="card pa">
+          <div class="card-up"><p class="eb">Drafted</p><h3 class="name-h t-d3"><a class="name" href="#">Design concept</a></h3></div>
+          <div class="lines"><div class="ln-item"><p class="line t-body">“Keep the rug and the chairs; a lower, lighter sofa.”</p><div class="foot"><button class="act act--tertiary" type="button"><span class="lbl">Open</span></button></div></div></div>
+        </article>
+        <article class="card pa is-focus"><span class="pin" style="left:-56px;top:12px" aria-hidden="true">2</span>
+          <div class="card-up"><p class="eb">To draft · open</p><h3 class="name-h t-d3"><a class="name" href="#">Pieces</a></h3></div>
+          <div class="lines"><div class="ln-item"><p class="line t-body">The rug and the two chairs stay. The sofa is still to choose: lower, lighter, under <span class="num">$6,000</span>.</p><div class="money-rows facet-money">
+              <div class="money-row"><span class="t-body-sm">Arden lounge chair ×2 · Calloway &amp; Brandt Upholstery</span><span class="t-money">$8,360</span></div>
+              <div class="money-row"><span class="t-body-sm">Wool flatweave rug, 8 × 10 · Marrow &amp; Weft</span><span class="t-money">$2,400</span></div>
+              <div class="money-row"><span class="t-body-sm faint">A sofa, not chosen yet</span><span class="t-body-sm faint">to come</span></div>
+            </div><div class="foot"><button class="act act--tertiary" type="button"><span class="lbl">Choose a sofa from the library</span></button></div></div></div>
+        </article>
+        <article class="card pa">
+          <div class="card-up"><p class="eb">To draft</p><h3 class="name-h t-d3"><a class="name" href="#">Fees and terms</a></h3></div>
+          <div class="lines"><div class="ln-item"><p class="line t-body">Not drafted yet.</p><div class="foot"><button class="act act--tertiary" type="button"><span class="lbl">Open</span></button></div></div></div>
+        </article>
+          </div>
+        </section>
+      <div class="copy-col pa"><span class="pin" style="right:-56px;top:44px" aria-hidden="true">4</span>
+        <p class="eb" id="copy-d"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>The client’s copy</span></p>
+        <article class="paper copy" aria-label="The client’s copy">
+          <p class="t-meta faint">Hartwell Studio · prepared for Tom and Ellery Vance</p>
+          <h3 class="t-d2 copy-title">A second sofa option</h3>
+          <p class="t-body-sm muted">Linden Place, the living room</p>
+          <div class="cblock"><h4 class="t-meta">Scope</h4><p class="t-body-sm">The living room: one seating group.</p></div>
+          <div class="cblock"><h4 class="t-meta">The idea</h4><p class="t-body-sm">Keep the rug and the chairs; a lower, lighter sofa.</p></div>
+          <div class="cblock"><h4 class="t-meta">Pieces</h4><p class="t-body-sm faint">Still being drafted. Tom and Ellery see this part once it is written.</p></div>
+          <div class="cblock"><h4 class="t-meta">Fees and terms</h4><p class="t-body-sm faint">Still being drafted.</p></div>
+        </article>
+      </div>
+      </div>
+    </div>
+  </div>
+  <p class="marks-line">Marks at rest: today 45 · 10 · 12 · 48 † · proposed <span data-marks="proposed">measured at render</span></p>
+  <ol class="pins-key">
+    <li><b>1</b> · One 3 px proposal title rule, the stage word in ink beside it · U-Q14</li>
+    <li><b>2</b> · Facets as Cards on the shared edge; the open facet keeps the 2 px clay ring · D2 area 7, compose-section.tsx:41-43</li>
+    <li><b>3</b> · ＋ Add a room as a scored secondary inside its facet, not a boxed button · rooms-in-scope.tsx:680</li>
+    <li><b>4</b> · The client's copy as laid paper (L1): depth from stock, not a rounded white card · uplift (c) area 7</li>
+  </ol>
+  <p class="fixture-note">Illustrative fixture · Hartwell Studio is invented</p>
+</section>
+
+<section class="frame" data-frame="frame-papers-p2" id="frame-papers-p2" aria-label="frame-papers-p2, proposed">
+  <p class="frame-cap"><b>frame-papers-p2</b> · 1440 · proposed · Linden Place, the same proposal, ready, est. 11:05 · “What will the client actually see?” All four facets drafted; the one filled act is “Send to Tom and Ellery Vance”, and nothing sends until Leah presses it. Depends on U-Q1, U-Q13, U-Q14.</p>
+  <div class="canvas">
+    <div class="measure-wide gutter pagepad">
+      <header class="hline">
+        <div class="hline-l">
+          <a class="act act--tertiary" href="#"><span class="lbl">← Linden Place</span></a>
+          <div class="title-rule st-proposal tblock pa">
+            <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Proposal · revised draft</span></p>
+            <h2 class="t-d2">A second sofa option for Tom and Ellery</h2>
+          </div>
+        </div>
+        <div class="hline-r"><div class="pa"><span class="pin" style="left:-40px;top:12px" aria-hidden="true">1</span><button class="act act--terminal" type="button"><span class="lbl">Send to Tom and Ellery Vance</span></button></div></div>
+      </header>
+      <div class="rule-strong" role="presentation"></div>
+      <p class="t-body-sm drafted pa"><span class="pin" style="left:-56px;top:-2px" aria-hidden="true">2</span>Drafted: scope, concept, pieces, fees</p>
+      <blockquote class="note-edge ask"><p class="t-body">“The sofa is over budget; can we see a second option under <span class="num">$6,000</span>?”</p><p class="t-body-sm muted">Tom and Ellery Vance</p></blockquote>
+      <div class="draft-grid">
+        <section class="section" aria-labelledby="fac-r">
+          <div class="sec-head"><p class="eb" id="fac-r"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>The proposal · four facets</span></p></div>
+          <div class="facets">
+        <article class="card pa">
+          <div class="card-up"><p class="eb">Drafted</p><h3 class="name-h t-d3"><a class="name" href="#">Scope of work</a></h3></div>
+          <div class="lines"><div class="ln-item"><p class="line t-body">The living room: one seating group.</p><div class="foot"><button class="act act--secondary" type="button"><span class="lbl"><span class="plus" aria-hidden="true">＋</span> Add a room</span></button><button class="act act--tertiary" type="button"><span class="lbl">Open</span></button></div></div></div>
+        </article>
+        <article class="card pa">
+          <div class="card-up"><p class="eb">Drafted</p><h3 class="name-h t-d3"><a class="name" href="#">Design concept</a></h3></div>
+          <div class="lines"><div class="ln-item"><p class="line t-body">“Keep the rug and the chairs; a lower, lighter sofa.”</p><div class="foot"><button class="act act--tertiary" type="button"><span class="lbl">Open</span></button></div></div></div>
+        </article>
+        <article class="card pa">
+          <div class="card-up"><p class="eb">Drafted</p><h3 class="name-h t-d3"><a class="name" href="#">Pieces</a></h3></div>
+          <div class="lines"><div class="ln-item"><p class="line t-body">Three pieces for the living room, at trade.</p><div class="money-rows facet-money">
+              <div class="money-row"><span class="t-body-sm">Tamsin sofa, 78″ · Calloway &amp; Brandt Upholstery</span><span class="t-money">$5,650</span></div>
+              <div class="money-row"><span class="t-body-sm">Arden lounge chair ×2 · Calloway &amp; Brandt Upholstery</span><span class="t-money">$8,360</span></div>
+              <div class="money-row"><span class="t-body-sm">Wool flatweave rug, 8 × 10 · Marrow &amp; Weft</span><span class="t-money">$2,400</span></div>
+              <div class="money-row total"><span class="t-body-sm">Pieces total</span><span class="t-money">$16,410</span></div>
+            </div><div class="foot"><button class="act act--tertiary" type="button"><span class="lbl">Open</span></button></div></div></div>
+        </article>
+        <article class="card pa">
+          <div class="card-up"><p class="eb">Drafted</p><h3 class="name-h t-d3"><a class="name" href="#">Fees and terms</a></h3></div>
+          <div class="lines"><div class="ln-item"><p class="line t-body">Design fee <span class="num">$4,500</span>; a 50% deposit on pieces.</p><div class="foot"><button class="act act--tertiary" type="button"><span class="lbl">Open</span></button></div></div></div>
+        </article>
+          </div>
+        </section>
+      <div class="copy-col pa"><span class="pin" style="right:-56px;top:44px" aria-hidden="true">3</span>
+        <p class="eb" id="copy-r"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>The client’s copy</span></p>
+        <article class="paper copy" aria-label="The client’s copy">
+          <p class="t-meta faint">Hartwell Studio · prepared for Tom and Ellery Vance</p>
+          <h3 class="t-d2 copy-title">A second sofa option</h3>
+          <p class="t-body-sm muted">Linden Place, the living room</p>
+          <div class="cblock"><h4 class="t-meta">Scope</h4><p class="t-body-sm">The living room: one seating group.</p></div>
+          <div class="cblock"><h4 class="t-meta">The idea</h4><p class="t-body-sm">Keep the rug and the chairs; a lower, lighter sofa.</p></div>
+          <div class="cblock"><h4 class="t-meta">Pieces</h4><div class="money-rows">
+            <div class="money-row"><span class="t-body-sm">Tamsin sofa, 78″</span></div>
+            <div class="money-row"><span class="t-body-sm">Arden lounge chair, a pair</span></div>
+            <div class="money-row"><span class="t-body-sm">Wool flatweave rug, 8 × 10</span></div>
+            <div class="money-row total"><span class="t-body-sm">Pieces, in total</span><span class="t-money">$16,410</span></div>
+          </div></div>
+          <div class="cblock"><h4 class="t-meta">Fees and terms</h4><dl class="facts"><dt>Design fee</dt><dd class="t-money">$4,500</dd><dt>Deposit</dt><dd class="t-body-sm">50% of the pieces, on signing</dd></dl></div>
+        </article>
+      </div>
+      </div>
+    </div>
+  </div>
+  <p class="marks-line">Marks at rest: today 45 · 10 · 12 · 48 † · proposed <span data-marks="proposed">measured at render</span></p>
+  <ol class="pins-key">
+    <li><b>1</b> · The view's one filled act, filled only once the draft can send · V18 Q8, uplift (c) area 7</li>
+    <li><b>2</b> · Status as words, no percentage · WALK §7 (“0 % drafted”)</li>
+    <li><b>3</b> · The client's copy shows the pieces and the total, never a trade price · SPEC §3.7</li>
+  </ol>
+  <p class="fixture-note">Illustrative fixture · Hartwell Studio is invented</p>
+</section>
+
+<section class="frame" data-frame="frame-papers-t2" id="frame-papers-t2" aria-label="frame-papers-t2, today">
+  <p class="frame-cap"><b>frame-papers-t2</b> · 1440 · today · A lead's first meeting today: the ceremony route redirects to the lead's brief, titled “Full Room”.</p>
+  <figure class="today">
+    <img src="../walk/a7-ceremony-fold-1440.jpg" alt="A lead's first meeting today: the brief titled “Full Room”, the rail calling the client “New client”, Ines Calder named only in the body, Budget and Timeline in two boxed tiles, the quote on a 3 px tan rule over a tinted band, and three underlined acts ACCEPT · BEGIN, NURTURE, PASS." loading="lazy">
+    <figcaption>WALK §7 · marks at rest, 1440 fold, inside &lt;main&gt;: 24 · 5 · 2 · 16. Budget and Timeline boxed as tiles; her name appears only in the body.</figcaption>
+  </figure>
+  <p class="fixture-note">Walk capture on the local walk seed, not the Hartwell fixture. Its names are walk data.</p>
+</section>
+
+<section class="frame" data-frame="frame-papers-p3" id="frame-papers-p3" aria-label="frame-papers-p3, proposed">
+  <p class="frame-cap"><b>frame-papers-p3</b> · 1440 · proposed · Ines Calder's first meeting, Monday 12 October, est. 9:15 · Leah decides: accept, nurture or pass. Her name heads the paper; her words sit on the note edge; budget and timeline are facts, not tiles. No filled act: Accept and begin is scored. Depends on U-Q14 (title rule) and U-Q13.</p>
+  <div class="canvas">
+    <div class="doc3">
+      <nav class="rail rail-col" aria-label="Ines Calder's paper">
+        <a class="act act--tertiary" href="#"><span class="lbl">← Desk</span></a>
+        <p class="t-body rail-name">Ines Calder</p>
+        <p class="word word--quiet">Brief</p>
+        <ul class="rail-list">
+          <li class="cur"><span class="t-body-sm">The first meeting</span><span class="word">Open</span></li>
+          <li><span class="t-body-sm">The record</span><span class="word word--quiet">Nothing yet</span></li>
+        </ul>
+      </nav>
+      <article class="paper doc3-paper">
+        <header class="hline">
+          <div class="hline-l">
+            <div class="title-rule st-brief tblock pa"><span class="pin" style="left:-56px;top:4px" aria-hidden="true">1</span>
+              <p class="eb"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Brief · first meeting</span></p>
+              <h2 class="t-d1">Ines Calder</h2>
+            </div>
+          </div>
+          <div class="hline-r"><p class="t-body-sm muted">Web inquiry · Monday 12 October, 6:35 am</p></div>
+        </header>
+        <div class="rule-strong" role="presentation"></div>
+        <section class="section" aria-labelledby="ines-words">
+          <div class="sec-head"><p class="eb" id="ines-words"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>In her words</span></p></div>
+          <blockquote class="note-edge pa"><span class="pin" style="left:-56px;top:4px" aria-hidden="true">2</span><p class="t-d3 t-authorship">“We just moved in and the living room is empty except for a piano.”</p></blockquote>
+          <dl class="facts ines-facts pa"><span class="pin" style="left:-56px;top:0" aria-hidden="true">3</span>
+            <dt>Room</dt><dd>The living room</dd>
+            <dt>Budget</dt><dd class="num">$40–60k</dd>
+            <dt>Timeline</dt><dd>“Before the holidays”</dd>
+            <dt>Reach her</dt><dd class="num">(415) 555-0141</dd>
+          </dl>
+        </section>
+        <section class="section" aria-labelledby="ines-answer">
+          <div class="sec-head"><p class="eb" id="ines-answer"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Respond to the inquiry</span></p></div>
+          <p class="t-body muted">Accept and begin opens her brief. Nurture keeps her in Also yours. Pass closes the inquiry. Nothing reaches Ines until you write it and send it.</p>
+          <div class="acts-row pa"><span class="pin" style="left:-56px;top:10px" aria-hidden="true">4</span><button class="act act--secondary" type="button"><span class="lbl">Accept and begin</span></button><button class="act act--tertiary" type="button"><span class="lbl">Nurture</span></button><button class="act act--tertiary" type="button"><span class="lbl">Pass</span></button></div>
+        </section>
+      </article>
+    </div>
+  </div>
+  <p class="marks-line">Marks at rest: today 24 · 5 · 2 · 16 · proposed <span data-marks="proposed">measured at render</span></p>
+  <ol class="pins-key">
+    <li><b>1</b> · Her name heads the paper with a 3 px brief title rule; the stage word prints in ink · WALK §7 (“Full Room”), U-Q14</li>
+    <li><b>2</b> · Her words on the one note edge, no tinted band · uplift (c) area 7</li>
+    <li><b>3</b> · Budget and timeline as facts, not boxed tiles · WALK §7</li>
+    <li><b>4</b> · Accept and begin as a scored secondary; Nurture and Pass tertiary; no filled act · V18 Q8</li>
+  </ol>
+  <p class="fixture-note">Illustrative fixture · Hartwell Studio is invented</p>
+</section>
+</main>
+<script>
+(function () {
+  var frames = Array.prototype.slice.call(document.querySelectorAll('[data-frame]'));
+  var ids = frames.map(function (f) { return f.getAttribute('data-frame'); });
+  function parse() {
+    var out = { id: null, nobar: false, nopins: false };
+    location.hash.replace(/^#/, '').split('&').forEach(function (t) {
+      t = decodeURIComponent(t.trim());
+      if (t === 'nobar') out.nobar = true;
+      else if (t === 'nopins') out.nopins = true;
+      else if (ids.indexOf(t) >= 0) out.id = t;
+    });
+    return out;
+  }
+  function toggle(sel, hide) {
+    Array.prototype.forEach.call(document.querySelectorAll(sel), function (el) { el.classList.toggle('is-hidden', hide); });
+  }
+  function apply() {
+    var s = parse();
+    frames.forEach(function (f) { f.classList.toggle('is-hidden', !!s.id && f.getAttribute('data-frame') !== s.id); });
+    toggle('[data-chrome]', !!s.id);
+    toggle('.frame-cap', s.nobar);
+    toggle('.pin, .pins-key', s.nopins);
+    Array.prototype.forEach.call(document.querySelectorAll('[data-go]'), function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-go') === s.id ? 'true' : 'false');
+    });
+    if (s.id) window.scrollTo(0, 0);
+  }
+  document.addEventListener('click', function (e) {
+    var go = e.target.closest('[data-go]');
+    if (go) { location.hash = go.getAttribute('data-go'); return; }
+    var a = e.target.closest('.canvas a[href="#"]');
+    if (a) e.preventDefault();
+  });
+  window.addEventListener('hashchange', apply);
+  apply();
+})();
+</script>
+</body>
+</html>
+<!-- SPECIMEN COMPLETE -->
