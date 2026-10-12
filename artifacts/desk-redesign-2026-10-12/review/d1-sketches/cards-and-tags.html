@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desk card tags</title>
+<!-- D1 sketch (SQ-788). Rough, self-contained: no external fetches, no shadows.
+     Fonts fall back to local faces when Playfair / Inter / DM Mono are not installed. -->
+<style>
+:root {
+  --paper: #FAF7F2; --paper-doc: #FCFAF6; --rail: #E8E3DB;
+  --ink: #2C2926; --ink-muted: #4E4339; --ink-subtle: #5A4E43;
+  --card-edge: #8F8C88; --hair: rgba(44,41,38,.10); --ink-border: rgba(44,41,38,.18);
+  --clay: #C4A57B; --clay-ink: #7C5E30; --oak: #8B7355;
+  --terracotta-ink: #9C5340; --golden-ink: #79651E; --sage-ink: #5F6B57;
+  --tab-brief: #497093; --tab-discovery: #307063; --tab-direction: #366A3A;
+  --tab-proposal: #575D1D; --tab-project: #6D4E24; --tab-install: #823832;
+  /* light mode: the rule spends --tab-* directly */
+  --edge-brief: var(--tab-brief); --edge-proposal: var(--tab-proposal);
+  --edge-project: var(--tab-project); --edge-install: var(--tab-install);
+  /* System 3 only: four proposed --job-* hues in 238-335deg (illustrative) */
+  --job-1: #4F5A9A; --job-2: #6A4E94; --job-3: #84487F; --job-4: #964663;
+  --serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --sans: Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
+  --mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+/* Dark companions: documented only for the portal (it paints no dark set). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #2A2622; --paper-doc: #26221E; --rail: #3A3530;
+    --ink: #F2EDE6; --ink-muted: #D6CEC4; --ink-subtle: #C7BEB3;
+    --card-edge: #77736E; --hair: rgba(242,237,230,.14); --ink-border: rgba(242,237,230,.22);
+    --clay-ink: #D8B98A; --terracotta-ink: #E2A895; --golden-ink: #E0C963; --sage-ink: #AFC0A6;
+    --edge-brief: #7D9EC0; --edge-proposal: #A3A75C; --edge-project: #B98F5A; --edge-install: #CC7A70;
+    --job-1: #8E9AD8; --job-2: #A98ED3; --job-3: #C68BBF; --job-4: #D98AA4;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #2A2622; --paper-doc: #26221E; --rail: #3A3530;
+  --ink: #F2EDE6; --ink-muted: #D6CEC4; --ink-subtle: #C7BEB3;
+  --card-edge: #77736E; --hair: rgba(242,237,230,.14); --ink-border: rgba(242,237,230,.22);
+  --clay-ink: #D8B98A; --terracotta-ink: #E2A895; --golden-ink: #E0C963; --sage-ink: #AFC0A6;
+  --edge-brief: #7D9EC0; --edge-proposal: #A3A75C; --edge-project: #B98F5A; --edge-install: #CC7A70;
+  --job-1: #8E9AD8; --job-2: #A98ED3; --job-3: #C68BBF; --job-4: #D98AA4;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--sans); }
+.page { max-width: 1024px; margin: 0 auto; padding: 48px 16px 96px; }
+h1 { font: 400 28px/1.2 var(--serif); margin: 0 0 4px; }
+h2 { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; margin: 72px 0 12px; color: var(--ink-subtle); }
+.note { color: var(--ink-muted); max-width: 70ch; margin: 0 0 16px; }
+.theme { display: flex; gap: 16px; margin-top: 12px; }
+.theme button { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; background: none; border: 0; border-bottom: 1px solid var(--oak); color: var(--ink); padding: 12px 0; min-height: 44px; cursor: pointer; }
+.theme button:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.scroller { overflow-x: auto; }
+.measure { width: 976px; }
+.grid { display: grid; gap: 24px; grid-template-columns: repeat(3, minmax(0,1fr)); align-items: stretch; }
+.row4 { display: grid; gap: 32px 24px; grid-template-columns: repeat(auto-fill, 309px); align-items: stretch; }
+
+/* ── the card (anatomy a) ── */
+.card { position: relative; display: flex; flex-direction: column; background: var(--paper-doc);
+  border: 1px solid var(--card-edge); border-radius: 2px; padding: 20px 20px 4px; overflow-wrap: anywhere; }
+.card:hover { background: color-mix(in srgb, var(--tag, var(--clay)) 6%, var(--paper-doc)); }
+.card:focus-within .upper:has(a:focus-visible) { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.eyebrow { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle);
+  display: flex; flex-wrap: wrap; gap: 4px 0; }
+.eyebrow span + span::before { content: "·"; padding: 0 8px; }
+.name { display: block; margin-top: 8px; font: 500 20px/26px var(--serif); color: var(--ink); text-decoration: none; }
+.name span { border-bottom: 1px solid var(--oak); }
+.card:hover .name span { border-bottom-color: var(--clay); }
+.name:focus-visible { outline: none; }
+.person { margin-top: 4px; font-size: 14px; line-height: 21px; color: var(--ink-muted); }
+.sentence { margin: 12px 0 0; color: var(--ink-muted); }
+.late { color: var(--terracotta-ink); }
+.foot { margin-top: auto; padding-top: 16px; }
+.band { border-top: 1px solid var(--hair); min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.act { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink);
+  text-decoration: none; border-bottom: 1px solid var(--oak); padding: 2px 0; }
+.act.quiet { color: var(--ink-subtle); border-bottom-color: var(--hair); }
+.act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* ── tag forms (b) ── */
+.t-left { border-left: 3px solid var(--tag); padding-left: 18px; }            /* left rule */
+.t-top  { border-top: 3px solid var(--tag); padding-top: 18px; }              /* top hairline */
+.t-tab::before { content: ""; position: absolute; left: 12px; top: -6px; width: 28px; height: 5px;
+  background: var(--tag); border-radius: 2px 2px 0 0; }                      /* corner tab */
+.t-square .eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--tag);
+  align-self: center; }                                                       /* small square (rejected) */
+.brief    { --tag: var(--edge-brief); }
+.proposal { --tag: var(--edge-proposal); }
+.project  { --tag: var(--edge-project); }
+.install  { --tag: var(--edge-install); }
+.c1 { --tag: var(--terracotta-ink); } .c2 { --tag: var(--clay-ink); }
+.s-late { --tag: var(--terracotta-ink); } .s-wait { --tag: var(--clay-ink); }
+.j1 { --tag: var(--job-1); } .j2 { --tag: var(--job-2); } .j3 { --tag: var(--job-3); }
+.caption { font: 500 12px/16px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-subtle); margin: 8px 0 0; }
+
+.phone { width: 390px; border: 1px solid var(--card-edge); padding: 16px; display: grid; gap: 16px; background: var(--paper); }
+</style>
+</head>
+<body>
+<main class="page">
+  <h1>Desk card · colour tags</h1>
+  <p class="note">D1 sketch for SQ-788. Real size: the 1440 Desk measure is 976&nbsp;px, so a 3-up card is 309&nbsp;px. Hartwell Studio fixture. Every tag is paired with a printed word; colour is never the only signal.</p>
+  <div class="theme" role="group" aria-label="Theme">
+    <button type="button" data-set="light">Light</button>
+    <button type="button" data-set="dark">Dark (documented companions)</button>
+    <button type="button" data-set="">System</button>
+  </div>
+
+  <h2>System 1 · Index Cards: stage on a 3 px left rule, 1440 measure</h2>
+  <div class="scroller"><div class="measure grid">
+    <article class="card t-left project">
+      <div class="upper"><div class="eyebrow"><span>Project</span><span>Invoice</span></div>
+        <a class="name" href="#holloway"><span>Holloway Den</span></a></div>
+      <p class="sentence">Invoice INV-2026-0721 · <span class="late">$3,800 overdue, oldest due 30&nbsp;September</span></p>
+      <div class="foot"><div class="band"><a class="act" href="#r">Send reminder</a><a class="act quiet" href="#n">Not today</a></div></div>
+    </article>
+    <article class="card t-left proposal">
+      <div class="upper"><div class="eyebrow"><span>Proposal</span><span>2 hours ago</span></div>
+        <a class="name" href="#linden"><span>Linden Place</span></a></div>
+      <p class="sentence">Declined: “The sofa is over budget.”</p>
+      <div class="foot"><div class="band"><a class="act" href="#f">Follow up</a><a class="act quiet" href="#n">Not today</a></div></div>
+    </article>
+    <article class="card t-left project">
+      <div class="upper"><div class="eyebrow"><span>Project</span><span>Purchase order</span></div>
+        <a class="name" href="#pell"><span>Pell Court</span></a></div>
+      <p class="sentence">PO-PC-0419 · <span class="late">the maker has not acknowledged it in 9&nbsp;days</span></p>
+      <div class="foot"><div class="band"><a class="act" href="#c">Follow up with the maker</a><a class="act quiet" href="#n">Not today</a></div></div>
+    </article>
+    <article class="card t-left project">
+      <div class="upper"><div class="eyebrow"><span>Project</span><span>Leah’s</span><span>Handed over Saturday</span></div>
+        <a class="name" href="#marsh"><span>Marsh Street Kitchen</span></a></div>
+      <p class="sentence">Leah handed you this job with a note on PO-MS-0388.</p>
+      <div class="foot"><div class="band"><a class="act" href="#h">Read the note</a><a class="act quiet" href="#n">Not today</a></div></div>
+    </article>
+    <article class="card t-left brief">
+      <div class="upper"><div class="eyebrow"><span>Brief</span><span>New inquiry</span></div>
+        <a class="name" href="#ines"><span>Consultation</span></a>
+        <div class="person">Ines Calder</div></div>
+      <p class="sentence">New inquiry: a primary suite and a reading room, respond by 14&nbsp;October.</p>
+      <div class="foot"><div class="band"><a class="act" href="#i">Respond to the inquiry</a><a class="act quiet" href="#n">Not today</a></div></div>
+    </article>
+  </div></div>
+  <p class="caption">Five cards, 3 + 2. Colour at rest: 5 rules + 2 overdue clauses. A long act (Pell Court, the inquiry) wraps Not today under it: wrap, never truncate.</p>
+
+  <h2>The four tag forms on one card (309 px)</h2>
+  <div class="scroller"><div class="row4">
+    <div>
+      <article class="card t-left project"><div class="upper"><div class="eyebrow"><span>Project</span></div><a class="name" href="#h"><span>Holloway Den</span></a></div>
+        <p class="sentence">Invoice INV-2026-0721 · <span class="late">$3,800 overdue</span></p>
+        <div class="foot"><div class="band"><a class="act" href="#r">Send reminder</a><a class="act quiet" href="#n">Not today</a></div></div></article>
+      <p class="caption">Left rule · stage (recommended)</p>
+    </div>
+    <div style="padding-top:6px">
+      <article class="card t-tab c1"><div class="upper"><div class="eyebrow"><span>Money</span><span>Project</span></div><a class="name" href="#h"><span>Holloway Den</span></a></div>
+        <p class="sentence">Invoice INV-2026-0721 · <span class="late">$3,800 overdue</span></p>
+        <div class="foot"><div class="band"><a class="act" href="#r">Send reminder</a><a class="act quiet" href="#n">Not today</a></div></div></article>
+      <p class="caption">Corner tab · need class 1</p>
+    </div>
+    <div>
+      <article class="card t-square s-late"><div class="upper"><div class="eyebrow"><span>Late</span><span>Project</span></div><a class="name" href="#h"><span>Holloway Den</span></a></div>
+        <p class="sentence">Invoice INV-2026-0721 · $3,800 overdue</p>
+        <div class="foot"><div class="band"><a class="act" href="#r">Send reminder</a><a class="act quiet" href="#n">Not today</a></div></div></article>
+      <p class="caption">Small square · state (rejected: a status dot)</p>
+    </div>
+    <div>
+      <article class="card t-top j2"><div class="upper"><div class="eyebrow"><span>Project</span></div><a class="name" href="#h"><span>Holloway Den</span></a></div>
+        <p class="sentence">Invoice INV-2026-0721 · <span class="late">$3,800 overdue</span></p>
+        <div class="foot"><div class="band"><a class="act" href="#r">Send reminder</a><a class="act quiet" href="#n">Not today</a></div></div></article>
+      <p class="caption">Top hairline · project colour (new token)</p>
+    </div>
+  </div></div>
+
+  <h2>390 · one-up, act and Not today on one row</h2>
+  <div class="scroller"><div class="phone">
+    <article class="card t-left project">
+      <div class="upper"><div class="eyebrow"><span>Project</span><span>Invoice</span></div>
+        <a class="name" href="#holloway"><span>Holloway Den</span></a></div>
+      <p class="sentence">Invoice INV-2026-0721 · <span class="late">$3,800 overdue, oldest due 30&nbsp;September</span></p>
+      <div class="foot"><div class="band" style="min-height:48px"><a class="act" href="#r">Send reminder</a><a class="act quiet" href="#n">Not today</a></div></div>
+    </article>
+    <article class="card t-left proposal">
+      <div class="upper"><div class="eyebrow"><span>Proposal</span><span>2 hours ago</span></div>
+        <a class="name" href="#linden"><span>Linden Place</span></a></div>
+      <p class="sentence">Declined: “The sofa is over budget.”</p>
+      <div class="foot"><div class="band" style="min-height:48px"><a class="act" href="#f">Follow up</a><a class="act quiet" href="#n">Not today</a></div></div>
+    </article>
+  </div></div>
+</main>
+<script>
+document.querySelectorAll('[data-set]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var v = b.getAttribute('data-set');
+    if (v) document.documentElement.setAttribute('data-theme', v);
+    else document.documentElement.removeAttribute('data-theme');
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desk header and edges</title>
+<!-- D1 sketch (SQ-788). Rough, self-contained: no external fetches, no shadows. -->
+<style>
+:root {
+  --paper: #FAF7F2; --paper-doc: #FCFAF6; --rail: #E8E3DB;
+  --ink: #2C2926; --ink-muted: #4E4339; --ink-subtle: #5A4E43;
+  --card-edge: #8F8C88; --hair: rgba(44,41,38,.10); --ink-border: rgba(44,41,38,.18);
+  --clay: #C4A57B; --clay-ink: #7C5E30; --oak: #8B7355; --terracotta-ink: #9C5340;
+  --tab-brief: #497093; --tab-proposal: #575D1D; --tab-project: #6D4E24; --tab-install: #823832;
+  --serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --sans: Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
+  --mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #2A2622; --paper-doc: #26221E; --rail: #3A3530;
+    --ink: #F2EDE6; --ink-muted: #D6CEC4; --ink-subtle: #C7BEB3;
+    --card-edge: #77736E; --hair: rgba(242,237,230,.14); --ink-border: rgba(242,237,230,.22);
+    --clay-ink: #D8B98A; --terracotta-ink: #E2A895; --oak: #B39572;
+    --tab-brief: #7D9EC0; --tab-proposal: #A3A75C; --tab-project: #B98F5A; --tab-install: #CC7A70;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--sans); }
+.wrap { padding: 32px 16px 96px; }
+.label { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); margin: 48px 0 12px; }
+.scroller { overflow-x: auto; }
+.frame-1440 { width: 1440px; padding: 0 232px; border: 1px dashed var(--ink-border); }
+.frame-390 { width: 390px; padding: 0 16px; border: 1px dashed var(--ink-border); }
+
+/* ── header (c) ── */
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; min-height: 44px; padding: 24px 0 16px; }
+.greet { font: 400 28px/1.2 var(--serif); margin: 0; }
+.greet i { color: var(--ink-muted); }
+.acts { display: flex; align-items: baseline; gap: 24px; flex-wrap: wrap; }
+.act { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink);
+  text-decoration: none; border-bottom: 1px solid var(--oak); padding: 14px 0 2px; display: inline-flex; align-items: baseline; gap: 6px; }
+.act .plus { color: var(--clay-ink); }
+.act.tert { color: var(--ink-subtle); border-bottom-color: var(--hair); }
+.act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+kbd { font: 500 11px/1 var(--mono); border: 1px solid var(--ink-border); border-radius: 3px; padding: 2px 4px; }
+@media (hover: none), (pointer: coarse) { kbd { display: none; } }
+.rule-strong { border-top: 2px solid var(--ink); }
+.rule-strong + .rule-faint { border-top: 1px solid var(--ink-border); margin-top: 2px; }
+
+.head-390 { padding: 20px 0 12px; }
+.head-390 .r1 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.head-390 .greet { font-size: 24px; }
+.head-390 .r2 { display: flex; gap: 24px; margin-top: 4px; }
+.head-390 .act { min-height: 44px; align-items: center; padding: 0; border-bottom: 0; text-decoration: underline; text-decoration-color: var(--oak); text-underline-offset: 4px; }
+
+/* ── section edges (d) ── */
+.eyebrow-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 24px; flex-wrap: wrap; margin-top: 48px; }
+.eyebrow { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); display: flex; align-items: center; gap: 12px; }
+.eyebrow::before { content: ""; width: 32px; height: 5px; border-top: 1px solid var(--oak); border-bottom: 1px solid var(--oak); }
+.scope { display: flex; gap: 10px; color: var(--ink-muted); font-size: 15px; }
+.scope b { font-weight: 500; color: var(--ink); border-bottom: 1px solid var(--ink); }
+.voice { font: italic 400 22px/1.3 var(--serif); margin: 12px 0 24px; }
+.grid { display: grid; gap: 24px; grid-template-columns: repeat(3, minmax(0,1fr)); align-items: stretch; }
+.card { display: flex; flex-direction: column; background: var(--paper-doc); border: 1px solid var(--card-edge);
+  border-left: 3px solid var(--tag); border-radius: 2px; padding: 16px 16px 4px 15px; overflow-wrap: anywhere; }
+.card .ey { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); }
+.card .nm { font: 500 20px/26px var(--serif); margin-top: 8px; }
+.card .st { color: var(--ink-muted); margin-top: 8px; }
+.card .ft { margin-top: auto; padding-top: 12px; }
+.card .ft div { border-top: 1px solid var(--hair); min-height: 44px; display: flex; align-items: center; justify-content: space-between; }
+.late { color: var(--terracotta-ink); }
+.rest { font: italic 400 17px/1.4 var(--serif); color: var(--ink-muted); margin: 24px 0; }
+.rule-mid { border-top: 1.5px solid var(--ink); }
+.tray { background: var(--rail); padding: 24px; margin-top: 24px; }
+.tray h3 { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; margin: 0 0 8px; color: var(--ink); }
+.tray p { margin: 0; padding: 8px 0; border-bottom: 1px solid var(--ink-border); color: var(--ink-muted); }
+.tray p:last-child { border-bottom: 0; }
+.ledger-row { display: grid; grid-template-columns: 220px 96px minmax(0,1fr) 170px; column-gap: 20px; align-items: baseline;
+  padding: 11px 0 10px 12px; border-bottom: 1px solid var(--hair); position: relative; }
+.ledger-row::before { content: ""; position: absolute; left: 0; top: 13px; width: 2px; height: 20px; background: var(--tag); }
+.ledger-row .n { font: 500 17px/1.3 var(--serif); }
+.ledger-row .s { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); }
+.brief { --tag: var(--tab-brief); } .proposal { --tag: var(--tab-proposal); }
+.project { --tag: var(--tab-project); } .install { --tag: var(--tab-install); }
+.sub { font: 500 12px/16px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); margin: 24px 0 8px; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <p class="label">Header (c) · 1440, one line · greeting and three acts on one baseline, two underline weights</p>
+  <div class="scroller"><div class="frame-1440">
+    <header class="head">
+      <h1 class="greet">Good morning, <i>Leah</i></h1>
+      <nav class="acts" aria-label="Desk actions">
+        <a class="act" href="#inq"><span class="plus" aria-hidden="true">＋</span>Record an inquiry</a>
+        <a class="act" href="#proj"><span class="plus" aria-hidden="true">＋</span>Create a project file</a>
+        <a class="act tert" href="#find">Find anything <kbd>⌘K</kbd></a>
+      </nav>
+    </header>
+    <div class="rule-strong"></div><div class="rule-faint"></div>
+
+    <!-- (d) the sheet: boxed cards, closed by --rule-mid -->
+    <div class="eyebrow-row">
+      <span class="eyebrow">Monday 12 October · This morning</span>
+      <span class="scope"><b>Mine</b> · <span>The studio’s</span></span>
+    </div>
+    <p class="voice">These need you.</p>
+    <div class="grid">
+      <div class="card project"><div class="ey">Project · Invoice</div><div class="nm">Holloway Den</div>
+        <div class="st">INV-2026-0721 · <span class="late">$3,800 overdue, oldest due 30 September</span></div>
+        <div class="ft"><div><a class="act" href="#r">Send reminder</a><a class="act tert" href="#n">Not today</a></div></div></div>
+      <div class="card proposal"><div class="ey">Proposal · 2 hours ago</div><div class="nm">Linden Place</div>
+        <div class="st">Declined: “The sofa is over budget.”</div>
+        <div class="ft"><div><a class="act" href="#f">Follow up</a><a class="act tert" href="#n">Not today</a></div></div></div>
+      <div class="card brief"><div class="ey">Brief · New inquiry</div><div class="nm">Consultation</div>
+        <div class="st">Ines Calder · respond by 14 October</div>
+        <div class="ft"><div><a class="act" href="#i">Respond</a><a class="act tert" href="#n">Not today</a></div></div></div>
+    </div>
+    <p class="rest">The rest are on their projects.</p>
+
+    <!-- the close-of-day tray: rail stock, no border, no cards -->
+    <section class="tray" aria-label="Waiting and coming back">
+      <h3>Waiting on others</h3>
+      <p>Marsh Street Kitchen · PO-MS-0388 · waiting on Fenmoor Joinery since 2 October</p>
+      <p>Wren Row Bath · signed · waiting on the client’s deposit since 9 October</p>
+      <h3 style="margin-top:16px">Coming back tomorrow</h3>
+      <p>Okafor Terrace — Study · not yet viewed · you put it off today</p>
+    </section>
+    <div class="rule-mid" style="margin-top:24px"></div>
+
+    <!-- the workload: rules only, 2 px stage tick per row -->
+    <div class="eyebrow-row" style="margin-top:72px">
+      <span class="eyebrow">Studio workload</span>
+      <a class="act" href="#by">By team member</a>
+    </div>
+    <p class="sub">Owed by you</p>
+    <div class="ledger-row project"><span class="n">Holloway Den</span><span class="s">Project</span><span>On today’s sheet</span><span></span></div>
+    <div class="ledger-row install"><span class="n">Tanaka Garden Flat</span><span class="s">Install</span><span>Install walk booked 16 October</span><a class="act" href="#o">Open the job</a></div>
+    <div class="ledger-row brief"><span class="n">Ines Calder</span><span class="s">Brief</span><span>On today’s sheet</span><span></span></div>
+    <div class="ledger-row proposal"><span class="n">Linden Place</span><span class="s">Proposal</span><span>On today’s sheet</span><span></span></div>
+    <div class="rule-mid" style="margin-top:24px"></div>
+  </div></div>
+
+  <p class="label">Header (c) · 390, two short rows (about 92 px; today 203 px)</p>
+  <div class="scroller"><div class="frame-390">
+    <header class="head-390">
+      <div class="r1"><h1 class="greet">Good morning, <i>Leah</i></h1><a class="act tert" href="#find" aria-label="Find anything">Find</a></div>
+      <nav class="r2" aria-label="Desk actions">
+        <a class="act" href="#inq" aria-label="Record an inquiry"><span class="plus" aria-hidden="true">＋</span>Inquiry</a>
+        <a class="act" href="#proj" aria-label="Create a project file"><span class="plus" aria-hidden="true">＋</span>Project</a>
+      </nav>
+    </header>
+    <div class="rule-strong"></div><div class="rule-faint"></div>
+    <div class="eyebrow-row" style="margin-top:24px"><span class="eyebrow">Mon 12 Oct · This morning</span><span class="scope"><b>Mine</b> · <span>Studio’s</span></span></div>
+    <p style="height:24px"></p>
+  </div></div>
+  <p class="label">Short 390 labels need the Direction C labeling owner's sign-off; the accessible names stay full.</p>
+</main>
+</body>
+</html>
