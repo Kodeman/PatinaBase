@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio colours · 1440</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  /* ---- today's tokens, as apps/designer-portal/src/app/globals.css names them ---- */
+  /* paper stocks */
+  --color-off-white: #FAF7F2;
+  --doc-paper: #FCFAF6;
+  --doc-rail-stock: #E8E3DB;
+  --doc-ink-border: rgba(44, 41, 38, 0.18);
+  /* inks */
+  --color-charcoal: #2C2926;
+  --text-muted: #4E4339;
+  --text-subtle: #5A4E43;
+  --text-faint: #65594E;
+  /* pigment inks */
+  --color-clay-ink: #7C5E30;
+  --color-terracotta-ink: #9C5340;
+  --color-golden-hour-ink: #79651E;
+  --color-sage-ink: #5F6B57;
+  /* stage pigments: declared as today, printed nowhere here. Direction C keeps V18 Q7,
+     stage as an ink word, and that is what frees the six job hues below. */
+  --tab-brief: #497093;
+  --tab-discovery: #307063;
+  --tab-direction: #366A3A;
+  --tab-proposal: #575D1D;
+  --tab-project: #6D4E24;
+  --tab-install: #823832;
+  /* edges */
+  --color-card-edge: #8F8C88;
+  --card-edge: var(--color-card-edge); /* the house sheet's name for it */
+  --rule-hair: 1px solid rgba(44, 41, 38, 0.10);
+  --rule-mid: 1.5px solid #2C2926;
+  --rule-strong: 2px solid #2C2926;
+  /* type floors and steps (globals.css §A3: .t-d1 34 · .t-d2 26 · .t-d3 20 · .t-body 16 · .t-body-sm 14 · .t-meta/.t-head 12) */
+  --type-metadata-min: 12px;
+  --type-body-min: 14px;
+  --type-control-min: 16px;
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta: 'DM Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+
+  /* ---- Direction C · proposed tokens (BRIEF §6: a new hex only as a named token) ----
+     NEW: --job-1 … --job-6, the studio colours, and their dark twins --job-1-dark … --job-6-dark.
+     Assigned round-robin at creation; changeable in the job's settings (direction.md §3 C). */
+  --job-1: #4F5B9E; /* indigo · hue 231 · 5.91:1 on #FAF7F2 */
+  --job-2: #2E7472; /* teal   · hue 178 · 5.09:1 */
+  --job-3: #8E6410; /* ochre  · hue  40 · 4.94:1 */
+  --job-4: #7A4A86; /* plum   · hue 288 · 6.24:1 */
+  --job-5: #55722A; /* moss   · hue  84 · 5.14:1 */
+  --job-6: #A0466A; /* rose   · hue 336 · 5.49:1 */
+  --job-1-dark: #9AA6E6; /* 6.41:1 on #2A2622 */
+  --job-2-dark: #6FBDB9; /* 6.90:1 */
+  --job-3-dark: #D9AE57; /* 7.25:1 */
+  --job-4-dark: #C69AD2; /* 6.40:1 */
+  --job-5-dark: #A2C07A; /* 7.40:1 */
+  --job-6-dark: #E496B4; /* 6.66:1 */
+}
+
+/* The house sheet's documented dark set (docs/design/house-sheet/SPEC.md:89-108), on the canvas only.
+   Documented, not shipped: the portal paints no dark paper set. */
+.frame.dark {
+  color-scheme: dark;
+  --color-off-white: #2A2622;
+  --doc-paper: #26221E;
+  --doc-rail-stock: #3A3530;
+  --doc-ink-border: rgba(242, 237, 230, .22);
+  --color-charcoal: #F2EDE6;
+  --text-muted: #D6CEC4;
+  --text-subtle: #C7BEB3;
+  --text-faint: #B8AEA2;
+  --color-clay-ink: #D8B98A;
+  --color-terracotta-ink: #E2A895;
+  --color-card-edge: #77736E; /* 3.19:1 on the dark ground */
+  --rule-hair: 1px solid rgba(242, 237, 230, .14);
+  --rule-mid: 1.5px solid #F2EDE6;
+  --rule-strong: 2px solid #F2EDE6;
+  --job-1: var(--job-1-dark);
+  --job-2: var(--job-2-dark);
+  --job-3: var(--job-3-dark);
+  --job-4: var(--job-4-dark);
+  --job-5: var(--job-5-dark);
+  --job-6: var(--job-6-dark);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; background: var(--doc-rail-stock); }
+body { margin: 0; background: var(--doc-rail-stock); color: var(--color-charcoal); font: 400 15px/1.5 var(--font-body); font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+h1, h2, h3, p, ul, ol, dl, dd, dt, figure { margin: 0; padding: 0; font-weight: inherit; font-size: inherit; }
+ul, ol { list-style: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: left; }
+a { color: inherit; }
+kbd { font: 400 12px/1 var(--font-meta); color: var(--text-muted); border: 1px solid var(--doc-ink-border); border-radius: 2px; padding: 3px 5px; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); margin: -1px; padding: 0; border: 0; }
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--color-clay-ink); outline-offset: 2px; border-radius: 2px; }
+
+/* ---------- page chrome (not part of the proposal) ---------- */
+#bar { position: sticky; top: 0; z-index: 30; background: #2C2926; color: #F4F0EA; display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px; font: 400 12px/1.4 var(--font-meta); }
+#bar .bar-cap { letter-spacing: .02em; }
+#bar .go { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 0 10px; color: #F4F0EA; font: 500 12px/1 var(--font-meta); letter-spacing: .06em; text-decoration: underline; text-decoration-color: rgba(244, 240, 234, .45); text-underline-offset: 5px; }
+#bar .go[aria-pressed="true"] { text-decoration-color: #F4F0EA; text-decoration-thickness: 2px; }
+#bar .go:focus-visible, #bar a:focus-visible { outline-color: #F4F0EA; }
+#bar .bar-alt { margin-left: auto; min-height: 44px; display: inline-flex; align-items: center; color: #F4F0EA; text-underline-offset: 5px; }
+.fr { margin: 0 0 96px; }
+.cap h2 { font: 500 12px/1.4 var(--font-meta); letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.cap .pair { margin-top: 4px; font: 400 12px/1.5 var(--font-meta); letter-spacing: .02em; color: var(--text-muted); }
+.cap p.what { margin-top: 6px; font-size: 15px; line-height: 1.5; color: var(--color-charcoal); }
+.cap .est { color: var(--text-muted); }
+.lbl { padding-bottom: 8px; font: 500 12px/1.4 var(--font-meta); letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.fixture { padding-top: 10px; font: 400 12px/1.4 var(--font-meta); letter-spacing: .04em; color: var(--text-muted); }
+.notes h3 { font: 500 12px/1.4 var(--font-meta); letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
+.notes ol { display: grid; row-gap: 14px; }
+.notes li { display: grid; grid-template-columns: 34px 1fr; font-size: 14px; line-height: 1.5; color: var(--color-charcoal); }
+.notes li .pin { grid-row: 1 / 3; }
+.notes .ref { grid-column: 2; font: 400 12px/1.5 var(--font-meta); color: var(--text-muted); }
+.today figcaption { font: 500 12px/1.4 var(--font-meta); letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+.today figcaption span { text-transform: none; letter-spacing: .02em; font-weight: 400; }
+.today img { display: block; border: 1px solid var(--doc-ink-border); background: #FAF7F2; }
+body.one #bar { display: none; }
+body.nobar .wrap { padding: 0; }
+body.nobar .fr { margin: 0; }
+body.nobar .cap, body.nobar .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); padding: 0; }
+body.nopins .pin { display: none !important; }
+body.nopins .notes { display: none; }
+body.nobefore .today { display: none; }
+body.nopins.nobefore .under { display: none; }
+
+/* ---------- pins ---------- */
+.pin { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 22px; height: 22px; border: 1px solid var(--color-clay-ink); border-radius: 2px; background: var(--color-off-white); color: var(--color-clay-ink); font: 500 12px/1 var(--font-meta); }
+.frame .pinned { position: relative; }
+.frame .pin { position: absolute; z-index: 8; }
+
+/* ---------- the canvas ---------- */
+.frame { position: relative; overflow: hidden; background: var(--color-off-white); color: var(--color-charcoal); }
+.desk { position: absolute; left: 0; right: 0; top: 0; bottom: var(--dock-h); overflow: hidden; }
+
+/* header: one row, no tips (F1) */
+.dh { display: flex; align-items: center; flex-wrap: wrap; column-gap: 16px; }
+.dh-hi { font: 400 34px/1.15 var(--font-display); color: var(--color-charcoal); }
+.dh-hi em { font-style: italic; }
+.dh-date { font: 400 12px/1.5 var(--font-meta); letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.dh-sp { flex: 1 1 0; }
+.hact, .hfind { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font: 500 12px/1 var(--font-meta); letter-spacing: .1em; text-transform: uppercase; color: var(--color-charcoal); }
+.hact .u { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 6px; }
+.hfind { color: var(--text-muted); font-weight: 400; }
+.hfind .u { text-decoration: underline; text-decoration-color: var(--doc-ink-border); text-underline-offset: 6px; }
+.hfind svg { fill: none; stroke: currentColor; stroke-width: 1.5; }
+.plus { color: var(--color-clay-ink); font: 400 16px/1 var(--font-body); }
+.rule2 { height: 6px; border-top: var(--rule-strong); border-bottom: 1px solid var(--doc-ink-border); }
+
+/* one eyebrow system: ornament, mono caps name, controls right on its baseline (F2) */
+.eb { display: flex; align-items: center; flex-wrap: wrap; column-gap: 12px; min-height: 44px; }
+.eb h2 { font: 500 12px/1.5 var(--font-meta); letter-spacing: .08em; text-transform: uppercase; color: var(--color-charcoal); }
+.orn { display: inline-block; width: 28px; height: 5px; border-top: 1px solid var(--text-faint); border-bottom: 1px solid var(--text-faint); }
+.scope { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; }
+.sc { min-height: 44px; font: 400 15px/1 var(--font-body); color: var(--text-muted); }
+.sc[aria-pressed="true"] { color: var(--color-charcoal); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 7px; }
+.sc-dot { color: var(--text-faint); }
+
+/* the focus strip: the Day Sheet, boxed with --card-edge, closing on --rule-mid */
+.strip { border: 1px solid var(--color-card-edge); border-bottom: var(--rule-mid); background: var(--doc-paper); }
+.sl { position: relative; display: grid; align-items: center; border-top: var(--rule-hair); }
+.sl:first-child { border-top: 0; }
+.sl::before { content: ""; position: absolute; left: 0; width: 3px; background: var(--jc); } /* the 3 px colour tick */
+.sl-t { font: 400 15px/1.5 var(--font-body); color: var(--text-muted); }
+.sl-n { font-weight: 600; color: var(--color-charcoal); text-decoration: underline; text-decoration-color: var(--doc-ink-border); text-underline-offset: 3px; }
+.sl-dash { color: var(--text-faint); }
+.sl-h, .sl-eb { font: 500 12px/1.5 var(--font-meta); letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.id { white-space: nowrap; } /* an order number is one word; the sentence around it still wraps */
+.od { font-style: normal; font-weight: 500; color: var(--color-terracotta-ink); }
+.sl-a { display: flex; align-items: center; column-gap: 20px; }
+.act { display: inline-flex; align-items: center; min-height: 44px; font: 500 12px/1.2 var(--font-meta); letter-spacing: .1em; text-transform: uppercase; color: var(--color-charcoal); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 5px; }
+.act--q { color: var(--text-faint); font-weight: 400; text-decoration-color: var(--doc-ink-border); }
+.sl--done .sl-t, .sl--done .sl-n { color: var(--text-faint); font-weight: 400; }
+.strip--quiet .sq { font: italic 400 20px/1.3 var(--font-display); color: var(--color-charcoal); }
+
+/* the wall: one compact card per live job, a 3 px band in its colour in place of the top edge */
+.wall { display: grid; gap: 16px; }
+.wc { position: relative; min-height: 104px; border: 1px solid var(--color-card-edge); border-top: 3px solid var(--jc); background: var(--color-off-white); }
+.wc-eb { font: 500 12px/1.5 var(--font-meta); letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.wc-n { display: inline; font: 400 18px/1.3 var(--font-display); color: var(--color-charcoal); text-decoration: underline; text-decoration-color: var(--doc-ink-border); text-underline-offset: 3px; }
+.wc-s { margin-top: 4px; font: 400 14px/1.45 var(--font-body); color: var(--text-muted); }
+.who { font: 500 12px/1.5 var(--font-meta); letter-spacing: .08em; text-transform: uppercase; color: var(--color-charcoal); }
+.rest { display: flex; flex-wrap: wrap; align-items: center; column-gap: 16px; font: 400 15px/1.5 var(--font-body); color: var(--text-muted); }
+.visit { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; font: 400 14px/1.5 var(--font-body); color: var(--text-faint); }
+
+/* the act sheet: today's overlay, unchanged except its words */
+.scrim { position: absolute; inset: 0; z-index: 5; background: rgba(44, 41, 38, .5); }
+.sheet { position: absolute; z-index: 6; background: var(--doc-paper); border: 1px solid var(--color-card-edge); }
+.sh-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: 16px; padding-bottom: 8px; border-bottom: var(--rule-hair); }
+.sh-h h2 { font: 500 12px/1.5 var(--font-meta); letter-spacing: .1em; text-transform: uppercase; color: var(--color-charcoal); }
+.sh-f { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 10px; margin-top: 18px; }
+.sh-f dt { font: 400 12px/1.9 var(--font-meta); letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.sh-f dd { font: 400 15px/1.5 var(--font-body); color: var(--color-charcoal); }
+.pin-host { display: block; height: 0; }
+.sh-k { display: block; margin-top: 20px; font: 400 12px/1.5 var(--font-meta); letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.sh-d { margin-top: 8px; padding: 12px 14px; border: 1px solid var(--color-card-edge); background: #FFFFFF; font: 400 15px/1.55 var(--font-body); color: var(--color-charcoal); }
+.sh-d p + p { margin-top: 10px; }
+.sh-n { margin-top: 12px; font: 400 14px/1.5 var(--font-body); color: var(--text-muted); }
+.sh-a { display: flex; flex-wrap: wrap; align-items: center; column-gap: 24px; margin-top: 4px; }
+.act--send { text-decoration-thickness: 2px; }
+
+/* the studio drawer: today's */
+.dock { position: absolute; left: 0; right: 0; bottom: 0; height: var(--dock-h); display: flex; align-items: center; }
+.dock a, .dock button { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
+.dock-m { font: 400 12px/1 var(--font-meta); letter-spacing: .1em; text-transform: uppercase; }
+.me { display: inline-flex; align-items: center; gap: 10px; font: 400 14px/1.2 var(--font-display); }
+.me i { font: 400 12px/1 var(--font-meta); font-style: normal; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--doc-ink-border); display: inline-grid; place-items: center; color: var(--text-muted); }
+
+.darknote { font: 400 12px/1.5 var(--font-meta); letter-spacing: .04em; color: var(--text-faint); }
+
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+@media (forced-colors: active) { .sl::before, .wc { forced-color-adjust: none; } .pin { border: 1px solid ButtonText; } }
+
+/* ---------- 1440 ---------- */
+#bar { padding: 0 24px; }
+#bar .bar-cap { padding: 14px 20px 14px 0; }
+.wrap { padding: 32px 0 80px; }
+.cap { padding: 0 24px 16px; max-width: 1440px; }
+.cap p.what { max-width: 1200px; }
+.lbl { padding-left: 24px; }
+.fixture { padding-left: 24px; }
+.under { display: grid; grid-template-columns: 440px 928px; column-gap: 24px; padding: 20px 24px 0; align-items: start; }
+body.nopins .under { grid-template-columns: 928px; }
+.today img { width: 928px; height: 580px; }
+.frame { width: 1440px; height: 900px; --dock-h: 60px; }
+.frame .pin { left: -40px; top: 0; }
+.desk { padding: 56px 232px 0; }
+.dh { min-height: 48px; }
+.darknote { position: absolute; top: 20px; left: 232px; }
+.rule2 { margin-top: 12px; }
+.sec { margin-top: 24px; }
+.sec .eb { margin-bottom: 8px; }
+.sec--wall { margin-top: 48px; }
+.sl { grid-template-columns: 1fr auto; column-gap: 32px; min-height: 56px; padding: 6px 16px 6px 24px; }
+.sl::before { top: 16px; height: 24px; }
+.sl .pin { top: 16px; left: -41px; }
+.sec > .pin { left: -40px; top: 52px; }
+.sl-a { justify-content: flex-end; }
+.strip--quiet { padding: 18px 24px; }
+.strip--quiet .pin { top: 18px; left: -41px; }
+.wall { grid-template-columns: repeat(4, 1fr); }
+.who { margin: 8px 0 10px; }
+.wall + .who { margin-top: 24px; }
+.wc { padding: 10px 14px 12px; }
+.wc .pin { left: -41px; top: 10px; }
+.wall .wc:not(:first-child) .pin { left: auto; right: -12px; top: -12px; }
+.eb .pin { left: -40px; top: 11px; }
+.rest { margin-top: 20px; }
+.rest .pin { left: -40px; top: 11px; }
+.visit { margin-top: 16px; }
+.visit .pin { left: -40px; top: 11px; }
+.dh .pin { left: -40px; top: 13px; }
+.sheet { left: 400px; top: 168px; width: 640px; padding: 32px 40px 28px; }
+.sheet .pin { left: -34px; }
+.sh-a .pin { top: 11px; }
+.dock { padding: 0 32px 0 280px; column-gap: 28px; border-top: var(--rule-hair); background: var(--color-off-white); font: 400 15px/1 var(--font-body); color: var(--color-charcoal); }
+.dock-r { margin-left: auto; display: inline-flex; align-items: center; column-gap: 28px; }
+</style>
+</head>
+<body>
+<h1 class="vh">Direction C, Studio colours: proposed Desk frames at 1440</h1>
+<nav id="bar" aria-label="Frames">
+  <span class="bar-cap">Direction C, Studio colours · 1440 · a static illustration, not a prototype · illustrative fixture · figures marked est. are estimates</span>
+  <a class="go" href="#all">All</a>
+  <button class="go" type="button" data-go="frame-c1" aria-pressed="false">C1</button>
+  <button class="go" type="button" data-go="frame-c2" aria-pressed="false">C2</button>
+  <button class="go" type="button" data-go="frame-c3" aria-pressed="false">C3</button>
+  <button class="go" type="button" data-go="frame-c4" aria-pressed="false">C4</button>
+  <button class="go" type="button" data-go="frame-c5" aria-pressed="false">C5</button>
+  <button class="go" type="button" data-go="frame-c6" aria-pressed="false">C6</button>
+  <button class="go" type="button" data-go="frame-c7" aria-pressed="false">C7</button>
+  <a class="bar-alt" href="proposed-c-390.html">The 390 frames</a>
+</nav>
+<p id="announce" class="vh" role="status" aria-live="polite"></p>
+
+<main class="wrap">
+
+<!-- ===================================================== C1 -->
+<section class="fr" id="frame-c1" data-frame="frame-c1" aria-labelledby="h-c1">
+<header class="cap">
+  <h2 id="h-c1">C1 · M1 · At rest, the studio’s scope</h2>
+  <p class="pair">Pairs with today: today-leah-studio-fold-1440.jpg</p>
+  <p class="what">Monday 12 October, 8:40&nbsp;am. Leah opens the Desk in the studio’s scope: the focus strip holds the studio’s five, each line ticked in its job’s colour (Holloway indigo twice, Linden teal, Marsh Street plum, Pell Court ochre). The wall below groups every live job under Leah’s and Jordan’s. <span class="est">Est.: 0 clicks, no scroll, about 5 s to read (today: 0 clicks, about 8 s). Marks at rest at the fold, est. ≈ 44 text · 12 controls · 14 colour · 10 edges.</span></p>
+</header>
+<p class="lbl" aria-hidden="true">Proposed</p>
+<div class="frame">
+  <div class="desk">
+    <header class="dh pinned">
+      <p class="dh-hi">Good morning, <em>Leah</em></p>
+      <p class="dh-date">Monday 12 October</p>
+      <span class="dh-sp"></span>
+      <button class="hact" type="button"><span class="plus" aria-hidden="true">＋</span><span class="u">Record an inquiry</span></button>
+      <button class="hfind" type="button"><span class="u">Find anything</span> <kbd>⌘K</kbd></button>
+      <span class="pin" aria-hidden="true">1</span>
+    </header>
+    <div class="rule2" role="presentation"></div>
+    <section class="sec pinned" aria-label="Today">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Today</h2></div>
+    <ol class="strip">
+      <li class="sl" style="--jc:var(--job-1)">
+        <p class="sl-t"><a class="sl-n" href="#">Holloway Den</a> <span class="sl-dash" aria-hidden="true">—</span> <span class="id">INV-2026-0721</span>, $3,800, due Monday 28 September, is <em class="od">14 days overdue</em>.</p><div class="sl-a"><button class="act" type="button">Send reminder</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl" style="--jc:var(--job-2)">
+        <p class="sl-t"><a class="sl-n" href="#">Linden Place Living Room</a> <span class="sl-dash" aria-hidden="true">—</span> Tom and Ellery Vance declined on Sunday: “The sofa is over budget; can we see a second option under $6,000?”</p><div class="sl-a"><button class="act" type="button">Follow up</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl" style="--jc:var(--job-1)">
+        <p class="sl-t"><a class="sl-n" href="#">Holloway Den</a> <span class="sl-dash" aria-hidden="true">—</span> Fenmoor Joinery has not answered <span class="id">PO-HD-0412</span> ($11,450) in 12 days.</p><div class="sl-a"><button class="act" type="button">Chase the maker</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl pinned" style="--jc:var(--job-4)">
+        <p class="sl-t"><a class="sl-n" href="#">Marsh Street Kitchen</a> <span class="sl-h">Jordan’s</span> <span class="sl-dash" aria-hidden="true">—</span> Ninebark Lighting has not answered <span class="id">PO-MS-0388</span> ($2,180) in 4 days.</p><span class="pin" aria-hidden="true">3</span>
+      </li>
+      <li class="sl" style="--jc:var(--job-3)">
+        <p class="sl-t"><a class="sl-n" href="#">Pell Court Dining</a> <span class="sl-dash" aria-hidden="true">—</span> Rosalind Fairweather paid the $9,200 deposit at 6:10&nbsp;am. Release <span class="id">PO-PC-0431</span> and <span class="id">PO-PC-0432</span>.</p><div class="sl-a"><button class="act" type="button">Release the order</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+    </ol><span class="pin" aria-hidden="true">2</span>
+  </section>
+    <section class="sec sec--wall" aria-label="Every job">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Every job</h2>
+      <div class="scope" role="group" aria-label="Whose jobs"><button class="sc" type="button" aria-pressed="false">Mine</button><span class="sc-dot" aria-hidden="true">·</span><button class="sc" type="button" aria-pressed="true">The studio’s</button></div>
+    </div>
+    <h3 class="who">Leah’s</h3>
+    <ul class="wall">
+      <li class="wc pinned" style="--jc:var(--job-1)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Holloway Den</a><p class="wc-s">On today’s strip</p><span class="pin" aria-hidden="true">4</span></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Linden Place Living Room</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Pell Court Dining</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Brief</p><a class="wc-n" href="#">Ines Calder</a><p class="wc-s">Owed: reply · wrote at 6:35&nbsp;am</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Thornfield</a><p class="wc-s">Owed: open the project · signed Friday 9 October</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Halloran Library</a><p class="wc-s">Waiting on Mae Halloran since Tuesday 6 October</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Copperfield Terrace</a><p class="wc-s">Waiting on Hal and Dana Whitfield since Friday 9 October</p></li>
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Aldous Lane</a><p class="wc-s">With Calloway & Brandt Upholstery · delivering Thursday 15 October</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Chen Residence</a><p class="wc-s">Back Friday 16 October</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Garnet Hill</a><p class="wc-s">Back Monday 19 October</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Discovery</p><a class="wc-n" href="#">Brierley Mews</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Discovery</p><a class="wc-n" href="#">Elm Quay</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Fairlight Close</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Dunmore Road</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Install · Care</p><a class="wc-n" href="#">Greaves Court Bath</a><p class="wc-s">At rest</p></li>
+    </ul>
+    <h3 class="who">Jordan’s</h3>
+    <ul class="wall">
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Project<span class="wc-hold"> · Jordan’s</span></p><a class="wc-n" href="#">Marsh Street Kitchen</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Proposal<span class="wc-hold"> · Jordan’s</span></p><a class="wc-n" href="#">Wren Row Bath</a><p class="wc-s">Owed: open the project · signed Saturday 10 October</p></li>
+    </ul>
+    
+  </section>
+  </div>
+  <footer class="dock" aria-label="Studio drawer">
+    <a href="#">Resource library</a><a href="#">Studio contacts</a><a href="#">Measured rooms</a><a href="#">Ledgers</a><a href="#">Keys <kbd>?</kbd></a>
+    <span class="dock-r"><span class="dock-m">No active timer</span><a class="dock-m" href="#">Studio inbox</a><span class="me"><i>LH</i>Leah Hartwell</span></span>
+  </footer>
+  
+</div>
+<p class="fixture">Illustrative fixture · not a real studio</p>
+<div class="under">
+  <div class="notes">
+    <h3>What changed and why</h3>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span>One line: the greeting and the date, Record an inquiry, and Find anything ⌘K. The tips are gone; Create a project file moves to ⌘K.<span class="ref">WALK §1a · F1 · D2 (d)</span></li>
+      <li><span class="pin" aria-hidden="true">2</span>The focus strip is the Day Sheet re-laid: at most five lines in one box with --card-edge, closing on --rule-mid. Each tick is its job’s studio colour, and the name prints beside it as a link.<span class="ref">direction.md §3 C · V18 Q1 · F3</span></li>
+      <li><span class="pin" aria-hidden="true">3</span>In the studio’s scope a line that is not Leah’s carries its holder word and no act. Jordan acts on Marsh Street from his own Desk.<span class="ref">D2 (e) M5 · SPEC §3.2</span></li>
+      <li><span class="pin" aria-hidden="true">4</span>Every live job once: a 3 px band in its colour, the stage as an ink word, and one state line. A job on the strip says so, so no act appears twice.<span class="ref">direction.md §3 C · G3 · D1 (b)</span></li>
+    </ol>
+  </div>
+  <figure class="today">
+    <figcaption>Today <span>· today-leah-studio-fold-1440.jpg</span></figcaption>
+    <img src="../walk/today-leah-studio-fold-1440.jpg" width="928" height="580" loading="lazy" alt="Today’s Desk at 1440, Leah in the studio’s scope: “Good morning, Leah” beside three header acts with tips printed under them, then “This morning, these need you.” over five ruled sentences (Chen Residence, Holloway Den, Walk · Release to invoice, Tanaka Garden Flat, Okafor Terrace), each with an act and Not today, then the Studio workload head. No section has an edge.">
+  </figure>
+</div>
+</section>
+
+<!-- ===================================================== C2 -->
+<section class="fr" id="frame-c2" data-frame="frame-c2" aria-labelledby="h-c2">
+<header class="cap">
+  <h2 id="h-c2">C2 · M4 · Acting, during</h2>
+  <p class="pair">Pairs with today: m4-holloway-reminder-1440.jpg</p>
+  <p class="what">8:41&nbsp;am, Mine. Leah has switched to Mine and pressed Send reminder on the strip’s first line. Today’s reminder sheet opens over the Desk, scoped to <span class="id">INV-2026-0721</span>. Nothing is sent. <span class="est">Est.: 1 click, no scroll, about 4 s (today: 1 click, about 5 s).</span></p>
+</header>
+<p class="lbl" aria-hidden="true">Proposed</p>
+<div class="frame">
+  <div class="desk">
+    <header class="dh pinned">
+      <p class="dh-hi">Good morning, <em>Leah</em></p>
+      <p class="dh-date">Monday 12 October</p>
+      <span class="dh-sp"></span>
+      <button class="hact" type="button"><span class="plus" aria-hidden="true">＋</span><span class="u">Record an inquiry</span></button>
+      <button class="hfind" type="button"><span class="u">Find anything</span> <kbd>⌘K</kbd></button>
+      
+    </header>
+    <div class="rule2" role="presentation"></div>
+    <section class="sec" aria-label="Today">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Today</h2></div>
+    <ol class="strip">
+      <li class="sl pinned" style="--jc:var(--job-1)">
+        <p class="sl-t"><a class="sl-n" href="#">Holloway Den</a> <span class="sl-dash" aria-hidden="true">—</span> <span class="id">INV-2026-0721</span>, $3,800, due Monday 28 September, is <em class="od">14 days overdue</em>.</p><div class="sl-a"><button class="act" type="button">Send reminder</button><button class="act act--q" type="button">Not today</button></div><span class="pin" aria-hidden="true">1</span>
+      </li>
+      <li class="sl" style="--jc:var(--job-2)">
+        <p class="sl-t"><a class="sl-n" href="#">Linden Place Living Room</a> <span class="sl-dash" aria-hidden="true">—</span> Tom and Ellery Vance declined on Sunday: “The sofa is over budget; can we see a second option under $6,000?”</p><div class="sl-a"><button class="act" type="button">Follow up</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl" style="--jc:var(--job-1)">
+        <p class="sl-t"><a class="sl-n" href="#">Holloway Den</a> <span class="sl-dash" aria-hidden="true">—</span> Fenmoor Joinery has not answered <span class="id">PO-HD-0412</span> ($11,450) in 12 days.</p><div class="sl-a"><button class="act" type="button">Chase the maker</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl" style="--jc:var(--job-3)">
+        <p class="sl-t"><a class="sl-n" href="#">Pell Court Dining</a> <span class="sl-dash" aria-hidden="true">—</span> Rosalind Fairweather paid the $9,200 deposit at 6:10&nbsp;am. Release <span class="id">PO-PC-0431</span> and <span class="id">PO-PC-0432</span>.</p><div class="sl-a"><button class="act" type="button">Release the order</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl" style="--jc:var(--job-5)">
+        <p class="sl-t"><a class="sl-n" href="#">Ines Calder</a> <span class="sl-dash" aria-hidden="true">—</span> wrote at 6:35&nbsp;am about a living room, budget $40–60k: “We just moved in and the living room is empty except for a piano.”</p><div class="sl-a"><button class="act" type="button">Reply</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+    </ol>
+  </section>
+    <section class="sec sec--wall" aria-label="Every job">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Every job</h2>
+      <div class="scope" role="group" aria-label="Whose jobs"><button class="sc" type="button" aria-pressed="true">Mine</button><span class="sc-dot" aria-hidden="true">·</span><button class="sc" type="button" aria-pressed="false">The studio’s</button></div>
+    </div>
+    
+    <ul class="wall">
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Holloway Den</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Linden Place Living Room</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Pell Court Dining</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Brief</p><a class="wc-n" href="#">Ines Calder</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Thornfield</a><p class="wc-s">Owed: open the project · signed Friday 9 October</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Halloran Library</a><p class="wc-s">Waiting on Mae Halloran since Tuesday 6 October</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Copperfield Terrace</a><p class="wc-s">Waiting on Hal and Dana Whitfield since Friday 9 October</p></li>
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Aldous Lane</a><p class="wc-s">With Calloway & Brandt Upholstery · delivering Thursday 15 October</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Chen Residence</a><p class="wc-s">Back Friday 16 October</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Garnet Hill</a><p class="wc-s">Back Monday 19 October</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Discovery</p><a class="wc-n" href="#">Brierley Mews</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Discovery</p><a class="wc-n" href="#">Elm Quay</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Fairlight Close</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Dunmore Road</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Install · Care</p><a class="wc-n" href="#">Greaves Court Bath</a><p class="wc-s">At rest</p></li>
+    </ul>
+    
+  </section>
+  </div>
+  <footer class="dock" aria-label="Studio drawer">
+    <a href="#">Resource library</a><a href="#">Studio contacts</a><a href="#">Measured rooms</a><a href="#">Ledgers</a><a href="#">Keys <kbd>?</kbd></a>
+    <span class="dock-r"><span class="dock-m">No active timer</span><a class="dock-m" href="#">Studio inbox</a><span class="me"><i>LH</i>Leah Hartwell</span></span>
+  </footer>
+  <div class="scrim" aria-hidden="true"></div>
+  <div class="sheet pinned" role="dialog" aria-modal="true" aria-labelledby="sh-1440">
+    <div class="sh-h"><h2 id="sh-1440">Send an invoice reminder</h2><button class="act act--q" type="button">Put back · Esc</button></div>
+    <span class="pin-host pinned"><span class="pin" aria-hidden="true">2</span></span>
+    <dl class="sh-f">
+      <dt>To</dt><dd>Nora and Sam Holloway</dd>
+      <dt>About</dt><dd>Invoice <span class="id">INV-2026-0721</span> · $3,800 · due Monday 28 September · <em class="od">14 days overdue</em></dd>
+    </dl>
+    <label class="sh-k" for="d-1440">A note with the reminder · the draft to review</label>
+    <div class="sh-d" id="d-1440" role="textbox" aria-multiline="true" tabindex="0">
+      <p>Nora and Sam,</p>
+      <p>A reminder that invoice <span class="id">INV-2026-0721</span> for $3,800 was due on Monday 28 September. Let me know if you have any questions about it.</p>
+      <p>Thank you.</p>
+    </div>
+    <p class="sh-n">Nothing has been sent.</p>
+    <div class="sh-a pinned"><button class="act act--send" type="button">Send to Nora and Sam Holloway</button><button class="act act--q" type="button">Put back</button><span class="pin" aria-hidden="true">3</span></div>
+  </div>
+</div>
+<p class="fixture">Illustrative fixture · not a real studio</p>
+<div class="under">
+  <div class="notes">
+    <h3>What changed and why</h3>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span>Send reminder on the strip’s first line opens today’s sheet. The strip and the wall keep their places under it.<span class="ref">direction.md §3 C M4 · WALK §3 M4</span></li>
+      <li><span class="pin" aria-hidden="true">2</span>The sheet opens on the facts it acts on: $3,800, due Monday 28 September, 14 days overdue, to Nora and Sam Holloway by name.<span class="ref">SPEC §2.2 x2</span></li>
+      <li><span class="pin" aria-hidden="true">3</span>Nothing is sent. The send is a named second control, beside Put back.<span class="ref">SPEC §4 Sending · G5</span></li>
+    </ol>
+  </div>
+  <figure class="today">
+    <figcaption>Today <span>· m4-holloway-reminder-1440.jpg</span></figcaption>
+    <img src="../walk/m4-holloway-reminder-1440.jpg" width="928" height="580" loading="lazy" alt="Today’s reminder sheet over the dimmed Desk at 1440: Send an invoice reminder, to Client User, about invoice INV-2026-0721 for $3,800, with a prefilled note and the control “Send the reminder to Client User”.">
+  </figure>
+</div>
+</section>
+
+<!-- ===================================================== C3 -->
+<section class="fr" id="frame-c3" data-frame="frame-c3" aria-labelledby="h-c3">
+<header class="cap">
+  <h2 id="h-c3">C3 · M4, M3 · Acting, after</h2>
+  <p class="pair">Pairs with today: today-leah-mine-fold-1440.jpg</p>
+  <p class="what">8:48&nbsp;am, Mine. The reminder went at 8:42 and Fenmoor Joinery was chased at 8:47. Both lines settle in place in muted ink, with their indigo ticks; no slot is refilled. <span class="est">Est.: M4 1 click, about 4 s (today: 1 click, about 5 s); M3 1 click, about 4 s (today: Leah has no line for it, 20 s or more).</span></p>
+</header>
+<p class="lbl" aria-hidden="true">Proposed</p>
+<div class="frame">
+  <div class="desk">
+    <header class="dh pinned">
+      <p class="dh-hi">Good morning, <em>Leah</em></p>
+      <p class="dh-date">Monday 12 October</p>
+      <span class="dh-sp"></span>
+      <button class="hact" type="button"><span class="plus" aria-hidden="true">＋</span><span class="u">Record an inquiry</span></button>
+      <button class="hfind" type="button"><span class="u">Find anything</span> <kbd>⌘K</kbd></button>
+      
+    </header>
+    <div class="rule2" role="presentation"></div>
+    <section class="sec" aria-label="Today">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Today</h2></div>
+    <ol class="strip">
+      <li class="sl sl--done pinned" style="--jc:var(--job-1)">
+        <p class="sl-t"><a class="sl-n" href="#">Holloway Den</a> <span class="sl-dash" aria-hidden="true">—</span> Reminder sent · waiting on Nora and Sam Holloway since 8:42</p><span class="pin" aria-hidden="true">1</span>
+      </li>
+      <li class="sl" style="--jc:var(--job-2)">
+        <p class="sl-t"><a class="sl-n" href="#">Linden Place Living Room</a> <span class="sl-dash" aria-hidden="true">—</span> Tom and Ellery Vance declined on Sunday: “The sofa is over budget; can we see a second option under $6,000?”</p><div class="sl-a"><button class="act" type="button">Follow up</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl sl--done pinned" style="--jc:var(--job-1)">
+        <p class="sl-t"><a class="sl-n" href="#">Holloway Den</a> <span class="sl-dash" aria-hidden="true">—</span> Chase sent · waiting on Fenmoor Joinery since 8:47</p><span class="pin" aria-hidden="true">2</span>
+      </li>
+      <li class="sl" style="--jc:var(--job-3)">
+        <p class="sl-t"><a class="sl-n" href="#">Pell Court Dining</a> <span class="sl-dash" aria-hidden="true">—</span> Rosalind Fairweather paid the $9,200 deposit at 6:10&nbsp;am. Release <span class="id">PO-PC-0431</span> and <span class="id">PO-PC-0432</span>.</p><div class="sl-a"><button class="act" type="button">Release the order</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl" style="--jc:var(--job-5)">
+        <p class="sl-t"><a class="sl-n" href="#">Ines Calder</a> <span class="sl-dash" aria-hidden="true">—</span> wrote at 6:35&nbsp;am about a living room, budget $40–60k: “We just moved in and the living room is empty except for a piano.”</p><div class="sl-a"><button class="act" type="button">Reply</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+    </ol>
+  </section>
+    <section class="sec sec--wall" aria-label="Every job">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Every job</h2>
+      <div class="scope" role="group" aria-label="Whose jobs"><button class="sc" type="button" aria-pressed="true">Mine</button><span class="sc-dot" aria-hidden="true">·</span><button class="sc" type="button" aria-pressed="false">The studio’s</button></div>
+    </div>
+    
+    <ul class="wall">
+      <li class="wc pinned" style="--jc:var(--job-1)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Holloway Den</a><p class="wc-s">Waiting on the Holloways and Fenmoor Joinery</p><span class="pin" aria-hidden="true">3</span></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Linden Place Living Room</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Pell Court Dining</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Brief</p><a class="wc-n" href="#">Ines Calder</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Thornfield</a><p class="wc-s">Owed: open the project · signed Friday 9 October</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Halloran Library</a><p class="wc-s">Waiting on Mae Halloran since Tuesday 6 October</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Copperfield Terrace</a><p class="wc-s">Waiting on Hal and Dana Whitfield since Friday 9 October</p></li>
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Aldous Lane</a><p class="wc-s">With Calloway & Brandt Upholstery · delivering Thursday 15 October</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Chen Residence</a><p class="wc-s">Back Friday 16 October</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Garnet Hill</a><p class="wc-s">Back Monday 19 October</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Discovery</p><a class="wc-n" href="#">Brierley Mews</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Discovery</p><a class="wc-n" href="#">Elm Quay</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Fairlight Close</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Dunmore Road</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Install · Care</p><a class="wc-n" href="#">Greaves Court Bath</a><p class="wc-s">At rest</p></li>
+    </ul>
+    
+  </section>
+  </div>
+  <footer class="dock" aria-label="Studio drawer">
+    <a href="#">Resource library</a><a href="#">Studio contacts</a><a href="#">Measured rooms</a><a href="#">Ledgers</a><a href="#">Keys <kbd>?</kbd></a>
+    <span class="dock-r"><span class="dock-m">No active timer</span><a class="dock-m" href="#">Studio inbox</a><span class="me"><i>LH</i>Leah Hartwell</span></span>
+  </footer>
+  
+</div>
+<p class="fixture">Illustrative fixture · not a real studio</p>
+<div class="under">
+  <div class="notes">
+    <h3>What changed and why</h3>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span>The reminder line stays where it was, as its new state. There is no ✓, no count and no “cleared”.<span class="ref">direction.md §7 Q6 · V18 Q1</span></li>
+      <li><span class="pin" aria-hidden="true">2</span>The chase settles the same way. The strip still holds five places; the empty slot is not refilled during the visit.<span class="ref">D2 (c) · direction.md §7 Q6</span></li>
+      <li><span class="pin" aria-hidden="true">3</span>Holloway’s wall card reads its new state, so the wall agrees with the strip.<span class="ref">direction.md §3 C card anatomy · WALK finding 4</span></li>
+    </ol>
+  </div>
+  <figure class="today">
+    <figcaption>Today <span>· today-leah-mine-fold-1440.jpg</span></figcaption>
+    <img src="../walk/today-leah-mine-fold-1440.jpg" width="928" height="580" loading="lazy" alt="Today’s Desk at 1440, Leah in Mine: five Day Sheet sentences, each with an act and Not today; the row hairlines stop short of the head rule; the Studio workload follows with nothing between them.">
+  </figure>
+</div>
+</section>
+
+<!-- ===================================================== C4 -->
+<section class="fr" id="frame-c4" data-frame="frame-c4" aria-labelledby="h-c4">
+<header class="cap">
+  <h2 id="h-c4">C4 · M7 · An inquiry lands</h2>
+  <p class="pair">Pairs with today: m7-inquiry-landed-1440.jpg</p>
+  <p class="what">11:21&nbsp;am, Mine. Since 8:48 Leah has followed up Linden (9:05), released both Pell Court orders (9:12) and replied to Ines Calder (9:20). She recorded Ainsley Moore at 11:20; the overlay closed onto the Desk. <span class="est">Est.: 3 clicks to record and 0 to see it land, about 25 s (today: 3 clicks, then Back and 1,344 px of scroll, about 25 + 10 s).</span></p>
+</header>
+<p class="lbl" aria-hidden="true">Proposed</p>
+<div class="frame">
+  <div class="desk">
+    <header class="dh pinned">
+      <p class="dh-hi">Good morning, <em>Leah</em></p>
+      <p class="dh-date">Monday 12 October</p>
+      <span class="dh-sp"></span>
+      <button class="hact" type="button"><span class="plus" aria-hidden="true">＋</span><span class="u">Record an inquiry</span></button>
+      <button class="hfind" type="button"><span class="u">Find anything</span> <kbd>⌘K</kbd></button>
+      
+    </header>
+    <div class="rule2" role="presentation"></div>
+    <p class="visit pinned">Ainsley Moore recorded · just now · <a class="act act--q" href="#">Open the brief</a><span class="pin" aria-hidden="true">1</span></p>
+    <section class="sec pinned" aria-label="Today">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Today</h2></div>
+    <ol class="strip">
+      <li class="sl" style="--jc:var(--job-5)">
+        <p class="sl-t"><a class="sl-n" href="#">Thornfield</a> <span class="sl-dash" aria-hidden="true">—</span> The Ashbys signed on Friday.</p><div class="sl-a"><button class="act" type="button">Open the project</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl" style="--jc:var(--job-6)">
+        <p class="sl-t"><a class="sl-n" href="#">Ainsley Moore</a> <span class="sl-dash" aria-hidden="true">—</span> <span class="sl-pre"><span class="sl-eb">Brief · just now</span> ·</span> called about a primary bedroom, budget $25–35k.</p><div class="sl-a"><button class="act" type="button">Reply</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+    </ol><span class="pin" aria-hidden="true">2</span>
+  </section>
+    <section class="sec sec--wall" aria-label="Every job">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Every job</h2>
+      <div class="scope" role="group" aria-label="Whose jobs"><button class="sc" type="button" aria-pressed="true">Mine</button><span class="sc-dot" aria-hidden="true">·</span><button class="sc" type="button" aria-pressed="false">The studio’s</button></div>
+    </div>
+    
+    <ul class="wall">
+      <li class="wc pinned" style="--jc:var(--job-6)"><p class="wc-eb">Brief</p><a class="wc-n" href="#">Ainsley Moore</a><p class="wc-s">On today’s strip</p><span class="pin" aria-hidden="true">3</span></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Thornfield</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Holloway Den</a><p class="wc-s">Waiting on the Holloways and Fenmoor Joinery since today</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Linden Place Living Room</a><p class="wc-s">Waiting on Tom and Ellery Vance since today</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Pell Court Dining</a><p class="wc-s">Waiting on Calloway & Brandt Upholstery and Ninebark Lighting since today</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Brief</p><a class="wc-n" href="#">Ines Calder</a><p class="wc-s">Waiting on Ines Calder since today</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Halloran Library</a><p class="wc-s">Waiting on Mae Halloran since Tuesday 6 October</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Copperfield Terrace</a><p class="wc-s">Waiting on Hal and Dana Whitfield since Friday 9 October</p></li>
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Aldous Lane</a><p class="wc-s">With Calloway & Brandt Upholstery · delivering Thursday 15 October</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Chen Residence</a><p class="wc-s">Back Friday 16 October</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Garnet Hill</a><p class="wc-s">Back Monday 19 October</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Discovery</p><a class="wc-n" href="#">Brierley Mews</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Discovery</p><a class="wc-n" href="#">Elm Quay</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Fairlight Close</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Dunmore Road</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Install · Care</p><a class="wc-n" href="#">Greaves Court Bath</a><p class="wc-s">At rest</p></li>
+    </ul>
+    
+  </section>
+  </div>
+  <footer class="dock" aria-label="Studio drawer">
+    <a href="#">Resource library</a><a href="#">Studio contacts</a><a href="#">Measured rooms</a><a href="#">Ledgers</a><a href="#">Keys <kbd>?</kbd></a>
+    <span class="dock-r"><span class="dock-m">No active timer</span><a class="dock-m" href="#">Studio inbox</a><span class="me"><i>LH</i>Leah Hartwell</span></span>
+  </footer>
+  
+</div>
+<p class="fixture">Illustrative fixture · not a real studio</p>
+<div class="under">
+  <div class="notes">
+    <h3>What changed and why</h3>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span>The overlay closes onto the Desk, not onto the new brief. A muted line for this visit says what landed.<span class="ref">WALK §3 M7 · direction.md §3 C M7</span></li>
+      <li><span class="pin" aria-hidden="true">2</span>Two lines remain: Thornfield, and Ainsley Moore under her own name, not “Consultation”.<span class="ref">WALK §3 M7 · WALK §4</span></li>
+      <li><span class="pin" aria-hidden="true">3</span>Her new card heads Leah’s jobs in rose, --job-6, the next colour in turn. Nobody had to choose it.<span class="ref">direction.md §3 C tag system · D1 (e)</span></li>
+    </ol>
+  </div>
+  <figure class="today">
+    <figcaption>Today <span>· m7-inquiry-landed-1440.jpg</span></figcaption>
+    <img src="../walk/m7-inquiry-landed-1440.jpg" width="928" height="580" loading="lazy" alt="Today, after Leah records an inquiry: it lands as a Studio workload row named “Consultation”, about 1,344 px down the Desk, among other briefs. The client’s name is only in the need text.">
+  </figure>
+</div>
+</section>
+
+<!-- ===================================================== C5 -->
+<section class="fr" id="frame-c5" data-frame="frame-c5" aria-labelledby="h-c5">
+<header class="cap">
+  <h2 id="h-c5">C5 · M5 · Jordan’s view</h2>
+  <p class="pair">Pairs with today: today-jordan-mine-fold-1440.jpg</p>
+  <p class="what">8:55&nbsp;am, Jordan Reyes, Mine. His three lines, the hand-off first (Marsh Street plum twice, Wren Row ochre). The wall holds his two jobs; the studio’s are one press away. No studio money totals. <span class="est">Est.: whose is it, 0 clicks; Read her note, 1 click; about 2 s (today: 1 click, about 4 s).</span></p>
+</header>
+<p class="lbl" aria-hidden="true">Proposed</p>
+<div class="frame">
+  <div class="desk">
+    <header class="dh pinned">
+      <p class="dh-hi">Good morning, <em>Jordan</em></p>
+      <p class="dh-date">Monday 12 October</p>
+      <span class="dh-sp"></span>
+      <button class="hact" type="button"><span class="plus" aria-hidden="true">＋</span><span class="u">Record an inquiry</span></button>
+      <button class="hfind" type="button"><span class="u">Find anything</span> <kbd>⌘K</kbd></button>
+      
+    </header>
+    <div class="rule2" role="presentation"></div>
+    <section class="sec" aria-label="Today">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Today</h2></div>
+    <ol class="strip">
+      <li class="sl pinned" style="--jc:var(--job-4)">
+        <p class="sl-t"><a class="sl-n" href="#">Marsh Street Kitchen</a> <span class="sl-dash" aria-hidden="true">—</span> Leah handed you Marsh Street Kitchen on Saturday 10 October.</p><div class="sl-a"><button class="act" type="button">Read her note</button></div><span class="pin" aria-hidden="true">1</span>
+      </li>
+      <li class="sl pinned" style="--jc:var(--job-4)">
+        <p class="sl-t"><a class="sl-n" href="#">Marsh Street Kitchen</a> <span class="sl-dash" aria-hidden="true">—</span> Ninebark Lighting has not answered <span class="id">PO-MS-0388</span> ($2,180) in 4 days. Leah’s note asks to see anything in writing first.</p><div class="sl-a"><button class="act" type="button">Draft the chase for Leah</button><button class="act act--q" type="button">Not today</button></div><span class="pin" aria-hidden="true">2</span>
+      </li>
+      <li class="sl" style="--jc:var(--job-3)">
+        <p class="sl-t"><a class="sl-n" href="#">Wren Row Bath</a> <span class="sl-dash" aria-hidden="true">—</span> Priya and Dev Anand signed the Wren Row Bath design services agreement ($6,500) on Saturday.</p><div class="sl-a"><button class="act" type="button">Open the project</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+    </ol>
+  </section>
+    <section class="sec sec--wall" aria-label="Every job">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Every job</h2>
+      <div class="scope" role="group" aria-label="Whose jobs"><button class="sc" type="button" aria-pressed="true">Mine</button><span class="sc-dot" aria-hidden="true">·</span><button class="sc" type="button" aria-pressed="false">The studio’s</button></div>
+    </div>
+    
+    <ul class="wall">
+      <li class="wc pinned" style="--jc:var(--job-4)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Marsh Street Kitchen</a><p class="wc-s">On today’s strip</p><span class="pin" aria-hidden="true">3</span></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Wren Row Bath</a><p class="wc-s">On today’s strip</p></li>
+    </ul>
+    <p class="rest">The rest of the studio’s jobs are Leah’s. <button class="act" type="button">The studio’s</button></p>
+  </section>
+  </div>
+  <footer class="dock" aria-label="Studio drawer">
+    <a href="#">Resource library</a><a href="#">Studio contacts</a><a href="#">Measured rooms</a><a href="#">Ledgers</a><a href="#">Keys <kbd>?</kbd></a>
+    <span class="dock-r"><span class="dock-m">No active timer</span><a class="dock-m" href="#">Studio inbox</a><span class="me"><i>JR</i>Jordan Reyes</span></span>
+  </footer>
+  
+</div>
+<p class="fixture">Illustrative fixture · not a real studio</p>
+<div class="under">
+  <div class="notes">
+    <h3>What changed and why</h3>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span>The hand-off prints first, dated, with Read her note. It no longer lacks a job name or an edge.<span class="ref">V18 Q3 · WALK §4 · SPEC §3.2</span></li>
+      <li><span class="pin" aria-hidden="true">2</span>Leah’s note asks to see anything in writing first, so the act is Draft the chase for Leah. It saves for Leah and never sends.<span class="ref">V18 Q11 · SPEC §3.2</span></li>
+      <li><span class="pin" aria-hidden="true">3</span>Mine holds Jordan’s two jobs. The rest of the studio is one press away, and no studio revenue, A/R or margin appears.<span class="ref">V18 Q10 · D2 (e) M5</span></li>
+    </ol>
+  </div>
+  <figure class="today">
+    <figcaption>Today <span>· today-jordan-mine-fold-1440.jpg</span></figcaption>
+    <img src="../walk/today-jordan-mine-fold-1440.jpg" width="928" height="580" loading="lazy" alt="Today’s Desk at 1440, Jordan in Mine: three sentences, the PO chase, the hand-off without a job name or an edge, and Wren Row signed.">
+  </figure>
+</div>
+</section>
+
+<!-- ===================================================== C6 -->
+<section class="fr" id="frame-c6" data-frame="frame-c6" aria-labelledby="h-c6">
+<header class="cap">
+  <h2 id="h-c6">C6 · M8 · Close of day</h2>
+  <p class="pair">Pairs with today: today-jordan-quiet-fold-1440.jpg</p>
+  <p class="what">5:50&nbsp;pm, Leah, Mine. The strip reads “Nothing more needs you today.” The wall’s state lines carry what waits on others and what comes back, each with its date. At rest is folded. Today’s only quiet capture is Jordan’s. <span class="est">Est.: 3 clicks to clear, 0 to read, about 10 s to read across the wall (today: 3 clicks to clear; not readable, about 10 s).</span></p>
+</header>
+<p class="lbl" aria-hidden="true">Proposed</p>
+<div class="frame">
+  <div class="desk">
+    <header class="dh pinned">
+      <p class="dh-hi">Good evening, <em>Leah</em></p>
+      <p class="dh-date">Monday 12 October</p>
+      <span class="dh-sp"></span>
+      <button class="hact" type="button"><span class="plus" aria-hidden="true">＋</span><span class="u">Record an inquiry</span></button>
+      <button class="hfind" type="button"><span class="u">Find anything</span> <kbd>⌘K</kbd></button>
+      
+    </header>
+    <div class="rule2" role="presentation"></div>
+    <section class="sec" aria-label="Today">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Today</h2></div>
+    <div class="strip strip--quiet pinned"><p class="sq">Nothing more needs you today.</p><span class="pin" aria-hidden="true">1</span></div>
+  </section>
+    <section class="sec sec--wall" aria-label="Every job">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Every job</h2>
+      <div class="scope" role="group" aria-label="Whose jobs"><button class="sc" type="button" aria-pressed="true">Mine</button><span class="sc-dot" aria-hidden="true">·</span><button class="sc" type="button" aria-pressed="false">The studio’s</button></div>
+    </div>
+    
+    <ul class="wall">
+      <li class="wc pinned" style="--jc:var(--job-1)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Holloway Den</a><p class="wc-s">Waiting on Nora and Sam Holloway, and on Fenmoor Joinery (PO sent Wednesday 30 September), since today</p><span class="pin" aria-hidden="true">2</span></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Linden Place Living Room</a><p class="wc-s">Waiting on Tom and Ellery Vance since today</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Pell Court Dining</a><p class="wc-s">Waiting on Calloway & Brandt Upholstery and Ninebark Lighting since today</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Brief</p><a class="wc-n" href="#">Ines Calder</a><p class="wc-s">Waiting on Ines Calder since today</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Brief</p><a class="wc-n" href="#">Ainsley Moore</a><p class="wc-s">Waiting on Ainsley Moore since today</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Halloran Library</a><p class="wc-s">Waiting on Mae Halloran, the samples, since Tuesday 6 October</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Copperfield Terrace</a><p class="wc-s">Waiting on Hal and Dana Whitfield, the palettes, since Friday 9 October</p></li>
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Aldous Lane</a><p class="wc-s">With Calloway & Brandt Upholstery, delivering to Aldous Lane on Thursday 15 October</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Thornfield</a><p class="wc-s">Back Tuesday 13 October · Not today at 4:15&nbsp;pm</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Chen Residence</a><p class="wc-s">Back Friday 16 October · waiting on the Chens’ bench decision</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Garnet Hill</a><p class="wc-s">Back Monday 19 October · the Okafors are travelling; call after the 18th</p></li>
+    </ul>
+    <p class="rest pinned"><button class="act act--q" type="button">At rest — show</button><span class="pin" aria-hidden="true">3</span></p>
+  </section>
+  </div>
+  <footer class="dock" aria-label="Studio drawer">
+    <a href="#">Resource library</a><a href="#">Studio contacts</a><a href="#">Measured rooms</a><a href="#">Ledgers</a><a href="#">Keys <kbd>?</kbd></a>
+    <span class="dock-r"><span class="dock-m">No active timer</span><a class="dock-m" href="#">Studio inbox</a><span class="me"><i>LH</i>Leah Hartwell</span></span>
+  </footer>
+  
+</div>
+<p class="fixture">Illustrative fixture · not a real studio</p>
+<div class="under">
+  <div class="notes">
+    <h3>What changed and why</h3>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span>The strip says it is done, in a sentence. No count, no “cleared”, no list of what moved today.<span class="ref">V18 Q1 · WALK finding 4</span></li>
+      <li><span class="pin" aria-hidden="true">2</span>What waits and what comes back are read from the wall’s state lines; what moved today reads only as “since today”. Reading eleven lines is C’s cost here.<span class="ref">SPEC §2.2 x6 · direction.md §3 C M8</span></li>
+      <li><span class="pin" aria-hidden="true">3</span>At rest is folded, with no count beside it.<span class="ref">direction.md §3 C · V18 Q1</span></li>
+    </ol>
+  </div>
+  <figure class="today">
+    <figcaption>Today <span>· today-jordan-quiet-fold-1440.jpg</span></figcaption>
+    <img src="../walk/today-jordan-quiet-fold-1440.jpg" width="928" height="580" loading="lazy" alt="Today’s quiet Desk at 1440, Jordan: “No current action alerts.”, then the Studio workload listing Wren Row Bath as owed by him and Marsh Street Kitchen as waiting on others.">
+  </figure>
+</div>
+</section>
+
+<!-- ===================================================== C7 -->
+<section class="fr" id="frame-c7" data-frame="frame-c7" aria-labelledby="h-c7">
+<header class="cap">
+  <h2 id="h-c7">C7 · M1 · Dark mode</h2>
+  <p class="pair">Pairs with today: today-leah-dark-probe-fold-1440.jpg</p>
+  <p class="what">C1 in the house sheet’s documented dark set, with --card-edge #77736E and the six --job-*-dark companions. Documented, not shipped: the portal paints no dark paper set. <span class="est">Est.: as C1, 0 clicks, about 5 s.</span></p>
+</header>
+<p class="lbl" aria-hidden="true">Proposed</p>
+<div class="frame dark">
+  <div class="desk">
+    <p class="darknote">Documented, not shipped: the portal paints no dark paper set</p>
+    <header class="dh pinned">
+      <p class="dh-hi">Good morning, <em>Leah</em></p>
+      <p class="dh-date">Monday 12 October</p>
+      <span class="dh-sp"></span>
+      <button class="hact" type="button"><span class="plus" aria-hidden="true">＋</span><span class="u">Record an inquiry</span></button>
+      <button class="hfind" type="button"><span class="u">Find anything</span> <kbd>⌘K</kbd></button>
+      <span class="pin" aria-hidden="true">1</span>
+    </header>
+    <div class="rule2" role="presentation"></div>
+    <section class="sec pinned" aria-label="Today">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Today</h2></div>
+    <ol class="strip">
+      <li class="sl" style="--jc:var(--job-1)">
+        <p class="sl-t"><a class="sl-n" href="#">Holloway Den</a> <span class="sl-dash" aria-hidden="true">—</span> <span class="id">INV-2026-0721</span>, $3,800, due Monday 28 September, is <em class="od">14 days overdue</em>.</p><div class="sl-a"><button class="act" type="button">Send reminder</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl" style="--jc:var(--job-2)">
+        <p class="sl-t"><a class="sl-n" href="#">Linden Place Living Room</a> <span class="sl-dash" aria-hidden="true">—</span> Tom and Ellery Vance declined on Sunday: “The sofa is over budget; can we see a second option under $6,000?”</p><div class="sl-a"><button class="act" type="button">Follow up</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl" style="--jc:var(--job-1)">
+        <p class="sl-t"><a class="sl-n" href="#">Holloway Den</a> <span class="sl-dash" aria-hidden="true">—</span> Fenmoor Joinery has not answered <span class="id">PO-HD-0412</span> ($11,450) in 12 days.</p><div class="sl-a"><button class="act" type="button">Chase the maker</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+      <li class="sl" style="--jc:var(--job-4)">
+        <p class="sl-t"><a class="sl-n" href="#">Marsh Street Kitchen</a> <span class="sl-h">Jordan’s</span> <span class="sl-dash" aria-hidden="true">—</span> Ninebark Lighting has not answered <span class="id">PO-MS-0388</span> ($2,180) in 4 days.</p>
+      </li>
+      <li class="sl" style="--jc:var(--job-3)">
+        <p class="sl-t"><a class="sl-n" href="#">Pell Court Dining</a> <span class="sl-dash" aria-hidden="true">—</span> Rosalind Fairweather paid the $9,200 deposit at 6:10&nbsp;am. Release <span class="id">PO-PC-0431</span> and <span class="id">PO-PC-0432</span>.</p><div class="sl-a"><button class="act" type="button">Release the order</button><button class="act act--q" type="button">Not today</button></div>
+      </li>
+    </ol><span class="pin" aria-hidden="true">2</span>
+  </section>
+    <section class="sec sec--wall" aria-label="Every job">
+    <div class="eb"><span class="orn" aria-hidden="true"></span><h2>Every job</h2>
+      <div class="scope" role="group" aria-label="Whose jobs"><button class="sc" type="button" aria-pressed="false">Mine</button><span class="sc-dot" aria-hidden="true">·</span><button class="sc" type="button" aria-pressed="true">The studio’s</button></div>
+    </div>
+    <h3 class="who">Leah’s</h3>
+    <ul class="wall">
+      <li class="wc pinned" style="--jc:var(--job-1)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Holloway Den</a><p class="wc-s">On today’s strip</p><span class="pin" aria-hidden="true">3</span></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Linden Place Living Room</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Pell Court Dining</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Brief</p><a class="wc-n" href="#">Ines Calder</a><p class="wc-s">Owed: reply · wrote at 6:35&nbsp;am</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Thornfield</a><p class="wc-s">Owed: open the project · signed Friday 9 October</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Halloran Library</a><p class="wc-s">Waiting on Mae Halloran since Tuesday 6 October</p></li>
+      <li class="wc" style="--jc:var(--job-5)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Copperfield Terrace</a><p class="wc-s">Waiting on Hal and Dana Whitfield since Friday 9 October</p></li>
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Aldous Lane</a><p class="wc-s">With Calloway & Brandt Upholstery · delivering Thursday 15 October</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Install</p><a class="wc-n" href="#">Chen Residence</a><p class="wc-s">Back Friday 16 October</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Proposal</p><a class="wc-n" href="#">Garnet Hill</a><p class="wc-s">Back Monday 19 October</p></li>
+      <li class="wc" style="--jc:var(--job-6)"><p class="wc-eb">Discovery</p><a class="wc-n" href="#">Brierley Mews</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-2)"><p class="wc-eb">Discovery</p><a class="wc-n" href="#">Elm Quay</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Direction</p><a class="wc-n" href="#">Fairlight Close</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-1)"><p class="wc-eb">Project</p><a class="wc-n" href="#">Dunmore Road</a><p class="wc-s">At rest</p></li>
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Install · Care</p><a class="wc-n" href="#">Greaves Court Bath</a><p class="wc-s">At rest</p></li>
+    </ul>
+    <h3 class="who">Jordan’s</h3>
+    <ul class="wall">
+      <li class="wc" style="--jc:var(--job-4)"><p class="wc-eb">Project<span class="wc-hold"> · Jordan’s</span></p><a class="wc-n" href="#">Marsh Street Kitchen</a><p class="wc-s">On today’s strip</p></li>
+      <li class="wc" style="--jc:var(--job-3)"><p class="wc-eb">Proposal<span class="wc-hold"> · Jordan’s</span></p><a class="wc-n" href="#">Wren Row Bath</a><p class="wc-s">Owed: open the project · signed Saturday 10 October</p></li>
+    </ul>
+    
+  </section>
+  </div>
+  <footer class="dock" aria-label="Studio drawer">
+    <a href="#">Resource library</a><a href="#">Studio contacts</a><a href="#">Measured rooms</a><a href="#">Ledgers</a><a href="#">Keys <kbd>?</kbd></a>
+    <span class="dock-r"><span class="dock-m">No active timer</span><a class="dock-m" href="#">Studio inbox</a><span class="me"><i>LH</i>Leah Hartwell</span></span>
+  </footer>
+  
+</div>
+<p class="fixture">Illustrative fixture · not a real studio · Documented, not shipped: the portal paints no dark paper set</p>
+<div class="under">
+  <div class="notes">
+    <h3>What changed and why</h3>
+    <ol>
+      <li><span class="pin" aria-hidden="true">1</span>The house sheet’s documented dark set: paper #2A2622, ink #F2EDE6, --card-edge #77736E.<span class="ref">house-sheet SPEC :89-108</span></li>
+      <li><span class="pin" aria-hidden="true">2</span>Ticks and bands take --job-1-dark … --job-6-dark, each at least 6.40:1 on #2A2622.<span class="ref">direction.md §3 C tokens</span></li>
+      <li><span class="pin" aria-hidden="true">3</span>Documented, not shipped: the portal paints no dark paper set. Today’s probe still paints cream.<span class="ref">WALK §0</span></li>
+    </ol>
+  </div>
+  <figure class="today">
+    <figcaption>Today <span>· today-leah-dark-probe-fold-1440.jpg</span></figcaption>
+    <img src="../walk/today-leah-dark-probe-fold-1440.jpg" width="928" height="580" loading="lazy" alt="Today’s Desk at 1440 with dark mode requested: it still paints cream, because the portal paints no dark paper set.">
+  </figure>
+</div>
+</section>
+
+</main>
+<script>
+(function () {
+  'use strict';
+  var FRAMES = {
+    "frame-c1": "C1, At rest, the studio’s scope",
+    "frame-c2": "C2, Acting, during",
+    "frame-c3": "C3, Acting, after",
+    "frame-c4": "C4, An inquiry lands",
+    "frame-c5": "C5, Jordan’s view",
+    "frame-c6": "C6, Close of day",
+    "frame-c7": "C7, Dark mode"
+  };
+  var has = function (k) { return Object.prototype.hasOwnProperty.call(FRAMES, k); };
+  var state = { frame: null, nobar: false, nopins: false, nobefore: false };
+  function parse(hash) {
+    var toks = String(hash || '').replace(/^#/, '').split('&');
+    var out = { frame: null, nobar: false, nopins: false, nobefore: false };
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i].trim();
+      if (!out.frame && /^c\d+$/.test(t)) t = 'frame-' + t; /* #c1 is shorthand for #frame-c1 */
+      if (!out.frame && t.indexOf('frame-') === 0) out.frame = t;
+      if (t === 'nobar') out.nobar = true;
+      if (t === 'nopins') out.nopins = true;
+      if (t === 'nobefore') out.nobefore = true;
+    }
+    return out;
+  }
+  function apply() {
+    var one = !!state.frame && has(state.frame);
+    var secs = document.querySelectorAll('[data-frame]');
+    for (var i = 0; i < secs.length; i++) secs[i].hidden = one && secs[i].getAttribute('data-frame') !== state.frame;
+    document.body.classList.toggle('one', one);
+    document.body.classList.toggle('nobar', state.nobar);
+    document.body.classList.toggle('nopins', state.nopins);
+    document.body.classList.toggle('nobefore', state.nobefore);
+    var btns = document.querySelectorAll('[data-go]');
+    for (var b = 0; b < btns.length; b++) btns[b].setAttribute('aria-pressed', one && btns[b].getAttribute('data-go') === state.frame ? 'true' : 'false');
+    document.getElementById('announce').textContent = one ? 'Showing frame ' + FRAMES[state.frame] : 'Showing all frames';
+    if (one) window.scrollTo(0, 0);
+  }
+  function fromHash() { state = parse(location.hash); apply(); }
+  document.addEventListener('DOMContentLoaded', fromHash);
+  window.addEventListener('hashchange', fromHash);
+  window.addEventListener('message', function (e) {
+    var d = e && e.data;
+    if (!d || typeof d !== 'object' || typeof d.frame !== 'string') return;
+    var f = d.frame.indexOf('frame-') === 0 ? d.frame : 'frame-' + d.frame;
+    if (!has(f)) return;
+    state.frame = f; apply();
+  });
+  document.addEventListener('click', function (e) {
+    var go = e.target.closest && e.target.closest('[data-go]');
+    if (go) {
+      var toks = [go.getAttribute('data-go')];
+      if (state.nopins) toks.push('nopins');
+      if (state.nobefore) toks.push('nobefore');
+      var next = '#' + toks.join('&');
+      if (location.hash === next) fromHash(); else location.hash = next;
+      return;
+    }
+    /* the mock's own links and buttons go nowhere */
+    var mock = e.target.closest && e.target.closest('.frame a[href="#"]');
+    if (mock) e.preventDefault();
+  });
+})();
+</script>
+</body>
+</html>
+<!-- SPECIMEN COMPLETE -->
