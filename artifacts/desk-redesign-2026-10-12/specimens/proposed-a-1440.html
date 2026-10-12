@@ -1,0 +1,1394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Restored and tightened 1440</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/*
+ * US-26 Direction A, Restored and tightened (direction.md §3 A; specimens/SPEC.md).
+ * Today's portal with edges. Changes only: D1's one-line header (both creates; the date in
+ * the Today eyebrow); job cards with a 3px --tab-* left rule; the grouped ledger with 2px
+ * stage ticks; full-measure rules, every section closing on --rule-mid.
+ * Tokens are today's, from apps/designer-portal/src/app/globals.css.
+ */
+:root {
+  color-scheme: light;
+  /* paper stocks */
+  --color-off-white: #FAF7F2;
+  --doc-paper: #FCFAF6;
+  --doc-rail-stock: #E8E3DB;
+  /* inks */
+  --color-charcoal: #2C2926;
+  --text-primary: var(--color-charcoal);
+  --text-muted: #4E4339;
+  --text-subtle: #5A4E43;
+  --text-faint: #65594E;
+  --color-mocha: #5C4A3C;
+  --color-quiet-ink: #65594E;
+  --color-aged-oak: #8B7355;
+  /* pigment inks and material */
+  --color-clay: #C4A57B;
+  --color-clay-ink: #7C5E30;
+  --color-terracotta-ink: #9C5340;
+  /* edges */
+  --color-card-edge: #8F8C88;
+  --doc-ink-border: rgba(44, 41, 38, 0.18);
+  --rule-hair: 1px solid rgba(44, 41, 38, 0.10);
+  --rule-mid: 1.5px solid #2C2926;
+  --rule-strong: 2px solid #2C2926;
+  /* stage pigments */
+  --tab-brief: #497093;
+  --tab-discovery: #307063;
+  --tab-direction: #366A3A;
+  --tab-proposal: #575D1D;
+  --tab-project: #6D4E24;
+  --tab-install: #823832;
+  --wash-brief-still: rgba(73, 112, 147, 0.06);
+  --wash-discovery-still: rgba(48, 112, 99, 0.06);
+  --wash-direction-still: rgba(54, 106, 58, 0.06);
+  --wash-proposal-still: rgba(87, 93, 29, 0.06);
+  --wash-project-still: rgba(109, 78, 36, 0.06);
+  --wash-install-still: rgba(130, 56, 50, 0.06);
+  /* NEW TOKENS proposed by Direction A (D1 (b)), dark only, documented and not shipped:
+     the stage pigments fail on the dark ground (1.93-3.02:1), so each takes an edge companion,
+     each at least 4.71:1 on #2A2622, hue order kept. */
+  --tab-brief-edge: #7D9EC0;
+  --tab-discovery-edge: #5FA08F;
+  --tab-direction-edge: #73A374;
+  --tab-proposal-edge: #A3A75C;
+  --tab-project-edge: #B98F5A;
+  --tab-install-edge: #CC7A70;
+  /* type steps */
+  --type-metadata-min: 12px;
+  --type-body-min: 14px;
+  --type-control-min: 16px;
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'DM Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--color-off-white); color: var(--text-primary); font-family: var(--font-body); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
+p, h1, h2, h3, ol, ul, dl, dd, figure { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+h2, h3 { font-weight: 400; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: left; }
+a { color: inherit; }
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+p, li, dd, h2, h3 { overflow-wrap: break-word; }
+
+/* ---------- specimen chrome (not part of the proposal) ---------- */
+#bar { position: sticky; top: 0; z-index: 40; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; padding: 8px 16px; background: var(--doc-rail-stock); border-bottom: 1px solid var(--doc-ink-border); font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+#bar .fb-acts { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+#bar .go { min-height: 32px; min-width: 40px; padding: 0 8px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-decoration: underline; text-decoration-color: var(--color-aged-oak); text-underline-offset: 4px; }
+#bar .go[aria-pressed="true"] { color: var(--text-primary); text-decoration-thickness: 2px; }
+.fw { padding: 0 0 64px; }
+.cap { padding: 40px 16px 16px; }
+.cap h2 { font-family: var(--font-display); font-size: 22px; line-height: 1.25; }
+.cap .est { margin-top: 6px; font-size: 14px; color: var(--text-muted); }
+.cap .pair { margin-top: 6px; font-size: 14px; color: var(--text-muted); }
+.cap .pair a { color: var(--text-primary); text-decoration-color: var(--color-aged-oak); text-underline-offset: 3px; overflow-wrap: anywhere; }
+.cap .lbl-chip { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
+body.nobar #bar, body.nobar .cap { display: none; }
+body.nobefore .cap .pair { display: none; }
+.notes { margin: 24px 16px 0; display: grid; gap: 10px; }
+.notes li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 2px 12px; font-size: 14px; color: var(--text-muted); }
+.notes li .pin { margin: 1px 0 0; grid-row: span 2; }
+.notes .src { grid-column: 2; }
+body.nopins .notes, body.nopins .pin { display: none; }
+.pin { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: 8px; border: 1px solid var(--color-clay-ink); border-radius: 2px; background: var(--color-off-white); color: var(--color-clay-ink); font-family: var(--font-mono); font-size: 12px; font-weight: 500; font-style: normal; letter-spacing: 0; text-transform: none; line-height: 1; vertical-align: middle; flex: none; }
+
+/* ---------- the proposal ---------- */
+.canvas { position: relative; display: flex; flex-direction: column; overflow-x: clip; background: var(--color-off-white); color: var(--text-primary); }
+.eb { font-family: var(--font-mono); font-size: 12px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.orn { width: 34px; height: 12px; flex: none; fill: none; stroke: var(--color-clay); stroke-width: 1.4; }
+
+/* acts: today's DocumentAction tiers. Primary two scores, secondary one, tertiary a whisper. */
+.act { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 44px; padding: 4px 6px 10px; font-family: var(--font-mono); font-size: 12px; line-height: 16px; text-transform: uppercase; letter-spacing: .1em; color: var(--color-mocha); }
+.act .lbl { position: relative; display: inline-block; }
+.act .lbl::before { content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 1px; background: var(--color-aged-oak); }
+.act-p { color: var(--text-primary); font-weight: 500; letter-spacing: .12em; }
+.act-p .lbl::before { height: 1.5px; background: var(--text-primary); }
+.act-p .lbl::after { content: ''; position: absolute; left: 0; right: 0; bottom: -7.5px; height: 1px; background: var(--color-clay); }
+.act-t { color: var(--color-quiet-ink); font-weight: 300; }
+.act .plus { color: var(--color-clay-ink); }
+.act:focus-visible, .scope button:focus-visible, .ln:focus-visible, .dk:focus-visible, .dk-studio:focus-visible, .dk-more:focus-visible, .go:focus-visible { outline: 2px solid var(--color-clay-ink); outline-offset: 2px; border-radius: 2px; }
+.kbd { margin-left: 4px; padding: 0 4px; border: 1px solid var(--doc-ink-border); border-radius: 2px; font-family: var(--font-mono); font-size: 12px; line-height: 16px; letter-spacing: 0; color: var(--text-faint); }
+@media not ((hover: hover) and (pointer: fine)) { .hacts .kbd { display: none; } }
+
+/* header */
+.greet { font-family: var(--font-display); font-weight: 400; line-height: 1.2; color: var(--text-primary); }
+.greet i { font-style: italic; }
+.rule-strong { height: 6px; border-top: var(--rule-strong); border-bottom: 1px solid var(--doc-ink-border); }
+
+/* Today */
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+.sh-t { display: inline-flex; align-items: center; gap: 12px; color: var(--text-primary); font-weight: 500; }
+.sh-t:focus-visible { outline: 2px solid var(--color-clay-ink); outline-offset: 4px; }
+.scope { display: flex; align-items: baseline; gap: 10px; font-size: 16px; color: var(--text-muted); }
+.scope button { min-height: 44px; color: var(--text-muted); }
+.scope button[aria-pressed="true"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.today-sec { padding-bottom: 24px; border-bottom: var(--rule-mid); }
+.visit { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; margin-top: 4px; font-size: 15px; color: var(--text-faint); }
+.cards-wrap { container-type: inline-size; margin-top: 12px; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch; }
+@container (max-width: 899px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 599px) { .cards { grid-template-columns: minmax(0, 1fr); gap: 16px; } }
+.rest { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin-top: 16px; font-family: var(--font-display); font-style: italic; font-size: 17px; color: var(--text-muted); }
+.rest .act { font-style: normal; }
+
+/* the card: one job, holding its lines from today's five */
+.st-brief { --st: var(--tab-brief); --st-wash: var(--wash-brief-still); }
+.st-discovery { --st: var(--tab-discovery); --st-wash: var(--wash-discovery-still); }
+.st-direction { --st: var(--tab-direction); --st-wash: var(--wash-direction-still); }
+.st-proposal { --st: var(--tab-proposal); --st-wash: var(--wash-proposal-still); }
+.st-project { --st: var(--tab-project); --st-wash: var(--wash-project-still); }
+.st-install { --st: var(--tab-install); --st-wash: var(--wash-install-still); }
+.card { display: flex; flex-direction: column; min-width: 0; padding: 16px 20px 4px 18px; background: var(--doc-paper); border: 1px solid var(--color-card-edge); border-left: 3px solid var(--st); border-radius: 2px; }
+.card:hover { background-image: linear-gradient(var(--st-wash), var(--st-wash)); }
+.card-up { position: relative; display: flex; flex-direction: column; border-radius: 2px; }
+.card-up:has(.jn:focus-visible) { outline: 2px solid var(--color-clay-ink); outline-offset: 2px; }
+.jn-h { margin-top: 8px; }
+.jn { font-family: var(--font-display); font-size: 20px; line-height: 26px; font-weight: 500; color: var(--text-primary); text-decoration: underline; text-decoration-color: var(--color-aged-oak); text-decoration-thickness: 1px; text-underline-offset: 5px; outline: none; }
+.jn::after { content: ''; position: absolute; inset: 0; }
+.card:hover .jn { text-decoration-color: var(--color-clay); }
+.person { margin-top: 4px; font-size: 14px; line-height: 21px; color: var(--text-muted); }
+.needs { display: flex; flex-direction: column; flex: 1; margin-top: 12px; }
+.need { display: flex; flex-direction: column; }
+.need + .need { margin-top: 12px; padding-top: 12px; border-top: var(--rule-hair); }
+.need:last-child { flex: 1; }
+.need:last-child .foot { margin-top: auto; }
+.line { font-size: 15px; line-height: 22.5px; color: var(--text-muted); }
+.od { color: var(--color-terracotta-ink); }
+.need.is-settled .line { color: var(--text-faint); }
+.need.is-settled:last-child { padding-bottom: 16px; }
+.foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; min-height: 44px; margin-top: 8px; margin-left: -6px; }
+
+/* the ledger: every other job once, in groups */
+.ledger { padding-bottom: 8px; border-bottom: var(--rule-mid); }
+.gh { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 0 0 8px; }
+.gh-t { color: var(--text-primary); font-weight: 500; }
+.grp { margin-top: 28px; }
+.grp-rest .gh { padding-bottom: 0; }
+.pgrp .sub { margin-top: 16px; padding-bottom: 6px; }
+.sub-rest { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; }
+.rows { border-top: 1px solid var(--doc-ink-border); }
+.lrow { border-bottom: 1px solid var(--doc-ink-border); }
+.lname { position: relative; padding-left: 12px; }
+.lname::before { content: ''; position: absolute; left: 0; top: 2px; width: 2px; height: 20px; background: var(--st); }
+.ln { font-family: var(--font-display); font-size: 17px; line-height: 24px; color: var(--text-primary); text-decoration: underline; text-decoration-color: var(--color-aged-oak); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.lsent { font-size: 14px; line-height: 21px; color: var(--text-muted); }
+.lwhen { color: var(--text-subtle); }
+
+/* the reminder sheet (today's act sheet, unchanged in shape) */
+.veil { position: absolute; inset: 0; z-index: 20; background: rgba(44, 41, 38, 0.42); }
+.sheet { position: absolute; z-index: 21; background: var(--doc-paper); border: 1px solid var(--doc-ink-border); border-radius: 2px; }
+.sh-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 16px; padding-bottom: 8px; border-bottom: var(--rule-hair); }
+.sh-title { display: inline-flex; align-items: center; gap: 10px; color: var(--text-primary); font-weight: 500; }
+.sh-ic { width: 16px; height: 16px; fill: none; stroke: var(--color-clay-ink); stroke-width: 1.2; }
+.facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 12px; align-items: baseline; margin-top: 20px; font-size: 15px; }
+.facts dt { color: var(--text-subtle); }
+.facts dd { color: var(--text-primary); }
+.nlabel { display: block; margin-top: 20px; }
+.note { display: block; width: 100%; margin-top: 8px; padding: 12px 14px; border: 1px solid var(--color-card-edge); border-radius: 2px; background: var(--color-off-white); color: var(--text-primary); font-family: var(--font-body); font-size: 15px; line-height: 1.55; resize: vertical; }
+.note:focus-visible { outline: 2px solid var(--color-clay-ink); outline-offset: 2px; }
+.sendrow { display: flex; flex-wrap: wrap; align-items: center; gap: 0 20px; margin-top: 16px; margin-left: -6px; }
+.nb { margin-top: 4px; font-size: 14px; color: var(--text-muted); }
+
+/* the empty Today box at close of day */
+.empty { display: flex; align-items: center; margin-top: 12px; padding: 24px 20px; background: var(--doc-paper); border: 1px solid var(--color-card-edge); border-radius: 2px; }
+.empty-t { font-family: var(--font-display); font-style: italic; font-size: 20px; line-height: 1.35; color: var(--text-primary); }
+
+/* the dock (today's, unchanged apart from the fixture line) */
+.dock { position: sticky; bottom: 0; z-index: 10; }
+.desk { flex: 1 0 auto; }
+.fx { font-family: var(--font-mono); font-size: 12px; line-height: 16px; color: var(--text-faint); }
+
+/* dark: the house sheet's documented dark set (docs/design/house-sheet/SPEC.md:89-108).
+   Documented, not shipped: the portal paints no dark paper set. */
+.canvas.is-dark {
+  color-scheme: dark;
+  --color-off-white: #2A2622;
+  --doc-paper: #26221E;
+  --doc-rail-stock: #3A3530;
+  --color-charcoal: #F2EDE6;
+  --text-primary: #F2EDE6;
+  --text-muted: #D6CEC4;
+  --text-subtle: #C7BEB3;
+  --text-faint: #B8AEA2;
+  --color-mocha: #D6CEC4;
+  --color-quiet-ink: #B8AEA2;
+  --color-aged-oak: #B39572;
+  --color-clay-ink: #D8B98A;
+  --color-terracotta-ink: #E2A895;
+  --color-card-edge: #77736E;
+  --doc-ink-border: rgba(242, 237, 230, 0.22);
+  --rule-hair: 1px solid rgba(242, 237, 230, 0.14);
+  --rule-mid: 1.5px solid #F2EDE6;
+  --rule-strong: 2px solid #F2EDE6;
+}
+.is-dark .st-brief { --st: var(--tab-brief-edge); }
+.is-dark .st-discovery { --st: var(--tab-discovery-edge); }
+.is-dark .st-direction { --st: var(--tab-direction-edge); }
+.is-dark .st-proposal { --st: var(--tab-proposal-edge); }
+.is-dark .st-project { --st: var(--tab-project-edge); }
+.is-dark .st-install { --st: var(--tab-install-edge); }
+
+@media (forced-colors: active) {
+  .card { border-left-color: CanvasText; }
+  .lname::before { background: CanvasText; }
+  .act .lbl::before, .act .lbl::after { background: CanvasText; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ---------- 1440: measure 976px (232 to 1208) ---------- */
+.cap, .notes { max-width: 1440px; padding-left: 24px; padding-right: 24px; }
+.notes { margin-left: 0; margin-right: 0; }
+.canvas { width: 1440px; min-height: 900px; }
+.desk { width: 976px; margin: 0 auto; padding: 32px 0 120px; }
+.dhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; min-height: 44px; padding-bottom: 16px; }
+.greet { font-size: 28px; }
+.hacts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 20px; }
+.today-sec { margin-top: 32px; }
+.ledger { margin-top: 0; }
+.lrow { display: grid; grid-template-columns: 236px 96px minmax(200px, 1fr) 132px 150px; column-gap: 20px; align-items: baseline; padding: 11px 0 10px; }
+.lwhen, .lact { text-align: right; }
+.lact { display: flex; justify-content: flex-end; margin: -12px 0 -12px; }
+.sheet { top: 172px; left: 400px; width: 640px; padding: 28px 40px 28px; }
+.dock { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 24px; height: 56px; margin-top: -56px; padding: 0 24px; background: var(--color-off-white); border-top: 1px solid var(--doc-ink-border); font-size: 15px; color: var(--text-muted); }
+.dk-c { display: flex; align-items: center; gap: 24px; }
+.dk-c > *, .dk-r > * { white-space: nowrap; }
+.dk { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; color: var(--text-muted); text-decoration: none; }
+.dk svg { width: 15px; height: 15px; fill: none; stroke: var(--text-faint); stroke-width: 1.2; }
+.dk-r { justify-self: end; display: flex; align-items: center; gap: 20px; }
+.who { display: inline-flex; align-items: center; gap: 10px; }
+.avatar { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid var(--doc-ink-border); border-radius: 50%; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+.who-n { font-family: var(--font-display); font-size: 14px; color: var(--text-primary); }
+</style>
+</head>
+<body>
+<h1 class="vh">Proposed Desk: Direction A, Restored and tightened, at 1440</h1>
+<div id="bar">
+  <span class="fb-cap">Direction A, Restored and tightened · 1440 · a static illustration, not a prototype · illustrative fixture: Hartwell Studio, Monday 12 October 2026 · click and second figures are estimates (est.) from direction.md §3</span>
+  <span class="fb-acts">
+    <button class="go" type="button" data-go="frame-a1" aria-pressed="false">a1</button>
+    <button class="go" type="button" data-go="frame-a2" aria-pressed="false">a2</button>
+    <button class="go" type="button" data-go="frame-a3" aria-pressed="false">a3</button>
+    <button class="go" type="button" data-go="frame-a4" aria-pressed="false">a4</button>
+    <button class="go" type="button" data-go="frame-a5" aria-pressed="false">a5</button>
+    <button class="go" type="button" data-go="frame-a6" aria-pressed="false">a6</button>
+    <button class="go" type="button" data-go="frame-a7" aria-pressed="false">a7</button>
+  </span>
+</div>
+<p class="vh" id="announce" role="status" aria-live="polite"></p>
+<main>
+
+<!-- ======================================================= a1 -->
+<section class="fw" data-frame="frame-a1" aria-labelledby="cap-a1">
+  <div class="cap">
+    <p class="lbl-chip">Proposed · Direction A, Restored and tightened · 1440</p>
+    <h2 id="cap-a1">a1 · M1 · At rest. Leah opens the Desk, Monday 12 October, 8:40 am, in the studio’s scope</h2>
+    <p class="est">M1, est. 0 clicks and about 5 s to read the day (today 0 clicks, 8 s). Marks at rest at the 1440 fold, est.: about 34 text · 14 controls · 9 colour · 6 edges (today 45 · 18 · 9 · 12, WALK §3).</p>
+    <p class="pair"><span class="lbl-chip">Pairs with today</span> <a href="../walk/today-leah-studio-fold-1440.jpg">../walk/today-leah-studio-fold-1440.jpg</a>: today’s Desk at 8:40 in the studio’s scope: a two-line header with tips under the acts, five ruled sentences with no edges, and the workload eyebrow at the fold.</p>
+  </div>
+  <div class="canvas">
+    <div class="desk">
+    <header class="dhead">
+      <p class="greet">Good morning, <i>Leah</i></p>
+      <div class="hacts">
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Record an inquiry</span></button>
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Create a project file</span></button>
+        <button class="act act-t" type="button"><span class="lbl">Find anything</span><kbd class="kbd">⌘K</kbd></button><span class="pin" aria-hidden="true">1</span>
+      </div>
+    </header>
+    <div class="rule-strong" role="presentation"></div>
+    <section class="today-sec" aria-label="Today">
+      <div class="sec-head">
+        <p class="eb sh-t" data-part="head" tabindex="-1"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Monday 12 October · Today</span></p>
+        <p class="scope"><button type="button" aria-pressed="false">Mine</button><span aria-hidden="true">·</span><button type="button" aria-pressed="true">The studio’s</button></p>
+      </div>
+      <div class="cards-wrap"><div class="cards">
+      <article class="card st-project">
+        <div class="card-up">
+          <p class="eb">Project · Leah’s<span class="pin" aria-hidden="true">2</span></p>
+          <h3 class="jn-h"><a class="jn" href="#">Holloway Den</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Invoice INV‑2026‑0721 is <span class="od">$3,800 overdue</span>, due Monday 28 September.<span class="pin" aria-hidden="true">3</span></p><div class="foot"><button class="act act-p" type="button"><span class="lbl">Send reminder</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+          <div class="need"><p class="line">Fenmoor Joinery has not answered PO‑HD‑0412 ($11,450) in 12 days.</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Chase the maker</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      <article class="card st-proposal">
+        <div class="card-up">
+          <p class="eb">Proposal · Leah’s · Yesterday</p>
+          <h3 class="jn-h"><a class="jn" href="#">Linden Place Living Room</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Declined yesterday: “The sofa is over budget; can we see a second option under $6,000?”</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Follow up</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      <article class="card st-project">
+        <div class="card-up">
+          <p class="eb">Project · Jordan’s</p>
+          <h3 class="jn-h"><a class="jn" href="#">Marsh Street Kitchen</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Ninebark Lighting has not answered PO‑MS‑0388 ($2,180) in 4 days. The move is Jordan’s.</p></div>
+        </div>
+      </article>
+      <article class="card st-project">
+        <div class="card-up">
+          <p class="eb">Project · Leah’s · 2 hours ago</p>
+          <h3 class="jn-h"><a class="jn" href="#">Pell Court Dining</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Deposit of $9,200 paid at 6:10 this morning; release both orders to the makers.</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Release the order</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      </div></div>
+    </section>
+    <section class="ledger" aria-label="The rest of the studio’s jobs, by person">
+      <div class="grp pgrp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">Leah’s</span><span class="pin" aria-hidden="true">4</span></p>
+        <p class="eb sub">Also yours</p>
+        <ul class="rows">
+          <li class="lrow st-brief">
+            <p class="lname"><a class="ln" href="#">Ines Calder</a></p>
+            <p class="eb lstage">Brief</p>
+            <p class="lsent">Web inquiry: a living room, budget $40–60k. “We just moved in and the living room is empty except for a piano.”</p>
+            <p class="eb lwhen">6:35 am</p>
+            <div class="lact"><button class="act act-s" type="button"><span class="lbl">Reply</span></button></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Thornfield</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">The Ashbys signed the proposal ($48,200) on Friday, before a project exists.</p>
+            <p class="eb lwhen">Fri 9 Oct</p>
+            <div class="lact"><button class="act act-s" type="button"><span class="lbl">Open the project</span></button></div>
+          </li>
+        </ul>
+        <p class="eb sub">With others</p>
+        <ul class="rows">
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Halloran Library</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Fabric samples with Mae Halloran, not yet opened.</p>
+            <p class="eb lwhen">Since Tue 6 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Copperfield Terrace</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Two palettes with Hal and Dana Whitfield.</p>
+            <p class="eb lwhen">Since Fri 9 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Aldous Lane</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Calloway &amp; Brandt Upholstery delivering to Marguerite Osei.</p>
+            <p class="eb lwhen">Thu 15 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+        <p class="eb sub">Coming back</p>
+        <ul class="rows">
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Chen Residence</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Balance to Calloway &amp; Brandt ($3,400) on hold, waiting on the Chens’ bench decision.</p>
+            <p class="eb lwhen">Fri 16 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Garnet Hill</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">Declined, postponing until spring. The Okafors are travelling; call after the 18th.</p>
+            <p class="eb lwhen">Mon 19 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+        <p class="sub sub-rest"><span class="eb">At rest</span><button class="act act-t" type="button" aria-expanded="false" aria-label="Show Leah’s jobs at rest"><span class="lbl">Show</span></button></p>
+      </div>
+      <div class="grp pgrp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">Jordan’s</span></p>
+        <p class="eb sub">With Jordan</p>
+        <ul class="rows">
+          <li class="lrow st-project">
+            <p class="lname"><a class="ln" href="#">Marsh Street Kitchen</a></p>
+            <p class="eb lstage">Project</p>
+            <p class="lsent">Leah’s hand-off, with Jordan since Saturday.</p>
+            <p class="eb lwhen">Sat 10 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Wren Row Bath</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">Priya and Dev Anand signed the design services agreement ($6,500) on Saturday.</p>
+            <p class="eb lwhen">Sat 10 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+      </div>
+    </section>
+    </div>
+    <footer class="dock">
+      <p class="fx">Illustrative fixture · not a real studio</p>
+      <nav class="dk-c" aria-label="Studio">
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Resource library</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 13c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4M11 3.2a2.3 2.3 0 0 1 0 4.4M12.5 9.5c1 .6 1.7 1.8 2 3.5"/></svg>Studio contacts</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3"/></svg>Measured rooms</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Ledgers ↑</a>
+        <a class="dk" href="#">Keys <kbd class="kbd">?</kbd></a>
+      </nav>
+      <div class="dk-r">
+        <span class="eb">No active timer</span>
+        <a class="eb dk" href="#">Studio inbox</a>
+        <span class="who"><span class="avatar" aria-hidden="true">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <ol class="notes" aria-label="What changed in a1, and why">
+    <li><span class="pin" aria-hidden="true">1</span><span>One header line. The tips leave; both ＋ creates take the secondary tier and Find the tertiary, so there are two underline weights. The date moves into the Today eyebrow, with the arrival landing.</span><span class="eb src">WALK §1a · finding 3 · D1 (c) · G1</span></li>
+    <li><span class="pin" aria-hidden="true">2</span><span>Each job has its own edge: a 1 px card-edge box whose left side is a 3 px stage rule, with the stage word in ink. The colour says where the job is, never how loudly to worry. In the studio’s scope every card names its holder.</span><span class="eb src">D1 (a), (b) · G2 · G6 · direction §2</span></li>
+    <li><span class="pin" aria-hidden="true">3</span><span>Holloway’s invoice and PO-HD-0412 share one card. The overdue clause is the only terracotta at rest, and it is words, not a mark.</span><span class="eb src">D2 (b) · direction §3 revision 1</span></li>
+    <li><span class="pin" aria-hidden="true">4</span><span>Under Today’s closing rule, every other job appears once, regrouped by person. No row repeats a Today line with a second act.</span><span class="eb src">WALK §1b-3 · finding 1 · D2 (b) · G3</span></li>
+  </ol>
+</section>
+
+<!-- ======================================================= a2 -->
+<section class="fw" data-frame="frame-a2" aria-labelledby="cap-a2">
+  <div class="cap">
+    <p class="lbl-chip">Proposed · Direction A, Restored and tightened · 1440</p>
+    <h2 id="cap-a2">a2 · M4 · Acting, during. 8:41, Mine: Leah presses Send reminder on Holloway Den’s invoice</h2>
+    <p class="est">M4, est. 1 click and about 4 s to the open reminder (today 1 click, 5 s). Nothing is sent.</p>
+    <p class="pair"><span class="lbl-chip">Pairs with today</span> <a href="../walk/m4-holloway-reminder-1440.jpg">../walk/m4-holloway-reminder-1440.jpg</a>: today’s Send an invoice reminder sheet open over the Desk, with its own send control.</p>
+  </div>
+  <div class="canvas">
+    <div class="desk">
+    <header class="dhead">
+      <p class="greet">Good morning, <i>Leah</i></p>
+      <div class="hacts">
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Record an inquiry</span></button>
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Create a project file</span></button>
+        <button class="act act-t" type="button"><span class="lbl">Find anything</span><kbd class="kbd">⌘K</kbd></button>
+      </div>
+    </header>
+    <div class="rule-strong" role="presentation"></div>
+    <section class="today-sec" aria-label="Today">
+      <div class="sec-head">
+        <p class="eb sh-t" data-part="head" tabindex="-1"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Monday 12 October · Today</span></p>
+        <p class="scope"><button type="button" aria-pressed="true">Mine</button><span aria-hidden="true">·</span><button type="button" aria-pressed="false">The studio’s</button></p>
+      </div>
+      <div class="cards-wrap"><div class="cards">
+      <article class="card st-project">
+        <div class="card-up">
+          <p class="eb">Project</p>
+          <h3 class="jn-h"><a class="jn" href="#">Holloway Den</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Invoice INV‑2026‑0721 is <span class="od">$3,800 overdue</span>, due Monday 28 September.</p><div class="foot"><button class="act act-p" type="button"><span class="lbl">Send reminder</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+          <div class="need"><p class="line">Fenmoor Joinery has not answered PO‑HD‑0412 ($11,450) in 12 days.</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Chase the maker</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      <article class="card st-proposal">
+        <div class="card-up">
+          <p class="eb">Proposal · Yesterday</p>
+          <h3 class="jn-h"><a class="jn" href="#">Linden Place Living Room</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Declined yesterday: “The sofa is over budget; can we see a second option under $6,000?”</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Follow up</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      <article class="card st-project">
+        <div class="card-up">
+          <p class="eb">Project · 2 hours ago</p>
+          <h3 class="jn-h"><a class="jn" href="#">Pell Court Dining</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Deposit of $9,200 paid at 6:10 this morning; release both orders to the makers.</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Release the order</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      <article class="card st-brief">
+        <div class="card-up">
+          <p class="eb">Brief · 2 hours ago</p>
+          <h3 class="jn-h"><a class="jn" href="#">Ines Calder</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Wrote at 6:35 am about a living room, budget $40–60k: “We just moved in and the living room is empty except for a piano.”</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Reply</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      </div></div>
+    </section>
+    <section class="ledger" aria-label="The rest of the day">
+      <div class="grp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">Also yours</span></p>
+        <ul class="rows">
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Thornfield</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">The Ashbys signed the proposal ($48,200) on Friday, before a project exists.</p>
+            <p class="eb lwhen">Fri 9 Oct</p>
+            <div class="lact"><button class="act act-s" type="button"><span class="lbl">Open the project</span></button></div>
+          </li>
+        </ul>
+      </div>
+      <div class="grp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">With others</span></p>
+        <ul class="rows">
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Halloran Library</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Fabric samples with Mae Halloran, not yet opened.</p>
+            <p class="eb lwhen">Since Tue 6 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Copperfield Terrace</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Two palettes with Hal and Dana Whitfield.</p>
+            <p class="eb lwhen">Since Fri 9 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Aldous Lane</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Calloway &amp; Brandt Upholstery delivering to Marguerite Osei.</p>
+            <p class="eb lwhen">Thu 15 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+      </div>
+      <div class="grp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">Coming back</span></p>
+        <ul class="rows">
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Chen Residence</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Balance to Calloway &amp; Brandt ($3,400) on hold, waiting on the Chens’ bench decision.</p>
+            <p class="eb lwhen">Fri 16 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Garnet Hill</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">Declined, postponing until spring. The Okafors are travelling; call after the 18th.</p>
+            <p class="eb lwhen">Mon 19 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+      </div>
+      <div class="grp grp-rest">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">At rest</span><button class="act act-t" type="button" aria-expanded="false" aria-label="Show the jobs at rest"><span class="lbl">Show</span></button></p>
+      </div>
+    </section>
+    </div>
+    <div class="veil" aria-hidden="true"></div>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-h-1440-a2">
+      <div class="sh-head">
+        <p class="eb sh-title" id="sheet-h-1440-a2"><svg class="sh-ic" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 1.5h6l3 3v10H4zM10 1.5v3h3M6.5 8h4M6.5 10.5h4"/></svg>Send an invoice reminder</p>
+        <button class="act act-t" type="button"><span class="lbl">Put back · Esc</span></button>
+      </div>
+      <dl class="facts">
+        <dt class="eb">To</dt><dd>Nora and Sam Holloway</dd>
+        <dt class="eb">About</dt><dd>Invoice INV‑2026‑0721 · $3,800 · due Monday 28 September · <span class="od">14 days overdue</span><span class="pin" aria-hidden="true">1</span></dd>
+      </dl>
+      <label class="eb nlabel" for="note-1440-a2">A note with the reminder, a draft to review</label>
+      <textarea class="note" id="note-1440-a2" rows="7">Nora and Sam,
+
+A reminder that invoice INV-2026-0721 for $3,800 was due on Monday 28 September. Let me know if you have any questions about it.
+
+Thank you,
+Leah</textarea>
+      <div class="sendrow">
+        <button class="act act-p" type="button"><span class="lbl">Send to Nora and Sam Holloway</span></button><button class="act act-t" type="button"><span class="lbl">Put back</span></button><span class="pin" aria-hidden="true">2</span>
+      </div>
+      <p class="nb">Nothing is sent until you press Send to Nora and Sam Holloway.</p>
+    </div>
+    <footer class="dock">
+      <p class="fx">Illustrative fixture · not a real studio</p>
+      <nav class="dk-c" aria-label="Studio">
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Resource library</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 13c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4M11 3.2a2.3 2.3 0 0 1 0 4.4M12.5 9.5c1 .6 1.7 1.8 2 3.5"/></svg>Studio contacts</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3"/></svg>Measured rooms</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Ledgers ↑</a>
+        <a class="dk" href="#">Keys <kbd class="kbd">?</kbd></a>
+      </nav>
+      <div class="dk-r">
+        <span class="eb">No active timer</span>
+        <a class="eb dk" href="#">Studio inbox</a>
+        <span class="who"><span class="avatar" aria-hidden="true">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <ol class="notes" aria-label="What changed in a2, and why">
+    <li><span class="pin" aria-hidden="true">1</span><span>Today’s reminder sheet, unchanged in shape, opens over the Desk from Holloway’s first line, scoped to INV-2026-0721 with its facts: $3,800, due Monday 28 September, 14 days overdue.</span><span class="eb src">WALK §3 M4 · G5</span></li>
+    <li><span class="pin" aria-hidden="true">2</span><span>Nothing is sent. Sending is a named second control, “Send to Nora and Sam Holloway”, beside Put back.</span><span class="eb src">SPEC §4 Sending · G5</span></li>
+  </ol>
+</section>
+
+<!-- ======================================================= a3 -->
+<section class="fw" data-frame="frame-a3" aria-labelledby="cap-a3">
+  <div class="cap">
+    <p class="lbl-chip">Proposed · Direction A, Restored and tightened · 1440</p>
+    <h2 id="cap-a3">a3 · M4, M3 · Acting, after. 8:48, Mine: the reminder sent at 8:42 and Fenmoor Joinery chased at 8:47</h2>
+    <p class="est">M3, est. 1 click and about 4 s to the open chase (today Leah has no Desk path, 20+ s). M4 as a2.</p>
+    <p class="pair"><span class="lbl-chip">Pairs with today</span> <a href="../walk/today-leah-mine-fold-1440.jpg">../walk/today-leah-mine-fold-1440.jpg</a>: today’s Desk in Mine at the fold: five ruled sentences with two acts each, running straight into the workload.</p>
+  </div>
+  <div class="canvas">
+    <div class="desk">
+    <header class="dhead">
+      <p class="greet">Good morning, <i>Leah</i></p>
+      <div class="hacts">
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Record an inquiry</span></button>
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Create a project file</span></button>
+        <button class="act act-t" type="button"><span class="lbl">Find anything</span><kbd class="kbd">⌘K</kbd></button>
+      </div>
+    </header>
+    <div class="rule-strong" role="presentation"></div>
+    <section class="today-sec" aria-label="Today">
+      <div class="sec-head">
+        <p class="eb sh-t" data-part="head" tabindex="-1"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Monday 12 October · Today</span></p>
+        <p class="scope"><button type="button" aria-pressed="true">Mine</button><span aria-hidden="true">·</span><button type="button" aria-pressed="false">The studio’s</button></p>
+      </div>
+      <div class="cards-wrap"><div class="cards">
+      <article class="card st-project">
+        <div class="card-up">
+          <p class="eb">Project</p>
+          <h3 class="jn-h"><a class="jn" href="#">Holloway Den</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need is-settled"><p class="line">Reminder sent · waiting on Nora and Sam Holloway since 8:42<span class="pin" aria-hidden="true">1</span></p></div>
+          <div class="need is-settled"><p class="line">Chase sent · waiting on Fenmoor Joinery since 8:47<span class="pin" aria-hidden="true">2</span></p></div>
+        </div>
+      </article>
+      <article class="card st-proposal">
+        <div class="card-up">
+          <p class="eb">Proposal · Yesterday</p>
+          <h3 class="jn-h"><a class="jn" href="#">Linden Place Living Room</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Declined yesterday: “The sofa is over budget; can we see a second option under $6,000?”<span class="pin" aria-hidden="true">3</span></p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Follow up</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      <article class="card st-project">
+        <div class="card-up">
+          <p class="eb">Project · 2 hours ago</p>
+          <h3 class="jn-h"><a class="jn" href="#">Pell Court Dining</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Deposit of $9,200 paid at 6:10 this morning; release both orders to the makers.</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Release the order</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      <article class="card st-brief">
+        <div class="card-up">
+          <p class="eb">Brief · 2 hours ago</p>
+          <h3 class="jn-h"><a class="jn" href="#">Ines Calder</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Wrote at 6:35 am about a living room, budget $40–60k: “We just moved in and the living room is empty except for a piano.”</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Reply</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      </div></div>
+    </section>
+    <section class="ledger" aria-label="The rest of the day">
+      <div class="grp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">Also yours</span></p>
+        <ul class="rows">
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Thornfield</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">The Ashbys signed the proposal ($48,200) on Friday, before a project exists.</p>
+            <p class="eb lwhen">Fri 9 Oct</p>
+            <div class="lact"><button class="act act-s" type="button"><span class="lbl">Open the project</span></button></div>
+          </li>
+        </ul>
+      </div>
+      <div class="grp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">With others</span></p>
+        <ul class="rows">
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Halloran Library</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Fabric samples with Mae Halloran, not yet opened.</p>
+            <p class="eb lwhen">Since Tue 6 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Copperfield Terrace</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Two palettes with Hal and Dana Whitfield.</p>
+            <p class="eb lwhen">Since Fri 9 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Aldous Lane</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Calloway &amp; Brandt Upholstery delivering to Marguerite Osei.</p>
+            <p class="eb lwhen">Thu 15 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+      </div>
+      <div class="grp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">Coming back</span></p>
+        <ul class="rows">
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Chen Residence</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Balance to Calloway &amp; Brandt ($3,400) on hold, waiting on the Chens’ bench decision.</p>
+            <p class="eb lwhen">Fri 16 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Garnet Hill</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">Declined, postponing until spring. The Okafors are travelling; call after the 18th.</p>
+            <p class="eb lwhen">Mon 19 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+      </div>
+      <div class="grp grp-rest">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">At rest</span><button class="act act-t" type="button" aria-expanded="false" aria-label="Show the jobs at rest"><span class="lbl">Show</span></button></p>
+      </div>
+    </section>
+    </div>
+    <footer class="dock">
+      <p class="fx">Illustrative fixture · not a real studio</p>
+      <nav class="dk-c" aria-label="Studio">
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Resource library</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 13c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4M11 3.2a2.3 2.3 0 0 1 0 4.4M12.5 9.5c1 .6 1.7 1.8 2 3.5"/></svg>Studio contacts</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3"/></svg>Measured rooms</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Ledgers ↑</a>
+        <a class="dk" href="#">Keys <kbd class="kbd">?</kbd></a>
+      </nav>
+      <div class="dk-r">
+        <span class="eb">No active timer</span>
+        <a class="eb dk" href="#">Studio inbox</a>
+        <span class="who"><span class="avatar" aria-hidden="true">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <ol class="notes" aria-label="What changed in a3, and why">
+    <li><span class="pin" aria-hidden="true">1</span><span>The acted line stays where it was, in muted ink, as its new state. Holloway’s act feet are gone.</span><span class="eb src">D2 (c) · direction §2</span></li>
+    <li><span class="pin" aria-hidden="true">2</span><span>No slot refills: there is no sixth line, no ✓, no count and no “cleared”.</span><span class="eb src">D2 (c) · V18 Q1 · G6</span></li>
+    <li><span class="pin" aria-hidden="true">3</span><span>Linden, Pell Court and Ines Calder keep their acts, and every job name still opens its job.</span><span class="eb src">G4 · WALK finding 2</span></li>
+  </ol>
+</section>
+
+<!-- ======================================================= a4 -->
+<section class="fw" data-frame="frame-a4" aria-labelledby="cap-a4">
+  <div class="cap">
+    <p class="lbl-chip">Proposed · Direction A, Restored and tightened · 1440</p>
+    <h2 id="cap-a4">a4 · M7 · 11:21, Mine: Leah recorded Ainsley Moore’s inquiry at 11:20 and sees it land under her name</h2>
+    <p class="est">M7, est. 3 clicks and about 25 s to record, then 0 clicks to see it land (today 3 clicks, then Back and a 1,344 px scroll, about 10 s more).</p>
+    <p class="pair"><span class="lbl-chip">Pairs with today</span> <a href="../walk/m7-inquiry-landed-1440.jpg">../walk/m7-inquiry-landed-1440.jpg</a>: today: the new inquiry lands in the workload as “Consultation”, about 1,344 px down, among other briefs.</p>
+  </div>
+  <div class="canvas">
+    <div class="desk">
+    <header class="dhead">
+      <p class="greet">Good morning, <i>Leah</i></p>
+      <div class="hacts">
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Record an inquiry</span></button>
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Create a project file</span></button>
+        <button class="act act-t" type="button"><span class="lbl">Find anything</span><kbd class="kbd">⌘K</kbd></button>
+      </div>
+    </header>
+    <div class="rule-strong" role="presentation"></div>
+    <section class="today-sec" aria-label="Today">
+      <div class="sec-head">
+        <p class="eb sh-t" data-part="head" tabindex="-1"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Monday 12 October · Today</span></p>
+        <p class="scope"><button type="button" aria-pressed="true">Mine</button><span aria-hidden="true">·</span><button type="button" aria-pressed="false">The studio’s</button></p>
+      </div>
+      <p class="visit">Ainsley Moore recorded · just now · <button class="act act-t" type="button"><span class="lbl">Open the brief</span></button><span class="pin" aria-hidden="true">1</span></p>
+      <div class="cards-wrap"><div class="cards">
+      <article class="card st-proposal">
+        <div class="card-up">
+          <p class="eb">Proposal · Friday</p>
+          <h3 class="jn-h"><a class="jn" href="#">Thornfield</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">The Ashbys signed the proposal ($48,200) on Friday, before a project exists.</p><div class="foot"><button class="act act-p" type="button"><span class="lbl">Open the project</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      <article class="card st-brief">
+        <div class="card-up">
+          <p class="eb">Brief · Just now</p>
+          <h3 class="jn-h"><a class="jn" href="#">Ainsley Moore</a><span class="pin" aria-hidden="true">2</span></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Called at 11:05 about a primary bedroom, budget $25–35k.</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Reply</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      </div></div>
+    </section>
+    <section class="ledger" aria-label="The rest of the day">
+      <div class="grp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">With others</span><span class="pin" aria-hidden="true">3</span></p>
+        <ul class="rows">
+          <li class="lrow st-project">
+            <p class="lname"><a class="ln" href="#">Holloway Den</a></p>
+            <p class="eb lstage">Project</p>
+            <p class="lsent">Waiting on Nora and Sam Holloway for the reminder, and on Fenmoor Joinery for PO‑HD‑0412.</p>
+            <p class="eb lwhen">Since today</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Linden Place Living Room</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">Waiting on Tom and Ellery Vance for the follow-up.</p>
+            <p class="eb lwhen">Since today</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-project">
+            <p class="lname"><a class="ln" href="#">Pell Court Dining</a></p>
+            <p class="eb lstage">Project</p>
+            <p class="lsent">Orders released; waiting on Calloway &amp; Brandt Upholstery and Ninebark Lighting.</p>
+            <p class="eb lwhen">Since today</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-brief">
+            <p class="lname"><a class="ln" href="#">Ines Calder</a></p>
+            <p class="eb lstage">Brief</p>
+            <p class="lsent">Replied; waiting on Ines Calder.</p>
+            <p class="eb lwhen">Since today</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Halloran Library</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Fabric samples with Mae Halloran, not yet opened.</p>
+            <p class="eb lwhen">Since Tue 6 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Copperfield Terrace</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Two palettes with Hal and Dana Whitfield.</p>
+            <p class="eb lwhen">Since Fri 9 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Aldous Lane</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Calloway &amp; Brandt Upholstery delivering to Marguerite Osei.</p>
+            <p class="eb lwhen">Thu 15 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+      </div>
+      <div class="grp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">Coming back</span></p>
+        <ul class="rows">
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Chen Residence</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Balance to Calloway &amp; Brandt ($3,400) on hold, waiting on the Chens’ bench decision.</p>
+            <p class="eb lwhen">Fri 16 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Garnet Hill</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">Declined, postponing until spring. The Okafors are travelling; call after the 18th.</p>
+            <p class="eb lwhen">Mon 19 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+      </div>
+      <div class="grp grp-rest">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">At rest</span><button class="act act-t" type="button" aria-expanded="false" aria-label="Show the jobs at rest"><span class="lbl">Show</span></button></p>
+      </div>
+    </section>
+    </div>
+    <footer class="dock">
+      <p class="fx">Illustrative fixture · not a real studio</p>
+      <nav class="dk-c" aria-label="Studio">
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Resource library</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 13c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4M11 3.2a2.3 2.3 0 0 1 0 4.4M12.5 9.5c1 .6 1.7 1.8 2 3.5"/></svg>Studio contacts</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3"/></svg>Measured rooms</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Ledgers ↑</a>
+        <a class="dk" href="#">Keys <kbd class="kbd">?</kbd></a>
+      </nav>
+      <div class="dk-r">
+        <span class="eb">No active timer</span>
+        <a class="eb dk" href="#">Studio inbox</a>
+        <span class="who"><span class="avatar" aria-hidden="true">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <ol class="notes" aria-label="What changed in a4, and why">
+    <li><span class="pin" aria-hidden="true">1</span><span>The overlay closes onto the Desk, with one muted line for this visit.</span><span class="eb src">direction §3 A M7 · G8</span></li>
+    <li><span class="pin" aria-hidden="true">2</span><span>The lead lands in Today under the person’s name, on a brief rule, not as “Consultation”.</span><span class="eb src">WALK finding 5 · G8</span></li>
+    <li><span class="pin" aria-hidden="true">3</span><span>This morning’s acts read once each, as “since today”, in With others: no list of what moved and no count.</span><span class="eb src">D2 (c) · V18 Q1 · G7</span></li>
+  </ol>
+</section>
+
+<!-- ======================================================= a5 -->
+<section class="fw" data-frame="frame-a5" aria-labelledby="cap-a5">
+  <div class="cap">
+    <p class="lbl-chip">Proposed · Direction A, Restored and tightened · 1440</p>
+    <h2 id="cap-a5">a5 · M5 · Jordan’s view. 8:55, Jordan Reyes, Mine: the hand-off first</h2>
+    <p class="est">M5, est. 0 clicks to see whose is what and 1 to read the note, about 2 s (today a toggle 900 px down, 4 s).</p>
+    <p class="pair"><span class="lbl-chip">Pairs with today</span> <a href="../walk/today-jordan-mine-fold-1440.jpg">../walk/today-jordan-mine-fold-1440.jpg</a>: today’s Desk for Jordan: three ruled lines, the hand-off line without a job name or an edge.</p>
+  </div>
+  <div class="canvas">
+    <div class="desk">
+    <header class="dhead">
+      <p class="greet">Good morning, <i>Jordan</i></p>
+      <div class="hacts">
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Record an inquiry</span></button>
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Create a project file</span></button>
+        <button class="act act-t" type="button"><span class="lbl">Find anything</span><kbd class="kbd">⌘K</kbd></button>
+      </div>
+    </header>
+    <div class="rule-strong" role="presentation"></div>
+    <section class="today-sec" aria-label="Today">
+      <div class="sec-head">
+        <p class="eb sh-t" data-part="head" tabindex="-1"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Monday 12 October · Today</span></p>
+        <p class="scope"><button type="button" aria-pressed="true">Mine</button><span aria-hidden="true">·</span><button type="button" aria-pressed="false">The studio’s</button></p>
+      </div>
+      <div class="cards-wrap"><div class="cards">
+      <article class="card st-project">
+        <div class="card-up">
+          <p class="eb">Project · Saturday</p>
+          <h3 class="jn-h"><a class="jn" href="#">Marsh Street Kitchen</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Leah handed you Marsh Street Kitchen on Saturday 10 October.<span class="pin" aria-hidden="true">1</span></p><div class="foot"><button class="act act-p" type="button"><span class="lbl">Read her note</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+          <div class="need"><p class="line">Ninebark Lighting has not answered PO‑MS‑0388 ($2,180) in 4 days. Leah’s note asks to see anything in writing first.<span class="pin" aria-hidden="true">2</span></p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Draft the chase for Leah</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      <article class="card st-proposal">
+        <div class="card-up">
+          <p class="eb">Proposal · Saturday</p>
+          <h3 class="jn-h"><a class="jn" href="#">Wren Row Bath</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Priya and Dev Anand signed the Wren Row Bath design services agreement ($6,500) on Saturday.</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Open the project</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      </div></div>
+      <p class="rest">The rest of the studio’s jobs are Leah’s. <button class="act act-s" type="button"><span class="lbl">The studio’s</span></button><span class="pin" aria-hidden="true">3</span></p>
+    </section>
+    </div>
+    <footer class="dock">
+      <p class="fx">Illustrative fixture · not a real studio</p>
+      <nav class="dk-c" aria-label="Studio">
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Resource library</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 13c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4M11 3.2a2.3 2.3 0 0 1 0 4.4M12.5 9.5c1 .6 1.7 1.8 2 3.5"/></svg>Studio contacts</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3"/></svg>Measured rooms</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Ledgers ↑</a>
+        <a class="dk" href="#">Keys <kbd class="kbd">?</kbd></a>
+      </nav>
+      <div class="dk-r">
+        <span class="eb">No active timer</span>
+        <a class="eb dk" href="#">Studio inbox</a>
+        <span class="who"><span class="avatar" aria-hidden="true">JR</span><span class="who-n">Jordan Reyes</span></span>
+      </div>
+    </footer>
+  </div>
+  <ol class="notes" aria-label="What changed in a5, and why">
+    <li><span class="pin" aria-hidden="true">1</span><span>The hand-off prints first on its own job’s card, so it explains the act it sits above without changing the cross-job rank.</span><span class="eb src">direction §2 · D2 (b) · WALK §3 M5</span></li>
+    <li><span class="pin" aria-hidden="true">2</span><span>Leah’s note covers anything in writing, so the act drafts the chase for her. It saves; it never sends.</span><span class="eb src">SPEC §3.2 · V18 Q11</span></li>
+    <li><span class="pin" aria-hidden="true">3</span><span>The rest of the studio is one press away. Jordan sees only his own jobs’ amounts, and no studio totals.</span><span class="eb src">V18 Q10 · D5 B5.1 (simulated)</span></li>
+  </ol>
+</section>
+
+<!-- ======================================================= a6 -->
+<section class="fw" data-frame="frame-a6" aria-labelledby="cap-a6">
+  <div class="cap">
+    <p class="lbl-chip">Proposed · Direction A, Restored and tightened · 1440</p>
+    <h2 id="cap-a6">a6 · M8 · Close of day. 5:50 pm, Leah, Mine: what waits on others, what comes back</h2>
+    <p class="est">M8, est. 0 clicks and about 5 s to read (today about 10 s to clear, and “comes back” is not shown).</p>
+    <p class="pair"><span class="lbl-chip">Pairs with today</span> <a href="../walk/today-jordan-quiet-fold-1440.jpg">../walk/today-jordan-quiet-fold-1440.jpg</a>: today’s quiet sheet, “No current action alerts.”, above a workload that still lists what Jordan owes.</p>
+  </div>
+  <div class="canvas">
+    <div class="desk">
+    <header class="dhead">
+      <p class="greet">Good evening, <i>Leah</i></p>
+      <div class="hacts">
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Record an inquiry</span></button>
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Create a project file</span></button>
+        <button class="act act-t" type="button"><span class="lbl">Find anything</span><kbd class="kbd">⌘K</kbd></button>
+      </div>
+    </header>
+    <div class="rule-strong" role="presentation"></div>
+    <section class="today-sec" aria-label="Today">
+      <div class="sec-head">
+        <p class="eb sh-t" data-part="head" tabindex="-1"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Monday 12 October · Today</span></p>
+        <p class="scope"><button type="button" aria-pressed="true">Mine</button><span aria-hidden="true">·</span><button type="button" aria-pressed="false">The studio’s</button></p>
+      </div>
+      
+      <div class="empty"><p class="empty-t">Nothing more needs you today.</p><span class="pin" aria-hidden="true">1</span></div>
+    </section>
+    <section class="ledger" aria-label="The rest of the day">
+      <div class="grp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">With others</span><span class="pin" aria-hidden="true">2</span></p>
+        <ul class="rows">
+          <li class="lrow st-project">
+            <p class="lname"><a class="ln" href="#">Holloway Den</a></p>
+            <p class="eb lstage">Project</p>
+            <p class="lsent">Waiting on Nora and Sam Holloway for the reminder, and on Fenmoor Joinery for PO‑HD‑0412, sent Wednesday 30 September.</p>
+            <p class="eb lwhen">Since today</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Linden Place Living Room</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">Waiting on Tom and Ellery Vance for the follow-up.</p>
+            <p class="eb lwhen">Since today</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-project">
+            <p class="lname"><a class="ln" href="#">Pell Court Dining</a></p>
+            <p class="eb lstage">Project</p>
+            <p class="lsent">Orders released; waiting on Calloway &amp; Brandt Upholstery and Ninebark Lighting.</p>
+            <p class="eb lwhen">Since today</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-brief">
+            <p class="lname"><a class="ln" href="#">Ines Calder</a></p>
+            <p class="eb lstage">Brief</p>
+            <p class="lsent">Replied; waiting on Ines Calder.</p>
+            <p class="eb lwhen">Since today</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-brief">
+            <p class="lname"><a class="ln" href="#">Ainsley Moore</a></p>
+            <p class="eb lstage">Brief</p>
+            <p class="lsent">Replied; waiting on Ainsley Moore.</p>
+            <p class="eb lwhen">Since today</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Halloran Library</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Waiting on Mae Halloran: the fabric samples, not yet opened.</p>
+            <p class="eb lwhen">Since Tue 6 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Copperfield Terrace</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Waiting on Hal and Dana Whitfield: the two palettes.</p>
+            <p class="eb lwhen">Since Fri 9 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Aldous Lane</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Calloway &amp; Brandt Upholstery delivering to Marguerite Osei.</p>
+            <p class="eb lwhen">Thu 15 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+      </div>
+      <div class="grp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">Coming back</span><span class="pin" aria-hidden="true">3</span></p>
+        <ul class="rows">
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Thornfield</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">Not today at 4:15 pm. The Ashbys signed the proposal; the project is still to open.</p>
+            <p class="eb lwhen">Tue 13 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Chen Residence</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Balance to Calloway &amp; Brandt ($3,400) on hold, waiting on the Chens’ bench decision.</p>
+            <p class="eb lwhen">Fri 16 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Garnet Hill</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">Declined, postponing until spring. The Okafors are travelling; call after the 18th.</p>
+            <p class="eb lwhen">Mon 19 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+      </div>
+      <div class="grp grp-rest">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">At rest</span><button class="act act-t" type="button" aria-expanded="false" aria-label="Show the jobs at rest"><span class="lbl">Show</span></button></p>
+      </div>
+    </section>
+    </div>
+    <footer class="dock">
+      <p class="fx">Illustrative fixture · not a real studio</p>
+      <nav class="dk-c" aria-label="Studio">
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Resource library</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 13c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4M11 3.2a2.3 2.3 0 0 1 0 4.4M12.5 9.5c1 .6 1.7 1.8 2 3.5"/></svg>Studio contacts</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3"/></svg>Measured rooms</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Ledgers ↑</a>
+        <a class="dk" href="#">Keys <kbd class="kbd">?</kbd></a>
+      </nav>
+      <div class="dk-r">
+        <span class="eb">No active timer</span>
+        <a class="eb dk" href="#">Studio inbox</a>
+        <span class="who"><span class="avatar" aria-hidden="true">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <ol class="notes" aria-label="What changed in a6, and why">
+    <li><span class="pin" aria-hidden="true">1</span><span>Today empties to one sentence in its box. The page below agrees with it.</span><span class="eb src">WALK §1c · finding 4 · G7</span></li>
+    <li><span class="pin" aria-hidden="true">2</span><span>With others carries the dates. What moved reads only as “since today”: no moved list, no “cleared”, no count.</span><span class="eb src">V18 Q1 · D2 (c)</span></li>
+    <li><span class="pin" aria-hidden="true">3</span><span>Coming back always shows, including the Thornfield line Leah put off at 4:15 pm.</span><span class="eb src">D2 §0 fact 1 · WALK §1c</span></li>
+  </ol>
+</section>
+
+<!-- ======================================================= a7 -->
+<section class="fw" data-frame="frame-a7" aria-labelledby="cap-a7">
+  <div class="cap">
+    <p class="lbl-chip">Proposed · Direction A, Restored and tightened · 1440</p>
+    <h2 id="cap-a7">a7 · M1 · Dark mode. a1 in the documented dark set. Documented, not shipped: the portal paints no dark paper set</h2>
+    <p class="est">M1, as a1: est. 0 clicks and about 5 s to read.</p>
+    <p class="pair"><span class="lbl-chip">Pairs with today</span> <a href="../walk/today-leah-dark-probe-fold-1440.jpg">../walk/today-leah-dark-probe-fold-1440.jpg</a>: today’s Desk under a dark-mode probe: it still paints cream, because the portal has no dark set.</p>
+  </div>
+  <div class="canvas is-dark">
+    <div class="desk">
+    <header class="dhead">
+      <p class="greet">Good morning, <i>Leah</i></p>
+      <div class="hacts">
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Record an inquiry</span></button>
+        <button class="act act-s" type="button"><span class="plus" aria-hidden="true">＋</span><span class="lbl">Create a project file</span></button>
+        <button class="act act-t" type="button"><span class="lbl">Find anything</span><kbd class="kbd">⌘K</kbd></button><span class="pin" aria-hidden="true">1</span>
+      </div>
+    </header>
+    <div class="rule-strong" role="presentation"></div>
+    <section class="today-sec" aria-label="Today">
+      <div class="sec-head">
+        <p class="eb sh-t" data-part="head" tabindex="-1"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span>Monday 12 October · Today</span></p>
+        <p class="scope"><button type="button" aria-pressed="false">Mine</button><span aria-hidden="true">·</span><button type="button" aria-pressed="true">The studio’s</button></p>
+      </div>
+      <div class="cards-wrap"><div class="cards">
+      <article class="card st-project">
+        <div class="card-up">
+          <p class="eb">Project · Leah’s<span class="pin" aria-hidden="true">2</span></p>
+          <h3 class="jn-h"><a class="jn" href="#">Holloway Den</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Invoice INV‑2026‑0721 is <span class="od">$3,800 overdue</span>, due Monday 28 September.<span class="pin" aria-hidden="true">3</span></p><div class="foot"><button class="act act-p" type="button"><span class="lbl">Send reminder</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+          <div class="need"><p class="line">Fenmoor Joinery has not answered PO‑HD‑0412 ($11,450) in 12 days.</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Chase the maker</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      <article class="card st-proposal">
+        <div class="card-up">
+          <p class="eb">Proposal · Leah’s · Yesterday</p>
+          <h3 class="jn-h"><a class="jn" href="#">Linden Place Living Room</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Declined yesterday: “The sofa is over budget; can we see a second option under $6,000?”</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Follow up</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      <article class="card st-project">
+        <div class="card-up">
+          <p class="eb">Project · Jordan’s</p>
+          <h3 class="jn-h"><a class="jn" href="#">Marsh Street Kitchen</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Ninebark Lighting has not answered PO‑MS‑0388 ($2,180) in 4 days. The move is Jordan’s.</p></div>
+        </div>
+      </article>
+      <article class="card st-project">
+        <div class="card-up">
+          <p class="eb">Project · Leah’s · 2 hours ago</p>
+          <h3 class="jn-h"><a class="jn" href="#">Pell Court Dining</a></h3>
+        </div>
+        <div class="needs">
+          <div class="need"><p class="line">Deposit of $9,200 paid at 6:10 this morning; release both orders to the makers.</p><div class="foot"><button class="act act-s" type="button"><span class="lbl">Release the order</span></button><button class="act act-t" type="button"><span class="lbl">Not today</span></button></div></div>
+        </div>
+      </article>
+      </div></div>
+    </section>
+    <section class="ledger" aria-label="The rest of the studio’s jobs, by person">
+      <div class="grp pgrp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">Leah’s</span><span class="pin" aria-hidden="true">4</span></p>
+        <p class="eb sub">Also yours</p>
+        <ul class="rows">
+          <li class="lrow st-brief">
+            <p class="lname"><a class="ln" href="#">Ines Calder</a></p>
+            <p class="eb lstage">Brief</p>
+            <p class="lsent">Web inquiry: a living room, budget $40–60k. “We just moved in and the living room is empty except for a piano.”</p>
+            <p class="eb lwhen">6:35 am</p>
+            <div class="lact"><button class="act act-s" type="button"><span class="lbl">Reply</span></button></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Thornfield</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">The Ashbys signed the proposal ($48,200) on Friday, before a project exists.</p>
+            <p class="eb lwhen">Fri 9 Oct</p>
+            <div class="lact"><button class="act act-s" type="button"><span class="lbl">Open the project</span></button></div>
+          </li>
+        </ul>
+        <p class="eb sub">With others</p>
+        <ul class="rows">
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Halloran Library</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Fabric samples with Mae Halloran, not yet opened.</p>
+            <p class="eb lwhen">Since Tue 6 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-direction">
+            <p class="lname"><a class="ln" href="#">Copperfield Terrace</a></p>
+            <p class="eb lstage">Direction</p>
+            <p class="lsent">Two palettes with Hal and Dana Whitfield.</p>
+            <p class="eb lwhen">Since Fri 9 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Aldous Lane</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Calloway &amp; Brandt Upholstery delivering to Marguerite Osei.</p>
+            <p class="eb lwhen">Thu 15 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+        <p class="eb sub">Coming back</p>
+        <ul class="rows">
+          <li class="lrow st-install">
+            <p class="lname"><a class="ln" href="#">Chen Residence</a></p>
+            <p class="eb lstage">Install</p>
+            <p class="lsent">Balance to Calloway &amp; Brandt ($3,400) on hold, waiting on the Chens’ bench decision.</p>
+            <p class="eb lwhen">Fri 16 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Garnet Hill</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">Declined, postponing until spring. The Okafors are travelling; call after the 18th.</p>
+            <p class="eb lwhen">Mon 19 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+        <p class="sub sub-rest"><span class="eb">At rest</span><button class="act act-t" type="button" aria-expanded="false" aria-label="Show Leah’s jobs at rest"><span class="lbl">Show</span></button></p>
+      </div>
+      <div class="grp pgrp">
+        <p class="gh"><svg class="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20"/></svg><span class="eb gh-t">Jordan’s</span></p>
+        <p class="eb sub">With Jordan</p>
+        <ul class="rows">
+          <li class="lrow st-project">
+            <p class="lname"><a class="ln" href="#">Marsh Street Kitchen</a></p>
+            <p class="eb lstage">Project</p>
+            <p class="lsent">Leah’s hand-off, with Jordan since Saturday.</p>
+            <p class="eb lwhen">Sat 10 Oct</p>
+            <div class="lact"></div>
+          </li>
+          <li class="lrow st-proposal">
+            <p class="lname"><a class="ln" href="#">Wren Row Bath</a></p>
+            <p class="eb lstage">Proposal</p>
+            <p class="lsent">Priya and Dev Anand signed the design services agreement ($6,500) on Saturday.</p>
+            <p class="eb lwhen">Sat 10 Oct</p>
+            <div class="lact"></div>
+          </li>
+        </ul>
+      </div>
+    </section>
+    </div>
+    <footer class="dock">
+      <p class="fx">Illustrative fixture · not a real studio · Documented, not shipped: the portal paints no dark paper set</p>
+      <nav class="dk-c" aria-label="Studio">
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Resource library</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 13c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4M11 3.2a2.3 2.3 0 0 1 0 4.4M12.5 9.5c1 .6 1.7 1.8 2 3.5"/></svg>Studio contacts</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3"/></svg>Measured rooms</a>
+        <a class="dk" href="#"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 0-2-2H2zM14 3h-4a2 2 0 0 0-2 2v8a2 2 0 0 1 2-2h4z"/></svg>Ledgers ↑</a>
+        <a class="dk" href="#">Keys <kbd class="kbd">?</kbd></a>
+      </nav>
+      <div class="dk-r">
+        <span class="eb">No active timer</span>
+        <a class="eb dk" href="#">Studio inbox</a>
+        <span class="who"><span class="avatar" aria-hidden="true">LH</span><span class="who-n">Leah Hartwell</span></span>
+      </div>
+    </footer>
+  </div>
+  <ol class="notes" aria-label="What changed in a7, and why">
+    <li><span class="pin" aria-hidden="true">1</span><span>Documented, not shipped: the portal paints no dark paper set. This is the house sheet’s documented dark set.</span><span class="eb src">globals.css:56 · WALK §0 · house sheet SPEC :89-108</span></li>
+    <li><span class="pin" aria-hidden="true">2</span><span>The stage pigments fail on the dark ground, so each rule takes its dark-only edge companion, --tab-*-edge.</span><span class="eb src">D1 (b) · direction §3 A</span></li>
+    <li><span class="pin" aria-hidden="true">3</span><span>The overdue clause takes the dark terracotta ink. The card edge takes its dark twin, #77736E.</span><span class="eb src">house sheet SPEC :89-108</span></li>
+    <li><span class="pin" aria-hidden="true">4</span><span>The rest is a1, unchanged.</span><span class="eb src">direction §3 A</span></li>
+  </ol>
+</section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var FRAMES = {
+    'frame-a1': "a1, Leah opens the Desk, Monday 12 October, 8:40 am, in the stud",
+    'frame-a2': "a2, 8:41, Mine: Leah presses Send reminder on Holloway Den’s inv",
+    'frame-a3': "a3, 8:48, Mine: the reminder sent at 8:42 and Fenmoor Joinery ch",
+    'frame-a4': "a4, a4 · M7 · 11:21, Mine: Leah recorded Ainsley Moore’s inquiry",
+    'frame-a5': "a5, 8:55, Jordan Reyes, Mine: the hand-off first",
+    'frame-a6': "a6, 5:50 pm, Leah, Mine: what waits on others, what comes back",
+    'frame-a7': "a7, Documented, not shipped: the portal paints no dark paper set"
+  };
+  var has = function (k) { return Object.prototype.hasOwnProperty.call(FRAMES, k); };
+  /* #frame-a1 (SPEC) or #a1 (the ticket); &nobar, &nopins, &nobefore in any order. */
+  function frameOf(t) {
+    var k = /^a\d+$/.test(t) ? 'frame-' + t : t;
+    return has(k) ? k : null;
+  }
+  var state = { frame: null, nobar: false, nopins: false, nobefore: false };
+  function parse(hash) {
+    var toks = String(hash || '').replace(/^#/, '').split('&');
+    var out = { frame: null, nobar: false, nopins: false, nobefore: false };
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i].trim();
+      var f = frameOf(t);
+      if (!out.frame && f) out.frame = f;
+      if (t === 'nobar') out.nobar = true;
+      if (t === 'nopins') out.nopins = true;
+      if (t === 'nobefore') out.nobefore = true;
+    }
+    return out;
+  }
+  function apply() {
+    var one = !!state.frame;
+    var secs = document.querySelectorAll('[data-frame]');
+    for (var i = 0; i < secs.length; i++) secs[i].hidden = one && secs[i].getAttribute('data-frame') !== state.frame;
+    document.getElementById('bar').hidden = one || state.nobar;
+    document.body.classList.toggle('nobar', state.nobar);
+    document.body.classList.toggle('one', one);
+    document.body.classList.toggle('nopins', state.nopins);
+    document.body.classList.toggle('nobefore', state.nobefore);
+    var btns = document.querySelectorAll('[data-go]');
+    for (var b = 0; b < btns.length; b++) btns[b].setAttribute('aria-pressed', one && btns[b].getAttribute('data-go') === state.frame ? 'true' : 'false');
+    document.getElementById('announce').textContent = one ? 'Showing frame ' + FRAMES[state.frame] : 'Showing all frames';
+    if (one) window.scrollTo(0, 0);
+  }
+  function fromHash() { state = parse(location.hash); apply(); }
+  document.addEventListener('DOMContentLoaded', fromHash);
+  window.addEventListener('hashchange', fromHash);
+  window.addEventListener('message', function (e) {
+    var d = e && e.data;
+    if (!d || typeof d !== 'object' || typeof d.frame !== 'string') return;
+    var f = frameOf(d.frame.indexOf('frame-') === 0 ? d.frame : 'frame-' + d.frame);
+    if (!f) return;
+    state.frame = f; apply();
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    var dead = t.closest && t.closest('a[href="#"]');
+    if (dead) { e.preventDefault(); return; }
+    var go = t.closest && t.closest('[data-go]');
+    if (!go) return;
+    var toks = [go.getAttribute('data-go')];
+    if (state.nopins) toks.push('nopins');
+    if (state.nobefore) toks.push('nobefore');
+    var next = '#' + toks.join('&');
+    if (location.hash === next) fromHash(); else location.hash = next;
+  });
+})();
+</script>
+</body>
+</html>
+<!-- SPECIMEN COMPLETE -->
