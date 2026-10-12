@@ -247,13 +247,13 @@ test("the studio rate card stands on the Account sheet (HT-3/HT-4)", async ({
   // `exact` matters: S-1's own switch reads "STUDIO 1 OF 2 · SWITCH" and would
   // otherwise make this a strict-mode collision with the tab.
   await expect(
-    sheet.getByRole("button", { name: "Studio", exact: true }),
+    sheet.getByRole("button", { name: "Studio settings", exact: true }),
   ).toHaveAttribute("aria-current", "page", { timeout: COLD });
 
   // HT-3 — a rate per member: what prices an hour when no signed agreement
   // names one. Gated on `studio-workspaces` alone.
   await expect(
-    sheet.getByRole("heading", { name: "Studio rates" }),
+    sheet.getByRole("heading", { name: "Studio rate schedule" }),
   ).toBeVisible({ timeout: COLD });
 
   // HT-4 — the rate card's ROLE picker sits inside the agreement-defaults card,
@@ -262,7 +262,9 @@ test("the studio rate card stands on the Account sheet (HT-3/HT-4)", async ({
     await expect(
       sheet.getByRole("heading", { name: "Agreement defaults" }),
     ).toBeVisible({ timeout: COLD });
-    await expect(sheet.getByText("Rate card", { exact: true })).toBeVisible();
+    await expect(
+      sheet.getByText("Default rate schedule", { exact: true }),
+    ).toBeVisible();
     // `+ Add a role`, not `Default role 1`: a studio whose card is still empty
     // renders no picker row, and the door is what HT-4 added.
     await expect(

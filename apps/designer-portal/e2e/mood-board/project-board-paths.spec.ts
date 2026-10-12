@@ -566,7 +566,7 @@ test.describe("Project-owned board save path", () => {
     await product.click();
     await page.keyboard.press("ArrowDown");
     await expect(banner).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: "Done" }).click();
+    await page.getByRole("button", { name: "Save and close" }).click();
     await expect(page).toHaveURL(/\/desk/, { timeout: 20_000 });
   });
 });
