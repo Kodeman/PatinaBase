@@ -167,7 +167,7 @@ Good morning, Leah          ＋ Record an inquiry   ＋ Create a project file   
 
 | | Today | A | Basis |
 |---|---|---|---|
-| **Calm** | 3 | **4** | **Marks at rest at the 1440 fold** (est.): A ≈ 34 text · 14 controls · 9 colour · 6 edges (4 card boxes + 2 section rules), against today's 45 · 18 · 9 · 12 (WALK §3). **Grading colour marks:** at most 2 terracotta clauses; the tags grade nothing. Nothing moves or counts. **Not 5,** because nine pigments at rest is more colour than V18 Q1's monochrome Desk. |
+| **Calm** | 3 | **4** | **Marks at rest at the 1440 fold, measured on the specimen** (frame a1, SQ-796): A 41 text · 19 controls · 13 colour · 11 edges, against today's 45 · 18 · 9 · 12 (WALK §3). At 390 (frame a8): 29 · 14 · 9 · 6, against today's 25 · 9 · 4 · 8. *This replaces the synthesis estimate of ≈ 34 · 14 · 9 · 6; see the note under the side-by-side table.* **Grading colour marks:** 1 at the fold, the terracotta overdue clause; the tags grade nothing. Nothing moves or counts. **Not 5,** because 13 colour marks at rest is more colour than V18 Q1's monochrome Desk. |
 | **Operable** | 2 | **4** | Every moment is at most 1 click from rest, except M7's typing. There is no scroll to act at 1440. Not 5, because acts still open an overlay sheet, and Record the payment needs a new sheet (Q10). |
 | **Glanceable** | 2 | **4** | M1 ≈ 5 s at 1440 and ≈ 8 s at 390; the close of day is readable in ≈ 5 s. Not 5, because "what can wait" is one section below the fold at 390. |
 
@@ -430,9 +430,19 @@ These hues are free only because C keeps V18 Q7: no stage pigment prints anywher
 | Header | D1: both creates, date to the eyebrow | D2: one create, date on the line | As B |
 | Schema | none | none | `projects.colour` |
 | Calm · Operable · Glanceable | 4 · 4 · 4 | 3 · 5 · 4 | 2 · 4 · 3 |
-| Colour marks at the 1440 fold (est.) | 9, none graded | 6, 5 graded | 14, none graded (23 on the page) |
+| Colour marks at the 1440 fold (measured on the specimen) | 13, 1 graded | 7, 6 graded | 15, 1 graded |
 | V18 reversed | Q1 monochrome · Q7 in part | Q1 monochrome and badges (arguably) · Q7 clause 2 in full | Q1 monochrome · Q7 clause 2 in part |
 | Slices | 5, small–medium | 6, medium | 8, large |
+
+**Note on the colour-marks row (SQ-796).** The row was an estimate (A 9, none graded; B 6, 5 graded; C 14, none graded). It now carries counts measured on the specimens' at-rest frames, a1, b1 and c1, all with one DOM counter that follows WALK §0. The counter covers the first viewport of the frame's Desk and excludes the dock and the pins. A colour mark is text, a fill or a drawn border with HSL saturation above 0.25, and the paper stocks (lightness above 0.9) count as ground. `capture.js` is not in the repo, so the counter is an approximation, but it reproduces SQ-793's a1 count exactly.
+- **Full marks at the 1440 fold** (text · controls · colour · edges): A 41 · 19 · 13 · 11; B 67 · 20 · 7 · 18; C 67 · 25 · 15 · 17. Today is 45 · 18 · 9 · 12.
+- **At 390** (frames a8, b8 and c8): A 29 · 14 · 9 · 6; B 32 · 14 · 6 · 7; C 42 · 19 · 9 · 10. Today is 25 · 9 · 4 · 8.
+- **What the colour marks are:**
+  - A: four stage rules, one ledger stage tick, the terracotta clause and the clay underline on the primary act, plus the two clay ＋ glyphs and the two ornaments, which the counter scores as two marks each.
+  - B: five lit tabs, the clause and the ＋.
+  - C: five strip ticks, eight wall bands, the clause and the ＋.
+- **"Graded"** counts every mark that says how urgent something is. All three directions keep the terracotta overdue clause, so each scores at least 1, including C, which the estimate had scored at 0.
+- **Which direction is calmest does not change.** A has the fewest marks in total at 1440 (84, against B's 112 and C's 124). At 390, A and B are level (58 and 59), and C has 80. B still has the fewest colour marks, but six of its seven grade. A's colour count is higher than estimated: 13, close to C's 15. The Calm scores above are the synthesis's and were not re-scored.
 
 ---
 
