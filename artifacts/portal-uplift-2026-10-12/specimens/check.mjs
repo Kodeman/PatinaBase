@@ -32,7 +32,10 @@
  * shared.css, checks that it passes, then injects each violation and checks that
  * the gate names it. No specimen file is read or written.
  *
- *   node specimens/check.mjs                 # all 18 files
+ * A US-28 spike (SPIKES, e.g. specbook in SPEC.md §S7b) is read from a `| spike `<slug>` | … |` row and
+ * then judged as an area: specimens/<slug>-{1440,390}.html, every rule above.
+ *
+ *   node specimens/check.mjs                 # all 18 area files and the spike files
  *   node specimens/check.mjs desk chrome     # only these areas
  *   node specimens/check.mjs --spec-only     # SPEC.md and shared.css only
  *   node specimens/check.mjs --self-test     # the gate's own detectors
@@ -47,6 +50,9 @@ const DIR = dirname(fileURLToPath(import.meta.url));
 const WALK = join(DIR, '..', 'walk');
 const SENTINEL = '<!-- SPECIMEN COMPLETE -->';
 const SLUGS = ['desk', 'document', 'rooms', 'people', 'library', 'boards', 'papers', 'money', 'chrome'];
+// US-28 spike specimens: listed in a SPEC.md addendum as `| spike `<slug>` | … |` rows, never as one of §1's nine,
+// and checked exactly like an area (frames, register, every file rule). §S7b: specbook (SQ-817).
+const SPIKES = ['specbook'];
 const DARK_REQUIRED = ['desk', 'document', 'money'];
 const WIDTHS = ['1440', '390'];
 const NARROW = 390;
@@ -59,9 +65,9 @@ const args = process.argv.slice(2);
 const flags = args.filter((a) => a.startsWith('--'));
 const named = args.filter((a) => !a.startsWith('--')).map((a) => a.toLowerCase());
 const badFlag = flags.find((f) => f !== '--spec-only' && f !== '--self-test');
-const badSlug = named.find((s) => !SLUGS.includes(s));
+const badSlug = named.find((s) => !SLUGS.includes(s) && !SPIKES.includes(s));
 if (badFlag || badSlug || flags.length > 1 || (flags.length && named.length)) {
-  console.error(`usage: node check.mjs [${SLUGS.join('|')} ...] | --spec-only | --self-test`);
+  console.error(`usage: node check.mjs [${[...SLUGS, ...SPIKES].join('|')} ...] | --spec-only | --self-test`);
   if (badFlag) console.error(`unknown flag: ${badFlag}`);
   if (badSlug) console.error(`unknown area slug: ${badSlug}`);
   process.exit(2);
@@ -280,6 +286,18 @@ if (areas.map((a) => a.slug).join(',') !== SLUGS.join(',')) {
   fail(`SPEC.md §1: expected the nine area rows ${SLUGS.join(', ')} in that order, found ${areas.map((a) => a.slug).join(', ') || 'none'}`);
 }
 
+// Spike addenda: | spike `specbook` | Spec book … | `frame-specbook-t1` … | `frame-specbook-t3` … |
+// Each joins the areas after the nine, so the register and file checks below treat it as one.
+for (const row of lines.filter((l) => /^\|\s*spike\s+`[a-z]+`\s*\|/.test(l))) {
+  const cells = row.split('|').map((c) => c.trim());
+  const slug = /^spike\s+`([a-z]+)`$/.exec(cells[1])?.[1];
+  const ids = (cell) => [...(cell ?? '').matchAll(/`(frame-[^`]+)`/g)].map((m) => m[1]);
+  if (!SPIKES.includes(slug)) fail(`SPEC.md: spike row ${slug} is not one of ${SPIKES.join(', ')}`);
+  else if (areas.some((a) => a.slug === slug)) fail(`SPEC.md: spike row ${slug} appears twice`);
+  else areas.push({ slug, lists: { 1440: ids(cells[3]), 390: ids(cells[4]) } });
+}
+for (const s of SPIKES) if (!areas.some((a) => a.slug === s)) fail(`SPEC.md: no spike row (| spike \`${s}\` | … |) for ${s}`);
+
 // §2.1: | `frame-desk-t1` | 1440 | today | `a1-desk-fold-1440.jpg` | … |
 const register = new Map();
 for (const l of lines) {
@@ -376,7 +394,7 @@ if (mode === '--self-test') {
     failed = true;
     console.error(`SELF-TEST FAIL ${msg}`);
   };
-  for (const slug of SLUGS) {
+  for (const slug of [...SLUGS, ...SPIKES]) {
     for (const w of WIDTHS) {
       const frames = framesOf(slug, w);
       const good = build(slug, w, frames);
@@ -397,12 +415,12 @@ if (mode === '--self-test') {
     }
   }
   if (failed) process.exit(1);
-  console.log(`PASS self-test (${checks} checks over ${SLUGS.length * WIDTHS.length} synthetic specimens: each clean one passes, each injected violation is named)`);
+  console.log(`PASS self-test (${checks} checks over ${(SLUGS.length + SPIKES.length) * WIDTHS.length} synthetic specimens: each clean one passes, each injected violation is named)`);
   process.exit(0);
 }
 
 // ---- specimens ----
-const targets = named.length ? SLUGS.filter((s) => named.includes(s)) : SLUGS;
+const targets = [...SLUGS, ...SPIKES].filter((s) => !named.length || named.includes(s));
 let passed = 0;
 let missing = 0;
 for (const slug of targets) {

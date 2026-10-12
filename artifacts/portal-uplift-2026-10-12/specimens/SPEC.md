@@ -378,3 +378,115 @@ It exits 0 when everything passes and 1 otherwise, naming each failing file and 
 **`--self-test`** builds an in-memory specimen from this spec and `shared.css` for every slug and width, checks that it passes, then injects each violation above one at a time and checks that the gate names it.
 
 **Render check** (after the gate passes, by the render seat): render each file with `artifacts/people-room-crm-2026-09-11/tools/render.mjs` at `--widths` 1440 or 390, one hash per frame with `&nobar`. Confirm no horizontal scroll at 390 (the static check is a floor, not proof), no console errors, no computed `box-shadow`, and fill each `data-marks` with US-26's counter (`marks()`, SQ-786 `capture.js`). Keep render output in the board verification folder, never in the repo.
+
+## §S7b · Addendum: the spec book, full uplift (US-28 spike, SQ-817)
+
+**12 October 2026 · SQ-817.** V20 rules U-Q18 beyond the recommendation: the spec book takes the **full uplift now**, not the token pass drawn in `frame-document-p3` / `frame-document-p5`. It keeps its job, a printable book of pieces by trade. Folding it into the Build room stays out of scope. Two files carry it: `specimens/specbook-1440.html` and `specimens/specbook-390.html`. Where these frames and `document-p3` / `document-p5` differ, these frames win; the document frames stay as the record of the token pass.
+
+Every rule in §2.2 (components, at most one filled act), §2.3 (frame element, caption, pins, fixture note), §4 and §5 applies unchanged. The files use only the shared components; the local style block places them and draws the plates.
+
+### S7b.1 Frame table
+
+`check.mjs` reads the `spike` row below as a tenth area, after the nine in §1 (its `SPIKES` list), and judges both files with every §6 rule.
+
+| Spike | Area | 1440 frames | 390 frames |
+|---|---|---|---|
+| spike `specbook` | Spec book, full uplift (U-Q18) | `frame-specbook-t1` `frame-specbook-p1` `frame-specbook-p2` `frame-specbook-p3` `frame-specbook-t2` `frame-specbook-p4` `frame-specbook-p5` | `frame-specbook-t3` `frame-specbook-p6` `frame-specbook-p7` `frame-specbook-p8` `frame-specbook-p9` `frame-specbook-p10` |
+
+| Frame | Width | Kind | Pairs with | What it shows |
+|---|---|---|---|---|
+| `frame-specbook-t1` | 1440 | today | `a2-spec-book-fold-1440.jpg` | The spec book today at the fold. Marks 100 · 26 · 10 · 62 |
+| `frame-specbook-p1` | 1440 | proposed | `frame-specbook-t1` | The book at rest, by trade |
+| `frame-specbook-p2` | 1440 | proposed | `frame-specbook-t1` | One piece's spec opened (the Arden lounge chair) |
+| `frame-specbook-p3` | 1440 | proposed | `frame-specbook-t1` | Editing a field (the turned side table's finish) |
+| `frame-specbook-t2` | 1440 | today | `a2-spec-book-full-1440.jpg` | The whole book today: 26 boxed rows, every one INCOMPLETE |
+| `frame-specbook-p4` | 1440 | proposed | `frame-specbook-t2` | The print preview: the client edition's item sheet |
+| `frame-specbook-p5` | 1440 | proposed | `frame-specbook-t2` | The empty book (Wren Row Bath) |
+| `frame-specbook-t3` | 390 | today | `a2-spec-book-fold-390.jpg` | The spec book at 390: tabs overflow to 424 px |
+| `frame-specbook-p6` | 390 | proposed | `frame-specbook-t3` | p1 at 390, and **the tabs frame**: four tab words wrap, scrollWidth 390 |
+| `frame-specbook-p7` | 390 | proposed | `frame-specbook-t3` | p2 at 390 |
+| `frame-specbook-p8` | 390 | proposed | `frame-specbook-t3` | p3 at 390 |
+| `frame-specbook-p9` | 390 | proposed | `frame-specbook-t3` | p4 at 390 |
+| `frame-specbook-p10` | 390 | proposed | `frame-specbook-t3` | p5 at 390 |
+
+The walk took three spec-book screenshots. The preview view and the empty book were not walked, so p4, p5, p9 and p10 pair with the nearest today frame, and their captions describe today's state from source.
+
+### S7b.2 What each proposed frame shows
+
+- **p1 / p6 (at rest).** The Header line: "← Holloway Den", the title "Holloway Den · specification book" in full (`.t-d2`, wrapping, never ellipsised), the meta "EDITION 2 · WORKING COPY", and "Run issue checks" as the one **secondary** act. Then the double rule (`.rule-strong`). The tabs are underline words (`.filters`), the workspace's **four** views: Specification · Audience editions · Issue readiness · Revision history. The front line: the ink word ISSUE READINESS and one sentence, "One piece has no finish: the turned side table. Everything else is ready for edition 2." At 1440 a 184 px index column on the ground holds "In this book" (Joinery · Lighting · Textiles as links) and "Show" (All · Incomplete · Ready · Unassigned · Changed since issue as underline words). At 390 the index runs inline above the Sections. Then three **Sections by trade**, each closing on `--rule-mid`. Each piece is a **ledger row** (`.lrow.plain`): a plate where a drawing exists, the document code, the name link, a sentence (finish · maker · room), one ink state word (READY or NO FINISH), and one tertiary act (Open, or "Add a finish"). The turned side table has no drawing, so it has no plate and no "No image" tile. No filled act.
+- **p2 / p7 (one piece opened).** The Arden lounge chair unfolds **in place under its own row**, inside Textiles. Its row act becomes "Put back". The unfolded block holds: the plate; the eyebrow "HD-03 · Textiles · project line v4 · READY"; the facts as a `dl` (Maker, Room, Colour / fabric, Finish, Dimensions, Lead time, Trade price), each sourced fact with a quiet meta word under it (SET FOR THIS JOB, FROM THE LIBRARY PIECE); the client note; and the foot: secondary "Edit the specification", tertiary "Preview the client sheet", and a house `.check` "In edition 2". No filled act.
+- **p3 / p8 (editing a field).** "Add a finish" on the turned side table opened its spec with the **Finish** field in edit: a labelled house `.field` holding "Rift oak, matte oil", focused (2 px `--clay-ink` ring), and one help sentence: "The bench and bookcase are rift oak, matte oil. Saving this leaves nothing missing in edition 2." The other facts stay a `dl`. **The one filled act is "Save the finish"**, with tertiary "Put back · Esc" and "A finish does not apply". The row's word stays NO FINISH until the save lands.
+- **p4 / p9 (the print preview).** The Audience editions tab. On the left (above at 390): "Edition for", with Client · Vendor · Installer · Internal · Care as underline words (Client pressed) and one sentence saying what the client edition shows; "Sheet" as a house select ("HD-03 · Arden lounge chair"). On the right: the item sheet as it prints, laid as one `.paper` (L1) on the ground. It carries the studio and edition meta, the code, the name `.t-d2`, "Den · Quantity 1", the plate, the facts as a `dl` opening on `--rule-mid`, the client note, and the foot meta. There is no trade price (R1; the client edition does not allow it). No filled act: issuing lives in Issue readiness.
+- **p5 / p10 (the empty book).** Wren Row Bath's book, which has no pieces yet. The header has no "Run issue checks", because there is nothing to check. The house empty state: the Section eyebrow SPECIFICATION, the sentence "No pieces in this book yet. Add pieces to Wren Row Bath and they arrive here by trade.", the inline secondary act "Open the pieces", and the closing rule. No empty chapters and no "Select an item" panel. No filled act.
+
+### S7b.3 Fixture additions [illustrative]
+
+These extend §3.2's spec book (Holloway Den, edition 2) and are invented like the rest:
+- **Document codes:** HD-01 built-in bench, HD-02 bookcase wall, HD-03 Arden lounge chair, HD-04 wool flatweave rug, HD-05 Halo floor lamp, HD-06 turned side table.
+- **Drawings:** every piece but the turned side table has one. The plates are inline line drawings, not photographs.
+- **The Arden lounge chair line:** project line v4; room "Den, the reading corner"; finish "Oiled walnut legs"; dimensions, lead time and trade price as §3.5; client note as §3.5's story.
+- **The turned side table line:** project line v2; material rift oak; no finish; dimensions not asked.
+- **Wren Row Bath** (US-26 §3, Priya and Dev Anand) has a spec book with no pieces.
+
+### S7b.4 Every proposed element, mapped to its source
+
+Paths are under `apps/designer-portal/src/` unless noted; `ws` is `components/document/spec-books/spec-book-workspace.tsx`. The last column says what the build changes; data reads stay as they are unless it says otherwise.
+
+| Proposed element (frames) | Source file:line | What changes |
+|---|---|---|
+| Page shell, one `--paper` ground (all) | `ws:1177` (`<main>` on `--doc-paper`); route `app/(document)/doc/[id]/spec-book/page.tsx:11-12` | Ground `--paper`; the laid stock is kept for the printed sheet |
+| Header line, sticky only while the book is long, opaque (all) | `ws:1178-1179` (`sticky … /95 backdrop-blur`) | Shared Header line; no translucency |
+| Back act "← Holloway Den" (all) | `ws:1180-1189` | `.act--tertiary`; target and `#line-` anchor unchanged |
+| Title, wrapping (all) | `ws:1191` (`truncate`) | `.t-d2`, no truncation |
+| Title meta "EDITION 2 · WORKING COPY" (p1–p4, p6–p9) | `ws:1192-1195` ("Working book · N lines · N revisions") | Words, not counts (§5.6) |
+| "Run issue checks", secondary (p1–p4, p6–p9) | `ws:1224-1226` (`Button size="sm" variant="secondary"`) | `.act--secondary`; absent when the book has no lines (p5, p10) |
+| The double rule (all) | none (`ws:1178` has one `border-b`) | `.rule-strong` |
+| Tabs as underline words, wrapping at 390 (all) | `ws:1197-1223` (`flex items-center gap-1`, no wrap: 424 px at 390) | `.filters` with `aria-pressed`; the four views of `ws:1201-1207` |
+| Front line: ISSUE READINESS word and one sentence (p1–p3, p6) | `ws:898-901` (`preflight`), `ws:1279-1281` (aside sentence) | One sentence from the preflight's blockers |
+| Index "In this book" (p1–p3, p6) | `ws:1232-1255` (numbered chapter list with counts) | Links on the ground; no counts, no hover wash |
+| "Show" readiness filter as underline words (p1–p3, p6) | `ws:1256-1278` (`FilterPill` ×5 from `components/ui/controls`); filter logic `ws:852,902-914` | `.filters`; "drift" reads "Changed since issue"; logic unchanged |
+| Section by trade: eyebrow, rows, closing `--rule-mid` (p1–p3, p6–p8) | `ws:916-937` (`groups` from `data.chapters`), `ws:1289-1302` (sticky italic chapter head, "N items") | `.section`; the eyebrow is the chapter title; no count (**see S7b.5 for trade**) |
+| Piece as a ledger row (p1–p3, p6–p8) | `ItemCard`, `ws:187-246` (a `<button>` grid with a 72 px tile) | `.lrow.plain` in `.ledger`; the name is the link that opens it; keep `id={specBookItemDomId}` (`ws:183-185,208`) and the `?ffeItemId=` arrival (`ws:841,948-954`) |
+| Plate where a drawing exists (p1–p4, p6–p9) | `imageFor`, `ws:112-128`; tile `ws:217-225` ("No image" when null) | `.plate` only when `imageFor` returns a URL; nothing when null |
+| Document code and name (rows) | `ws:227-230` (`truncate`) | `.t-meta` code above a `.t-d4` name link, wrapping |
+| Row sentence: finish · maker · room | `ws:231-233` (finish only, `truncate`); `vendor_name`, `room` on `SpecBookWorkItem` (`packages/supabase/src/hooks/use-spec-books.ts:132,146`) | `.lsent`, wrapping |
+| Ink state word READY / NO FINISH | `ReadinessMark`, `ws:158-180`; `readinessColor` `ws:99-110` (green `#66765f`, amber `#a47f33`) | `.word` in ink; the missing field names the word ("No finish") instead of a `title` tooltip (`ws:175`); `readinessColor` retires |
+| "Changed since issue" word (not drawn) | `ws:236-240` | A second `.word` in the row |
+| Row act Open / Add a finish / Put back | `ws:205-216` (whole-row button, `aria-pressed`), `ws:243` (chevron) | One `.act--tertiary` in `.lact`; `aria-expanded` on the name |
+| Spec opened in place (p2, p3, p7, p8) | right `<aside>`, `ws:1327-1394`; `selectedItemId` `ws:948-954` | Unfolds under its row; one piece open at a time |
+| Unfolded eyebrow "HD-03 · Textiles · project line v4 · READY" | `ws:531-541` ("Project line · v{row_version}", `h2`, `ReadinessMark`) | `.eb` with the `.word` |
+| Room fact (p2, p3) | `LineRoomSelect`, `ws:269-331` | A `dl` fact; editing it opens the same select as a house field |
+| Facts `dl` with a source word under each value | `FieldProvenance`, `ws:130-156`; fields `ws:578-591`; sources `lib/spec-books/model.ts:206-278` | `.facts`; sources read SET FOR THIS JOB (`project_override`), FROM THE LINE (`ffe_line`), FROM THE LIBRARY PIECE (`product_master`), NOT SPECIFIED (`studio_custom`), DOES NOT APPLY (`declaration`) |
+| Trade price fact (p2, p7) | `useCanSeeMargin`, `ws:720,806-825` | Shown only to a viewer who may see margin (R1), as in the preview |
+| Client note (p2, p4, p7, p9) | note fields `ws:644-663` | Text under a `.t-meta` label; a field only in edit |
+| "In edition 2" check (p2, p7) | `ws:1330-1346` (native checkbox, `accent-[clay]`) | House `.check` |
+| "Edit the specification", secondary (p2, p7) | the always-open form, `ws:593-663` | The form opens on demand: one field from a row act (p3), every field from this act |
+| "Preview the client sheet", tertiary (p2, p7) | `setView("preview")`, `ws:851,1398` | Switches tab with the piece chosen |
+| Finish field in edit, label, help sentence (p3, p8) | `textFields` `ws:506-512,593-603` (`Input`) | House `.field`, focused, `aria-describedby` help |
+| "Save the finish", the one filled act (p3, p8) | `save`, `ws:421-468`; button `ws:703-707` ("Save specification") | `.act--terminal` naming the change; same mutation and `expectedRowVersion` |
+| "Put back · Esc" (p3, p8) | none (the panel never closes) | `.act--tertiary`; Esc closes the fold and returns focus to the row's name |
+| "A finish does not apply" (p3, p8) | N/A declaration, `ws:469-495,665-692` (`Select` + `Input` + "Mark N/A") | `.act--tertiary` opening the reason field for that one fact |
+| Save and error feedback (not drawn) | `ws:694-702` (`role="status"`) | One sentence under the foot; semantics unchanged |
+| Configuration snapshot (not drawn; custom pieces) | `ws:545-576` (`ConfigurationSnapshotCard`) | A group inside the unfolded block; its links become tertiary acts |
+| Drift decision acts (not drawn) | `ws:1347-1381` (terracotta box, three ghost buttons) | One sentence and three tertiary acts; no box |
+| No-line-record warning (not drawn) | `ws:497-504` (terracotta box) | One terracotta-ink sentence; no box |
+| Print preview tab (p4, p9) | `view === "preview"`, `ws:1398-1447` | Two columns at ≥ 900 px (296 px picks, then the sheet), stacked below |
+| "Edition for" audience words (p4, p9) | `AUDIENCES` `ws:59-77`; bordered buttons `ws:1405-1423` | `.filters` words; the description becomes one sentence |
+| "Sheet" select (p4, p9) | `ws:1425-1438` (`Select`) | House `.field` select |
+| The printed sheet, laid paper (p4, p9) | `AudiencePreview`, `ws:712-834` (`bg-white`, `#2f302d`, `#857f74`, `#ddd8ce`, `#b9ad9b`); well `ws:1442` (`bg-[#e7e2d8]`) | `.paper` on the ground: one stock, house tokens only, no well |
+| Sheet facts `dl` opening on `--rule-mid` (p4, p9) | `ws:782-826` | `.facts`; audience filtering by `audienceAllows` unchanged (`lib/spec-books/model.ts:155`) |
+| Sheet plate (p4, p9) | `ws:775-781` | `.plate` |
+| "Choose an item" state (not drawn) | `ws:721-727` | An `.empty-t` sentence |
+| Empty book: eyebrow, sentence, "Open the pieces", rule (p5, p10) | today's empty: each chapter "Nothing in this chapter matches the filter." `ws:1303-1306`; the panel "Select an item…" `ws:1389-1393` | House empty state; the act links to `/doc/[id]/pieces` |
+| A filter that matches nothing (not drawn) | `ws:1303-1306` | One sentence in the Section, then its rule |
+| Loading and error (not drawn) | `ws:1135-1169` | Ground `--paper`; the error keeps "Try again" as `.act--secondary` |
+| Issue readiness tab (not drawn) | `ws:1449-1611` (icons in `#66765f` and terracotta, bordered audience boxes, full-width filled "Issue N editions") | Sections Blockers and Warnings as rows; audiences as `.check`; "Issue edition 2" the one filled act |
+| Revision history tab (not drawn) | `ws:1613-1756` (`Sparkles` icon, bordered artifact rows, icon colours `#66765f` and `#a47f33`) | A Section of ledger rows with the state as an ink word; Retry, Finalize and Share as tertiary acts |
+| The dock (all) | the house dock (§2.2 chrome p2 and p6) | Unchanged from chrome |
+
+### S7b.5 Constraints the build must take up
+
+1. **"By trade" is not in today's data.** The book's Sections are its chapters (`ws:916-937`). `ensure_project_spec_book` makes **one chapter per project room** (`supabase/migrations/00380_spec_books_foundation.sql:795,844-851`) and files each line into its room's chapter (`:853-866`). That is why the walk shows Hall, Living Room and the other rooms (`a2-spec-book-full-1440.jpg`). The schema already allows a chapter with no room (`00380:113-126`; the unique index covers only room chapters, `:128-129`), and a line's `setting.chapter_id` already places it (`ws:923-926`). But nothing creates a trade chapter, and `SpecBookWorkItem` carries no trade or `ffe_category` (`packages/supabase/src/hooks/use-spec-books.ts:119-150`). To draw these frames from real data, the build needs one of two changes: seed trade chapters from each line's `ffe_category` (taxonomy in `00128_ffe_categories_taxonomy.sql`), or add `ffe_category` to the workbench read and group client-side. Either is a data change not listed in `uplift.md` (d). Under the US-28 contract that is a **reopen-the-design** item for the orchestrator. These specimens draw the ruled outcome (U-Q18, §3.2) regardless.
+2. **The token-pass frames named a "Print" act and five tabs.** `document-p3` / `document-p5` show a tertiary "Print" and five tabs, with Audience and Editions split. The workspace has **four** views (`ws:79,1201-1207`) and no print action: editions are issued PDFs (`ws:1596-1604`; history `ws:1677-1743`). These frames keep four tabs and put the print preview under Audience editions.
+3. **One stock.** The book stands on `--paper`; only the printed sheet is `--paper-doc`. This retires `bg-white` (`ws:748`), `bg-[#e7e2d8]` (`ws:1442`), the hex text colours in `AudiencePreview` and `readinessColor`, and the `rgba(196,165,123,…)` hover washes (`ws:213-214,1241`).
+4. **Targets.** Every act, tab word, filter word, index link and the edition check reaches 44 px. Today 14 targets at 390 fall short (WALK §2).
