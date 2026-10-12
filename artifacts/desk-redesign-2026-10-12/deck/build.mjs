@@ -65,18 +65,18 @@ const SPECIMENS = [
   specimen('{{SPECIMEN_C_390}}', 5, 'proposed-c-390.html'),
 ];
 
-/* Measured on the specimens (SQ-796): one DOM counter, WALK section 0's definition,
+/* Measured on the specimens (SQ-796; a1 and b1 recounted by SQ-798 after triage R1): one DOM counter, WALK section 0's definition,
    the first viewport of the frame's Desk, dock and pins excluded. See DECK.md. */
 const MARKS = [
   {
     name: 'proposed-a-1440.html',
     from: 'Marks at rest at the 1440 fold, est.: about 34 text · 14 controls · 9 colour · 6 edges (today 45 · 18 · 9 · 12, WALK §3).',
-    to: 'Marks at rest at the 1440 fold, measured on the specimen: 41 text · 19 controls · 13 colour · 11 edges (today 45 · 18 · 9 · 12, WALK §3).',
+    to: 'Marks at rest at the 1440 fold, measured on the specimen: 43 text · 20 controls · 13 colour · 12 edges (today 45 · 18 · 9 · 12, WALK §3).',
   },
   {
     name: 'proposed-b-1440.html',
     from: 'Marks at rest at the fold, est.: ≈ 44 text · 12 controls · 6 colour (5 lit tabs and the clay ＋) · 14 edges.',
-    to: 'Marks at rest at the fold, measured on the specimen: 67 text · 20 controls · 7 colour (5 lit tabs, the overdue clause and the clay ＋) · 18 edges.',
+    to: 'Marks at rest at the fold, measured on the specimen: 62 text · 20 controls · 6 colour (4 tabs, the overdue clause and the clay ＋) · 16 edges.',
   },
   {
     name: 'proposed-c-1440.html',

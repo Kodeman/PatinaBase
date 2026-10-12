@@ -59,15 +59,16 @@ One counter is used for all six frames: `verification/SQ-796/marks.cjs`, Playwri
 | Frame | Text | Controls | Colour | Edges | Graded colour | Total |
 |---|---|---|---|---|---|---|
 | Today, 1440 (WALK §3) | 45 | 18 | 9 | 12 | — | 84 |
-| **a1**, 1440 | 41 | 19 | 13 | 11 | 1 | 84 |
-| **b1**, 1440 | 67 | 20 | 7 | 18 | 6 | 112 |
+| **a1**, 1440 | 43 | 20 | 13 | 12 | 1 | 88 |
+| **b1**, 1440 | 62 | 20 | 6 | 16 | 5 | 104 |
 | **c1**, 1440 | 67 | 25 | 15 | 17 | 1 | 124 |
 | Today, 390 (WALK §3) | 25 | 9 | 4 | 8 | — | 46 |
-| **a8**, 390 | 29 | 14 | 9 | 6 | 1 | 58 |
+| **a8**, 390 | 30 | 15 | 9 | 6 | 1 | 60 |
 | **b8**, 390 | 32 | 14 | 6 | 7 | 5 | 59 |
 | **c8**, 390 | 42 | 19 | 9 | 10 | 1 | 80 |
 
 - **Graded** counts every colour mark that says how urgent something is: B's lit tabs and each direction's terracotta overdue clause.
+- **SQ-798 recount.** Triage R1 put Marsh Street's hand-off on its Today card and took it out of A's ledger and B's Waiting, so a1, a8 and b1 were recounted with a rebuilt counter that reproduces SQ-796's a1, a8, b1 and b8 counts exactly before the change. Before R1: a1 41 · 19 · 13 · 11 = 84; a8 29 · 14 · 9 · 6 = 58; b1 67 · 20 · 7 · 18 = 112 (6 graded). b8 and the C frames did not change.
 - **What the sheets say.** The measured counts do not change which direction is calmest. A has the fewest marks in total, and B has the fewest colour marks, though most of them grade. The sheets also say plainly that A's colour count at the fold (13) is above the estimate (9) and close to C's (15).
 - **direction.md §3** has the measured row and note. The Calm scores stay the synthesis's.
 
@@ -95,7 +96,7 @@ One counter is used for all six frames: `verification/SQ-796/marks.cjs`, Playwri
 | 28 | `s-canon` | The canon each reverses | 8 | Every BRIEF §6 item (V18 Q1's five clauses, V18 Q7's two clauses, R143 D3 / D5–D7 and D10, house sheet :1011, :54–57, :592 and :168, and the new-hex rule) by A, B and C, in words |
 | 29 | `s-fixnow` | Fix-now | 9 | F1–F8: defect, where, fix, source |
 | 30 | `s-slices` | Slices | 10 | Slices 0–4 plus the doc-only slice, and what B and C would change |
-| 31 | `s-questions` | Founder questions | 11 | Q1–Q14: each with the question, the recommended answer, what follows if declined, and a ruling field. Q1–Q4 are marked "decide first". The field keeps a draft in this browser only |
+| 31 | `s-questions` | Founder questions | 11 | Q1–Q15: each with the question, the recommended answer, what follows if declined, and a ruling field. Q1–Q4 are marked "decide first". The field keeps a draft in this browser only |
 | 32 | `s-asks` | What only the studio can tell us | 11 | direction.md §8, the five asks for real studio validation; where the files live |
 
 ## 4. Today pairings (SPEC §2.1)

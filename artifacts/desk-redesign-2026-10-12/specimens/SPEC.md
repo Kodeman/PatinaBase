@@ -67,12 +67,12 @@ The wording on a frame is the team's guess, pending Leah's words (direction.md �
   - Today holds **four job cards**:
     - Holloway Den carries two lines, the invoice and the PO, with "$3,800 overdue" as a terracotta-ink clause;
     - Linden Place;
-    - Marsh Street Kitchen, with "JORDAN'S" in its eyebrow;
+    - Marsh Street Kitchen, with "JORDAN'S" in its eyebrow. It holds two lines: first "Handed to Jordan by Leah, Saturday 10 October · Read the note", a reading line with no act for Leah, then the PO line (triage R1);
     - Pell Court Dining.
   - Each card has its stage on a 3 px left rule, with the stage word in ink.
   - Under Today's closing rule, the ledger regroups by person:
     - **Leah's:** Also yours (Ines Calder "6:35 AM", Thornfield); With others (Mae Halloran, the Whitfields, Aldous Lane); Coming back (Chen, Friday 16 October; Garnet Hill, Monday 19 October); At rest — show.
-    - **Jordan's:** Marsh Street hand-off, "with Jordan since Saturday"; Wren Row Bath.
+    - **Jordan's:** Wren Row Bath only. **A job with a line in Today never appears in the ledger, in any scope** (triage R1), so Marsh Street's hand-off is stated once, on its card.
   - Each row has a 2 px stage tick.
   - At 390: the two-row header, then the Holloway and Linden cards; the rest is below the fold.
 - **B:**
@@ -82,7 +82,8 @@ The wording on a frame is the team's guess, pending Leah's words (direction.md �
     - Holloway PO: 2 px clay tab, "NEEDS YOU";
     - Marsh PO: 2 px clay tab, "JORDAN'S";
     - Pell Court: 2 px clay tab.
-  - **Waiting**, in the studio's scope, is split. *With clients and makers:* Mae Halloran since Tuesday 6 October; the Whitfields since Friday 9 October; Calloway & Brandt Upholstery, delivering to Aldous Lane on Thursday 15 October. *With Jordan:* Marsh Street hand-off since Saturday.
+  - Marsh Street's Now card holds the hand-off as its first line, "Handed to Jordan by Leah, Saturday 10 October · Read the note", above the PO line.
+  - **Waiting**, in the studio's scope, is split. *With clients and makers:* Mae Halloran since Tuesday 6 October; the Whitfields since Friday 9 October; Calloway & Brandt Upholstery, delivering to Aldous Lane on Thursday 15 October. *With Jordan:* nothing at 8:40, because a job with a card in Now never appears in Waiting (triage R1).
   - **Coming back:** Chen, Friday 16 October; Garnet Hill, Monday 19 October.
   - Waiting and Coming back tabs are faint.
   - "Every job — show" is folded.
@@ -91,6 +92,7 @@ The wording on a frame is the team's guess, pending Leah's words (direction.md �
   - The **focus strip** holds the five lines. Each has its job's colour tick: Holloway indigo ×2, Linden teal, Marsh plum, Pell Court ochre.
   - The **wall** is grouped "Leah's" (15 cards, including the Ines Calder lead) and "Jordan's" (Marsh Street, Wren Row Bath). Each card has its 3 px band, its stage word in ink, and one state line.
   - Jobs on the strip read "On today's strip".
+  - The wall shows every job by design; that is C's stated model, not a duplicate, so triage R1's "never in two places" rule does not apply to it.
   - At 390: the strip, then the wall's first row, 2-up.
 
 **x2 / x9, acting, during, 8:41, Mine.**
@@ -116,7 +118,7 @@ The wording on a frame is the team's guess, pending Leah's words (direction.md �
   - "Chase sent · waiting on Fenmoor Joinery since 8:47".
 - There is no ✓, no count and no "cleared".
 - **A:** both settled lines sit on the Holloway card, and the card's act feet are gone. Linden, Pell Court and Ines Calder keep their acts.
-- **B:** the two Holloway cards are settled in Now, with their tabs dropped to faint. Their slots stay empty. They move to Waiting on the next open, never during the visit.
+- **B:** the two Holloway cards are settled in Now, with their tabs dropped to faint. Their slots stay empty. They move to Waiting on the next morning's first open, never during the working day (triage R2).
 - **C:** both strip lines are settled with their indigo ticks. The Holloway wall card reads "Waiting on the Holloways and Fenmoor Joinery".
 - At 390: the same, for the first two lines.
 
@@ -143,25 +145,25 @@ The wording on a frame is the team's guess, pending Leah's words (direction.md �
 
 **x6 / x12, close of day, 5:50 pm, Leah, Mine.**
 - Today reads **"Nothing more needs you today."**
-- **With others**, with dates:
-  - Nora and Sam Holloway, since today;
-  - Fenmoor Joinery, since today (PO sent Wednesday 30 September);
-  - Tom and Ellery Vance, since today;
-  - Calloway & Brandt Upholstery and Ninebark Lighting, since today;
-  - Ines Calder, since today;
-  - Ainsley Moore, since today;
+- **What moved, in place (triage R2):** every line Leah settled today stays on its card, in muted ink, with its new state and time, until the next morning's first open:
+  - Holloway: "Reminder sent · waiting on Nora and Sam Holloway since 8:42"; "Chase sent · waiting on Fenmoor Joinery since 8:47";
+  - Linden: "Follow-up sent · waiting on Tom and Ellery Vance since 9:05";
+  - Pell Court: "Orders released · waiting on Calloway & Brandt Upholstery and Ninebark Lighting since 9:12";
+  - Ines Calder: "Replied · waiting on Ines Calder since 9:20";
+  - Ainsley Moore: "Replied · waiting on Ainsley Moore since 2:40 pm";
+  - Thornfield: "Not today · 4:15 pm · back Tuesday 13 October".
+- **With others**, with dates, holds only what waited before today (a job with a line in Today is never repeated below):
   - Mae Halloran, the samples, since Tuesday 6 October;
   - Hal and Dana Whitfield, the palettes, since Friday 9 October;
   - Calloway & Brandt Upholstery, delivering to Aldous Lane on Thursday 15 October.
-- **Coming back:**
-  - Thornfield, Tuesday 13 October (Not today, 4:15 pm);
+- **Coming back** (Thornfield joins it on the next morning's first open):
   - Chen Residence, Friday 16 October, "waiting on the Chens' bench decision";
   - Garnet Hill, Monday 19 October, "the Okafors are travelling; call after the 18th".
 - At rest is folded.
-- **No "moved today" list, no "cleared", no count** (V18 Q1). What moved reads only as "since today".
-- **A:** the empty Today box, then the ledger's With others and Coming back groups.
-- **B:** Now's sentence, beside full Waiting and Coming back columns.
-- **C:** the strip's sentence, then the wall, whose state lines carry the same facts.
+- **No "moved today" list, no "cleared", no count** (V18 Q1). What moved reads only from the settled lines that stayed put (direction.md Q6, Q15).
+- **A:** the Today box's sentence, then the six settled cards, then the ledger's With others and Coming back groups.
+- **B:** Now's sentence above its seven settled cards, beside the Waiting and Coming back columns.
+- **C:** the strip's sentence above its seven settled lines, then the wall, whose state lines carry the same facts.
 
 **x7 / x13, dark mode.**
 - x1 (or x8) in the house sheet's documented dark set (`docs/design/house-sheet/SPEC.md:89-108`), with `--card-edge #77736E`.

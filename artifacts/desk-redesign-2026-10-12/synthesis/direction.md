@@ -143,33 +143,34 @@ Good morning, Leah          ＋ Record an inquiry   ＋ Create a project file   
   - Today closes on a full-measure `--rule-mid`;
   - **the ledger**, every other live job once, in groups: **Also yours** · **With others** · **Coming back** · **At rest — show** (folded, no count);
   - each group opens with the ornament eyebrow, and row hairlines run full measure;
-  - in the studio's scope the groups regroup by person ("Leah's", "Jordan's"), each with its own yours / with others split, and the "By team member" toggle retires (D2 (b)).
+  - in the studio's scope the groups regroup by person ("Leah's", "Jordan's"), each with its own yours / with others split, and the "By team member" toggle retires (D2 (b));
+  - **a job with a line in Today never appears in the ledger, in any scope.** Its hand-off prints as the first line on its Today card: in the studio's scope Marsh Street's card reads "Handed to Jordan by Leah, Saturday 10 October · Read the note" above its PO line, and the ledger's "Jordan's" group keeps only Wren Row Bath (triage R1).
 - **390:**
   - the two-row header (about 92 px);
   - then one card per row, 358 px wide, with the act and Not today on one row when the act fits (D1 (a));
-  - five lines on four cards come to about one screen (today: 1,095 px);
+  - five lines on four cards run to **1,177 px** from the top of the page, measured on a8 (SQ-798). The first 844 px fold shows the header, the Holloway and Linden cards and the head of Marsh Street’s; Marsh Street’s PO line and Pell Court are below it, so Today is about a screen and a half, not one screen;
   - the ledger rows stack name / sentence / act, with the 2 px tick beside the name.
 
 **M1–M8.** Clicks are counted from the Desk at rest to the act's sheet or page being open. Scrolling is not a click. Today's figures are WALK §3's; "real" means without the seed's legacy rows (WALK §2).
 
 | # | Path under A | A: clicks (scroll 1440 / 390) | A: est. s 1440 / 390 | Today: clicks (scroll) | Today: s |
 |---|---|---|---|---|---|
-| M1 | Read the Today eyebrow and four cards: the stage edges give the shape (two Project, a Proposal, a Brief), then five lines. "What can wait" sits directly under Today's closing rule: Also yours, With others, Coming back. | 0 (0 / under 1 screen) | 5 / 8 | 0 (0 / 1 screen) | 8 / 14 |
+| M1 | Read the Today eyebrow and four cards: the stage edges give the shape (two Project, a Proposal, a Brief), then five lines. "What can wait" sits directly under Today's closing rule: Also yours, With others, Coming back. | 0 (0 / Today runs 1,177 px; the 844 px fold holds Holloway and Linden) | 5 / 8 | 0 (0 / 1 screen) | 8 / 14 |
 | M2 | Linden's card: "Declined yesterday: 'The sofa is over budget; can we see a second option under $6,000?'" · **Follow up** opens `proposal-follow-up` in place | 1 (0) | 4 / 5 | 1 (529 / 1,522 px); real 1 (0) | 12 / 20; real 4 |
 | M3 | Holloway's card, line 2: "Fenmoor Joinery has not answered PO-HD-0412 in 12 days" · **Chase the maker** opens `po-chase` | 1 (0) | 4 / 5 | Leah: no Desk path | 20+ |
 | M4 | Holloway's card, line 1 · **Send reminder**. Chen's Record the payment opens a **new scoped sheet** (Q10). | 1 (0) | 4 / 5 | 1 (0); Record opens the whole ledger | 5 / 6 |
 | M5 | Jordan's Mine: the Marsh Street card opens with the hand-off line, then the PO line, "Draft the chase for Leah". In the studio's scope every card carries its holder word. | Whose: 0 · Read: 1 | 2 / 3 | Read 1; whose: a toggle 900 px down | 4 / 5 |
 | M6 | Press the name on Holloway's card; Back returns to the same scroll offset (fix-now F6) | 1 (0) + Back | 2 / 3 | 1 (1,873 / 4,624 px); Back to 96 px | 8 / 15 |
 | M7 | ＋ Record an inquiry, two fields, Create. The overlay closes **onto the Desk** with a muted line for the visit: "Ainsley Moore recorded · just now · Open the brief". The lead lands in Today, or at the head of Also yours, **under her name**. | 3 + 0 | 25 + 0 | 3, then Back + 1,344 px | 25 + about 10 |
-| M8 | Acted lines read in their settled state for the visit. On the next open: "Nothing more needs you today." above With others ("Waiting on Fenmoor Joinery since today") and Coming back ("Thornfield · back Tuesday 13 October"), both always shown. Facts, never a score. | 3 to clear · 0 to read | about 10 / 5 to read | 3 to clear; "comes back" not shown | about 10 / not readable |
+| M8 | **What moved:** every line Leah acted on stays on its card in muted ink, with its new state and time, until the next morning's first open: Holloway "Reminder sent · waiting on Nora and Sam Holloway since 8:42" and "Chase sent · waiting on Fenmoor Joinery since 8:47", Linden 9:05, Pell Court 9:12, Ines Calder 9:20, Ainsley Moore 2:40 pm. "Nothing more needs you today." heads them. **What waits on others:** With others, only what waited before today (Mae Halloran since Tuesday 6 October, the Whitfields since Friday 9 October, Aldous Lane's delivery on Thursday 15 October). **What comes back:** Thornfield's card reads "Not today · 4:15 pm · back Tuesday 13 October"; Coming back holds Chen (Friday 16 October) and Garnet Hill (Monday 19 October). No count, no list, no "cleared" (Q15). | 3 to clear · 0 to read | about 10 / 5 to read | 3 to clear; "comes back" not shown | about 10 / not readable |
 
 **Calm, operable, glanceable.** Each score is out of 5, against BRIEF §5.
 
 | | Today | A | Basis |
 |---|---|---|---|
-| **Calm** | 3 | **4** | **Marks at rest at the 1440 fold, measured on the specimen** (frame a1, SQ-796): A 41 text · 19 controls · 13 colour · 11 edges, against today's 45 · 18 · 9 · 12 (WALK §3). At 390 (frame a8): 29 · 14 · 9 · 6, against today's 25 · 9 · 4 · 8. *This replaces the synthesis estimate of ≈ 34 · 14 · 9 · 6; see the note under the side-by-side table.* **Grading colour marks:** 1 at the fold, the terracotta overdue clause; the tags grade nothing. Nothing moves or counts. **Not 5,** because 13 colour marks at rest is more colour than V18 Q1's monochrome Desk. |
+| **Calm** | 3 | **4** | **Marks at rest at the 1440 fold, measured on the specimen** (frame a1, recounted by SQ-798 after triage R1 put the hand-off line on Marsh Street's card): A 43 text · 20 controls · 13 colour · 12 edges, against today's 45 · 18 · 9 · 12 (WALK §3). At 390 (frame a8): 30 · 15 · 9 · 6, against today's 25 · 9 · 4 · 8. SQ-796's counts before R1 were 41 · 19 · 13 · 11 and 29 · 14 · 9 · 6. *This replaces the synthesis estimate of ≈ 34 · 14 · 9 · 6; see the note under the side-by-side table.* **Grading colour marks:** 1 at the fold, the terracotta overdue clause; the tags grade nothing. Nothing moves or counts. **Not 5,** because 13 colour marks at rest is more colour than V18 Q1's monochrome Desk. |
 | **Operable** | 2 | **4** | Every moment is at most 1 click from rest, except M7's typing. There is no scroll to act at 1440. Not 5, because acts still open an overlay sheet, and Record the payment needs a new sheet (Q10). |
-| **Glanceable** | 2 | **4** | M1 ≈ 5 s at 1440 and ≈ 8 s at 390; the close of day is readable in ≈ 5 s. Not 5, because "what can wait" is one section below the fold at 390. |
+| **Glanceable** | 2 | **4 at 1440 · 3 at 390** | M1 ≈ 5 s at 1440 and ≈ 8 s at 390; the close of day is readable in ≈ 5 s. At 1440, not 5, because "what can wait" is a section below Today. **At 390, re-scored to 3 (SQ-798):** the first 844 px fold holds two of Today's four cards; all of Today runs to 1,177 px, and "what can wait" starts below that. |
 
 **Data or schema needs.** **No migration.**
 - A new pure fold, `groupSheetByJob`, over `DaySheet.lines` (`lib/document/day-sheet.ts:42-47`), keyed on `projectId`; the roster excludes those ids (D2 (b)).
@@ -254,21 +255,21 @@ Good morning, Leah · Monday 12 October          ＋ Record an inquiry · Find a
   - **Coming back:** about 236 px, compact cards by day.
   - **No column sits on rail stock,** because a card edge fails there (D1 (b)).
   - Below the board, "Every job — show" folds the full ledger: one ruled row per live job, no tags, no count.
-  - The scope switch sits on the Now eyebrow. In the studio's scope, Now cards carry holder words, and Waiting splits into "with clients and makers" and "with Jordan" / "with Leah".
-- **390:** the columns stack in the same order, Now, then Waiting, then Coming back, each with its edge and eyebrow. There are no tabs or segmented control, because tab bars are refused (VISION §6). An act opened in a card fills the full 358 px. Five Now cards at about 150 px each come to about 1 screen; Waiting starts on the second.
+  - The scope switch sits on the Now eyebrow. In the studio's scope, Now cards carry holder words, and Waiting splits into "with clients and makers" and "with Jordan" / "with Leah". A job with a card in Now never appears in Waiting: Marsh Street's hand-off prints as the first line on its Now card, "Handed to Jordan by Leah, Saturday 10 October · Read the note", and "with Jordan" holds nothing at 8:40 (triage R1).
+- **390:** the columns stack in the same order, Now, then Waiting, then Coming back, each with its edge and eyebrow. There are no tabs or segmented control, because tab bars are refused (VISION §6). An act opened in a card fills the full 358 px. Measured on b8 (SQ-798), Now runs to **1,231 px** from the top of the page. The first 844 px fold shows the header and three of Now's five cards (Holloway's invoice, Linden, Holloway's PO); Marsh Street and Pell Court are below it, and Waiting starts after 1,231 px.
 
 **M1–M8.**
 
 | # | Path under B | B: clicks (scroll 1440 / 390) | B: est. s 1440 / 390 | Today: clicks | Today: s |
 |---|---|---|---|---|---|
-| M1 | Now holds five cards; Waiting and Coming back sit beside it, so "what can wait" is visible at once at 1440 | 0 (0 / 1 screen to reach Waiting) | 4 / 8 | 0 | 8 / 14 |
+| M1 | Now holds five cards; Waiting and Coming back sit beside it, so "what can wait" is visible at once at 1440 | 0 (0 / Now runs 1,231 px; the 844 px fold holds 3 of 5 cards) | 4 / 8 | 0 | 8 / 14 |
 | M2 | Linden's card (solid terracotta tab, "MONEY OR SIGNATURE") · Follow up opens in the card | 1 (0) | 4 / 5 | 1 (529 / 1,522 px) | 12 / 20 |
 | M3 | Holloway's PO card (2 px clay tab) · Chase the maker opens in the card | 1 (0) | 4 / 5 | Leah: none | 20+ |
 | M4 | Holloway's invoice card · Send reminder opens in the card; send is the named second control | 1 (0) + send | 3 / 4 | 1 (0) | 5 / 6 |
 | M5 | Jordan's Now: the hand-off card first ("Leah handed you Marsh Street Kitchen on Saturday 10 October · Read her note"), then the PO card, "Draft the chase for Leah" | Whose 0 · Read 1 | 2 / 3 | Read 1; whose: a toggle | 4 / 5 |
 | M6 | Press a card's name; Back returns to the same place | 1 + Back | 2 / 3 | 1 + 1,873 / 4,624 px | 8 / 15 |
 | M7 | ＋ Record an inquiry · two fields · Create. The overlay closes onto the board; "Ainsley Moore · BRIEF · just now" joins Now if it ranks, otherwise heads Also yours in the folded ledger with a muted line on the board for the visit | 3 + 0 | 25 + 0 | 3, Back + 1,344 px | 25 + 10 |
-| M8 | Now reads "Nothing more needs you today."; Waiting and Coming back are the close, side by side at 1440 | 3 to clear · 0 to read | about 10 / 4 to read | 3; not readable | about 10 / — |
+| M8 | **What moved:** Now reads "Nothing more needs you today." above the seven cards Leah settled today, faint-tabbed, in muted ink, each with its new state and time, until the next morning's first open (Holloway twice, Linden, Pell Court, Ines Calder, Ainsley Moore, and Thornfield "Not today · 4:15 pm · back Tuesday 13 October"). **What waits on others:** Waiting holds only what waited before today (Halloran, Copperfield, Aldous Lane). **What comes back:** Chen and Garnet Hill, with Thornfield joining tomorrow. Side by side at 1440; no count, no list (Q15) | 3 to clear · 0 to read | about 10 / 4 to read | 3; not readable | about 10 / — |
 
 **Calm, operable, glanceable.**
 
@@ -276,7 +277,7 @@ Good morning, Leah · Monday 12 October          ＋ Record an inquiry · Find a
 |---|---|---|---|
 | **Calm** | 3 | **3** | **Marks at rest at the 1440 fold** (est.): ≈ 44 text · 12 controls · 6 colour (5 lit tabs + the clay ＋) · 14 edges (≈ 11 cards + 3 column rules). **Grading colour marks: 5. Every lit tab grades,** and on most mornings the top of Now is solid terracotta (D1 (e) System 2, "its honest weakness"). The most boxes of the three. |
 | **Operable** | 2 | **5** | Every act is 1 press from rest and done inside its card, with no overlay to orient in. The close of day reads with 0 clicks. |
-| **Glanceable** | 2 | **4** | At 1440 the three columns answer M1 and M8 in one look (about 4 s). At 390 Waiting is a screen down. Holloway as two cards reads as two jobs at a glance (D2 (b) "Gets wrong"). |
+| **Glanceable** | 2 | **4 at 1440 · 3 at 390** | At 1440 the three columns answer M1 and M8 in one look (about 4 s). **At 390, re-scored to 3 (SQ-798):** the first 844 px fold holds three of Now's five cards, Now runs to 1,231 px, and Waiting starts below that. Holloway as two cards reads as two jobs at a glance (D2 (b) "Gets wrong"). |
 
 **Data or schema needs.** **No migration.**
 - `NEED_CLASS` (`need-class.ts:23-56`), as it is.
@@ -366,14 +367,14 @@ These hues are free only because C keeps V18 Q7: no stage pigment prints anywher
 
 | # | Path under C | C: clicks (scroll 1440 / 390) | C: est. s 1440 / 390 | Today: clicks | Today: s |
 |---|---|---|---|---|---|
-| M1 | Read the strip (five lines), then glance at the wall for the rest | 0 (0 / 1 screen) | 5 / 9 | 0 | 8 / 14 |
+| M1 | Read the strip (five lines), then glance at the wall for the rest | 0 (0 / the strip ends at 651 px, inside the 844 px fold) | 5 / 9 | 0 | 8 / 14 |
 | M2 | Strip line 2, Linden (teal tick) · Follow up opens the existing sheet | 1 (0) | 4 / 5 | 1 + scroll | 12 / 20 |
 | M3 | Strip line 3, Holloway (indigo) · Chase the maker | 1 (0) | 4 / 5 | Leah: none | 20+ |
 | M4 | Strip line 1, Holloway · Send reminder | 1 (0) | 4 / 5 | 1 | 5 / 6 |
 | M5 | Jordan's strip: the hand-off first, then the PO. In the studio's scope the wall's "Jordan's" group holds Marsh Street (plum) and Wren Row Bath | Whose 0 · Read 1 | 2 / 3 | Read 1 | 4 / 5 |
 | M6 | Press Holloway's wall card. The Document opens under an indigo letterhead band, so arrival is confirmed by colour; Back returns to the same place | 1 + Back | 2 / 3 | 1 + 1,873 / 4,624 px | 8 / 15 |
 | M7 | Record the inquiry. The overlay closes onto the Desk; Ainsley Moore's new card appears at the wall's head of yours, in the next colour in turn, under her name | 3 + 0 | 25 + 0 | 3, Back + 1,344 px | 25 + 10 |
-| M8 | The strip reads "Nothing more needs you today."; the wall's state lines answer waiting and coming back, but across sixteen cards | 3 to clear · 0 to read | about 10 / 8 to read | 3; not readable | about 10 / — |
+| M8 | **What moved:** the strip reads "Nothing more needs you today." above the seven lines Leah settled today, each with its job's tick, in muted ink, with its new state and time, until the next morning's first open. **What waits on others and what comes back:** the wall's state lines, but across sixteen cards. No count, no list (Q15) | 3 to clear · 0 to read | about 10 / 8 to read | 3; not readable | about 10 / — |
 
 **Calm, operable, glanceable.**
 
@@ -381,7 +382,7 @@ These hues are free only because C keeps V18 Q7: no stage pigment prints anywher
 |---|---|---|---|
 | **Calm** | 3 | **2** | **Marks at rest at the 1440 fold** (est.): ≈ 44 text · 12 controls · **14 colour** (≈ 8 wall bands at the fold + 5 strip ticks + the clay ＋) · 10 edges (8 cards + the strip box + 1 rule). The whole page carries 23 colour marks (17 bands in x1, 5 ticks, the ＋). **Grading colour marks: 0,** but it has the most colour of the three, a key a hire must learn, and a studio choice on every new job (against "the studio won't notice Patina"). |
 | **Operable** | 2 | **4** | 1 press from rest for every moment; the wall is a one-click index into every job. Acts still open the overlay sheets. |
-| **Glanceable** | 2 | **3** | M1's five lines read in ≈ 5 s, but M8 means scanning sixteen state lines. Colour helps only once the studio has learned which job is which colour, and at 390 the wall runs to ≈ 1,000 px. |
+| **Glanceable** | 2 | **3 at 1440 · 3 at 390** | M1's five lines read in ≈ 5 s; at 390 the strip ends at 651 px, inside the 844 px fold (measured on c8, SQ-798), so the score holds, but M8 means scanning sixteen state lines. Colour helps only once the studio has learned which job is which colour, and at 390 the wall runs to ≈ 1,000 px. |
 
 **Data or schema needs.** **A migration, and work in three codebases.**
 - **`projects.colour`**: a `smallint` 1–6, or a token key, set at creation. That means a migration, a backfill for existing rows (round-robin by `created_at`), the generated types, and a studio-member update policy. The column does not exist today (BRIEF §7; checked against the `projects` Row in `packages/supabase/src/database.types.ts:21131`).
@@ -429,20 +430,22 @@ These hues are free only because C keeps V18 Q7: no stage pigment prints anywher
 | Acting | Today's overlay sheets | Inside the card | Today's overlay sheets, from the strip |
 | Header | D1: both creates, date to the eyebrow | D2: one create, date on the line | As B |
 | Schema | none | none | `projects.colour` |
-| Calm · Operable · Glanceable | 4 · 4 · 4 | 3 · 5 · 4 | 2 · 4 · 3 |
-| Colour marks at the 1440 fold (measured on the specimen) | 13, 1 graded | 7, 6 graded | 15, 1 graded |
+| Calm · Operable · Glanceable (Glanceable at 1440 / 390) | 4 · 4 · 4 / 3 | 3 · 5 · 4 / 3 | 2 · 4 · 3 / 3 |
+| Today at 390 (measured on the specimen, against an 844 px fold) | 1,177 px; the fold holds 2 of 4 cards | 1,231 px; the fold holds 3 of 5 cards | 651 px; the strip fits |
+| Colour marks at the 1440 fold (measured on the specimen) | 13, 1 graded | 6, 5 graded | 15, 1 graded |
 | V18 reversed | Q1 monochrome · Q7 in part | Q1 monochrome and badges (arguably) · Q7 clause 2 in full | Q1 monochrome · Q7 clause 2 in part |
 | Slices | 5, small–medium | 6, medium | 8, large |
 
 **Note on the colour-marks row (SQ-796).** The row was an estimate (A 9, none graded; B 6, 5 graded; C 14, none graded). It now carries counts measured on the specimens' at-rest frames, a1, b1 and c1, all with one DOM counter that follows WALK §0. The counter covers the first viewport of the frame's Desk and excludes the dock and the pins. A colour mark is text, a fill or a drawn border with HSL saturation above 0.25, and the paper stocks (lightness above 0.9) count as ground. `capture.js` is not in the repo, so the counter is an approximation, but it reproduces SQ-793's a1 count exactly.
-- **Full marks at the 1440 fold** (text · controls · colour · edges): A 41 · 19 · 13 · 11; B 67 · 20 · 7 · 18; C 67 · 25 · 15 · 17. Today is 45 · 18 · 9 · 12.
-- **At 390** (frames a8, b8 and c8): A 29 · 14 · 9 · 6; B 32 · 14 · 6 · 7; C 42 · 19 · 9 · 10. Today is 25 · 9 · 4 · 8.
+- **Full marks at the 1440 fold** (text · controls · colour · edges): A 43 · 20 · 13 · 12; B 62 · 20 · 6 · 16; C 67 · 25 · 15 · 17. Today is 45 · 18 · 9 · 12. *SQ-798 recounted a1 and b1 with the same counter after triage R1 moved Marsh Street's hand-off onto its card (A) and out of Waiting (B); before R1 they were A 41 · 19 · 13 · 11 and B 67 · 20 · 7 · 18. C is unchanged, because its wall shows every job by design.*
+- **At 390** (frames a8, b8 and c8): A 30 · 15 · 9 · 6 (recounted; was 29 · 14 · 9 · 6); B 32 · 14 · 6 · 7; C 42 · 19 · 9 · 10. Today is 25 · 9 · 4 · 8.
 - **What the colour marks are:**
   - A: four stage rules, one ledger stage tick, the terracotta clause and the clay underline on the primary act, plus the two clay ＋ glyphs and the two ornaments, which the counter scores as two marks each.
-  - B: five lit tabs, the clause and the ＋.
+  - B: four tabs, the clause and the ＋ (the faint "with Jordan" tab left with R1).
   - C: five strip ticks, eight wall bands, the clause and the ＋.
 - **"Graded"** counts every mark that says how urgent something is. All three directions keep the terracotta overdue clause, so each scores at least 1, including C, which the estimate had scored at 0.
-- **Which direction is calmest does not change.** A has the fewest marks in total at 1440 (84, against B's 112 and C's 124). At 390, A and B are level (58 and 59), and C has 80. B still has the fewest colour marks, but six of its seven grade. A's colour count is higher than estimated: 13, close to C's 15. The Calm scores above are the synthesis's and were not re-scored.
+- **Which direction is calmest does not change.** A has the fewest marks in total at 1440 (88, against B's 104 and C's 124). At 390, A and B are level (60 and 59), and C has 80. B still has the fewest colour marks, but five of its six grade. A's colour count is higher than estimated: 13, close to C's 15. The Calm scores above are the synthesis's and were not re-scored.
+- **Glanceable at 390 was re-scored (SQ-798, triage R3).** Neither A's Today nor B's Now fits the 844 px fold, so both drop from 4 to 3 at 390; C's strip fits and stays at 3. At 390 the three directions now score level on Glanceable. **This does not move the recommendation:** A still leads on Calm and on Operable against C, B still leads on Operable, and the 1440 scores are unchanged.
 
 ---
 
@@ -513,7 +516,7 @@ Decide Q1–Q4 first: they choose the direction. The rest can follow the fix-now
 | Q3 | **Reverse V18 Q7?** Q7 demoted stage plates to ink words, and B carried urgency in order and words alone. | **In part.** Stage colour returns as a 3 px edge rule, **never a plate**; the stage word stays ink. Urgency stays in order and words, and only the overdue clause prints in terracotta-ink. No mark grades. | Under a full keep, stage stays a grey word ("a grey word I skip", D5 B3, simulated) and the tag has nothing to say. |
 | Q4 | **What does a Desk card stand for?** A job holding today's lines (A), one need (B), or every job (C). | **A job, holding today's lines.** Leah recognises jobs, not needs (D2 (b)); one name in one place; the five-line guard stays literal. | One need: Holloway as two cards. Every job: the catalogue (32 cards, 5,819 px, WALK §4). |
 | Q5 | **May `--card-edge` box more than claim cards?** House sheet :55–57 says "Claim cards ONLY". | **Yes, for the Desk's Today cards.** They are the claim cards' successors, and the edge is the only 3:1 boundary there is (D1 (b)). Do not extend it to rail stock, where it fails (2.62:1). | The cards take a hairline that fails WCAG 1.4.11, or no edge, which is today's bleed. |
-| Q6 | **After an act, does the line stay put for the visit, and does the slot stay empty?** Today the sixth need fills the gap at once (`day-sheet.ts:158`). | **Yes to both.** The line settles in muted ink as its new state, with Undo for Not today and Set aside; on the next open it moves to its group. "Each defer deals a fresh card" is the engagement loop VISION refuses (D2 (c)). | The sheet refills as it is cleared and can never be finished. |
+| Q6 | **After an act, does the line stay put for the visit, and does the slot stay empty?** Today the sixth need fills the gap at once (`day-sheet.ts:158`). | **Yes to both, and until the end of the working day, not only for the visit** (revised by triage R2). The line settles in muted ink as its new state and time ("Reminder sent · waiting on Nora and Sam Holloway since 8:42", "Not today · 4:15 pm"), with Undo for Not today and Set aside. It stays on its card until the next morning's first open, then moves to its group. So close of day reads what moved, in place (Q15). "Each defer deals a fresh card" is the engagement loop VISION refuses (D2 (c)). | The sheet refills as it is cleared and can never be finished. |
 | Q7 | **Which acts stay in the header?** D1 keeps both creates and moves the date to the Today eyebrow; D2 moves Create a project file to ⌘K and keeps the date on the line. | **Keep both creates** (A's header). Kody objected to the tips, not the acts. R79 made Create a project file a deliberate quiet act. D5 A5.1 (simulated Leah) wants all three "once each". The **390 short labels** ("＋ Inquiry", "＋ Project") go to the Direction C labeling owner for sign-off (V18). | D2's header in A: one create, date on the line. Same fix-now cost. |
 | Q8 | **In the studio's scope, may Leah read a teammate's acted state** ("Jordan chased this, 9:30")? Need state is per person today; `select_own` (00765:45-47). | **Yes, read-only, as a fact on the job:** who acted and when. Never a pace, a count, or "how fast". It needs a studio-member select policy, which is its own migration and its own review. | Leah may chase PO-MS-0388 twice (D2 §0 fact 3), and the studio's scope cannot show "with Jordan". |
 | Q9 | **Give Set aside a door?** Q6 allowed a dated set-aside with a reason; the RPC branch exists (00765:160), but nothing writes it. | **Yes.** It is a second choice on Not today: "Not today · Until…", with a date and a reason. It is never counted and is shown under Coming back with its day. | Chen-like holds return every working day, or are hidden. |
@@ -522,6 +525,7 @@ Decide Q1–Q4 first: they choose the direction. The rest can follow the fix-now
 | Q12 | **Add a project colour column** (`projects.colour`) and carry it to the Document and Field (Direction C)? | **Not now.** Park it in VISION-DECISIONS as a side journey, with C's six tokens as its starting point. Revisit when Field needs cross-surface job identity. | C's migration, backfill, setting, letterhead and Field tile: about three slices more than A. |
 | Q13 | **Dark mode:** document the Desk's dark values, or ship a dark paper set? | **Document only.** Record the six `--tab-*-edge` companions in the house sheet beside `--card-edge`'s dark twin. The portal paints no dark set (`globals.css:56`), and starting one is a separate story. | A dark Desk on its own would be the only dark page in the portal. |
 | Q14 | **May Desk colour ever mean urgency?** This is D1's question, and B's premise. | **No.** Colour orients; order and words carry urgency; terracotta-ink appears only on an overdue clause. Both seats refuse a colour that grades (D5 A4, B4). | B's class tab; the founders also rule the house sheet :592 / :1011 "at risk" items. |
+| Q15 | **At close of day, should the Desk show what moved?** BRIEF §4 M8 asks for it; V18 Q1 bans a "cleared today" count or list. | **In place only:** settled lines stay on their cards until the next morning. Never a count, a list or a "cleared today" header (V18 Q1 stands). | The close answers waiting and coming back only, and M8's "what moved" stays open. |
 
 ---
 

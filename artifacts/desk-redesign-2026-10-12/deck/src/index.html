@@ -262,7 +262,7 @@ figure.shot figcaption, figure.spec figcaption { color: var(--ink-muted); font-s
 .pager button { min-width: 44px; min-height: 44px; padding: 0 14px; background: transparent; border: 1px solid transparent; color: var(--ink); cursor: pointer; font-family: var(--font-meta); font-size: 13px; letter-spacing: .04em; border-radius: var(--radius); }
 .pager button:hover { border-color: var(--rule-strong); }
 .pager button:disabled { color: var(--ink-faint); cursor: default; border-color: transparent; }
-.pager .where { font-family: var(--font-meta); font-size: 13px; letter-spacing: .04em; color: var(--ink-muted); padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: clip; min-width: 0; flex: 0 1 auto; max-width: 52vw; }
+.pager .where { font-family: var(--font-meta); font-size: 13px; line-height: 1.3; letter-spacing: .04em; color: var(--ink-muted); padding: 0 8px; white-space: normal; overflow-wrap: anywhere; text-align: center; min-width: 0; flex: 0 1 auto; max-width: 52vw; }
 @media (max-width: 560px) { .pager .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } .pager .where { max-width: 60vw; font-size: 12px; } }
 .slide h1:focus, .slide h2:focus { outline: none; }
 .slide h1:focus-visible, .slide h2:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 4px; }
@@ -340,7 +340,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
   <div class="inner">
     <p class="kicker">The Desk, re-envisioned · US-26 · 12 October 2026</p>
     <h1 class="t-d0">A true place to run the day from.</h1>
-    <p class="t-lede">Kody asked for three things: a concise top bar, edges between the parts of the Desk, and the cards back with little colour tags. A team of review seats walked today's Desk, measured it, and drew three directions: <strong>A</strong>, Restored and tightened; <strong>B</strong>, The day board; <strong>C</strong>, Studio colours. We recommend <strong>A</strong>. We need your rulings on fourteen questions, Q1&ndash;Q4 first.</p>
+    <p class="t-lede">Kody asked for three things: a concise top bar, edges between the parts of the Desk, and the cards back with little colour tags. A team of review seats walked today's Desk, measured it, and drew three directions: <strong>A</strong>, Restored and tightened; <strong>B</strong>, The day board; <strong>C</strong>, Studio colours. We recommend <strong>A</strong>. We need your rulings on fifteen questions, Q1&ndash;Q4 first.</p>
     <div class="howto" role="list">
       <div role="listitem"><p class="t-head"><span class="tag tag--today">Today</span></p><p>A screenshot from the walk: the Desk as it runs on <code>main</code>, against a local studio, on Monday 12 October.</p></div>
       <div role="listitem"><p class="t-head"><span class="tag tag--prop">Proposed</span></p><p>A live, static mockup on an illustrative fixture: Hartwell Studio, Monday 12 October. Not a real studio.</p></div>
@@ -581,7 +581,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
         <p class="t-body">Acts still open today's prefilled sheets over the Desk. After an act, the line stays where it was, in muted ink, and its slot does not refill.</p>
         <ul class="look">
           <li><strong>1440:</strong> the header, the double rule that opens the day, Today's cards 3 + 2 (about 420 px for five), Today's closing rule, then the ledger. In the studio's scope the ledger regroups by person.</li>
-          <li><strong>390:</strong> a two-row header (about 92 px), then one card per row, with the act and Not today on one row when they fit. Five lines on four cards come to about one screen (today 1,095 px).</li>
+          <li><strong>390:</strong> a two-row header (about 92 px), then one card per row, with the act and Not today on one row when they fit. Five lines on four cards run to 1,177 px, measured on a8: the first 844 px fold shows the header, the Holloway and Linden cards and the head of Marsh Street's; Pell Court is below it.</li>
         </ul>
       </div>
       <div class="scroller stackable">
@@ -625,7 +625,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
       <div class="spec__stage"><div class="spec__scaler">
         <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a1" title="Proposed, frame a1: Direction A's Desk at rest, four job cards with stage rules over a ledger grouped by person" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
       </div></div>
-      <figcaption>Four job cards, each with its stage rule and stage word: Holloway Den carries two lines, with "$3,800 overdue" in terracotta-ink; Marsh Street reads "JORDAN'S". Under Today's closing rule the ledger regroups by person. <span class="est">M1 est. 0 clicks, about 5 s (today 8 s). Marks at rest, measured on the specimen: 41 text &middot; 19 controls &middot; 13 colour &middot; 11 edges (today 45 &middot; 18 &middot; 9 &middot; 12).</span></figcaption>
+      <figcaption>Four job cards, each with its stage rule and stage word: Holloway Den carries two lines, with "$3,800 overdue" in terracotta-ink; Marsh Street reads "JORDAN'S", with its hand-off as the card's first line, above the PO it explains. Under Today's closing rule the ledger regroups by person, and no job in Today appears there again. <span class="est">M1 est. 0 clicks, about 5 s (today 8 s). Marks at rest, measured on the specimen: 43 text &middot; 20 controls &middot; 13 colour &middot; 12 edges (today 45 &middot; 18 &middot; 9 &middot; 12).</span></figcaption>
       <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
     </figure>
     <div class="phones">
@@ -642,7 +642,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
       <div class="stack">
         <p class="t-hint">Between site visits</p>
         <p class="t-sm muted">The two-row header takes about 92 px, not 203. The Holloway and Linden cards sit at the fold.</p>
-        <p class="est">M1 est. 0 clicks, about 8 s (today 14 s). Marks at rest, measured on the specimen: 29 &middot; 14 &middot; 9 &middot; 6 (today 25 &middot; 9 &middot; 4 &middot; 8).</p>
+        <p class="est">M1 est. 0 clicks, about 8 s (today 14 s). Today runs 1,177 px; the 844 px fold holds Holloway and Linden. Marks at rest, measured on the specimen: 30 &middot; 15 &middot; 9 &middot; 6 (today 25 &middot; 9 &middot; 4 &middot; 8).</p>
       </div>
     </div>
   </div>
@@ -794,9 +794,9 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
       <figure class="spec wide" data-w="1440" data-h="1250" data-s="frame-a6">
         <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; A &middot; 5:50 pm</span><span class="src">frame a6</span></p>
         <div class="spec__stage"><div class="spec__scaler">
-          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a6" title="Proposed, frame a6: Leah's close of day under Direction A, the empty Today box over With others and Coming back" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a6" title="Proposed, frame a6: Leah's close of day under Direction A, the settled cards in Today over With others and Coming back" srcdoc="{{SPECIMEN_A_1440}}"></iframe>
         </div></div>
-        <figcaption>The empty Today box reads "Nothing more needs you today.", then the ledger's With others and Coming back, each with its date. No "moved today" list, no "cleared", no count. <span class="est">M8 est. 0 clicks to read, about 5 s at 390.</span></figcaption>
+        <figcaption>Today reads "Nothing more needs you today." above the six cards Leah settled today, each line in muted ink with its new state and time: that is what moved, in place, until tomorrow's first open. Below, With others holds only what waited before today, then Coming back. No "moved today" list, no "cleared", no count. <span class="est">M8 est. 0 clicks to read, about 5 s at 390.</span></figcaption>
         <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
       </figure>
       <div class="phones">
@@ -810,7 +810,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
             <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-a12" title="Proposed, frame a12: the close of day on the phone under Direction A" srcdoc="{{SPECIMEN_A_390}}"></iframe>
           </div></div>
         </figure>
-        <div class="stack"><p class="t-hint">The close, on the phone</p><p class="t-sm muted">With others and Coming back are always shown, with dates.</p></div>
+        <div class="stack"><p class="t-hint">The close, on the phone</p><p class="t-sm muted">The settled cards first, then With others and Coming back, always shown, with dates.</p></div>
       </div>
     </div>
   </div>
@@ -893,7 +893,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
           <tr><td class="id" data-label="#">M5</td><td data-label="Path">Jordan's Marsh Street card opens with the hand-off; holder words on every card in the studio's scope</td><td data-label="A: clicks">Whose 0 &middot; read 1</td><td data-label="A: est. s">2 / 3</td><td data-label="Today: s">4 / 5</td></tr>
           <tr><td class="id" data-label="#">M6</td><td data-label="Path">Press the name on Holloway's card; Back returns to the same place (F6)</td><td data-label="A: clicks">1 + Back</td><td data-label="A: est. s">2 / 3</td><td data-label="Today: s">8 / 15</td></tr>
           <tr><td class="id" data-label="#">M7</td><td data-label="Path">Record an inquiry; the overlay closes onto the Desk with a muted line; the lead lands under her name</td><td data-label="A: clicks">3 + 0</td><td data-label="A: est. s">25 + 0</td><td data-label="Today: s">25 + about 10</td></tr>
-          <tr><td class="id" data-label="#">M8</td><td data-label="Path">"Nothing more needs you today." above With others and Coming back, always shown</td><td data-label="A: clicks">0 to read</td><td data-label="A: est. s">about 10 / 5 to read</td><td data-label="Today: s">not readable</td></tr>
+          <tr><td class="id" data-label="#">M8</td><td data-label="Path">What moved: the settled lines stay on their cards, with state and time, until tomorrow. Then With others and Coming back, always shown</td><td data-label="A: clicks">0 to read</td><td data-label="A: est. s">about 10 / 5 to read</td><td data-label="Today: s">not readable</td></tr>
         </tbody>
       </table>
     </div>
@@ -901,9 +901,9 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
       <table class="sheet">
         <thead><tr><th scope="col">Out of 5</th><th scope="col">Today</th><th scope="col">A</th><th scope="col">Basis</th></tr></thead>
         <tbody>
-          <tr class="marks-row"><th scope="row">Calm</th><td data-label="Today">3</td><td data-label="A"><strong>4</strong></td><td data-label="Basis"><strong>Marks at rest at the 1440 fold, measured on the specimen:</strong> 41 text &middot; 19 controls &middot; 13 colour &middot; 11 edges (today 45 &middot; 18 &middot; 9 &middot; 12). At 390: 29 &middot; 14 &middot; 9 &middot; 6. One colour mark grades, the overdue clause; the tags grade nothing. The synthesis had estimated 9 colour marks; measured, it is 13, close to C's 15. Not 5: that is more colour than V18 Q1's monochrome Desk.</td></tr>
+          <tr class="marks-row"><th scope="row">Calm</th><td data-label="Today">3</td><td data-label="A"><strong>4</strong></td><td data-label="Basis"><strong>Marks at rest at the 1440 fold, measured on the specimen:</strong> 41 text &middot; 19 controls &middot; 13 colour &middot; 11 edges (today 45 &middot; 18 &middot; 9 &middot; 12). At 390: 30 &middot; 15 &middot; 9 &middot; 6 (recounted after the hand-off moved onto Marsh Street's card). One colour mark grades, the overdue clause; the tags grade nothing. The synthesis had estimated 9 colour marks; measured, it is 13, close to C's 15. Not 5: that is more colour than V18 Q1's monochrome Desk.</td></tr>
           <tr><th scope="row">Operable</th><td data-label="Today">2</td><td data-label="A"><strong>4</strong></td><td data-label="Basis">Every moment at most 1 click from rest, except M7's typing; no scroll to act at 1440. Not 5: acts still open a sheet over the page.</td></tr>
-          <tr><th scope="row">Glanceable</th><td data-label="Today">2</td><td data-label="A"><strong>4</strong></td><td data-label="Basis">M1 about 5 s at 1440 and 8 s at 390; the close reads in about 5 s. Not 5: "what can wait" is one section below the fold at 390.</td></tr>
+          <tr><th scope="row">Glanceable</th><td data-label="Today">2</td><td data-label="A"><strong>4 at 1440 &middot; 3 at 390</strong></td><td data-label="Basis">M1 about 5 s at 1440 and 8 s at 390; the close reads in about 5 s. At 390, re-scored to 3: the first 844 px fold holds two of Today's four cards, and Today runs to 1,177 px before "what can wait" starts.</td></tr>
         </tbody>
       </table>
     </div>
@@ -927,7 +927,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
         <p class="t-body">Pressing an act opens it <strong>inside the card</strong>, not over the page. The card grows in place to hold the scoped draft and a named second control ("Send to Nora and Sam Holloway"), with Put back beside it. One card is open at a time. After sending, the card settles in place, its tab drops to faint, and its slot does not refill.</p>
         <ul class="look">
           <li><strong>1440:</strong> Now about 480 px wide, one-up; Waiting and Coming back about 236 px each, compact cards with no act foot. "Every job &mdash; show" folds the full ledger below the board.</li>
-          <li><strong>390:</strong> the columns stack, Now then Waiting then Coming back. No tabs or segmented control. Five Now cards come to about one screen.</li>
+          <li><strong>390:</strong> the columns stack, Now then Waiting then Coming back. No tabs or segmented control. Now runs to 1,231 px, measured on b8: the first 844 px fold shows three of its five cards.</li>
         </ul>
       </div>
       <div class="scroller stackable">
@@ -969,7 +969,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
       <div class="spec__stage"><div class="spec__scaler">
         <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b1" title="Proposed, frame b1: Direction B's day board at rest, five Now cards beside Waiting and Coming back" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
       </div></div>
-      <figcaption>Now holds the studio's five need cards in rank order: two solid terracotta tabs (money or a signature), three 2 px clay tabs. Waiting splits into "with clients and makers" and "with Jordan"; Coming back lists Chen and Garnet Hill by day. Their tabs are faint. <span class="est">M1 est. 0 clicks, about 4 s (today 8 s). Marks at rest, measured on the specimen: 67 text &middot; 20 controls &middot; 7 colour &middot; 18 edges (today 45 &middot; 18 &middot; 9 &middot; 12). Six of the seven colour marks grade: five lit tabs and the overdue clause.</span></figcaption>
+      <figcaption>Now holds the studio's five need cards in rank order: two solid terracotta tabs (money or a signature), three 2 px clay tabs. Marsh Street's card opens with its hand-off line, so Waiting holds only what waits on clients and makers; Coming back lists Chen and Garnet Hill by day. Their tabs are faint. <span class="est">M1 est. 0 clicks, about 4 s (today 8 s). Marks at rest, measured on the specimen: 62 text &middot; 20 controls &middot; 6 colour &middot; 16 edges (today 45 &middot; 18 &middot; 9 &middot; 12). Five of the six colour marks grade: four tabs and the overdue clause.</span></figcaption>
       <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
     </figure>
     <div class="phones">
@@ -1115,9 +1115,9 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
       <figure class="spec wide" data-w="1440" data-h="1250" data-s="frame-b6">
         <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; B &middot; 5:50 pm</span><span class="src">frame b6</span></p>
         <div class="spec__stage"><div class="spec__scaler">
-          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b6" title="Proposed, frame b6: Leah's close of day on the day board, Now's sentence beside full Waiting and Coming back columns" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b6" title="Proposed, frame b6: Leah's close of day on the day board, Now's sentence over its settled cards, beside Waiting and Coming back" srcdoc="{{SPECIMEN_B_1440}}"></iframe>
         </div></div>
-        <figcaption>Now reads "Nothing more needs you today." beside full Waiting and Coming back columns: the close, side by side, in one look. <span class="est">M8 est. 0 clicks to read, about 4 s.</span></figcaption>
+        <figcaption>Now reads "Nothing more needs you today." above the seven cards Leah settled today, faint-tabbed, each with its new state and time: what moved, in place, until tomorrow's first open. Waiting holds only what waited before today, and Coming back sits beside it: the close, in one look. <span class="est">M8 est. 0 clicks to read, about 4 s.</span></figcaption>
         <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
       </figure>
       <div class="phones">
@@ -1131,7 +1131,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
             <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-b12" title="Proposed, frame b12: the close of day on the phone under Direction B" srcdoc="{{SPECIMEN_B_390}}"></iframe>
           </div></div>
         </figure>
-        <div class="stack"><p class="t-hint">The close, on the phone</p><p class="t-sm muted">Now's sentence, then Waiting with every date, then Coming back by day.</p><p class="est">M8 est. about 4 s to read.</p></div>
+        <div class="stack"><p class="t-hint">The close, on the phone</p><p class="t-sm muted">Now's sentence and its settled cards, then Waiting with every date, then Coming back by day.</p><p class="est">M8 est. about 4 s to read.</p></div>
       </div>
     </div>
   </div>
@@ -1207,7 +1207,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
           <tr><td class="id" data-label="#">M5</td><td data-label="Path">Jordan's Now: the hand-off card first, then the PO</td><td data-label="B: clicks">Whose 0 &middot; read 1</td><td data-label="B: est. s">2 / 3</td><td data-label="Today: s">4 / 5</td></tr>
           <tr><td class="id" data-label="#">M6</td><td data-label="Path">Press a card's name; Back returns to the same place</td><td data-label="B: clicks">1 + Back</td><td data-label="B: est. s">2 / 3</td><td data-label="Today: s">8 / 15</td></tr>
           <tr><td class="id" data-label="#">M7</td><td data-label="Path">Record an inquiry; it joins Now if it ranks, otherwise heads Also yours in the folded ledger, with a muted line for the visit</td><td data-label="B: clicks">3 + 0</td><td data-label="B: est. s">25 + 0</td><td data-label="Today: s">25 + 10</td></tr>
-          <tr><td class="id" data-label="#">M8</td><td data-label="Path">Now's sentence; Waiting and Coming back are the close, side by side at 1440</td><td data-label="B: clicks">0 to read</td><td data-label="B: est. s">about 10 / 4 to read</td><td data-label="Today: s">not readable</td></tr>
+          <tr><td class="id" data-label="#">M8</td><td data-label="Path">Now's sentence over the settled cards (what moved, until tomorrow); Waiting and Coming back are the rest of the close, side by side at 1440</td><td data-label="B: clicks">0 to read</td><td data-label="B: est. s">about 10 / 4 to read</td><td data-label="Today: s">not readable</td></tr>
         </tbody>
       </table>
     </div>
@@ -1215,9 +1215,9 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
       <table class="sheet">
         <thead><tr><th scope="col">Out of 5</th><th scope="col">Today</th><th scope="col">B</th><th scope="col">Basis</th></tr></thead>
         <tbody>
-          <tr class="marks-row"><th scope="row">Calm</th><td data-label="Today">3</td><td data-label="B"><strong>3</strong></td><td data-label="Basis"><strong>Marks at rest at the 1440 fold, measured on the specimen:</strong> 67 text &middot; 20 controls &middot; 7 colour &middot; 18 edges (today 45 &middot; 18 &middot; 9 &middot; 12). At 390: 32 &middot; 14 &middot; 6 &middot; 7. The fewest colour marks of the three, but <strong>six of the seven grade</strong>: every lit tab, and the overdue clause. On most mornings the top of Now is solid terracotta. The most text and the most boxes of the three.</td></tr>
+          <tr class="marks-row"><th scope="row">Calm</th><td data-label="Today">3</td><td data-label="B"><strong>3</strong></td><td data-label="Basis"><strong>Marks at rest at the 1440 fold, measured on the specimen:</strong> 62 text &middot; 20 controls &middot; 6 colour &middot; 16 edges (today 45 &middot; 18 &middot; 9 &middot; 12), recounted after the hand-off left Waiting. At 390: 32 &middot; 14 &middot; 6 &middot; 7. The fewest colour marks of the three, but <strong>five of the six grade</strong>: every tab at the fold, and the overdue clause. On most mornings the top of Now is solid terracotta. The most text and the most boxes of the three.</td></tr>
           <tr><th scope="row">Operable</th><td data-label="Today">2</td><td data-label="B"><strong>5</strong></td><td data-label="Basis">Every act is one press from rest and done inside its card, with no overlay to orient in. The close reads with 0 clicks.</td></tr>
-          <tr><th scope="row">Glanceable</th><td data-label="Today">2</td><td data-label="B"><strong>4</strong></td><td data-label="Basis">At 1440 the columns answer M1 and M8 in one look, about 4 s. At 390 Waiting is a screen down. Holloway as two cards reads as two jobs.</td></tr>
+          <tr><th scope="row">Glanceable</th><td data-label="Today">2</td><td data-label="B"><strong>4 at 1440 &middot; 3 at 390</strong></td><td data-label="Basis">At 1440 the columns answer M1 and M8 in one look, about 4 s. At 390, re-scored to 3: the first 844 px fold holds three of Now's five cards, Now runs to 1,231 px, and Waiting starts below that. Holloway as two cards reads as two jobs.</td></tr>
         </tbody>
       </table>
     </div>
@@ -1426,9 +1426,9 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
       <figure class="spec wide" data-w="1440" data-h="1250" data-s="frame-c6">
         <p class="t-head pair-label"><span class="tag tag--prop">Proposed &middot; C &middot; 5:50 pm</span><span class="src">frame c6</span></p>
         <div class="spec__stage"><div class="spec__scaler">
-          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-c6" title="Proposed, frame c6: Leah's close of day, the strip's sentence over the wall's state lines" srcdoc="{{SPECIMEN_C_1440}}"></iframe>
+          <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-c6" title="Proposed, frame c6: Leah's close of day, the strip's sentence and its settled lines over the wall's state lines" srcdoc="{{SPECIMEN_C_1440}}"></iframe>
         </div></div>
-        <figcaption>The strip reads "Nothing more needs you today." The wall's state lines carry what waits on others and what comes back, each with its date. At rest is folded. <span class="est">M8 est. 0 clicks to read, about 10 s to read across the wall.</span></figcaption>
+        <figcaption>The strip reads "Nothing more needs you today." above the seven lines Leah settled today, each with its job's tick and its new state and time: what moved, in place, until tomorrow's first open. The wall's state lines carry what waits on others and what comes back, each with its date. At rest is folded. <span class="est">M8 est. 0 clicks to read, about 10 s to read across the wall.</span></figcaption>
         <p class="narrow-note t-meta">A 1440 frame, scaled to fit. Open the deck on a wider screen to read it.</p>
       </figure>
       <div class="phones">
@@ -1442,7 +1442,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
             <iframe class="spec-frame" sandbox="allow-scripts" loading="lazy" name="frame-c12" title="Proposed, frame c12: the close of day on the phone under Direction C" srcdoc="{{SPECIMEN_C_390}}"></iframe>
           </div></div>
         </figure>
-        <div class="stack"><p class="t-hint">The close, on the phone</p><p class="t-sm muted">The strip's sentence, then the wall 2-up, whose state lines say who has it and since when.</p><p class="est">M8 est. about 8 s to read.</p></div>
+        <div class="stack"><p class="t-hint">The close, on the phone</p><p class="t-sm muted">The strip's sentence and its settled lines, then the wall 2-up, whose state lines say who has it and since when.</p><p class="est">M8 est. about 8 s to read.</p></div>
       </div>
     </div>
   </div>
@@ -1509,14 +1509,14 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
       <table class="sheet">
         <thead><tr><th scope="col">#</th><th scope="col">Path under C</th><th scope="col">C: clicks</th><th scope="col">C: est. s, 1440 / 390</th><th scope="col">Today: s</th></tr></thead>
         <tbody>
-          <tr><td class="id" data-label="#">M1</td><td data-label="Path">Read the strip (five lines), then glance at the wall for the rest</td><td data-label="C: clicks">0 (1 screen at 390)</td><td data-label="C: est. s">5 / 9</td><td data-label="Today: s">8 / 14</td></tr>
+          <tr><td class="id" data-label="#">M1</td><td data-label="Path">Read the strip (five lines), then glance at the wall for the rest</td><td data-label="C: clicks">0 (the strip ends at 651 px, inside the 844 px fold)</td><td data-label="C: est. s">5 / 9</td><td data-label="Today: s">8 / 14</td></tr>
           <tr><td class="id" data-label="#">M2</td><td data-label="Path">Strip line 2, Linden (teal tick) &middot; Follow up opens the existing sheet</td><td data-label="C: clicks">1</td><td data-label="C: est. s">4 / 5</td><td data-label="Today: s">12 / 20</td></tr>
           <tr><td class="id" data-label="#">M3</td><td data-label="Path">Strip line 3, Holloway (indigo) &middot; Chase the maker</td><td data-label="C: clicks">1</td><td data-label="C: est. s">4 / 5</td><td data-label="Today: s">20+</td></tr>
           <tr><td class="id" data-label="#">M4</td><td data-label="Path">Strip line 1, Holloway &middot; Send reminder</td><td data-label="C: clicks">1</td><td data-label="C: est. s">4 / 5</td><td data-label="Today: s">5 / 6</td></tr>
           <tr><td class="id" data-label="#">M5</td><td data-label="Path">Jordan's strip: the hand-off first, then the PO. In the studio's scope the wall's "Jordan's" group holds Marsh Street (plum) and Wren Row Bath</td><td data-label="C: clicks">Whose 0 &middot; read 1</td><td data-label="C: est. s">2 / 3</td><td data-label="Today: s">4 / 5</td></tr>
           <tr><td class="id" data-label="#">M6</td><td data-label="Path">Press Holloway's wall card. The Document opens under an indigo letterhead band; Back returns to the same place</td><td data-label="C: clicks">1 + Back</td><td data-label="C: est. s">2 / 3</td><td data-label="Today: s">8 / 15</td></tr>
           <tr><td class="id" data-label="#">M7</td><td data-label="Path">Record the inquiry. Ainsley Moore's new card appears at the head of yours, in the next colour in turn</td><td data-label="C: clicks">3 + 0</td><td data-label="C: est. s">25 + 0</td><td data-label="Today: s">25 + 10</td></tr>
-          <tr><td class="id" data-label="#">M8</td><td data-label="Path">The strip's sentence; the wall's state lines answer waiting and coming back, across sixteen cards</td><td data-label="C: clicks">0 to read</td><td data-label="C: est. s">about 10 / 8 to read</td><td data-label="Today: s">not readable</td></tr>
+          <tr><td class="id" data-label="#">M8</td><td data-label="Path">The strip's sentence over its settled lines (what moved, until tomorrow); the wall's state lines answer waiting and coming back, across sixteen cards</td><td data-label="C: clicks">0 to read</td><td data-label="C: est. s">about 10 / 8 to read</td><td data-label="Today: s">not readable</td></tr>
         </tbody>
       </table>
     </div>
@@ -1526,7 +1526,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
         <tbody>
           <tr class="marks-row"><th scope="row">Calm</th><td data-label="Today">3</td><td data-label="C"><strong>2</strong></td><td data-label="Basis"><strong>Marks at rest at the 1440 fold, measured on the specimen:</strong> 67 text &middot; 25 controls &middot; 15 colour &middot; 17 edges (today 45 &middot; 18 &middot; 9 &middot; 12). At 390: 42 &middot; 19 &middot; 9 &middot; 10. The most marks of the three. One colour mark grades, the overdue clause (the estimate said none). The most colour, a key a hire must learn, and a studio choice on every new job.</td></tr>
           <tr><th scope="row">Operable</th><td data-label="Today">2</td><td data-label="C"><strong>4</strong></td><td data-label="Basis">One press from rest for every moment; the wall is a one-click index into every job. Acts still open the overlay sheets.</td></tr>
-          <tr><th scope="row">Glanceable</th><td data-label="Today">2</td><td data-label="C"><strong>3</strong></td><td data-label="Basis">The strip reads in about 5 s, but M8 means scanning sixteen state lines. Colour helps only once the studio has learned which job is which colour; at 390 the wall runs to about 1,000 px.</td></tr>
+          <tr><th scope="row">Glanceable</th><td data-label="Today">2</td><td data-label="C"><strong>3 at 1440 &middot; 3 at 390</strong></td><td data-label="Basis">The strip reads in about 5 s, and at 390 it ends at 651 px, inside the fold, but M8 means scanning sixteen state lines. Colour helps only once the studio has learned which job is which colour; at 390 the wall runs to about 1,000 px.</td></tr>
         </tbody>
       </table>
     </div>
@@ -1554,17 +1554,19 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
           <tr><th scope="row">Acting</th><td data-label="A">Today's overlay sheets</td><td data-label="B">Inside the card</td><td data-label="C">Today's overlay sheets, from the strip</td></tr>
           <tr><th scope="row">Header</th><td data-label="A">D1: both creates, the date to the eyebrow</td><td data-label="B">D2: one create, the date on the line</td><td data-label="C">As B</td></tr>
           <tr><th scope="row">Schema</th><td data-label="A">None</td><td data-label="B">None</td><td data-label="C"><code>projects.colour</code></td></tr>
-          <tr><th scope="row">Calm &middot; Operable &middot; Glanceable</th><td data-label="A"><strong>4 &middot; 4 &middot; 4</strong></td><td data-label="B">3 &middot; 5 &middot; 4</td><td data-label="C">2 &middot; 4 &middot; 3</td></tr>
-          <tr class="marks-row"><th scope="row">Marks at rest, 1440 fold, measured on the specimen</th><td data-label="A">41 &middot; 19 &middot; 13 &middot; 11 = <strong>84</strong></td><td data-label="B">67 &middot; 20 &middot; 7 &middot; 18 = 112</td><td data-label="C">67 &middot; 25 &middot; 15 &middot; 17 = 124</td></tr>
-          <tr class="marks-row"><th scope="row">Colour marks, 1440 fold, measured on the specimen</th><td data-label="A">13, 1 graded</td><td data-label="B">7, 6 graded</td><td data-label="C">15, 1 graded</td></tr>
-          <tr class="marks-row"><th scope="row">Marks at rest, 390 fold, measured on the specimen</th><td data-label="A">29 &middot; 14 &middot; 9 &middot; 6 = <strong>58</strong></td><td data-label="B">32 &middot; 14 &middot; 6 &middot; 7 = 59</td><td data-label="C">42 &middot; 19 &middot; 9 &middot; 10 = 80</td></tr>
+          <tr><th scope="row">Calm &middot; Operable &middot; Glanceable (Glanceable at 1440 / 390)</th><td data-label="A"><strong>4 &middot; 4 &middot; 4 / 3</strong></td><td data-label="B">3 &middot; 5 &middot; 4 / 3</td><td data-label="C">2 &middot; 4 &middot; 3 / 3</td></tr>
+          <tr><th scope="row">Today at 390, measured on the specimen (844 px fold)</th><td data-label="A">1,177 px; the fold holds 2 of 4 cards</td><td data-label="B">1,231 px; the fold holds 3 of 5 cards</td><td data-label="C">651 px; the strip fits</td></tr>
+          <tr class="marks-row"><th scope="row">Marks at rest, 1440 fold, measured on the specimen</th><td data-label="A">43 &middot; 20 &middot; 13 &middot; 12 = <strong>88</strong></td><td data-label="B">62 &middot; 20 &middot; 6 &middot; 16 = 104</td><td data-label="C">67 &middot; 25 &middot; 15 &middot; 17 = 124</td></tr>
+          <tr class="marks-row"><th scope="row">Colour marks, 1440 fold, measured on the specimen</th><td data-label="A">13, 1 graded</td><td data-label="B">6, 5 graded</td><td data-label="C">15, 1 graded</td></tr>
+          <tr class="marks-row"><th scope="row">Marks at rest, 390 fold, measured on the specimen</th><td data-label="A">30 &middot; 15 &middot; 9 &middot; 6 = <strong>60</strong></td><td data-label="B">32 &middot; 14 &middot; 6 &middot; 7 = 59</td><td data-label="C">42 &middot; 19 &middot; 9 &middot; 10 = 80</td></tr>
           <tr><th scope="row">V18 reversed</th><td data-label="A">Q1 monochrome &middot; Q7 in part</td><td data-label="B">Q1 monochrome and badges (arguably) &middot; Q7 clause 2 in full</td><td data-label="C">Q1 monochrome &middot; Q7 clause 2 in part</td></tr>
           <tr><th scope="row">Slices</th><td data-label="A">5, small to medium</td><td data-label="B">6, medium</td><td data-label="C">8, large</td></tr>
         </tbody>
       </table>
     </div>
     <p class="t-sm muted">Marks are text &middot; controls &middot; colour &middot; edges in the first viewport of each at-rest frame (a1, b1, c1 at 1440; a8, b8, c8 at 390), one counter for all six, following WALK &sect;0. Today is 45 &middot; 18 &middot; 9 &middot; 12 = 84 at 1440, and 25 &middot; 9 &middot; 4 &middot; 8 = 46 at 390. "Graded" counts a colour mark that says how urgent something is.</p>
-    <p class="plain">Measuring does not change which direction is calmest. A has the fewest marks: 84 at 1440, level with today, against 112 for B and 124 for C; at 390, A and B are level. B has the fewest colour marks, but six of its seven grade. A carries more colour than the synthesis estimated: 13 marks, not 9, close to C's 15. The Calm scores are the synthesis's and were not re-scored.</p>
+    <p class="plain">Measuring does not change which direction is calmest. A has the fewest marks: 88 at 1440, against 104 for B, 124 for C and 84 today; at 390, A and B are level (60 and 59). B has the fewest colour marks, but five of its six grade. A carries more colour than the synthesis estimated: 13 marks, not 9, close to C's 15. The Calm scores are the synthesis's and were not re-scored.</p>
+    <p class="plain">Glanceable at 390 was re-scored after measuring. Neither A's Today (1,177 px) nor B's Now (1,231 px) fits the 844 px fold, so both drop from 4 to 3 at 390; C's strip fits and stays at 3. On the phone the three score level on Glanceable. That does not move the recommendation: the 1440 scores, and A's lead on Calm, are unchanged.</p>
   </div>
 </section>
 
@@ -1675,7 +1677,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
 <section class="slide" id="s-questions" data-label="Founder questions">
   <header class="shead"><span class="no">31 / 32</span><span class="ch">11 · Founder questions</span><span class="job">direction.md §7 · decide Q1&ndash;Q4 first</span></header>
   <div class="inner">
-    <h2 class="t-d1">Fourteen questions for the founders</h2>
+    <h2 class="t-d1">Fifteen questions for the founders</h2>
     <p class="t-lede">Q1&ndash;Q4 choose the direction, so they come first. The rest can follow the fix-now track. Each shows the recommended answer and what follows if you decline it.</p>
     <p class="t-sm faint">Each ruling field keeps a draft in this browser only. Nothing is sent or shared; copy your rulings out when you are done.</p>
     <ol class="qcards">
@@ -1684,7 +1686,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
       <li class="first"><div class="qhead"><span class="qno">Q3</span><span class="qtag">Decide first</span></div><p class="qtext">Reverse V18 Q7? Q7 demoted stage plates to ink words and carried urgency in order and words alone.</p><p class="qrec"><b>Recommended</b>In part. Stage colour returns as a 3 px edge rule, never a plate; the stage word stays ink. Urgency stays in order and words; only the overdue clause prints in terracotta-ink. No mark grades.</p><p class="qelse"><b>If declined</b>Stage stays a grey word ("a grey word I skip", simulated principal) and the tag has nothing to say.</p><div class="ruling"><label for="rule-q3">Your ruling</label><textarea id="rule-q3" data-ruling="q3" rows="3"></textarea></div></li>
       <li class="first"><div class="qhead"><span class="qno">Q4</span><span class="qtag">Decide first</span></div><p class="qtext">What does a Desk card stand for? A job holding today's lines (A), one need (B), or every job (C).</p><p class="qrec"><b>Recommended</b>A job, holding today's lines. Leah recognises jobs, not needs; one name in one place; the five-line guard stays literal.</p><p class="qelse"><b>If declined</b>One need: Holloway as two cards. Every job: the catalogue again (32 cards, 5,819 px).</p><div class="ruling"><label for="rule-q4">Your ruling</label><textarea id="rule-q4" data-ruling="q4" rows="3"></textarea></div></li>
       <li><div class="qhead"><span class="qno">Q5</span></div><p class="qtext">May <code>--card-edge</code> box more than claim cards? House sheet :55&ndash;57 says claim cards only.</p><p class="qrec"><b>Recommended</b>Yes, for the Desk's Today cards: the claim cards' successors, and the only 3:1 boundary there is. Not on rail stock, where it fails (2.62:1).</p><p class="qelse"><b>If declined</b>A hairline that fails WCAG 1.4.11, or no edge, which is today's bleed.</p><div class="ruling"><label for="rule-q5">Your ruling</label><textarea id="rule-q5" data-ruling="q5" rows="3"></textarea></div></li>
-      <li><div class="qhead"><span class="qno">Q6</span></div><p class="qtext">After an act, does the line stay put for the visit, and does the slot stay empty? Today the sixth need fills the gap at once.</p><p class="qrec"><b>Recommended</b>Yes to both. The line settles in muted ink with Undo; on the next open it moves to its group. "Each defer deals a fresh card" is the engagement loop VISION refuses.</p><p class="qelse"><b>If declined</b>The sheet refills as it is cleared and can never be finished.</p><div class="ruling"><label for="rule-q6">Your ruling</label><textarea id="rule-q6" data-ruling="q6" rows="3"></textarea></div></li>
+      <li><div class="qhead"><span class="qno">Q6</span></div><p class="qtext">After an act, does the line stay put, and does the slot stay empty? Today the sixth need fills the gap at once.</p><p class="qrec"><b>Recommended</b>Yes to both, until the end of the working day, not only for the visit. The line settles in muted ink as its new state and time, with Undo; on the next morning's first open it moves to its group (Q15). "Each defer deals a fresh card" is the engagement loop VISION refuses.</p><p class="qelse"><b>If declined</b>The sheet refills as it is cleared and can never be finished.</p><div class="ruling"><label for="rule-q6">Your ruling</label><textarea id="rule-q6" data-ruling="q6" rows="3"></textarea></div></li>
       <li><div class="qhead"><span class="qno">Q7</span></div><p class="qtext">Which acts stay in the header? D1 keeps both creates and moves the date; D2 moves Create a project file to &#x2318;K.</p><p class="qrec"><b>Recommended</b>Keep both creates (A's header). Kody objected to the tips, not the acts. The 390 short labels ("&#xFF0B; Inquiry", "&#xFF0B; Project") go to the labeling owner for sign-off.</p><p class="qelse"><b>If declined</b>D2's header in A: one create, the date on the line. Same fix-now cost.</p><div class="ruling"><label for="rule-q7">Your ruling</label><textarea id="rule-q7" data-ruling="q7" rows="3"></textarea></div></li>
       <li><div class="qhead"><span class="qno">Q8</span></div><p class="qtext">In the studio's scope, may Leah read a teammate's acted state ("Jordan chased this, 9:30")? Need state is per person today.</p><p class="qrec"><b>Recommended</b>Yes, read-only, as a fact on the job: who acted and when. Never a pace or a count. It needs a studio-member select policy: its own migration and review.</p><p class="qelse"><b>If declined</b>Leah may chase PO-MS-0388 twice, and the studio's scope cannot show "with Jordan".</p><div class="ruling"><label for="rule-q8">Your ruling</label><textarea id="rule-q8" data-ruling="q8" rows="3"></textarea></div></li>
       <li><div class="qhead"><span class="qno">Q9</span></div><p class="qtext">Give Set aside a door? The RPC branch exists, but nothing writes it.</p><p class="qrec"><b>Recommended</b>Yes: a second choice on Not today, "Not today &middot; Until&hellip;", with a date and a reason. Never counted; shown under Coming back with its day.</p><p class="qelse"><b>If declined</b>Chen-like holds return every working day, or are hidden.</p><div class="ruling"><label for="rule-q9">Your ruling</label><textarea id="rule-q9" data-ruling="q9" rows="3"></textarea></div></li>
@@ -1693,6 +1695,7 @@ pre.hdr { margin: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); b
       <li><div class="qhead"><span class="qno">Q12</span></div><p class="qtext">Add a project colour column (<code>projects.colour</code>) and carry it to the Document and Field (Direction C)?</p><p class="qrec"><b>Recommended</b>Not now. Park it in VISION-DECISIONS as a side journey, with C's six tokens as its starting point. Revisit when Field needs cross-surface job identity.</p><p class="qelse"><b>If declined</b>C's migration, backfill, setting, letterhead and Field tile: about three slices more than A.</p><div class="ruling"><label for="rule-q12">Your ruling</label><textarea id="rule-q12" data-ruling="q12" rows="3"></textarea></div></li>
       <li><div class="qhead"><span class="qno">Q13</span></div><p class="qtext">Dark mode: document the Desk's dark values, or ship a dark paper set?</p><p class="qrec"><b>Recommended</b>Document only. Record the six <code>--tab-*-edge</code> companions beside <code>--card-edge</code>'s dark twin. Starting a dark set is a separate story.</p><p class="qelse"><b>If declined</b>A dark Desk on its own would be the only dark page in the portal.</p><div class="ruling"><label for="rule-q13">Your ruling</label><textarea id="rule-q13" data-ruling="q13" rows="3"></textarea></div></li>
       <li><div class="qhead"><span class="qno">Q14</span></div><p class="qtext">May Desk colour ever mean urgency? D1's question, and B's premise.</p><p class="qrec"><b>Recommended</b>No. Colour orients; order and words carry urgency; terracotta-ink appears only on an overdue clause. Both simulated seats refuse a colour that grades.</p><p class="qelse"><b>If declined</b>B's class tab; you also rule the house sheet's :592 and :1011 "at risk" items.</p><div class="ruling"><label for="rule-q14">Your ruling</label><textarea id="rule-q14" data-ruling="q14" rows="3"></textarea></div></li>
+      <li><div class="qhead"><span class="qno">Q15</span></div><p class="qtext">At close of day, should the Desk show what moved? The brief asks for it (M8); V18 Q1 bans a "cleared today" count or list.</p><p class="qrec"><b>Recommended</b>In place only: settled lines stay on their cards until the next morning. Never a count, a list or a "cleared today" header (V18 Q1 stands).</p><p class="qelse"><b>If declined</b>The close answers waiting and coming back only, and M8's "what moved" stays open.</p><div class="ruling"><label for="rule-q15">Your ruling</label><textarea id="rule-q15" data-ruling="q15" rows="3"></textarea></div></li>
     </ol>
   </div>
 </section>
