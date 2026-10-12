@@ -112,6 +112,34 @@ describe('DeskLedgerRow — the roster line (US-25 slice 4)', () => {
     }
   });
 
+  // SQ-784 R1 — the act track is a fixed width (globals.css .desk-ledger-row)
+  // and a need's act can run past it; the house rule is wrap, never clip.
+  it('lets a long act wrap inside its track, on a link act and a ledger act alike', () => {
+    const { container, rerender } = render(
+      <DeskLedgerRow
+        line={line({
+          needKind: 'ceremony_pending',
+          act: { label: 'Continue the introduction', href: '/doc/reinhardt' },
+        })}
+      />,
+    );
+    const act = () => container.querySelector('[data-ledger-cell="act"] [data-action-key^="roster-"]')!;
+    expect(act()).toHaveTextContent('Continue the introduction');
+    expect(act().className).toContain('whitespace-normal');
+    expect(act().className).not.toContain('whitespace-nowrap');
+    rerender(
+      <DeskLedgerRow
+        line={line({
+          needKind: 'overdue_invoice',
+          act: { label: 'Send reminder', href: '/doc/reinhardt', ledger: { name: 'accounts', context: {} } },
+        })}
+      />,
+    );
+    expect(act().tagName).toBe('BUTTON');
+    expect(act().className).toContain('whitespace-normal');
+    expect(act().className).not.toContain('whitespace-nowrap');
+  });
+
   it('lands a return on the line’s own anchor', () => {
     const { container } = render(<DeskLedgerRow line={line()} />);
     expect(container.querySelector('#roster-line-reinhardt')).not.toBeNull();

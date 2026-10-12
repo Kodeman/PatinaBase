@@ -22,7 +22,7 @@
  * Each cell covers one latency and one entry mode:
  *  - hard: `page.goto('/doc/{id}')`.
  *  - soft: `page.goto('/desk')`. Her Desk arrival ends first (a card is
- *    skipped). Then she clicks the claim card's NAME link, which writes a
+ *    skipped). Then she clicks the job's roster NAME link, which writes a
  *    `ptr` token. The "Open the job" act declines `token` by design
  *    (R-DM21 A), so it is not used here.
  *
@@ -78,8 +78,8 @@ const LATENCIES = [0, 150, 350] as const;
 const MODES = ['hard', 'soft'] as const;
 type Mode = (typeof MODES)[number];
 
-/** The claim card's name link (desk-claim-card.tsx `data-roster-name`), never its act. */
-const NAME_LINK = `[data-claim-card="${ARRIVAL_PROJECT_ID}"] a[data-roster-name]`;
+/** The job's roster-line name link (desk-ledger-row.tsx `data-roster-name`), never its act. */
+const NAME_LINK = `[data-ledger-row="${ARRIVAL_PROJECT_ID}"] a[data-roster-name]`;
 
 type SurfaceRec = {
   firstSeenAt: number | null;

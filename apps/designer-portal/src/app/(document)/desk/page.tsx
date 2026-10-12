@@ -226,6 +226,16 @@ export default function DeskPage() {
     [data, deskScope, oneVoice, projectLeads, user?.id],
   );
 
+  // R-DM21 A — a Day Sheet line finds its job's roster line by the need's
+  // project id, to land where that job's act lands.
+  const rosterJobs = useMemo(
+    () =>
+      new Map(
+        roster.groups.flatMap((group) => group.lines).map((line) => [line.projectId ?? line.engagementId, line]),
+      ),
+    [roster],
+  );
+
   // A quiet Desk (no live jobs at all) lets the Studio index rise to fill the
   // space — larger, and earlier in the composition — rather than sitting as
   // bottom front matter. Only known once the read resolves.
@@ -419,6 +429,7 @@ export default function DeskPage() {
           onScope={setDeskScope}
           oneVoice={oneVoice}
           now={now}
+          jobs={rosterJobs}
         />
         <DeskRoster
           roster={roster}

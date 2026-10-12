@@ -639,6 +639,9 @@
 }
 .desk-ledger-row [data-ledger-cell='value'],
 .desk-ledger-row [data-ledger-cell='act'] { text-align: right; }
+/* A wrapping act (DocumentAction `wrap`) sets its own text-left; its lines
+   follow the column instead — right here, left once the row collapses. */
+.desk-ledger-row [data-ledger-cell='act'] .da-act { text-align: inherit; }
 
 @container (max-width: 899px) {
   .desk-ledger-row {

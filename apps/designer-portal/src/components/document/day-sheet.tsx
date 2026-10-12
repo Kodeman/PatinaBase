@@ -18,12 +18,15 @@ import type { MouseEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSetNeedState } from '@patina/supabase';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
+import type { RosterLine } from '@/lib/document/desk-roster-derivation';
 import type { DeskScope } from '@/lib/document/desk-scope';
 import { deskActionLabel, deskNeedText } from '@/lib/document/desk-derivation';
 import { nextWorkingDay, timeWord, type DaySheet as DaySheetModel } from '@/lib/document/day-sheet';
 import { dayMonth, WEEKDAY_FORMAT, parseSourceDate } from '@/lib/document/dates';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { useNeedActSheet } from './acts/need-act-sheet';
+import { actSheetKindOf } from './acts/act-sheet-kind';
+import { actLanding } from './desk-ledger-row';
 import { openLedger } from './command-bar';
 
 export const NOTHING_NEEDS_YOU_TONIGHT = 'No current action alerts.';
@@ -54,11 +57,13 @@ function SheetLine({
   index,
   oneVoice,
   now,
+  job,
 }: {
   entry: DeskNeed;
   index: number;
   oneVoice: boolean;
   now: Date;
+  job?: RosterLine;
 }) {
   const acts = useNeedActSheet();
   const router = useRouter();
@@ -73,6 +78,17 @@ function SheetLine({
   const label = (handoff ? need.actionLabel : deskActionLabel(need, oneVoice)) ?? 'Open project file';
   const href = need.deepLink ?? `/doc/${entry.projectId}`;
   const top = index === 0;
+  // US-14 R-DM21 A — the act lands where the claim card's act landed: the
+  // job's stage, read off its roster line. One that opens a sheet carries none.
+  const landing =
+    job && !actSheetKindOf(entry)
+      ? actLanding({
+          ...job,
+          needKind: need.kind,
+          jobHref: `/doc/${entry.projectId}`,
+          act: { label, href, ...(need.ledger ? { ledger: need.ledger } : {}) },
+        })
+      : null;
 
   const act = (event: MouseEvent<HTMLAnchorElement>) => {
     // Walk W-D6 — opening the hand-off is reading it: the same `acted` mark
@@ -127,6 +143,7 @@ function SheetLine({
           onClick={act}
           aria-label={`${label} — ${entry.projectName}`}
           data-part={top ? 'act' : undefined}
+          data-landing={landing ? JSON.stringify(landing) : undefined}
         >
           {label}
         </DocumentAction>
@@ -167,12 +184,15 @@ export function DaySheet({
   onScope,
   oneVoice = false,
   now,
+  jobs,
 }: {
   sheet: DaySheetModel;
   scope: DeskScope;
   onScope: (scope: DeskScope) => void;
   oneVoice?: boolean;
   now: Date;
+  /** Each job's roster line, by the need's project id — where its act lands. */
+  jobs?: ReadonlyMap<string, RosterLine>;
 }) {
   const quiet = sheet.lines.length === 0;
   const notChecked =
@@ -217,6 +237,7 @@ export function DaySheet({
                 index={index}
                 oneVoice={oneVoice}
                 now={now}
+                job={jobs?.get(entry.projectId)}
               />
             ))}
           </ol>

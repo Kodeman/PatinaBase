@@ -13,8 +13,9 @@ import { WORKFLOW_GATE_PROJECT_ID } from '../helpers/workflow-gate-fixture';
 export const SEEDED_DESIGNER = 'a0000000-0000-0000-0000-000000000004';
 
 /** The workflow-gate fixture's project: its `overdue` gate gives this designer's
- *  Desk a claim card, so this id is both a `/doc/{id}` route AND a
- *  `[data-claim-card]`/`#roster-line-{id}` row on the Desk. */
+ *  Desk a roster line, so this id is both a `/doc/{id}` route AND a
+ *  `[data-ledger-row]`/`#roster-line-{id}` row on the Desk (US-25 retired the
+ *  claim cards for the Day Sheet and the line roster). */
 export const ARRIVAL_PROJECT_ID = WORKFLOW_GATE_PROJECT_ID;
 
 /** sessionStorage key the gate reads to opt a real Chromium/WebKit run out of
@@ -179,14 +180,18 @@ export const SKIP_SELECTOR = '.arr-skip';
  *  `busy()` (host.ts `dialogOnScreen()`) — the same write desk-claims.spec.ts's
  *  beforeAll makes, for the same reason: the auth fixture's localStorage flag
  *  only covers help-system's OWN key, and the Desk gate additionally reads the
- *  persisted `profiles.help_state` record. */
+ *  persisted `profiles.help_state` record. `jsonb_set` creates only the LAST
+ *  path key: with no `tours` object yet (a spec that cleared help_state ran
+ *  first) a `{tours,desk-walkthrough}` path wrote nothing, the Desk's
+ *  walkthrough offer stayed on screen, and the Desk card declined `busy`. */
 export function settleDeskWalkthrough(designerId: string = SEEDED_DESIGNER): void {
   psqlRun(
     `UPDATE public.profiles
         SET help_state = jsonb_set(
           coalesce(help_state, '{}'::jsonb),
-          '{tours,desk-walkthrough}',
-          '{"completed": true}'::jsonb,
+          '{tours}',
+          coalesce(help_state->'tours', '{}'::jsonb)
+            || '{"desk-walkthrough": {"completed": true}}'::jsonb,
           true
         )
       WHERE id = '${designerId}'::uuid`,

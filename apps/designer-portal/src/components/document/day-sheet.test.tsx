@@ -7,6 +7,7 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { NeedLine } from '@/lib/document/desk-derivation';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
+import type { RosterLine } from '@/lib/document/desk-roster-derivation';
 import { deriveDaySheet, nextWorkingDay } from '@/lib/document/day-sheet';
 import { DaySheet, NOTHING_NEEDS_YOU_TONIGHT, THE_REST } from './day-sheet';
 
@@ -52,6 +53,7 @@ function entry(i: number, over: Partial<NeedLine> = {}): DeskNeed {
 function renderSheet(
   needs: DeskNeed[],
   over: Partial<Parameters<typeof deriveDaySheet>[0]> = {},
+  jobs?: ReadonlyMap<string, RosterLine>,
 ) {
   const sheet = deriveDaySheet({
     needs,
@@ -65,7 +67,7 @@ function renderSheet(
   });
   const onScope = jest.fn();
   const utils = render(
-    <DaySheet sheet={sheet} scope="studio" onScope={onScope} now={NOW} />,
+    <DaySheet sheet={sheet} scope="studio" onScope={onScope} now={NOW} jobs={jobs} />,
   );
   return { ...utils, onScope };
 }
@@ -286,5 +288,48 @@ describe('DaySheet', () => {
       await userEvent.setup().click(screen.getByRole('button', { name: 'Mine' }));
     });
     expect(onScope).toHaveBeenCalledWith('mine');
+  });
+
+  it('lands an act that opens its job where the job’s roster line lands, as the claim card did (R-DM21 A)', () => {
+    const job = (id: string) =>
+      ({
+        engagementId: id,
+        projectId: id,
+        stage: 'proposal',
+        jobHref: `/doc/${id}`,
+        needKind: null,
+        act: { label: 'Open the job', href: `/doc/${id}` },
+      }) as unknown as RosterLine;
+    const jobs = new Map([1, 2, 3, 4, 5].map((i) => [`p${i}`, job(`p${i}`)]));
+    const { container } = renderSheet(
+      [
+        entry(1, { deepLink: undefined }),
+        entry(2, { deepLink: undefined }),
+        entry(3),
+        entry(4, { deepLink: undefined, ledger: { name: 'accounts', context: {} } } as Partial<NeedLine>),
+      ],
+      {},
+      jobs,
+    );
+    const landingOf = (key: string, root: HTMLElement = container) =>
+      root
+        .querySelector(`[data-day-sheet-line="${key}"] [data-register="act"] a`)!
+        .getAttribute('data-landing');
+    const section = JSON.stringify({ kind: 'section', sectionKey: 'proposal' });
+
+    // The arrival's act (the top line) carries its landing, and so does every
+    // act that opens its job's own Document — each claim card's did.
+    expect(container.querySelector('[data-part~="act"]')!.getAttribute('data-landing')).toBe(section);
+    expect(landingOf('task_due:t1')).toBe(section);
+    expect(landingOf('task_due:t2')).toBe(section);
+    // A deep link into the paper, a ledger and an act sheet carry none.
+    expect(landingOf('task_due:t3')).toBeNull();
+    expect(landingOf('task_due:t4')).toBeNull();
+    const sheetAct = renderSheet(
+      [entry(5, { deepLink: undefined, kind: 'overdue_invoice', recordId: 'inv-5' } as Partial<NeedLine>)],
+      {},
+      jobs,
+    );
+    expect(landingOf('task_due:t5', sheetAct.container)).toBeNull();
   });
 });

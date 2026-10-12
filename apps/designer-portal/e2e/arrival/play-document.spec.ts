@@ -1,7 +1,7 @@
 /**
  * W3b — Document surface plays (US-14, CONTRACT §5).
  *
- *  - a warm soft entry (Desk → Document via a claim card) plays with a token
+ *  - a warm soft entry (Desk → Document via the job's roster line) plays with a token
  *  - T3 live: every card part's text is a substring of the page's own visible
  *    text once the card has rested (both routes — the Desk half lives in
  *    play-desk.spec.ts's hard-entry test via a shared assertion helper here)
@@ -95,11 +95,11 @@ test.describe('Document plays', () => {
       await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
     }
 
-    const claimCard = page.locator(`[data-claim-card="${ARRIVAL_PROJECT_ID}"]`);
-    await expect(claimCard).toBeVisible();
-    // arrival-mount.tsx TOKEN_LINKS: the claim card's own act anchor is the
+    const rosterLine = page.locator(`[data-ledger-row="${ARRIVAL_PROJECT_ID}"]`);
+    await expect(rosterLine).toBeVisible();
+    // arrival-mount.tsx TOKEN_LINKS: the roster line's name link is a
     // token-writing link, a soft client navigation into the Document.
-    await claimCard.locator('[data-register="act"] a, a[href^="/doc/"]').first().click();
+    await rosterLine.locator('[data-register="act"] a, a[href^="/doc/"]').first().click();
     await page.waitForURL(new RegExp(`/doc/${ARRIVAL_PROJECT_ID}`));
 
     const card = page.locator(CARD_SELECTOR).first();
@@ -178,10 +178,10 @@ test.describe('Document plays', () => {
       await page.locator(SKIP_SELECTOR).click();
       await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
     }
-    // Write a real pending token by clicking the claim card's act link (this
+    // Write a real pending token by clicking the roster line's link (this
     // is what a reload must NOT honour).
-    const claimCard = page.locator(`[data-claim-card="${ARRIVAL_PROJECT_ID}"]`);
-    await claimCard.locator('[data-register="act"] a, a[href^="/doc/"]').first().click();
+    const rosterLine = page.locator(`[data-ledger-row="${ARRIVAL_PROJECT_ID}"]`);
+    await rosterLine.locator('[data-register="act"] a, a[href^="/doc/"]').first().click();
     await page.waitForURL(new RegExp(`/doc/${ARRIVAL_PROJECT_ID}`));
     await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });
     await page.locator(SKIP_SELECTOR).click();

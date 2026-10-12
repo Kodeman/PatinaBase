@@ -92,6 +92,7 @@ export function DeskLedgerRow({ line }: { line: RosterLine }) {
             actionKey={actionKey}
             aria-label={ariaLabel}
             variant="tertiary"
+            wrap
             onClick={() =>
               openLedger(line.act.ledger!.name, line.act.ledger!.context)
             }
@@ -103,6 +104,7 @@ export function DeskLedgerRow({ line }: { line: RosterLine }) {
             actionKey={actionKey}
             aria-label={ariaLabel}
             variant="tertiary"
+            wrap
             data-landing={landing ? JSON.stringify(landing) : undefined}
             href={line.act.href}
           >

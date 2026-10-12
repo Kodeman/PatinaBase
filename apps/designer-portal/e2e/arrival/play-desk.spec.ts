@@ -50,6 +50,10 @@ async function expectCardThroughDwell(page: Page, reads: ReadWatch): Promise<voi
 
 /** The Day Sheet's top line's act (day-sheet.tsx `data-part="act"`, US-25 slice 4). */
 const ACT_SELECTOR = '[data-arrival="desk"] [data-part~="act"]';
+/** R-DM21 A — the first Desk act that opens its own Document, which names its landing
+ *  (desk-ledger-row.tsx `actLanding`). The top act may open a ledger or an act sheet, and
+ *  by that rule carries none, so the landing spec cannot rely on the top line. */
+const DOC_ACT_SELECTOR = '[data-arrival="desk"] [data-register="act"] a[data-landing]';
 
 test.describe('Desk plays', () => {
   test.beforeAll(() => {
@@ -175,11 +179,11 @@ test.describe('Desk plays', () => {
     await page.locator(SKIP_SELECTOR).click();
     await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
 
-    const act = page.locator(ACT_SELECTOR);
+    const act = page.locator(DOC_ACT_SELECTOR).first();
     const href = await act.getAttribute('href');
     expect(href).toMatch(/^\/doc\//);
     const raw = await act.getAttribute('data-landing');
-    expect(raw, 'the top card act opens its Document and names a landing').not.toBeNull();
+    expect(raw, 'the Desk act opens its Document and names a landing').not.toBeNull();
     const landing = JSON.parse(raw!) as { kind: 'region'; region: string } | { kind: 'section'; sectionKey: string };
 
     // From before the click to the end of the test: any card node the engine mounts is seen.
