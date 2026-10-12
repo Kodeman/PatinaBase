@@ -53,6 +53,8 @@ const SLUGS = ['desk', 'document', 'rooms', 'people', 'library', 'boards', 'pape
 // US-28 spike specimens: listed in a SPEC.md addendum as `| spike `<slug>` | … |` rows, never as one of §1's nine,
 // and checked exactly like an area (frames, register, every file rule). §S7b: specbook (SQ-817).
 const SPIKES = ['specbook'];
+
+SLUGS.push('boardroom'); // US-28 spike addendum (SQ-816): its §1-format row lives in SPEC.md §S12, after the nine.
 const DARK_REQUIRED = ['desk', 'document', 'money'];
 const WIDTHS = ['1440', '390'];
 const NARROW = 390;

@@ -490,3 +490,84 @@ Paths are under `apps/designer-portal/src/` unless noted; `ws` is `components/do
 2. **The token-pass frames named a "Print" act and five tabs.** `document-p3` / `document-p5` show a tertiary "Print" and five tabs, with Audience and Editions split. The workspace has **four** views (`ws:79,1201-1207`) and no print action: editions are issued PDFs (`ws:1596-1604`; history `ws:1677-1743`). These frames keep four tabs and put the print preview under Audience editions.
 3. **One stock.** The book stands on `--paper`; only the printed sheet is `--paper-doc`. This retires `bg-white` (`ws:748`), `bg-[#e7e2d8]` (`ws:1442`), the hex text colours in `AudiencePreview` and `readinessColor`, and the `rgba(196,165,123,…)` hover washes (`ws:213-214,1241`).
 4. **Targets.** Every act, tab word, filter word, index link and the edition check reaches 44 px. Today 14 targets at 390 fall short (WALK §2).
+
+## S12. Addendum (US-28 spike, SQ-816): the board room, canvas included
+
+V20 U-Q17 rules that the board room takes the full uplift, canvas included. Area 6 above (`boards`) shows the list and the room at a distance; this addendum is the room itself, as its own slug `boardroom`, in `boardroom-1440.html` and `boardroom-390.html`. Everything in §2–§6 applies unchanged.
+
+`check.mjs` takes this row as a tenth area through a one-line additive change (`SLUGS.push('boardroom')`, after the nine); it is the only `| **` line outside §1, and it sits here, after `chrome`, because the gate reads area rows in order. The tables below that are not the register start with plain text, so the gate does not read them.
+
+| **boardroom** | 6b. The board room, canvas included (U-Q17) | `frame-boardroom-t1` `frame-boardroom-p1` `frame-boardroom-p2` `frame-boardroom-p3` `frame-boardroom-p4` `frame-boardroom-p5` `frame-boardroom-t2` `frame-boardroom-p6` | `frame-boardroom-t3` `frame-boardroom-p7` `frame-boardroom-p8` `frame-boardroom-p9` |
+
+### S12.1 Register
+
+| Frame | Width | Kind | Pairs with | What it shows |
+|---|---|---|---|---|
+| `frame-boardroom-t1` | 1440 | today | `a6-board-fold-1440.jpg` | The board room today, Palette A. Marks 44 · 31 · 8 · 74 (WALK §6) |
+| `frame-boardroom-p1` | 1440 | proposed | `frame-boardroom-t1` | At rest: ten items in four dashed zones, Tools open on the left, three header acts |
+| `frame-boardroom-p2` | 1440 | proposed | `frame-boardroom-t1` | Arden lounge chair selected: 2 px clay-ink ring, square handles, the L4 inspector as a popover |
+| `frame-boardroom-p3` | 1440 | proposed | `frame-boardroom-t1` | Dragging Halo floor lamp onto Pieces: the zone's edge goes ink and its word says "let go to add it here" |
+| `frame-boardroom-p4` | 1440 | proposed | `frame-boardroom-t1` | Tags: verdicts as ink words in captions, the Feedback tab as rows with one state word each |
+| `frame-boardroom-p5` | 1440 | proposed | `frame-boardroom-t1` | Present: the same board read-only, "Back to editing", the house check "Show notes" |
+| `frame-boardroom-t2` | 1440 | today | `a6-board-picker-sheet-1440.jpg` | The board picker sheet today. Marks 22 · 6 · 1 · 24 (WALK §6) |
+| `frame-boardroom-p6` | 1440 | proposed | `frame-boardroom-t2` | Empty board, A second sofa option: the one empty state, Tools open on Resource library |
+| `frame-boardroom-t3` | 390 | today | `a6-board-fold-390.jpg` | The board room today at 390 (not counted, WALK §6) |
+| `frame-boardroom-p7` | 390 | proposed | `frame-boardroom-t3` | At rest at 390: two header rows with Tools as an act, the board window at 100%, Zoom and Fit under it |
+| `frame-boardroom-p8` | 390 | proposed | `frame-boardroom-t3` | Tools open as one sheet over the veil; Undo, Redo, Grid and Snap reachable at 390 |
+| `frame-boardroom-p9` | 390 | proposed | `frame-boardroom-t3` | Arden selected at 390: the ring and handles, the inspector docked below the board |
+
+The walk never captured selection, drag, tags, Present or an empty board as screenshots, so p2–p5 pair with the fold (`t1`) and p6 with the picker (`t2`), and each pin key cites the code that draws today's state instead.
+
+### S12.2 Canvas rules the frames carry
+
+1. A canvas item is **a plate and a caption**: the photo or drawing on a 1 px card edge, then a sans name, a mono line of facts and, where it has one, a mono state word. No shadow, no pill, no overlay on the plate, nothing truncated.
+2. A zone is a **1 px dashed** edge that always prints its word (mono, ink, on the board stock). Its colour is no longer a fill or a white-on-colour label.
+3. Selection is a **2 px `--clay-ink` ring**, never a shadow. Handles are 10 px drawn squares with a 44 px hit area on a coarse pointer (est.); the rotate handle is a circle on a 1 px stem.
+4. Item chrome stays quiet: lock, direction count and verdict are words in the caption, not badges.
+5. At 390 the tools fold behind the header act "Tools", which opens one sheet; nothing scrolls sideways.
+
+### S12.3 Fixture extension [illustrative]
+
+Palette A, warm limewash (Copperfield Terrace, Direction, §3.6) gains: Copperfield living room scan, 17′ 2″ × 21′ 6″; a reference photo "North light on limewash"; an empty Materials slot "Drop a stone or surface here"; a note "What repeats? What contrasts? Name the material rule that keeps the room coherent."; prices Arden lounge chair $4,180, Tamsin sofa 78″ $5,650 (Calloway & Brandt Upholstery), Halo floor lamp $690 (Ninebark Lighting, two directions open). Verdicts: Arden approved and Tamsin flagged by the Whitfields Saturday 10 October; the limewash sample noted from a guest link Sunday 11 October; Halo has no verdict. A second sofa option (Linden Place, Draft) is empty; the Resource library search "sofa" returns Tamsin sofa, Arden lounge chair and Wool flatweave rug, 8 × 10 (Marrow & Weft).
+
+### S12.4 Element map: every proposed element to its source
+
+Paths: shell = `apps/designer-portal/src/components/mood-board/board-room-shell.tsx`; canvas = `packages/patina-design-system/src/components/BoardRoomCanvas/BoardRoomCanvas.tsx`; renderer = `apps/designer-portal/src/components/portal/scope-builder/board-item-renderer.tsx`; inspector = `apps/designer-portal/src/components/mood-board/board-room-inspector.tsx`; rail = `apps/designer-portal/src/components/mood-board/board-add-rail.tsx`; menu = `apps/designer-portal/src/components/mood-board/board-room-sections-menu.tsx`; present = `packages/patina-design-system/src/components/proposal/BoardsBlock.tsx`; painter = `packages/patina-design-system/src/mood-board/painter-core.ts`.
+
+| Proposed element | Frames | Today (file:line) | Change |
+|---|---|---|---|
+| Header: back word, Playfair board name, three acts (Present, Save and close, Share) | p1–p7, p9 | shell:1266-1326 (name 1267, owner pill truncate 1268-1270, Share 1305, Export 1306, Present 1307-1309, Save and close 1322-1324) | Owner pill and Export leave the header; Export goes to Tools › Board; Save and close stays the one primary |
+| Board name as a heading, edited in place | p1 | shell:330 (BoardNameField input class) | Input chrome only on focus |
+| Tools Section (left, L2) with Bring pieces in, View, Arrange, Board groups | p1–p4, p6 | shell:1444-1460 (aside, max-h-48 narrow 1446), 1272-1300 (annotations, rail toggle, undo/redo, zoom/fit, grid/snap, Arrange), menu:89-91 | Header controls move into one Section; "Composition tools" popover becomes the Arrange group |
+| Tab row as underline words, wrapping | p1, p4, p6, p8 | rail:919-940 (overflow-x-auto, 8 px mono) | Wraps instead of scrolling; 12 px mono minimum |
+| Rail rows: Playfair name, sans maker, one act word | p6, p8 | rail:524, 595, 683, 961, 1025, 1106 (boxed rows with truncate), 497 (dashed hint) | Rows on hairlines, names wrap |
+| Feedback filters and rows with one ink state word | p4 | rail:656-664 (filter pills, aria-pressed 660), 688-692 (Guest pill), 694-696 (coloured verdict word); `apps/designer-portal/src/lib/document/verdict-chip.ts:23-39` | Pills become underline words keeping aria-pressed; Guest becomes the words "guest link"; verdict colour becomes ink (U-Q13) |
+| Board surface: board stock, 1 px edge, quiet grid | p1–p7, p9 | canvas:2329 (viewport bg), 2523-2541 (surface and grid) | Surface takes `--paper-doc`; grid dots stay, lighter |
+| Off-screen cue (gradient at the window edge) | p7, p9 | canvas:2397-2427 | Kept: a gradient, not a shadow |
+| Zone: 1 px dashed edge with its word | p1–p7, p9 | canvas:2871-2946 (SectionBand; dashed 2894, colour and fill 2900-2901, white-on-colour pill label 2904-2912); painter:353-397 (drawSection, dash 368, label 380-393) | Fill and pill label retire; the word prints in ink; designer colour moves to the dashed edge only |
+| Zone rename and colour | p2 | canvas:2931 (rename input), 2933-2940 (colour input) | Rename stays in place; the colour control moves to the tool panel |
+| Drop target: zone edge 2 px dashed ink, word "let go to add it here", clay-ink guide | p3 | canvas:1850-1871 (membership on release, centre point 1858-1865), 2802-2845 (guides) | New render-only hover state; membership logic and data unchanged |
+| Item as plate and caption (product) | p1–p5, p7, p9 | renderer:92-157 (ProductCard; shadow-sm 97, line-clamp 120, truncate 131); present:421-552 (line-clamp 486, truncate 501, 534); painter:398-460 | Shadow, clamp and truncate retire; caption wraps |
+| Item as plate and caption (image, scan, palette, note) | p1–p5, p7 | renderer:173-198 (ImageTile; dashed placeholder 177, shadow 195), 202-237 (RoomScanTile; 205, truncate 224), 241-280 (PaletteStrip; 246, 267), 284-306 (NoteCard); present:553-906 (truncates 584, 621, 734, 769, 830, 866); painter:470, 529, 558 | Same: no shadow, no truncate; the empty slot keeps its dashed placeholder |
+| Verdict and directions as caption words | p1, p2, p4, p5 | shell:168-190 (VerdictBadge; shadow-sm 178, dot 183), 198-208 (DirectionIndicator; shadow 203), 1203-1232 (editRenderItem; overlays 1213-1222, caption truncate 1223-1230) | Overlays retire; words join the caption; directions count shows in edit only |
+| Selection ring 2 px `--clay-ink` | p2, p9 | canvas:2607-2615 (selection border), 2576 (focus ring), 2747-2759 (multi bounds), 2737-2742 (alt-drag border) | One ring token; never a shadow |
+| Resize and rotate handles | p2, p9 | canvas:2273-2274 (handleSize, handleDot), 2663-2682, 3004-3037 (ResizeHandle; hit 3022, dot 3032), 2683-2705 (rotate) | 10 px square drawn, 44 px hit on coarse pointer (est.) |
+| Lock as a word | p2 | canvas:2620-2662 (lock badge and stubs), 2987-3002 (LockedHandleStub) | Badge becomes "Lock pin" / "Locked" in the inspector and caption |
+| Drag lift | p3 | canvas:2591-2596 (drag z-boost), 2847-2858 (marquee) | z-order only; no lift shadow |
+| Inspector as an L4 popover (1440) and docked panel (390) | p2, p9 | inspector:296-308 (aside class 301, w-286, max-md bottom dock), head 309-326 (truncate 311, 8 px mono 314), single 376-556, delete foot 559-571; shell:1567-1577 (mount) | Takes the shared `.popover`; head wraps; 12 px minimum; source link 546-555 wraps |
+| Inspector fields and acts | p2, p9 | inspector:377-403 (fields), 421-433 (zone select), 435-439 (directions), 441-446 (order), 448-450 (lock), 498-528 (promote), 534-538 (open product), 540-544 (replace) | Same controls, shared field and `.act` styles |
+| Tidy and exit prompts | p1 | shell:1466-1497 (tidy pill 1470), 1516, 1525 (prefetch notices, shadow-sm), 1602-1603 (exit prompt pill) | Become a lone line in the house sentence register |
+| Present: same renderer, read-only, house header | p5 | shell:1498-1511 (BoardComposition mount), 1272-1276 (Show annotations); present:162-307 (ScaledBoardCanvas, rounded border 256, section pill label nowrap 291-306), 1210 | "Edit design board" becomes "Back to editing"; annotations toggle becomes the house check "Show notes"; zones dashed with an ink word |
+| Empty board: one empty state on the surface | p6 | shell:1542-1565 (canvas mount) | New: shown when the board has no items; not a canvas item |
+| 390: two header rows, Tools act, Zoom and Fit under the board | p7 | shell:1266-1326, 1284-1289 (zoom/fit); canvas:743-744 (showViewControls default) | Header wraps to two rows; zoom/fit visible at every width (CI-02) |
+| 390: Tools as one sheet over the veil | p8 | shell:1444-1460, 1282-1291 (undo/redo/grid/snap hidden below sm and xl); rail:919-940 | One `.sheet`; Undo, Redo, Grid and Snap reachable at 390 |
+| Alignment toolbar | (not drawn) | canvas:743-744 (showAlignmentControls default true), 2482 (shadow-sm), 2434 (view toolbar shadow-sm, hidden in room) | Its shadow retires; alignment lives in Tools › Arrange |
+| Shared visual constants | all | `packages/patina-design-system/src/mood-board/visual-contract.ts:14-40` (MOOD_BOARD_VISUAL) | Change once; DOM and painter read it |
+
+### S12.5 Risks
+
+1. **Painter parity.** Export (PDF/PNG) draws through `painter-core.ts` (`paintMoodBoardGeometry` 635) from `visual-contract.ts`, not from the DOM. Every caption, zone and verdict change above must land in both or Export stops matching the board.
+2. **Section colour.** Designers pick a zone colour today and see it as a fill and a label. Moving it to the dashed edge only (and its control into the tool panel) is a visible loss of emphasis; WALK §6 and U-Q17 support it, but it should be named to Leah.
+3. **Drop target.** The hover state in p3 is new and render-only: membership is still decided by the item's centre point on release (canvas:1858-1865). No data change.
+4. **An extra shadow site.** `uplift.md` (b) did not list the alignment toolbar's `shadow-sm` (canvas:2482), which shows in the room because the shell does not pass `showAlignmentControls`. The view toolbar's (2434) is hidden there.
+5. **Present and guest share `BoardsBlock.tsx`.** Changing its tiles changes what a client sees on a guest link, too; that is intended (VD12) but it touches a client surface.
