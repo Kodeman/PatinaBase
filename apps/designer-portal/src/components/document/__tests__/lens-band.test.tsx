@@ -134,13 +134,14 @@ describe('LensBand · the box and the sentinel (C-5)', () => {
     expect(band()).not.toHaveAttribute('data-lens-state');
   });
 
-  it('is the sticky, opaque, declared-height box with its own lower rule', () => {
+  it('is the sticky, opaque box with a 56px floor and its own lower rule', () => {
     render(<LensBand model={model()} docId="doc-1" />);
     expect(band().tagName).toBe('SECTION');
     expect(band()).toHaveAccessibleName('Project overview');
-    // jsdom does no layout: the height is asserted as the declared class, and
-    // the fallback keeps it true before W3-L3 mints the token.
-    expect(band().className).toContain('h-[var(--doc-band-height,56px)]');
+    // jsdom does no layout: the height is asserted as the declared class. US-28
+    // S7 (V20 U-Q19) — 56px is a floor, not a ceiling: NEXT may wrap past it.
+    expect(band().className).toContain('min-h-[var(--doc-band-height,56px)]');
+    expect(band().className).not.toMatch(/(^|\s)h-\[var\(--doc-band-height/);
     expect(band().className).toContain('box-border');
     expect(band().className).toContain('sticky');
     expect(band().className).toContain('top-0');
@@ -149,21 +150,17 @@ describe('LensBand · the box and the sentinel (C-5)', () => {
     expect(band().className).toContain('doc-rule-mid');
   });
 
-  it('holds both lines to one line — and clips the SENTENCE, not the act (C-02)', () => {
+  it('wraps both lines and truncates nothing — the act keeps its 44px box (US-28 S7, U-Q19)', () => {
     render(<LensBand model={model({ needs: NEEDS })} docId="doc-1" />);
     for (const which of ['1', '2'] as const) {
-      expect(line(which).className).toContain('whitespace-nowrap');
+      expect(line(which).className).not.toContain('whitespace-nowrap');
+      expect(line(which).className).not.toContain('text-ellipsis');
+      expect(line(which).className).not.toContain('overflow-hidden');
+      expect(line(which).className).toContain('flex-wrap');
     }
-    // Line 1 has no inset control on it, so it may clip itself.
-    expect(line('1').className).toContain('overflow-hidden');
-    expect(line('1').className).toContain('text-ellipsis');
-    // Line 2 must not: the act is inset by -12px into the 19.5px line, so an
-    // `overflow: hidden` here would cut 12px off its 44px box for painting AND
-    // for hit-testing — and at 390 this is that act's only printing.
-    expect(line('2').className).not.toContain('overflow-hidden');
-    expect(line('2').className).not.toContain('text-ellipsis');
-    expect(sentence().className).toContain('overflow-hidden');
-    expect(sentence().className).toContain('text-ellipsis');
+    expect(sentence().className).not.toContain('text-ellipsis');
+    expect(sentence().className).not.toContain('overflow-hidden');
+    expect(sentence().className).toContain('whitespace-normal');
     const act44 = screen.getByRole('button', { name: 'Send a reminder' });
     expect(act44.className).not.toContain('overflow-hidden');
     expect(
@@ -919,7 +916,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     // The door follows the act on the same line.
     expect(act.compareDocumentPosition(door() as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole('button', { name: /MORE/ })).toBeNull();
-    expect(band().className).toContain('h-[var(--doc-band-height,56px)]');
+    expect(band().className).toContain('min-h-[var(--doc-band-height,56px)]');
   });
 
   it('is silent on the right when nothing stands beside Next', () => {
@@ -1086,7 +1083,7 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(screen.getByRole('button', { name: 'Record payment' })).toBeInTheDocument();
   });
 
-  it('F2-1 — prints the job’s name, never the household, and only the name may clip', () => {
+  it('F2-1 — prints the job’s name, never the household, and the name wraps rather than clips', () => {
     render(<LensBand model={chen()} docId="doc-1" />);
     const identity = line('1').querySelector('[data-lens-identity]') as HTMLElement;
     expect(identity.textContent).toBe('Project · Chen Residence');
@@ -1094,7 +1091,8 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     const [stage, name] = Array.from(identity.children) as HTMLElement[];
     expect(stage).toHaveTextContent('Project');
     expect(stage).toHaveClass('shrink-0');
-    expect(name).toHaveClass('min-w-0', 'text-ellipsis');
+    expect(name).toHaveClass('min-w-0', 'whitespace-pre-wrap');
+    expect(name).not.toHaveClass('text-ellipsis');
   });
 
   describe('F2-4 — the measure, not the tier, drops the sentence; the act never yields', () => {
@@ -1180,6 +1178,27 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         expect(line('2')).toHaveAttribute('data-lens-line2-form', 'sentence');
         expect(sentence().textContent).not.toBe('');
         expect(screen.getByRole('button', { name: 'Record the payment' })).toBeInTheDocument();
+      });
+
+      it('US-28 S7 (U-Q19) — the last rung wraps onto a second line, and the act keeps its score on its own 44px row', () => {
+        clips = (text) => text.length > 0;
+        render(<LensBand model={chen({ tier: 'mobile' })} docId="doc-1" />);
+        // The rung ladder is spent: the sentence wraps rather than clipping.
+        expect(line('2')).toHaveClass('flex-wrap');
+        expect(line('2')).not.toHaveClass('flex-nowrap');
+        expect(sentence()).toHaveClass('whitespace-normal', 'max-[599px]:basis-full');
+        expect(sentence().className).not.toMatch(/overflow-hidden|text-ellipsis|whitespace-nowrap/);
+        const act = screen.getByRole('button', { name: 'Record the payment' });
+        expect(act).toHaveAttribute('data-action-variant', 'primary');
+        expect(act.className).toContain('max-[599px]:my-0');
+      });
+
+      it('US-28 S7 — a rung on trial is held to one row only so the measure can see it overflow', () => {
+        clips = () => false;
+        render(<LensBand model={chen({ tier: 'narrow' })} docId="doc-1" />);
+        expect(line('2')).toHaveAttribute('data-lens-line2-form', 'long');
+        // Nothing clips, so the long form stays — on one row, with no ellipsis.
+        expect(sentence().className).not.toContain('text-ellipsis');
       });
 
       it('Wren held: the phone form, with Open the held draft beside it (fix-now 13)', () => {
