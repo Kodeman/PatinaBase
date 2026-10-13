@@ -23,6 +23,7 @@ import {
   type ArchetypeRow,
   BATCH_SIZE,
   buildDraftRequest,
+  buildDraftSchema,
   BULK_MODEL,
   type ClaudeInvoker,
   CONCURRENCY,
@@ -717,4 +718,26 @@ Deno.test('validateDraft rejects unknown primary archetype as schema failure', (
   const result = validateDraft(raw, ARCHETYPE_NAMES);
   assert(!result.ok);
   assertEquals(result.kind, 'schema_failure');
+});
+
+// The API 400s a schema with more than 16 union-typed parameters (it had 34).
+Deno.test('buildDraftSchema stays within the 16 union-parameter limit', () => {
+  // deno-lint-ignore no-explicit-any
+  const unions = (s: any): number => {
+    if (!s || typeof s !== 'object') return 0;
+    let n = Array.isArray(s.type) || s.anyOf || s.oneOf ? 1 : 0;
+    for (const v of Object.values(s.properties ?? {})) n += unions(v);
+    if (s.items) n += unions(s.items);
+    for (const b of [...(s.anyOf ?? []), ...(s.oneOf ?? [])]) n += unions(b);
+    return n;
+  };
+  assert(unions(buildDraftSchema(ARCHETYPE_NAMES)) <= 16);
+});
+
+Deno.test('validateDraft stores an empty text field as null', () => {
+  const raw = structuredClone(highDraft) as Record<string, unknown>;
+  (raw.identity as Record<string, unknown>).era = '  ';
+  const result = validateDraft(raw, ARCHETYPE_NAMES);
+  assert(result.ok);
+  assertEquals((result.draft.identity as Record<string, unknown>).era, null);
 });

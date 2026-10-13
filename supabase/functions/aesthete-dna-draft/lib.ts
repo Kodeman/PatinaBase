@@ -188,7 +188,7 @@ export function buildSystemPrompt(archetypes: ArchetypeRow[]): string {
 
   return `You are a senior furniture analyst for an interior design studio. Given product images and retailer text, you extract the product's aesthetic DNA as structured data: identity and provenance, form and silhouette, material and construction, color and finish, patina and aging potential, style signature, function, context, and commercial read.
 
-Ground every score in what you can actually see or read. When imagery is occluded, ambiguous, or missing, lower the relevant confidence and name the gap in "uncertainties" — an honest low-confidence read is worth more than a confident guess. Never invent provenance.
+Ground every score in what you can actually see or read. When a text field is unknown, return an empty string; when a number is unknown, return null. When imagery is occluded, ambiguous, or missing, lower the relevant confidence and name the gap in "uncertainties" — an honest low-confidence read is worth more than a confident guess. Never invent provenance.
 
 ${SPECTRUM_DEFINITIONS}
 
@@ -202,13 +202,17 @@ ${archetypeBlock}`;
 // ─── Output schema (§6.3 contract, structured-outputs dialect) ──────────────
 // Structured-outputs constraints: every object carries additionalProperties:
 // false + required; no numeric min/max (ranges are clamped in validateDraft);
-// nullable fields via anyOf. Archetype names are an enum built from the
+// nullable numbers via anyOf. The API rejects schemas with more than 16
+// union-typed parameters, so unknown text fields come back as "" (optStr) and
+// validateDraft maps them to null. Archetype names are an enum built from the
 // styles table so drafts always resolve to real style ids.
 
 type Schema = Record<string, unknown>;
 
 const nullable = (schema: Schema): Schema => ({ anyOf: [schema, { type: 'null' }] });
 const str: Schema = { type: 'string' };
+/** An unknown text field is ""; validateDraft stores it as null. */
+const optStr: Schema = str;
 const num: Schema = { type: 'number' };
 const strArr: Schema = { type: 'array', items: { type: 'string' } };
 
@@ -235,35 +239,35 @@ export function buildDraftSchema(archetypeNames: string[]): Schema {
   const spectrumMap = obj(Object.fromEntries(SPECTRUM_KEYS.map((k) => [k, num])));
   return obj({
     identity: obj({
-      era: nullable(str),
-      origin_country: nullable(str),
-      provenance_candidate: nullable(str),
+      era: optStr,
+      origin_country: optStr,
+      provenance_candidate: optStr,
       conf: num,
     }),
     form: obj({
-      silhouette: nullable(str),
+      silhouette: optStr,
       line_quality: nullable(num),
       visual_scale: nullable(num),
       negative_space: nullable(num),
-      leg_style: nullable(str),
-      arm_profile: nullable(str),
-      back_profile: nullable(str),
-      symmetry: nullable(str),
+      leg_style: optStr,
+      arm_profile: optStr,
+      back_profile: optStr,
+      symmetry: optStr,
       conf: num,
     }),
     material: obj({
-      primary: nullable(str),
+      primary: optStr,
       materials: strArr,
-      finish: nullable(str),
-      joinery: nullable(str),
-      surface_texture: nullable(str),
+      finish: optStr,
+      joinery: optStr,
+      surface_texture: optStr,
       solidity: nullable(num),
       craftsmanship_tier: nullable(num),
       conf: num,
     }),
     color: obj({
-      dominant_hex: nullable(str),
-      palette_family: nullable(str),
+      dominant_hex: optStr,
+      palette_family: optStr,
       temperature: nullable(num),
       value: nullable(num),
       saturation: nullable(num),
@@ -274,7 +278,7 @@ export function buildDraftSchema(archetypeNames: string[]): Schema {
     patina: obj({
       potential: nullable(num),
       material_honesty: nullable(num),
-      trajectory: nullable(str),
+      trajectory: optStr,
       conf: num,
     }),
     style: obj({
@@ -286,20 +290,20 @@ export function buildDraftSchema(archetypeNames: string[]): Schema {
       spectrums: spectrumMap,
       spectrum_conf: spectrumMap,
       mood_keywords: strArr,
-      ambiance: nullable(str),
+      ambiance: optStr,
       conf: num,
     }),
     function: obj({
-      primary_use: nullable(str),
+      primary_use: optStr,
       comfort: nullable(num),
       flexibility: nullable(num),
       durability_for: { type: 'array', items: { type: 'string', enum: ['kids', 'pets', 'high_traffic'] } },
       conf: num,
     }),
-    context: obj({ min_room_feel: nullable(str), conf: num }),
+    context: obj({ min_room_feel: optStr, conf: num }),
     commercial: obj({
-      price_tier_estimate: nullable(str),
-      value_story_draft: nullable(str),
+      price_tier_estimate: optStr,
+      value_story_draft: optStr,
       conf: num,
     }),
     overall_confidence: num,
@@ -421,6 +425,10 @@ export function validateDraft(
     const value = draft[family];
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return { ok: false, kind: 'schema_failure', detail: `missing family: ${family}` };
+    }
+    // optStr fields: an empty string is the schema's "unknown".
+    for (const [attr, v] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof v === 'string' && v.trim() === '') (value as Record<string, unknown>)[attr] = null;
     }
   }
   const overall = draft.overall_confidence;
