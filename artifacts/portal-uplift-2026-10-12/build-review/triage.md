@@ -41,6 +41,28 @@ The review was GPT-6 Astra, read-only, pinned to e29a956a1, and its verdict was 
 
 SQ-845 re-reviewed the repair before the integration gate. It was GPT-6 Astra, read-only, pinned to 926b048c2, and found **CLEAN, no new findings**: F2, F3, F5, F6, F8a and F9 are closed and the lock_timeout is present. One residual is accepted: archiving a line does not, on its own, physically prune an emptied chapter, which the client hides anyway.
 
-## Local walk (SQ-834) and release review (SQ-835)
+## Release review (SQ-835)
 
-Pending.
+The review was GPT-6 Astra, read-only, pinned to 401c1a02b. Its verdict: release not recommended, with 1 high, 13 medium and 1 low finding. Every finding is triaged here. The repairs are split by surface into parallel fix tickets, followed by a fresh re-review of the fix diff.
+
+| # | Severity / confidence | Finding | Ruling |
+|---|---|---|---|
+| R1 | med / high | The record-payment act rounds cents: "Record $3,401" submits 340050. | **FIX** (payments ticket): use a cents-exact, currency-aware formatter on every money string in the sheet. |
+| R2 | **high** / high | `nextUnacted` replaces a PO chased today with the next PO, so Today refills or re-ranks without anything being resolved. | **FIX** (Desk ticket): a record acted today keeps its identity and rank, settled in place (U-Q2). The other open records stay reachable from the job. Add a six-line regression test that crosses the cutoff. |
+| R3 | med / high | Below 768 px the board Tools sheet looks modal but doesn't isolate focus. | **FIX** (board ticket): use the shared modal/focus seam on narrow widths only. |
+| R4 | med / high | The zone drag grip was removed, so a drag can only start in the 8 px gap. | **FIX** (board ticket): an explicit drag target, 24 px on a fine pointer and 44 px on a coarse one (T10), that doesn't steal rename or colour clicks. |
+| R5 | med / high | The shared `Dialog` still has `shadow-lg`, which shows on board Export. | **FIX** (board ticket): a designer-side override on the export dialog only. Don't widen into other portals. |
+| R6 | med / high | A successful Undo drops focus and announces nothing (Today and the ledger). | **FIX** (Desk ticket): move focus to the restored need's act and give a polite "Undone" status. |
+| R7 | med / high | An expired own deferral suppresses today's holder act. | **FIX** (Desk ticket): an expired own row doesn't shadow the holder's fact. |
+| R8 | med / high | Inbound lead rows lose the consent, reach and contact-rule lines. | **FIX** (People/Library ticket): reuse the PersonRow safety facts. |
+| R9 | med / high | When the payment reads fail, the sheet shows "Reading" forever. | **FIX** (payments ticket): separate pending, error with retry, and missing. |
+| R10 | med / high | The payment sheet hardcodes USD. | **FIX** (payments ticket): use the invoice's currency, and the PO's where it exists. |
+| R11 | med / high | `library-piece-usage` isn't invalidated after placing a piece. | **FIX** (People/Library ticket). |
+| R12 | med / med | Usage reads cap at 1000 rows with no pagination. | **KEEP** as a known scale limit. Leah's studio is orders of magnitude below it. OWED: aggregate server-side when a studio approaches it. |
+| R13 | med / high | Long captions outgrow the saved tile geometry in BoardsBlock. | **FIX** (board ticket): consistent minimum caption geometry across edit, present and painter. Never truncate. |
+| R14 | med / high | A failed teammate-facts read is invisible: settled work reads as open. | **FIX** (Desk ticket): carry the facts' status into the unread or "not checked" caveat. |
+| R15 | low / high | The Rooms index makes one document-state request per job. | **KEEP** for this release (about 16 jobs). OWED: roster-provided titles. |
+
+## Local walk (SQ-834)
+
+Pending. It runs once the integration gate frees the shared local runtime.
