@@ -656,6 +656,7 @@ describe("US-28 S7b — the spec book by trade", () => {
     const user = userEvent.setup();
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(1);
     await user.click(screen.getByLabelText("Finish"));
     await user.keyboard("{Escape}");
     expect(container.querySelectorAll(".sb-open")).toHaveLength(0);
