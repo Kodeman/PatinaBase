@@ -38,6 +38,12 @@ export interface SpecBookChapter {
   id: string;
   spec_book_id: string;
   project_room_id: string | null;
+  /**
+   * The trade this chapter files lines by (00767): the top-level category slug,
+   * or 'unsorted' for lines with no category. Null for a chapter the studio made
+   * by hand.
+   */
+  trade: string | null;
   title: string;
   position: number;
   hero_media: unknown;
@@ -217,7 +223,8 @@ export function useSpecBookWorkbench(projectId: string) {
             .from("spec_book_chapters")
             .select("*")
             .eq("spec_book_id", book.id)
-            .order("position", { ascending: true }),
+            .order("position", { ascending: true })
+            .order("title", { ascending: true }),
           supabase
             .from("spec_book_item_settings")
             .select("*")

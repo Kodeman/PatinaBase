@@ -27543,6 +27543,7 @@ export type Database = {
           review_state: string
           spec_book_id: string
           title: string
+          trade: string | null
           updated_at: string
         }
         Insert: {
@@ -27556,6 +27557,7 @@ export type Database = {
           review_state?: string
           spec_book_id: string
           title: string
+          trade?: string | null
           updated_at?: string
         }
         Update: {
@@ -27569,6 +27571,7 @@ export type Database = {
           review_state?: string
           spec_book_id?: string
           title?: string
+          trade?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -37371,6 +37374,10 @@ export type Database = {
         Args: { p_forbidden: string[]; p_value: Json }
         Returns: boolean
       }
+      _spec_book_refile: {
+        Args: { p_ffe_item_ids?: string[]; p_spec_book_id: string }
+        Returns: number
+      }
       _spec_book_resolve_field:
         | {
             Args: {
@@ -37401,6 +37408,18 @@ export type Database = {
             }
             Returns: Json
           }
+      _spec_book_trade_chapter: {
+        Args: { p_category: string; p_spec_book_id: string }
+        Returns: string
+      }
+      _spec_book_trade_for: {
+        Args: { p_category: string; p_project_id: string }
+        Returns: {
+          chapter_position: number
+          title: string
+          trade: string
+        }[]
+      }
       _stage_project_ffe_document_extraction_00661_impl: {
         Args: {
           p_actor_id: string
