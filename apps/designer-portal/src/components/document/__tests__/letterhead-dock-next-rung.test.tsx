@@ -3,6 +3,11 @@
  * `sentence` rung with no act; the dock's centre still prints Next's act,
  * because the letterhead registers `voice.next`, never the printed rung.
  *
+ * US-28 walk-fix paper — the band now prints Next's act beside every rung
+ * (US-25 fix-now 13), so the dock bar no longer prints a `lens-band` act in
+ * its centre (mobile-bar.test.tsx). The registration stands: ⌘K reads the
+ * elected act and its sentence. "Elected act" below means that registration.
+ *
  * The mocking shape is letterhead-compose-landing.test.tsx's.
  */
 import { render } from '@testing-library/react';
@@ -101,7 +106,7 @@ const ASK: LensOwnAct = {
   onAct: jest.fn(),
 };
 
-it('Olsen at 390: the band prints the long sentence alone; the dock centre is still File the claim', () => {
+it('Olsen at 390: the band prints the long sentence alone; the elected act is still File the claim', () => {
   const voice = phoneVoice({
     ownAct: {
       key: 'own:claim',
@@ -123,7 +128,7 @@ it('Olsen at 390: the band prints the long sentence alone; the dock centre is st
 });
 
 // FR7 F7-4 (D13) — the phone form alone in the band; the dock carries the act.
-it('Wren held at 390: the band prints the phone form alone; the dock centre is Open the held draft', () => {
+it('Wren held at 390: the band prints the phone form alone; the elected act is Open the held draft', () => {
   const reading = installReading(
     [
       {
@@ -163,7 +168,7 @@ it('Wren held at 390: the band prints the phone form alone; the dock centre is O
   expect(action?.label).toBe('Open the held draft');
 });
 
-it('Cedar at 390: the band prints the repair’s phone form alone; the dock centre is Add the maker', () => {
+it('Cedar at 390: the band prints the repair’s phone form alone; the elected act is Add the maker', () => {
   const reading = installReading(
     [{ id: 'ffe-1', name: 'Side table, walnut', status: 'ordered', purchase_order: null }],
     OCT_8,

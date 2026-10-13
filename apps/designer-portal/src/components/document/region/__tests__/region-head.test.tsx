@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { render, screen } from '@testing-library/react';
 import { BandLeadsContext, RegionHead, type RegionLedgerEntry } from '../region-head';
 
@@ -7,6 +10,8 @@ jest.mock('@/lib/analytics/document-events', () => ({
     actionSelected: jest.fn(),
   },
 }));
+
+const GLOBALS_CSS = join(__dirname, '../../../../app/globals.css');
 
 const ledger: RegionLedgerEntry[] = [
   { key: 'lead-act', label: 'Approve', onClick: jest.fn() },
@@ -63,14 +68,28 @@ describe('RegionHead', () => {
     ).toHaveLength(0);
   });
 
-  it('prints the region name at the Life Review’s 24px, over its eyebrow', () => {
+  // US-28 walk-fix paper (SQ-834 WALK §2; specimens/document-*.html
+  // `.sec-head .eb`) — the region opens on the Section header, the ornament
+  // and its name in the mono eyebrow, where it printed a 24px Playfair heading.
+  it('prints the region name as the Section header — ornament and mono eyebrow — over its eyebrow', () => {
     const { container } = renderHead({ eyebrow: 'The job · project' });
     const heading = screen.getByRole('heading', { name: 'Approvals' });
-    expect(heading).toHaveClass(
-      'font-heading',
-      'text-[24px]',
-      'text-[var(--text-primary)]',
+    expect(heading).toHaveClass('eb');
+    expect(heading).not.toHaveClass('font-heading');
+    expect(heading.className).not.toMatch(/text-\[24px\]/);
+    const ornament = heading.querySelector('svg.orn')!;
+    expect(ornament).toHaveAttribute('aria-hidden', 'true');
+    expect(ornament).toHaveAttribute('focusable', 'false');
+    // Full ink, as `.sec-head .eb` paints it, from the fenced paper block.
+    const css = readFileSync(GLOBALS_CSS, 'utf8');
+    const block = css.slice(
+      css.indexOf('/* US-28 walk-fix paper */'),
+      css.indexOf('/* end US-28 walk-fix paper */'),
     );
+    expect(block).toMatch(/\[data-region-head\] h2\.eb,[\s\S]*?\{\s*color: var\(--text-primary\);/);
+    // The status line still follows the heading directly (prework-regions
+    // e2e reads `[data-region-head] h2 + p`).
+    expect(heading.nextElementSibling).toHaveTextContent('Two decisions waiting');
     const eyebrow = container.querySelector('p')!;
     expect(eyebrow).toHaveTextContent('The job · project');
     expect(eyebrow).toHaveClass(

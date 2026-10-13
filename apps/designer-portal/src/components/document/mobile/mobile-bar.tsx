@@ -98,13 +98,17 @@ export function MobileBar() {
   const {
     activeDoc,
     sheet,
-    primaryAction,
+    primaryAction: electedAction,
     secondaryActions,
     openSpine,
     openTimer,
     openDrawer,
     openMargin,
   } = useMobileShell();
+  // US-28 walk-fix paper — the band's Next prints on line 2 at every width
+  // (U-Q19, US-25 fix-now 13), so the dock never prints it a second time. It
+  // stays registered for ⌘K, which reads the elected act with its sentence.
+  const primaryAction = electedAction?.regionKey === 'lens-band' ? null : electedAction;
   const { inHandToday, running, paused, elapsedSeconds, offer, offerOwnsEdge } =
     useDocumentTime();
   const { data: unreadInbox = 0 } = useUnreadInboxCount();

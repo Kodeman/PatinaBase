@@ -26,6 +26,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { SectionOrnament } from './section-ornament';
 
 export interface FoldSeamProps {
   headingId: string;
@@ -68,16 +69,22 @@ export function FoldSeam({
       data-action-region={regionKey}
       data-surface-key={surfaceKey}
       onClick={onUnfold}
-      className="fold-settle grid min-h-11 w-full grid-cols-[auto_1fr_auto] items-baseline gap-3 px-3 py-2 text-left"
+      // US-28 walk-fix paper — the folded region is the same Section header
+      // as the open one (the ornament and the mono name), at the paper's own
+      // measure: no inset box, no italic display name.
+      className="fold-settle grid min-h-11 w-full grid-cols-[auto_1fr_auto] items-baseline gap-3 py-2 text-left"
     >
-      <span className="font-heading text-[12.5px] font-medium italic text-[var(--color-charcoal)]">
-        {name}
+      <span className="eb">
+        <SectionOrnament />
+        <span>{name}</span>
       </span>
       {/* One cell, so the cause rides the summary's own line: a fourth grid
-          column would open an implicit row and the seam would stop being the
-          44px one-line control its target size rests on. */}
-      <span className="flex min-w-0 items-baseline gap-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-        <span className="truncate">{summary}</span>
+          column would open an implicit row. The summary wraps inside it,
+          never truncates; the seam stays one 44px control however tall. */}
+      <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <span className="min-w-0 [overflow-wrap:anywhere]" data-fold-summary>
+          {summary}
+        </span>
         {cause ? (
           <span data-fold-cause className="shrink-0">
             {cause}

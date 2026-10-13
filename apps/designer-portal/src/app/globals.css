@@ -2996,3 +2996,14 @@ html:has([data-document-shell]) {
 @media (max-width: 1179px) { .hline-r.room-acts-wide { display: none; } }
 .room-card-foot { margin-top: auto; }
 /* end US-28 walk-fix header line */
+
+/* US-28 walk-fix paper */
+/* The Document paper (SQ-834 WALK §2; specimens/document-{1440,390}.html
+   `.sec-head .eb`). A region opens on the Section header, the ornament and
+   its name in the mono eyebrow in full ink, open (RegionHead) or folded
+   (FoldSeam) alike. */
+[data-region-head] h2.eb,
+[data-fold-seam] .eb {
+  color: var(--text-primary);
+}
+/* end US-28 walk-fix paper */

@@ -2,8 +2,9 @@
 
 /**
  * The head of a Project region — two registers on one line: the region's name
- * and its one-line state on the left (serif, the document's own voice), its
- * ledger of acts on the right (Scored Ink words, never boxes).
+ * as the Section header (the ornament and a mono eyebrow, US-28 walk-fix
+ * paper) and its one-line state on the left, its ledger of acts on the right
+ * (Scored Ink words, never boxes).
  *
  * The ledger's ORDER is its hierarchy: entry 0 is the region's leader and is
  * rendered `inked` whatever it declares; everything after it is a secondary or
@@ -31,6 +32,7 @@ import {
   DocumentActionGroup,
   type DocumentActionVariant,
 } from '../document-action';
+import { SectionOrnament } from './section-ornament';
 
 export interface RegionLedgerEntry {
   /** DocumentAction actionKey — stable telemetry identity. */
@@ -238,15 +240,20 @@ export function RegionHead({
         <h2
           id={headingId}
           tabIndex={-1}
-          // D2 — the letterhead's own ring, verbatim. `outline-none` on a
-          // -1 tabindex heading meant a rail jump landed with nothing drawn.
+          // US-28 walk-fix paper (uplift.md area 2; specimens/document-*.html
+          // `.sec-head .eb`) — each region opens on the Section header: the
+          // ornament and the region's name in the mono eyebrow register, never
+          // a display heading. D2 — the letterhead's own ring, verbatim.
+          // `outline-none` on a -1 tabindex heading meant a rail jump landed
+          // with nothing drawn.
           className={
             silent
               ? 'sr-only'
-              : 'font-heading text-[24px] font-medium leading-[1.2] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]'
+              : 'eb focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]'
           }
         >
-          {name}
+          {!silent && <SectionOrnament />}
+          {silent ? name : <span className="min-w-0">{name}</span>}
         </h2>
         {!silent && (
           <p className="text-[12.5px] text-[var(--color-mocha)]">{status}</p>

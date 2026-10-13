@@ -840,6 +840,26 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
     expect(within(bar).queryByRole('button', { name: 'Open the project' })).toBeNull();
   });
 
+  // US-28 walk-fix paper (WALK §2, 390: "SEND REMINDER appears twice") — the
+  // band prints its Next on line 2 at every width, so a Next the letterhead
+  // registers from the band is never printed again in the dock's centre.
+  it('never prints the band’s Next in the centre: the band is its one printing', () => {
+    render(
+      <TestProviders>
+        <HoldDocument doc={heldDocument} />
+        <Primary action={press('Open the project')} priority={MOBILE_ACTION_PRIORITY.lifecycle} />
+        <Primary
+          action={{ ...press('Send reminder', 'next:remind'), regionKey: 'lens-band' }}
+          priority={MOBILE_ACTION_PRIORITY.next}
+        />
+        <MobileBar />
+      </TestProviders>,
+    );
+    const bar = screen.getByTestId('mobile-bar');
+    expect(within(bar).queryByRole('button', { name: 'Send reminder' })).toBeNull();
+    expect(bar.querySelector('[data-action-key="next:remind"]')).toBeNull();
+  });
+
   it('leads More with the ruled acts, in order, and keeps one Call sheet door', () => {
     mountDock();
     const menu = openMore();

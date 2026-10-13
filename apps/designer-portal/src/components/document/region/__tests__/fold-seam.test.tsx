@@ -92,11 +92,37 @@ describe('FoldSeam', () => {
     expect(seam.className).toContain('grid-cols-[auto_1fr_auto]');
     expect(seam.children).toHaveLength(3);
     expect(cause.closest('[data-fold-seam]')).toBe(seam);
-    // The summary is still there, and still the thing that truncates.
+    // The summary is still there. US-28 walk-fix paper: it wraps, it never
+    // truncates (the contract's "every surface wraps").
     expect(seam).toHaveTextContent('36 lines · 2 unspecified');
-    expect(container.querySelector('.truncate')).toHaveTextContent(
-      '36 lines · 2 unspecified',
+    const summary = container.querySelector('[data-fold-summary]')!;
+    expect(summary).toHaveTextContent('36 lines · 2 unspecified');
+    expect(summary).not.toHaveClass('truncate');
+    expect(container.querySelector('.truncate')).toBeNull();
+  });
+
+  // US-28 walk-fix paper (SQ-834 WALK §2: the inset italic "Schedule dates"
+  // box) — a folded region prints the same Section header as an open one:
+  // the ornament and its name in the mono eyebrow, at the paper's measure.
+  it('prints the folded region as the Section header, not an inset italic box', () => {
+    const { container } = renderSeam();
+    const seam = screen.getByRole('button');
+    const head = seam.firstElementChild!;
+    expect(head).toHaveClass('eb');
+    expect(head).toHaveTextContent('Pieces');
+    const ornament = head.querySelector('svg.orn')!;
+    expect(ornament).toHaveAttribute('aria-hidden', 'true');
+    expect(container.querySelector('.italic, .font-heading')).toBeNull();
+    expect(seam.className).not.toMatch(/(?:^|\s)px-/);
+    // The ornament reads nothing: the seam's name is still the region's word.
+    expect(seam).toHaveAccessibleName(/^Pieces/);
+    // Its colour is the Section header's full ink, from the fenced block.
+    const css = readFileSync(GLOBALS_CSS, 'utf8');
+    const block = css.slice(
+      css.indexOf('/* US-28 walk-fix paper */'),
+      css.indexOf('/* end US-28 walk-fix paper */'),
     );
+    expect(block).toMatch(/\[data-fold-seam\] \.eb \{\s*color: var\(--text-primary\);/);
   });
 
   it('prints no cause at all when there was no choice to print', () => {
