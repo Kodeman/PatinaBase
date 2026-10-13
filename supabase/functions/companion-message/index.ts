@@ -227,7 +227,7 @@ async function generateAIResponse(context: {
   productData: Record<string, unknown> | null;
   styleProfile: Record<string, unknown> | null;
   screen: string;
-}, deps: { admin: ReturnType<typeof createClient>; userId: string; studioId: string | null }): Promise<{
+}, deps: { admin: Parameters<typeof createLlmLedger>[0]; userId: string; studioId: string | null }): Promise<{
   response: string;
   quickActions: QuickAction[] | null;
   suggestedProducts: ProductSuggestion[] | null;
