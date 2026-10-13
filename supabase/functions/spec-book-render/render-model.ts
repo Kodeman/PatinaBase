@@ -802,6 +802,7 @@ async function audienceItemHash(
 ): Promise<string> {
   if (audience === "internal") return await rawItemHash(item);
   const safeItem = buildSafeItem(item, audience, chapters, allow);
+  safeItem.chapterId = null;
   safeItem.contentHash = "";
   return await sha256Hex(canonicalStringify(safeItem));
 }
@@ -899,9 +900,10 @@ function audienceAllowTokens(
 
 function rawItemHash(item: JsonRecord): Promise<string> {
   const provided = stringValue(item.contentHash ?? item.content_hash);
-  return provided
-    ? Promise.resolve(provided)
-    : sha256Hex(canonicalStringify(item));
+  if (provided) return Promise.resolve(provided);
+  const content = canonicalClone(item);
+  delete content.chapterId;
+  return sha256Hex(canonicalStringify(content));
 }
 
 async function diffItems(
