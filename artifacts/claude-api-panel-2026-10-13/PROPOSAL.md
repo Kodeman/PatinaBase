@@ -1,5 +1,7 @@
 # US-29 · Claude API panel: proposal record (2026-10-13)
 
+Founder deck: https://claude.ai/artifact/U8jSGUmZVFezqbwA9HAzMC
+
 Seat findings are verbatim from the Sidequest board, in `panel/`:
 - seat 1 (studio, SQ-867)
 - seat 2 (platform, SQ-868)
