@@ -4,8 +4,10 @@ import {
   computeMoodBoardRasterScale,
   DEFAULT_MOOD_BOARD_EXPORT_SCALE,
   MOOD_BOARD_EXPORT_MAX_EDGE,
+  measureMoodBoardContentHeight,
   renderMoodBoardPng,
   resolveMoodBoardGeometry,
+  type MoodBoardPainterContext,
   type MoodBoardPngOptions,
   type MoodBoardRasterInput,
   type MoodBoardRasterResult,
@@ -47,11 +49,36 @@ export interface MoodBoardPngExportPlan {
   capped: boolean;
 }
 
-/** Preflight dimensions shown by the dialog before invoking the painter. */
+/** A 2D context the dialog measures captions with, as the painter will. */
+function defaultMeasureContext(): MoodBoardPainterContext | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    return document.createElement('canvas').getContext('2d') as MoodBoardPainterContext | null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Preflight dimensions shown by the dialog before invoking the painter. They
+ * are the raster the painter will produce: the composition grown to every
+ * printed caption (R13b), then the 2× scale under the 8192px edge cap. With
+ * no 2D context to measure text (a server render), the saved canvas stands in.
+ */
 export function getMoodBoardPngExportPlan(
   input: MoodBoardRasterInput,
+  measureContext: MoodBoardPainterContext | null = defaultMeasureContext(),
 ): MoodBoardPngExportPlan {
-  const canvas = 'canvas' in input ? input.canvas : resolveMoodBoardGeometry(input).canvas;
+  const geometry = 'canvas' in input ? input : resolveMoodBoardGeometry(input);
+  const canvas = measureContext
+    ? {
+        width: geometry.canvas.width,
+        height: Math.max(
+          geometry.canvas.height,
+          measureMoodBoardContentHeight(measureContext, geometry),
+        ),
+      }
+    : geometry.canvas;
   const output = computeMoodBoardRasterScale(
     canvas,
     DEFAULT_MOOD_BOARD_EXPORT_SCALE,

@@ -177,8 +177,9 @@ export function BoardExportDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
       {/* The shared Dialog keeps `shadow-lg` for the other portals; the
-          designer portal carries no shadow (US-28 S1, R5). */}
-      <DialogContent className="max-w-lg shadow-none">
+          designer portal carries no shadow (US-28 S1, R5), and the sheet is
+          the one house stock: 2px corner on --card-edge (U-Q12). */}
+      <DialogContent className="br-sheet rounded-[2px] border-[var(--card-edge)] bg-[var(--paper-doc)] shadow-none sm:rounded-[2px] max-w-lg">
         <DialogHeader>
           <DialogTitle>Export {boardName}</DialogTitle>
           <DialogDescription>
@@ -186,12 +187,12 @@ export function BoardExportDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3">
+        <div className="br-export-options grid">
           <button
             type="button"
             onClick={exportPng}
             disabled={busy !== null}
-            className="rounded-[5px] border border-[var(--border-default)] p-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
+            className="br-export-option"
           >
             <span className="font-heading text-[14px] text-[var(--text-primary)]">Board composition · PNG</span>
             <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
@@ -204,7 +205,7 @@ export function BoardExportDialog({
             type="button"
             onClick={() => exportPdf('board-composition')}
             disabled={busy !== null}
-            className="rounded-[5px] border border-[var(--border-default)] p-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
+            className="br-export-option"
           >
             <span className="font-heading text-[14px] text-[var(--text-primary)]">Board composition · PDF</span>
             <span className="mt-1 block text-[11px] text-[var(--text-muted)]">Single landscape page preserving the composition.</span>
@@ -213,7 +214,7 @@ export function BoardExportDialog({
             type="button"
             onClick={() => exportPdf('board')}
             disabled={busy !== null}
-            className="rounded-[5px] border border-[var(--border-default)] p-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
+            className="br-export-option"
           >
             <span className="font-heading text-[14px] text-[var(--text-primary)]">Product specification sheet · PDF</span>
             <span className="mt-1 block text-[11px] text-[var(--text-muted)]">Product references grouped by composition section.</span>

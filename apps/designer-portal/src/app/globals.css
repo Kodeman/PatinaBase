@@ -2841,6 +2841,30 @@ html:has([data-document-shell]) {
 .s12-card-acts { margin: 8px 0 0 -6px; }
 /* ═══ end US-28 S12 board room ═════════════════════════════════════════════ */
 
+/* US-28 walk-fix board room ═════════════════════════════════════════════════
+   SQ-859 (WALK §6): the Header line closes on the house double rule (no
+   extra hairline under it, and none of the page's 48px below it — the board
+   is right there); the back act keeps its job name on one wrapping line;
+   tool words are tertiary acts, scored at rest; the room's fields wear the
+   house field; Share and Export are the one sheet stock, no shadow; Export's
+   options are rows under a hairline, never edged cards. */
+.br-head { border-bottom: 0; }
+.br-rule { margin-bottom: 0; }
+.br-back { text-align: left; }
+.br-tool { color: var(--color-quiet-ink); }
+.br-tool:not(:disabled) { text-decoration: underline; text-decoration-color: var(--color-aged-oak); text-decoration-thickness: 1px; text-underline-offset: 6px; }
+.br-tool:not(:disabled):hover { text-decoration-thickness: 1.5px; }
+.br-tool[aria-pressed="true"] { text-decoration-color: var(--text-primary); text-decoration-thickness: 1.5px; }
+.br-tool--word { margin-left: -6px; text-align: left; }
+.br-field { min-height: 44px; padding: 10px 12px; font-size: 14px; line-height: 20px; color: var(--text-primary); }
+.br-sheet { box-shadow: none; border-radius: 2px; }
+.br-export-options { border-top: 1px solid var(--doc-ink-border); }
+.br-export-option { display: block; width: 100%; min-height: 44px; padding: 12px 0; text-align: left; border-bottom: 1px solid var(--doc-ink-border); }
+.br-export-option:hover:not(:disabled) { background: var(--bg-hover); }
+.br-export-option:disabled { cursor: wait; opacity: .6; }
+.br-export-option:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+/* ═══ end US-28 walk-fix board room ═════════════════════════════════════════ */
+
 /* US-28 S7b spec book ═══════════════════════════════════════════════════════
    The spec book, full uplift (V20 U-Q18; specimens/specbook-{1440,390}.html,
    SPEC §S7b). One stock: the book stands on --paper; only the printed sheet

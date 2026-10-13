@@ -578,4 +578,77 @@ describe('BoardComposition never clips a caption at the canvas bottom (R13b)', (
       restore()
     }
   })
+
+  it('grows to a rotated caption’s turned corner, not its unturned height (SQ-855 repro)', () => {
+    // Board 400×300; a product at (100,190), saved 200×40, turned 45°. The
+    // browser lays the tile out 82px tall (plate and caption) before turning
+    // it about the centre of its saved box, (200, 210).
+    const turned: BoardCompositionBoard = {
+      id: 'b-turned',
+      name: 'Turned',
+      canvas_width: 400,
+      canvas_height: 300,
+      background_color: '#FAF8F5',
+      items: [
+        {
+          id: 'turned',
+          type: 'product',
+          x: 100,
+          y: 190,
+          width: 200,
+          height: 40,
+          rotation: 45,
+          z_index: 0,
+          data: { name: 'Arden lounge chair' },
+        },
+      ],
+    }
+    const restore = stubLayout({ turned: 82 })
+    try {
+      const { container } = render(<BoardComposition board={turned} />)
+      const canvas = container.querySelector('[data-board-composition-canvas]') as HTMLElement
+      // The oracle is plane geometry, worked here by hand: the lowest turned
+      // corner of the 200×82 box is (100, 62) from the centre, which lands at
+      // 210 + (100 + 62)·sin 45° = 324.55 — past the 300px canvas, and past
+      // the 190 + 82 = 272 an unturned measure would give.
+      const lowestCorner = 210 + (100 + 62) * Math.SQRT1_2
+      expect(lowestCorner).toBeCloseTo(324.55, 2)
+      expect(canvas).toHaveAttribute('data-content-height', String(Math.ceil(lowestCorner)))
+      expect((canvas.firstElementChild as HTMLElement).style.height).toBe(`${Math.ceil(lowestCorner)}px`)
+    } finally {
+      restore()
+    }
+  })
+})
+
+describe('the stacked reading view keeps a template’s empty slots (SQ-859)', () => {
+  it('prints each Materials placeholder on a plate at phone width, as the canvas does', () => {
+    const board: BoardCompositionBoard = {
+      id: 'b-slots',
+      name: 'Palette + materials study',
+      canvas_width: 1200,
+      canvas_height: 800,
+      background_color: '#FAF8F5',
+      sections: [{ id: 'materials', name: 'Materials', color: '#D9E0D7' }],
+      items: ['Textile', 'Stone or surface', 'Wood or finish'].map((name, index) => ({
+        id: `slot-${index}`,
+        type: 'image',
+        x: 40 + index * 300,
+        y: 300,
+        width: 260,
+        height: 200,
+        z_index: index,
+        image_url: null,
+        data: { name, section_id: 'materials' },
+      })),
+    }
+    const { container } = render(<BoardComposition board={board} />)
+    const stacked = container.querySelector('.sm\\:hidden') as HTMLElement
+    expect(stacked.querySelector('[data-stacked-section="materials"]')).toHaveTextContent('Materials')
+    const plates = stacked.querySelectorAll('[data-board-plate="true"]')
+    expect(plates).toHaveLength(3)
+    for (const name of ['Textile', 'Stone or surface', 'Wood or finish']) {
+      expect(within(stacked).getByText(name)).toBeInTheDocument()
+    }
+  })
 })

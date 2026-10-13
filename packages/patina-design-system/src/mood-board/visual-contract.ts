@@ -97,6 +97,36 @@ export function moodBoardItemExtent(height: number, captionHeight: number): numb
 }
 
 /**
+ * The vertical span an item prints, in board px: the box from its top edge
+ * down to `extent` (its plate and caption), turned about the centre of its
+ * SAVED box as the DOM tile (`transform-origin: center`) and the painter both
+ * turn it. Unrotated, that is simply `{ y, height: extent }`; rotated, it is
+ * the rotated bounding box, so a turned caption is never clipped (R13b).
+ */
+export function moodBoardPrintedSpan(
+  box: { y: number; width: number; height: number; rotation?: number | null },
+  extent: number,
+): { y: number; height: number } {
+  const radians = ((box.rotation ?? 0) * Math.PI) / 180
+  if (!Number.isFinite(radians) || radians % (2 * Math.PI) === 0) {
+    return { y: box.y, height: extent }
+  }
+  const sin = Math.sin(radians)
+  const cos = Math.cos(radians)
+  const centreY = box.y + box.height / 2
+  let top = Infinity
+  let bottom = -Infinity
+  for (const dx of [-box.width / 2, box.width / 2]) {
+    for (const dy of [-box.height / 2, extent - box.height / 2]) {
+      const y = centreY + dx * sin + dy * cos
+      top = Math.min(top, y)
+      bottom = Math.max(bottom, y)
+    }
+  }
+  return { y: top, height: bottom - top }
+}
+
+/**
  * The composition's height: the saved canvas, grown so every item's printed
  * extent — a caption that ran past its saved box included — sits inside it.
  * Never clip (R13b): the DOM composition, Present and the painter all size to

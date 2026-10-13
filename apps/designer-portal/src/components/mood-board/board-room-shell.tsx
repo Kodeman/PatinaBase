@@ -479,7 +479,9 @@ function BoardNameField({ api }: { api: BoardRoomControllerApi }) {
       }}
       // The board's name is the room's heading (US-28 S12): Playfair at the
       // house display step, edited in place — input chrome only on focus.
-      className="br-name h-11 w-full min-w-[120px] border-transparent bg-transparent px-1 font-heading text-[20px] font-medium leading-[1.2] shadow-none hover:border-transparent focus:border-[var(--clay-ink)] md:text-[26px]"
+      // The face is set inline because Input pins the body face inline.
+      className="br-name h-11 w-full min-w-[120px] border-transparent bg-transparent px-1 text-[20px] font-medium leading-[1.2] shadow-none hover:border-transparent focus:border-[var(--clay-ink)] md:text-[26px]"
+      style={{ fontFamily: 'var(--font-display)' }}
     />
   );
 }
@@ -1019,9 +1021,9 @@ function BoardRoomSurface({
     );
   }, [api]);
 
-  const fit = useCallback(() => {
+  const fittedView = useCallback(() => {
     const current = api.state;
-    if (!current) return;
+    if (!current) return null;
     const rect = workspaceRef.current?.getBoundingClientRect();
     const geometry = resolveMoodBoardGeometry({
       canvasWidth: current.canvasWidth,
@@ -1030,14 +1032,39 @@ function BoardRoomSurface({
       sections: current.sections,
       items: current.items,
     });
-    api.canvasProps?.onViewChange?.(
-      fitBoardGeometry(geometry, {
-        width: rect?.width ?? 800,
-        height: rect?.height ?? 600,
-      }),
-      'fit',
-    );
-  }, [api]);
+    const size = { width: rect?.width ?? 800, height: rect?.height ?? 600 };
+    return { view: fitBoardGeometry(geometry, size), size };
+  }, [api.state]);
+
+  const fit = useCallback(() => {
+    const fitted = fittedView();
+    if (fitted) api.canvasProps?.onViewChange?.(fitted.view, 'fit');
+  }, [api, fittedView]);
+
+  // The room opens at fit (US-28 walk-fix): every zone and piece inside the
+  // window at 1440 and at 390, never a fragment of the first zone. Once per
+  // board, after layout gives the window its size; a board smaller than the
+  // window opens centred at 100% rather than blown up past it.
+  const openedAtFitRef = useRef<string | null>(null);
+  const boardIdForFit = api.state?.boardId ?? null;
+  useEffect(() => {
+    if (!boardIdForFit || openedAtFitRef.current === boardIdForFit) return;
+    const frame = requestAnimationFrame(() => {
+      const rect = workspaceRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+      const fitted = fittedView();
+      if (!fitted) return;
+      openedAtFitRef.current = boardIdForFit;
+      const { view, size } = fitted;
+      api.canvasProps?.onViewChange?.(
+        view.zoom > 1
+          ? zoomBoardViewAtPoint(view, { x: size.width / 2, y: size.height / 2 }, 1)
+          : view,
+        'fit',
+      );
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [api.canvasProps, boardIdForFit, fittedView]);
 
   // View shortcuts are room-scoped, not canvas-scoped: after a click in the
   // rail or the inspector, Cmd+0, 1 and the zoom keys kept working for edit
@@ -1438,7 +1465,20 @@ function BoardRoomSurface({
       <header className="br-head relative z-50 shrink-0">
         <div className="hline br-hline">
           <div className="hline-l br-hline-l">
-            <p className="eb br-owner">{ownerLabel}</p>
+            {/* Back to the job (boardroom-p1): the same leave as Save and
+                close, so the board and its cover are written before it goes. */}
+            <DocumentAction
+              actionKey="board-room-back"
+              surfaceKey="board-room"
+              regionKey="board-room-head"
+              variant="tertiary"
+              leading="←"
+              className="br-back"
+              disabled={api.isExiting}
+              onClick={() => void api.requestExit()}
+            >
+              {ownerLabel}
+            </DocumentAction>
             <div className="br-name-wrap"><BoardNameField api={api} /></div>
           </div>
           <div className="hline-r br-hline-r">
@@ -1503,6 +1543,7 @@ function BoardRoomSurface({
             </DocumentAction>
           </div>
         </div>
+        <div className="rule-strong br-rule" role="presentation" />
       </header>
 
       {(surfaceError || api.persistenceError) && (

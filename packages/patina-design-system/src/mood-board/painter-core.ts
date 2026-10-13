@@ -9,6 +9,7 @@ import {
   MOOD_BOARD_VISUAL,
   moodBoardCaptionHeight,
   moodBoardItemExtent,
+  moodBoardPrintedSpan,
   moodBoardZoneColor,
   resolveMoodBoardContentHeight,
   resolveMoodBoardPlate,
@@ -445,15 +446,17 @@ export function measureMoodBoardContentHeight(
     geometry.canvas.height,
     geometry.items.map((item) => {
       const caption = itemCaption(item)
-      if (!caption) return { y: item.y, height: item.height }
+      if (!caption) return moodBoardPrintedSpan(item, item.height)
       const lines = measureCaption(context, item.width, caption.name, caption.meta)
-      return {
-        y: item.y,
-        height: moodBoardItemExtent(
+      // The plate and caption, turned with the item (drawItem rotates about
+      // the saved box's centre): a rotated caption's corner sets the bottom.
+      return moodBoardPrintedSpan(
+        item,
+        moodBoardItemExtent(
           item.height,
           moodBoardCaptionHeight(lines.name.length, lines.meta.length),
         ),
-      }
+      )
     }),
   )
 }

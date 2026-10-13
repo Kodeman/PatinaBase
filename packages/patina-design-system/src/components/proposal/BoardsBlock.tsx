@@ -9,6 +9,7 @@ import {
   MOOD_BOARD_MONO_FONT,
   MOOD_BOARD_VISUAL,
   moodBoardZoneColor,
+  moodBoardPrintedSpan,
   resolveMoodBoardContentHeight,
 } from '../../mood-board/visual-contract'
 
@@ -219,18 +220,23 @@ function ScaledBoardCanvas({
   useIsomorphicLayoutEffect(() => {
     const world = worldRef.current
     if (!world) return
-    const topByKey = new Map(geometry.items.map((item) => [item.key, item.y]))
+    const itemByKey = new Map(geometry.items.map((item) => [item.key, item]))
     const tiles = () =>
       Array.from(world.querySelectorAll<HTMLElement>('[data-board-snapshot-key]'))
     const measure = () => {
       const next = resolveMoodBoardContentHeight(
         canvasHeight,
-        tiles().map((tile) => ({
-          y: topByKey.get(tile.dataset.boardSnapshotKey ?? '') ?? 0,
-          // Layout px, untouched by the scale transform; scrollHeight counts
-          // the caption that runs past the tile's saved height.
-          height: Math.max(tile.offsetHeight, tile.scrollHeight),
-        })),
+        tiles().flatMap((tile) => {
+          const item = itemByKey.get(tile.dataset.boardSnapshotKey ?? '')
+          if (!item) return []
+          // Layout px, untouched by the scale and rotate transforms;
+          // scrollHeight counts the caption that runs past the saved height.
+          // The tile turns about its saved box's centre, so the printed span
+          // is that extent's rotated bounding box, as the painter measures it.
+          return [
+            moodBoardPrintedSpan(item, Math.max(tile.offsetHeight, tile.scrollHeight)),
+          ]
+        }),
       )
       setContentHeight((current) => (current === next ? current : next))
     }
@@ -634,14 +640,17 @@ function ProductTile({
 function ImageTile({
   item,
   box,
+  aspectRatio,
 }: {
   item: BoardCompositionItem
   box?: { width: number; height: number }
+  /** The stacked reading view's fixed plate shape (no box there). */
+  aspectRatio?: string
 }) {
   const snap = (item.data ?? {}) as ImageSnapshot
   return (
     <PlateItem box={box}>
-      <Plate box={box}>
+      <Plate box={box} aspectRatio={aspectRatio}>
         {item.image_url ? (
           <PlateImage src={item.image_url} alt="" />
         ) : (
@@ -655,14 +664,17 @@ function ImageTile({
 function RoomScanTile({
   item,
   box,
+  aspectRatio,
 }: {
   item: BoardCompositionItem
   box?: { width: number; height: number }
+  /** The stacked reading view's fixed plate shape (no box there). */
+  aspectRatio?: string
 }) {
   const snap = (item.data ?? {}) as RoomScanSnapshot
   return (
     <PlateItem box={box}>
-      <Plate box={box}>
+      <Plate box={box} aspectRatio={aspectRatio}>
         {item.image_url ? (
           <PlateImage src={item.image_url} alt={snap.name ?? 'Your space'} />
         ) : (
@@ -901,7 +913,18 @@ function StackedBoardItems({
                   : typeof itemData?.thumbnail_url === 'string' && itemData.thumbnail_url.trim()
                     ? itemData.thumbnail_url
                     : item.image_url
-                if (!displayUrl) return null
+                // An empty slot (a template's "Textile", "Stone or surface") or a
+                // scan with no preview prints its word on a plate, as the
+                // canvas does — the phone must not drop what the desktop shows.
+                if (!displayUrl) {
+                  return frame(
+                    item.type === 'image' ? (
+                      <ImageTile item={item} aspectRatio="4 / 3" />
+                    ) : (
+                      <RoomScanTile item={item} aspectRatio="4 / 3" />
+                    ),
+                  )
+                }
                 return frame(
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={displayUrl} alt="" className="h-full w-full object-contain" />,

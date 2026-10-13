@@ -23,7 +23,7 @@ import {
   type ProposalPalette,
   type RoomScan,
 } from '@patina/supabase';
-import { Button, Input } from '@/components/ui/controls';
+import { Input } from '@/components/ui/controls';
 import {
   ProductPickerModal,
   type ProductPickResult,
@@ -977,9 +977,9 @@ export function BoardAddRail({
             <p className="text-[11px] leading-4 text-[var(--text-muted)]">
               Search personal, studio, and catalog pieces.
             </p>
-            <Button variant="secondary" size="sm" className="min-h-11 min-w-11" onClick={() => setPickerOpen(true)}>
+            <button type="button" className="br-tool br-tool--word" onClick={() => setPickerOpen(true)}>
               Browse resource library
-            </Button>
+            </button>
           </div>
         )}
 
@@ -1055,9 +1055,9 @@ export function BoardAddRail({
               className="sr-only"
               onChange={(event) => void upload(Array.from(event.target.files ?? []))}
             />
-            <Button variant="secondary" size="sm" className="min-h-11 min-w-11" disabled={uploading} onClick={() => inputRef.current?.click()}>
+            <button type="button" className="br-tool br-tool--word" disabled={uploading} onClick={() => inputRef.current?.click()}>
               {uploading ? 'Preparing images…' : 'Choose images'}
-            </Button>
+            </button>
             {onBringInDeck && (
               <button
                 type="button"
@@ -1167,7 +1167,7 @@ export function BoardAddRail({
             )
           }
         />
-        <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={addNote}>+ Note</Button>
+        <button type="button" className="br-tool br-tool--word" onClick={addNote}>+ Note</button>
         {error && <p role="alert" className="mt-2 text-[11px] text-[var(--color-clay-ink)]">{error}</p>}
       </div>
 

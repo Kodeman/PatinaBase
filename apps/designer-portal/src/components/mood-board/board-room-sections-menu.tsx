@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Input } from '@/components/ui/controls';
 import type { BoardRoomControllerApi } from '@/components/portal/scope-builder/board-room-controller';
 import { newSectionId } from '@/components/portal/scope-builder/board-arrange';
 
@@ -33,7 +32,8 @@ function SectionRow({
   };
   return (
     <li className="flex items-center gap-1">
-      <Input
+      <input
+        className="field-control br-field"
         value={draft}
         aria-label={`Rename ${section.name}`}
         onChange={(event) => setDraft(event.target.value)}
@@ -92,9 +92,9 @@ export function BoardRoomSectionsMenu({
           <button type="button" className="br-tool" onClick={() => api.trimCanvas()}>Trim composition canvas</button>
         </div>
         <p className="br-tools-sub">Composition sections</p>
-        <div className="mt-2 flex gap-1">
-          <Input
-            className="h-11"
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            className="field-control br-field"
             value={newName}
             aria-label="New section name"
             placeholder="Section name"
@@ -103,7 +103,7 @@ export function BoardRoomSectionsMenu({
               if (event.key === 'Enter') add();
             }}
           />
-          <Button size="sm" className="min-h-11 min-w-11" variant="secondary" disabled={!newName.trim()} onClick={add}>Add section</Button>
+          <button type="button" className="br-tool br-tool--word shrink-0" disabled={!newName.trim()} onClick={add}>Add section</button>
         </div>
         {api.state.sections.length > 0 && (
           <ul className="mt-2 space-y-1">

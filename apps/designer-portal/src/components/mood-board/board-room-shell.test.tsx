@@ -183,16 +183,26 @@ describe('narrow Tools sheet is a modal (R3)', () => {
     expect(onEndTidySession).toHaveBeenCalledTimes(1);
   });
 
-  it('Shift+T does nothing behind the open sheet', async () => {
+  it('Shift+T does nothing behind the open sheet, even with a Tidy session open', async () => {
     setWide(false);
     const onTidy = jest.fn();
-    render(<ToolsRoom initiallyOpen={false} onTidy={onTidy} />);
+    const onEndTidySession = jest.fn();
+    render(
+      <ToolsRoom
+        initiallyOpen={false}
+        tidySessionOpen
+        onTidy={onTidy}
+        onEndTidySession={onEndTidySession}
+      />,
+    );
     const head = await openToolsFromAct();
     const event = new KeyboardEvent('keydown', { key: 'T', shiftKey: true, bubbles: true, cancelable: true });
     head.dispatchEvent(event);
     expect(onTidy).not.toHaveBeenCalled();
+    expect(onEndTidySession).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
     expect(screen.getByRole('dialog', { name: 'Tools' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Tidy spacing' })).toBeInTheDocument();
     // With the sheet put back, Shift+T tidies again.
     fireEvent.click(screen.getByRole('button', { name: 'Put back' }));
     fireEvent.keyDown(document.body, { key: 'T', shiftKey: true });

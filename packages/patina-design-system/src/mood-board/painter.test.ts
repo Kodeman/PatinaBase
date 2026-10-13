@@ -403,6 +403,108 @@ describe('worker-safe mood-board painter core', () => {
       ).toBe(300)
     })
 
+    it('measures a rotated caption by the turned box of plate and caption (SQ-855 repro)', async () => {
+      // The SQ-855 shape: board 400×300, a product at (100,190), saved 200×40,
+      // turned 45°. Under this context's 6px-a-character metrics a 32-character
+      // name spans the plate on one line, so its turned glyphs end below 300.
+      const turned = {
+        id: 'turned',
+        type: 'product' as const,
+        x: 100,
+        y: 190,
+        width: 200,
+        height: 40,
+        rotation: 45,
+        data: { name: 'Arden lounge chair in walnut oak' },
+      }
+      const geometry = resolveMoodBoardGeometry({
+        canvasWidth: 400,
+        canvasHeight: 300,
+        backgroundColor: '#FCFAF6',
+        sections: [],
+        items: [turned],
+      })
+
+      // Replays the paint's own transforms to find every glyph box's lowest
+      // corner in board px: the oracle is the painted text, not the helper.
+      class TransformContext extends RecordingContext {
+        private matrix = [1, 0, 0, 1, 0, 0]
+        private stack: number[][] = []
+        glyphBottom = -Infinity
+        save() {
+          super.save()
+          this.stack.push([...this.matrix])
+        }
+        restore() {
+          super.restore()
+          this.matrix = this.stack.pop() ?? [1, 0, 0, 1, 0, 0]
+        }
+        private apply(a: number, b: number, c: number, d: number, e: number, f: number) {
+          const [ma, mb, mc, md, me, mf] = this.matrix
+          this.matrix = [
+            ma * a + mc * b,
+            mb * a + md * b,
+            ma * c + mc * d,
+            mb * c + md * d,
+            ma * e + mc * f + me,
+            mb * e + md * f + mf,
+          ]
+        }
+        translate(x: number, y: number) {
+          super.translate(x, y)
+          this.apply(1, 0, 0, 1, x, y)
+        }
+        scale(x: number, y: number) {
+          super.scale(x, y)
+          this.apply(x, 0, 0, y, 0, 0)
+        }
+        rotate(radians: number) {
+          super.rotate(radians)
+          this.apply(Math.cos(radians), Math.sin(radians), -Math.sin(radians), Math.cos(radians), 0, 0)
+        }
+        fillText(text: string, x: number, y: number, maxWidth?: number) {
+          super.fillText(text, x, y, maxWidth)
+          const { nameLine, metaLine } = MOOD_BOARD_VISUAL.caption
+          const half = this.font.includes(MOOD_BOARD_MONO_FONT) ? metaLine / 2 : nameLine / 2
+          const width = this.measureText(text).width
+          const [a, b, c, d, e, f] = this.matrix
+          for (const [px, py] of [
+            [x, y - half],
+            [x + width, y - half],
+            [x, y + half],
+            [x + width, y + half],
+          ] as const) {
+            this.glyphBottom = Math.max(this.glyphBottom, b * px + d * py + f)
+          }
+        }
+      }
+
+      const context = new TransformContext()
+      await paintMoodBoardGeometry({
+        context,
+        geometry,
+        transform: { scale: 1, offsetX: 0, offsetY: 0, viewportWidth: 400, viewportHeight: 300 },
+      })
+      const height = measureMoodBoardContentHeight(new RecordingContext(), geometry)
+      // The turned caption is painted past the saved 300px canvas …
+      expect(context.glyphBottom).toBeGreaterThan(300)
+      // … and the composition grows to hold every painted glyph.
+      expect(height).toBeGreaterThanOrEqual(Math.ceil(context.glyphBottom))
+      // Unturned, the same piece's caption fits its box and the canvas stays.
+      expect(
+        measureMoodBoardContentHeight(
+          new RecordingContext(),
+          resolveMoodBoardGeometry({
+            canvasWidth: 400,
+            canvasHeight: 300,
+            backgroundColor: '#FCFAF6',
+            sections: [],
+            items: [{ ...turned, rotation: 0 }],
+          }),
+        ),
+      ).toBe(300)
+    })
+
     it('sizes the PNG to the grown composition and fits the cover to it (contain)', async () => {
       const geometry = board(tiles)
       const height = measureMoodBoardContentHeight(new RecordingContext(), geometry)
