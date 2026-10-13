@@ -60,16 +60,35 @@ function authorityFrom(ctx: OutboundKindContext): SendAuthority {
   return (ctx as OutboundKindContext & { authority: SendAuthority }).authority;
 }
 
+export async function stampInvoiceReminderCadence(
+  admin: SupabaseClient,
+  invoiceId: string,
+  stage: number,
+  sentAt: string,
+): Promise<void> {
+  const { error } = await admin.from("invoices").update({
+    reminder_count: stage + 1,
+    last_reminder_at: sentAt,
+  }).eq("id", invoiceId);
+  if (error) console.error("invoice reminder send stamp failed", invoiceId, error);
+}
+
+export async function repairSentInvoiceReminder(
+  admin: SupabaseClient,
+  draft: { status: string; sent_at: string | null },
+  invoiceId: string,
+  stage: number,
+): Promise<boolean> {
+  if (draft.status !== "sent" || !draft.sent_at) return false;
+  await stampInvoiceReminderCadence(admin, invoiceId, stage, draft.sent_at);
+  return true;
+}
+
 export async function afterSendInvoiceReminder(ctx: OutboundKindContext): Promise<void> {
   const { admin, draft } = ctx;
   const payload = draft.payload;
   const stage = numberValue(payload, "step");
-  const now = new Date().toISOString();
-  const { error: stampError } = await admin.from("invoices").update({
-    reminder_count: stage + 1,
-    last_reminder_at: now,
-  }).eq("id", draft.ref_id);
-  if (stampError) console.error("invoice reminder send stamp failed", draft.ref_id, stampError);
+  await stampInvoiceReminderCadence(admin, draft.ref_id, stage, new Date().toISOString());
 
   if (stage === 0) {
     const clientId = value(payload, "client_user_id");
@@ -99,7 +118,7 @@ export async function afterSendInvoiceReminder(ctx: OutboundKindContext): Promis
       metadata: {
         invoice_id: draft.ref_id, project_id: value(payload, "project_id"),
         subject: `Invoice ${value(payload, "invoice_number") ?? "Invoice"} is past due`,
-        message: `Invoice ${value(payload, "invoice_number") ?? "Invoice"}${value(payload, "for_clause") ?? ""} is past due. An automated overdue notice was sent to the client.`,
+        message: `Invoice ${value(payload, "invoice_number") ?? "Invoice"}${value(payload, "for_clause") ?? ""} is past due. A reminder from ${value(payload, "studio_name") ?? "the studio"} was sent to the client.`,
         deep_link: "/desk?book=accounts&page=receivables",
       },
     });
@@ -127,8 +146,8 @@ async function escalateInvoiceToDesigner({ admin, draft }: OutboundKindContext):
       template_id: "invoice-ar-flagged",
       metadata: {
         invoice_id: draft.ref_id, project_id: value(payload, "project_id"),
-        subject: `${invoiceNumber} is ${daysOverdue}+ days overdue — automated reminders exhausted`,
-        message: `Invoice ${invoiceNumber}${value(payload, "for_clause") ?? ""} is ${daysOverdue}+ days overdue. Automated reminders are exhausted — it needs direct follow-up.`,
+        subject: `${invoiceNumber} is ${daysOverdue}+ days overdue — reminders exhausted`,
+        message: `Invoice ${invoiceNumber}${value(payload, "for_clause") ?? ""} is ${daysOverdue}+ days overdue. The reminders are complete — it needs direct follow-up.`,
         deep_link: "/desk?book=accounts&page=receivables",
       },
     });

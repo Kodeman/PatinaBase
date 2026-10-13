@@ -38,6 +38,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendOutboundDraft } from '../_shared/outbound-send.ts';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
+import { repairSentInvoiceReminder } from '../_shared/outbound-kinds/invoice_reminder.ts';
 import {
   buildInvoiceArEscalationEmail,
   buildInvoiceFinalNoticeEmail,
@@ -130,7 +131,7 @@ function reminderBody(stage: number, params: InvoiceReminderEmailParams): string
     `Just a friendly reminder that ${designer}’s invoice${project} is coming due.\n\n${facts}\n\nIf you’ve already arranged payment, you can disregard this note.`,
     `Invoice ${invoice} from ${designer}${project} is still open.\n\n${facts}\n\nWhen you have a moment, please settle the balance so the work can carry on without interruption.\n\nIf payment is already on its way, thank you — no further action is needed.`,
     `This is a second notice that invoice ${invoice} from ${designer}${project} is still open, a week on from its due date.\n\n${facts}\n\nPlease arrange payment promptly. If something about this invoice looks off, reply to this email or reach out to ${designer} directly so it can be sorted out.`,
-    `This is the final automated notice for invoice ${invoice} from ${designer}${project}, now two weeks on from its due date.\n\n${facts}\n\nImmediate payment is required. The outstanding balance has been flagged for direct follow-up by ${designer}, and continued non-payment may pause work already under way.`,
+    `This is the final reminder for invoice ${invoice} from ${designer}${project}, now two weeks on from its due date.\n\n${facts}\n\nImmediate payment is required. The outstanding balance has been flagged for direct follow-up by ${designer}, and continued non-payment may pause work already under way.`,
   ];
   return `${greeting}\n\n${messages[stage]}`;
 }
@@ -204,7 +205,7 @@ async function escalateToDesigner(
   const designerName =
     invoice.designer?.full_name?.trim() || invoice.designer?.business_name?.trim() || null;
   const arUrl = `${DESIGNER_PORTAL_URL}/desk?book=accounts&page=receivables`;
-  const subjectLine = `${invoiceNumber} is ${overdueDays}+ days overdue — automated reminders exhausted`;
+  const subjectLine = `${invoiceNumber} is ${overdueDays}+ days overdue — reminders exhausted`;
 
   // In-app visibility row for the designer (the portal inbox surfaces
   // notification_log rows; metadata.subject/message/deep_link drive rendering).
@@ -218,7 +219,7 @@ async function escalateToDesigner(
       invoice_id: invoice.id,
       project_id: invoice.project_id,
       subject: subjectLine,
-      message: `Invoice ${invoiceNumber}${forClause} is ${overdueDays}+ days overdue. Automated reminders are exhausted — it needs direct follow-up.`,
+      message: `Invoice ${invoiceNumber}${forClause} is ${overdueDays}+ days overdue. The reminders are complete — it needs direct follow-up.`,
       deep_link: '/desk?book=accounts&page=receivables',
     },
   });
@@ -481,6 +482,22 @@ Deno.serve(async (_req: Request) => {
     if (composeError || !draftId) {
       skipped++;
       console.error('invoice-reminders: draft composition failed', invoice.id, composeError);
+      continue;
+    }
+
+    const { data: composedDraft, error: draftLookupError } = await admin
+      .from('outbound_drafts')
+      .select('status, sent_at')
+      .eq('id', draftId)
+      .maybeSingle();
+    if (draftLookupError || !composedDraft) {
+      skipped++;
+      console.error('invoice-reminders: composed draft lookup failed', invoice.id, draftLookupError);
+      continue;
+    }
+    if (await repairSentInvoiceReminder(admin, composedDraft, invoice.id, stage)) {
+      // The provider already accepted this exact stage on an earlier run.
+      // Repair a missed cadence stamp and let the next cron run select the next stage.
       continue;
     }
 
