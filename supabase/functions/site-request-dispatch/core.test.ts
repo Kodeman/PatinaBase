@@ -66,6 +66,7 @@ function deps(
     claimDispatch: () => Promise.resolve(claimed),
     completeDispatch: () => Promise.resolve({ status: "sent" }),
     pendingDispatches: () => Promise.resolve([]),
+    composeDueDraft: () => Promise.resolve({ sent: false }),
     shouldDefer: () => false,
     sendSms: () => Promise.resolve({ sent: true, twilioSid: "SM123" }),
     logNotification: () => Promise.resolve(),
@@ -373,6 +374,31 @@ Deno.test(
     assertEquals(body.dispatchesSent, 0);
   },
 );
+
+Deno.test("due reminder sweep stages a draft without sending SMS", async () => {
+  let composed = "";
+  let sent = false;
+  const context = { ...claimed, action: "due-reminder" };
+  const res = await handleSiteRequestDispatch(
+    request("lifecycle"),
+    deps({
+      callerRole: () => "service_role",
+      pendingDispatches: () => Promise.resolve([OUTBOX_ID]),
+      claimDispatch: () => Promise.resolve(context),
+      composeDueDraft: (_context, body) => {
+        composed = body;
+        return Promise.resolve({ sent: false });
+      },
+      sendSms: () => {
+        sent = true;
+        return Promise.resolve({ sent: true });
+      },
+    }),
+  );
+  assertEquals(res.status, 200);
+  assertStringIncludes(composed, "due Jul 20");
+  assertFalse(sent);
+});
 
 Deno.test("consent and lifecycle remain service-role only", async () => {
   assertEquals(

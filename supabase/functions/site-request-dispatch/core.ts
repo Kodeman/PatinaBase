@@ -115,6 +115,7 @@ export interface SiteRequestDispatchDeps {
     result: DispatchCompletion,
   ): Promise<Record<string, unknown>>;
   pendingDispatches(now?: string): Promise<string[]>;
+  composeDueDraft(context: SiteRequestDispatchContext, body: string): Promise<DispatchSmsResult>;
   shouldDefer(): boolean;
   sendSms(
     context: SiteRequestDispatchContext,
@@ -336,8 +337,14 @@ async function dispatchClaimed(
     body = nudgeBody(context);
     templateKey = "site_request_nudge";
   } else if (action === "due-reminder") {
-    body = dueReminderBody(context);
-    templateKey = "site_request_due_reminder";
+    const result = await deps.composeDueDraft(context, dueReminderBody(context));
+    await completeWithRetry(deps, context.outbox_id!, {
+      sent: result.sent,
+      providerMessageId: result.messageId,
+      error: result.sent ? undefined : "outbound_draft_composed",
+      terminal: !result.sent,
+    });
+    return { sent: result.sent, queued: false, context };
   } else {
     if (!context.token || !context.access_id) {
       await completeWithRetry(deps, context.outbox_id!, {

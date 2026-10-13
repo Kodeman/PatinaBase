@@ -5,6 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isQuietHours, sendPartySms } from "../_shared/sms.ts";
+import { sendOutboundDraft } from "../_shared/outbound-send.ts";
 import type { SendAuthority } from "../_shared/send-authority.ts";
 import {
   type DeliveryNotificationContext,
@@ -177,6 +178,39 @@ const deps: SiteRequestDispatchDeps = {
     );
     if (error) throw new Error("pending_dispatches_failed");
     return (data ?? []) as string[];
+  },
+  composeDueDraft: async (context, body) => {
+    const client = admin();
+    const { data: project, error: projectError } = await client.from("projects")
+      .select("studio_id").eq("id", context.project_id).single();
+    if (projectError || !project?.studio_id) throw new Error("site_request_studio_missing");
+    const dueAt = new Date(context.due_at).toISOString();
+    const { data: draftId, error } = await client.rpc("compose_outbound_draft", {
+      p_kind: "site_request_due", p_org: project.studio_id,
+      p_project: context.project_id, p_channel: "sms", p_recipient_kind: "trade",
+      p_to: { party_id: context.party_id, address: context.assignee_phone },
+      p_subject: null, p_body: body, p_payload: { site_name: context.site_name },
+      p_ref_type: "site_request", p_ref_id: context.request_id,
+      p_dedupe_key: `site_request:${context.request_id}:due:${dueAt}`,
+      p_due_at: dueAt, p_expires_at: dueAt, p_composed_by: "system",
+    });
+    if (error || !draftId) throw new Error("compose_site_request_due_draft_failed");
+    const { data: active } = await client.rpc("outbound_review_active", {
+      p_studio: project.studio_id,
+    });
+    const { data: mode } = await client.rpc("studio_outbound_mode", {
+      p_studio: project.studio_id, p_kind: "site_request_due",
+    });
+    if (mode === "scheduled" || active !== true) {
+      const result = await sendOutboundDraft(client, draftId, {
+        kind: "studio_schedule",
+        studioId: project.studio_id,
+        outboundKind: "site_request_due",
+      });
+      if (!result.ok) throw new Error("site_request_due_send_failed");
+      return { sent: true, messageId: result.messageId };
+    }
+    return { sent: false };
   },
   sendSms: async (context, input) =>
     sendPartySms(admin(), {
