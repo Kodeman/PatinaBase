@@ -69,4 +69,36 @@ describe('ComposingPage quiet facets', () => {
     ).toHaveLength(1);
     expect(commerce).toHaveTextContent('not yet written');
   });
+
+  it('US-28 S9 — facets are Cards with one ink state word, progress in words', () => {
+    render(<ComposingPage />);
+
+    const identity = screen.getByRole('button', { name: /Identity/i });
+    expect(identity.closest('article')).toHaveClass('card', 'facet', 'is-open');
+    expect(identity).toHaveTextContent('To write · open');
+
+    expect(screen.getByTestId('written-words')).toHaveTextContent(
+      'To write: identity, the piece, commerce, the folio, style',
+    );
+    expect(document.body.textContent).not.toMatch(/%\s*composed/);
+    expect(screen.getByTestId('compose-state')).toHaveClass('word');
+
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Heirloom table' },
+    });
+    fireEvent.change(screen.getByLabelText('Maker'), {
+      target: { value: 'Nordic Atelier' },
+    });
+    expect(identity).toHaveTextContent('Written');
+    expect(screen.getByTestId('written-words')).toHaveTextContent(
+      'Written: identity · To write: the piece, commerce, the folio, style',
+    );
+
+    // movements are Sections that close; no coloured dashes
+    expect(
+      Array.from(document.querySelectorAll('section.section')).map(
+        (s) => s.querySelector('.eb')?.textContent,
+      ),
+    ).toEqual(['The record', 'The catalog', 'The eye']);
+  });
 });

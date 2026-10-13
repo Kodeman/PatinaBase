@@ -2491,3 +2491,53 @@ html:has([data-document-shell]) {
   .money-fline { grid-template-columns: minmax(0, 1fr); }
 }
 /* ═══ end US-28 S8 money ══════════════════════════════════════════════════ */
+
+/* ═══ US-28 S9 papers ═══════════════════════════════════════════════════════
+   Area 7, Making papers (uplift.md (c) 7; specimens/papers-{1440,390}.html):
+   drafting, compose and the ceremony. Facets are Cards on the shared edge
+   with one ink state word, and the open facet keeps the clay ring; the
+   client's copy is laid paper (L1) on the --paper ground; progress is words;
+   each movement is an S1 Section; a quoted client word takes --edge-note;
+   facts are a dl. Zero shadows. */
+.papers-ground { min-height: 100%; margin-bottom: -96px; padding-bottom: 96px; background: var(--paper); }
+@media (min-width: 1180px) { .papers-ground { margin-bottom: -84px; padding-bottom: 84px; } }
+.papers-tblock { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; min-width: 0; overflow-wrap: anywhere; }
+.papers-drafted { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: -24px 0 24px; }
+.papers-drafted-words { flex: 1 1 240px; min-width: 0; color: var(--text-muted); }
+.papers-saving { color: var(--text-subtle); text-transform: uppercase; }
+.papers-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 48px; padding-bottom: 48px; }
+@media (min-width: 1440px) { .papers-grid { grid-template-columns: minmax(0, 1fr) 400px; gap: 56px; align-items: start; } }
+.papers-facets { display: flex; flex-direction: column; gap: 16px; }
+.papers-meta { color: var(--text-subtle); text-transform: uppercase; }
+.papers-closing { margin-top: 32px; color: var(--text-muted); font-style: italic; }
+.papers-copy-eb { margin-bottom: 12px; }
+.papers-copy { padding: 28px 32px 32px; background: var(--paper-doc); color: var(--text-primary); }
+
+/* the facet: an S1 Card whose upper block is the toggle */
+.card.facet { padding: 0; }
+.card.facet:hover { background-image: none; }
+.card.facet.is-open { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.facet-toggle { display: flex; flex-direction: column; align-items: flex-start; width: 100%; min-height: 44px; padding: 16px 20px 14px 18px; border-radius: 2px; text-align: left; background: transparent; }
+.facet-toggle:hover { background: var(--bg-hover); }
+.facet-toggle:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.facet-toggle:hover .name { text-decoration-color: var(--clay); }
+.facet-toggle .line { margin-top: 4px; overflow-wrap: anywhere; }
+.facet-body { min-width: 0; margin: 0 20px 0 18px; padding: 12px 0 16px; border-top: var(--rule-hair); }
+
+/* the client's word on the note edge; the facts as a dl */
+.papers-note { border-left: var(--edge-note); padding: 4px 0 4px 16px; }
+.papers-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: baseline; }
+.papers-facts dt { font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.papers-facts dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+
+@media (max-width: 599px) {
+  .papers-drafted { margin: -8px 0 16px; }
+  .papers-facets { gap: 12px; }
+  .papers-copy { padding: 24px 16px; }
+  .facet-toggle { padding: 14px 16px 12px 14px; }
+  .facet-body { margin: 0 16px 0 14px; }
+}
+@media (forced-colors: active) {
+  .card.facet.is-open { outline-color: Highlight; }
+}
+/* ═══ end US-28 S9 papers ═══════════════════════════════════════════════════ */

@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Button, Input, Select, Textarea } from '@/components/ui/controls';
+import { DocumentAction } from '@/components/document/document-action';
 import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalScopeRooms,
@@ -676,9 +677,17 @@ export function RoomsInScope({ proposalId }: RoomsInScopeProps) {
         </div>
       ) : (
         <div className="mt-3">
-          <Button variant="secondary" onClick={() => setIsAdding(true)}>
-            + Add Room
-          </Button>
+          {/* US-28 S9 — a scored secondary act, not a boxed button. */}
+          <DocumentAction
+            actionKey="add-room"
+            surfaceKey="drafting"
+            regionKey="rooms"
+            variant="secondary"
+            leading="＋"
+            onClick={() => setIsAdding(true)}
+          >
+            Add a room
+          </DocumentAction>
         </div>
       )}
 
