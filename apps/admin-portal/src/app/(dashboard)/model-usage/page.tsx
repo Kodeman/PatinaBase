@@ -47,7 +47,7 @@ export default function ModelUsagePage() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: QUERY_KEY });
 
   const controls = useMutation({
-    mutationFn: (next: { killSwitch: boolean; globalDailyCapUsd: number }) =>
+    mutationFn: (next: { killSwitch?: boolean; globalDailyCapUsd?: number }) =>
       postJson('/api/admin/model-usage/controls', next),
     onSettled: refresh,
   });
@@ -207,7 +207,7 @@ function ControlsSection({
 }: {
   overview: ModelUsageOverview;
   saving: boolean;
-  onSave: (next: { killSwitch: boolean; globalDailyCapUsd: number }, successMessage: string) => Promise<void>;
+  onSave: (next: { killSwitch?: boolean; globalDailyCapUsd?: number }, successMessage: string) => Promise<void>;
 }) {
   const { killSwitch, globalDailyCapUsd } = overview.controls;
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -266,7 +266,7 @@ function ControlsSection({
                 disabled={!capDirty || !capValid || saving}
                 onClick={() => {
                   if (typeof parsedCap === 'number') {
-                    void onSave({ killSwitch, globalDailyCapUsd: parsedCap }, 'Global daily cap saved.');
+                    void onSave({ globalDailyCapUsd: parsedCap }, 'Global daily cap saved.');
                   }
                 }}
               >
@@ -291,7 +291,7 @@ function ControlsSection({
         isLoading={saving}
         onConfirm={() =>
           onSave(
-            { killSwitch: !killSwitch, globalDailyCapUsd },
+            { killSwitch: !killSwitch },
             killSwitch ? 'Kill switch off. Calls allowed.' : 'Kill switch on. All calls refused.',
           )
         }

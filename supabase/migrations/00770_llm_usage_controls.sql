@@ -279,14 +279,18 @@ CREATE OR REPLACE FUNCTION public.llm_set_controls(p_kill_switch boolean, p_glob
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_temp' AS $$
 DECLARE v_before jsonb; v_after jsonb;
 BEGIN
-  IF p_kill_switch IS NULL OR p_global_daily_cap IS NULL OR p_global_daily_cap < 0 THEN
+  IF (p_kill_switch IS NULL AND p_global_daily_cap IS NULL)
+     OR (p_global_daily_cap IS NOT NULL AND p_global_daily_cap < 0) THEN
     RAISE EXCEPTION 'invalid controls' USING ERRCODE = 'check_violation';
   END IF;
   SELECT jsonb_build_object('kill_switch', kill_switch, 'global_daily_cap_usd', global_daily_cap_usd)
     INTO v_before FROM public.llm_controls WHERE id FOR UPDATE;
-  UPDATE public.llm_controls SET kill_switch = p_kill_switch,
-    global_daily_cap_usd = p_global_daily_cap, updated_at = now() WHERE id;
-  v_after := jsonb_build_object('kill_switch', p_kill_switch, 'global_daily_cap_usd', p_global_daily_cap);
+  UPDATE public.llm_controls SET
+    kill_switch = COALESCE(p_kill_switch, kill_switch),
+    global_daily_cap_usd = COALESCE(p_global_daily_cap, global_daily_cap_usd),
+    updated_at = now() WHERE id;
+  SELECT jsonb_build_object('kill_switch', kill_switch, 'global_daily_cap_usd', global_daily_cap_usd)
+    INTO v_after FROM public.llm_controls WHERE id;
   INSERT INTO public.llm_controls_audit(actor, target, before, after)
   VALUES (p_actor, 'controls', v_before, v_after);
 END;
