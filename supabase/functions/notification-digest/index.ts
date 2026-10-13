@@ -46,6 +46,7 @@ import {
   type ReminderDigestItem,
 } from "./logic.ts";
 import { isSnoozeActive } from "../_shared/decision-notify.ts";
+import { clientDigestDraftIdentity } from "./draft-identity.ts";
 import {
   type EmbeddedApprovalArtifact,
   resolveApprovalArtifactCitation,
@@ -433,6 +434,12 @@ async function dispatchReminderDigests(
           const { data: designer } = designerId
             ? await supabase.from("profiles").select("email").eq("id", designerId).maybeSingle()
             : { data: null };
+          const draftIdentity = clientDigestDraftIdentity(
+            pref.user_id,
+            studioId,
+            projectId,
+            sinceIso,
+          );
           const { data: draftId, error: composeError } = await supabase.rpc(
             "compose_outbound_draft",
             {
@@ -456,9 +463,9 @@ async function dispatchReminderDigests(
                 item_count: carriedDigestItems.length,
                 artifactCitations: artifactCitationsForDigest(carriedDigestItems),
               },
-              p_ref_type: "client",
-              p_ref_id: pref.user_id,
-              p_dedupe_key: `digest:${pref.user_id}:${studioId}:${projectId}:${sinceIso}`,
+              p_ref_type: draftIdentity.refType,
+              p_ref_id: draftIdentity.refId,
+              p_dedupe_key: draftIdentity.dedupeKey,
               p_due_at: null,
               p_expires_at: null,
               p_composed_by: "system",

@@ -23,7 +23,8 @@ INSERT INTO organization_members (id,user_id,organization_id,role,status,joined_
  ('77500000-0000-4000-8000-000000000023','77500000-0000-4000-8000-000000000003','77500000-0000-4000-8000-000000000012','owner','active',now());
 INSERT INTO projects (id,name,designer_id,created_by,studio_id) VALUES
  ('77500000-0000-4000-8000-000000000031','Outbound project A','77500000-0000-4000-8000-000000000001','77500000-0000-4000-8000-000000000001','77500000-0000-4000-8000-000000000011'),
- ('77500000-0000-4000-8000-000000000032','Outbound project B','77500000-0000-4000-8000-000000000003','77500000-0000-4000-8000-000000000003','77500000-0000-4000-8000-000000000012');
+ ('77500000-0000-4000-8000-000000000032','Outbound project B','77500000-0000-4000-8000-000000000003','77500000-0000-4000-8000-000000000003','77500000-0000-4000-8000-000000000012'),
+ ('77500000-0000-4000-8000-000000000033','Outbound project C','77500000-0000-4000-8000-000000000001','77500000-0000-4000-8000-000000000001','77500000-0000-4000-8000-000000000011');
 
 SELECT is(public.studio_outbound_mode('77500000-0000-4000-8000-000000000011','invoice_reminder'), 'review', 'mode defaults to review');
 SELECT is(public.outbound_review_active('77500000-0000-4000-8000-000000000011'), false, 'rollout defaults disabled');
@@ -39,6 +40,13 @@ SELECT is((SELECT status FROM public.outbound_drafts WHERE dedupe_key='dedupe-77
 SELECT lives_ok($$SELECT public.compose_outbound_draft('client_digest','77500000-0000-4000-8000-000000000012',NULL,'email','client','{"client_id":"77500000-0000-4000-8000-000000000001","address":"client-a@test.invalid"}','Studio B digest','B body','{}','client','77500000-0000-4000-8000-000000000001','digest-b-775',now(),null,'system')$$,'compose the same client digest in another studio');
 SELECT lives_ok($$SELECT public.compose_outbound_draft('client_digest','77500000-0000-4000-8000-000000000011',NULL,'email','client','{"client_id":"77500000-0000-4000-8000-000000000001","address":"client-a@test.invalid"}','Studio A digest','A body','{}','client','77500000-0000-4000-8000-000000000001','digest-a-775',now(),null,'system')$$,'compose newer digest in the original studio');
 SELECT is((SELECT status FROM public.outbound_drafts WHERE dedupe_key='digest-b-775'),'awaiting_review','composing in one studio does not supersede another studio draft');
+SELECT lives_ok($$SELECT public.compose_outbound_draft('client_digest','77500000-0000-4000-8000-000000000011','77500000-0000-4000-8000-000000000031','email','client','{"client_id":"77500000-0000-4000-8000-000000000001","address":"client-a@test.invalid"}','Project A digest','A body','{}','client','77500000-0000-4000-8000-000000000001','digest-project-a-775',now(),null,'system')$$,'compose client digest for project A');
+SELECT lives_ok($$SELECT public.compose_outbound_draft('client_digest','77500000-0000-4000-8000-000000000011','77500000-0000-4000-8000-000000000033','email','client','{"client_id":"77500000-0000-4000-8000-000000000001","address":"client-a@test.invalid"}','Project C digest','C body','{}','client','77500000-0000-4000-8000-000000000001','digest-project-c-775',now(),null,'system')$$,'compose client digest for project C');
+SELECT is((SELECT status FROM public.outbound_drafts WHERE dedupe_key='digest-project-a-775'),'awaiting_review','project A digest remains in review after composing project C');
+SELECT is((SELECT status FROM public.outbound_drafts WHERE dedupe_key='digest-project-c-775'),'awaiting_review','project C digest remains in review');
+SELECT lives_ok($$SELECT public.compose_outbound_draft('client_digest','77500000-0000-4000-8000-000000000011','77500000-0000-4000-8000-000000000031','email','client','{"client_id":"77500000-0000-4000-8000-000000000001","address":"client-a@test.invalid"}','Project A newer digest','Updated body','{}','client','77500000-0000-4000-8000-000000000001','digest-project-a-new-775',now(),null,'system')$$,'compose newer client digest for project A');
+SELECT is((SELECT status FROM public.outbound_drafts WHERE dedupe_key='digest-project-a-775'),'superseded','newer compose supersedes older digest for the same project');
+SELECT is((SELECT status FROM public.outbound_drafts WHERE dedupe_key='digest-project-c-775'),'awaiting_review','same-project superseding leaves another project digest in review');
 
 SELECT lives_ok($$SELECT public.compose_outbound_draft('decision_reminder','77500000-0000-4000-8000-000000000011','77500000-0000-4000-8000-000000000031','sms','client','{"client_id":"77500000-0000-4000-8000-000000000001","address":"+15555550101"}',null,'Claim body','{}','decision','77500000-0000-4000-8000-000000000042','dedupe-775-3',now(),null,'system')$$,'compose sms draft');
 SELECT is((public.claim_outbound_draft_for_send((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-775-3'))).status,'sending','claim moves awaiting review to sending');
@@ -66,7 +74,7 @@ SELECT is(public.studio_outbound_mode('77500000-0000-4000-8000-000000000011','in
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','77500000-0000-4000-8000-000000000002',true);
 SELECT throws_ok($$SELECT public.set_studio_outbound_mode('77500000-0000-4000-8000-000000000011','invoice_reminder','scheduled')$$,'42501',NULL,'non-owner cannot set scheduled mode');
-SELECT is((SELECT count(*)::int FROM public.outbound_drafts WHERE project_id='77500000-0000-4000-8000-000000000031'),6,'org member with project access reads studio drafts');
+SELECT is((SELECT count(*)::int FROM public.outbound_drafts WHERE project_id='77500000-0000-4000-8000-000000000031'),8,'org member with project access reads studio drafts including scoped client digests');
 SELECT is((SELECT count(*)::int FROM public.outbound_drafts WHERE organization_id='77500000-0000-4000-8000-000000000012'),0,'member of another studio cannot read drafts');
 RESET ROLE;
 SELECT * FROM finish();
