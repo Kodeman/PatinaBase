@@ -83,13 +83,13 @@ export async function resolveNotificationAuthority(
     const projectId = job.data.project_id;
     if (typeof projectId === "string" && projectId) {
       const { data: project } = await db.from("projects")
-        .select("organization_id")
+        .select("studio_id")
         .eq("id", projectId)
         .maybeSingle();
-      if (project?.organization_id) {
+      if (project?.studio_id) {
         const { data: membership } = await db.from("organization_members")
           .select("user_id")
-          .eq("organization_id", project.organization_id)
+          .eq("organization_id", project.studio_id)
           .eq("user_id", job.user_id)
           .eq("status", "active")
           .maybeSingle();

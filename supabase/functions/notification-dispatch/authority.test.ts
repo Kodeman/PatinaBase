@@ -49,11 +49,12 @@ Deno.test("comms notifications use internal or sender authority by recipient mem
     from(table: string) {
       tables.push(table);
       return {
-        select: () => {
+        select: (columns: string) => {
+          assertEquals(columns, table === "projects" ? "studio_id" : "user_id");
           const query = {
             eq: () => query,
             maybeSingle: async () => table === "projects"
-              ? { data: { organization_id: "studio" } }
+              ? { data: { studio_id: "studio" } }
               : { data: { user_id: "recipient" } },
           };
           return query;

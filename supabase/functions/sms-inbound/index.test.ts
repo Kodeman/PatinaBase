@@ -6,11 +6,14 @@ import { fieldParseAttribution } from "./pipeline.ts";
 Deno.test("SMS field parser reserves against the texting party project's organization", async () => {
   const attribution = await fieldParseAttribution({
     from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({ data: { organization_id: "studio-project-org" }, error: null }),
-        }),
-      }),
+      select: (columns: string) => {
+        assertEquals(columns, "studio_id");
+        return {
+          eq: () => ({
+            maybeSingle: async () => ({ data: { studio_id: "studio-project-org" }, error: null }),
+          }),
+        };
+      },
     }),
   } as never, "project-1");
   let studioReserved: string | null = null;

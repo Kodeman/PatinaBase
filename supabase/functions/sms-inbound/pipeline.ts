@@ -84,9 +84,9 @@ export async function fieldParseAttribution(
 ): Promise<{ studioId: string | null; userId: null; studioLookupFailed: boolean }> {
   if (!projectId) return { studioId: null, userId: null, studioLookupFailed: true };
   const { data, error } = await supabase.from("projects")
-    .select("organization_id").eq("id", projectId).maybeSingle();
+    .select("studio_id").eq("id", projectId).maybeSingle();
   return {
-    studioId: (data?.organization_id as string | null | undefined) ?? null,
+    studioId: (data?.studio_id as string | null | undefined) ?? null,
     userId: null,
     studioLookupFailed: !!error || !data,
   };

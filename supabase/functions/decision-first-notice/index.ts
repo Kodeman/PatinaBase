@@ -43,6 +43,7 @@ import {
   type PredecessorRow,
   resolveSupersededEdition,
 } from "./logic.ts";
+import { resolveDecisionSendAuthority } from "./authority.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -237,28 +238,11 @@ Deno.serve(async (req: Request) => {
     )
     : null;
 
-  const { data: project } = decision.project_id
-    ? await supabase
-      .from("projects")
-      .select("designer_id, organization_id")
-      .eq("id", decision.project_id)
-      .maybeSingle()
-    : { data: null };
-  // The publishing trigger is the click. Legacy decisions do not retain a
-  // distinct publisher id, so prefer the recorded decision designer, then the
-  // project's designer; if neither exists, attribute to the studio schedule.
-  const sendAuthority = decision.designer_id
-    ? { kind: "designer" as const, userId: decision.designer_id }
-    : project?.designer_id
-    ? { kind: "designer" as const, userId: project.designer_id }
-    : project?.organization_id
-    ? {
-      // TODO(B7): decision/project designer can be absent on legacy records.
-      kind: "studio_schedule" as const,
-      studioId: project.organization_id,
-      outboundKind: "decision_reminder" as const,
-    }
-    : null;
+  const sendAuthority = await resolveDecisionSendAuthority(
+    supabase,
+    decision.project_id,
+    decision.designer_id,
+  );
   if (!sendAuthority) {
     console.error(
       "decision-first-notice: cannot attribute publisher or studio",
