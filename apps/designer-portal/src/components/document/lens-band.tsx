@@ -169,6 +169,8 @@ export function LensBand({
     voice,
     sameVoice,
   );
+  /** Line 1's right-flush slot, from whichever voice is printing. */
+  const rightSlot = spoken ?? line1;
   const [sheetOpen, setSheetOpen] = useState(false);
   const moreRef = useRef<HTMLButtonElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -392,30 +394,27 @@ export function LensBand({
             )}
           </span>
           <span className="shrink-0" data-lens-right-flush>
-            {spoken
-              ? open
-                ? spoken.moneyOnly
-                : // D-B38 at 390 — line 1 prints the same words pinned as at
-                  // rest, so it holds the same rows and line 2 keeps its y.
-                  // The dated half (`INSTALL …`, `SENT …`) is what wrapped it
-                  // to a second row; at the phone's measure it yields, and the
-                  // figure stays (U-Q19: only NEXT takes a second line).
-                  spoken.rightFlush &&
-                  (spoken.rightFlush === spoken.moneyOnly ? (
-                    spoken.rightFlush
-                  ) : (
-                    <>
-                      <span className="max-[599px]:hidden" data-lens-right-flush-wide>
-                        {spoken.rightFlush}
-                      </span>
-                      {spoken.moneyOnly && (
-                        <span className="hidden max-[599px]:inline">{spoken.moneyOnly}</span>
-                      )}
-                    </>
-                  ))
-              : open
-                ? line1.moneyOnly
-                : line1.rightFlush}
+            {open
+              ? rightSlot.moneyOnly
+              : // D-B38 at 390 — line 1 prints the same words pinned as at
+                // rest, so it holds the same rows and line 2 keeps its y.
+                // The dated half (`INSTALL …`, `SENT …`) is what wrapped it
+                // to a second row; at the phone's measure it yields, and the
+                // figure stays (U-Q19: only NEXT takes a second line). Both
+                // voices: the stage-guide line (no NEXT) pins the same way.
+                rightSlot.rightFlush &&
+                (rightSlot.rightFlush === rightSlot.moneyOnly ? (
+                  rightSlot.rightFlush
+                ) : (
+                  <>
+                    <span className="max-[599px]:hidden" data-lens-right-flush-wide>
+                      {rightSlot.rightFlush}
+                    </span>
+                    {rightSlot.moneyOnly && (
+                      <span className="hidden max-[599px]:inline">{rightSlot.moneyOnly}</span>
+                    )}
+                  </>
+                ))}
           </span>
         </p>
 
