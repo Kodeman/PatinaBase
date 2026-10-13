@@ -567,4 +567,19 @@ Both start with a design spike: specimens, then the build.
 
 **Source:** Kody, 2026-10-13.
 
-*Entries add: … · V18 · V19 · V20 (US-28) · V21 (Founding Circle) · V22 · last id = V22*
+### V23 · Where the model serves designers: R1–R7 ruled; draft-first goes live — Kody 2026-10-13
+
+**Rollout:** the V22 draft-first outbound goes live for **every studio** on 2026-10-13. The order was: PostHog `outbound-review` at 100%, then `outbound_review_rollout.enabled_for_all`, both at 21:04Z. The studio notice ("Your reminders now wait for you", `docs/design/outbound-drafts/studio-notice-draft.md`) is approved as written. Kody sends it himself; it is not an automated send.
+
+**Rulings on the US-29 panel** (`artifacts/claude-api-panel-2026-10-13/PROPOSAL.md`):
+- **R1 Drafts — as recommended.** A draft she asked for, inside the sheet she's in, unsaved until she saves or sends, is not an agent draft. Buying drafts go through `draft-review.tsx` with a named reviewer.
+- **R2 Applying without a click — high-confidence apply stays.** SMS ≥0.8 auto-apply and Capture enrichment writes may apply without a click. Each apply must be logged and reversible. Companion history is retired from the Engine path. *This is against the recommendation, which was that the model never applies at any confidence.*
+- **R3 Naming — no label.** Model-backed features carry no name in the UI: no "Designer-Taught Intelligence" and no "via the Engine" attribution. "AI" stays banned everywhere. *This is against the recommendation.*
+- **R4 Homeowner data — update the privacy page.** Claude drafts an update to `(legal)/privacy/page.tsx` on a branch, not deployed, for Kody's read. Counsel follows.
+- **R5 Teaching — shared by default, with an opt-out, effective now.** A studio's corrections improve the shared Engine unless the studio opts out. Kody chose this over the open-by-default caution in VISION.md §3. Pledge *royalty* language stays counsel-gated (V6). *This is against the recommendation, which was private with an explicit opt-in.*
+- **R6 Dark paths — as recommended.** Field-parse and companion stay disabled in `llm_feature_controls` until R2's logged, reversible apply is built.
+- **R7 Cost — as recommended.** Model cost is bundled in the subscription, with the per-studio caps published on the pricing page and no usage billing.
+
+**Source:** Kody's multiple-choice interview of 2026-10-13.
+
+*Entries add: … · V18 · V19 · V20 (US-28) · V21 (Founding Circle) · V22 · V23 · last id = V23*

@@ -41,7 +41,7 @@ Two streams.
 
 - **Floor — the studio subscription.** Studios pay for The Document. Leah's would; others will. (Price and tiers: open, §7.)
 - **Upside — margin on furniture.** A piece sold through a designer-led project carries Patina margin. **This is where the first real dollar comes from.**
-- **The Pledge** returns a share of *marketplace* margin to the designers who teach the engine. Working read: it rides on the upside stream and sits alongside the subscription — whether "you pay us and we pay you" survives Leah's ear is **open (V6)**. No Pledge language becomes public or contractual before counsel reviews it.
+- **The Pledge** returns a share of *marketplace* margin to the designers who teach the engine. Working read: it rides on the upside stream and sits alongside the subscription — whether "you pay us and we pay you" survives Leah's ear is **open (V6)**. No Pledge language becomes public or contractual before counsel reviews it. Teaching itself is **shared by default**: a studio's corrections improve the shared Engine unless the studio opts out (V23). Only the royalty terms wait on counsel.
 
 Superseded by this section: affiliate revenue (Jan spine); "designers never pay for their own client relationships" (v4 one-pager, Aug). The v4 numbers themselves (18% blended take · 4% client project fee · 25% Pledge) are still the working figures pending §7.
 
