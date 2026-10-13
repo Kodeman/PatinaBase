@@ -4,7 +4,7 @@
  * place, muted, with Undo on her own deferral; someone else's move prints
  * no act. Nothing counts — no badge, overflow count, "cleared" or streak.
  */
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { NeedLine } from '@/lib/document/desk-derivation';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
@@ -13,12 +13,24 @@ import { deriveDaySheet, groupSheetByJob, nextWorkingDay, type SheetNeedState } 
 import { DaySheet, NOTHING_NEEDS_YOU, NOTHING_NEEDS_YOU_TONIGHT } from './day-sheet';
 
 const mockMutate = jest.fn();
+const mockMutateAsync = jest.fn();
 const mockSetNeedStateOptions: unknown[] = [];
 jest.mock('@patina/supabase', () => ({
   useSetNeedState: (options?: unknown) => {
     mockSetNeedStateOptions.push(options);
-    return { mutate: mockMutate, isPending: false };
+    return { mutate: mockMutate, mutateAsync: mockMutateAsync, isPending: false };
   },
+}));
+// The act sheet's provider: none by default, so every act keeps its landing.
+const mockOpenAct = jest.fn((..._args: unknown[]) => false);
+jest.mock('./acts/need-act-sheet', () => ({
+  useNeedActSheet: () => ({ open: (...args: unknown[]) => mockOpenAct(...args) }),
+}));
+jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
+jest.mock('./date-text-input', () => ({
+  DateTextInput: ({ value, onChange, ariaLabel }: { value: string | null; onChange: (v: string | null) => void; ariaLabel?: string }) => (
+    <input aria-label={ariaLabel} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)} />
+  ),
 }));
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -127,6 +139,8 @@ const lineOf = (container: HTMLElement, key: string) =>
 
 beforeEach(() => {
   mockMutate.mockReset();
+  mockMutateAsync.mockReset();
+  mockOpenAct.mockClear();
   mockPush.mockReset();
 });
 
@@ -288,6 +302,75 @@ describe('DaySheet — the acts', () => {
       expect.objectContaining({ needKey: 'task_due:t2', engagementId: 'proposal-aspen', action: 'not_today' }),
       expect.anything(),
     );
+  });
+
+  it('“Until…” opens Set aside, which writes the day and reason through useSetNeedState (U-Q5)', async () => {
+    mockMutateAsync.mockResolvedValue(undefined);
+    renderSheet([entry(1)]);
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Set aside until a day — Job 1' }));
+    });
+    const sheet = screen.getByRole('dialog');
+    expect(sheet).toHaveTextContent('Job 1 · Task 1 is due');
+    fireEvent.change(within(sheet).getByLabelText('Back on'), { target: { value: '2026-10-16' } });
+    fireEvent.change(within(sheet).getByLabelText('Waiting on'), { target: { value: 'the Chens’ bench decision' } });
+    await act(async () => {
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Set aside until Friday 16 October' }));
+    });
+    expect(mockMutateAsync).toHaveBeenCalledWith({
+      needKey: 'task_due:t1',
+      engagementId: 'p1',
+      action: 'set_aside',
+      until: '2026-10-16',
+      reason: 'the Chens’ bench decision',
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('settles a set-aside in place with Undo, and its words name the day and the reason', () => {
+    const { container } = renderSheet([entry(1)], {
+      states: new Map([
+        state('task_due:t1', { setAsideUntil: '2026-10-16', setAsideReason: 'the Chens’ bench decision', updatedAt: at(9, 30) }),
+      ]),
+    });
+    const line = lineOf(container, 'task_due:t1');
+    expect(line).toHaveTextContent('Set aside until Friday 16 October · waiting on the Chens’ bench decision');
+    expect(within(line).getByRole('button', { name: 'Undo — Job 1' })).toBeInTheDocument();
+  });
+
+  it('offers an overdue invoice a quiet “Record payment” door into the one act sheet (U-Q6)', async () => {
+    renderSheet([entry(1, { kind: 'overdue_invoice', recordId: 'inv-1', text: 'Invoice INV-1 is $3,800 overdue' })]);
+    const door = screen.getByRole('button', { name: 'Record payment — Job 1' });
+    expect(door).toHaveAttribute('data-action-variant', 'tertiary');
+    await act(async () => {
+      await userEvent.setup().click(door);
+    });
+    expect(mockOpenAct).toHaveBeenCalledWith(expect.objectContaining({ key: 'task_due:t1' }), 'record-payment');
+    // A task has no payment to record, so it has no such door.
+    renderSheet([entry(2)]);
+    expect(screen.queryByRole('button', { name: 'Record payment — Job 2' })).not.toBeInTheDocument();
+  });
+
+  it('opens a maker payment’s own act in the record-payment sheet, not the Orders ledger (U-Q6)', async () => {
+    mockOpenAct.mockReturnValueOnce(true);
+    jest.requireMock('@/components/document/command-bar').openLedger.mockClear();
+    renderSheet([
+      entry(1, {
+        kind: 'payment_due',
+        recordId: 'pay-1',
+        text: 'Balance to Calloway & Brandt · $3,400 due Friday 16 October — PO-CR-0412',
+        actionLabel: 'Record payment',
+        ledger: { name: 'orders', context: { page: 'ledger', projectId: 'p1', purchaseOrderId: 'po-1' } },
+      }),
+    ]);
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('link', { name: 'Record payment — Job 1' }));
+    });
+    expect(mockOpenAct).toHaveBeenCalledWith(expect.objectContaining({ key: 'task_due:t1' }));
+    expect(jest.requireMock('@/components/document/command-bar').openLedger).not.toHaveBeenCalled();
+    // Its own act is the door: no second "Record payment" beside it.
+    expect(screen.getAllByRole('link', { name: /Record payment/ })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /Record payment/ })).not.toBeInTheDocument();
   });
 
   it('says so on its line when “Not today” did not save (SQ-751 F6)', async () => {

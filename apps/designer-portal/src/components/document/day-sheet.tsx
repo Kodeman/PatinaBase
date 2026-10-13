@@ -33,7 +33,8 @@ import {
 import { dayMonth, WEEKDAY_FORMAT, parseSourceDate } from '@/lib/document/dates';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { useNeedActSheet } from './acts/need-act-sheet';
-import { actSheetKindOf } from './acts/act-sheet-kind';
+import { actSheetKindOf, recordsPayment } from './acts/act-sheet-kind';
+import { SetAsideSheet } from './acts/set-aside-sheet';
 import { actLanding } from './desk-ledger-row';
 import { openLedger } from './command-bar';
 import { clockTime, DeskJobCard, holderWord } from './desk-job-card';
@@ -140,6 +141,7 @@ function SheetLine({
   const setNeedState = useSetNeedState({ errorSurface: 'inline' });
   const undo = useSetNeedState({ errorSurface: 'inline' });
   const [failed, setFailed] = useState<string | null>(null);
+  const [asideOpen, setAsideOpen] = useState(false);
   const armed = useRef(false);
   const lineRef = useRef<HTMLParagraphElement>(null);
   const undoRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
@@ -277,6 +279,20 @@ function SheetLine({
           >
             {label}
           </DocumentAction>
+          {/* U-Q6 — an overdue invoice can also be recorded as paid, in the
+              same one act sheet; the door is quiet text. */}
+          {recordsPayment(entry) && actSheetKindOf(entry) !== 'record-payment' && (
+            <DocumentAction
+              actionKey="day-sheet-record-payment"
+              variant="tertiary"
+              aria-label={`Record payment — ${card.name}`}
+              onClick={() => {
+                acts.open(entry, 'record-payment');
+              }}
+            >
+              Record payment
+            </DocumentAction>
+          )}
           {/* SQ-778 N5 — every line can be set aside for today: the line's
               engagement names its studio. */}
           {!handoff && (
@@ -302,7 +318,40 @@ function SheetLine({
               Not today
             </DocumentAction>
           )}
+          {/* U-Q5 — Set aside has its own door: a day and a reason. */}
+          {!handoff && (
+            <DocumentAction
+              actionKey="day-sheet-set-aside"
+              variant="tertiary"
+              aria-label={`Set aside until a day — ${card.name}`}
+              disabled={setNeedState.isPending}
+              onClick={() => {
+                setFailed(null);
+                setAsideOpen(true);
+              }}
+            >
+              Until…
+            </DocumentAction>
+          )}
         </div>
+      )}
+      {!handoff && !theirs && (
+        <SetAsideSheet
+          open={asideOpen}
+          onClose={() => setAsideOpen(false)}
+          jobName={card.name}
+          line={sentence}
+          now={now}
+          onSave={({ until, reason }) => {
+            armed.current = true;
+            return setNeedState
+              .mutateAsync({ needKey: entry.key, engagementId: entry.projectId, action: 'set_aside', until, reason })
+              .catch((error: unknown) => {
+                armed.current = false;
+                throw error;
+              });
+          }}
+        />
       )}
       {failed && (
         <p role="alert" data-day-sheet-failed className="t-body-sm">

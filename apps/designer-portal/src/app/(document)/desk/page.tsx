@@ -68,7 +68,7 @@ import {
   useDeskWalkthroughOffer,
   useSuppressDeskFirstTouch,
 } from '@/components/document/help/desk-walkthrough';
-import { CaptureLeadSheet } from '@/components/document/overlays/capture-lead-sheet';
+import { CaptureLeadSheet, type CapturedLead } from '@/components/document/overlays/capture-lead-sheet';
 import { OpenProjectSheet } from '@/components/document/overlays/open-project-sheet';
 import {
   DocumentAction,
@@ -131,6 +131,8 @@ export default function DeskPage() {
   const suppressFirstTouch = useSuppressDeskFirstTouch(); // R97 — hold the note during modal/tour
   const showWalkthroughOffer = useDeskWalkthroughOffer(); // R97 — existing-designer tour offer
   const [captureOpen, setCaptureOpen] = useState(false);
+  // U-Q7 — the inquiry she just recorded, for this visit's one line.
+  const [recorded, setRecorded] = useState<CapturedLead | null>(null);
   const [openProjectOpen, setOpenProjectOpen] = useState(false);
 
   // US-19 FR2 F2-2 — the roster prints each act by its one name.
@@ -600,7 +602,26 @@ export default function DeskPage() {
         <DeskRoster
           ledger={ledger}
           holderOf={holderOf}
-          belowHead={deskLine}
+          belowHead={
+            <>
+              {deskLine}
+              {/* U-Q7 — the visit line, above Also yours; the inquiry
+                  itself is a row of the ledger, read like any other. */}
+              {recorded && (
+                <p data-desk-visit role="status" className="t-body-sm text-[var(--text-muted)] [overflow-wrap:anywhere]">
+                  {`${recorded.name} recorded · just now · `}
+                  <DocumentAction
+                    actionKey="desk-visit-open-brief"
+                    variant="tertiary"
+                    href={`/doc/${recorded.id}`}
+                    aria-label={`Open the brief — ${recorded.name}`}
+                  >
+                    Open the brief
+                  </DocumentAction>
+                </p>
+              )}
+            </>
+          }
           othersHold={othersHold}
         />
       </>
@@ -784,6 +805,7 @@ export default function DeskPage() {
       <CaptureLeadSheet
         open={captureOpen}
         onClose={() => setCaptureOpen(false)}
+        onCreated={setRecorded}
       />
 
       {/* R79 — the no-proposal front door: same overlay contract as capture. */}

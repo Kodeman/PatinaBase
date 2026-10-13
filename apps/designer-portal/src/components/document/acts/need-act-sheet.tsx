@@ -10,10 +10,11 @@
  */
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { MessageSquare, PackageCheck, Receipt, Send, type LucideIcon } from 'lucide-react';
+import { Banknote, MessageSquare, PackageCheck, Receipt, Send, type LucideIcon } from 'lucide-react';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
 import { DocSheet } from '../overlays/doc-sheet';
-import { actSheetKindOf, type ActSheetKind } from './act-sheet-kind';
+import { actSheetKindOf, recordsPayment, type ActSheetKind } from './act-sheet-kind';
+import { RecordPaymentSheet } from './record-payment-sheet';
 import {
   InvoiceReminderSheet,
   PoChaseSheet,
@@ -22,8 +23,10 @@ import {
 } from './act-sheets';
 
 export interface NeedActSheetApi {
-  /** False means no scoped sheet for that need; fall back to its landing. */
-  open(need: DeskNeed): boolean;
+  /** False means no scoped sheet for that need; fall back to its landing.
+   *  `as` asks for another sheet the need can take (US-28 S4: an overdue
+   *  invoice's quiet "Record payment" door); false where it cannot. */
+  open(need: DeskNeed, as?: ActSheetKind): boolean;
 }
 
 const NONE: NeedActSheetApi = { open: () => false };
@@ -41,6 +44,7 @@ const SHEETS: Record<
   'invoice-reminder': { title: 'Send an invoice reminder', icon: Receipt, Body: InvoiceReminderSheet },
   'proposal-follow-up': { title: 'Follow up on this proposal', icon: MessageSquare, Body: ProposalFollowUpSheet },
   'release-order': { title: "Approve this order's release", icon: PackageCheck, Body: ReleaseOrderSheet },
+  'record-payment': { title: 'Record a payment', icon: Banknote, Body: RecordPaymentSheet },
 };
 
 export function NeedActSheetProvider({ children }: { children: ReactNode }) {
@@ -48,8 +52,8 @@ export function NeedActSheetProvider({ children }: { children: ReactNode }) {
     null,
   );
   const [isOpen, setOpen] = useState(false);
-  const open = useCallback((need: DeskNeed) => {
-    const kind = actSheetKindOf(need);
+  const open = useCallback((need: DeskNeed, as?: ActSheetKind) => {
+    const kind = as === 'record-payment' ? (recordsPayment(need) ? as : null) : actSheetKindOf(need);
     if (!kind) return false;
     setCurrent((was) => ({ need, kind, seq: (was?.seq ?? 0) + 1 }));
     setOpen(true);

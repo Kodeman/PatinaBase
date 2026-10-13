@@ -149,8 +149,13 @@ jest.mock('@/components/document/help/desk-walkthrough', () => ({
   useDeskWalkthroughOffer: () => false,
   useSuppressDeskFirstTouch: () => false,
 }));
+// U-Q7 — the sheet's close-back is the Desk's to answer; the test plays it.
+let mockCaptured: ((lead: { id: string; name: string }) => void) | undefined;
 jest.mock('@/components/document/overlays/capture-lead-sheet', () => ({
-  CaptureLeadSheet: () => null,
+  CaptureLeadSheet: ({ onCreated }: { onCreated?: (lead: { id: string; name: string }) => void }) => {
+    mockCaptured = onCreated;
+    return null;
+  },
 }));
 jest.mock('@/components/document/overlays/open-project-sheet', () => ({
   OpenProjectSheet: () => null,
@@ -266,6 +271,21 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
     expect(studioScope).toHaveAttribute('aria-pressed', 'true');
     expect(window.localStorage.getItem('patina.desk.scope.me')).toBe('studio');
     window.localStorage.removeItem('patina.desk.scope.me');
+  });
+});
+
+describe('Desk — Record an inquiry closes onto the Desk (U-Q7)', () => {
+  it('prints the visit line above the ledger, with the brief one act away', () => {
+    render(<DeskPage />);
+    expect(document.querySelector('[data-desk-visit]')).toBeNull();
+    act(() => mockCaptured?.({ id: 'lead-ainsley', name: 'Ainsley Moore' }));
+    const visit = document.querySelector<HTMLElement>('[data-desk-visit]')!;
+    expect(visit).toHaveTextContent('Ainsley Moore recorded · just now · Open the brief');
+    expect(visit).toHaveAttribute('role', 'status');
+    expect(visit.closest('[data-testid="desk-roster"]')).not.toBeNull();
+    const open = within(visit).getByRole('link', { name: 'Open the brief — Ainsley Moore' });
+    expect(open).toHaveAttribute('href', '/doc/lead-ainsley');
+    expect(open).toHaveAttribute('data-action-variant', 'tertiary');
   });
 });
 

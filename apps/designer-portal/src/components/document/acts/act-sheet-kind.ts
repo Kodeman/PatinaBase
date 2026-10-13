@@ -35,7 +35,23 @@ export function silencePoId(
   return unanswered.size === 1 ? [...unanswered][0]! : null;
 }
 
-export type ActSheetKind = 'po-chase' | 'invoice-reminder' | 'proposal-follow-up' | 'release-order';
+export type ActSheetKind =
+  | 'po-chase'
+  | 'invoice-reminder'
+  | 'proposal-follow-up'
+  | 'release-order'
+  | 'record-payment';
+
+/**
+ * US-28 S4 (U-Q6) — the needs a scoped "Record a payment" sheet can record:
+ * a maker's scheduled payment (its line's own act, in place of the Orders
+ * ledger) and an overdue client invoice (a quiet door beside its reminder).
+ */
+export function recordsPayment({ need }: DeskNeed): boolean {
+  if (!need.recordId) return false;
+  if (need.kind === 'overdue_invoice') return true;
+  return need.kind === 'payment_due' && !!need.ledger?.context?.purchaseOrderId;
+}
 
 export function actSheetKindOf({ need }: DeskNeed): ActSheetKind | null {
   if (!need.recordId) return null;
@@ -44,6 +60,8 @@ export function actSheetKindOf({ need }: DeskNeed): ActSheetKind | null {
       return need.draft ? null : 'po-chase';
     case 'overdue_invoice':
       return 'invoice-reminder';
+    case 'payment_due':
+      return need.ledger?.context?.purchaseOrderId ? 'record-payment' : null;
     case 'proposal_declined':
     case 'hesitating_proposal':
     case 'proposal_expired':

@@ -44,11 +44,11 @@ interface SheetProps {
   onDone: () => void;
 }
 
-function Reading() {
+export function Reading() {
   return <p className="text-[13px] text-[var(--text-muted)]">Loading the record…</p>;
 }
 
-function Missing() {
+export function Missing() {
   return (
     <p className="text-[14px] text-[var(--color-charcoal)]">
       This record is no longer open. Put the sheet back to see what stands now.
@@ -69,7 +69,7 @@ interface OrderRecord {
 
 /** SQ-778 N3 — the order the need names, read off the purchase order itself:
  *  a PO need not ride a live paper line, and its number is on the record. */
-function useOrder(projectId: string, purchaseOrderId: string) {
+export function useOrder(projectId: string, purchaseOrderId: string) {
   const orders = usePurchaseOrders({ projectId });
   const po = (orders.data as OrderRecord[] | undefined)?.find((o) => o.id === purchaseOrderId) ?? null;
   return {
