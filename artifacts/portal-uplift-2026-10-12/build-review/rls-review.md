@@ -45,3 +45,16 @@ U-Q4 was ruled as "facts only". The projection below honours that ruling literal
   - The 00765 test's own-only assertion is restored to its pre-SQ-818 text.
 - **Types.** The function is in `packages/supabase/src/database.types.ts`, which is where the generated types actually live; the ticket named `packages/supabase/src/types/database.ts`. The entry is the package-local CLI 2.77.0 output for this function only. The generator types a RETURNS TABLE column as non-null, so `project_id` reads `string`, but it is NULL for an engagement row with no project. Consumers (SQ-828) must treat it as nullable.
 - **For the second pass.** The projection checks the caller's seat and the row's studio, not the row owner's seat. A former teammate's acted facts stay visible to the studio. The ruling does not ask for that check, and none was added.
+
+## Re-review (SQ-840, GPT-6 Astra, pinned 2f6b2f2eb)
+
+**Verdict.** No unresolved defects. SQ-832's F1–F3 are closed:
+- The table is own-row only, so the deployed hook and any already-open bundles are safe in any rollout order.
+- The RPC returns five columns and acted rows only.
+- The revocation negatives are real.
+
+**One low-severity finding.** service_role keeps EXECUTE on the function. The orchestrator accepted this as intended: that role is trusted, already holds ALL on the table, and runs server-side only.
+
+**Carried forward:**
+- SQ-828 must treat `project_id` as nullable.
+- The ship owner must inspect the actual pending set on Strata before `db push --include-all`.
