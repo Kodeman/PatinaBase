@@ -5,11 +5,13 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isQuietHours, sendPartySms } from "../_shared/sms.ts";
+import type { SendAuthority } from "../_shared/send-authority.ts";
 import {
   type DeliveryNotificationContext,
   DISPATCH_RPC_BY_ACTION,
   dispatchCompletionStatus,
   handleSiteRequestDispatch,
+  siteRequestSendAuthority,
   type SiteRequestDispatchContext,
   type SiteRequestDispatchDeps,
   type SiteRequestPrepareAction,
@@ -76,6 +78,31 @@ async function prepare(
   return (
     Array.isArray(data) ? data[0] : data
   ) as SiteRequestDispatchContext | null;
+}
+
+async function sendAuthority(context: SiteRequestDispatchContext): Promise<SendAuthority> {
+  const client = admin();
+  const { data: project } = await client.from("projects")
+    .select("studio_id, designer_id").eq("id", context.project_id).maybeSingle();
+  if (context.action === "due-reminder") {
+    return siteRequestSendAuthority(context.action, project?.studio_id, null, project?.designer_id);
+  }
+  const eventTypes = context.action === "send"
+    ? ["request_send_requested"]
+    : context.action === "resend"
+    ? ["request_resend_requested"]
+    : context.action === "nudge"
+    ? ["nudge_requested"]
+    : context.action === "consent-invite"
+    ? ["consent_requested"]
+    : ["request_send_requested", "consent_requested", "request_resend_requested", "nudge_requested"];
+  const { data: events } = await client.from("site_request_events")
+    .select("actor_id")
+    .eq("request_id", context.request_id)
+    .eq("actor_kind", "designer")
+    .in("event_type", eventTypes)
+    .order("sequence_no", { ascending: false }).limit(1);
+  return siteRequestSendAuthority(context.action, project?.studio_id, events?.[0]?.actor_id, project?.designer_id);
 }
 
 const deps: SiteRequestDispatchDeps = {
@@ -156,6 +183,7 @@ const deps: SiteRequestDispatchDeps = {
       projectId: context.project_id,
       partyId: context.party_id,
       phone: context.assignee_phone,
+      authority: await sendAuthority(context),
       templateKey: input.templateKey,
       body: input.body,
       auditBody: input.auditBody,

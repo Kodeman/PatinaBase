@@ -35,6 +35,8 @@ import {
   type SendPartySmsResult,
   type SmsDeps,
 } from "../_shared/sms.ts";
+import { resolveStudioIdentity } from "../_shared/studio-identity.ts";
+import type { SendAuthority } from "../_shared/send-authority.ts";
 
 const FIELD_KINDS = ["gc", "sub", "installer", "receiver"];
 
@@ -448,6 +450,16 @@ async function promptRef(supabase: SupabaseClient, party: {id: string; project_i
   return created.error || !prompt?.id || !/^\d{2,3}$/.test(prompt.short_code) ? null : prompt;
 }
 
+export async function scheduledAuthority(
+  supabase: SupabaseClient,
+  projectId: string,
+  outboundKind: "trade_site_digest" | "trade_day_of" | "delivery_confirm" | "homeowner_window_pick" | "hours_prompt",
+): Promise<SendAuthority> {
+  const identity = await resolveStudioIdentity(supabase, { projectId });
+  if (!identity?.studioId) throw new Error(`studio_identity_missing:${projectId}`);
+  return { kind: "studio_schedule", studioId: identity.studioId, outboundKind };
+}
+
 export async function runFieldDaily(
   supabase: SupabaseClient,
   deps: FieldDailyDeps = {},
@@ -614,6 +626,7 @@ export async function runFieldDaily(
       {
         partyId: party.id,
         projectId: party.project_id,
+        authority: await scheduledAuthority(supabase, party.project_id, "trade_site_digest"),
         templateKey: "sms_daily_digest",
         vars: { menu: menuText },
         dedupeKey: `field-daily:${party.id}:${today}`,
@@ -681,6 +694,7 @@ export async function runFieldDaily(
         {
           partyId: party.id,
           projectId: party.project_id,
+          authority: await scheduledAuthority(supabase, party.project_id, "delivery_confirm"),
           templateKey: "sms_delivery_confirm",
           dedupeKey: `field-delivery:${party.id}:${ev.event_id}:${ev.event_date}`,
           automationPhase: 0,
@@ -820,6 +834,9 @@ export async function runFieldDaily(
           {
             partyId: party.id,
             projectId: party.project_id,
+            authority: await scheduledAuthority(
+              supabase, party.project_id, card.kind === "site_card" ? "trade_site_digest" : "trade_day_of",
+            ),
             templateKey: card.kind === "site_card" ? "sms_site_card" : "sms_day_of",
             dedupeKey: `field-${card.kind}:${party.id}:${card.day}`,
             automationPhase: 1,
@@ -957,6 +974,7 @@ export async function runFieldDaily(
         const res = await sendClient(supabase, {
           partyId: seat.id,
           projectId: seat.project_id,
+          authority: await scheduledAuthority(supabase, seat.project_id, "homeowner_window_pick"),
           templateKey: "sms_selection_ready",
           clientInvitationId: letter.id,
           dedupeKey: `client-batch-reminder:${openBatch.id}`,
@@ -1034,6 +1052,7 @@ export async function runFieldDaily(
         ? await sendClient(supabase, {
           partyId: seat.id,
           projectId: seat.project_id,
+          authority: await scheduledAuthority(supabase, seat.project_id, "homeowner_window_pick"),
           templateKey: "sms_selection_ready",
           clientInvitationId: letter.id,
           dedupeKey: `client-batch:${batchId}`,
@@ -1136,6 +1155,7 @@ export async function runFieldDaily(
         {
           partyId: party.id,
           projectId: party.project_id,
+          authority: await scheduledAuthority(supabase, party.project_id, "hours_prompt"),
           templateKey: "sms_hours_prompt",
           dedupeKey: `field-hours:${party.id}:${localToday}`,
           automationPhase: 3,
@@ -1156,7 +1176,8 @@ export async function runFieldDaily(
   }
 
   // ── Flush deferred outbound rows ──────────────────────────────────────────
-  const flushed = await flush(supabase, deps);
+  // Deferred rows keep their original send authority; this is only the explicit fallback for legacy rows without one.
+  const flushed = await flush(supabase, { kind: "exempt", reason: "internal" }, deps);
   summary.deferred_flushed = flushed.flushed;
 
   return summary;
@@ -1302,6 +1323,7 @@ async function issueWindowPick(
     const res = await sendClient(supabase, {
       partyId: seat.id,
       projectId: seat.project_id,
+      authority: await scheduledAuthority(supabase, seat.project_id, "homeowner_window_pick"),
       templateKey: "sms_window_pick",
       // Keyed on the reference, which is the ask: a retry within the day meets
       // the same prompt and the same claim, and a card for a later delivery is a

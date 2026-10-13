@@ -3,6 +3,7 @@ import { assert, assertEquals, assertStringIncludes } from
 import {
   buildSnapshot,
   chooseSigner,
+  clientInviteAuthority,
   isServiceRoleCaller,
   parseSecretKeys,
   resendCooldownRemainingMs,
@@ -12,6 +13,10 @@ import {
   RESEND_COOLDOWN_MS,
 } from "./lib.ts";
 import { renderClientLetter, senderDisplayName } from "../_shared/client-letter.ts";
+
+Deno.test("client-invite send authority names the initiating designer", () => {
+  assertEquals(clientInviteAuthority("designer-1"), { kind: "designer", userId: "designer-1" });
+});
 
 Deno.test("R4 — the note is optional, trimmed, and capped at 280", () => {
   assertEquals(validateNote(undefined), { ok: true, value: null });

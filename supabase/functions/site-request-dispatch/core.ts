@@ -1,3 +1,21 @@
+import type { SendAuthority } from "../_shared/send-authority.ts";
+
+export function siteRequestSendAuthority(
+  action: string,
+  studioId: string | null | undefined,
+  actorId: string | null | undefined,
+  projectDesignerId: string | null | undefined,
+): SendAuthority {
+  if (action === "due-reminder") {
+    if (!studioId) throw new Error("site_request_studio_missing");
+    return { kind: "studio_schedule", studioId, outboundKind: "site_request_due" };
+  }
+  if (actorId) return { kind: "designer", userId: actorId };
+  if (!projectDesignerId) throw new Error("site_request_designer_missing");
+  // TODO(B7): actor missing, project designer used.
+  return { kind: "designer", userId: projectDesignerId };
+}
+
 export const DISPATCH_RPC_BY_ACTION = {
   send: "site_request_send",
   resend: "site_request_resend",

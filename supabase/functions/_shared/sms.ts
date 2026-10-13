@@ -2329,6 +2329,7 @@ interface FlushRow {
   created_at: string;
   twilio_status: string;
   claimed_at: string | null;
+  send_authority: SendAuthority | null;
 }
 
 /**
@@ -2376,7 +2377,7 @@ export async function flushDeferredMessages(
     "https://client.patina.cloud";
 
   const FLUSH_COLUMNS = "id, body, conversation_id, party_id, project_id, " +
-    "template_key, recipe, dedupe_key, created_at, twilio_status, claimed_at";
+    "template_key, recipe, dedupe_key, created_at, twilio_status, claimed_at, send_authority";
   const { data: deferredRows } = await supabase
     .from("sms_messages")
     .select(FLUSH_COLUMNS)
@@ -2901,7 +2902,7 @@ export async function flushDeferredMessages(
       .eq("id", row.id);
     const settle: Record<string, unknown> = {
       twilio_status: twilioStatus,
-      send_authority: authority,
+      send_authority: row.send_authority ?? authority,
     };
     if (providerCode) settle.error_code = providerCode;
     // Monotonic (contract S5), exactly as sendPartySms settles: a delivery

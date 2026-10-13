@@ -26,6 +26,8 @@ import { parseFieldMessage, type FieldParseInput, type FieldParseResult } from "
 import { judgeHoursReply } from "../_shared/hours-judgment.ts";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
 import { channelConsentDecision, channelConsentVerdict, fieldLineCampaignApproved, fieldLinePhase, orgsOfProjects, resolveStudioName, recoverSmsSelection, sendPartySms } from "../_shared/sms.ts";
+import { resolveStudioIdentity } from "../_shared/studio-identity.ts";
+import type { SendAuthority } from "../_shared/send-authority.ts";
 import { captureServerEvent } from "../_shared/aesthete-events.ts";
 
 import type { SelectionIntent, SelectionQuestion } from "../_shared/sms-selection.ts";
@@ -204,6 +206,7 @@ async function logOutbound(
   body: string,
   partyId: string | null,
   projectId: string | null,
+  authority: SendAuthority,
 ): Promise<void> {
   await supabase.from("sms_messages").insert({
     conversation_id: conversationId,
@@ -213,6 +216,7 @@ async function logOutbound(
     twilio_status: "twiml",
     party_id: partyId,
     project_id: projectId,
+    send_authority: authority,
   });
   await supabase
     .from("sms_conversations")
@@ -231,7 +235,9 @@ async function reply(
   recipe?: { templateKey: string; vars: Record<string, unknown> },
 ): Promise<InboundResult> {
   if (disposition === "help" || disposition === "opted_out") {
-    await logOutbound(supabase, conversationId, message, partyId, projectId);
+    await logOutbound(supabase, conversationId, message, partyId, projectId, {
+      kind: "exempt", reason: "carrier_compliance",
+    });
     return { status: 200, twiml: twimlBody(message), disposition };
   }
   return { status: 200, twiml: twimlBody(message), disposition,
@@ -2781,7 +2787,14 @@ async function replyToRenew(
   const newest = rows[0];
   if (newest.status !== "active" || !(expiry(newest) <= nowMs)) return null;
 
+  const identity = await resolveStudioIdentity(supabase, { projectId: party.project_id });
+  if (!identity?.studioId) return null;
+  // TODO(B7): classify the inbound link-renewal reply by outbound kind.
+  const authority: SendAuthority = {
+    kind: "studio_schedule", studioId: identity.studioId, outboundKind: "trade_site_digest",
+  };
   const sent = await sendPartySms(supabase, {
+    authority,
     partyId: party.id,
     projectId: party.project_id,
     phone: recipient,

@@ -17,6 +17,8 @@ import { verifyTwilioSignature } from "../_shared/twilio-verify.ts";
 import { processInbound, parseForm, twimlBody, ownedReview, bindInboundSelection, inboundCompletion, completedInbound, type InboundDeps, type InboundResult, type InboundParams } from "./pipeline.ts";
 
 import { sendPartySms, resolveStudioName } from "../_shared/sms.ts";
+import { resolveStudioIdentity } from "../_shared/studio-identity.ts";
+import type { SendAuthority } from "../_shared/send-authority.ts";
 
 const GSM7_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
 const GSM7_EXTENDED = "^{}\\[~]|€";
@@ -47,6 +49,39 @@ function specializedReplyParams(template: string, vars: Record<string, unknown> 
   }));
 }
 
+export function inboundReplyAuthority(templateKey: string | undefined, scheduled: SendAuthority): SendAuthority {
+  return templateKey === "sms_optin_confirm"
+    ? { kind: "exempt", reason: "carrier_compliance" }
+    : scheduled;
+}
+
+async function inboundScheduleAuthority(
+  supabase: InboundDeps["supabase"],
+  phone: string,
+  projectId?: string | null,
+  partyId?: string | null,
+  inboundMessageId?: string,
+): Promise<SendAuthority> {
+  let resolvedProjectId = projectId;
+  if (!resolvedProjectId && partyId) {
+    const { data } = await supabase.from("project_parties").select("project_id").eq("id", partyId).maybeSingle();
+    resolvedProjectId = data?.project_id;
+  }
+  if (!resolvedProjectId && inboundMessageId) {
+    const { data } = await supabase.from("sms_messages").select("project_id").eq("id", inboundMessageId).maybeSingle();
+    resolvedProjectId = data?.project_id;
+  }
+  if (!resolvedProjectId) {
+    const { data } = await supabase.from("project_parties").select("project_id").eq("phone_e164", phone).limit(1).maybeSingle();
+    resolvedProjectId = data?.project_id;
+  }
+  if (!resolvedProjectId) throw new Error("inbound_reply_project_missing");
+  const identity = await resolveStudioIdentity(supabase, { projectId: resolvedProjectId });
+  if (!identity?.studioId) throw new Error("inbound_reply_studio_missing");
+  // TODO(B7): classify non-compliance inbound auto-replies by outbound kind.
+  return { kind: "studio_schedule", studioId: identity.studioId, outboundKind: "homeowner_window_pick" };
+}
+
 /** Only compliance is TwiML. The shared sender owns ordinary logging and deferral. */
 export async function dispatchInboundReplies(params: InboundParams, result: InboundResult,
   deps: InboundDeps): Promise<InboundResult> {
@@ -55,7 +90,10 @@ export async function dispatchInboundReplies(params: InboundParams, result: Inbo
       const completion = await inboundCompletion(deps.supabase, result.selection.inboundMessageId, params.To, params.From);
       if (completion.status === "unknown") return { status: 503, twiml: twimlBody(), disposition: "completion_unknown", retainSid: true, messageId: result.messageId };
       if (completion.status !== "unresolved") return completedInbound(result.messageId);
-      const sent = await sendPartySms(deps.supabase, { kind: "selection", phone: params.From, selection: result.selection }, deps);
+      const sent = await sendPartySms(deps.supabase, {
+        kind: "selection", phone: params.From, selection: result.selection,
+        authority: await inboundScheduleAuthority(deps.supabase, params.From, undefined, undefined, result.selection.inboundMessageId),
+      }, deps);
       if (!["sent", "queued", "deferred"].includes(sent.status ?? "failed") || !sent.selection || !sent.messageId ||
         !await bindInboundSelection(deps.supabase, result.messageId, sent.selection, sent.messageId)) {
         return { ...result, status: 503, disposition: "selection_recovery_needed", retainSid: true };
@@ -75,6 +113,12 @@ export async function dispatchInboundReplies(params: InboundParams, result: Inbo
       const sent = await sendPartySms(deps.supabase, {
         partyId: outgoing.partyId ?? undefined, projectId: outgoing.projectId ?? undefined,
         phone: params.From, templateKey: outgoing.templateKey ?? "sms_inbound_reply", vars,
+        authority: inboundReplyAuthority(
+          outgoing.templateKey,
+          outgoing.templateKey === "sms_optin_confirm"
+            ? { kind: "exempt", reason: "carrier_compliance" }
+            : await inboundScheduleAuthority(deps.supabase, params.From, outgoing.projectId, outgoing.partyId),
+        ),
         dedupeKey: `inbound:${params.MessageSid}:${index}`,
       }, deps);
       if (sent.status === "failed") throw new Error(sent.reason ?? "reply_send_failed");

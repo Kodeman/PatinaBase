@@ -1,8 +1,13 @@
 // Pure decisions for the client-invite legs, split out so they can be tested
 // without a Supabase client, a network, or a clock.
 
+import type { SendAuthority } from "../_shared/send-authority.ts";
 import { givenName } from "../_shared/branded-email.ts";
 import type { ClientLetterSnapshot } from "../_shared/client-letter.ts";
+
+export function clientInviteAuthority(userId: string): SendAuthority {
+  return { kind: "designer", userId };
+}
 
 /** R10: one letter per hour, per invitation. */
 export const RESEND_COOLDOWN_MS = 60 * 60 * 1000;

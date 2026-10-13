@@ -33,6 +33,7 @@
 // `provider_code` are additive.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SendAuthority } from "../_shared/send-authority.ts";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
 import {
   isUniqueViolation,
@@ -620,6 +621,11 @@ async function isProjectTeamMember(
   return !!tm;
 }
 
+export function partySmsAuthority(userId: string | null | undefined): SendAuthority {
+  if (!userId) throw new Error("send_authority_unavailable");
+  return { kind: "designer", userId };
+}
+
 async function handlePartySms(
   req: Request,
   job: SmsJob,
@@ -629,6 +635,17 @@ async function handlePartySms(
   const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
   const claims = decodeBearerClaims(req.headers.get("Authorization"));
   const isInternal = claims?.role === "service_role";
+
+  let authorityUserId = claims?.sub;
+  if (isInternal) {
+    // Assignment-triggered jobs carry no caller JWT; use the project's designer as the assigner authority.
+    const projectId = job.projectId ?? (await supabase.from("project_parties")
+      .select("project_id").eq("id", job.partyId!).maybeSingle()).data?.project_id;
+    const project = projectId
+      ? (await supabase.from("projects").select("designer_id").eq("id", projectId).maybeSingle()).data
+      : null;
+    authorityUserId = project?.designer_id;
+  }
 
   // A user JWT must be on the party's project team before we send on its behalf.
   if (!isInternal) {
@@ -659,6 +676,13 @@ async function handlePartySms(
     }
   }
 
+  if (!authorityUserId) {
+    return new Response(JSON.stringify({ error: "send_authority_unavailable" }), {
+      status: 500,
+      headers: jsonHeaders,
+    });
+  }
+
   // The invite is the one template that cannot go out without its code: the
   // copy asks the recipient to "Reply YES {{code}}", and an empty code is a
   // question with no way to answer it. So it is allocated before the send and
@@ -683,6 +707,7 @@ async function handlePartySms(
 
   const send = deps.sendPartySms ?? realSendPartySms;
   const result = await send(supabase, {
+    authority: partySmsAuthority(authorityUserId),
     partyId: job.partyId,
     projectId: job.projectId,
     body: job.body,

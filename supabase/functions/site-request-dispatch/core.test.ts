@@ -7,9 +7,25 @@ import {
   type DispatchCompletion,
   dispatchCompletionStatus,
   handleSiteRequestDispatch,
+  siteRequestSendAuthority,
   type SiteRequestDispatchContext,
   type SiteRequestDispatchDeps,
 } from "./core.ts";
+
+Deno.test("site request outbound authority follows its designer event and scheduled due reminders", () => {
+  assertEquals(siteRequestSendAuthority("send", "studio-1", "actor-1", "designer-1"), {
+    kind: "designer", userId: "actor-1",
+  });
+  assertEquals(siteRequestSendAuthority("consent-granted", "studio-1", "actor-1", "designer-1"), {
+    kind: "designer", userId: "actor-1",
+  });
+  assertEquals(siteRequestSendAuthority("send", "studio-1", null, "designer-1"), {
+    kind: "designer", userId: "designer-1",
+  });
+  assertEquals(siteRequestSendAuthority("due-reminder", "studio-1", null, "designer-1"), {
+    kind: "studio_schedule", studioId: "studio-1", outboundKind: "site_request_due",
+  });
+});
 
 const REQUEST_ID = "11111111-1111-4111-8111-111111111111";
 const OUTBOX_ID = "77777777-7777-4777-8777-777777777777";
