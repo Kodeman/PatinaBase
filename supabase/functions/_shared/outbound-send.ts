@@ -96,8 +96,12 @@ export async function sendOutboundDraft(
       const sent = draft.recipient_kind === "client" && templateKey
         ? await sendClientSms(admin, smsInput)
         : await sendPartySms(admin, smsInput);
-      if (sent.status === "deferred") return await fail("not_sendable_until_send_window");
-      if (!sent.sent) return await fail(sent.reason ?? "sms_send_failed");
+      // Field-line kinds ask sms.ts not to queue (deferToCaller); any other kind's
+      // "deferred" means a queued row now exists and will send in the window.
+      if (sent.status === "deferred" && smsInput.deferToCaller) {
+        return await fail("not_sendable_until_send_window");
+      }
+      if (sent.status !== "deferred" && !sent.sent) return await fail(sent.reason ?? "sms_send_failed");
       messageId = sent.messageId;
     } else {
       const userId = typeof draft.payload.user_id === "string" ? draft.payload.user_id : draft.to_client_id;
