@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       p_kill_switch: hasKillSwitch ? (body.killSwitch as boolean) : null,
       p_global_daily_cap: cap?.ok && cap.value !== null ? cap.value : null,
       p_actor: auth.user.id,
-    });
+    } as never);
     if (error) throw error;
     return NextResponse.json({ data: { ok: true } });
   } catch (err) {
