@@ -495,6 +495,47 @@ describe('F04 — the empty query leads with Where the work stands', () => {
   });
 });
 
+describe('US-28 S6 — ⌘K rows are ledger rows that wrap', () => {
+  const studio = {
+    folders: [
+      folder(
+        {
+          engagement_id: 'eng-holloway',
+          project_id: 'proj-holloway',
+          client_name: 'Holloway',
+          title:
+            'Holloway Den — the den, with the built-in bench, the bookcase wall and the reading lamp by the window',
+          active_section: 'project',
+        },
+        'invoice INV-2026-0721 is overdue',
+      ),
+    ],
+    chips: [],
+  };
+
+  it('never truncates or ellipsises a row, and ticks a job row with its stage word in ink', () => {
+    mockDeskData.mockReturnValue(studio as never);
+    openPalette();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
+      target: { value: 'holloway' },
+    });
+
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBeGreaterThan(0);
+    for (const option of options) {
+      // The row wraps: no element in it clips its text to one line.
+      expect(option).not.toHaveClass('truncate');
+      expect(option.querySelector('.truncate, .text-ellipsis, [class*="line-clamp"]')).toBeNull();
+    }
+
+    const job = options.find((option) => option.querySelector('.lphase')?.textContent === 'Project');
+    expect(job).toBeDefined();
+    expect(job!.querySelector('.lname')).toHaveClass('tick', 'st-project');
+    expect(job!.querySelector('.lphase')).toHaveClass('word');
+    expect(job).toHaveTextContent(/the bookcase wall and the reading lamp by the window/);
+  });
+});
+
 describe('F39/F65 — a stage phrase opens the palette already typed', () => {
   it('pre-types the stage the doorway asked for', () => {
     mockDeskData.mockReturnValue({

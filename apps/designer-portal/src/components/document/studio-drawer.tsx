@@ -400,10 +400,12 @@ export function StudioDrawer() {
                 id="studio-books-menu"
                 role="group"
                 aria-label="Ledgers"
-                className="absolute bottom-[calc(100%+8px)] left-1/2 w-[260px] -translate-x-1/2 overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)]"
+                /* US-28 S6 — the popover (L4′): square, on --paper-doc with
+                   the card edge, so it separates from the cream it covers. */
+                className="popover ledgers-pop absolute bottom-[calc(100%+8px)] left-1/2 w-[260px] -translate-x-1/2 overflow-hidden"
               >
-                <div className="border-b border-[var(--border-default)] px-3 py-2">
-                  <span className="font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+                <div className="border-b border-[var(--doc-ink-border)] px-3 py-2">
+                  <span className="font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--text-subtle)]">
                     Ledgers · sheets
                   </span>
                 </div>
@@ -425,7 +427,7 @@ export function StudioDrawer() {
                         });
                         openBook(book.key, null, { fromBooksMenu: true });
                       }}
-                      className="flex min-h-11 w-full items-center gap-3 border-b border-[var(--border-default)] px-3 py-2 text-left text-[var(--text-body)] last:border-b-0 hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)]"
+                      className="flex min-h-11 w-full items-center gap-3 border-b border-[var(--doc-ink-border)] px-3 py-2 text-left text-[var(--text-body)] last:border-b-0 hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--clay-ink)]"
                     >
                       <Icon
                         className="h-4 w-4 text-[var(--color-aged-oak)]"

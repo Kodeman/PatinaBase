@@ -13,6 +13,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { EmptyState } from '@/components/document/empty-state';
 import { useChangesList } from '@/hooks/use-changes-list';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { captureTeachingEvent } from '@/lib/analytics/teaching-events';
@@ -57,23 +58,16 @@ function NoteSentences({ notes }: { notes: TeachingNoteView[] }) {
 
 function ChangesHeader() {
   return (
-    <header>
-      <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        The Help Center
-      </p>
-      <h1 className="mt-1 font-heading text-[24px] font-medium text-[var(--color-charcoal)]">
-        What changed
-      </h1>
+    <header className="mb-12">
+      <h1 className="t-d2">What changed</h1>
     </header>
   );
 }
 
+/** US-28 S6 — the one empty state: the Section's eyebrow, one sentence, its
+ *  closing rule. */
 function EmptyChangesBody() {
-  return (
-    <p className="font-heading text-[15px] italic leading-relaxed text-[var(--text-muted)]">
-      Nothing has changed in the Document yet.
-    </p>
-  );
+  return <EmptyState eyebrow="Releases">Nothing has changed in the Document yet.</EmptyState>;
 }
 
 /** Flag on: the real releases list, wired to `useChangesList`. */
@@ -91,17 +85,18 @@ function ChangesListBody() {
       {empty && <EmptyChangesBody />}
 
       {releases.map((release) => (
-        <section
-          key={release.id}
-          aria-labelledby={`release-${release.id}`}
-          className="border-t border-[var(--color-pearl)] pt-4"
-        >
-          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-faint)]">
-            {dateWord(release.shippedOn)}
-          </p>
+        <section key={release.id} aria-labelledby={`release-${release.id}`} className="section">
+          <div className="sec-head">
+            <p className="eb">
+              <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+                <path d="M0 2h34M0 6h28M0 10h20" />
+              </svg>
+              <span>{dateWord(release.shippedOn)}</span>
+            </p>
+          </div>
           <h2
             id={`release-${release.id}`}
-            className="mt-1 font-heading text-[20px] font-medium leading-snug text-[var(--color-charcoal)]"
+            className="t-d3 text-[var(--text-primary)]"
           >
             {release.headline}
           </h2>
@@ -115,13 +110,15 @@ function ChangesListBody() {
       ))}
 
       {also.length > 0 && (
-        <section aria-labelledby="changes-also" className="border-t border-[var(--color-pearl)] pt-4">
-          <h2
-            id="changes-also"
-            className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]"
-          >
-            Also
-          </h2>
+        <section aria-labelledby="changes-also" className="section">
+          <div className="sec-head">
+            <h2 id="changes-also" className="eb">
+              <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+                <path d="M0 2h34M0 6h28M0 10h20" />
+              </svg>
+              <span>Also</span>
+            </h2>
+          </div>
           <NoteSentences notes={also} />
         </section>
       )}
@@ -139,7 +136,7 @@ export default function WhatChangedPage() {
   const { value: teachingNotesOn, isLoading: flagLoading } = useFeatureFlag(TEACHING_SYSTEM_FLAG);
 
   return (
-    <article className="space-y-7">
+    <article>
       <ChangesHeader />
       {flagLoading || !teachingNotesOn ? <EmptyChangesBody /> : <ChangesListBody />}
     </article>

@@ -192,6 +192,14 @@ describe('StudioDrawer', () => {
     });
   });
 
+  it('US-28 S6 — the Ledgers popover is square, on the paper-doc stock with the card edge', () => {
+    render(<StudioDrawer />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
+    const menu = screen.getByRole('group', { name: 'Ledgers' });
+    expect(menu).toHaveClass('popover');
+    expect(menu.className).not.toMatch(/rounded|bg-\[var\(--bg-surface\)\]/);
+  });
+
   it('no longer carries a feedback doorway — the Tester widget owns it', () => {
     render(<StudioDrawer />);
     fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));

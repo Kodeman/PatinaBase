@@ -28,6 +28,7 @@ import {
 } from '@patina/supabase';
 import type { NotificationPreferences } from '@patina/shared/types';
 import { useAuth } from '@/hooks/use-auth';
+import { DocumentAction } from '@/components/document/document-action';
 
 type DigestFrequency = NotificationPreferences['digest_frequency'];
 
@@ -195,44 +196,49 @@ function PreferencesPageInner() {
 
   if (!isAuthenticated) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] p-6">
-        <div className="max-w-md">
-          {/* The token's outcome is reported HERE, not only on the signed-in
-              page — the emailed footer link is followed by people who are not
-              signed in, and R91's contract is that the page renders and says
-              what happened. An applied token shows its confirmation; a bad or
-              expired one says so plainly instead of failing silently. */}
-          <TokenStatusBanner status={tokenStatus} />
-          <div className="text-center">
-            <h1 className="font-serif text-2xl font-semibold text-[var(--color-charcoal)] mb-3">
-              Sign in to manage preferences
-            </h1>
-            <p className="text-[var(--color-bark)] text-[15px] mb-6">
+      <Page>
+        {/* No back act: a signed-out visitor has no Desk to go back to. */}
+        <header className="hline">
+          <div className="hline-l">
+            <h1 className="t-d2">Preferences</h1>
+          </div>
+        </header>
+        <div className="rule-strong" role="presentation" />
+        {/* The token's outcome is reported HERE, not only on the signed-in
+            page — the emailed footer link is followed by people who are not
+            signed in, and R91's contract is that the page renders and says
+            what happened. An applied token shows its confirmation; a bad or
+            expired one says so plainly instead of failing silently. */}
+        <TokenStatusBanner status={tokenStatus} />
+        <section aria-label="Sign in" className="section">
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+            <p className="empty-t">
               {tokenStatus.kind === 'applied'
                 ? 'Sign in to manage the rest of your preferences.'
                 : 'Sign in to view and update your notification preferences.'}
             </p>
-            <a
+            <DocumentAction
+              actionKey="preferences-sign-in"
               href="/auth/signin?callbackUrl=/preferences"
-              className="inline-block bg-[var(--color-taupe)] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
+              variant="secondary"
             >
               Sign in
-            </a>
+            </DocumentAction>
           </div>
-        </div>
-      </main>
+        </section>
+      </Page>
     );
   }
 
   if (prefsError || !prefs) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)] p-6">
-        <p className="text-[#C45B4A]">
+      <Page>
+        <p role="alert" className="t-body pt-12 text-[var(--terracotta-ink)]">
           {prefsError instanceof Error
             ? prefsError.message
             : 'Could not load preferences.'}
         </p>
-      </main>
+      </Page>
     );
   }
 
@@ -240,134 +246,153 @@ function PreferencesPageInner() {
   const effectiveTimezone = prefs.timezone || browserTz;
 
   return (
-    <main className="min-h-screen bg-[var(--bg-subtle)] py-12 px-6">
-      <div className="max-w-2xl mx-auto">
-        <header className="mb-8">
-          <h1 className="font-serif text-3xl font-semibold text-[var(--color-charcoal)] mb-2">
-            Notification preferences
-          </h1>
-          <p className="text-[var(--color-bark)] text-[15px]">
-            Choose what you want to hear from us — and how.
-          </p>
-        </header>
-
-        <TokenStatusBanner status={tokenStatus} />
-        <SaveStatus
-          saving={updateMutation.isPending}
-          savedAt={savedAt}
-          error={updateMutation.error}
-        />
-
-        <Section title="Email" description="Master switch for email delivery.">
-          <Toggle
-            label="Email notifications"
-            help="Turn off to stop all marketing email. Transactional alerts may still send."
-            checked={prefs.channels_email}
-            onChange={(v) => update({ channels_email: v })}
-          />
-        </Section>
-
-        {TOGGLE_GROUPS.map((group) => (
-          <Section
-            key={group.title}
-            title={group.title}
-            description={group.description}
+    <Page>
+      {/* US-28 S6 — the Header line: the back act, the title, then the
+          double rule. The save status rides on its right; chrome never fills. */}
+      <header className="hline">
+        <div className="hline-l">
+          <DocumentAction
+            actionKey="preferences-back-to-desk"
+            href="/desk"
+            variant="tertiary"
+            leading="←"
           >
-            {group.rows.map((row) => (
-              <Toggle
-                key={String(row.key)}
-                label={row.label}
-                help={row.help}
-                checked={row.alwaysOn ? true : !!prefs[row.key]}
-                disabled={row.alwaysOn}
-                onChange={
-                  row.alwaysOn
-                    ? undefined
-                    : (v) => update({ [row.key]: v } as Partial<NotificationPreferences>)
-                }
-              />
-            ))}
-          </Section>
-        ))}
-
-        <Section
-          title="Quiet hours"
-          description="Pause non-urgent notifications during set hours."
-        >
-          <Toggle
-            label="Enable quiet hours"
-            checked={prefs.quiet_hours_enabled}
-            onChange={(v) => update({ quiet_hours_enabled: v })}
+            Desk
+          </DocumentAction>
+          <h1 className="t-d2">Preferences</h1>
+        </div>
+        <div className="hline-r">
+          <SaveStatus
+            saving={updateMutation.isPending}
+            savedAt={savedAt}
+            error={updateMutation.error}
           />
-          {prefs.quiet_hours_enabled && (
-            <>
-              <div className="flex gap-4 mt-3">
-                <TimeField
-                  label="Start"
-                  value={prefs.quiet_hours_start ?? '22:00'}
-                  onChange={(v) => update({ quiet_hours_start: v })}
-                />
-                <TimeField
-                  label="End"
-                  value={prefs.quiet_hours_end ?? '08:00'}
-                  onChange={(v) => update({ quiet_hours_end: v })}
-                />
-              </div>
-              <label className="block mt-3">
-                <span className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">
-                  Timezone
-                </span>
-                <select
-                  value={effectiveTimezone}
-                  onChange={(e) => update({ timezone: e.target.value })}
-                  className="w-full px-3 py-2 border border-[var(--border-warm)] rounded-md bg-white text-[var(--color-charcoal)]"
-                >
-                  {timezones.map((tz) => (
-                    <option key={tz} value={tz}>
-                      {tz}
-                      {tz === browserTz ? ' (your timezone)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </>
-          )}
-        </Section>
+        </div>
+      </header>
+      <div className="rule-strong" role="presentation" />
 
+      <TokenStatusBanner status={tokenStatus} />
+
+      <Section title="Email" description="Master switch for email delivery.">
+        <Toggle
+          label="Email notifications"
+          help="Turn off to stop all marketing email. Transactional alerts may still send."
+          checked={prefs.channels_email}
+          onChange={(v) => update({ channels_email: v })}
+        />
+      </Section>
+
+      {TOGGLE_GROUPS.map((group) => (
         <Section
-          title="Digest frequency"
-          description="Bundle routine updates into a single email."
+          key={group.title}
+          title={group.title}
+          description={group.description}
         >
-          <fieldset className="space-y-2">
-            <legend className="sr-only">Digest frequency</legend>
-            {DIGEST_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className="flex items-center gap-3 cursor-pointer"
-              >
-                <input
-                  type="radio"
-                  name="digest_frequency"
-                  value={opt.value}
-                  checked={prefs.digest_frequency === opt.value}
-                  onChange={() => update({ digest_frequency: opt.value })}
-                  className="h-4 w-4 border-[var(--border-warm)] text-[var(--color-taupe)] focus:ring-[var(--color-taupe)]"
-                />
-                <span className="text-[15px] text-[var(--color-charcoal)]">{opt.label}</span>
-              </label>
-            ))}
-          </fieldset>
+          {group.rows.map((row) => (
+            <Toggle
+              key={String(row.key)}
+              label={row.label}
+              help={row.help}
+              checked={row.alwaysOn ? true : !!prefs[row.key]}
+              disabled={row.alwaysOn}
+              onChange={
+                row.alwaysOn
+                  ? undefined
+                  : (v) => update({ [row.key]: v } as Partial<NotificationPreferences>)
+              }
+            />
+          ))}
         </Section>
-      </div>
+      ))}
+
+      <Section
+        title="Quiet hours"
+        description="Pause non-urgent notifications during set hours."
+      >
+        <Toggle
+          label="Enable quiet hours"
+          checked={prefs.quiet_hours_enabled}
+          onChange={(v) => update({ quiet_hours_enabled: v })}
+        />
+        {prefs.quiet_hours_enabled && (
+          <>
+            <div className="mt-4 flex flex-wrap gap-4">
+              <TimeField
+                label="Start"
+                value={prefs.quiet_hours_start ?? '22:00'}
+                onChange={(v) => update({ quiet_hours_start: v })}
+              />
+              <TimeField
+                label="End"
+                value={prefs.quiet_hours_end ?? '08:00'}
+                onChange={(v) => update({ quiet_hours_end: v })}
+              />
+            </div>
+            <label className="mt-4 block max-w-[420px]">
+              <span className="eb mb-2">Timezone</span>
+              <select
+                value={effectiveTimezone}
+                onChange={(e) => update({ timezone: e.target.value })}
+                className="field-control text-[var(--text-primary)]"
+              >
+                {timezones.map((tz) => (
+                  <option key={tz} value={tz}>
+                    {tz}
+                    {tz === browserTz ? ' (your timezone)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
+      </Section>
+
+      <Section
+        title="Digest frequency"
+        description="Bundle routine updates into a single email."
+      >
+        <fieldset>
+          <legend className="sr-only">Digest frequency</legend>
+          <ul className="rows">
+            {DIGEST_OPTIONS.map((opt) => (
+              <li key={opt.value} className="border-b border-[var(--doc-ink-border)]">
+                <label className="check">
+                  <input
+                    type="radio"
+                    name="digest_frequency"
+                    value={opt.value}
+                    checked={prefs.digest_frequency === opt.value}
+                    onChange={() => update({ digest_frequency: opt.value })}
+                    className="check-input"
+                  />
+                  <span className="check-box is-one" aria-hidden="true" />
+                  <span className="t-body text-[var(--text-primary)]">{opt.label}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </fieldset>
+      </Section>
+    </Page>
+  );
+}
+
+/** US-28 S6 — the page on the --paper ground at the house measure. */
+function Page({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="min-h-screen bg-[var(--paper)] text-[var(--text-primary)]">
+      <div className="mx-auto max-w-[880px] px-6 pb-24 max-[599px]:px-4">{children}</div>
     </main>
   );
 }
 
 function LoadingShell() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[var(--bg-subtle)]">
-      <p className="text-[var(--text-faint)]">Loading preferences…</p>
-    </main>
+    <Page>
+      <p role="status" className="t-body-sm pt-12 text-[var(--text-subtle)]">
+        Loading preferences…
+      </p>
+    </Page>
   );
 }
 
@@ -381,36 +406,27 @@ function TokenStatusBanner({
     | { kind: 'error'; message: string };
 }) {
   if (status.kind === 'idle') return null;
+  // US-28 S6 — the outcome is a sentence in ink on the paper, never a
+  // tinted box; only the failure takes terracotta-ink.
   if (status.kind === 'applying') {
     return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="mb-4 px-4 py-3 rounded-md border border-[var(--border-warm)] bg-white text-sm text-[var(--color-bark)]"
-      >
+      <p role="status" aria-live="polite" className="t-body mb-8 text-[var(--text-muted)]">
         Applying unsubscribe link…
-      </div>
+      </p>
     );
   }
   if (status.kind === 'applied') {
     return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="mb-4 px-4 py-3 rounded-md border border-[#C8DCC0] bg-[#F1F7EC] text-sm text-[#3F5C32]"
-      >
+      <p role="status" aria-live="polite" className="t-body mb-8 text-[var(--text-primary)]">
         Unsubscribe applied
         {status.type ? ` (${humanize(status.type)})` : ''}.
-      </div>
+      </p>
     );
   }
   return (
-    <div
-      role="alert"
-      className="mb-4 px-4 py-3 rounded-md border border-[#E8C7BE] bg-[#FBEDE8] text-sm text-[#A24332]"
-    >
+    <p role="alert" className="t-body mb-8 text-[var(--terracotta-ink)]">
       {status.message}
-    </div>
+    </p>
   );
 }
 
@@ -427,21 +443,28 @@ function Section({
   description?: string;
   children: React.ReactNode;
 }) {
+  // US-28 S6 — a Section (uplift (b)1): the eyebrow, one line on what it
+  // holds, its rows, its own closing rule. Never a white card.
   return (
-    // D4 — zero shadows. The ported page carried a `shadow-sm`; depth here is
-    // the flat border against the warm ground.
-    <section className="bg-white rounded-lg p-6 mb-6 border border-[var(--bg-warm)]">
-      <h2 className="font-serif text-lg font-semibold text-[var(--color-charcoal)] mb-1">
-        {title}
-      </h2>
+    <section aria-label={title} className="section">
+      <div className="sec-head">
+        <h2 className="eb">
+          <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+            <path d="M0 2h34M0 6h28M0 10h20" />
+          </svg>
+          <span>{title}</span>
+        </h2>
+      </div>
       {description && (
-        <p className="text-sm text-[var(--text-faint)] mb-4">{description}</p>
+        <p className="t-body-sm mb-3 max-w-[64ch] text-[var(--text-muted)]">{description}</p>
       )}
-      <div className="space-y-3">{children}</div>
+      {children}
     </section>
   );
 }
 
+/** One row with the house check (specimens `.check`): the native checkbox
+ *  stays for the keyboard and the reader; the box is drawn in ink. */
 function Toggle({
   label,
   help,
@@ -456,25 +479,28 @@ function Toggle({
   disabled?: boolean;
 }) {
   return (
-    <label
-      className={`flex items-start justify-between gap-4 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-    >
-      <span className="flex-1">
-        <span className="block text-[15px] text-[var(--color-charcoal)] font-medium">
-          {label}
+    <div className="border-b border-[var(--doc-ink-border)] py-1 first:border-t">
+      <label className="check items-start py-2.5">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange?.(e.target.checked)}
+          disabled={disabled}
+          className="check-input"
+        />
+        <span className="check-box mt-0.5" aria-hidden="true">
+          <svg viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+            <path d="M2.5 7.5l3 3 6-7" />
+          </svg>
         </span>
-        {help && (
-          <span className="block text-xs text-[var(--text-faint)] mt-0.5">{help}</span>
-        )}
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange?.(e.target.checked)}
-        disabled={disabled}
-        className="mt-1 h-5 w-5 rounded border-[var(--border-warm)] text-[var(--color-taupe)] focus:ring-[var(--color-taupe)]"
-      />
-    </label>
+        <span className="min-w-0 flex-1">
+          <span className="t-body block text-[var(--text-primary)]">{label}</span>
+          {help && (
+            <span className="t-body-sm block text-[var(--text-subtle)]">{help}</span>
+          )}
+        </span>
+      </label>
+    </div>
   );
 }
 
@@ -488,15 +514,13 @@ function TimeField({
   onChange: (next: string) => void;
 }) {
   return (
-    <label className="flex-1">
-      <span className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">
-        {label}
-      </span>
+    <label className="block w-[200px] max-w-full">
+      <span className="eb mb-2">{label}</span>
       <input
         type="time"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 border border-[var(--border-warm)] rounded-md bg-white text-[var(--color-charcoal)]"
+        className="field-control text-[var(--text-primary)]"
       />
     </label>
   );
@@ -515,26 +539,22 @@ function SaveStatus({
     if (error) {
       return {
         text: error instanceof Error ? error.message : 'Save failed',
-        color: 'text-[#C45B4A]',
+        color: 'text-[var(--terracotta-ink)]',
       };
     }
-    if (saving) return { text: 'Saving…', color: 'text-[var(--text-faint)]' };
+    if (saving) return { text: 'Saving…', color: 'text-[var(--text-subtle)]' };
     if (savedAt)
       return {
         text: `Saved ${savedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
-        color: 'text-[var(--text-faint)]',
+        color: 'text-[var(--text-subtle)]',
       };
     return null;
   }, [error, saving, savedAt]);
 
-  if (!status) return null;
+  // The live region stays mounted so the first "Saving…" is announced.
   return (
-    <div
-      className={`mb-4 text-sm ${status.color}`}
-      role="status"
-      aria-live="polite"
-    >
-      {status.text}
-    </div>
+    <p className={`t-meta ${status?.color ?? ''}`} role="status" aria-live="polite">
+      {status?.text}
+    </p>
   );
 }

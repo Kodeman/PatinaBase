@@ -307,7 +307,7 @@ describe('⌘K on the paper (D4)', () => {
     const acts = screen.getByRole('group', { name: 'Project file actions' });
     const names = within(acts)
       .getAllByRole('option')
-      .map((option) => option.querySelector('.font-medium')?.textContent);
+      .map((option) => option.querySelector('.t-d4')?.textContent);
     expect(names).toEqual(['Record the payment', 'Draft an invoice']);
     expect(screen.queryByRole('option', { name: /^Money/ })).not.toBeInTheDocument();
 
@@ -363,7 +363,7 @@ describe('⌘K on the paper (D4)', () => {
     const acts = screen.getByRole('group', { name: 'Project file actions' });
     expect(within(acts).queryByRole('option', { name: /Record the payment/ })).not.toBeInTheDocument();
     const draw = within(acts).getByRole('option', { name: /Draft an invoice/ });
-    expect(draw.querySelector('.font-medium')?.textContent).toBe('Draft an invoice');
+    expect(draw.querySelector('.t-d4')?.textContent).toBe('Draft an invoice');
   });
 
   it('R29 — invoice numbers are searched through the paper’s invoice rows', () => {
@@ -484,7 +484,7 @@ describe('one-voice ⌘K (FR2)', () => {
     mockPathname.mockReturnValue('/doc/eng-dir');
     openAndType('prop');
     const write = screen.getByRole('option', { name: /^Write the proposal/ });
-    expect(write.querySelector('.font-medium')?.textContent).toBe('Write the proposal');
+    expect(write.querySelector('.t-d4')?.textContent).toBe('Write the proposal');
     expect(screen.queryByText('Contract Room')).not.toBeInTheDocument();
     expect(screen.queryByText(/Open the Contract Room/)).not.toBeInTheDocument();
 
@@ -589,7 +589,7 @@ describe('one-voice ⌘K (FR3)', () => {
     openWithNext({ label, sentence, onPress }, query);
     expect(screen.queryByText(`No results in this project file for "${query}".`)).not.toBeInTheDocument();
     const row = actRow(new RegExp(`^${label}`));
-    expect(row.querySelector('.font-medium')?.textContent).toBe(label);
+    expect(row.querySelector('.t-d4')?.textContent).toBe(label);
     expect(row).toHaveTextContent(sentence);
     expect(screen.getAllByRole('option', { name: new RegExp(label) })).toHaveLength(1);
     fireEvent.click(row);

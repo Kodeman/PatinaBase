@@ -39,48 +39,37 @@ export default function HelpCenterPage() {
     safeCapture(HELP_EVENTS.HELP_CENTER_VIEWED, { source: 'page_view' });
   }, []);
 
+  // US-28 S6 — Sections of plain rows: no topic cards, no boxed links.
   return (
-    <div className="space-y-10">
-      <p className="text-[13px] leading-relaxed text-[var(--text-muted)]">
-        Search the articles, browse by topic, or start with one of the featured guides.
-      </p>
-
-      <section aria-labelledby="search-heading">
-        <h2 id="search-heading" className="sr-only">
-          Search
+    <div>
+      <section aria-labelledby="search-heading" className="mb-12 max-w-[560px]">
+        <h2 id="search-heading" className="eb mb-2">
+          Search help
         </h2>
         <HelpSearch placeholder="Search help articles…" />
       </section>
 
-      {/* Pinned walkthrough row — always present, above Featured. */}
-      <section aria-label="Studio overview tour">
-        <Link
-          href="/desk?tour=desk-walkthrough"
-          className="flex items-baseline justify-between gap-4 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-4 py-3.5 transition-colors hover:border-[var(--color-clay)]"
-        >
-          <span className="font-heading text-[15px] font-medium text-[var(--color-charcoal)]">
-            The Desk walkthrough
-          </span>
-          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            about a minute
-          </span>
-        </Link>
-      </section>
-
-      {/* FEATURED — curated exact-keys list. Drafts-only today, so it can
-          settle empty; `onEmpty` (fired once the query resolves) swaps in one
-          line rather than hiding the section via a `:has()` DOM watch. */}
-      <section aria-labelledby="featured-heading" className="space-y-3">
-        <p
-          id="featured-heading"
-          className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
-        >
-          Featured guides
-          <span className="h-px flex-1 bg-[var(--color-pearl)]" />
-        </p>
+      {/* The pinned walkthrough row stands first in Featured guides, always. */}
+      <section aria-labelledby="featured-heading" className="section">
+        <SectionHead id="featured-heading">Featured guides</SectionHead>
+        <div className="ledger">
+          <ul className="rows">
+            <li className="lrow plain">
+              <p className="lname">
+                <Link href="/desk?tour=desk-walkthrough" className="name t-d4">
+                  The Desk walkthrough
+                </Link>
+              </p>
+              <p className="lsent t-body-sm">Six stops around the Desk, about a minute.</p>
+            </li>
+          </ul>
+        </div>
+        {/* FEATURED — curated exact-keys list. Drafts-only today, so it can
+            settle empty; `onEmpty` (fired once the query resolves) swaps in
+            one sentence rather than hiding the section via a `:has()` watch. */}
         {featuredEmpty ? (
-          <p className="text-[13px] italic text-[var(--text-muted)]">
-            Featured guides arrive as they&apos;re written — browse by topic below.
+          <p className="t-body-sm mt-3 text-[var(--text-subtle)]">
+            Featured guides arrive as they&apos;re written. Browse by topic below.
           </p>
         ) : (
           <RelatedArticles
@@ -93,31 +82,40 @@ export default function HelpCenterPage() {
         )}
       </section>
 
-      <section aria-labelledby="categories-heading" className="space-y-3">
-        <p
-          id="categories-heading"
-          className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
-        >
-          Browse topics
-          <span className="h-px flex-1 bg-[var(--color-pearl)]" />
-        </p>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {HELP_TOPICS.map((topic) => (
-            <Link
-              key={topic.label}
-              href={`/help/topic/${encodeURIComponent(topic.prefixes[0])}`}
-              className="block rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-4 py-3.5 transition-colors hover:border-[var(--color-clay)]"
-            >
-              <span className="font-heading text-[15px] font-medium text-[var(--color-charcoal)]">
-                {topic.label}
-              </span>
-              <span className="mt-1 block text-[12px] leading-relaxed text-[var(--text-muted)]">
-                {topic.description}
-              </span>
-            </Link>
-          ))}
+      <section aria-labelledby="categories-heading" className="section">
+        <SectionHead id="categories-heading">Browse topics</SectionHead>
+        <div className="ledger">
+          <ul className="rows">
+            {HELP_TOPICS.map((topic) => (
+              <li key={topic.label} className="lrow plain">
+                <p className="lname">
+                  <Link
+                    href={`/help/topic/${encodeURIComponent(topic.prefixes[0])}`}
+                    className="name t-d4"
+                  >
+                    {topic.label}
+                  </Link>
+                </p>
+                <p className="lsent t-body-sm">{topic.description}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
+    </div>
+  );
+}
+
+/** A Section's eyebrow with the clay ornament (uplift (b)1). */
+function SectionHead({ id, children }: { id: string; children: React.ReactNode }) {
+  return (
+    <div className="sec-head">
+      <h2 id={id} className="eb">
+        <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+          <path d="M0 2h34M0 6h28M0 10h20" />
+        </svg>
+        <span>{children}</span>
+      </h2>
     </div>
   );
 }

@@ -12,32 +12,20 @@
  */
 
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import { HelpHeaderLine } from './help-header-line';
 
 export const metadata: Metadata = {
   title: 'Help · Patina',
 };
 
+/** US-28 S6 — the house Header line on the --paper ground, at the measure. */
 export default function HelpCenterLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[var(--doc-paper)] text-[var(--color-charcoal)]">
-      <header className="border-b border-[var(--color-pearl)] px-7 py-4">
-        <div className="mx-auto flex max-w-3xl items-baseline justify-between">
-          <Link
-            href="/help"
-            className="font-heading text-[22px] font-medium text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)]"
-          >
-            Help
-          </Link>
-          <Link
-            href="/desk"
-            className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:opacity-80"
-          >
-            ← The Desk
-          </Link>
-        </div>
-      </header>
-      <main className="mx-auto max-w-3xl px-7 py-10">{children}</main>
+    <div className="min-h-screen bg-[var(--paper)] text-[var(--text-primary)]">
+      <div className="mx-auto max-w-[880px] px-6 pb-24 max-[599px]:px-4">
+        <HelpHeaderLine />
+        <main>{children}</main>
+      </div>
     </div>
   );
 }

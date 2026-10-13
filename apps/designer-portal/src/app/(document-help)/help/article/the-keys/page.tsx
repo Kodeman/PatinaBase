@@ -32,29 +32,22 @@ export default function TheKeysPage() {
   }, []);
 
   return (
-    <article className="space-y-7">
-      <header>
-        <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-          Getting started
-        </p>
-        <h1 className="mt-1 font-heading text-[24px] font-medium text-[var(--color-charcoal)]">
-          The keys
-        </h1>
-        <p className="mt-2 font-heading text-[15px] italic leading-relaxed text-[var(--text-muted)]">
+    <article>
+      <header className="mb-12">
+        <p className="eb">Getting started</p>
+        <h1 className="t-d2 mt-2">The keys</h1>
+        <p className="t-body mt-3 max-w-[64ch] text-[var(--text-muted)]">
           Every key the studio answers to. Two keys open any room or book; the
           rest are for the work you are already in the middle of. Press{' '}
-          <span className="not-italic font-mono text-[12px]">?</span> anywhere
-          you are not typing to read this page over your desk.
+          <kbd className="keycap">?</kbd> anywhere you are not typing to read
+          this page over your desk.
         </p>
       </header>
 
       <KeysReferenceList />
 
-      <footer className="border-t border-[var(--color-pearl)] pt-4">
-        <Link
-          href={THE_WORDS_HREF}
-          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:opacity-80"
-        >
+      <footer className="mt-12 border-t border-[var(--doc-ink-border)] pt-4">
+        <Link href={THE_WORDS_HREF} className="name t-body-sm inline-flex min-h-11 items-center">
           The words — what Patina calls things →
         </Link>
       </footer>

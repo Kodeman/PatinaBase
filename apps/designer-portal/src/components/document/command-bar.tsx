@@ -2,8 +2,8 @@
 
 /**
  * The ⌘K command bar (spec §3): every destination is a document or a ledger,
- * never a zone. Documents render with their fill-state Strata Mark (R15) —
- * the mark answers "how far" right in the result row. Ledgers dispatch an
+ * never a zone. A job row carries its stage tick and its stage word in ink
+ * (US-28 S6) — the row answers "how far" in words. Ledgers dispatch an
  * `open-ledger` event the Studio Drawer owns (the drawer holds sheet state).
  *
  * R93 — the Populated Palette: a clean ⌘K opens ALREADY POPULATED, grouped
@@ -28,7 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { FolderPlus, History, Keyboard, LifeBuoy, Presentation, Type } from 'lucide-react';
+import { FolderPlus, History, Keyboard, LifeBuoy, Presentation, Search, Type } from 'lucide-react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import {
   usePeopleDirectory,
@@ -53,11 +53,11 @@ import { useMobilePrimaryActionValue, type MobilePrimaryAction } from './mobile/
 import { openHelp } from '@/lib/help-system/open-help';
 import { openLogTime } from './log-time-sheet';
 import { openKeys } from './overlays/keys-sheet';
+import { DocSheetHead } from './overlays/doc-sheet';
 import { THE_WORDS_HREF } from '@/lib/help-system/keys-reference';
 import { CHANGES_HREF, TEACHING_SYSTEM_FLAG } from '@/lib/teaching/constants';
 import { HELP_EVENTS, safeCapture } from '@/lib/help-system/help-events';
 import { openDraftProposalPicker } from './rooms/drafting/draft-proposal-opener';
-import { fillStateForDesk, type FillState } from '@/lib/document/fill-state';
 import {
   deskMotion,
   deskNeedText,
@@ -104,7 +104,6 @@ import {
   type RecentDocumentInHand,
 } from '@/lib/analytics/document-events';
 import { authEvents } from '@/lib/analytics/events';
-import { StrataMark } from './strata-mark';
 import { EngineResults, type InDocument } from './engine/engine-results';
 import {
   recentBoardCommandDescriptor,
@@ -122,7 +121,8 @@ type PaletteRow =
       key: string;
       label: string;
       sub: string;
-      fill?: FillState;
+      /** US-28 S6 — a job's stage: the row's tick and its ink word. */
+      stage?: SectionKey;
       hint?: string;
       run: () => void;
       match: string;
@@ -286,6 +286,17 @@ const STAGE_ORDER: SectionKey[] = [
   'discovery',
   'brief',
 ];
+
+/** US-28 S6 — a job row's tick takes the S1 stage class. Care has no stage
+ *  edge, so a care row prints its word with no tick. */
+const STAGE_CLASS: Partial<Record<SectionKey, string>> = {
+  brief: 'st-brief',
+  discovery: 'st-discovery',
+  direction: 'st-direction',
+  proposal: 'st-proposal',
+  project: 'st-project',
+  install: 'st-install',
+};
 
 /** What is true of a live document right now — a folder's need line, or an
  *  in-motion chip's own text. Structural so this reads both Desk populations
@@ -582,14 +593,14 @@ export function CommandBar() {
       key: `doc:${r.engagement_id}`,
       label: folderTab(r),
       sub: r.title,
-      fill: fillStateForDesk(r),
+      stage: r.active_section,
       hint,
       run: () => router.push(`/doc/${r.engagement_id}`),
       match: `${folderTab(r)} ${r.title}`.toLowerCase(),
     });
 
-    // A recent MRU entry: prefer the live Desk row (truthful fill + household);
-    // an off-Desk memory falls back to its stored title and a neutral clay mark.
+    // A recent MRU entry: prefer the live Desk row (truthful stage + household);
+    // an off-Desk memory falls back to its stored title and carries no tick.
     // F13 — the row prints the document's FULL TITLE. Two documents in one
     // household used to print as two rows reading the same bold family word.
     const recentRow = (entry: RecentDocumentInHand): PaletteRow => {
@@ -601,7 +612,7 @@ export function CommandBar() {
         key: `doc:${entry.id}`,
         label: title,
         sub: household,
-        ...(live ? { fill: fillStateForDesk(live) } : {}),
+        ...(live ? { stage: live.active_section } : {}),
         run: () => router.push(`/doc/${entry.id}`),
         match: `${title} ${household}`.toLowerCase(),
       };
@@ -960,7 +971,7 @@ export function CommandBar() {
           key: `stage:${stage}`,
           label: `${stageLabels[stage]} · ${inStage.length}`,
           sub,
-          fill: fillStateForDesk(head),
+          stage,
           run: () => router.push(`/doc/${head.engagement_id}`),
           match: [
             stageLabels[stage],
@@ -1691,60 +1702,14 @@ export function CommandBar() {
     row.run();
   };
 
-  const renderGlyph = (row: PaletteRow) => {
-    if (row.kind === 'document') {
-      return row.fill ? (
-        <StrataMark size="sm" fill={row.fill} />
-      ) : (
-        <StrataMark size="sm" state="active" />
-      );
-    }
-    if (row.kind === 'engine') return <StrataMark size="sm" state="active" />;
-    if (row.kind === 'person') {
-      // A party reads as a quiet terracotta dot — the People spine color
-      // (studio-drawer), so the noun's home is legible.
-      return (
-        <span
-          aria-hidden
-          className="inline-block h-[8px] w-[8px] shrink-0 rounded-full"
-          style={{ background: 'var(--color-terracotta)' }}
-        />
-      );
-    }
-    const Icon = 'icon' in row ? row.icon : undefined;
-    if (!Icon) {
-      // A studio action with no registry icon keeps the flat aged-oak tick.
-      return (
-        <span
-          aria-hidden
-          className="inline-block h-[14px] w-[3px] rounded-[1px]"
-          style={{ background: 'var(--color-aged-oak)' }}
-        />
-      );
-    }
-    return (
-      <Icon
-        className="h-[15px] w-[15px] shrink-0 text-[var(--color-aged-oak)]"
-        strokeWidth={1.5}
-        aria-hidden
-      />
-    );
-  };
-
+  // US-28 S6 — a row is a ledger row in words: no glyph. What it ends on (the
+  // act Enter takes, a hint, a key) prints as text, never a keycap box.
   const renderTrailing = (row: PaletteRow) => {
     if (row.kind === 'paper' && row.act) {
-      return (
-        <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          ↵ {row.act}
-        </span>
-      );
+      return <span className="lwhen t-meta uppercase">↵ {row.act}</span>;
     }
     if (row.kind === 'document' && row.hint) {
-      return (
-        <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          {row.hint}
-        </span>
-      );
+      return <span className="lwhen t-meta uppercase">{row.hint}</span>;
     }
     if (
       (row.kind === 'room' ||
@@ -1753,11 +1718,7 @@ export function CommandBar() {
         row.kind === 'help') &&
       row.shortcut?.length
     ) {
-      return (
-        <span className="shrink-0 rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-px font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          {row.shortcut.join(' ')}
-        </span>
-      );
+      return <span className="lwhen keycap">{row.shortcut.join(' ')}</span>;
     }
     return null;
   };
@@ -1803,22 +1764,25 @@ export function CommandBar() {
       role="dialog"
       aria-modal="true"
       aria-label="Studio search"
-      className="fixed inset-0 z-[70] flex items-start justify-center pt-[12vh]"
+      className="fixed inset-0 z-[70] flex items-start justify-center px-6 pt-[12vh] max-[599px]:px-0 max-[599px]:pt-[env(safe-area-inset-top)]"
     >
       <button
         type="button"
         aria-label="Close studio search"
-        className="absolute inset-0 cursor-default bg-[rgba(44,41,38,0.45)]"
+        className="veil absolute inset-0 cursor-default"
         onClick={() => setOpen(false)}
       />
+      {/* US-28 S6 — the one sheet frame (L4): --paper-doc, the card edge,
+          2px corners, over the veil. Its head is DocSheet's own. */}
       <div
         ref={dialogRef}
         onKeyDown={askThePaperOn ? onPanelKeyDown : undefined}
-        className="relative w-[min(560px,92vw)] overflow-hidden rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)]"
+        className="sheet cmd-sheet relative"
       >
         {askThePaperOn && inHandRow?.project_id && (
           <PaperLinesSource projectId={inHandRow.project_id} onLines={setPaperLines} />
         )}
+        <DocSheetHead icon={Search} title="Find anything" onClose={() => setOpen(false)} />
         {/* B03 — the pattern completed. A textbox that names an active option
             in a list it controls IS a combobox; without the role, expanded
             state and autocomplete behaviour, a screen reader announces a plain
@@ -1838,7 +1802,7 @@ export function CommandBar() {
           aria-owns={asking ? undefined : RESULTS_ID}
           aria-label="Studio search"
           placeholder="Search project files, contacts and tools…"
-          className="w-full border-b border-[var(--color-pearl)] bg-transparent px-4 py-3 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-muted)] focus:outline-none"
+          className="field-control shrink-0 placeholder:text-[var(--text-muted)]"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -1868,15 +1832,13 @@ export function CommandBar() {
         />
 
         {asking ? (
-          <div className="max-h-[60vh] overflow-y-auto px-4 pb-3 pt-2">
-            <div className="mb-1 flex items-center justify-between gap-3">
-              <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
-                Results · “{asking}”
-              </span>
+          <div className="cmd-scroll mt-5">
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3">
+              <span className="eb">Results · “{asking}”</span>
               <button
                 type="button"
                 onClick={() => setAsking(null)}
-                className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-charcoal)]"
+                className="inline-flex min-h-11 items-center font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               >
                 ← results
               </button>
@@ -1884,12 +1846,13 @@ export function CommandBar() {
             <EngineResults query={asking} inDocument={inDocument} />
           </div>
         ) : (
-          <div className="max-h-[52vh] overflow-y-auto py-1">
+          <div className="cmd-scroll">
             {statusNote ? (
               // FR2 F2-11 — under `one-voice` a dry query says one sentence:
               // the sheet's own note is the status, never a second
-              // `Nothing matches.` beside it.
-              <p role="status" className="px-4 pb-1 pt-3 text-[13px] text-[var(--color-charcoal)]">
+              // `Nothing matches.` beside it. US-28 S6: the empty state's
+              // sentence (uplift (b)5), in the sheet, not a Section.
+              <p role="status" className="cmd-note empty-t">
                 {statusNote}
               </p>
             ) : (
@@ -1901,48 +1864,58 @@ export function CommandBar() {
             )}
             <div role="listbox" id={RESULTS_ID} aria-label="Results">
               {rendered.map((section, sectionIndex) => (
+                // US-28 S6 — a group is a Section head and its ledger rows; the
+                // sheet's foot closes it, not --rule-mid (no Section in a sheet).
                 <div
                   key={`${section.eyebrow ?? 'results'}-${sectionIndex}`}
                   role="group"
                   aria-label={section.eyebrow ?? 'Results'}
+                  className="cmd-group"
                 >
                   {section.eyebrow && (
-                    <div className="px-4 pb-1 pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                      {section.eyebrow}
+                    <div className="sec-head">
+                      <p className="eb">
+                        <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+                          <path d="M0 2h34M0 6h28M0 10h20" />
+                        </svg>
+                        <span>{section.eyebrow}</span>
+                      </p>
                     </div>
                   )}
                   {section.note && section.note !== statusNote && (
-                    <p className="px-4 pb-1 pt-3 text-[13px] text-[var(--color-charcoal)]">
-                      {section.note}
-                    </p>
+                    <p className="empty-t mb-3">{section.note}</p>
                   )}
-                  <ul role="presentation">
-                    {section.items.map(({ row, index }) => (
-                      <li key={row.key} role="presentation">
-                        <button
-                          type="button"
-                          id={optionId(index)}
-                          role="option"
-                          aria-selected={index === active}
-                          onMouseEnter={() => setActive(index)}
-                          onClick={() => choose(row, index)}
-                          className={`flex w-full items-center gap-3 px-4 py-2 text-left ${
-                            index === active ? 'bg-[rgba(196,165,123,0.12)]' : ''
-                          }`}
-                        >
-                          {renderGlyph(row)}
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[13px] font-medium text-[var(--color-charcoal)]">
-                              {row.label}
+                  <ul role="presentation" className={section.items.length ? 'rows' : undefined}>
+                    {section.items.map(({ row, index }) => {
+                      const stageClass =
+                        row.kind === 'document' && row.stage ? STAGE_CLASS[row.stage] : undefined;
+                      // The stage word prints beside its tick (state is never
+                      // colour alone); a stage row's label already names it.
+                      const word =
+                        row.kind === 'document' && row.stage && !row.key.startsWith('stage:')
+                          ? STAGE_WORD[row.stage]
+                          : null;
+                      return (
+                        <li key={row.key} role="presentation">
+                          <button
+                            type="button"
+                            id={optionId(index)}
+                            role="option"
+                            aria-selected={index === active}
+                            onMouseEnter={() => setActive(index)}
+                            onClick={() => choose(row, index)}
+                            className={`lrow cmd-row${index === active ? ' is-active' : ''}`}
+                          >
+                            <span className={stageClass ? `lname tick ${stageClass}` : 'lname'}>
+                              <span className="t-d4 text-[var(--text-primary)]">{row.label}</span>
                             </span>
-                            <span className="block truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                              {row.sub}
-                            </span>
-                          </span>
-                          {renderTrailing(row)}
-                        </button>
-                      </li>
-                    ))}
+                            {word && <span className="lphase word">{word}</span>}
+                            {row.sub && <span className="lsent t-body-sm">{row.sub}</span>}
+                            {renderTrailing(row)}
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ))}
@@ -1952,9 +1925,9 @@ export function CommandBar() {
         {/* US-19 D4 — `?` printed in the foot line. The `?` key itself is
             KeysShortcut's, which never fires in a field or an open dialog. */}
         {askThePaperOn && (
-          <p className="border-t border-[var(--color-pearl)] px-4 py-2 font-mono text-[11px] tracking-[0.06em] text-[var(--text-muted)]">
-            ↵ open · ↑↓ move · ? keys · esc close
-          </p>
+          <div className="sh-foot">
+            <p className="t-meta text-[var(--text-subtle)]">↵ open · ↑↓ move · ? keys · esc close</p>
+          </div>
         )}
       </div>
     </div>
