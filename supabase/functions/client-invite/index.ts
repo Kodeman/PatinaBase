@@ -189,6 +189,7 @@ async function sendLetter(
     token: string;
     replyTo: string | null;
     userId: string;
+    signerUserId: string;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const letter = renderClientLetter(opts.snapshot);
@@ -196,6 +197,7 @@ async function sendLetter(
 
   const result = await sendCompliantEmail(admin, {
     to: opts.snapshot.recipientEmail,
+    authority: { kind: "designer", userId: opts.signerUserId },
     subject: letter.subject,
     html: letter.html,
     // lens 3: the plain-text part is mandatory on a cold first touch.
@@ -324,12 +326,14 @@ async function sendFirstLetterSms(
     invitationId: string;
     projectId: string | null;
     phone: string | null;
+    signerId: string;
   },
 ): Promise<{ deliver: string; reason?: string }> {
   if (!args.phone) return { deliver: "sms_failed", reason: "no_phone_number" };
   const partyId = await clientSeatFor(admin, args.projectId, args.phone);
   try {
     const res = await sendClientSms(admin, {
+      authority: { kind: "designer", userId: args.signerId },
       partyId: partyId ?? undefined,
       phone: args.phone,
       projectId: args.projectId ?? undefined,
@@ -581,6 +585,7 @@ async function handleSend(req: Request): Promise<Response> {
       invitationId,
       projectId,
       phone,
+      signerId: signer.signerId,
     });
     deliver = smsLeg.deliver;
     deliverReason = smsLeg.reason;
@@ -596,6 +601,7 @@ async function handleSend(req: Request): Promise<Response> {
       token,
       replyTo: signer.signerEmail,
       userId: profileId,
+      signerUserId: signer.signerId,
     });
     if (!sent.ok) return json({ error: "send_failed", detail: sent.error }, 502);
   }
@@ -933,6 +939,7 @@ async function resendFrom(
       invitationId: newId,
       projectId: row.project_id ?? null,
       phone: row.phone ?? null,
+      signerId: row.signer_id,
     });
     // No capability link on the way out (SQ-111 INFO-7): the resend route pipes
     // this body straight to the designer's browser, and the homeowner's own
@@ -964,6 +971,7 @@ async function resendFrom(
     token,
     replyTo: (signerProfile as { email?: string } | null)?.email ?? null,
     userId,
+    signerUserId: row.signer_id,
   });
   if (!sent.ok) return json({ error: "send_failed", detail: sent.error }, 502);
 

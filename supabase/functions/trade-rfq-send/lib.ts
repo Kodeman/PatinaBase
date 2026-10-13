@@ -19,6 +19,7 @@
 // ownership predicate is injected as its own deps call rather than compared
 // on the loaded row.
 
+import type { SendAuthority } from "../_shared/send-authority.ts";
 import {
   buildTradeRfqEmail,
   type TradeRfqScopeSection,
@@ -230,6 +231,7 @@ export interface TradeRfqSendDeps {
     metadata: Record<string, unknown>;
     /** The sending studio, so the out touch lands in its own book (B-2). */
     organizationId?: string | null;
+    authority: SendAuthority;
   }) => Promise<SendEmailResult>;
   /**
    * Persist the send-time stamp: party_email always, sentAt if unset, and
@@ -388,6 +390,7 @@ export async function handleTradeRfqSend(
   try {
     sendResult = await deps.sendEmail({
       to: recipient,
+      authority: { kind: "designer", userId: caller.id },
       subject: rendered.subject,
       html: rendered.html,
       replyTo: identity.designerEmail ?? undefined,

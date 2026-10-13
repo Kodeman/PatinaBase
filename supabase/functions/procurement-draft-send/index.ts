@@ -131,6 +131,7 @@ const deps: ProcurementDraftSendDeps = {
   sendEmail: async (input) => {
     const result = await sendCompliantEmail(admin(), {
       to: input.to,
+      authority: input.authority,
       subject: input.subject,
       html: input.html,
       text: input.text,

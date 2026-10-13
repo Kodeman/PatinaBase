@@ -6,6 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
 import { sendCompliantEmail, type SendCategory } from "../_shared/send-email.ts";
+import { resolveNotificationAuthority } from "./authority.ts";
 import {
   renderBrandedShell,
   heading,
@@ -149,7 +150,11 @@ serve(async (req) => {
         rendered?.html ||
         (await buildEmailHtml(supabase, job.template_id, enrichedData, job.data));
 
+      const authority = await resolveNotificationAuthority(job, supabase);
+      if (!authority) return json({ error: `unmapped_template_authority:${job.template_id}` }, 400);
+
       const result = await sendCompliantEmail(supabase, {
+        authority,
         to: profile.email,
         subject: rendered?.subject || buildSubject(job.type, job.data),
         html,

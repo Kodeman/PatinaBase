@@ -21,6 +21,7 @@
 //     not sendable.
 
 import { buildTradeAgreementEmail } from "../_shared/trade-agreement-emails.ts";
+import type { SendAuthority } from "../_shared/send-authority.ts";
 
 // ─── Wire types ──────────────────────────────────────────────────────────────
 
@@ -264,6 +265,7 @@ export interface TradeAgreementSendDeps {
     metadata: Record<string, unknown>;
     /** The sending studio, so the out touch lands in its own book (B-2). */
     organizationId?: string | null;
+    authority: SendAuthority;
   }) => Promise<SendEmailResult>;
   /**
    * public.send_trade_agreement(p_agreement_id), evaluated as the CALLER (it
@@ -460,6 +462,7 @@ export async function handleTradeAgreementSend(
   try {
     sendResult = await deps.sendEmail({
       to: recipient,
+      authority: { kind: "designer", userId: caller.id },
       subject: rendered.subject,
       html: rendered.html,
       replyTo: identity.designerEmail ?? undefined,

@@ -416,6 +416,7 @@ async function handleInvite(req: Request): Promise<Response> {
   }
 
   const sendResult = await sendCompliantEmail(admin, {
+    authority: { kind: "designer", userId: caller.id },
     to: email,
     subject: rendered.subject || `You're invited to ${studioName} on Patina`,
     html: rendered.html,

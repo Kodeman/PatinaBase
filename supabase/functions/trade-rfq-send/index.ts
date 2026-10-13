@@ -207,6 +207,7 @@ const deps: TradeRfqSendDeps = {
   sendEmail: async (opts): Promise<SendEmailResult> => {
     const result = await sendCompliantEmail(admin(), {
       to: opts.to,
+      authority: opts.authority,
       subject: opts.subject,
       html: opts.html,
       replyTo: opts.replyTo,

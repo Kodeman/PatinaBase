@@ -306,6 +306,7 @@ async function dispatchDigests(
               : "Your Patina digest";
 
         const result = await sendCompliantEmail(supabase, {
+          authority: { kind: "exempt", reason: "patina_to_designer" },
           to: profile.email,
           subject,
           html,

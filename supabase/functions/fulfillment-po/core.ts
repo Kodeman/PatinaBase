@@ -307,6 +307,7 @@ export async function runFulfillmentPo(
     let sendResult: ComplianceSendResult;
     try {
       sendResult = await deps.sendEmail(deps.supabase, {
+        authority: { kind: "exempt", reason: "staff" },
         to: recipient,
         from: PO_FROM,
         subject: `Purchase Order ${ctx.poNumber} · ${ctx.sideMark ?? ctx.clientName}`,

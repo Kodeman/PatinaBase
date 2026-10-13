@@ -181,6 +181,7 @@ Deno.serve(async (_req: Request) => {
       emailAttempted = true;
       const html = renderBriefEmailHtml(content, briefDate);
       const result = await sendCompliantEmail(supabase, {
+        authority: { kind: "exempt", reason: "internal" },
         to: emailTo,
         subject: `Morning Brief — ${briefDate}`,
         html,

@@ -631,6 +631,7 @@ Deno.serve(async (req: Request) => {
       const attachmentBytes = new ArrayBuffer(pdfBytes.byteLength);
       new Uint8Array(attachmentBytes).set(pdfBytes);
       sendResult = await sendCompliantEmail(admin, {
+        authority: { kind: "designer", userId: caller.id },
         to: recipient,
         subject: rendered.subject,
         html: rendered.html,

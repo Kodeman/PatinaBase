@@ -46,6 +46,7 @@ Deno.serve(async (req) => {
     supabase: supabase as unknown as NotifyDeps['supabase'],
     sendEmail: async (opts) => {
       const res = await sendCompliantEmail(supabase, {
+        authority: { kind: "exempt", reason: "staff" },
         to: opts.to,
         subject: opts.subject,
         html: opts.html,

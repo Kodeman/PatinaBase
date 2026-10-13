@@ -89,6 +89,7 @@ Deno.serve(async (req: Request) => {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const result = await sendCompliantEmail(admin, {
+      authority: { kind: "exempt", reason: "internal" },
       to: NOTIFY_TO,
       subject: `New waitlist signup: ${email}`,
       html,

@@ -286,6 +286,7 @@ async function handleInvite(req: Request): Promise<Response> {
   }
 
   const sendResult = await sendCompliantEmail(admin, {
+    authority: { kind: "exempt", reason: "staff" },
     to: email,
     subject: rendered.subject || 'An invitation to Patina',
     html: rendered.html,

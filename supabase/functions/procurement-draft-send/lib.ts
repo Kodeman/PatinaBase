@@ -3,6 +3,7 @@
 // wires the real Supabase clients and boots Deno.serve; this file is pure).
 
 import { escapeHtml } from "../_shared/branded-email.ts";
+import type { SendAuthority } from "../_shared/send-authority.ts";
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,6 +43,7 @@ export interface SendEmailInput {
   organizationId: string | null;
   draftId: string;
   kind: string;
+  authority: SendAuthority;
 }
 
 export interface SendEmailResult {
@@ -177,6 +179,7 @@ export async function handleProcurementDraftSend(
       organizationId: claimed.organizationId,
       draftId: claimed.id,
       kind: claimed.kind,
+      authority: { kind: "designer", userId: caller.id },
     });
   } catch (err) {
     const detail = err instanceof Error ? err.message : "unknown send error";
