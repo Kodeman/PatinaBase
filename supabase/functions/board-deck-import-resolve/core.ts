@@ -155,6 +155,17 @@ export class AdjudicationHttpError extends Error {
   }
 }
 
+export function adjudicationErrorFromClaudeFailure(failure: {
+  error: string;
+  status: number | null;
+  errorType: string | null;
+  transient: boolean;
+}): Error {
+  return failure.transient
+    ? new AdjudicationHttpError(failure.status ?? 503)
+    : new Error(failure.error);
+}
+
 const TRANSIENT_ADJUDICATION_STATUS = new Set([
   408,
   429,

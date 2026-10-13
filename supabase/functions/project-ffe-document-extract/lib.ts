@@ -190,7 +190,11 @@ export async function callExtractionWithFiles(
     document.source = { type: "file", file_id: uploaded.id };
     return await client.messages.create(params);
   } finally {
-    await client.files.delete(uploaded.id);
+    try {
+      await client.files.delete(uploaded.id);
+    } catch (error) {
+      console.warn("FFE extraction temporary file cleanup failed", error);
+    }
   }
 }
 
@@ -212,13 +216,27 @@ export function parseClaudeExtraction(
     : validateExtractionV2(parsed, sourceKind);
 }
 
-export function claudeFailureResponse(
-  result: { denied: "kill" | "disabled" | "budget" },
-  resetsAt: string,
-) {
-  return result.denied === "budget"
-    ? { body: { error: "monthly_allowance_used", resets_at: resetsAt }, status: 429 }
-    : { body: { error: "extractor_unavailable" }, status: 503 };
+export function claudeFailureResponse(result: {
+  denied: "kill" | "disabled" | "budget";
+  reason: string | null;
+  resetsAt: string | null;
+}) {
+  if (result.reason === "global_daily" || result.reason === "feature_daily") {
+    return {
+      body: { error: "daily_allowance_used", message: "Check back tomorrow.", resets_at: result.resetsAt },
+      status: 429,
+    };
+  }
+  if (result.reason === "studio_monthly") {
+    return {
+      body: { error: "monthly_allowance_used", message: "Available again on the 1st.", resets_at: result.resetsAt },
+      status: 429,
+    };
+  }
+  return {
+    body: { error: "extractor_unavailable", message: "Unavailable right now." },
+    status: 503,
+  };
 }
 
 // Contract B §B.5: the type is read from the bytes, never from the request or

@@ -158,7 +158,7 @@ serve(async (req) => {
       }));
 
     // Generate AI response
-    const { data: studioId } = await supabase.rpc("_primary_studio_for", { p_user: user.id });
+    const { data: studioId, error: studioLookupError } = await supabase.rpc("_primary_studio_for", { p_user: user.id });
     const aiResponse = await generateAIResponse({
       message: body.message,
       conversationHistory,
@@ -166,7 +166,7 @@ serve(async (req) => {
       productData: productData.data,
       styleProfile: styleProfile.data,
       screen: body.context.screen,
-    }, { admin: supabase, userId: user.id, studioId: studioId ?? null });
+    }, { admin: supabase, userId: user.id, studioId: studioId ?? null, studioLookupFailed: !!studioLookupError });
 
     // Save companion response
     const { data: companionMsg, error: companionMsgError } = await supabase
@@ -227,7 +227,7 @@ async function generateAIResponse(context: {
   productData: Record<string, unknown> | null;
   styleProfile: Record<string, unknown> | null;
   screen: string;
-}, deps: { admin: Parameters<typeof createLlmLedger>[0]; userId: string; studioId: string | null }): Promise<{
+}, deps: { admin: Parameters<typeof createLlmLedger>[0]; userId: string; studioId: string | null; studioLookupFailed: boolean }): Promise<{
   response: string;
   quickActions: QuickAction[] | null;
   suggestedProducts: ProductSuggestion[] | null;
@@ -241,6 +241,7 @@ async function generateAIResponse(context: {
       role: "answer",
       studioId: deps.studioId,
       userId: deps.userId,
+      studioLookupFailed: deps.studioLookupFailed,
       promptVersion: "companion-v1",
       timeoutMs: 30_000,
       ledger: createLlmLedger(deps.admin),

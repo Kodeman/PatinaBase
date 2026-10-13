@@ -92,6 +92,7 @@ Deno.serve(async (req) => {
     role: "extract",
     studioId: caller.studioId,
     userId: caller.userId,
+    studioLookupFailed: caller.studioLookupFailed,
     promptVersion: `ffe-extract-v${payload.schemaVersion}`,
     timeoutMs: 120_000,
     ledger: createLlmLedger(admin),
@@ -120,8 +121,7 @@ Deno.serve(async (req) => {
   });
   if (!result.ok) {
     if ("denied" in result) {
-      const resetsAt = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1)).toISOString();
-      const failure = claudeFailureResponse(result, resetsAt);
+      const failure = claudeFailureResponse(result);
       return json(failure.body, failure.status);
     }
     return json({ error: "extraction_failed" }, 502);

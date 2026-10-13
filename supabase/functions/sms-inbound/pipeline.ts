@@ -78,6 +78,20 @@ export interface InboundResult {
   retainSid?: boolean;
 }
 
+export async function fieldParseAttribution(
+  supabase: SupabaseClient,
+  projectId: string | null | undefined,
+): Promise<{ studioId: string | null; userId: null; studioLookupFailed: boolean }> {
+  if (!projectId) return { studioId: null, userId: null, studioLookupFailed: true };
+  const { data, error } = await supabase.from("projects")
+    .select("organization_id").eq("id", projectId).maybeSingle();
+  return {
+    studioId: (data?.organization_id as string | null | undefined) ?? null,
+    userId: null,
+    studioLookupFailed: !!error || !data,
+  };
+}
+
 // ── TwiML ────────────────────────────────────────────────────────────────────
 export function twimlBody(message?: string): string {
   if (!message) return `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
@@ -1791,13 +1805,17 @@ async function processInboundCore(
   // its own row (still in the last-5 history) must be excluded.
   const recent = activePartyForConv || projectIds.length === 1
     ? await loadRecentMessages(supabase, conv.id, replayExcludeFromHistory, activePartyForConv?.project_id ?? projectIds[0]) : [];
+  const attribution = await fieldParseAttribution(
+    supabase,
+    activePartyForConv?.project_id ?? partiesForItems[0]?.project_id,
+  );
   const parsed = await parseFn({
     body,
     openItems: candidateItems.map((c) => ({ id: c.id, kind: c.kind, title: c.title, project_name: c.project_name, due: c.due })),
     recentMessages: recent,
     today: nowIso.slice(0, 10),
     hasMedia: numMedia > 0 || media.length > 0,
-  }, { getEnv: deps.getEnv });
+  }, { getEnv: deps.getEnv, ...attribution });
 
   const targetItem = parsed.target_ref
     ? candidateItems.find((c) => c.id === parsed.target_ref!.id && c.kind === parsed.target_ref!.kind)
@@ -3342,7 +3360,8 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
     ...(tradePrompt?.condition ? { condition: tradePrompt.condition } : {}),
   } : await (deps.parseFn ?? parseFieldMessage)({ body: explicit?.[1] ?? body,
     openItems: [{ ...subject, project_name: "", due: null }], recentMessages: [],
-    today: now.toISOString().slice(0, 10), hasMedia: media.length > 0 }, { getEnv: deps.getEnv });
+    today: now.toISOString().slice(0, 10), hasMedia: media.length > 0 },
+    { getEnv: deps.getEnv, ...await fieldParseAttribution(supabase, party.project_id) });
   if (prompt.proposed_effect) {
     const original = prompt.proposed_effect;
     parsed = { ...parsed, intent: original.type as FieldParseResult["intent"],

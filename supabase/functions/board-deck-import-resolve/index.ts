@@ -35,6 +35,7 @@ import {
 import type { BoardCropScope } from "../board-asset-cleanup/core.ts";
 import { isServiceCaller } from "./auth.ts";
 import {
+  adjudicationErrorFromClaudeFailure,
   ADJUDICATION_SYSTEM,
   type AdjudicationClaim,
   adjudicationTool,
@@ -329,7 +330,7 @@ function deps(
         });
         if (!result.ok) {
           if ("denied" in result) return null;
-          throw new Error(result.error);
+          throw adjudicationErrorFromClaudeFailure(result);
         }
         const text = result.response.content.find((block) =>
           block.type === "text"

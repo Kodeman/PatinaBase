@@ -60,6 +60,7 @@ export interface FieldParseDeps {
   ledger?: LlmLedgerPort;
   studioId?: string | null;
   userId?: string | null;
+  studioLookupFailed?: boolean;
 }
 
 const TOOL = {
@@ -501,6 +502,7 @@ export async function parseFieldMessage(
       role: "triage",
       studioId: deps.studioId ?? null,
       userId: deps.userId ?? null,
+      studioLookupFailed: deps.studioLookupFailed,
       promptVersion: "field-parse-v1",
       params: {
         max_tokens: 512,

@@ -316,6 +316,32 @@ Deno.test("parseFieldMessage honors disabled feature without calling the model",
   assertEquals(calls, 0);
 });
 
+Deno.test("parseFieldMessage reserves against the attributed project studio", async () => {
+  let reservation: unknown[] | null = null;
+  await parseFieldMessage(
+    { body: "the cabinet door is loose", openItems: [], recentMessages: [], today: TODAY },
+    {
+      getEnv: () => "test-key",
+      studioId: "studio-from-project",
+      userId: null,
+      ledger: {
+        async reserve(...args) {
+          reservation = args;
+          return { granted: true, reason: null, usageId: 12 };
+        },
+        async settle() {},
+      },
+      caller: async () => ({
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: JSON.stringify({ intent: "note", note: "site update", confidence: 0.6 }) }],
+        usage: { input_tokens: 10, output_tokens: 8 },
+      }),
+    },
+  );
+  assertEquals(reservation?.[1], "studio-from-project");
+  assertEquals(reservation?.[2], null);
+});
+
 Deno.test("parseFieldMessage returns normalized parsed result when enabled", async () => {
   let calls = 0;
   const got = await parseFieldMessage(

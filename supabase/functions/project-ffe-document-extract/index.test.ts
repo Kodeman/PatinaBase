@@ -1,3 +1,4 @@
+import { callClaude } from "../_shared/claude.ts";
 import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   EXTRACTION_TOOL_NAME,
@@ -87,13 +88,19 @@ Deno.test("structured extraction parses JSON text and maps Claude denials", () =
   assertEquals(parseClaudeExtraction([{ type: "text", text: JSON.stringify({ rows: [row] }) }], 1, "pdf")?.rows, [row]);
   assertEquals(parseClaudeExtraction([{ type: "text", text: "not json" }], 1, "pdf"), null);
   const resetsAt = "2026-11-01T00:00:00.000Z";
-  assertEquals(claudeFailureResponse({ denied: "budget" }, resetsAt), {
-    body: { error: "monthly_allowance_used", resets_at: resetsAt },
+  assertEquals(claudeFailureResponse({ denied: "budget", reason: "studio_monthly", resetsAt },), {
+    body: { error: "monthly_allowance_used", message: "Available again on the 1st.", resets_at: resetsAt },
     status: 429,
   });
-  for (const denied of ["kill", "disabled"] as const) {
-    assertEquals(claudeFailureResponse({ denied }, resetsAt), {
-      body: { error: "extractor_unavailable" },
+  for (const reason of ["global_daily", "feature_daily"] as const) {
+    assertEquals(claudeFailureResponse({ denied: "budget", reason, resetsAt }), {
+      body: { error: "daily_allowance_used", message: "Check back tomorrow.", resets_at: resetsAt },
+      status: 429,
+    });
+  }
+  for (const [denied, reason] of [["kill", "kill"], ["disabled", "disabled"], ["disabled", "studio_unresolved"]] as const) {
+    assertEquals(claudeFailureResponse({ denied, reason, resetsAt: null }), {
+      body: { error: "extractor_unavailable", message: "Unavailable right now." },
       status: 503,
     });
   }
@@ -135,6 +142,45 @@ Deno.test("PDFs above the inline threshold use Files API and delete the uploaded
   await callExtractionWithFiles(client, smallParams, "application/pdf", new Uint8Array([37, 80, 68, 70]));
   assertEquals(uploadCount, 1, "small PDFs remain inline");
   assertEquals(((request!.messages as Array<{ content: Array<{ source: { type: string } }> }>)[0].content[0]).source.type, "base64");
+});
+
+Deno.test("Files API delete failure preserves successful extraction and settled usage", async () => {
+  let settled = false;
+  const client = {
+    files: {
+      upload: async () => ({ id: "file_cleanup_503" }),
+      delete: async () => { throw new Error("503 delete failed"); },
+    },
+    messages: {
+      create: async () => ({
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: "{}" }],
+        usage: { input_tokens: 10, output_tokens: 4 },
+      }),
+    },
+  };
+  const result = await callClaude({
+    feature: "ffe-extract",
+    role: "extract",
+    studioId: "studio-test",
+    userId: "user-test",
+    promptVersion: "test",
+    timeoutMs: 1000,
+    params: { max_tokens: 10, messages: [{ role: "user", content: [{ type: "document", source: {} }] }] },
+    caller: async (params) => await callExtractionWithFiles(
+      client,
+      params,
+      "application/pdf",
+      new Uint8Array(FILES_API_THRESHOLD_BYTES + 1),
+    ),
+    ledger: {
+      async reserve() { return { granted: true, reason: null, usageId: 1 }; },
+      async settle(_usageId, fields) { settled = fields.status === "settled"; },
+    },
+    clientOptions: { apiKey: "test-key", capture: async () => undefined },
+  });
+  assertEquals(result.ok, true);
+  assertEquals(settled, true);
 });
 
 Deno.test("Anthropic request uses one schema-constrained staging shape", () => {

@@ -7,6 +7,7 @@ import {
   type AdjudicationAssignment,
   type AdjudicationClaim,
   AdjudicationHttpError,
+  adjudicationErrorFromClaudeFailure,
   type Candidate,
   type ClaimedItem,
   FetchBlocked,
@@ -685,6 +686,16 @@ Deno.test("F5: no API key → no adjudication slot is claimed or stored", async 
   assertEquals(f.calls.claimAdjudication ?? 0, 0);
   assertEquals(f.calls.storeAdjudication ?? 0, 0);
   assertEquals(f.recorded.length, 2);
+});
+
+Deno.test("shared-client 529 failures remain transient at the deck adapter", () => {
+  const error = adjudicationErrorFromClaudeFailure({
+    error: "overloaded",
+    status: 529,
+    errorType: "api_error",
+    transient: true,
+  });
+  assert(isTransientAdjudicationError(error));
 });
 
 Deno.test("F5: a transient failure (429, 529, timeout, network) stores nothing; the slot stays reclaimable", async () => {
