@@ -22,7 +22,6 @@ import type {
   DraftInsert,
   JobRow,
   ProductRow,
-  SpendDelta,
   StyleInsert,
   TriagePatch,
 } from './lib.ts';
@@ -34,16 +33,6 @@ export function createDb(supabaseUrl: string, serviceRoleKey: string): DbPort {
 
 class SupabaseDb implements DbPort {
   constructor(private client: SupabaseClient) {}
-
-  async getSpendToday(day: string): Promise<{ usd: number } | null> {
-    const { data, error } = await this.client
-      .from('aesthete_spend_ledger')
-      .select('usd')
-      .eq('day', day)
-      .maybeSingle();
-    if (error) throw new Error(`spend ledger read failed: ${error.message}`);
-    return data ? { usd: Number((data as any).usd ?? 0) } : null;
-  }
 
   async loadArchetypes(): Promise<ArchetypeRow[]> {
     const { data, error } = await this.client
@@ -182,32 +171,5 @@ class SupabaseDb implements DbPort {
     if (insertError && insertError.code !== '23505') {
       throw new Error(`teaching_queue insert failed: ${insertError.message}`);
     }
-  }
-
-  async addSpend(day: string, delta: SpendDelta): Promise<void> {
-    // Read-modify-write upsert. The cron runs one invocation at a time
-    // (2-min cadence vs a hard sub-60s deadline), so lost-update races are
-    // effectively impossible; if invocations ever overlap the governor still
-    // parks within one batch of the budget.
-    const { data, error } = await this.client
-      .from('aesthete_spend_ledger')
-      .select('input_tokens, output_tokens, cache_read_tokens, usd, products')
-      .eq('day', day)
-      .maybeSingle();
-    if (error) throw new Error(`spend ledger read failed: ${error.message}`);
-
-    const current = (data ?? {}) as any;
-    const { error: upsertError } = await this.client.from('aesthete_spend_ledger').upsert(
-      {
-        day,
-        input_tokens: Number(current.input_tokens ?? 0) + delta.input_tokens,
-        output_tokens: Number(current.output_tokens ?? 0) + delta.output_tokens,
-        cache_read_tokens: Number(current.cache_read_tokens ?? 0) + delta.cache_read_tokens,
-        usd: Math.round((Number(current.usd ?? 0) + delta.usd) * 100) / 100,
-        products: Number(current.products ?? 0) + delta.products,
-      },
-      { onConflict: 'day' },
-    );
-    if (upsertError) throw new Error(`spend ledger upsert failed: ${upsertError.message}`);
   }
 }

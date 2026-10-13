@@ -6,7 +6,7 @@
 // Deno tests for the aesthete-dna-draft pass (Wave 2C).
 // Run: deno test supabase/functions/aesthete-dna-draft/
 //
-// Everything is mocked — the ClaudeCaller port is driven by the golden
+// Everything is mocked — the shared-client invoker is driven by the golden
 // fixtures in ./fixtures/ and the DbPort by an op-recording fake; NO real
 // API calls happen here (the real-API smoke lives in smoke.test.ts behind
 // ANTHROPIC_API_KEY + RUN_REAL_SMOKE=1). Tests import ./lib.ts only, so the
@@ -24,14 +24,14 @@ import {
   BATCH_SIZE,
   buildDraftRequest,
   BULK_MODEL,
-  type ClaudeCaller,
-  computeCostUsd,
+  type ClaudeInvoker,
   CONCURRENCY,
   type DbPort,
   type DraftInsert,
   ENGINE_ACTOR_ID,
   ESCALATION_MODEL,
   type JobRow,
+  type LlmLedgerPort,
   type ModelResponse,
   type ModelUsage,
   type PassDeps,
@@ -40,7 +40,6 @@ import {
   runDnaDraftPass,
   selectImageUrls,
   shouldReplaceDraft,
-  type SpendDelta,
   type StyleInsert,
   triageBand,
   type TriagePatch,
@@ -111,19 +110,36 @@ function okResponse(draft: unknown, usage: ModelUsage = USAGE_BULK): ModelRespon
 /** Scripted caller: responds per (model) from a queue; records every request. */
 function makeCaller(
   script: (params: Record<string, unknown>, callIndex: number) => ModelResponse | Error,
-): { caller: ClaudeCaller; calls: Record<string, unknown>[] } {
+): { caller: ClaudeInvoker; calls: Record<string, unknown>[] } {
   const calls: Record<string, unknown>[] = [];
-  const caller: ClaudeCaller = (params) => {
-    calls.push(params);
-    const result = script(params, calls.length - 1);
-    if (result instanceof Error) return Promise.reject(result);
-    return Promise.resolve(result);
+  const caller: ClaudeInvoker = (role, params) => {
+    const request = { ...params, model: role === 'triage' ? BULK_MODEL : ESCALATION_MODEL };
+    calls.push(request);
+    const result = script(request, calls.length - 1);
+    if (result instanceof Error) return Promise.resolve({ ok: false, error: result.message });
+    return Promise.resolve({ ok: true, response: result, usd: 0.0125, model: request.model as string });
   };
   return { caller, calls };
 }
 
+class FakeLedger implements LlmLedgerPort {
+  reason: string | null = null;
+  spentUsd = 0;
+  featureCapUsd = 20;
+  reservations: { feature: string; studioId: string | null; userId: string | null; estimate: number }[] = [];
+  settlements: { id: number; fields: Parameters<LlmLedgerPort['settle']>[1] }[] = [];
+
+  async reserve(feature: string, studioId: string | null, userId: string | null, estimate: number) {
+    this.reservations.push({ feature, studioId, userId, estimate });
+    const deniedReason = this.reason ?? (this.spentUsd + estimate >= this.featureCapUsd ? 'feature_daily' : null);
+    return { granted: deniedReason === null, reason: deniedReason, usageId: deniedReason === null ? this.reservations.length : null };
+  }
+  async settle(usageId: number, fields: Parameters<LlmLedgerPort['settle']>[1]) {
+    this.settlements.push({ id: usageId, fields });
+  }
+}
+
 interface FakeDbOptions {
-  spendUsd?: number;
   jobs?: JobRow[];
   products?: Record<string, ProductRow>;
   existingDraft?: { id: number; overall_confidence: number | null };
@@ -142,7 +158,6 @@ class FakeDb implements DbPort {
   insertedStyles: StyleInsert[] = [];
   deletedMlStyleProducts: string[] = [];
   triage: { productId: string; patch: TriagePatch }[] = [];
-  spend: { day: string; delta: SpendDelta }[] = [];
   claimCalls = 0;
 
   constructor(private opts: FakeDbOptions = {}) {}
@@ -151,12 +166,6 @@ class FakeDb implements DbPort {
     this.ops.push({ op, args });
   }
 
-  getSpendToday(day: string): Promise<{ usd: number } | null> {
-    this.record('getSpendToday', day);
-    return Promise.resolve(
-      this.opts.spendUsd === undefined ? null : { usd: this.opts.spendUsd },
-    );
-  }
   loadArchetypes(): Promise<ArchetypeRow[]> {
     this.record('loadArchetypes');
     return Promise.resolve(this.opts.archetypes ?? ARCHETYPES);
@@ -208,18 +217,13 @@ class FakeDb implements DbPort {
     this.triage.push({ productId, patch });
     return Promise.resolve();
   }
-  addSpend(day: string, delta: SpendDelta): Promise<void> {
-    this.record('addSpend', day, delta);
-    this.spend.push({ day, delta });
-    return Promise.resolve();
-  }
 }
 
-function makeDeps(db: DbPort, caller: ClaudeCaller | null, overrides: Partial<PassDeps> = {}): PassDeps {
+function makeDeps(db: DbPort, caller: ClaudeInvoker | null, overrides: Partial<PassDeps> = {}): PassDeps {
   return {
     db,
     claude: caller,
-    budgetUsd: 20,
+    ledger: new FakeLedger(),
     deadlineAt: Date.now() + 50_000,
     now: () => new Date('2026-07-01T12:00:00Z'),
     log: () => {},
@@ -241,11 +245,13 @@ function assertNoCanonicalWrites(db: FakeDb) {
 
 // ─── Park behavior ───────────────────────────────────────────────────────────
 
-Deno.test('parks without claiming when the daily ledger is over budget', async () => {
-  const db = new FakeDb({ spendUsd: 21.5 });
+Deno.test('parks without claiming when the feature ledger denies budget', async () => {
+  const db = new FakeDb();
+  const ledger = new FakeLedger();
+  ledger.spentUsd = 21.5;
   const { caller, calls } = makeCaller(() => okResponse(highDraft));
 
-  const summary = await runDnaDraftPass(makeDeps(db, caller));
+  const summary = await runDnaDraftPass(makeDeps(db, caller, { ledger }));
 
   assertEquals(summary, {
     claimed: 0,
@@ -257,34 +263,55 @@ Deno.test('parks without claiming when the daily ledger is over budget', async (
   });
   assertEquals(db.claimCalls, 0, 'must not claim jobs when parked');
   assertEquals(calls.length, 0, 'must not call the API when parked');
+  assertEquals(ledger.reservations, [{ feature: 'aesthete-dna-draft', studioId: null, userId: null, estimate: 0 }]);
 });
 
-Deno.test('parks at exactly the budget boundary', async () => {
-  const db = new FakeDb({ spendUsd: 20 });
-  const summary = await runDnaDraftPass(makeDeps(db, makeCaller(() => okResponse(highDraft)).caller));
+Deno.test('parks at exactly the feature budget boundary', async () => {
+  const ledger = new FakeLedger();
+  ledger.spentUsd = 20;
+  const db = new FakeDb();
+  const summary = await runDnaDraftPass(makeDeps(db, makeCaller(() => okResponse(highDraft)).caller, { ledger }));
   assertEquals(summary.parked, true);
   assertEquals(summary.reason, 'budget_exhausted');
+  assertEquals(db.claimCalls, 0);
 });
 
 Deno.test('parks cleanly when no API key is configured (no-key dry-run path)', async () => {
-  const db = new FakeDb({ spendUsd: 0 });
+  const db = new FakeDb();
+  const ledger = new FakeLedger();
   const events: string[] = [];
 
   const summary = await runDnaDraftPass(
-    makeDeps(db, null, { log: (e) => events.push(e) }),
+    makeDeps(db, null, { ledger, log: (e) => events.push(e) }),
   );
 
   assertEquals(summary.parked, true);
   assertEquals(summary.reason, 'no_api_key');
   assertEquals(db.ops.length, 0, 'must not touch the DB at all without a key');
+  assertEquals(ledger.reservations.length, 0, 'must not reserve without a key');
   assert(events.includes('parked_no_api_key'), 'must log the no-key park clearly');
+});
+
+Deno.test('call-level budget denial parks the pass and returns the claimed job for retry', async () => {
+  const db = new FakeDb({
+    jobs: [{ id: 40, kind: 'dna_draft', product_id: PRODUCT_A }],
+    products: { [PRODUCT_A]: makeProduct(PRODUCT_A) },
+  });
+  const caller: ClaudeInvoker = async () => ({ ok: false, denied: 'budget' });
+
+  const summary = await runDnaDraftPass(makeDeps(db, caller));
+
+  assertEquals(summary.parked, true);
+  assertEquals(summary.reason, 'budget_exhausted');
+  assertEquals(db.completed[0].status, 'failed');
+  assert(db.completed[0].error?.includes('claude_denied:budget'));
 });
 
 // ─── Happy path: high-confidence draft ───────────────────────────────────────
 
+
 Deno.test('high-confidence draft: writes draft row, ML styles, triage; completes job; no canonical writes', async () => {
   const db = new FakeDb({
-    spendUsd: 0.5,
     jobs: [{ id: 1, kind: 'dna_draft', product_id: PRODUCT_A }],
     products: { [PRODUCT_A]: makeProduct(PRODUCT_A) },
   });
@@ -337,7 +364,6 @@ Deno.test('high-confidence draft: writes draft row, ML styles, triage; completes
 
 Deno.test('low confidence triggers one Sonnet escalation; Sonnet draft wins', async () => {
   const db = new FakeDb({
-    spendUsd: 0,
     jobs: [{ id: 7, kind: 'dna_draft', product_id: PRODUCT_A }],
     products: { [PRODUCT_A]: makeProduct(PRODUCT_A) },
   });
@@ -358,7 +384,6 @@ Deno.test('low confidence triggers one Sonnet escalation; Sonnet draft wins', as
 
 Deno.test('schema violation triggers escalation; valid Sonnet output recovers it', async () => {
   const db = new FakeDb({
-    spendUsd: 0,
     jobs: [{ id: 8, kind: 'dna_draft', product_id: PRODUCT_A }],
     products: { [PRODUCT_A]: makeProduct(PRODUCT_A) },
   });
@@ -378,7 +403,6 @@ Deno.test('schema violation triggers escalation; valid Sonnet output recovers it
 
 Deno.test('both models fail schema → no draft, deep-analysis triage, job done', async () => {
   const db = new FakeDb({
-    spendUsd: 0,
     jobs: [{ id: 9, kind: 'dna_draft', product_id: PRODUCT_A }],
     products: { [PRODUCT_A]: makeProduct(PRODUCT_A) },
   });
@@ -403,7 +427,6 @@ Deno.test('both models fail schema → no draft, deep-analysis triage, job done'
 
 Deno.test('escalated Sonnet keeps a low-confidence Haiku draft when Sonnet output is invalid', async () => {
   const db = new FakeDb({
-    spendUsd: 0,
     jobs: [{ id: 10, kind: 'dna_draft', product_id: PRODUCT_A }],
     products: { [PRODUCT_A]: makeProduct(PRODUCT_A) },
   });
@@ -424,7 +447,6 @@ Deno.test('escalated Sonnet keeps a low-confidence Haiku draft when Sonnet outpu
 
 Deno.test('refusal does not escalate: no draft, deep triage, job done', async () => {
   const db = new FakeDb({
-    spendUsd: 0,
     jobs: [{ id: 11, kind: 'dna_draft', product_id: PRODUCT_A }],
     products: { [PRODUCT_A]: makeProduct(PRODUCT_A) },
   });
@@ -447,7 +469,6 @@ Deno.test('refusal does not escalate: no draft, deep triage, job done', async ()
 
 Deno.test('one product failing does not sink the batch', async () => {
   const db = new FakeDb({
-    spendUsd: 0,
     jobs: [
       { id: 21, kind: 'dna_draft', product_id: PRODUCT_A },
       { id: 22, kind: 'dna_draft', product_id: PRODUCT_B },
@@ -456,10 +477,11 @@ Deno.test('one product failing does not sink the batch', async () => {
   });
   // Product A's call (first job claimed, first API call) errors; B succeeds.
   let callCount = 0;
-  const failingCaller: ClaudeCaller = (_params) => {
+  const failingCaller: ClaudeInvoker = (_role, params) => {
     callCount++;
-    if (callCount === 1) return Promise.reject(new Error('api_error: 529 overloaded'));
-    return Promise.resolve(okResponse(highDraft));
+    const model = callCount === 1 ? BULK_MODEL : BULK_MODEL;
+    if (callCount === 1) return Promise.resolve({ ok: false, error: 'api_error: 529 overloaded' });
+    return Promise.resolve({ ok: true, response: okResponse(highDraft), usd: 0.0125, model });
   };
 
   const summary = await runDnaDraftPass(makeDeps(db, failingCaller));
@@ -475,7 +497,6 @@ Deno.test('one product failing does not sink the batch', async () => {
 
 Deno.test('missing product row fails that job only', async () => {
   const db = new FakeDb({
-    spendUsd: 0,
     jobs: [
       { id: 31, kind: 'dna_draft', product_id: 'missing-product-id' },
       { id: 32, kind: 'dna_draft', product_id: PRODUCT_B },
@@ -494,9 +515,8 @@ Deno.test('missing product row fails that job only', async () => {
 
 // ─── Spend accounting ────────────────────────────────────────────────────────
 
-Deno.test('spend accrues per §6.2 rates into the daily ledger', async () => {
+Deno.test('pass summary uses the shared client usage and USD values', async () => {
   const db = new FakeDb({
-    spendUsd: 0,
     jobs: [{ id: 41, kind: 'dna_draft', product_id: PRODUCT_A }],
     products: { [PRODUCT_A]: makeProduct(PRODUCT_A) },
   });
@@ -504,46 +524,20 @@ Deno.test('spend accrues per §6.2 rates into the daily ledger', async () => {
     params.model === BULK_MODEL ? okResponse(lowDraft, USAGE_BULK) : okResponse(highDraft, USAGE_CACHED)
   );
 
-  const summary = await runDnaDraftPass(makeDeps(db, caller));
+  const ledger = new FakeLedger();
+  const summary = await runDnaDraftPass(makeDeps(db, caller, { ledger }));
 
-  assertEquals(db.spend.length, 1);
-  const { day, delta } = db.spend[0];
-  assertEquals(day, '2026-07-01');
-  // Bulk call: 1200 fresh + 10000 cache-write input; cached Sonnet call:
-  // 1200 fresh input + 10000 cache-read.
-  assertEquals(delta.input_tokens, 1200 + 10000 + 1200);
-  assertEquals(delta.output_tokens, 1800);
-  assertEquals(delta.cache_read_tokens, 10000);
-  assertEquals(delta.products, 1);
-
-  const expectedUsd = computeCostUsd(BULK_MODEL, USAGE_BULK) +
-    computeCostUsd(ESCALATION_MODEL, USAGE_CACHED);
-  assertEquals(delta.usd, Math.round(expectedUsd * 10000) / 10000);
-  assertEquals(summary.usd, delta.usd);
-});
-
-Deno.test('computeCostUsd applies base, cache-write 1.25x, cache-read 0.1x and output rates', () => {
-  // Haiku: $1 in / $5 out per MTok.
-  const usd = computeCostUsd(BULK_MODEL, {
-    input_tokens: 1_000_000,
-    output_tokens: 1_000_000,
-    cache_creation_input_tokens: 1_000_000,
-    cache_read_input_tokens: 1_000_000,
-  });
-  assertEquals(usd, 1 + 5 + 1.25 + 0.1);
-  // Sonnet: $3 in / $15 out per MTok.
-  const sonnetUsd = computeCostUsd(ESCALATION_MODEL, {
-    input_tokens: 1_000_000,
-    output_tokens: 1_000_000,
-  });
-  assertEquals(sonnetUsd, 3 + 15);
+  assertEquals(summary.input_tokens, 1200 + 10000 + 1200);
+  assertEquals(summary.output_tokens, 1800);
+  assertEquals(summary.usd, 0.025);
+  assertEquals(summary.drafted, 1);
+  assertEquals(ledger.settlements[0].fields.usd, 0, 'the preflight reservation is immediately settled at zero cost');
 });
 
 // ─── Draft replace policy (UNIQUE product_id, prompt_version) ────────────────
 
 Deno.test('existing draft with higher confidence is kept; lower is replaced', async () => {
   const keep = new FakeDb({
-    spendUsd: 0,
     jobs: [{ id: 51, kind: 'dna_draft', product_id: PRODUCT_A }],
     products: { [PRODUCT_A]: makeProduct(PRODUCT_A) },
     existingDraft: { id: 900, overall_confidence: 0.95 },
@@ -554,7 +548,6 @@ Deno.test('existing draft with higher confidence is kept; lower is replaced', as
   assertEquals(keep.completed[0].status, 'done');
 
   const replace = new FakeDb({
-    spendUsd: 0,
     jobs: [{ id: 52, kind: 'dna_draft', product_id: PRODUCT_A }],
     products: { [PRODUCT_A]: makeProduct(PRODUCT_A) },
     existingDraft: { id: 901, overall_confidence: 0.4 },
@@ -576,7 +569,6 @@ Deno.test('shouldReplaceDraft: null incumbent replaced, ties kept', () => {
 
 Deno.test('ML style writes never touch manual/validated rows', async () => {
   const db = new FakeDb({
-    spendUsd: 0,
     jobs: [{ id: 61, kind: 'dna_draft', product_id: PRODUCT_A }],
     products: { [PRODUCT_A]: makeProduct(PRODUCT_A) },
     // Designer already validated Warm Modern for this product.
@@ -610,7 +602,6 @@ Deno.test('triage bands per §6.3', () => {
 
 Deno.test('jobs past the deadline are deferred as failed instead of stranded running', async () => {
   const db = new FakeDb({
-    spendUsd: 0,
     jobs: [
       { id: 71, kind: 'dna_draft', product_id: PRODUCT_A },
       { id: 72, kind: 'dna_draft', product_id: PRODUCT_B },
@@ -682,10 +673,10 @@ Deno.test('buildDraftRequest: cached system prefix, ≤3 URL images, archetype e
   };
   assertEquals(primaryEnum.enum, ARCHETYPE_NAMES, 'archetype enum from the styles table');
 
-  // Sonnet request disables thinking; Haiku omits it.
+  // Sonnet request also omits thinking; shared client supplies role params.
   assertEquals(request.thinking, undefined);
   const sonnetRequest = buildDraftRequest(ESCALATION_MODEL, product, imageUrls, ARCHETYPES);
-  assertEquals(sonnetRequest.thinking, { type: 'disabled' });
+  assertEquals(sonnetRequest.thinking, undefined);
 });
 
 // ─── Validation / clamping ───────────────────────────────────────────────────

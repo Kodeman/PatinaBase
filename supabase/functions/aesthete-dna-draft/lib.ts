@@ -14,14 +14,13 @@
 //                  product_style_spectrum. Draft spectrums live inside the
 //                  draft jsonb; the teaching UI prefers them into sliders and
 //                  only a designer save writes the canonical tables.
-//   • ClaudeCaller — one Messages-API call, implemented in ./claude.ts over
-//                  the official @anthropic-ai/sdk. Tests inject fixtures.
+//   • ClaudeInvoker — role-bound calls through the shared Claude client.
 
 // ─── Constants (§6.2 / §12.2) ────────────────────────────────────────────────
 
 export const PROMPT_VERSION = 'p1';
-export const BULK_MODEL = 'claude-haiku-4-5';
-export const ESCALATION_MODEL = 'claude-sonnet-5';
+export const BULK_MODEL = 'claude-haiku-5-5';
+export const ESCALATION_MODEL = 'claude-sonnet-5-5';
 export const JOB_KIND = 'dna_draft';
 /** §12.2: 4 products per invocation, 2-way concurrency — with the per-call
  * timeout (20 s) and maxRetries 1 set in index.ts this bounds an invocation
@@ -34,19 +33,10 @@ export const MAX_IMAGES = 3;
 export const MAX_OUTPUT_TOKENS = 3000;
 /** §6.2: escalate to Sonnet when Haiku's overall_confidence < 0.6. */
 export const ESCALATION_CONFIDENCE = 0.6;
-export const DEFAULT_DAILY_BUDGET_USD = 20;
 /** Machine actor for product_styles.assigned_by (NOT NULL, no FK — 00001).
  * The nil UUID marks engine-written rows; source='ml_predicted' is the real
  * provenance signal. Flagged in the handoff. */
 export const ENGINE_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
-
-/** §6.2 rates, USD per MTok. Cache write = 1.25×, cache read = 0.1× input. */
-export const PRICING: Record<string, { inputPerMTok: number; outputPerMTok: number }> = {
-  [BULK_MODEL]: { inputPerMTok: 1, outputPerMTok: 5 },
-  [ESCALATION_MODEL]: { inputPerMTok: 3, outputPerMTok: 15 },
-};
-const CACHE_WRITE_MULT = 1.25;
-const CACHE_READ_MULT = 0.1;
 
 // ─── Row / wire types ────────────────────────────────────────────────────────
 
@@ -110,7 +100,6 @@ export interface SpendDelta {
 /** Narrow DB surface. Deliberately NO product_dna / product_style_spectrum
  * methods — see the drafts-never-canon note at the top of this file. */
 export interface DbPort {
-  getSpendToday(day: string): Promise<{ usd: number } | null>;
   loadArchetypes(): Promise<ArchetypeRow[]>;
   claimJobs(kind: string, batch: number): Promise<JobRow[]>;
   completeJob(id: number, status: 'done' | 'failed', error?: string): Promise<void>;
@@ -125,7 +114,6 @@ export interface DbPort {
   deleteMlStyles(productId: string): Promise<void>;
   insertStyles(rows: StyleInsert[]): Promise<void>;
   applyTriage(productId: string, patch: TriagePatch): Promise<void>;
-  addSpend(day: string, delta: SpendDelta): Promise<void>;
 }
 
 export interface ModelUsage {
@@ -143,7 +131,27 @@ export interface ModelResponse {
 
 /** One Anthropic Messages API call. Params are the fully-built request body
  * (see buildDraftRequest); the ./claude.ts adapter feeds it to the SDK. */
-export type ClaudeCaller = (params: Record<string, unknown>) => Promise<ModelResponse>;
+export type ClaudeRole = 'triage' | 'extract';
+export type ClaudeResult =
+  | { ok: true; response: ModelResponse; usd: number; model: string }
+  | { ok: false; denied: 'kill' | 'disabled' | 'budget' }
+  | { ok: false; error: string };
+export type ClaudeInvoker = (role: ClaudeRole, params: Record<string, unknown>) => Promise<ClaudeResult>;
+export interface LlmLedgerPort {
+  reserve(feature: string, studioId: string | null, userId: string | null, estUsd: number): Promise<{
+    granted: boolean;
+    reason: string | null;
+    usageId: number | null;
+  }>;
+  settle(usageId: number, fields: {
+    model: string;
+    usage: ModelUsage;
+    usd: number;
+    status: 'settled' | 'error';
+    stopReason: string | null;
+    latencyMs: number;
+  }): Promise<void>;
+}
 
 export type Logger = (event: string, fields?: Record<string, unknown>) => void;
 
@@ -355,11 +363,6 @@ export function buildDraftRequest(
       },
     },
   };
-  if (model === ESCALATION_MODEL) {
-    // Sonnet 5 runs adaptive thinking when the field is omitted; disable it so
-    // escalations stay inside the §6.2 cost model (~1k output tokens).
-    request.thinking = { type: 'disabled' };
-  }
   return request;
 }
 
@@ -510,20 +513,6 @@ export function parseDraftResponse(
 
 // ─── Spend accounting (§6.2) ─────────────────────────────────────────────────
 
-export function computeCostUsd(model: string, usage: ModelUsage): number {
-  const rates = PRICING[model];
-  if (!rates) return 0;
-  const cacheWrite = usage.cache_creation_input_tokens ?? 0;
-  const cacheRead = usage.cache_read_input_tokens ?? 0;
-  const usd =
-    (usage.input_tokens * rates.inputPerMTok +
-      cacheWrite * rates.inputPerMTok * CACHE_WRITE_MULT +
-      cacheRead * rates.inputPerMTok * CACHE_READ_MULT +
-      usage.output_tokens * rates.outputPerMTok) /
-    1_000_000;
-  return usd;
-}
-
 export class SpendAccumulator {
   input_tokens = 0;
   output_tokens = 0;
@@ -531,13 +520,11 @@ export class SpendAccumulator {
   usd = 0;
   products = 0;
 
-  add(model: string, usage: ModelUsage): void {
-    // Ledger folds cache writes into input_tokens (they are input tokens);
-    // cache reads tracked separately per the 00241 column set.
+  add(usage: ModelUsage, usd: number): void {
     this.input_tokens += usage.input_tokens + (usage.cache_creation_input_tokens ?? 0);
     this.output_tokens += usage.output_tokens;
     this.cache_read_tokens += usage.cache_read_input_tokens ?? 0;
-    this.usd += computeCostUsd(model, usage);
+    this.usd += usd;
   }
 
   toDelta(): SpendDelta {
@@ -545,7 +532,7 @@ export class SpendAccumulator {
       input_tokens: this.input_tokens,
       output_tokens: this.output_tokens,
       cache_read_tokens: this.cache_read_tokens,
-      usd: Math.round(this.usd * 10000) / 10000,
+      usd: this.usd,
       products: this.products,
     };
   }
@@ -640,7 +627,8 @@ function isImageFetchError(err: unknown): boolean {
  * retailer links are common on captures), retry once text-only rather than
  * permanently failing the product. */
 async function callModel(
-  claude: ClaudeCaller,
+  claude: ClaudeInvoker,
+  role: ClaudeRole,
   model: string,
   product: ProductRow,
   imageUrls: string[],
@@ -648,10 +636,16 @@ async function callModel(
   spend: SpendAccumulator,
   log: Logger,
 ): Promise<ModelResponse> {
+  const call = async (urls: string[]): Promise<ModelResponse> => {
+    const result = await claude(role, buildDraftRequest(model, product, urls, archetypes));
+    if (!result.ok) {
+      throw new Error('denied' in result ? `claude_denied:${result.denied}` : result.error);
+    }
+    spend.add(result.response.usage, result.usd);
+    return result.response;
+  };
   try {
-    const response = await claude(buildDraftRequest(model, product, imageUrls, archetypes));
-    spend.add(model, response.usage);
-    return response;
+    return await call(imageUrls);
   } catch (err) {
     if (imageUrls.length > 0 && isImageFetchError(err)) {
       log('image_fetch_failed_retrying_text_only', {
@@ -659,9 +653,7 @@ async function callModel(
         model,
         error: err instanceof Error ? err.message : String(err),
       });
-      const response = await claude(buildDraftRequest(model, product, [], archetypes));
-      spend.add(model, response.usage);
-      return response;
+      return await call([]);
     }
     throw err;
   }
@@ -672,7 +664,7 @@ async function callModel(
  * escalate. If the escalation output is invalid but the bulk output was a
  * valid low-confidence draft, the bulk draft is kept. */
 export async function draftProduct(
-  claude: ClaudeCaller,
+  claude: ClaudeInvoker,
   product: ProductRow,
   archetypes: ArchetypeRow[],
   spend: SpendAccumulator,
@@ -681,7 +673,7 @@ export async function draftProduct(
   const archetypeNames = archetypes.map((a) => a.name);
   const imageUrls = selectImageUrls(product.images);
 
-  const bulkResponse = await callModel(claude, BULK_MODEL, product, imageUrls, archetypes, spend, log);
+  const bulkResponse = await callModel(claude, 'triage', BULK_MODEL, product, imageUrls, archetypes, spend, log);
   const bulk = parseDraftResponse(bulkResponse, archetypeNames);
 
   if (bulk.ok && bulk.confidence >= ESCALATION_CONFIDENCE) {
@@ -703,6 +695,7 @@ export async function draftProduct(
   });
   const escResponse = await callModel(
     claude,
+    'extract',
     ESCALATION_MODEL,
     product,
     imageUrls,
@@ -739,8 +732,8 @@ export async function draftProduct(
 export interface PassDeps {
   db: DbPort;
   /** null = no ANTHROPIC_API_KEY configured → park, never crash. */
-  claude: ClaudeCaller | null;
-  budgetUsd: number;
+  claude: ClaudeInvoker | null;
+  ledger: LlmLedgerPort;
   /** Epoch ms after which no new product is started; remaining claimed jobs
    * are completed 'failed' so the queue backoff retries them (60 s window). */
   deadlineAt: number;
@@ -761,17 +754,13 @@ export interface PassSummary {
   output_tokens?: number;
 }
 
-export function utcDay(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 async function processJob(
   deps: PassDeps,
   job: JobRow,
   archetypes: ArchetypeRow[],
   archetypesByName: Map<string, string>,
   spend: SpendAccumulator,
-  counters: { drafted: number; escalated: number; failed: number },
+  counters: { drafted: number; escalated: number; failed: number; denial?: 'budget_exhausted' | 'disabled' },
 ): Promise<void> {
   const { db, log } = deps;
   try {
@@ -845,10 +834,13 @@ async function processJob(
       log('dna_draft_no_draft', { product_id: product.id, reason: result.reason });
     }
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.startsWith('claude_denied:')) {
+      counters.denial = message.endsWith(':budget') ? 'budget_exhausted' : 'disabled';
+    }
     // Per-product isolation: API/DB errors fail this job only; queue backoff
     // (1 m / 5 m / 25 m, park at 5 attempts — 00241) handles the retries.
     counters.failed++;
-    const message = err instanceof Error ? err.message : String(err);
     log('dna_draft_job_failed', { job_id: job.id, product_id: job.product_id, error: message });
     try {
       await db.completeJob(job.id, 'failed', message.slice(0, 500));
@@ -872,20 +864,26 @@ export async function runDnaDraftPass(deps: PassDeps): Promise<PassSummary> {
     return { claimed: 0, drafted: 0, escalated: 0, parked: true, usd: 0, reason: 'no_api_key' };
   }
 
-  // Spend guard FIRST (§6.2): over budget → park, claim nothing.
-  const day = utcDay(deps.now());
-  const spendToday = await db.getSpendToday(day);
-  const spentUsd = Number(spendToday?.usd ?? 0);
-  if (spentUsd >= deps.budgetUsd) {
-    log('parked_budget_exhausted', { day, spent_usd: spentUsd, budget_usd: deps.budgetUsd });
-    return {
-      claimed: 0,
-      drafted: 0,
-      escalated: 0,
-      parked: true,
+  // Probe the shared ledger before claiming jobs. Settling the zero-cost
+  // reservation immediately preserves the no-claim behavior at the cap.
+  const probe = await deps.ledger.reserve('aesthete-dna-draft', null, null, 0);
+  if (!probe.granted) {
+    const budgetDenied = ['global_daily', 'feature_daily', 'studio_monthly'].includes(probe.reason ?? '');
+    const reason = budgetDenied ? 'budget_exhausted' : 'disabled';
+    log(budgetDenied ? 'parked_budget_exhausted' : 'parked_disabled', {
+      ledger_reason: probe.reason,
+    });
+    return { claimed: 0, drafted: 0, escalated: 0, parked: true, usd: 0, reason };
+  }
+  if (probe.usageId !== null) {
+    await deps.ledger.settle(probe.usageId, {
+      model: BULK_MODEL,
+      usage: { input_tokens: 0, output_tokens: 0 },
       usd: 0,
-      reason: 'budget_exhausted',
-    };
+      status: 'settled',
+      stopReason: null,
+      latencyMs: 0,
+    });
   }
 
   const archetypes = await db.loadArchetypes();
@@ -902,14 +900,18 @@ export async function runDnaDraftPass(deps: PassDeps): Promise<PassSummary> {
   log('claimed', { count: jobs.length, job_ids: jobs.map((j) => j.id) });
 
   const spend = new SpendAccumulator();
-  const counters = { drafted: 0, escalated: 0, failed: 0 };
+  const counters: { drafted: number; escalated: number; failed: number; denial?: 'budget_exhausted' | 'disabled' } = {
+    drafted: 0,
+    escalated: 0,
+    failed: 0,
+  };
   const queue = [...jobs];
 
   // CONCURRENCY-wide worker pool with a hard deadline: jobs not started in
   // time are completed 'failed' (→ pending after 1 min backoff) instead of
   // being stranded in status='running' when the pg_net window kills us.
   const lane = async () => {
-    while (queue.length > 0) {
+    while (queue.length > 0 && counters.denial === undefined) {
       const job = queue.shift()!;
       if (deps.now().getTime() >= deps.deadlineAt) {
         counters.failed++;
@@ -928,26 +930,28 @@ export async function runDnaDraftPass(deps: PassDeps): Promise<PassSummary> {
     }
   };
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, lane));
-
-  // One ledger write per invocation (§6.2 accrual).
-  const delta = spend.toDelta();
-  if (delta.input_tokens > 0 || delta.output_tokens > 0 || delta.products > 0) {
-    try {
-      await db.addSpend(day, delta);
-    } catch (err) {
-      log('spend_ledger_write_failed', {
-        error: err instanceof Error ? err.message : String(err),
-        delta,
-      });
+  if (counters.denial) {
+    for (const job of queue) {
+      counters.failed++;
+      try {
+        await db.completeJob(job.id, 'failed', `not attempted: ${counters.denial}`);
+      } catch (err) {
+        log('complete_job_failed', {
+          job_id: job.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 
+  const delta = spend.toDelta();
   const summary: PassSummary = {
     claimed: jobs.length,
     drafted: counters.drafted,
     escalated: counters.escalated,
-    parked: false,
+    parked: counters.denial !== undefined,
     usd: delta.usd,
+    ...(counters.denial ? { reason: counters.denial } : {}),
     ...(counters.failed > 0 ? { failed: counters.failed } : {}),
     // tokens ride only on worked passes so the parked-pass summaries (and
     // their exact-shape tests) stay byte-stable (§12.4 dna_draft_done).

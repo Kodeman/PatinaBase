@@ -5,13 +5,13 @@ Aesthete Engine Wave 2C — the Claude draft-fill worker (design
 
 Drains `dna_draft` jobs from `aesthete_jobs` (00241) every 2 minutes
 (pg_cron → `invoke_edge_function`). Per product: loads the products row + up
-to 3 image URLs → `claude-haiku-4-5` with a cached system prefix (role, six
+to 3 image URLs → shared Claude role `triage` (`claude-haiku-5-5`) with a cached system prefix (role, six
 spectrum pole anchors verbatim from the product brief, the 12 archetypes from
 the `styles` table) and structured outputs enforcing the §6.3 JSON schema →
-escalates once to `claude-sonnet-5` on `overall_confidence < 0.6` or schema
+escalates once via role `extract` (`claude-sonnet-5-5`) on `overall_confidence < 0.6` or schema
 failure → writes `product_dna_drafts` (prompt_version `p1`,
 replace-only-if-better), `product_styles` `source='ml_predicted'`,
-`teaching_queue` triage, and accrues `aesthete_spend_ledger`.
+`teaching_queue` triage. Usage and spend are recorded in `llm_usage`; the feature cap is managed by `llm_feature_controls`.
 
 **Drafts never write canonical rows** (§5.2): `product_dna` and
 `product_style_spectrum` are untouchable from this function — the DbPort in
@@ -22,9 +22,8 @@ replace-only-if-better), `product_styles` `source='ml_predicted'`,
 | File | Role |
 |---|---|
 | `index.ts` | `Deno.serve` boot: env, CORS, deadline, wiring |
-| `lib.ts` | Pure logic (prompt, schema, validation, triage, spend, pass) — dependency-free, unit-tested |
+| `lib.ts` | Pure logic (prompt, schema, validation, triage, pass) — dependency-free, unit-tested |
 | `db.ts` | `DbPort` over supabase-js (service role) |
-| `claude.ts` | `ClaudeCaller` over the official `@anthropic-ai/sdk` (npm specifier) |
 | `fixtures/` | Golden Claude drafts (high-confidence clean · low-confidence → escalation) |
 | `index.test.ts` | Mocked suite — **no real API calls** |
 | `smoke.test.ts` | Real-API smoke, gated behind env (below) |
@@ -36,13 +35,13 @@ replace-only-if-better), `product_styles` `source='ml_predicted'`,
 | `SUPABASE_URL` | injected | — | runtime-provided |
 | `SUPABASE_SERVICE_ROLE_KEY` | injected | — | claim/complete RPCs are service-role-only (00241) |
 | `ANTHROPIC_API_KEY` | for drafting | — | edge secret only (§12.5). Missing → the fn **parks** (`{parked:true, reason:'no_api_key'}`), never crashes |
-| `DAILY_BUDGET_USD` | no | `20` | spend governor: ledger ≥ budget → park before claiming (§6.2) |
+| Shared LLM controls | configured in DB | feature cap | `llm_usage` records usage; `llm_feature_controls` sets the cap; kill/disabled → park as `disabled` |
 
 ## Response
 
 ```jsonc
 { "claimed": 4, "drafted": 3, "escalated": 1, "parked": false, "usd": 0.0512 }
-// parked:  { "claimed": 0, "drafted": 0, "escalated": 0, "parked": true, "usd": 0, "reason": "budget_exhausted" | "no_api_key" | "no_archetypes" }
+// parked:  { "claimed": 0, "drafted": 0, "escalated": 0, "parked": true, "usd": 0, "reason": "budget_exhausted" | "disabled" | "no_api_key" | "no_archetypes" }
 // "failed": n appears when any job failed (queue backoff retries it)
 ```
 
@@ -54,8 +53,7 @@ deno test supabase/functions/aesthete-dna-draft/
 
 ## Real-API smoke (costs ~1–2¢ — run deliberately)
 
-Not run by default; ignored unless **both** env vars are set. The Anthropic
-SDK is imported dynamically so the normal suite never resolves it.
+Not run by default; ignored unless **both** env vars are set. The shared Claude client and SDK are imported dynamically, keeping the normal fixture suite offline.
 
 ```bash
 DENO_NO_PACKAGE_JSON=1 RUN_REAL_SMOKE=1 ANTHROPIC_API_KEY=sk-ant-... \
@@ -63,7 +61,7 @@ DENO_NO_PACKAGE_JSON=1 RUN_REAL_SMOKE=1 ANTHROPIC_API_KEY=sk-ant-... \
 ```
 
 (`DENO_NO_PACKAGE_JSON=1` because the monorepo root package.json puts deno
-into manual-node_modules mode, where `claude.ts`'s `npm:` SDK specifier
+into manual-node_modules mode, where `_shared/claude.ts`'s `npm:` SDK specifier
 refuses to resolve; the edge runtime itself bundles `npm:` natively.)
 
 Asserts one live haiku structured-output round-trip (draft parses, archetype

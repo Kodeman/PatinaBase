@@ -2,10 +2,8 @@
 // ^ restores the Deno global under the repo-root tsconfig (see index.test.ts).
 //
 // Real-API smoke for aesthete-dna-draft (Wave 2C). NOT part of the normal
-// suite: it is ignored unless BOTH env vars are set, and the Anthropic SDK is
-// imported dynamically so `deno test supabase/functions/aesthete-dna-draft/`
-// never resolves npm:@anthropic-ai/sdk (or the network) when the smoke is
-// skipped.
+// suite: it is ignored unless BOTH env vars are set. The shared Claude client
+// is imported dynamically so the normal suite keeps its fixture-only graph.
 //
 // Run (see README.md — costs real money, ~1–2¢):
 //   DENO_NO_PACKAGE_JSON=1 RUN_REAL_SMOKE=1 ANTHROPIC_API_KEY=sk-ant-… \
@@ -80,13 +78,27 @@ Deno.test({
   name: 'real-API smoke: haiku structured draft round-trip (RUN_REAL_SMOKE=1 only)',
   ignore: !RUN,
   fn: async () => {
-    // Computed specifier: keeps ./claude.ts (and its npm: SDK import) out of
-    // the static test graph so the mocked suite never resolves it.
-    const { createClaudeCaller } = await import(
-      new URL('./claude.ts', import.meta.url).href
-    );
-    const caller = createClaudeCaller(Deno.env.get('ANTHROPIC_API_KEY')!);
+    // Dynamic import keeps the SDK and client outside the skipped test graph.
+    const { callClaude } = await import(new URL('../_shared/claude.ts', import.meta.url).href);
     const spend = new SpendAccumulator();
+    const caller = async (role: 'triage' | 'extract', params: Record<string, unknown>) => {
+      const result = await callClaude({
+        feature: 'aesthete-dna-draft',
+        role,
+        studioId: null,
+        userId: null,
+        promptVersion: 'p1',
+        params,
+        timeoutMs: 20_000,
+        ledger: {
+          reserve: async () => ({ granted: true, reason: null, usageId: 1 }),
+          settle: async () => {},
+        },
+      });
+      if (!result.ok) throw new Error('denied' in result ? result.denied : result.error);
+      spend.add(result.response.usage, result.usd);
+      return result.response;
+    };
     const log = (event: string, fields?: Record<string, unknown>) =>
       console.log(JSON.stringify({ smoke: event, ...fields }));
 
