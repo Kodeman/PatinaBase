@@ -88,12 +88,6 @@ export function LibraryShelf({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [layer, reads.personal.data, reads.studio.data, reads.catalog.data],
   );
-  // Wave 1P (spec §6 Flow 6) — the place name behind the Field chip.
-  const captureIds = useMemo(
-    () => (data ?? []).map((p) => p.field_capture_id),
-    [data],
-  );
-  const { data: venueByCapture } = useCaptureVenueLabels(captureIds);
   const items = data ?? [];
   const visibleItems = items.filter((item) =>
     matchesCapabilityFilter(
@@ -101,16 +95,19 @@ export function LibraryShelf({
       capability,
     ),
   );
-  const { data: usageByPiece } = usePieceUsage(
-    visibleItems.map((item) => item.id),
-  );
 
-  // Past one screen the shelf folds: the first SHELF_FOLD_AT plates show and
-  // the rest wait behind one act, so the Section still closes on its rule.
+  // Past one screen the shelf folds: only the visible slice needs per-piece metadata.
   const [unfolded, setUnfolded] = useState(false);
   const folds = visibleItems.length > SHELF_FOLD_AT;
   const shownItems =
     folds && !unfolded ? visibleItems.slice(0, SHELF_FOLD_AT) : visibleItems;
+  const shownIds = shownItems.map((item) => item.id);
+  const { data: usageByPiece } = usePieceUsage(shownIds);
+  const captureIds = useMemo(
+    () => shownItems.map((piece) => piece.field_capture_id),
+    [shownItems],
+  );
+  const { data: venueByCapture } = useCaptureVenueLabels(captureIds);
 
   return (
     <section

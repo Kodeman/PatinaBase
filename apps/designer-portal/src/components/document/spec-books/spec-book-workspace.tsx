@@ -1378,10 +1378,10 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   }
 
   const projectName = project.data?.name ?? project.data?.title ?? "Project";
-  // The book is named by its job (SPEC §S7b p1), never the stored "— Spec Book".
-  const bookTitle = project.data
+  const derivedBookTitle = project.data
     ? `${projectName} · specification book`
     : "Specification book";
+  const bookTitle = data?.book.title.trim() || derivedBookTitle;
   const issueBusy =
     prepareIssue.isPending ||
     renderArtifact.isPending;

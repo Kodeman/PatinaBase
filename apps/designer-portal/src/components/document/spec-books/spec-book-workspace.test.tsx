@@ -211,6 +211,29 @@ beforeEach(() => {
   };
 });
 
+describe("Spec Book workspace title", () => {
+  it("uses the stored book title for the working preview heading", () => {
+    render(<SpecBookWorkspace projectId="project-1" />);
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Oak project specification" }),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to the project-derived title when the stored title is empty", () => {
+    mockWorkbenchHookResult = {
+      ...(mockWorkbenchHookResult as object),
+      data: {
+        ...((mockWorkbenchHookResult as { data: object }).data),
+        book: { id: "book-1", title: "  " },
+      },
+    };
+    render(<SpecBookWorkspace projectId="project-1" />);
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Oak project · specification book" }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("Spec Book artifact recovery actions", () => {
   it("offers finalize-only recovery for a durable artifact on an unissued revision", () => {
     expect(specBookArtifactRetryLabel("ready", "pending")).toBe("Finalize");

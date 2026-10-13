@@ -12,6 +12,19 @@
 import { render, screen } from "@testing-library/react";
 import { RoomShell } from "../room-shell";
 
+describe("the Room header measure", () => {
+  it.each([
+    ["short title", <RoomShell title="Library"><p className="mx-auto max-w-[976px] px-4 sm:px-6" data-room-body>body</p></RoomShell>],
+    ["heading=null", <RoomShell title="Product" heading={null}><h1 className="mx-auto max-w-[976px] px-4 sm:px-6" data-room-body>Product details</h1></RoomShell>],
+  ])("keeps header and body on the same measure for %s", (_label, tree) => {
+    const { container } = render(tree);
+    const headerMeasure = container.querySelector("[data-room-header-line]")?.parentElement;
+    const bodyMeasure = container.querySelector("[data-room-body]");
+    expect(headerMeasure).toHaveClass("w-full", "max-w-[976px]", "px-4", "sm:px-6");
+    expect(bodyMeasure).toHaveClass("max-w-[976px]", "px-4", "sm:px-6");
+  });
+});
+
 describe("the Room head count", () => {
   it("stays behind the sm breakpoint by default", () => {
     render(

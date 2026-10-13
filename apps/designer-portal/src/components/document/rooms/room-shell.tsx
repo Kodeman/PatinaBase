@@ -157,7 +157,7 @@ export function RoomShell({
           `.t-d2` title, the acts at the right, then the double rule. It wraps,
           never truncates. The S1 classes (`.hline`, `.rule-strong`); the old
           white band (leave · ornament · mono title) is retired. */}
-      <div className={`relative z-10 ${measure}`}>
+      <div className={`relative z-10 w-full ${measure}`}>
         <header className="hline" data-room-header-line>
           <div className="hline-l">
             {/* The way out is a word, not a box (I107): a tertiary act. A

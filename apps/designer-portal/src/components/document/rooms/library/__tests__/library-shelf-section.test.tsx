@@ -7,6 +7,7 @@ import { LibraryShelf, SHELF_FOLD_AT } from '../library-shelf';
 import { groupPieceUsage } from '../use-piece-usage';
 
 let rows: Array<Record<string, unknown>> = [];
+const usageCalls: string[][] = [];
 
 jest.mock('@patina/supabase', () => ({
   useLayerProducts: () => ({ data: rows, isLoading: false, isError: false }),
@@ -20,11 +21,14 @@ jest.mock('@patina/supabase', () => ({
 
 jest.mock('../use-piece-usage', () => ({
   ...jest.requireActual('../use-piece-usage'),
-  usePieceUsage: () => ({
-    data: {
-      'p-0': [{ projectId: 'proj-h', title: 'Holloway Den', clientName: null, stage: 'project' }],
-    },
-  }),
+  usePieceUsage: (ids: readonly string[]) => {
+    usageCalls.push([...ids]);
+    return {
+      data: {
+        'p-0': [{ projectId: 'proj-h', title: 'Holloway Den', clientName: null, stage: 'project' }],
+      },
+    };
+  },
 }));
 
 jest.mock('next/navigation', () => ({
@@ -69,6 +73,7 @@ function renderShelf() {
 
 beforeEach(() => {
   rows = [];
+  usageCalls.length = 0;
 });
 
 describe('LibraryShelf — a Section that closes and folds', () => {
@@ -86,11 +91,13 @@ describe('LibraryShelf — a Section that closes and folds', () => {
     const { container } = renderShelf();
 
     expect(container.querySelectorAll('[data-library-card]')).toHaveLength(SHELF_FOLD_AT);
+    expect(usageCalls.at(-1)).toEqual(Array.from({ length: SHELF_FOLD_AT }, (_, i) => `p-${i}`));
     const unfold = screen.getByRole('button', { name: `Show all ${SHELF_FOLD_AT + 3} pieces` });
     expect(unfold).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.click(unfold);
     expect(container.querySelectorAll('[data-library-card]')).toHaveLength(SHELF_FOLD_AT + 3);
+    expect(usageCalls.at(-1)).toEqual(Array.from({ length: SHELF_FOLD_AT + 3 }, (_, i) => `p-${i}`));
     const fold = screen.getByRole('button', { name: 'Fold the shelf' });
     expect(fold).toHaveAttribute('aria-expanded', 'true');
 
