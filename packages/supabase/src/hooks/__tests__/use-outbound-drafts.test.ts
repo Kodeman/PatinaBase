@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { from, rpc, invoke, invalidateQueries } = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), invoke: vi.fn(), invalidateQueries: vi.fn() }));
-vi.mock('../../client', () => ({ getSupabase: () => ({ from, rpc, functions: { invoke } }) }));
+vi.mock('../../client', () => ({ createBrowserClient: () => ({ from, rpc, functions: { invoke } }) }));
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
