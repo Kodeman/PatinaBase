@@ -2912,3 +2912,15 @@ html:has([data-document-shell]) {
   .sb-page { padding: 28px 16px 24px; }
 }
 /* end US-28 S7b spec book */
+
+/* US-28 S3 desk — Today's cards and the ledger under them. Only the S1
+   tokens and classes; the old .day-sheet-* and .desk-ledger-* rules above are
+   no longer drawn by the Desk. */
+.desk-quiet { margin: 4px 0 20px; max-width: 56ch; }
+.desk-ledger .sub { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin: 24px 0 8px; }
+.desk-ledger .sec-head + .desk-ledger-group .sub { margin-top: 4px; }
+.desk-ledger [data-ledger-section] + [data-ledger-section] { margin-top: 48px; }
+.desk-rest-note { margin-top: 20px; color: var(--text-muted); }
+.desk-loading-frame { height: 120px; border: 1px solid var(--border-subtle); border-radius: 2px; }
+.day-sheet + .desk-ledger { margin-top: 72px; }
+@media (max-width: 599px) { .day-sheet + .desk-ledger { margin-top: 48px; } }

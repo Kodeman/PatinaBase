@@ -24,6 +24,7 @@ import {
   useStudioUnbilledTime,
   useProjectLeads,
   useNeedStates,
+  useTeammateActed,
 } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useViewerStudio } from '@/hooks/use-viewer-studio';
@@ -38,14 +39,18 @@ import {
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DeskRoster } from '@/components/document/desk-roster';
 import {
+  deriveDeskLedger,
   deriveDeskRoster,
+  deriveRosterPeople,
   pinnedProjectIdsFromRoster,
+  type DeskRosterInput,
 } from '@/lib/document/desk-roster-derivation';
 import { useDeskLineState } from '@/components/document/desk-arbiter';
 import { deriveDeskNeedList } from '@/lib/document/desk-need-list';
 import {
   deriveHandoffNeeds,
   deskDesignersOf,
+  deskHolderOf,
   type DeskScope,
 } from '@/lib/document/desk-scope';
 import { WEEKDAY_FORMAT, dayMonth } from '@/lib/document/dates';
@@ -55,7 +60,8 @@ import { DeskBoardsReactionRollup } from '@/components/document/desk-boards-reac
 import { MarginNote } from '@/components/document/margin-note';
 import { useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
 import { DaySheet } from '@/components/document/day-sheet';
-import { deriveDaySheet } from '@/lib/document/day-sheet';
+import { EmptyState } from '@/components/document/empty-state';
+import { deriveDaySheet, groupSheetByJob } from '@/lib/document/day-sheet';
 import {
   START_DESK_WALKTHROUGH_EVENT,
   clearDeskWalkthroughLater,
@@ -139,6 +145,8 @@ export default function DeskPage() {
   const studioId = studio?.id ?? '';
   const { data: projectLeads, isSuccess: projectLeadsRead } = useProjectLeads(studioId);
   const { data: needStates } = useNeedStates(studio?.id ?? '');
+  // U-Q4 — teammates' acts, as facts; never merged into her own states.
+  const { data: teammateActed } = useTeammateActed(studio?.id ?? '');
   // N4 — Mine by default, held per person in this browser.
   const [deskScope, setDeskScopeState] = useState<DeskScope>('mine');
   const scopeStoreKey = user?.id ? `patina.desk.scope.${user.id}` : null;
@@ -243,32 +251,38 @@ export default function DeskPage() {
 
   // The roster is the Desk's one population — every live job, grouped by
   // stage, in the paper's own section order.
-  const roster = useMemo(
-    () =>
-      deriveDeskRoster(
-        {
-          folders: data?.folders ?? [],
-          chips: data?.chips ?? [],
-          live: data?.live ?? [],
-          oneVoice,
-          unreadFeeds: data?.unreadFeeds,
-          scope: deskScope,
-          leads: projectLeads,
-          meUserId: user?.id,
-        },
-        new Date(),
-      ),
+  const rosterInput = useMemo<DeskRosterInput>(
+    () => ({
+      folders: data?.folders ?? [],
+      chips: data?.chips ?? [],
+      live: data?.live ?? [],
+      oneVoice,
+      unreadFeeds: data?.unreadFeeds,
+      scope: deskScope,
+      leads: projectLeads,
+      meUserId: user?.id,
+    }),
     [data, deskScope, oneVoice, projectLeads, user?.id],
   );
+  const roster = useMemo(() => deriveDeskRoster(rosterInput, new Date()), [rosterInput]);
 
-  // R-DM21 A — a Day Sheet line finds its job's roster line by the need's
-  // project id, to land where that job's act lands.
+  // Today's cards take each job's name and stage from the full roster, keyed
+  // by the id the sheet's lines carry (`project_id ?? engagement_id`).
   const rosterJobs = useMemo(
     () =>
       new Map(
         roster.groups.flatMap((group) => group.lines).map((line) => [line.projectId ?? line.engagementId, line]),
       ),
     [roster],
+  );
+  const people = useMemo(() => deriveRosterPeople(studioMembers ?? []), [studioMembers]);
+  const names = useMemo(
+    () => new Map(people.map((person) => [person.id, person.name] as const)),
+    [people],
+  );
+  const holderOf = useMemo(
+    () => deskHolderOf(projectLeads ?? new Map(), user?.id, deskDesignersOf(data?.live ?? []), names),
+    [projectLeads, user?.id, data, names],
   );
 
   // A quiet Desk (no live jobs at all) lets the Studio index rise to fill the
@@ -288,6 +302,7 @@ export default function DeskPage() {
       user?.id,
       needStates,
       mySeat,
+      at,
     );
     // SQ-751 F8 — the person scope runs before the studio errands collapse to
     // one line, so her own Pulse survives in Mine.
@@ -310,6 +325,7 @@ export default function DeskPage() {
       meUserId: user?.id,
       scope: deskScope,
       designers: deskDesignersOf(data?.live ?? []),
+      teammateActs: teammateActed,
       // SQ-751 F5 — who leads each job is a feed: until a studio's leads
       // answer, Mine is not known to be empty. A seat with no studio has none.
       unreadFeeds: [
@@ -318,7 +334,33 @@ export default function DeskPage() {
       ],
       now: at,
     });
-  }, [data, projectLeads, projectLeadsRead, studioId, user?.id, needStates, mySeat, deskScope]);
+  }, [data, projectLeads, projectLeadsRead, studioId, user?.id, needStates, teammateActed, mySeat, deskScope]);
+
+  // US-28 change 1/2 — Today as cards, one per job; the ledger takes every
+  // job Today does not, read on the same ranked list.
+  const cards = useMemo(
+    () => groupSheetByJob(sheet.lines, rosterJobs, holderOf),
+    [sheet, rosterJobs, holderOf],
+  );
+  const ledger = useMemo(
+    () => deriveDeskLedger({ roster: rosterInput, sheet, cards, people, holderOf, now: new Date() }),
+    [rosterInput, sheet, cards, people, holderOf],
+  );
+  // Mine — whose the rest of the studio's jobs are, by the names that carry them.
+  const othersHold = useMemo(() => {
+    if (deskScope !== 'mine') return null;
+    const holders = [
+      ...new Set(
+        (data?.live ?? [])
+          .map((row) => holderOf(row.project_id ?? row.engagement_id))
+          .filter((holder) => !holder.mine && holder.name)
+          .map((holder) => `${holder.name}’s`),
+      ),
+    ];
+    if (holders.length === 0) return null;
+    const list = holders.length === 1 ? holders[0] : `${holders.slice(0, -1).join(', ')} and ${holders.at(-1)}`;
+    return `The rest of the studio’s jobs are ${list}.`;
+  }, [deskScope, data, holderOf]);
 
   // The Desk arbiter (return-teaching §2): these four lines keep their own
   // conditions, and at most one of them, or the teaching note, renders per
@@ -511,33 +553,55 @@ export default function DeskPage() {
 
   const rosterBlock =
     (isLoading && !data) || arrivalHeld ? (
-      <div
-        className="space-y-3"
-        aria-hidden
+      // Loading is not empty: Today's eyebrow and three quiet frames where
+      // its cards will stand, no ledger yet.
+      <section
+        className="section"
+        aria-labelledby="desk-loading-head"
+        aria-busy="true"
         data-tour-anchor="desk-needs-your-hand"
       >
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="h-6 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
-          />
-        ))}
+        <div className="sec-head">
+          <p id="desk-loading-head" className="eb">
+            <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+              <path d="M0 2h34M0 6h28M0 10h20" />
+            </svg>
+            <span>{dateLabel ? `${dateLabel} · Today` : 'Today'}</span>
+          </p>
+        </div>
+        <p className="sr-only">Loading today’s lines.</p>
+        <div className="cards-wrap" aria-hidden="true">
+          <div className="cards">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="desk-loading-frame" />
+            ))}
+          </div>
+        </div>
+      </section>
+    ) : deskEmpty && !data?.unreadFeeds?.length ? (
+      <div data-tour-anchor="desk-needs-your-hand">
+        <EmptyState eyebrow={dateLabel ? `${dateLabel} · Today` : 'Today'}>
+          No project files yet. Record an inquiry or create a project file to begin.
+        </EmptyState>
       </div>
     ) : (
       <>
         <DaySheet
           sheet={sheet}
+          cards={cards}
           scope={deskScope}
           onScope={setDeskScope}
           oneVoice={oneVoice}
           now={now}
-          jobs={rosterJobs}
           dateLabel={dateLabel}
+          teammateActed={teammateActed}
+          names={names}
         />
         <DeskRoster
-          roster={roster}
-          studioMembers={studioMembers}
+          ledger={ledger}
+          holderOf={holderOf}
           belowHead={deskLine}
+          othersHold={othersHold}
         />
       </>
     );

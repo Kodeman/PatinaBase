@@ -13,7 +13,6 @@ import { deriveDeskNeedList } from '@/lib/document/desk-need-list';
 import { deskDesignersOf, deskHolderOf } from '@/lib/document/desk-scope';
 import {
   custodyWord,
-  deriveDeskClaims,
   deriveDeskLedger,
   deriveDeskRoster,
   deriveRosterPeople,
@@ -839,200 +838,6 @@ describe('D8 · deriveDeskRoster writes the value and the motion sentence', () =
   });
 });
 
-describe('D5 · a claim takes a card, a quiet job takes a line', () => {
-  function claimsOf(over: Partial<DeskRosterInput> = {}) {
-    return deriveDeskClaims({
-      roster: deriveDeskRoster(input(over), NOW),
-      now: NOW,
-    });
-  }
-
-  it('cards every marked line and leaves every unmarked one in the ledger', () => {
-    const claimed = row('claimed', 'project');
-    const quietA = row('quiet-a', 'project');
-    const quietB = row('quiet-b', 'care');
-    const result = claimsOf({
-      live: [claimed, quietA, quietB],
-      folders: [folder(claimed)],
-    });
-
-    expect(result.cards.map((c) => c.line.engagementId)).toEqual(['claimed']);
-    expect(result.ledger.map((g) => g.key)).toEqual(['project', 'care']);
-    expect(result.ledger[0].lines.map((l) => l.engagementId)).toEqual(['quiet-a']);
-    expect(result.ledger[0].count).toBe(1);
-  });
-
-  it('drops a stage group the split emptied', () => {
-    const claimed = row('claimed', 'project');
-    expect(claimsOf({ live: [claimed], folders: [folder(claimed)] }).ledger).toEqual([]);
-  });
-
-  it('keeps the roster’s own heading, and counts the ledger head', () => {
-    const claimed = row('claimed', 'project');
-    const quiet = row('quiet', 'project');
-    const result = claimsOf({ live: [claimed, quiet], folders: [folder(claimed)] });
-
-    expect(result.heading).toBe('Studio workload · 2 live · 0 overdue');
-    expect(result.restHeading).toBe('No current alert · 1 job');
-  });
-
-  it('pluralises the ledger head, and says nothing over an empty ledger', () => {
-    const a = row('a', 'project');
-    const b = row('b', 'project');
-    expect(claimsOf({ live: [a, b] }).restHeading).toBe('No current alert · 2 jobs');
-    expect(claimsOf({ live: [] }).restHeading).toBe('');
-  });
-
-  it('keeps the ledger under the paper’s own stage order (D8)', () => {
-    const live = [...ROSTER_STAGE_ORDER].reverse().map((s) => row(s, s));
-    const result = claimsOf({ live });
-
-    expect(result.ledger.map((g) => g.key)).toEqual([...ROSTER_STAGE_ORDER]);
-    expect(result.cards).toEqual([]);
-  });
-});
-
-describe('N2 · the cards rank by the band’s Next order, then name', () => {
-  function claimsOf(over: Partial<DeskRosterInput> = {}) {
-    return deriveDeskClaims({
-      roster: deriveDeskRoster(input(over), NOW),
-      now: NOW,
-    });
-  }
-
-  it('ranks class, then deadline, then age — never by whose hand the need is in', () => {
-    // claimBand put the designer's own lines first and the maker's last. The
-    // band's order puts the client's overdue invoice (class 1) first, and a
-    // maker silence 12 days old above an undated Pulse and the setup chore
-    // the designer holds (class 3).
-    const setup = row('a-setup', 'project', { title: 'A setup' });
-    const pulse = row('b-pulse', 'project', { title: 'B pulse' });
-    const maker = row('c-maker', 'project', { title: 'C maker silence' });
-    const late = row('d-late', 'project', { title: 'D overdue task' });
-    const invoice = row('e-invoice', 'project', { title: 'E invoice' });
-    const result = claimsOf({
-      live: [setup, pulse, maker, late, invoice],
-      folders: [
-        folder(setup, need({ kind: 'schedule_unconfigured', owner: 'designer' })),
-        folder(pulse, need({ kind: 'pulse_due', owner: 'designer' })),
-        folder(
-          maker,
-          need({
-            kind: 'po_unacknowledged',
-            owner: 'maker',
-            text: 'PO-HD-0412 sent — no acknowledgment',
-            dueOn: '2026-08-13T10:00:00Z',
-            at: '2026-08-13T10:00:00Z',
-          }),
-        ),
-        folder(late, need({ owner: 'designer', dueOn: '2026-08-01' })),
-        folder(invoice, need({ kind: 'overdue_invoice', owner: 'client', dueOn: '2026-08-15' })),
-      ],
-    });
-
-    expect(result.cards.map((c) => c.line.engagementId)).toEqual([
-      'e-invoice',
-      'd-late',
-      'c-maker',
-      'b-pulse',
-      'a-setup',
-    ]);
-  });
-
-  it('puts the older of two silences first', () => {
-    const fresh = row('a-fresh', 'project', { title: 'A fresh' });
-    const stale = row('b-stale', 'project', { title: 'B stale' });
-    const silence = (at: string) =>
-      need({ kind: 'po_unacknowledged', owner: 'maker', text: 'A purchase order sent — no acknowledgment', dueOn: at, at });
-    const result = claimsOf({
-      live: [fresh, stale],
-      folders: [folder(fresh, silence('2026-08-21')), folder(stale, silence('2026-08-13'))],
-    });
-
-    expect(result.cards.map((c) => c.line.engagementId)).toEqual(['b-stale', 'a-fresh']);
-  });
-
-  it('puts the nearer deadline first inside a class', () => {
-    const soon = row('m-soon', 'project', { title: 'M soon' });
-    const older = row('a-older', 'project', { title: 'A older' });
-    const result = claimsOf({
-      live: [soon, older],
-      folders: [
-        folder(soon, need({ owner: 'designer', dueOn: '2026-09-20' })),
-        folder(older, need({ owner: 'designer', dueOn: '2026-09-01' })),
-      ],
-    });
-
-    expect(result.cards.map((c) => c.line.engagementId)).toEqual([
-      'a-older',
-      'm-soon',
-    ]);
-  });
-
-  it('breaks a tie on the name, never on the id', () => {
-    // A UUID tiebreak is stable but arbitrary; a name is legible.
-    const zed = row('aaa', 'project', { title: 'Zeta house' });
-    const ash = row('zzz', 'project', { title: 'Ash house' });
-    const result = claimsOf({
-      live: [zed, ash],
-      folders: [
-        folder(zed, need({ owner: 'designer' })),
-        folder(ash, need({ owner: 'designer' })),
-      ],
-    });
-
-    expect(result.cards.map((c) => c.line.name)).toEqual([
-      'Ash house',
-      'Zeta house',
-    ]);
-  });
-
-  it('orders two UNDATED same-class cards by name', () => {
-    // Both read `none` with no age, so the comparator ties and the name order
-    // the cards were handed in stands.
-    const zed = row('aaa', 'project', { title: 'Zeta house' });
-    const ash = row('zzz', 'project', { title: 'Ash house' });
-    const result = claimsOf({
-      live: [zed, ash],
-      folders: [
-        folder(zed, need({ owner: 'designer', dueOn: null })),
-        folder(ash, need({ owner: 'designer', dueOn: null })),
-      ],
-    });
-
-    expect(result.cards.map((c) => c.line.name)).toEqual([
-      'Ash house',
-      'Zeta house',
-    ]);
-  });
-
-  it('sorts a dated card ahead of an undated one in the same class', () => {
-    const dated = row('dated', 'project', { title: 'Zeta house' });
-    const undated = row('undated', 'project', { title: 'Ash house' });
-    const result = claimsOf({
-      live: [dated, undated],
-      folders: [
-        folder(dated, need({ owner: 'designer', dueOn: '2026-09-01' })),
-        folder(undated, need({ owner: 'designer', dueOn: null })),
-      ],
-    });
-
-    expect(result.cards.map((c) => c.line.engagementId)).toEqual([
-      'dated',
-      'undated',
-    ]);
-  });
-
-  it('carries the stage and its sentence-case label on the card', () => {
-    const mine = row('mine', 'project');
-    const result = claimsOf({ live: [mine], folders: [folder(mine)] });
-
-    expect(result.cards[0].stage).toBe('project');
-    expect(result.cards[0].stageLabel).toBe('Project delivery');
-    expect(result.cards[0].custody).toBe('Action with you');
-  });
-});
-
 describe('deriveDeskRoster — personLine (the line under the name)', () => {
   it('joins the client and the phase, and never the body text', () => {
     const r = row('a', 'project', {
@@ -1473,7 +1278,6 @@ describe('fix-now 6 — at rest only when every modelled feed answered', () => {
     expect(q.state).not.toContain('no current alert');
     // A job with a need keeps its need.
     expect(lines.find((l) => l.engagementId === 'b')!.notChecked).toBeNull();
-    expect(deriveDeskClaims({ roster, now: NOW }).restHeading).toBe('Not checked · 1 job');
   });
 
   it('every feed answered (absent or empty) is the one state that may print at rest', () => {
@@ -1493,26 +1297,6 @@ describe('fix-now 6 — at rest only when every modelled feed answered', () => {
     const [line] = roster.groups.flatMap((g) => g.lines);
     expect(line.notChecked).toBeNull();
     expect(line.state).toContain('On hold');
-  });
-});
-
-describe('N6 — lead cards stand in the order they wrote in', () => {
-  it('within one deadline the earlier arrival leads, whatever the name order', () => {
-    const due = '2026-08-30T00:00:00Z';
-    const aaron = row('a', 'brief', { title: 'Aaron' });
-    const zelda = row('z', 'brief', { title: 'Zelda' });
-    const roster = deriveDeskRoster(
-      input({
-        live: [aaron, zelda],
-        folders: [
-          folder(aaron, need({ kind: 'new_lead', text: 'Aaron wrote — respond', dueOn: due, at: '2026-08-24T00:00:00Z', owner: 'designer' })),
-          folder(zelda, need({ kind: 'new_lead', text: 'Zelda wrote — respond', dueOn: due, at: '2026-08-20T00:00:00Z', owner: 'designer' })),
-        ],
-      }),
-      NOW,
-    );
-    const { cards } = deriveDeskClaims({ roster, now: NOW });
-    expect(cards.map((c) => c.line.engagementId)).toEqual(['z', 'a']);
   });
 });
 

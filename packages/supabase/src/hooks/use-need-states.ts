@@ -12,9 +12,12 @@ export interface NeedState {
   waitingOn: string | null;
   setAsideUntil: string | null;
   setAsideReason: string | null;
+  /** When the state was last written — the Desk's "since 9:30". */
+  updatedAt: string | null;
 }
 
 interface NeedStateRow {
+  user_id?: string;
   need_key: string;
   project_id: string | null;
   deferred_until: string | null;
@@ -22,10 +25,17 @@ interface NeedStateRow {
   waiting_on: string | null;
   set_aside_until: string | null;
   set_aside_reason: string | null;
+  updated_at?: string | null;
 }
 
-export function mapNeedStateRows(rows: NeedStateRow[]): Map<NeedKey, NeedState> {
-  return new Map(rows.map((row) => [row.need_key, {
+/**
+ * Her own states keyed by need. Given `meUserId`, a row filed by anyone else
+ * is dropped — `studio_need_states` is own-row only (00766), and a teammate's
+ * act travels separately as a fact (`useTeammateActed`), never as her state.
+ */
+export function mapNeedStateRows(rows: NeedStateRow[], meUserId?: string): Map<NeedKey, NeedState> {
+  const own = meUserId ? rows.filter((row) => row.user_id === meUserId) : rows;
+  return new Map(own.map((row) => [row.need_key, {
     needKey: row.need_key,
     projectId: row.project_id,
     deferredUntil: row.deferred_until,
@@ -33,25 +43,71 @@ export function mapNeedStateRows(rows: NeedStateRow[]): Map<NeedKey, NeedState> 
     waitingOn: row.waiting_on,
     setAsideUntil: row.set_aside_until,
     setAsideReason: row.set_aside_reason,
+    updatedAt: row.updated_at ?? null,
   }]));
 }
 
 /**
- * The viewer's own need states, across every studio she sits in. RLS returns
- * only her rows, and `set_need_state` files each under the PROJECT's studio, so
- * a read filtered by the Desk's studio missed every state a member of two
- * studios wrote (walk W-D1). `organizationId` only gates the read.
+ * The viewer's own need states, across every studio she sits in, and only
+ * hers: the read names her `user_id`. `set_need_state` files each under the
+ * PROJECT's studio, so a read filtered by the Desk's studio missed every state
+ * a member of two studios wrote (walk W-D1). `organizationId` only gates it.
  */
 export function useNeedStates(organizationId: string) {
   return useQuery({
     queryKey: ['need-states', organizationId],
     queryFn: async () => {
       const supabase = createBrowserClient();
+      // The session is local; the table's own-row policy is the authority.
+      const { data: { session } } = await supabase.auth.getSession();
+      const me = session?.user.id;
+      if (!me) return new Map<NeedKey, NeedState>();
       const { data, error } = await supabase
         .from('studio_need_states')
-        .select('need_key, project_id, deferred_until, acted_at, waiting_on, set_aside_until, set_aside_reason');
+        .select('user_id, need_key, project_id, deferred_until, acted_at, waiting_on, set_aside_until, set_aside_reason, updated_at')
+        .eq('user_id', me);
       if (error) throw error;
-      return mapNeedStateRows((data ?? []) as NeedStateRow[]);
+      return mapNeedStateRows((data ?? []) as NeedStateRow[], me);
+    },
+    enabled: Boolean(organizationId),
+  });
+}
+
+/** A teammate's act on a need, as a fact: who, and when. Never her state. */
+export interface TeammateActed {
+  userId: string;
+  actedAt: string;
+}
+
+interface NeedStateFactRow {
+  user_id: string;
+  need_key: string;
+  acted_at: string;
+}
+
+/** Every teammate who acted on each need — one need can carry several. */
+export function mapTeammateActedRows(rows: NeedStateFactRow[]): Map<NeedKey, TeammateActed[]> {
+  const facts = new Map<NeedKey, TeammateActed[]>();
+  for (const row of rows) {
+    const acts = facts.get(row.need_key) ?? [];
+    acts.push({ userId: row.user_id, actedAt: row.acted_at });
+    facts.set(row.need_key, acts);
+  }
+  return facts;
+}
+
+/**
+ * Teammates' acted facts from `studio_need_state_facts()` (00766): user, need
+ * and time only — never the caller's own rows, never a deferral or a reason.
+ */
+export function useTeammateActed(organizationId: string) {
+  return useQuery({
+    queryKey: ['need-state-facts', organizationId],
+    queryFn: async () => {
+      const supabase = createBrowserClient();
+      const { data, error } = await supabase.rpc('studio_need_state_facts');
+      if (error) throw error;
+      return mapTeammateActedRows((data ?? []) as NeedStateFactRow[]);
     },
     enabled: Boolean(organizationId),
   });
@@ -95,6 +151,9 @@ export function useSetNeedState(options?: { errorSurface?: 'inline' }) {
       });
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['need-states'] }),
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['need-states'] }),
+      queryClient.invalidateQueries({ queryKey: ['need-state-facts'] }),
+    ]),
   });
 }

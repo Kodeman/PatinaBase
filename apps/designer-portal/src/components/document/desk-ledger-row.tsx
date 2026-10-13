@@ -1,21 +1,26 @@
 'use client';
 
 /**
- * The roster line (R143 · D8 · US-25 slice 4).
+ * The ledger row (R143 · US-25 slice 4 · US-28 S3 change 2).
  *
- * One dense line per job, in every group of the line roster: the job, the
- * phase as an ink word (Q7 — the stage plates are gone), the head need's
- * sentence, its date and its one act. Monochrome: no wash, no mark, no
- * pigment. Every word stays selectable — nothing overlays anything here.
+ * One S1 ledger row per job: the job's name on its stage tick, the phase as
+ * an ink word, one sentence, when, and at most one act. A job with the studio
+ * waiting on someone else, or put off until a day ahead, prints no act. A
+ * line that settled today stays in place, muted. Every word stays selectable.
  */
 
+import { useState } from 'react';
 import Link from 'next/link';
+import { useSetNeedState } from '@patina/supabase';
 import type { Landing } from '@/lib/arrival/types';
 import { STAGE_WORD } from '@/lib/document/act-names';
 import { paperRegionsForSection } from '@/lib/document/document-index';
-import type { RosterLine } from '@/lib/document/desk-roster-derivation';
+import type { DeskLedgerLine, RosterLine } from '@/lib/document/desk-roster-derivation';
+import type { DeskHolder } from '@/lib/document/desk-scope';
+import { parseSourceDate } from '@/lib/document/dates';
 import { DocumentAction } from './document-action';
 import { openLedger } from './command-bar';
+import { clockTime, holderWord, stageClass } from './desk-job-card';
 
 /** F4 — the quiet row says what the roster's quiet state says
  *  (desk-roster-derivation's QUIET_STATE). */
@@ -32,7 +37,9 @@ export function rosterLineAnchorId(engagementId: string): string {
  *  (needGuideAction, document-guide.ts), in the arrival token's shape. A
  *  purchase order lands on the FF&E region; every other need on its stage's
  *  section. An act that opens a sheet or another room carries none. */
-export function actLanding(line: RosterLine): Landing | null {
+export function actLanding(
+  line: Pick<RosterLine, 'act' | 'jobHref' | 'needKind' | 'projectId' | 'stage'>,
+): Landing | null {
   if (line.act.ledger || line.act.href !== line.jobHref) return null;
   const po = line.needKind === 'po_unsent' || line.needKind === 'po_unacknowledged';
   if (po && line.projectId && paperRegionsForSection(line.stage).some((r) => r.key === 'ffe')) {
@@ -41,64 +48,101 @@ export function actLanding(line: RosterLine): Landing | null {
   return { kind: 'section', sectionKey: line.stage };
 }
 
-export function DeskLedgerRow({ line }: { line: RosterLine }) {
+const SHORT_DAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
+/** "Fri 16 Oct" — the ledger's short day, from a local day or a timestamp. */
+function shortDay(value: string | null | undefined): string | null {
+  const date = parseSourceDate(value ?? null) ?? (value ? new Date(value) : null);
+  if (!date || Number.isNaN(date.getTime())) return null;
+  return SHORT_DAY.format(date).replace(',', '');
+}
+
+export function DeskLedgerRow({
+  line,
+  standing,
+  settled = null,
+  waiting = null,
+  back = null,
+  holder = null,
+}: { line: RosterLine } & Partial<Omit<DeskLedgerLine, 'line'>> & {
+  /** Who carries the job; a row she does not carry prints no act. */
+  holder?: DeskHolder | null;
+}) {
+  const undo = useSetNeedState({ errorSurface: 'inline' });
+  const [failed, setFailed] = useState(false);
   const actionKey = `roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`;
   const ariaLabel = `${line.act.label} — ${line.name}`;
   const landing = line.needKind ? actLanding(line) : null;
-  const sentence = line.needKind
-    ? (line.overdueText ?? line.needText)
-    : (line.motionText ?? line.notChecked ?? AT_REST_SENTENCE);
+  const need = line.needKind ? (line.overdueText ?? line.needText ?? '') : '';
+  const theirs = standing === 'yours' && !!holder && !holder.mine;
+
+  let sentence = line.needKind ? need : (line.motionText ?? line.notChecked ?? AT_REST_SENTENCE);
+  let when: string | null = line.valueText ?? null;
+  if (settled) {
+    sentence = settled.kind === 'not_today' || settled.kind === 'set_aside'
+      ? `${settled.kind === 'not_today' ? 'Not today' : 'Set aside'} · ${clockTime(settled.at)}${settled.until ? ` · back ${shortDay(settled.until)}` : ''}`
+      : `${need || 'Done'} · ${settled.who ? `waiting on ${settled.who} since ` : ''}${clockTime(settled.at)}`;
+    when = null;
+  } else if (waiting) {
+    sentence = `${need || sentence} · waiting on ${waiting.who}`;
+    when = `Since ${shortDay(waiting.since) ?? 'today'}`;
+  } else if (back) {
+    sentence = back.reason ? `${need || sentence} · ${back.reason}` : need || sentence;
+    when = `Back ${shortDay(back.until) ?? 'soon'}`;
+  } else if (theirs) {
+    sentence = `${sentence} The move is ${holder?.name ? holderWord(holder.name) : 'the lead’s'}.`;
+  }
+  const quietRow = !!waiting || !!back || theirs || !!settled;
+  const ownDeferral = !!settled && !settled.by && (settled.kind === 'not_today' || settled.kind === 'set_aside');
 
   return (
     <li
       id={rosterLineAnchorId(line.engagementId)}
       data-ledger-row={line.engagementId}
-      className="desk-ledger-row"
+      className={settled ? 'lrow settled' : 'lrow'}
     >
-      <span data-ledger-cell="name" className="min-w-0">
-        <Link
-          href={line.jobHref}
-          data-roster-name
-          className="block min-w-0 font-heading text-[18px] leading-[1.3] text-[var(--text-primary)] no-underline [overflow-wrap:anywhere] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--text-primary)]"
-        >
+      <p data-ledger-cell="name" className={`lname tick ${stageClass(line.stage)}`}>
+        <Link href={line.jobHref} data-roster-name className="name t-d4 [overflow-wrap:anywhere]">
           {line.name}
         </Link>
-        <span className="mt-1 block font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--text-subtle)]">
-          {line.custody}
-        </span>
-      </span>
-      <span
-        data-ledger-cell="phase"
-        className="font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)]"
-      >
+      </p>
+      <span data-ledger-cell="phase" className="lphase word">
         {STAGE_WORD[line.stage]}
       </span>
-      <span
-        data-ledger-cell="sentence"
-        className="min-w-0 text-[15px] leading-[1.45] text-[var(--text-muted)] [overflow-wrap:anywhere]"
-      >
+      <span data-ledger-cell="sentence" className="lsent t-body-sm [overflow-wrap:anywhere]">
         {sentence}
       </span>
-      {/* Tabular figures: the column exists so that the moment one row carries
-          a date, it lines up with every other one that does. */}
-      <span
-        data-ledger-cell="value"
-        className="font-mono text-[14px] leading-[1.5] tracking-[0.02em] tabular-nums text-[var(--text-primary)]"
-      >
-        {line.valueText ?? ''}
+      {/* Tabular figures: the moment one row carries a date, it lines up
+          with every other one that does. */}
+      <span data-ledger-cell="value" className="lwhen t-meta tabular-nums">
+        {when ?? ''}
       </span>
       {/* `data-register="act"` is what the arrival click token reads (US-14
           R-DM21 A): an act opens the record straight, with its landing. */}
-      <span data-ledger-cell="act" data-register="act">
-        {line.act.ledger ? (
+      <span data-ledger-cell="act" data-register="act" className="lact">
+        {ownDeferral ? (
+          <DocumentAction
+            actionKey={`roster-undo-${line.engagementId}`}
+            aria-label={`Undo — ${line.name}`}
+            variant="tertiary"
+            disabled={undo.isPending || !line.needKey}
+            onClick={() => {
+              if (!line.needKey) return;
+              undo.mutate(
+                { needKey: line.needKey, engagementId: line.projectId ?? line.engagementId, action: 'clear' },
+                { onError: () => setFailed(true) },
+              );
+            }}
+          >
+            Undo
+          </DocumentAction>
+        ) : quietRow ? null : line.act.ledger ? (
           <DocumentAction
             actionKey={actionKey}
             aria-label={ariaLabel}
-            variant="tertiary"
+            variant="secondary"
             wrap
-            onClick={() =>
-              openLedger(line.act.ledger!.name, line.act.ledger!.context)
-            }
+            onClick={() => openLedger(line.act.ledger!.name, line.act.ledger!.context)}
           >
             {line.act.label}
           </DocumentAction>
@@ -106,7 +150,7 @@ export function DeskLedgerRow({ line }: { line: RosterLine }) {
           <DocumentAction
             actionKey={actionKey}
             aria-label={ariaLabel}
-            variant="tertiary"
+            variant="secondary"
             wrap
             data-landing={landing ? JSON.stringify(landing) : undefined}
             href={line.act.href}
@@ -115,6 +159,11 @@ export function DeskLedgerRow({ line }: { line: RosterLine }) {
           </DocumentAction>
         )}
       </span>
+      {failed && (
+        <p role="alert" className="t-body-sm">
+          Undo did not save. Try again.
+        </p>
+      )}
     </li>
   );
 }
