@@ -24,8 +24,13 @@
 
 // deno-lint-ignore-file no-explicit-any
 
-import { readProductPage } from '../_shared/product-page/page.ts';
-import { hostOf, isDeniedLink, nameFromSlug, normalizeProductUrl } from './links.ts';
+import { readProductPage } from "../_shared/product-page/page.ts";
+import {
+  hostOf,
+  isDeniedLink,
+  nameFromSlug,
+  normalizeProductUrl,
+} from "./links.ts";
 import {
   applyLookTier,
   emptyLookSummary,
@@ -33,16 +38,26 @@ import {
   lookCheckCandidate,
   type LookDeps,
   type LookSummary,
-} from './look.ts';
-import { cosine, nameOverlap, pairByLook, PAIR_NAME_MIN_OVERLAP } from './pairing.ts';
-import { retailerName } from './retailers.ts';
-import { ADJUDICATION, LIMITS, THRESHOLD_VERSION, THRESHOLDS } from './thresholds.ts';
+} from "./look.ts";
+import {
+  cosine,
+  nameOverlap,
+  PAIR_NAME_MIN_OVERLAP,
+  pairByLook,
+} from "./pairing.ts";
+import { retailerName } from "./retailers.ts";
+import { LIMITS, THRESHOLD_VERSION, THRESHOLDS } from "./thresholds.ts";
 
 // ─── Shapes ──────────────────────────────────────────────────────────────────
 
-export type Band = 'strong' | 'likely' | 'possible';
-export type CandidateSource = 'link_existing' | 'link' | 'sku' | 'words' | 'look';
-export type FoundBy = 'link' | 'words' | 'look';
+export type Band = "strong" | "likely" | "possible";
+export type CandidateSource =
+  | "link_existing"
+  | "link"
+  | "sku"
+  | "words"
+  | "look";
+export type FoundBy = "link" | "words" | "look";
 
 /** The record_board_deck_import_resolution candidate contract (snake_case). */
 export interface Candidate {
@@ -68,6 +83,7 @@ export interface ClaimedItem {
   slide_index: number;
   role: string;
   extracted: Record<string, unknown>;
+  created_by?: string;
 }
 
 export interface DeckLink {
@@ -116,13 +132,14 @@ export interface AdjudicationAssignment {
 }
 
 export type AdjudicationClaim =
-  | { status: 'granted' }
-  | { status: 'cached'; assignments: AdjudicationAssignment[] }
-  | { status: 'denied' };
+  | { status: "granted" }
+  | { status: "cached"; assignments: AdjudicationAssignment[] }
+  | { status: "denied" };
 
 export interface AdjudicationReply {
   input: unknown;
   usage: { input_tokens: number; output_tokens: number };
+  usd: number;
 }
 
 export class FetchBlocked extends Error {
@@ -138,14 +155,24 @@ export class AdjudicationHttpError extends Error {
   }
 }
 
-const TRANSIENT_ADJUDICATION_STATUS = new Set([408, 429, 500, 502, 503, 504, 529]);
+const TRANSIENT_ADJUDICATION_STATUS = new Set([
+  408,
+  429,
+  500,
+  502,
+  503,
+  504,
+  529,
+]);
 
 /** Rate limits, overload, timeouts and dropped connections pass; retry later. */
 export function isTransientAdjudicationError(error: unknown): boolean {
-  if (error instanceof AdjudicationHttpError) return TRANSIENT_ADJUDICATION_STATUS.has(error.status);
+  if (error instanceof AdjudicationHttpError) {
+    return TRANSIENT_ADJUDICATION_STATUS.has(error.status);
+  }
   if (error instanceof TypeError) return true; // fetch: network failure
   const name = (error as { name?: unknown })?.name;
-  return name === 'TimeoutError' || name === 'AbortError';
+  return name === "TimeoutError" || name === "AbortError";
 }
 
 /** Runs one request to `url` under the run's limit for that URL's host. */
@@ -159,25 +186,63 @@ export interface ResolveDeps {
     products: ProductHit[];
     vendors: Record<string, string>;
   }>;
-  matchSku(importId: string, sku: string, vendor: string): Promise<ProductHit[]>;
-  searchWords(importId: string, query: string, vendor: string | null, limit: number): Promise<ProductHit[]>;
+  matchSku(
+    importId: string,
+    sku: string,
+    vendor: string,
+  ): Promise<ProductHit[]>;
+  searchWords(
+    importId: string,
+    query: string,
+    vendor: string | null,
+    limit: number,
+  ): Promise<ProductHit[]>;
   /** Links granted out of `n` (0 = quota spent). */
   consumeLinkQuota(importId: string, n: number): Promise<number>;
   /** SSRF-guarded page read; throws FetchBlocked on any failure. Every
    *  request, the first and each redirect hop, runs through `hop`, so the
    *  per-host limit holds for the host actually contacted. */
-  fetchPage(url: string, hop: HopGate): Promise<{ html: string; finalUrl: string }>;
-  record(itemId: string, state: 'found' | 'not_found' | 'pending', foundBy: FoundBy | null, candidates: Candidate[]): Promise<void>;
+  fetchPage(
+    url: string,
+    hop: HopGate,
+  ): Promise<{ html: string; finalUrl: string }>;
+  record(
+    itemId: string,
+    state: "found" | "not_found" | "pending",
+    foundBy: FoundBy | null,
+    candidates: Candidate[],
+  ): Promise<void>;
   /** Hand back leased pieces this run never tried: lease cleared, the claim's attempt refunded. */
   release(itemIds: string[]): Promise<void>;
   pairablePictures(importId: string): Promise<PairablePicture[]>;
-  pairLink(linkItemId: string, pictureItemId: string, candidates: Candidate[]): Promise<boolean>;
+  pairLink(
+    linkItemId: string,
+    pictureItemId: string,
+    candidates: Candidate[],
+  ): Promise<boolean>;
   /** Null when the embedder is not configured. Map id → vector. */
-  embedImages: ((inputs: { id: string; url: string }[]) => Promise<Map<string, number[]>>) | null;
-  claimAdjudication(importId: string, slideIndex: number): Promise<AdjudicationClaim>;
-  storeAdjudication(importId: string, slideIndex: number, assignments: AdjudicationAssignment[] | null): Promise<void>;
+  embedImages:
+    | ((
+      inputs: { id: string; url: string }[],
+    ) => Promise<Map<string, number[]>>)
+    | null;
+  claimAdjudication(
+    importId: string,
+    slideIndex: number,
+  ): Promise<AdjudicationClaim>;
+  storeAdjudication(
+    importId: string,
+    slideIndex: number,
+    assignments: AdjudicationAssignment[] | null,
+  ): Promise<void>;
   /** Null when ANTHROPIC_API_KEY is absent: deterministic results only. */
-  adjudicate: ((context: AdjudicationContext) => Promise<AdjudicationReply>) | null;
+  adjudicate:
+    | ((
+      context: AdjudicationContext,
+      importId: string,
+      userId: string | null,
+    ) => Promise<AdjudicationReply | null>)
+    | null;
   /** The look tier (look.ts). Absent: links and words only. */
   look?: LookDeps | null;
   sleep(ms: number): Promise<void>;
@@ -198,6 +263,7 @@ export interface RunSummary {
   /** Claimed pieces not started before the run's start budget ran out. */
   deferred: number;
   adjudications: number;
+  llm_denied: number;
   adjudication_input_tokens: number;
   adjudication_output_tokens: number;
   cost_usd: number;
@@ -208,33 +274,34 @@ export interface RunSummary {
 // ─── Reading what the slide said ─────────────────────────────────────────────
 
 function str(v: unknown): string | null {
-  return typeof v === 'string' && v.trim() ? v.trim() : null;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
 function cents(v: unknown): number | null {
-  if (typeof v === 'number' && Number.isInteger(v) && v > 0) return v;
-  if (typeof v === 'string') {
-    const n = Number(v.replace(/[^0-9.]/g, ''));
+  if (typeof v === "number" && Number.isInteger(v) && v > 0) return v;
+  if (typeof v === "string") {
+    const n = Number(v.replace(/[^0-9.]/g, ""));
     if (Number.isFinite(n) && n > 0) return Math.round(n * 100);
   }
   return null;
 }
 
-const ON_PICTURE_SOURCES = new Set(['picture', 'overlay', 'shape']);
+const ON_PICTURE_SOURCES = new Set(["picture", "overlay", "shape"]);
 
 /** The links on a piece: `extracted.links[]` ({url, source?, on_picture?}). */
 export function readLinks(extracted: Record<string, unknown>): DeckLink[] {
   const raw = Array.isArray(extracted.links) ? extracted.links : [];
   const out: DeckLink[] = [];
   for (const entry of raw) {
-    if (!entry || typeof entry !== 'object') continue;
+    if (!entry || typeof entry !== "object") continue;
     const url = str((entry as any).url);
     if (!url || isDeniedLink(url)) continue;
     const source = str((entry as any).source) ?? str((entry as any).origin);
     out.push({
       url,
       source,
-      onPicture: (entry as any).on_picture === true || (source != null && ON_PICTURE_SOURCES.has(source)),
+      onPicture: (entry as any).on_picture === true ||
+        (source != null && ON_PICTURE_SOURCES.has(source)),
     });
   }
   // A link on the picture itself is read first.
@@ -243,7 +310,7 @@ export function readLinks(extracted: Record<string, unknown>): DeckLink[] {
 
 /** The caption: `extracted.caption{}` or the same keys flat on extracted. */
 export function readCaption(extracted: Record<string, unknown>): Caption {
-  const c = extracted.caption && typeof extracted.caption === 'object'
+  const c = extracted.caption && typeof extracted.caption === "object"
     ? { ...extracted, ...(extracted.caption as Record<string, unknown>) }
     : extracted;
   const altAuto = extracted.alt_auto === true;
@@ -261,21 +328,35 @@ export function readCaption(extracted: Record<string, unknown>): Caption {
 // ─── Candidate assembly ──────────────────────────────────────────────────────
 
 const BAND_ORDER: Record<Band, number> = { strong: 0, likely: 1, possible: 2 };
-const SOURCE_ORDER: Record<CandidateSource, number> = { link_existing: 0, sku: 1, link: 2, words: 3, look: 4 };
+const SOURCE_ORDER: Record<CandidateSource, number> = {
+  link_existing: 0,
+  sku: 1,
+  link: 2,
+  words: 3,
+  look: 4,
+};
 
 /** Dedupe by product or page, best band first, at most five, ranked 1..n. */
-export function finalizeCandidates(list: Omit<Candidate, 'rank'>[]): Candidate[] {
-  const best = new Map<string, Omit<Candidate, 'rank'>>();
+export function finalizeCandidates(
+  list: Omit<Candidate, "rank">[],
+): Candidate[] {
+  const best = new Map<string, Omit<Candidate, "rank">>();
   for (const [index, candidate] of list.entries()) {
     const key = candidate.product_id
       ? `p:${candidate.product_id}`
-      : `u:${normalizeProductUrl(candidate.extracted?.source_url ?? '') ?? index}`;
+      : `u:${
+        normalizeProductUrl(candidate.extracted?.source_url ?? "") ?? index
+      }`;
     const held = best.get(key);
-    if (!held || BAND_ORDER[candidate.band] < BAND_ORDER[held.band]) best.set(key, candidate);
+    if (!held || BAND_ORDER[candidate.band] < BAND_ORDER[held.band]) {
+      best.set(key, candidate);
+    }
   }
   return [...best.values()]
     .sort((a, b) =>
-      BAND_ORDER[a.band] - BAND_ORDER[b.band] || SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source])
+      BAND_ORDER[a.band] - BAND_ORDER[b.band] ||
+      SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source]
+    )
     .slice(0, 5)
     .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
 }
@@ -283,12 +364,14 @@ export function finalizeCandidates(list: Omit<Candidate, 'rank'>[]): Candidate[]
 export function foundByOf(candidates: Candidate[]): FoundBy | null {
   const top = candidates[0];
   if (!top) return null;
-  if (top.source === 'look') return 'look';
-  return top.source === 'link_existing' || top.source === 'link' ? 'link' : 'words';
+  if (top.source === "look") return "look";
+  return top.source === "link_existing" || top.source === "link"
+    ? "link"
+    : "words";
 }
 
 /** T1 banding: a clear top hit is likely, everything else possible. */
-export function bandWords(hits: ProductHit[]): Omit<Candidate, 'rank'>[] {
+export function bandWords(hits: ProductHit[]): Omit<Candidate, "rank">[] {
   const sorted = [...hits].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   return sorted.map((hit, index) => {
     const score = hit.score ?? 0;
@@ -296,9 +379,9 @@ export function bandWords(hits: ProductHit[]): Omit<Candidate, 'rank'>[] {
     const likely = index === 0 && score >= THRESHOLDS.words.likelyScore &&
       score - next >= THRESHOLDS.words.likelyMargin;
     return {
-      source: 'words' as const,
+      source: "words" as const,
       product_id: hit.product_id,
-      band: likely ? 'likely' as const : 'possible' as const,
+      band: likely ? "likely" as const : "possible" as const,
       evidence: { score: Math.round(score * 1000) / 1000 },
     };
   });
@@ -327,9 +410,16 @@ export class HostGate {
       });
     }
     this.active.set(host, (this.active.get(host) ?? 0) + 1);
-    this.peak.set(host, Math.max(this.peak.get(host) ?? 0, this.active.get(host)!));
-    const wait = (this.last.get(host) ?? -Infinity) + this.spacingMs - this.now();
-    this.last.set(host, Math.max(this.now(), (this.last.get(host) ?? -Infinity) + this.spacingMs));
+    this.peak.set(
+      host,
+      Math.max(this.peak.get(host) ?? 0, this.active.get(host)!),
+    );
+    const wait = (this.last.get(host) ?? -Infinity) + this.spacingMs -
+      this.now();
+    this.last.set(
+      host,
+      Math.max(this.now(), (this.last.get(host) ?? -Infinity) + this.spacingMs),
+    );
     try {
       if (wait > 0) await this.sleep(wait);
       return await task();
@@ -343,41 +433,48 @@ export class HostGate {
   peak = new Map<string, number>();
 }
 
-async function pool<T>(items: T[], size: number, work: (item: T) => Promise<void>): Promise<void> {
+async function pool<T>(
+  items: T[],
+  size: number,
+  work: (item: T) => Promise<void>,
+): Promise<void> {
   let next = 0;
-  const lanes = Array.from({ length: Math.min(size, items.length) }, async () => {
-    while (next < items.length) {
-      const item = items[next++];
-      await work(item);
-    }
-  });
+  const lanes = Array.from(
+    { length: Math.min(size, items.length) },
+    async () => {
+      while (next < items.length) {
+        const item = items[next++];
+        await work(item);
+      }
+    },
+  );
   await Promise.all(lanes);
 }
 
 // ─── Adjudication ────────────────────────────────────────────────────────────
 
-export const ADJUDICATION_TOOL_NAME = 'assign_slide_elements';
+export const ADJUDICATION_TOOL_NAME = "assign_slide_elements";
 
 export function adjudicationTool() {
   return {
     name: ADJUDICATION_TOOL_NAME,
     description:
-      'Say which text elements and which links on this slide describe each picture. Use only the element keys and link ids given.',
+      "Say which text elements and which links on this slide describe each picture. Use only the element keys and link ids given.",
     input_schema: {
-      type: 'object',
+      type: "object",
       additionalProperties: false,
-      required: ['assignments'],
+      required: ["assignments"],
       properties: {
         assignments: {
-          type: 'array',
+          type: "array",
           items: {
-            type: 'object',
+            type: "object",
             additionalProperties: false,
-            required: ['image_element_key', 'text_element_keys', 'link_ids'],
+            required: ["image_element_key", "text_element_keys", "link_ids"],
             properties: {
-              image_element_key: { type: 'string' },
-              text_element_keys: { type: 'array', items: { type: 'string' } },
-              link_ids: { type: 'array', items: { type: 'string' } },
+              image_element_key: { type: "string" },
+              text_element_keys: { type: "array", items: { type: "string" } },
+              link_ids: { type: "array", items: { type: "string" } },
             },
           },
         },
@@ -387,27 +484,39 @@ export function adjudicationTool() {
 }
 
 export const ADJUDICATION_SYSTEM =
-  'You read one slide of an interior designer\'s mood-board deck. Each picture may be a product; captions and links near it may name it. Assign each text element and each link to the one picture it describes, or to none when it describes no picture or you cannot tell. Use only the keys and ids provided; never invent one and never describe positions. Submit with the provided tool.';
+  "You read one slide of an interior designer's mood-board deck. Each picture may be a product; captions and links near it may name it. Assign each text element and each link to the one picture it describes, or to none when it describes no picture or you cannot tell. Use only the keys and ids provided; never invent one and never describe positions. Submit with the provided tool.";
 
 /** The slide context the parser attached to a flagged piece. */
-export function readAdjudicationContext(item: ClaimedItem): AdjudicationContext | null {
+export function readAdjudicationContext(
+  item: ClaimedItem,
+): AdjudicationContext | null {
   if (item.extracted.needs_adjudication !== true) return null;
   const raw = item.extracted.adjudication as any;
-  if (!raw || typeof raw !== 'object') return null;
+  if (!raw || typeof raw !== "object") return null;
   const images = (Array.isArray(raw.images) ? raw.images : [])
     .filter((x: any) => str(x?.key))
-    .map((x: any) => ({ key: String(x.key), ...(str(x.alt) ? { alt: String(x.alt).slice(0, 300) } : {}) }));
+    .map((x: any) => ({
+      key: String(x.key),
+      ...(str(x.alt) ? { alt: String(x.alt).slice(0, 300) } : {}),
+    }));
   const texts = (Array.isArray(raw.texts) ? raw.texts : [])
     .filter((x: any) => str(x?.key) && str(x?.text))
-    .map((x: any) => ({ key: String(x.key), text: String(x.text).slice(0, 500) }));
+    .map((x: any) => ({
+      key: String(x.key),
+      text: String(x.text).slice(0, 500),
+    }));
   const links = (Array.isArray(raw.links) ? raw.links : [])
     .filter((x: any) => str(x?.id) && str(x?.url))
     .map((x: any) => ({
       id: String(x.id),
       url: String(x.url).slice(0, 2048),
-      ...(str(x.text_context) ? { text_context: String(x.text_context).slice(0, 300) } : {}),
+      ...(str(x.text_context)
+        ? { text_context: String(x.text_context).slice(0, 300) }
+        : {}),
     }));
-  if (images.length === 0 || (texts.length === 0 && links.length === 0)) return null;
+  if (images.length === 0 || (texts.length === 0 && links.length === 0)) {
+    return null;
+  }
   return { slide_index: item.slide_index, images, texts, links };
 }
 
@@ -425,12 +534,21 @@ export function validateAssignments(
   const usedLinks = new Set<string>();
   const out: AdjudicationAssignment[] = [];
   for (const entry of list) {
-    const key = typeof entry?.image_element_key === 'string' ? entry.image_element_key : null;
-    if (!key || !images.has(key) || out.some((o) => o.image_element_key === key)) continue;
-    const t = (Array.isArray(entry.text_element_keys) ? entry.text_element_keys : [])
-      .filter((k: unknown) => typeof k === 'string' && texts.has(k) && !usedTexts.has(k));
+    const key = typeof entry?.image_element_key === "string"
+      ? entry.image_element_key
+      : null;
+    if (
+      !key || !images.has(key) || out.some((o) => o.image_element_key === key)
+    ) continue;
+    const t =
+      (Array.isArray(entry.text_element_keys) ? entry.text_element_keys : [])
+        .filter((k: unknown) =>
+          typeof k === "string" && texts.has(k) && !usedTexts.has(k)
+        );
     const l = (Array.isArray(entry.link_ids) ? entry.link_ids : [])
-      .filter((k: unknown) => typeof k === 'string' && links.has(k) && !usedLinks.has(k));
+      .filter((k: unknown) =>
+        typeof k === "string" && links.has(k) && !usedLinks.has(k)
+      );
     t.forEach((k: string) => usedTexts.add(k));
     l.forEach((k: string) => usedLinks.add(k));
     out.push({ image_element_key: key, text_element_keys: t, link_ids: l });
@@ -438,10 +556,7 @@ export function validateAssignments(
   return out;
 }
 
-export function adjudicationCostUsd(usage: { input_tokens: number; output_tokens: number }): number {
-  return (usage.input_tokens * ADJUDICATION.usdPerMillionInput +
-    usage.output_tokens * ADJUDICATION.usdPerMillionOutput) / 1_000_000;
-}
+// Adjudication spend is priced by _shared/claude-models.ts through callClaude.
 
 // ─── One piece ───────────────────────────────────────────────────────────────
 
@@ -455,7 +570,7 @@ interface PieceView {
 }
 
 interface PieceOutcome {
-  state: 'found' | 'not_found' | 'pending';
+  state: "found" | "not_found" | "pending";
   candidates: Candidate[];
   /** For pairing: the page photo of a link-only row. */
   pageImage: string | null;
@@ -468,21 +583,23 @@ async function resolvePiece(
   summary: RunSummary,
 ): Promise<PieceOutcome> {
   const { item, links, caption } = view;
-  const list: Omit<Candidate, 'rank'>[] = [];
+  const list: Omit<Candidate, "rank">[] = [];
   let pageImage: string | null = null;
   const common = view.adjudicated ? { adjudicated: true } : {};
 
   // T0a: links already in the importer's library. One round trip for all.
-  const normalized = links.map((l) => normalizeProductUrl(l.url)).filter((u): u is string => !!u);
+  const normalized = links.map((l) => normalizeProductUrl(l.url)).filter((
+    u,
+  ): u is string => !!u);
   let vendors: Record<string, string> = {};
   if (normalized.length) {
     const matched = await deps.matchLinks(item.import_id, normalized);
     vendors = matched.vendors;
     for (const hit of matched.products) {
       list.push({
-        source: 'link_existing',
+        source: "link_existing",
         product_id: hit.product_id,
-        band: 'strong',
+        band: "strong",
         evidence: { ...common, url: hit.url ?? null },
       });
     }
@@ -490,34 +607,43 @@ async function resolvePiece(
 
   // T0b: read the best link's page unless the library already had it.
   const primary = links[0];
-  if (primary && !list.some((c) => c.source === 'link_existing')) {
-    const slideEvidence = { ...common, link_on_picture: primary.onPicture, link_source: primary.source };
+  if (primary && !list.some((c) => c.source === "link_existing")) {
+    const slideEvidence = {
+      ...common,
+      link_on_picture: primary.onPicture,
+      link_source: primary.source,
+    };
     const granted = await deps.consumeLinkQuota(item.import_id, 1);
     let read: ReturnType<typeof readProductPage> | null = null;
     let blockedReason: string | null = null;
     if (granted < 1) {
       summary.quota_denied++;
-      blockedReason = 'quota';
+      blockedReason = "quota";
     } else {
       try {
-        const page = await deps.fetchPage(primary.url, (url, task) => gate.run(hostOf(url) ?? url, task));
+        const page = await deps.fetchPage(
+          primary.url,
+          (url, task) => gate.run(hostOf(url) ?? url, task),
+        );
         read = readProductPage(page.html, primary.url, page.finalUrl);
         summary.pages_read++;
       } catch (error) {
         if (error instanceof FetchBlocked && error.unsafe) {
           // An unsafe address is not a shop: no candidate at all.
-          deps.log('link_unsafe', { item_id: item.item_id, code: error.code });
-          blockedReason = 'unsafe';
+          deps.log("link_unsafe", { item_id: item.item_id, code: error.code });
+          blockedReason = "unsafe";
         } else {
-          blockedReason = error instanceof FetchBlocked ? error.code : 'fetch_failed';
+          blockedReason = error instanceof FetchBlocked
+            ? error.code
+            : "fetch_failed";
         }
       }
     }
 
-    if (read?.kind === 'product') {
+    if (read?.kind === "product") {
       pageImage = read.images[0] ?? null;
       list.push({
-        source: 'link',
+        source: "link",
         extracted: {
           ...(read.name ? { name: read.name } : {}),
           ...(read.brand ? { brand: read.brand } : {}),
@@ -525,29 +651,35 @@ async function resolvePiece(
           ...(read.images.length ? { images: read.images.slice(0, 6) } : {}),
           source_url: read.sourceUrl,
         },
-        band: primary.onPicture ? 'strong' : 'likely',
+        band: primary.onPicture ? "strong" : "likely",
         evidence: { ...slideEvidence, page_read: true, look_checked: false },
       });
     } else if (read) {
       // A page that is not a product: no candidate; the link stays on the
       // piece's extracted.links for the ledger.
-      deps.log('link_not_product', { item_id: item.item_id, reason: read.reason });
-    } else if (blockedReason && blockedReason !== 'unsafe') {
+      deps.log("link_not_product", {
+        item_id: item.item_id,
+        reason: read.reason,
+      });
+    } else if (blockedReason && blockedReason !== "unsafe") {
       // Link-only: identity from the link, details from the slide. Never a
       // fabricated price; kept-able but never preselected.
       const linkHost = hostOf(primary.url);
       const name = caption.name ?? nameFromSlug(primary.url);
-      const brand = caption.vendor ?? (linkHost ? vendors[linkHost] ?? retailerName(linkHost) : null);
+      const brand = caption.vendor ??
+        (linkHost ? vendors[linkHost] ?? retailerName(linkHost) : null);
       summary.link_only++;
       list.push({
-        source: 'link',
+        source: "link",
         extracted: {
           ...(name ? { name } : {}),
           ...(brand ? { brand } : {}),
-          ...(caption.priceCents != null ? { price_cents: caption.priceCents } : {}),
+          ...(caption.priceCents != null
+            ? { price_cents: caption.priceCents }
+            : {}),
           source_url: primary.url,
         },
-        band: 'likely',
+        band: "likely",
         evidence: { ...slideEvidence, page_read: false, reason: blockedReason },
       });
     }
@@ -555,20 +687,46 @@ async function resolvePiece(
 
   // T0c: SKU + vendor from the caption.
   if (caption.sku && caption.vendor) {
-    for (const hit of await deps.matchSku(item.import_id, caption.sku, caption.vendor)) {
-      list.push({ source: 'sku', product_id: hit.product_id, band: 'strong', evidence: { ...common, sku: caption.sku } });
+    for (
+      const hit of await deps.matchSku(
+        item.import_id,
+        caption.sku,
+        caption.vendor,
+      )
+    ) {
+      list.push({
+        source: "sku",
+        product_id: hit.product_id,
+        band: "strong",
+        evidence: { ...common, sku: caption.sku },
+      });
     }
   }
 
   // T1: words, unless something strong already answered.
-  const query = [caption.name ?? caption.text, caption.vendor].filter(Boolean).join(' ').slice(0, 200).trim();
-  if (query && !list.some((c) => c.band === 'strong')) {
-    const hits = await deps.searchWords(item.import_id, query, caption.vendor, LIMITS.wordsLimit);
-    list.push(...bandWords(hits).map((c) => ({ ...c, evidence: { ...c.evidence, ...common } })));
+  const query = [caption.name ?? caption.text, caption.vendor].filter(Boolean)
+    .join(" ").slice(0, 200).trim();
+  if (query && !list.some((c) => c.band === "strong")) {
+    const hits = await deps.searchWords(
+      item.import_id,
+      query,
+      caption.vendor,
+      LIMITS.wordsLimit,
+    );
+    list.push(
+      ...bandWords(hits).map((c) => ({
+        ...c,
+        evidence: { ...c.evidence, ...common },
+      })),
+    );
   }
 
   const candidates = finalizeCandidates(list);
-  return { state: candidates.length ? 'found' : 'not_found', candidates, pageImage };
+  return {
+    state: candidates.length ? "found" : "not_found",
+    candidates,
+    pageImage,
+  };
 }
 
 // ─── The run ─────────────────────────────────────────────────────────────────
@@ -585,6 +743,7 @@ function emptySummary(): RunSummary {
     quota_denied: 0,
     deferred: 0,
     adjudications: 0,
+    llm_denied: 0,
     adjudication_input_tokens: 0,
     adjudication_output_tokens: 0,
     cost_usd: 0,
@@ -602,30 +761,46 @@ async function adjudicateSlides(
   const byItemKey = new Map<string, { texts: string[]; links: DeckLink[] }>();
   // No API key: no slot is claimed, so none is spent or left pending.
   if (!deps.adjudicate) return byItemKey;
-  const slides = new Map<string, AdjudicationContext & { import_id: string }>();
+  const slides = new Map<
+    string,
+    AdjudicationContext & { import_id: string; user_id: string | null }
+  >();
   for (const item of items) {
     const context = readAdjudicationContext(item);
     const key = `${item.import_id}:${item.slide_index}`;
-    if (context && !slides.has(key)) slides.set(key, { ...context, import_id: item.import_id });
+    if (context && !slides.has(key)) {
+      slides.set(key, {
+        ...context,
+        import_id: item.import_id,
+        user_id: item.created_by ?? null,
+      });
+    }
   }
   for (const [, slide] of slides) {
     if (pastDeadline()) break;
     let assignments: AdjudicationAssignment[] | null = null;
-    const claim = await deps.claimAdjudication(slide.import_id, slide.slide_index);
-    if (claim.status === 'cached') {
+    const claim = await deps.claimAdjudication(
+      slide.import_id,
+      slide.slide_index,
+    );
+    if (claim.status === "cached") {
       assignments = claim.assignments;
-    } else if (claim.status === 'granted') {
+    } else if (claim.status === "granted") {
       try {
-        const { import_id: _ignored, ...context } = slide;
-        const reply = await deps.adjudicate(context);
-        summary.adjudications++;
-        summary.adjudication_input_tokens += reply.usage.input_tokens;
-        summary.adjudication_output_tokens += reply.usage.output_tokens;
-        summary.cost_usd += adjudicationCostUsd(reply.usage);
-        assignments = validateAssignments(reply.input, context);
+        const { import_id: _ignored, user_id, ...context } = slide;
+        const reply = await deps.adjudicate(context, slide.import_id, user_id);
+        if (reply === null) {
+          summary.llm_denied++;
+        } else {
+          summary.adjudications++;
+          summary.adjudication_input_tokens += reply.usage.input_tokens;
+          summary.adjudication_output_tokens += reply.usage.output_tokens;
+          summary.cost_usd += reply.usd;
+          assignments = validateAssignments(reply.input, context);
+        }
       } catch (error) {
         const transient = isTransientAdjudicationError(error);
-        deps.log('adjudication_failed', {
+        deps.log("adjudication_failed", {
           import_id: slide.import_id,
           transient,
           error: String(error).slice(0, 200),
@@ -634,7 +809,11 @@ async function adjudicateSlides(
         // once its lease ages out. Anything else is recorded as failed.
         if (transient) continue;
       }
-      await deps.storeAdjudication(slide.import_id, slide.slide_index, assignments);
+      await deps.storeAdjudication(
+        slide.import_id,
+        slide.slide_index,
+        assignments,
+      );
     }
     if (!assignments) continue;
     const texts = new Map(slide.texts.map((t) => [t.key, t.text]));
@@ -645,14 +824,17 @@ async function adjudicateSlides(
         links: a.link_ids
           .map((id) => links.get(id)!)
           .filter((url) => url && !isDeniedLink(url))
-          .map((url) => ({ url, onPicture: false, source: 'adjudicated' })),
+          .map((url) => ({ url, onPicture: false, source: "adjudicated" })),
       });
     }
   }
   return byItemKey;
 }
 
-function viewOf(item: ClaimedItem, adjudicated?: { texts: string[]; links: DeckLink[] }): PieceView {
+function viewOf(
+  item: ClaimedItem,
+  adjudicated?: { texts: string[]; links: DeckLink[] },
+): PieceView {
   const caption = readCaption(item.extracted);
   const links = readLinks(item.extracted);
   if (adjudicated) {
@@ -661,7 +843,7 @@ function viewOf(item: ClaimedItem, adjudicated?: { texts: string[]; links: DeckL
       if (!known.has(normalizeProductUrl(link.url))) links.push(link);
     }
     if (!caption.name && !caption.text && adjudicated.texts.length) {
-      caption.text = adjudicated.texts.join(' ').slice(0, 300);
+      caption.text = adjudicated.texts.join(" ").slice(0, 300);
     }
   }
   return {
@@ -669,24 +851,28 @@ function viewOf(item: ClaimedItem, adjudicated?: { texts: string[]; links: DeckL
     links,
     caption,
     adjudicated: !!adjudicated,
-    isLinkItem: item.board_item_id == null && item.element_key.startsWith('link:'),
+    isLinkItem: item.board_item_id == null &&
+      item.element_key.startsWith("link:"),
   };
 }
 
 type LinkRow = { view: PieceView; outcome: PieceOutcome };
-type AnchorBy = 'sole_picture' | 'name';
+type AnchorBy = "sole_picture" | "name";
 
 /** Speaker notes or bare slide text: a link no picture on the slide carries. */
-const UNANCHORED_SOURCES = new Set(['notes', 'text']);
+const UNANCHORED_SOURCES = new Set(["notes", "text"]);
 
 function isUnanchored(row: LinkRow): boolean {
   const source = row.view.links[0]?.source;
-  return row.view.item.extracted.deck_level !== true && source != null && UNANCHORED_SOURCES.has(source);
+  return row.view.item.extracted.deck_level !== true && source != null &&
+    UNANCHORED_SOURCES.has(source);
 }
 
 /** The product name the link's page gave, when the page was read. */
 function linkPageName(row: LinkRow): string | null {
-  const read = row.outcome.candidates.find((c) => isPageRead(c) && str(c.extracted?.name));
+  const read = row.outcome.candidates.find((c) =>
+    isPageRead(c) && str(c.extracted?.name)
+  );
   return read ? str(read.extracted?.name) : null;
 }
 
@@ -694,7 +880,8 @@ function nameMatches(row: LinkRow, picture: PairablePicture): boolean {
   const name = linkPageName(row);
   const caption = readCaption(picture.caption ?? {});
   const label = caption.name ?? caption.text;
-  return name != null && label != null && nameOverlap(name, label) >= PAIR_NAME_MIN_OVERLAP;
+  return name != null && label != null &&
+    nameOverlap(name, label) >= PAIR_NAME_MIN_OVERLAP;
 }
 
 /**
@@ -702,27 +889,40 @@ function nameMatches(row: LinkRow, picture: PairablePicture): boolean {
  * picture, else the one picture whose caption names the link's product. A
  * picture two links anchor to keeps the one whose name matches, or neither.
  */
-function anchorLinks(rows: LinkRow[], pictures: PairablePicture[]): { row: LinkRow; picture: PairablePicture; by: AnchorBy }[] {
-  const byPicture = new Map<string, { picture: PairablePicture; rows: { row: LinkRow; by: AnchorBy }[] }>();
+function anchorLinks(
+  rows: LinkRow[],
+  pictures: PairablePicture[],
+): { row: LinkRow; picture: PairablePicture; by: AnchorBy }[] {
+  const byPicture = new Map<
+    string,
+    { picture: PairablePicture; rows: { row: LinkRow; by: AnchorBy }[] }
+  >();
   for (const row of rows) {
     if (!isUnanchored(row)) continue;
-    const onSlide = pictures.filter((p) => p.slide_index === row.view.item.slide_index);
+    const onSlide = pictures.filter((p) =>
+      p.slide_index === row.view.item.slide_index
+    );
     let anchor: { picture: PairablePicture; by: AnchorBy } | null = null;
     if (onSlide.length === 1 && onSlide[0].slide_pictures === 1) {
-      anchor = { picture: onSlide[0], by: 'sole_picture' };
+      anchor = { picture: onSlide[0], by: "sole_picture" };
     } else {
       const named = onSlide.filter((p) => nameMatches(row, p));
-      if (named.length === 1) anchor = { picture: named[0], by: 'name' };
+      if (named.length === 1) anchor = { picture: named[0], by: "name" };
     }
     if (!anchor) continue;
-    const held = byPicture.get(anchor.picture.item_id) ?? { picture: anchor.picture, rows: [] };
+    const held = byPicture.get(anchor.picture.item_id) ??
+      { picture: anchor.picture, rows: [] };
     held.rows.push({ row, by: anchor.by });
     byPicture.set(anchor.picture.item_id, held);
   }
   const out: { row: LinkRow; picture: PairablePicture; by: AnchorBy }[] = [];
   for (const { picture, rows: held } of byPicture.values()) {
-    const chosen = held.length === 1 ? held : held.filter(({ row }) => nameMatches(row, picture));
-    if (chosen.length === 1) out.push({ row: chosen[0].row, picture, by: chosen[0].by });
+    const chosen = held.length === 1
+      ? held
+      : held.filter(({ row }) => nameMatches(row, picture));
+    if (chosen.length === 1) {
+      out.push({ row: chosen[0].row, picture, by: chosen[0].by });
+    }
   }
   return out;
 }
@@ -730,13 +930,17 @@ function anchorLinks(rows: LinkRow[], pictures: PairablePicture[]): { row: LinkR
 /** The link row's candidates for its anchored picture. A read page's product
  *  is strong when its photo agrees with the crop (the og:image check), likely
  *  when it disagrees or could not be checked. */
-function anchoredCandidates(row: LinkRow, by: AnchorBy, similarity: number | null): Candidate[] {
+function anchoredCandidates(
+  row: LinkRow,
+  by: AnchorBy,
+  similarity: number | null,
+): Candidate[] {
   return finalizeCandidates(row.outcome.candidates.map(({ rank: _r, ...c }) => {
     const candidate = { ...c, evidence: { ...c.evidence, paired_by: by } };
     if (!isPageRead(c)) return candidate;
     return similarity == null
-      ? { ...candidate, band: 'likely' as const }
-      : lookCheckCandidate({ ...candidate, band: 'strong' }, similarity);
+      ? { ...candidate, band: "likely" as const }
+      : lookCheckCandidate({ ...candidate, band: "strong" }, similarity);
   }));
 }
 
@@ -747,7 +951,7 @@ async function pairLinks(
 ): Promise<void> {
   const byImport = new Map<string, LinkRow[]>();
   for (const entry of outcomes) {
-    if (!entry.view.isLinkItem || entry.outcome.state !== 'found') continue;
+    if (!entry.view.isLinkItem || entry.outcome.state !== "found") continue;
     // Without the embedder only unanchored links can pair.
     if (!deps.embedImages && !isUnanchored(entry)) continue;
     const list = byImport.get(entry.view.item.import_id) ?? [];
@@ -762,11 +966,20 @@ async function pairLinks(
     if (deps.embedImages && withPhoto.length) {
       try {
         vectors = await deps.embedImages([
-          ...withPhoto.map((r) => ({ id: `link:${r.view.item.item_id}`, url: r.outcome.pageImage! })),
-          ...pictures.map((p) => ({ id: `crop:${p.item_id}`, url: p.image_url })),
+          ...withPhoto.map((r) => ({
+            id: `link:${r.view.item.item_id}`,
+            url: r.outcome.pageImage!,
+          })),
+          ...pictures.map((p) => ({
+            id: `crop:${p.item_id}`,
+            url: p.image_url,
+          })),
         ]);
       } catch (error) {
-        deps.log('embed_failed', { import_id: importId, error: String(error).slice(0, 200) });
+        deps.log("embed_failed", {
+          import_id: importId,
+          error: String(error).slice(0, 200),
+        });
       }
     }
     const taken = new Set<string>();
@@ -777,8 +990,16 @@ async function pairLinks(
     for (const { row, picture, by } of anchorLinks(rows, pictures)) {
       const linkVector = vectors?.get(`link:${row.view.item.item_id}`);
       const cropVector = vectors?.get(`crop:${picture.item_id}`);
-      const similarity = linkVector && cropVector ? cosine(linkVector, cropVector) : null;
-      if (await deps.pairLink(row.view.item.item_id, picture.item_id, anchoredCandidates(row, by, similarity))) {
+      const similarity = linkVector && cropVector
+        ? cosine(linkVector, cropVector)
+        : null;
+      if (
+        await deps.pairLink(
+          row.view.item.item_id,
+          picture.item_id,
+          anchoredCandidates(row, by, similarity),
+        )
+      ) {
         taken.add(picture.item_id);
         pairedRows.add(row.view.item.item_id);
         summary.paired++;
@@ -786,38 +1007,55 @@ async function pairLinks(
     }
 
     if (!vectors) continue;
-    const linkRows = withPhoto.filter((r) => !pairedRows.has(r.view.item.item_id));
+    const linkRows = withPhoto.filter((r) =>
+      !pairedRows.has(r.view.item.item_id)
+    );
     // Slide links pair on their own slide first; deck-level links deck-wide.
     const groups = new Map<string, typeof linkRows>();
     for (const row of linkRows) {
-      const scope = row.view.item.extracted.deck_level === true ? 'deck' : `slide:${row.view.item.slide_index}`;
+      const scope = row.view.item.extracted.deck_level === true
+        ? "deck"
+        : `slide:${row.view.item.slide_index}`;
       groups.set(scope, [...(groups.get(scope) ?? []), row]);
     }
-    const scopes = [...groups.keys()].filter((s) => s !== 'deck');
-    if (groups.has('deck')) scopes.push('deck');
+    const scopes = [...groups.keys()].filter((s) => s !== "deck");
+    if (groups.has("deck")) scopes.push("deck");
     for (const scope of scopes) {
-      const rows = groups.get(scope)!.filter((r) => vectors.has(`link:${r.view.item.item_id}`));
+      const rows = groups.get(scope)!.filter((r) =>
+        vectors.has(`link:${r.view.item.item_id}`)
+      );
       const crops = pictures.filter((p) =>
         !taken.has(p.item_id) && vectors.has(`crop:${p.item_id}`) &&
-        (scope === 'deck' || `slide:${p.slide_index}` === scope));
+        (scope === "deck" || `slide:${p.slide_index}` === scope)
+      );
       if (rows.length === 0 || crops.length === 0) continue;
       const sim = rows.map((r) =>
-        crops.map((c) => cosine(vectors.get(`link:${r.view.item.item_id}`)!, vectors.get(`crop:${c.item_id}`)!)));
+        crops.map((c) =>
+          cosine(
+            vectors.get(`link:${r.view.item.item_id}`)!,
+            vectors.get(`crop:${c.item_id}`)!,
+          )
+        )
+      );
       for (const pair of pairByLook(sim)) {
         const row = rows[pair.link];
         const crop = crops[pair.crop];
-        const candidates = finalizeCandidates(row.outcome.candidates.map(({ rank: _r, ...c }) => ({
-          ...c,
-          band: 'likely' as const,
-          evidence: {
-            ...c.evidence,
-            paired_by: 'look',
-            pair_similarity: Math.round(pair.similarity * 1000) / 1000,
-            pair_margin: Math.round(pair.margin * 1000) / 1000,
-            threshold_version: THRESHOLD_VERSION,
-          },
-        })));
-        if (await deps.pairLink(row.view.item.item_id, crop.item_id, candidates)) {
+        const candidates = finalizeCandidates(
+          row.outcome.candidates.map(({ rank: _r, ...c }) => ({
+            ...c,
+            band: "likely" as const,
+            evidence: {
+              ...c.evidence,
+              paired_by: "look",
+              pair_similarity: Math.round(pair.similarity * 1000) / 1000,
+              pair_margin: Math.round(pair.margin * 1000) / 1000,
+              threshold_version: THRESHOLD_VERSION,
+            },
+          })),
+        );
+        if (
+          await deps.pairLink(row.view.item.item_id, crop.item_id, candidates)
+        ) {
           taken.add(crop.item_id);
           summary.paired++;
         }
@@ -842,39 +1080,55 @@ export async function runResolve(deps: ResolveDeps): Promise<RunSummary> {
   // Adjudication runs alongside the pieces, under the same start budget but
   // on its own: a slow Claude defers only the pieces on its slides.
   let adjudicationError: unknown = null;
-  const adjudication = adjudicateSlides(items, deps, summary, pastDeadline).catch((error) => {
-    adjudicationError = error;
-    return null;
-  });
-  const claudeSlides = new Set(deps.adjudicate
-    ? items.filter((item) => readAdjudicationContext(item)).map((item) => `${item.import_id}:${item.slide_index}`)
-    : []);
-  const needsClaude = (item: ClaimedItem) => claudeSlides.has(`${item.import_id}:${item.slide_index}`);
+  const adjudication = adjudicateSlides(items, deps, summary, pastDeadline)
+    .catch((error) => {
+      adjudicationError = error;
+      return null;
+    });
+  const claudeSlides = new Set(
+    deps.adjudicate
+      ? items.filter((item) => readAdjudicationContext(item)).map((item) =>
+        `${item.import_id}:${item.slide_index}`
+      )
+      : [],
+  );
+  const needsClaude = (item: ClaimedItem) =>
+    claudeSlides.has(`${item.import_id}:${item.slide_index}`);
   const gate = new HostGate(deps.sleep);
   const resolved: { view: PieceView; outcome: PieceOutcome }[] = [];
   const results: { view: PieceView; outcome: PieceOutcome }[] = [];
   const deferred: string[] = [];
 
-  await pool([...items.filter((i) => !needsClaude(i)), ...items.filter(needsClaude)], LIMITS.runConcurrency, async (item) => {
-    const adjudicated = needsClaude(item) ? await adjudication : new Map();
-    // Past the start budget nothing new begins, and a piece whose slide could
-    // not be adjudicated waits: either way it is handed back untried.
-    if (pastDeadline() || !adjudicated) {
-      summary.deferred++;
-      deferred.push(item.item_id);
-      return;
-    }
-    const view = viewOf(item, adjudicated.get(`${item.import_id}:${item.element_key}`));
-    let outcome: PieceOutcome;
-    try {
-      outcome = await resolvePiece(view, deps, gate, summary);
-    } catch (error) {
-      // A tier failed (database, network): retry later with backoff.
-      deps.log('piece_failed', { item_id: item.item_id, error: String(error).slice(0, 200) });
-      outcome = { state: 'pending', candidates: [], pageImage: null };
-    }
-    resolved.push({ view, outcome });
-  });
+  await pool(
+    [...items.filter((i) => !needsClaude(i)), ...items.filter(needsClaude)],
+    LIMITS.runConcurrency,
+    async (item) => {
+      const adjudicated = needsClaude(item) ? await adjudication : new Map();
+      // Past the start budget nothing new begins, and a piece whose slide could
+      // not be adjudicated waits: either way it is handed back untried.
+      if (pastDeadline() || !adjudicated) {
+        summary.deferred++;
+        deferred.push(item.item_id);
+        return;
+      }
+      const view = viewOf(
+        item,
+        adjudicated.get(`${item.import_id}:${item.element_key}`),
+      );
+      let outcome: PieceOutcome;
+      try {
+        outcome = await resolvePiece(view, deps, gate, summary);
+      } catch (error) {
+        // A tier failed (database, network): retry later with backoff.
+        deps.log("piece_failed", {
+          item_id: item.item_id,
+          error: String(error).slice(0, 200),
+        });
+        outcome = { state: "pending", candidates: [], pageImage: null };
+      }
+      resolved.push({ view, outcome });
+    },
+  );
 
   // T2 and the og:image look-check, before record: the lease still holds.
   await applyLookTier(resolved, deps, summary.look, pastDeadline);
@@ -882,14 +1136,22 @@ export async function runResolve(deps: ResolveDeps): Promise<RunSummary> {
   await pool(resolved, LIMITS.runConcurrency, async ({ view, outcome }) => {
     const item = view.item;
     try {
-      await deps.record(item.item_id, outcome.state, foundByOf(outcome.candidates), outcome.candidates);
-      if (outcome.state === 'found') summary.found++;
-      else if (outcome.state === 'not_found') summary.not_found++;
+      await deps.record(
+        item.item_id,
+        outcome.state,
+        foundByOf(outcome.candidates),
+        outcome.candidates,
+      );
+      if (outcome.state === "found") summary.found++;
+      else if (outcome.state === "not_found") summary.not_found++;
       else summary.retried++;
       results.push({ view, outcome });
     } catch (error) {
       // The lease expires and the piece is claimed again.
-      deps.log('record_failed', { item_id: item.item_id, error: String(error).slice(0, 200) });
+      deps.log("record_failed", {
+        item_id: item.item_id,
+        error: String(error).slice(0, 200),
+      });
       summary.retried++;
     }
   });
@@ -899,7 +1161,10 @@ export async function runResolve(deps: ResolveDeps): Promise<RunSummary> {
       await deps.release(deferred);
     } catch (error) {
       // The lease runs out and the claim sweep backs the pieces off instead.
-      deps.log('release_failed', { count: deferred.length, error: String(error).slice(0, 200) });
+      deps.log("release_failed", {
+        count: deferred.length,
+        error: String(error).slice(0, 200),
+      });
     }
   }
   if (adjudicationError) throw adjudicationError;

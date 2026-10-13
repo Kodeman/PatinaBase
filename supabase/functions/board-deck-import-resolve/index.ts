@@ -18,8 +18,12 @@
 
 // deno-lint-ignore-file no-explicit-any no-import-prefix
 
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  createClient,
+  type SupabaseClient,
+} from "https://esm.sh/@supabase/supabase-js@2";
 import { createInferenceClient, toPgVector } from "../_shared/aesthete.ts";
+import { callClaude, createLlmLedger } from "../_shared/claude.ts";
 import { DECK_PAGE_MAX_BYTES } from "../_shared/product-page/page.ts";
 import {
   denoPinnedHttpTransport,
@@ -32,9 +36,7 @@ import type { BoardCropScope } from "../board-asset-cleanup/core.ts";
 import { isServiceCaller } from "./auth.ts";
 import {
   ADJUDICATION_SYSTEM,
-  ADJUDICATION_TOOL_NAME,
   type AdjudicationClaim,
-  AdjudicationHttpError,
   adjudicationTool,
   type ClaimedItem,
   FetchBlocked,
@@ -50,15 +52,19 @@ import { ADJUDICATION } from "./thresholds.ts";
 const FUNCTION_NAME = "board-deck-import-resolve";
 // Local e2e only (test_fetch_base.ts); null everywhere else.
 const TEST_FETCH_BASE = testFetchBase(Deno.env);
-const pageTransport = TEST_FETCH_BASE ? testTransport(TEST_FETCH_BASE) : denoPinnedHttpTransport;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const pageTransport = TEST_FETCH_BASE
+  ? testTransport(TEST_FETCH_BASE)
+  : denoPinnedHttpTransport;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SIGNED_CROP_SECONDS = 600;
 /** Crops are ≤2400 px WebP; anything far larger is not hashed. */
 const CROP_MAX_BYTES = 16 * 1024 * 1024;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -70,10 +76,21 @@ function json(body: unknown, status = 200): Response {
 }
 
 function log(event: string, fields: Record<string, unknown> = {}): void {
-  console.log(JSON.stringify({ ts: new Date().toISOString(), fn: FUNCTION_NAME, event, ...fields }));
+  console.log(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      fn: FUNCTION_NAME,
+      event,
+      ...fields,
+    }),
+  );
 }
 
-async function rpc<T>(admin: SupabaseClient, name: string, args: Record<string, unknown>): Promise<T> {
+async function rpc<T>(
+  admin: SupabaseClient,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<T> {
   const { data, error } = await admin.rpc(name, args);
   if (error) throw new Error(`${name}: ${error.message}`);
   return data as T;
@@ -87,7 +104,11 @@ function deps(
   const inferenceToken = Deno.env.get("INFERENCE_TOKEN");
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   const inference = inferenceUrl && inferenceToken
-    ? createInferenceClient({ url: inferenceUrl, token: inferenceToken, timeoutMs: 15_000 })
+    ? createInferenceClient({
+      url: inferenceUrl,
+      token: inferenceToken,
+      timeoutMs: 15_000,
+    })
     : null;
   // The claim's lease owner; every later write is refused without it.
   let leaseOwner: string | null = null;
@@ -95,16 +116,35 @@ function deps(
   let imageModelVersion: string | null = null;
   // The import's board and its project, read here, never from the request.
   const scopes = new Map<string, Promise<BoardCropScope>>();
+  const studioIds = new Map<string, Promise<string | null>>();
+  const studioFor = (importId: string): Promise<string | null> => {
+    let studio = studioIds.get(importId);
+    if (!studio) {
+      studio = rpc<string | null>(admin, "board_web_match_studio_key", {
+        p_import_id: importId,
+      });
+      studioIds.set(importId, studio);
+    }
+    return studio;
+  };
   const scopeFor = (importId: string): Promise<BoardCropScope> => {
     let scope = scopes.get(importId);
     if (!scope) {
       scope = (async () => {
-        const deckImport = await admin.from("board_deck_imports").select("board_id").eq("id", importId).single();
-        if (deckImport.error) throw new Error(`crop scope: ${deckImport.error.message}`);
+        const deckImport = await admin.from("board_deck_imports").select(
+          "board_id",
+        ).eq("id", importId).single();
+        if (deckImport.error) {
+          throw new Error(`crop scope: ${deckImport.error.message}`);
+        }
         const boardId = deckImport.data.board_id as string;
-        const board = await admin.from("proposal_boards").select("project_id").eq("id", boardId).single();
+        const board = await admin.from("proposal_boards").select("project_id")
+          .eq("id", boardId).single();
         if (board.error) throw new Error(`crop scope: ${board.error.message}`);
-        return { boardId, projectId: (board.data.project_id as string | null) ?? null };
+        return {
+          boardId,
+          projectId: (board.data.project_id as string | null) ?? null,
+        };
       })();
       scopes.set(importId, scope);
     }
@@ -113,7 +153,10 @@ function deps(
   // Only a picture where its board keeps it goes to the embedder, signed after
   // the claim (cron) or the caller's RLS read (browser) let us here.
   const sign = async (bucket: string, path: string) => {
-    const signed = await admin.storage.from(bucket).createSignedUrl(path, SIGNED_CROP_SECONDS);
+    const signed = await admin.storage.from(bucket).createSignedUrl(
+      path,
+      SIGNED_CROP_SECONDS,
+    );
     return signed.error ? null : signed.data?.signedUrl ?? null;
   };
 
@@ -125,9 +168,16 @@ function deps(
       return claimedItems(result);
     },
     matchLinks: (importId, urls) =>
-      rpc(admin, "board_deck_import_match_links", { p_import_id: importId, p_urls: urls }),
+      rpc(admin, "board_deck_import_match_links", {
+        p_import_id: importId,
+        p_urls: urls,
+      }),
     matchSku: (importId, sku, vendor) =>
-      rpc(admin, "board_deck_import_match_sku", { p_import_id: importId, p_sku: sku, p_vendor: vendor }),
+      rpc(admin, "board_deck_import_match_sku", {
+        p_import_id: importId,
+        p_sku: sku,
+        p_vendor: vendor,
+      }),
     searchWords: (importId, query, vendor, limit) =>
       rpc(admin, "board_deck_import_search_words", {
         p_import_id: importId,
@@ -136,24 +186,40 @@ function deps(
         p_limit: limit,
       }),
     consumeLinkQuota: async (importId, n) => {
-      const result = await rpc<{ granted?: number }>(admin, "consume_board_deck_import_link_quota", {
-        p_import_id: importId,
-        p_n: n,
-        p_lease_owner: leaseOwner,
-      });
+      const result = await rpc<{ granted?: number }>(
+        admin,
+        "consume_board_deck_import_link_quota",
+        {
+          p_import_id: importId,
+          p_n: n,
+          p_lease_owner: leaseOwner,
+        },
+      );
       return Number(result?.granted ?? 0);
     },
     fetchPage: async (url, hop) => {
       try {
         // Each hop's request waits on its own host's gate (redirects included).
         const transport = {
-          request: (target: URL, address: ResolvedAddress, options: PinnedRequestOptions) =>
-            hop(target.toString(), () => pageTransport.request(target, address, options)),
+          request: (
+            target: URL,
+            address: ResolvedAddress,
+            options: PinnedRequestOptions,
+          ) =>
+            hop(
+              target.toString(),
+              () => pageTransport.request(target, address, options),
+            ),
         };
         // A page past the budget is read as its first 5MB, not refused.
-        return await fetchHtml(url, { transport }, { maxBytes: DECK_PAGE_MAX_BYTES, truncate: true });
+        return await fetchHtml(url, { transport }, {
+          maxBytes: DECK_PAGE_MAX_BYTES,
+          truncate: true,
+        });
       } catch (error) {
-        if (error instanceof UrlError) throw new FetchBlocked(error.message, error.status === 400);
+        if (error instanceof UrlError) {
+          throw new FetchBlocked(error.message, error.status === 400);
+        }
         throw new FetchBlocked("fetch_failed", false);
       }
     },
@@ -186,7 +252,11 @@ function deps(
         { p_import_id: importId },
       );
       const signed = await signCrops(
-        (rows ?? []).map((row) => ({ item_id: row.item_id, import_id: importId, image: row.image_url })),
+        (rows ?? []).map((row) => ({
+          item_id: row.item_id,
+          import_id: importId,
+          image: row.image_url,
+        })),
         scopeFor,
         sign,
       );
@@ -200,7 +270,9 @@ function deps(
           image_url: url,
           state: row.state,
           caption: row.caption,
-          slide_pictures: row.slide_pictures == null ? undefined : Number(row.slide_pictures),
+          slide_pictures: row.slide_pictures == null
+            ? undefined
+            : Number(row.slide_pictures),
         });
       }
       return out;
@@ -233,63 +305,85 @@ function deps(
       });
     },
     adjudicate: apiKey
-      ? async (context) => {
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-          signal: AbortSignal.timeout(20_000),
-          body: JSON.stringify({
-            model: ADJUDICATION.model,
+      ? async (context, importId, userId) => {
+        const result = await callClaude({
+          feature: "board-deck-import",
+          role: "extract",
+          studioId: await studioFor(importId),
+          userId,
+          promptVersion: "slide-adjudication-v1",
+          timeoutMs: 20_000,
+          ledger: createLlmLedger(admin),
+          params: {
             max_tokens: ADJUDICATION.maxTokens,
             system: ADJUDICATION_SYSTEM,
-            tools: [adjudicationTool()],
-            tool_choice: { type: "tool", name: ADJUDICATION_TOOL_NAME, disable_parallel_tool_use: true },
-            messages: [{ role: "user", content: [{ type: "text", text: JSON.stringify(context) }] }],
-          }),
-        });
-        if (!response.ok) {
-          await response.body?.cancel();
-          throw new AdjudicationHttpError(response.status);
-        }
-        const body = await response.json() as {
-          content?: Array<{ type?: string; name?: string; input?: unknown }>;
-          usage?: { input_tokens?: number; output_tokens?: number };
-        };
-        const toolUse = body.content?.find((entry) => entry.type === "tool_use" && entry.name === ADJUDICATION_TOOL_NAME);
-        return {
-          input: toolUse?.input ?? null,
-          usage: {
-            input_tokens: Number(body.usage?.input_tokens ?? 0),
-            output_tokens: Number(body.usage?.output_tokens ?? 0),
+            output_config: {
+              format: {
+                type: "json_schema",
+                name: "assign_slide_elements",
+                schema: adjudicationTool().input_schema,
+              },
+            },
+            messages: [{ role: "user", content: JSON.stringify(context) }],
           },
+        });
+        if (!result.ok) {
+          if ("denied" in result) return null;
+          throw new Error(result.error);
+        }
+        const text = result.response.content.find((block) =>
+          block.type === "text"
+        )?.text;
+        if (!text) throw new Error("Claude adjudication returned no JSON text");
+        return {
+          input: JSON.parse(text),
+          usage: {
+            input_tokens: result.response.usage.input_tokens,
+            output_tokens: result.response.usage.output_tokens,
+          },
+          usd: result.usd,
         };
       }
       : null,
     // The look tier (look.ts, 00679). Without inference it reports itself
     // unavailable for imports that asked for photo match.
     look: {
-      healthy: async () => Boolean(inference && (await inference.healthz())?.warmed),
-      gate: (importId) => rpc<LookGate>(admin, "board_deck_import_look_gate", { p_import_id: importId }),
+      healthy: async () =>
+        Boolean(inference && (await inference.healthz())?.warmed),
+      gate: (importId) =>
+        rpc<LookGate>(admin, "board_deck_import_look_gate", {
+          p_import_id: importId,
+        }),
       cropUrls: async (itemIds) => {
         if (itemIds.length === 0) return new Map<string, string>();
         const { data, error } = await admin
           .from("board_deck_import_items")
-          .select("id, import_id, pin:proposal_board_items(image_url, data_image_url:data->>image_url)")
+          .select(
+            "id, import_id, pin:proposal_board_items(image_url, data_image_url:data->>image_url)",
+          )
           .in("id", itemIds);
         if (error) throw new Error(`crop urls: ${error.message}`);
         const rows = ((data ?? []) as any[]).map((row) => {
           const pin = Array.isArray(row.pin) ? row.pin[0] : row.pin;
-          return { item_id: row.id, import_id: row.import_id, image: pin?.image_url ?? pin?.data_image_url };
+          return {
+            item_id: row.id,
+            import_id: row.import_id,
+            image: pin?.image_url ?? pin?.data_image_url,
+          };
         });
         return await signCrops(rows, scopeFor, sign);
       },
       knn: async (importId, vector, limit, category) => {
-        const rows = await rpc<KnnHit[] | null>(admin, "board_deck_import_match_knn", {
-          p_import_id: importId,
-          p_embedding: toPgVector(vector),
-          p_limit: limit,
-          p_category: category,
-        });
+        const rows = await rpc<KnnHit[] | null>(
+          admin,
+          "board_deck_import_match_knn",
+          {
+            p_import_id: importId,
+            p_embedding: toPgVector(vector),
+            p_limit: limit,
+            p_category: category,
+          },
+        );
         return (rows ?? []).map((row) => ({
           product_id: row.product_id,
           rank: Number(row.rank),
@@ -297,12 +391,16 @@ function deps(
         }));
       },
       imageKnn: async (importId, vector, limit, category) => {
-        const rows = await rpc<KnnHit[] | null>(admin, "board_deck_import_match_image_knn", {
-          p_import_id: importId,
-          p_embedding: toPgVector(vector),
-          p_limit: limit,
-          p_category: category,
-        });
+        const rows = await rpc<KnnHit[] | null>(
+          admin,
+          "board_deck_import_match_image_knn",
+          {
+            p_import_id: importId,
+            p_embedding: toPgVector(vector),
+            p_limit: limit,
+            p_category: category,
+          },
+        );
         return (rows ?? []).map((row) => ({
           product_id: row.product_id,
           rank: Number(row.rank),
@@ -311,12 +409,16 @@ function deps(
         }));
       },
       phashMatch: async (importId, phash, maxDistance, limit) => {
-        const rows = await rpc<PhashHit[] | null>(admin, "board_deck_import_match_phash", {
-          p_import_id: importId,
-          p_phash: phash,
-          p_max_distance: maxDistance,
-          p_limit: limit,
-        });
+        const rows = await rpc<PhashHit[] | null>(
+          admin,
+          "board_deck_import_match_phash",
+          {
+            p_import_id: importId,
+            p_phash: phash,
+            p_max_distance: maxDistance,
+            p_limit: limit,
+          },
+        );
         return (rows ?? []).map((row) => ({
           product_id: row.product_id,
           distance: Number(row.distance),
@@ -326,7 +428,9 @@ function deps(
       },
       // The URL is one this function just signed in the board's bucket.
       cropSignature: async (url) => {
-        const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+        const response = await fetch(url, {
+          signal: AbortSignal.timeout(10_000),
+        });
         if (!response.ok) {
           await response.body?.cancel();
           return null;
@@ -380,24 +484,33 @@ async function finish(
   error: string | null,
   costUsd: number | null,
 ): Promise<void> {
-  const { error: finishError } = await admin.rpc("finish_board_deck_import_resolve_run", {
-    p_run_id: runId,
-    p_status: status,
-    p_detail: detail,
-    p_error: error,
-    p_cost_usd: costUsd,
-  });
-  if (finishError) log("finish_failed", { run_id: runId, error: finishError.message });
+  const { error: finishError } = await admin.rpc(
+    "finish_board_deck_import_resolve_run",
+    {
+      p_run_id: runId,
+      p_status: status,
+      p_detail: detail,
+      p_error: error,
+      p_cost_usd: costUsd,
+    },
+  );
+  if (finishError) {
+    log("finish_failed", { run_id: runId, error: finishError.message });
+  }
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!supabaseUrl || !serviceKey || !anonKey) return json({ error: "not_configured" }, 500);
+  if (!supabaseUrl || !serviceKey || !anonKey) {
+    return json({ error: "not_configured" }, 500);
+  }
 
   let body: { job_run_id?: unknown; import_id?: unknown };
   try {
@@ -407,20 +520,40 @@ Deno.serve(async (req) => {
   }
 
   const authorization = req.headers.get("Authorization");
-  const isService = isServiceCaller(authorization, Deno.env.get("SUPABASE_SECRET_KEYS"));
-  const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+  const isService = isServiceCaller(
+    authorization,
+    Deno.env.get("SUPABASE_SECRET_KEYS"),
+  );
+  const admin = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false },
+  });
 
   if (isService) {
     const runId = Number(body.job_run_id);
-    if (!Number.isSafeInteger(runId) || runId < 1) return json({ error: "job_run_id_required" }, 400);
+    if (!Number.isSafeInteger(runId) || runId < 1) {
+      return json({ error: "job_run_id_required" }, 400);
+    }
     try {
-      const summary = await runResolve(deps(admin, (limit) =>
-        rpc(admin, "claim_board_deck_import_items", { p_limit: limit })));
-      await finish(admin, runId, summary.claimed ? "succeeded" : "skipped", { summary }, null, summary.cost_usd);
+      const summary = await runResolve(
+        deps(
+          admin,
+          (limit) =>
+            rpc(admin, "claim_board_deck_import_items", { p_limit: limit }),
+        ),
+      );
+      await finish(
+        admin,
+        runId,
+        summary.claimed ? "succeeded" : "skipped",
+        { summary, llm_denied: summary.llm_denied },
+        null,
+        summary.cost_usd,
+      );
       log("run_done", { run_id: runId, ...summary });
       return json({ ok: true, summary });
     } catch (error) {
-      const message = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+      const message = (error instanceof Error ? error.message : String(error))
+        .slice(0, 500);
       await finish(admin, runId, "failed", {}, message, null);
       log("run_failed", { run_id: runId, error: message });
       return json({ error: "resolve_failed" }, 500);
@@ -429,33 +562,58 @@ Deno.serve(async (req) => {
 
   // Browser path: the import must be visible to the caller under RLS.
   const importId = typeof body.import_id === "string" ? body.import_id : "";
-  if (!UUID_RE.test(importId)) return json({ error: "import_id_required" }, 400);
+  if (!UUID_RE.test(importId)) {
+    return json({ error: "import_id_required" }, 400);
+  }
   if (!authorization) return json({ error: "unauthorized" }, 401);
   const asCaller = createClient(supabaseUrl, anonKey, {
     auth: { persistSession: false },
     global: { headers: { Authorization: authorization } },
   });
-  const visible = await asCaller.from("board_deck_imports").select("id").eq("id", importId).maybeSingle();
+  const visible = await asCaller.from("board_deck_imports").select("id").eq(
+    "id",
+    importId,
+  ).maybeSingle();
   if (visible.error || !visible.data) return json({ error: "not_found" }, 404);
 
   let runId: number | null = null;
   try {
-    await rpc(admin, "materialize_board_deck_import_links", { p_import_id: importId });
+    await rpc(admin, "materialize_board_deck_import_links", {
+      p_import_id: importId,
+    });
     const summary = await runResolve(deps(admin, async (limit) => {
-      const result = await rpc(admin, "claim_board_deck_import_items_for_import", {
-        p_import_id: importId,
-        p_limit: limit,
-      });
+      const result = await rpc(
+        admin,
+        "claim_board_deck_import_items_for_import",
+        {
+          p_import_id: importId,
+          p_limit: limit,
+        },
+      );
       // Billing guard: a job_runs row only when there is work.
       if (claimedItems(result).length && runId == null) {
-        runId = await rpc<number>(admin, "begin_board_deck_import_resolve_run", { p_import_id: importId });
+        runId = await rpc<number>(
+          admin,
+          "begin_board_deck_import_resolve_run",
+          { p_import_id: importId },
+        );
       }
       return result;
     }));
-    if (runId != null) await finish(admin, runId, "succeeded", { summary }, null, summary.cost_usd);
+    if (runId != null) {
+      await finish(
+        admin,
+        runId,
+        "succeeded",
+        { summary, llm_denied: summary.llm_denied },
+        null,
+        summary.cost_usd,
+      );
+    }
     return json({ ok: true, summary });
   } catch (error) {
-    const message = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+    const message = (error instanceof Error ? error.message : String(error))
+      .slice(0, 500);
     if (runId != null) await finish(admin, runId, "failed", {}, message, null);
     log("run_failed", { import_id: importId, error: message });
     return json({ error: "resolve_failed" }, 500);

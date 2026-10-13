@@ -7,7 +7,7 @@
 // designer as words and order, never as numbers, so moving a threshold
 // changes which word a row gets.
 
-export const THRESHOLD_VERSION = 'deck-resolve-v1-sq362';
+export const THRESHOLD_VERSION = "deck-resolve-v1-sq362";
 
 export const THRESHOLDS = {
   /** Link-to-picture pairing by look (cosine on /embed/image vectors). A
@@ -26,7 +26,7 @@ export const THRESHOLDS = {
  *  any change bumps `threshold_version`. Cosine on /embed/image vectors; the
  *  designer sees words and order, never numbers. */
 export const LOOK_THRESHOLDS = {
-  threshold_version: 'deck-look-v2-sq362',
+  threshold_version: "deck-look-v2-sq362",
   /** τ_likely: top kNN hit similarity for "likely". Score alone barely
    *  separates right from wrong (wrong top hits sit at 0.84–0.96); the
    *  margin does the work. */
@@ -52,7 +52,7 @@ export const LOOK_THRESHOLDS = {
    *  better than this band; image-only hits (product_image_vectors) are
    *  preferred whenever a product has them (contract, W5). SQ-362 keeps the
    *  cap: fused scores sit ~0.1 below image-only and never reach τ_likely. */
-  fusedCap: 'possible' as const,
+  fusedCap: "possible" as const,
   /** Look hits shown per piece. */
   shown: 3,
   /** Hits asked of the kNN twin per piece. */
@@ -82,12 +82,7 @@ export const LIMITS = {
   runStartBudgetMs: 40_000,
 } as const;
 
-/** Adjudication (Anthropic Messages API, forced tool). Sonnet 5 list price,
- *  per million tokens: $2 input, $10 output (claude-api skill, cached
- *  2026-09-25). Used only to log spend on the job_runs row. */
+/** Adjudication output cap. Model selection and pricing live in _shared/claude-models.ts. */
 export const ADJUDICATION = {
-  model: 'claude-sonnet-5',
   maxTokens: 2_000,
-  usdPerMillionInput: 2,
-  usdPerMillionOutput: 10,
 } as const;
