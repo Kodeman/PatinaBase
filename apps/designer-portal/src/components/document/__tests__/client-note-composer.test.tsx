@@ -1,5 +1,6 @@
 /**
- * "Write to your client" (spec §6, Lane 6) — the project document's note
+ * "Leave a note on the client’s page" (was "Write to your client" until
+ * SQ-860; spec §6, Lane 6) — the project document's note
  * composer. Gated on the `threshold` flag (fail-closed: renders nothing
  * while loading or off — mock @/hooks/use-feature-flag per test).
  *
@@ -21,7 +22,7 @@
  * mock is needed.
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { ClientNoteComposer } from "../client-note-composer";
+import { ClientNoteComposer, NOTE_ACT_LABEL } from "../client-note-composer";
 
 /** Byte-identical to the component's own local `CLIENT_NOTE_WRITE_EVENT` —
  *  kept as a literal here too rather than importing margin-rail.tsx into
@@ -100,7 +101,7 @@ const baseProps = {
 };
 
 function openTheComposer() {
-  fireEvent.click(screen.getByRole("button", { name: "Write to your client" }));
+  fireEvent.click(screen.getByRole("button", { name: NOTE_ACT_LABEL }));
 }
 
 beforeEach(() => {
@@ -161,11 +162,17 @@ describe("ClientNoteComposer — flag gate", () => {
 });
 
 describe("ClientNoteComposer — no standing note", () => {
-  it('shows the collapsed "Write to your client" action', () => {
+  // US-28 walk-fix paper (SQ-860, ruling (a)) — the entry act names its own
+  // job, a note that stands on the client's page, and is tertiary: the
+  // letterhead's "Message the client" is the paper's one messaging act.
+  it("shows the collapsed entry act in its own words, tertiary, never a second message act", () => {
     render(<ClientNoteComposer {...baseProps} />);
+    const act = screen.getByRole("button", { name: NOTE_ACT_LABEL });
+    expect(NOTE_ACT_LABEL).toBe("Leave a note on the client’s page");
+    expect(act).toHaveAttribute("data-action-variant", "tertiary");
     expect(
-      screen.getByRole("button", { name: "Write to your client" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /write to your client|message/i }),
+    ).toBeNull();
   });
 
   it("pre-ticks an authorization (from useProjectInstruments) with the instrument-shaped label, a design services agreement (from useProposals), and a trade scope (from useTradeScopes) — invoices offered unticked", () => {
@@ -424,7 +431,7 @@ describe("ClientNoteComposer — no standing note", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Never mind" }));
     expect(
-      screen.getByRole("button", { name: "Write to your client" }),
+      screen.getByRole("button", { name: NOTE_ACT_LABEL }),
     ).toBeInTheDocument();
     openTheComposer();
     expect(screen.getByPlaceholderText(/Three last pieces/)).toHaveValue("");
@@ -466,11 +473,11 @@ describe("ClientNoteComposer — standing note", () => {
       screen.getByRole("button", { name: "Take it down" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Write to your client" }),
+      screen.queryByRole("button", { name: NOTE_ACT_LABEL }),
     ).not.toBeInTheDocument();
   });
 
-  it('retire calls the retire mutation, and after it resolves shows the retired receipt plus "Write to your client" again (not stuck)', () => {
+  it('retire calls the retire mutation, and after it resolves shows the retired receipt plus the entry act again (not stuck)', () => {
     render(<ClientNoteComposer {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: "Take it down" }));
 
@@ -488,7 +495,7 @@ describe("ClientNoteComposer — standing note", () => {
       screen.getByText("Taken down 4 September. It moves to Previously."),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Write to your client" }),
+      screen.getByRole("button", { name: NOTE_ACT_LABEL }),
     ).toBeInTheDocument();
 
     // The stale cache still reports the note as "standing" (query not yet
@@ -499,7 +506,7 @@ describe("ClientNoteComposer — standing note", () => {
 
     // And composing again reaches the real composer, not a stuck receipt.
     fireEvent.click(
-      screen.getByRole("button", { name: "Write to your client" }),
+      screen.getByRole("button", { name: NOTE_ACT_LABEL }),
     );
     expect(
       screen.getByPlaceholderText(/Three last pieces/),

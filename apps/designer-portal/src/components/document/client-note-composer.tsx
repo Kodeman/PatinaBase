@@ -1,7 +1,9 @@
 "use client";
 
 /**
- * "Write to your client" (spec §6, Lane 6) — a project document's one
+ * "Leave a note on the client’s page" (spec §6, Lane 6; "Write to your
+ * client" until SQ-860, which kept "Message the client" the paper's one
+ * messaging act) — a project document's one
  * instrument for a studio member to leave a note that stands on the
  * client's page until she answers. Shape copied from margin-rail.tsx's
  * note composer (collapsed DocumentAction → textarea → DocumentActionRow);
@@ -82,6 +84,12 @@ const CLIENT_NOTE_WRITE_EVENT = "document:write";
 const MAX_BODY_LENGTH = 2000;
 /** 00565's `project_note_enclosures_ok` CHECK: `jsonb_array_length <= 6`. */
 const MAX_ENCLOSURES = 6;
+
+/** US-28 walk-fix paper (SQ-860, ruling (a)) — the entry act names its own job,
+ *  a note that stands on the client's page, in this feature's words. It is
+ *  not a second "Message the client": that is the letterhead's one messaging
+ *  act (a thread), and this one is tertiary beside it. */
+export const NOTE_ACT_LABEL = "Leave a note on the client’s page";
 
 interface EnclosureOption {
   id: string;
@@ -367,11 +375,11 @@ function ClientNoteComposerInner({
           actionKey="open-client-note-composer"
           surfaceKey="open-document"
           regionKey="client-note"
-          variant="secondary"
+          variant="tertiary"
           className="mt-1.5"
           onClick={openComposer}
         >
-          Write to your client
+          {NOTE_ACT_LABEL}
         </DocumentAction>
       </div>
     );
@@ -417,11 +425,11 @@ function ClientNoteComposerInner({
         actionKey="open-client-note-composer"
         surfaceKey="open-document"
         regionKey="client-note"
-        variant="secondary"
+        variant="tertiary"
         className="mt-2"
         onClick={openComposer}
       >
-        Write to your client
+        {NOTE_ACT_LABEL}
       </DocumentAction>
     );
   }
