@@ -8,6 +8,7 @@ import {
   smsIsSuppressed,
 } from "./sms.ts";
 import type { SendPartySmsResult, SmsDeps } from "./sms.ts";
+import type { SendAuthority } from "./send-authority.ts";
 import { interpolate } from "./render-template.ts";
 
 export const SELECTION_TEMPLATE = "sms_selection";
@@ -47,6 +48,7 @@ export interface SelectionSmsInput {
   kind: "selection";
   phone: string;
   selection: SelectionIntent;
+  authority: SendAuthority;
   automationPhase?: number;
   partyId?: never;
   projectId?: never;
@@ -135,14 +137,29 @@ function validIntent(
   });
 }
 
+function validAuthority(value: unknown): value is SendAuthority {
+  if (!object(value)) return false;
+  if (value.kind === "designer") {
+    return typeof value.userId === "string" &&
+      (value.draftId === undefined || typeof value.draftId === "string");
+  }
+  if (value.kind === "studio_schedule") {
+    return typeof value.studioId === "string" &&
+      typeof value.outboundKind === "string";
+  }
+  return value.kind === "exempt" && typeof value.reason === "string";
+}
+
 export function isSelectionInput(value: SelectionSmsInput): boolean {
   return keys(value as unknown as Record<string, unknown>, [
     "kind",
     "phone",
     "selection",
+    "authority",
     "automationPhase",
   ]) &&
     value.kind === "selection" && PHONE.test(value.phone) &&
+    validAuthority(value.authority) &&
     validIntent(value.selection, false) &&
     (value.automationPhase === undefined ||
       (Number.isInteger(value.automationPhase) && value.automationPhase >= 0));

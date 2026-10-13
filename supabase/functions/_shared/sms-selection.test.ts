@@ -89,6 +89,7 @@ function fixture(kind: "project_choice" | "ref_clarify" = "project_choice") {
   const input: SelectionSmsInput = {
     kind: "selection",
     phone: PHONE,
+    authority: { kind: "designer", userId: id(99) },
     selection: kind === "project_choice"
       ? {
         kind,
@@ -258,7 +259,11 @@ function fixture(kind: "project_choice" | "ref_clarify" = "project_choice") {
         phone: PHONE,
         messageId,
       }, deps),
-    flush: () => flushDeferredMessages(fake as never, deps),
+    flush: () =>
+      flushDeferredMessages(fake as never, {
+        kind: "designer",
+        userId: "designer-1",
+      }, deps),
   };
 }
 
@@ -734,11 +739,13 @@ Deno.test("recovery binds exact manifest/expiry/endpoints and does not authorize
 Deno.test("ordinary null-attribution stays refused and cannot select the reserved template", async () => {
   const f = fixture();
   const ordinary = await sendPartySms(f.fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
     phone: PHONE,
     body: "Studio A and Studio B",
   }, f.deps);
   assertEquals(ordinary.reason, "not_consented");
   const reserved = await sendPartySms(f.fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
     partyId: id(20),
     templateKey: "sms_selection",
     vars: { selection: "caller" },

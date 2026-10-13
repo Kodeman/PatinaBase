@@ -93,7 +93,11 @@ Deno.test("dry_run writes a row and never calls Twilio", async () => {
   let fetchCalls = 0;
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "hello" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "dry_run",
@@ -129,7 +133,11 @@ Deno.test("the consent gate blocks a record at not_asked and one at opted_out", 
     });
     const res = await sendPartySms(
       fake as never,
-      { partyId: "p1", body: "hello" },
+      {
+        authority: { kind: "designer", userId: "designer-1" },
+        partyId: "p1",
+        body: "hello",
+      },
       {
         getEnv: envOf({ SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+1" }),
         now: new Date("2026-07-08T18:00:00Z"),
@@ -160,6 +168,7 @@ Deno.test("sms_optin_invite is allowed to a pending party", async () => {
   const res = await sendPartySms(
     fake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "p1",
       templateKey: "sms_optin_invite",
       body: "Reply YES for updates",
@@ -186,6 +195,7 @@ Deno.test("the invite is refused where NO record has asked anything (S2)", async
   const res = await sendPartySms(
     fake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "p1",
       templateKey: "sms_optin_invite",
       body: "Reply YES for updates",
@@ -214,7 +224,11 @@ Deno.test("quiet hours defer stores the body without sending", async () => {
   let fetchCalls = 0;
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "after hours" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "after hours",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "off",
@@ -251,6 +265,7 @@ Deno.test("caller-owned sensitive outbox never persists a raw guest URL", async 
   const deferred = await sendPartySms(
     quietFake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "p1",
       body: raw,
       auditBody: audit,
@@ -274,6 +289,7 @@ Deno.test("caller-owned sensitive outbox never persists a raw guest URL", async 
   const sent = await sendPartySms(
     redirectFake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "p1",
       body: raw,
       auditBody: audit,
@@ -326,7 +342,11 @@ Deno.test("MG From + SMS_CONVERSATION_NUMBER keys the conversation on the physic
   let capturedBody = "";
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "hi there" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hi there",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "off",
@@ -372,7 +392,11 @@ Deno.test("MG From without SMS_CONVERSATION_NUMBER refuses to send (would split 
   let fetchCalls = 0;
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "hi there" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hi there",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "off",
@@ -411,7 +435,11 @@ Deno.test("MG-prefixed SMS_CONVERSATION_NUMBER is treated as unset and refuses t
   let fetchCalls = 0;
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "hi there" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hi there",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "off",
@@ -457,7 +485,11 @@ Deno.test("flush: an opted-out recipient is suppressed and never sent", async ()
   const now = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago — not quiet
   const fake = createFakeSupabase({
     sms_conversations: [
-      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+      {
+        id: "conv1",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230001",
+      },
     ],
     sms_messages: [
       {
@@ -486,6 +518,9 @@ Deno.test("flush: an opted-out recipient is suppressed and never sent", async ()
   });
   let fetchCalls = 0;
   const result = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: flushEnv(),
     fetchImpl: (() => {
       fetchCalls++;
@@ -515,7 +550,11 @@ Deno.test("flush: a deferred sms_optin_invite on a number some studio has RECORD
   const now = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago — not quiet
   const fake = createFakeSupabase({
     sms_conversations: [
-      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551239999" },
+      {
+        id: "conv1",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551239999",
+      },
     ],
     sms_messages: [
       {
@@ -540,6 +579,9 @@ Deno.test("flush: a deferred sms_optin_invite on a number some studio has RECORD
   });
   let fetchCalls = 0;
   const result = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: flushEnv(),
     fetchImpl: (() => {
       fetchCalls++;
@@ -562,7 +604,11 @@ Deno.test("flush: a row older than 24h expires without sending", async () => {
   const now = new Date("2026-07-08T18:00:00Z");
   const fake = createFakeSupabase({
     sms_conversations: [
-      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230002" },
+      {
+        id: "conv1",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230002",
+      },
     ],
     sms_messages: [
       {
@@ -583,6 +629,9 @@ Deno.test("flush: a row older than 24h expires without sending", async () => {
   });
   let fetchCalls = 0;
   const result = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: flushEnv(),
     fetchImpl: (() => {
       fetchCalls++;
@@ -605,7 +654,11 @@ Deno.test("flush: a Twilio send failure marks the row failed with the error, sin
   const now = new Date("2026-07-08T18:00:00Z");
   const fake = createFakeSupabase({
     sms_conversations: [
-      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230003" },
+      {
+        id: "conv1",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230003",
+      },
     ],
     sms_messages: [
       {
@@ -632,6 +685,9 @@ Deno.test("flush: a Twilio send failure marks the row failed with the error, sin
   });
   let fetchCalls = 0;
   const result = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: flushEnv(),
     fetchImpl: (() => {
       fetchCalls++;
@@ -675,13 +731,21 @@ Deno.test("the studio's consent record blocks a send the party row would allow",
       status: "opted_out",
     }],
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
   assert(!res.sent, "an opted-out studio record must block the send");
   assertEquals(res.reason, "opted_out");
-  assertEquals((fake._data.sms_messages ?? []).length, 0, "no row on a blocked send");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    0,
+    "no row on a blocked send",
+  );
 });
 
 Deno.test("another studio's opt-out does not block this studio's send", async () => {
@@ -705,7 +769,11 @@ Deno.test("another studio's opt-out does not block this studio's send", async ()
       },
     ],
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
@@ -724,11 +792,18 @@ Deno.test("with no studio record at all the send is refused — not_asked is a r
     ],
     // studio_channel_consent deliberately empty — the backfill has not run.
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
-  assert(!res.sent, "a number this studio holds no record for must not be texted");
+  assert(
+    !res.sent,
+    "a number this studio holds no record for must not be texted",
+  );
   assertEquals(res.reason, "opted_out");
 });
 
@@ -746,13 +821,24 @@ Deno.test("no record refuses even a seat frozen at granted (R-AW)", async () => 
     projects: [{ id: "proj1", studio_id: "org-alpha" }],
     // studio_channel_consent deliberately empty.
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
-  assert(!res.sent, "a frozen granted seat may not authorise a send on its own");
+  assert(
+    !res.sent,
+    "a frozen granted seat may not authorise a send on its own",
+  );
   assertEquals(res.reason, "opted_out");
-  assertEquals((fake._data.sms_messages ?? []).length, 0, "no row on a blocked send");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    0,
+    "no row on a blocked send",
+  );
 });
 
 // …and a record the FOLD minted at `not_asked` says the same thing as none.
@@ -768,7 +854,11 @@ Deno.test("a not_asked record refuses, exactly as no record does (R-AW)", async 
       refusal_unanswered: false,
     }],
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
@@ -792,11 +882,18 @@ Deno.test("with no studio record the send is refused whoever's seat carries the 
     ],
     // studio_channel_consent deliberately empty for both.
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
-  assert(!res.sent, "no record for Alpha means not_asked, and not_asked refuses");
+  assert(
+    !res.sent,
+    "no record for Alpha means not_asked, and not_asked refuses",
+  );
   assertEquals(res.reason, "opted_out");
 });
 
@@ -817,11 +914,18 @@ Deno.test("with no record and no resolvable studio, NO seat word authorises the 
       // proj1 carries neither studio_id nor designer_id.
       projects: [{ id: "proj1", studio_id: null, designer_id: null }],
     });
-    const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+    const res = await sendPartySms(fake as never, {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    }, {
       getEnv: envOf(CONSENT_ENV),
       now: OPEN_HOURS,
     });
-    assert(!res.sent, `a seat frozen at ${seat} may not carry an unattributable send`);
+    assert(
+      !res.sent,
+      `a seat frozen at ${seat} may not carry an unattributable send`,
+    );
     assertEquals(res.reason, "not_consented");
   }
 });
@@ -843,7 +947,11 @@ Deno.test("the studio's granted record carries a send the party row would refuse
       status: "granted",
     }],
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
@@ -868,7 +976,11 @@ Deno.test("a granted record carries the send over a seat frozen at opted_out (R-
       status: "granted",
     }],
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
@@ -900,7 +1012,11 @@ Deno.test("an unanswered refusal refuses the send, whatever the status now says"
       opt_out_at: "2025-12-03T00:00:00Z",
     }],
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
@@ -925,13 +1041,18 @@ Deno.test("the opt-in invite does not slip past an unanswered refusal", async ()
     }],
   });
   const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
     partyId: "p1",
     templateKey: "sms_optin_invite",
     body: "Reply YES for updates",
   }, { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS });
   assert(!res.sent, "the invite must not reach a number that replied STOP");
   assertEquals(res.reason, "opted_out");
-  assertEquals((fake._data.sms_messages ?? []).length, 0, "no row on a blocked send");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    0,
+    "no row on a blocked send",
+  );
 });
 
 // r7 M7-1: the same flag standing on a record that reads `granted` — which is
@@ -951,11 +1072,18 @@ Deno.test("a granted record carrying an unanswered refusal still refuses", async
       opt_out_at: "2025-12-03T00:00:00Z",
     }],
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
-  assert(!res.sent, "a folded granted row over an unanswered refusal must refuse");
+  assert(
+    !res.sent,
+    "a folded granted row over an unanswered refusal must refuse",
+  );
   assertEquals(res.reason, "opted_out");
 });
 
@@ -975,6 +1103,7 @@ Deno.test("a pending record with no refusal behind it still takes the invite", a
     }],
   });
   const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
     partyId: "p1",
     templateKey: "sms_optin_invite",
     body: "Reply YES for updates",
@@ -1004,6 +1133,7 @@ Deno.test("the invite stands on the RECORD's evidence, not the frozen seat", asy
     }],
   });
   const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
     partyId: "p1",
     templateKey: "sms_optin_invite",
     body: "Reply YES for updates",
@@ -1039,11 +1169,15 @@ Deno.test("a record with no recorded_by is refused consent_evidence_required", a
       }],
     });
     const res = await sendPartySms(fake as never, {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "p1",
       templateKey: "sms_optin_invite",
       body: "Reply YES for updates",
     }, { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS });
-    assert(!res.sent, `a record missing ${Object.keys(missing)[0]} must refuse`);
+    assert(
+      !res.sent,
+      `a record missing ${Object.keys(missing)[0]} must refuse`,
+    );
     assertEquals(res.reason, "consent_evidence_required");
     assertEquals(res.status, "failed");
     assertEquals(
@@ -1071,6 +1205,7 @@ Deno.test("a pre-fold seat's own evidence cannot open the invite", async () => {
     }],
   });
   const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
     partyId: "p1",
     templateKey: "sms_optin_invite",
     body: "Reply YES for updates",
@@ -1107,6 +1242,7 @@ Deno.test("the invite send reads no frozen sms_consent_ column", async () => {
     return query;
   };
   const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
     partyId: "p1",
     templateKey: "sms_optin_invite",
     body: "Reply YES for updates",
@@ -1146,7 +1282,11 @@ Deno.test("the recipient's own START reopens the door", async () => {
       consented_at: "2026-06-01T00:00:00Z",
     }],
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
@@ -1196,7 +1336,11 @@ Deno.test("a NULL-studio_id project resolves its org from organization_members",
       }],
     },
   );
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
@@ -1271,12 +1415,15 @@ Deno.test("a failed org resolve refuses the send instead of reading as no studio
   });
   const blindToProjects = {
     ...fake,
-    from: (table: string) =>
-      table === "projects" ? failing : fake.from(table),
+    from: (table: string) => table === "projects" ? failing : fake.from(table),
   };
   const res = await sendPartySms(
     blindToProjects as never,
-    { partyId: "p1", body: "hello" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    },
     { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS },
   );
   assert(!res.sent, "an unresolvable studio must not send on a granted seat");
@@ -1310,11 +1457,18 @@ Deno.test("a granted record carries the send, and a sibling seat's frozen STOP d
       status: "granted", // stale: written before the STOP reached the rows
     }],
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
-  assert(res.sent, "the record is the consent; a frozen sibling seat is not a verdict");
+  assert(
+    res.sent,
+    "the record is the consent; a frozen sibling seat is not a verdict",
+  );
 });
 
 // …and no seat of any studio blocks it, which is R-AK holding by construction
@@ -1337,7 +1491,11 @@ Deno.test("another studio's opted-out party row does not block this studio's gra
       status: "granted",
     }],
   });
-  const res = await sendPartySms(fake as never, { partyId: "p1", body: "hello" }, {
+  const res = await sendPartySms(fake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
+    partyId: "p1",
+    body: "hello",
+  }, {
     getEnv: envOf(CONSENT_ENV),
     now: OPEN_HOURS,
   });
@@ -1359,7 +1517,11 @@ Deno.test("flush: the studio's granted record carries a deferred send the party 
   const now = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago — not quiet
   const fake = createFakeSupabase({
     sms_conversations: [
-      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+      {
+        id: "conv1",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230001",
+      },
     ],
     sms_messages: [
       {
@@ -1375,7 +1537,12 @@ Deno.test("flush: the studio's granted record carries a deferred send the party 
     ],
     // F-11: the seat was created today and has not caught up with the record.
     project_parties: [
-      { id: "p1", phone_e164: "+15551230001", project_id: "proj1", sms_consent_status: "not_asked" },
+      {
+        id: "p1",
+        phone_e164: "+15551230001",
+        project_id: "proj1",
+        sms_consent_status: "not_asked",
+      },
     ],
     projects: [{ id: "proj1", studio_id: "org-alpha" }],
     studio_channel_consent: [{
@@ -1386,10 +1553,20 @@ Deno.test("flush: the studio's granted record carries a deferred send the party 
     }],
   });
   const result = await flushDeferredMessages(fake as never, {
-    getEnv: envOf({ SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+15550000000" }),
+    kind: "designer",
+    userId: "designer-1",
+  }, {
+    getEnv: envOf({
+      SMS_DEV_MODE: "dry_run",
+      TWILIO_FROM_NUMBER: "+15550000000",
+    }),
     now,
   });
-  assertEquals(result.flushed, 1, "the studio's own grant must survive quiet hours");
+  assertEquals(
+    result.flushed,
+    1,
+    "the studio's own grant must survive quiet hours",
+  );
   assertEquals(result.suppressed, 0);
 });
 
@@ -1397,7 +1574,11 @@ Deno.test("flush: the studio's opted-out record suppresses a deferred send the p
   const now = new Date("2026-07-08T18:00:00Z");
   const fake = createFakeSupabase({
     sms_conversations: [
-      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+      {
+        id: "conv1",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230001",
+      },
     ],
     sms_messages: [
       {
@@ -1414,8 +1595,18 @@ Deno.test("flush: the studio's opted-out record suppresses a deferred send the p
     // The owning studio's own seat is gone (G-10 hard-deletes on roster
     // remove); another studio's granted row is all the reduction can see.
     project_parties: [
-      { id: "p1", phone_e164: "+15551230001", project_id: "proj1", sms_consent_status: "granted" },
-      { id: "p2", phone_e164: "+15551230001", project_id: "proj2", sms_consent_status: "granted" },
+      {
+        id: "p1",
+        phone_e164: "+15551230001",
+        project_id: "proj1",
+        sms_consent_status: "granted",
+      },
+      {
+        id: "p2",
+        phone_e164: "+15551230001",
+        project_id: "proj2",
+        sms_consent_status: "granted",
+      },
     ],
     projects: [
       { id: "proj1", studio_id: "org-alpha" },
@@ -1430,6 +1621,9 @@ Deno.test("flush: the studio's opted-out record suppresses a deferred send the p
   });
   let fetchCalls = 0;
   const result = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: flushEnv(),
     fetchImpl: (() => {
       fetchCalls++;
@@ -1459,7 +1653,11 @@ Deno.test("flush: an unrelated studio's opted-out row does not suppress the owni
   const now = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago — not quiet
   const fake = createFakeSupabase({
     sms_conversations: [
-      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+      {
+        id: "conv1",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230001",
+      },
     ],
     sms_messages: [
       {
@@ -1475,9 +1673,19 @@ Deno.test("flush: an unrelated studio's opted-out row does not suppress the owni
     ],
     project_parties: [
       // The studio that owns the deferred send: granted, on its own books.
-      { id: "p1", phone_e164: "+15551230001", project_id: "proj1", sms_consent_status: "granted" },
+      {
+        id: "p1",
+        phone_e164: "+15551230001",
+        project_id: "proj1",
+        sms_consent_status: "granted",
+      },
       // An unrelated studio's STOP on the same number.
-      { id: "p2", phone_e164: "+15551230001", project_id: "proj2", sms_consent_status: "opted_out" },
+      {
+        id: "p2",
+        phone_e164: "+15551230001",
+        project_id: "proj2",
+        sms_consent_status: "opted_out",
+      },
     ],
     projects: [
       { id: "proj1", studio_id: "org-alpha" },
@@ -1491,10 +1699,20 @@ Deno.test("flush: an unrelated studio's opted-out row does not suppress the owni
     }],
   });
   const result = await flushDeferredMessages(fake as never, {
-    getEnv: envOf({ SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+15550000000" }),
+    kind: "designer",
+    userId: "designer-1",
+  }, {
+    getEnv: envOf({
+      SMS_DEV_MODE: "dry_run",
+      TWILIO_FROM_NUMBER: "+15550000000",
+    }),
     now,
   });
-  assertEquals(result.flushed, 1, "another studio's STOP is not this studio's fact");
+  assertEquals(
+    result.flushed,
+    1,
+    "another studio's STOP is not this studio's fact",
+  );
   assertEquals(result.suppressed, 0);
 });
 
@@ -1502,7 +1720,11 @@ Deno.test("flush: an unrelated studio's granted row does not carry a send for a 
   const now = new Date("2026-07-08T18:00:00Z");
   const fake = createFakeSupabase({
     sms_conversations: [
-      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+      {
+        id: "conv1",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230001",
+      },
     ],
     sms_messages: [
       {
@@ -1518,9 +1740,19 @@ Deno.test("flush: an unrelated studio's granted row does not carry a send for a 
     ],
     project_parties: [
       // org-alpha never asked, and holds no consent record either.
-      { id: "p1", phone_e164: "+15551230001", project_id: "proj1", sms_consent_status: "not_asked" },
+      {
+        id: "p1",
+        phone_e164: "+15551230001",
+        project_id: "proj1",
+        sms_consent_status: "not_asked",
+      },
       // org-beta's own, legitimate grant, for its own job.
-      { id: "p2", phone_e164: "+15551230001", project_id: "proj2", sms_consent_status: "granted" },
+      {
+        id: "p2",
+        phone_e164: "+15551230001",
+        project_id: "proj2",
+        sms_consent_status: "granted",
+      },
     ],
     projects: [
       { id: "proj1", studio_id: "org-alpha" },
@@ -1529,6 +1761,9 @@ Deno.test("flush: an unrelated studio's granted row does not carry a send for a 
   });
   let fetchCalls = 0;
   const result = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: flushEnv(),
     fetchImpl: (() => {
       fetchCalls++;
@@ -1536,7 +1771,11 @@ Deno.test("flush: an unrelated studio's granted row does not carry a send for a 
     }) as unknown as typeof fetch,
     now,
   });
-  assertEquals(result.flushed, 0, "another studio's grant may not authorise this send");
+  assertEquals(
+    result.flushed,
+    0,
+    "another studio's grant may not authorise this send",
+  );
   assertEquals(result.suppressed, 1);
   assertEquals(fetchCalls, 0);
   const row = (fake._data.sms_messages ?? [])[0] as {
@@ -1553,7 +1792,11 @@ Deno.test("flush: with no party on the deferred row the phone-global reduction s
   const now = new Date("2026-07-08T18:00:00Z");
   const fake = createFakeSupabase({
     sms_conversations: [
-      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+      {
+        id: "conv1",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230001",
+      },
     ],
     sms_messages: [
       {
@@ -1568,12 +1811,20 @@ Deno.test("flush: with no party on the deferred row the phone-global reduction s
       },
     ],
     project_parties: [
-      { id: "p2", phone_e164: "+15551230001", project_id: "proj2", sms_consent_status: "opted_out" },
+      {
+        id: "p2",
+        phone_e164: "+15551230001",
+        project_id: "proj2",
+        sms_consent_status: "opted_out",
+      },
     ],
     projects: [{ id: "proj2", studio_id: "org-beta" }],
   });
   let fetchCalls = 0;
   const result = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: flushEnv(),
     fetchImpl: (() => {
       fetchCalls++;
@@ -1581,7 +1832,11 @@ Deno.test("flush: with no party on the deferred row the phone-global reduction s
     }) as unknown as typeof fetch,
     now,
   });
-  assertEquals(result.flushed, 0, "an unattributable send must not outrun a STOP");
+  assertEquals(
+    result.flushed,
+    0,
+    "an unattributable send must not outrun a STOP",
+  );
   assertEquals(result.suppressed, 1);
   assertEquals(fetchCalls, 0);
 });
@@ -1622,7 +1877,11 @@ Deno.test("an unattributable send is refused by another studio's RECORDED stop",
   });
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "hello" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    },
     { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS },
   );
   assert(!res.sent, "a send with no studio must not outrun a recorded STOP");
@@ -1639,7 +1898,8 @@ Deno.test("an unattributable send whose record scan fails is refused, not allowe
         ? {
           select: () => ({
             eq: () => ({
-              eq: () => Promise.resolve({ data: null, error: { message: "denied" } }),
+              eq: () =>
+                Promise.resolve({ data: null, error: { message: "denied" } }),
             }),
           }),
         }
@@ -1647,10 +1907,17 @@ Deno.test("an unattributable send whose record scan fails is refused, not allowe
   };
   const res = await sendPartySms(
     denied as never,
-    { partyId: "p1", body: "hello" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    },
     { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS },
   );
-  assert(!res.sent, "a record scan we could not read is not a scan that found nothing");
+  assert(
+    !res.sent,
+    "a record scan we could not read is not a scan that found nothing",
+  );
   assertEquals(res.reason, "opted_out");
 });
 
@@ -1664,10 +1931,17 @@ Deno.test("the unattributable send with a clean scan is refused as not_consented
   const fake = createFakeSupabase(unattributableSeed());
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "hello" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    },
     { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS },
   );
-  assert(!res.sent, "no record grants this number, so nothing ordinary goes out");
+  assert(
+    !res.sent,
+    "no record grants this number, so nothing ordinary goes out",
+  );
   assertEquals(res.reason, "not_consented");
 });
 
@@ -1681,7 +1955,10 @@ Deno.test("a 'never text' rule on the person's card refuses a send the record gr
   const fake = createFakeSupabase({
     projects: ORG_ALPHA_PROJECTS,
     studio_channel_consent: [grant()],
-    project_parties: [{ ...party("p1", "granted"), studio_contact_id: "card-1" }],
+    project_parties: [{
+      ...party("p1", "granted"),
+      studio_contact_id: "card-1",
+    }],
     studio_contact_rules: [
       {
         subject_type: "person",
@@ -1692,7 +1969,11 @@ Deno.test("a 'never text' rule on the person's card refuses a send the record gr
   });
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "hello" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "dry_run",
@@ -1710,7 +1991,10 @@ Deno.test("the rule binds the opt-in invite too — 'never text' is not 'never t
   const fake = createFakeSupabase({
     projects: ORG_ALPHA_PROJECTS,
     studio_channel_consent: [{ ...grant(), status: "pending" }],
-    project_parties: [{ ...party("p1", "pending"), studio_contact_id: "card-1" }],
+    project_parties: [{
+      ...party("p1", "pending"),
+      studio_contact_id: "card-1",
+    }],
     studio_contact_rules: [
       {
         subject_type: "engagement",
@@ -1721,7 +2005,12 @@ Deno.test("the rule binds the opt-in invite too — 'never text' is not 'never t
   });
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "hello", templateKey: "sms_optin_invite" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+      templateKey: "sms_optin_invite",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "dry_run",
@@ -1738,7 +2027,10 @@ Deno.test("a rule that bars only email leaves the text rail open", async () => {
   const fake = createFakeSupabase({
     projects: ORG_ALPHA_PROJECTS,
     studio_channel_consent: [grant()],
-    project_parties: [{ ...party("p1", "granted"), studio_contact_id: "card-1" }],
+    project_parties: [{
+      ...party("p1", "granted"),
+      studio_contact_id: "card-1",
+    }],
     studio_contact_rules: [
       {
         subject_type: "person",
@@ -1749,7 +2041,11 @@ Deno.test("a rule that bars only email leaves the text rail open", async () => {
   });
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "hello" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "dry_run",
@@ -1765,7 +2061,10 @@ Deno.test("a rule read that FAILS refuses the send rather than falling through",
   const fake = createFakeSupabase({
     projects: ORG_ALPHA_PROJECTS,
     studio_channel_consent: [grant()],
-    project_parties: [{ ...party("p1", "granted"), studio_contact_id: "card-1" }],
+    project_parties: [{
+      ...party("p1", "granted"),
+      studio_contact_id: "card-1",
+    }],
   });
   const denied = {
     ...fake,
@@ -1781,7 +2080,11 @@ Deno.test("a rule read that FAILS refuses the send rather than falling through",
   };
   const res = await sendPartySms(
     denied as never,
-    { partyId: "p1", body: "hello" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "dry_run",
@@ -1821,12 +2124,24 @@ Deno.test("flush: every flushed row writes one out touch, and a skipped or suppr
   const touches: Array<Record<string, unknown>> = [];
   const fake = createFakeSupabase({
     sms_conversations: [
-      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
-      { id: "conv2", twilio_number: "+15550000000", phone_e164: "+15551230002" },
-      { id: "conv3", twilio_number: "+15550000000", phone_e164: "+15551230003" },
+      {
+        id: "conv1",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230001",
+      },
+      {
+        id: "conv2",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230002",
+      },
+      {
+        id: "conv3",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230003",
+      },
     ],
     sms_messages: [
-      deferred("m1", "p1"),                       // flushes
+      deferred("m1", "p1"), // flushes
       deferred("m2", "p2", { conversation_id: "conv2" }), // suppressed: refused
       // A phone-only INVITE: it goes (the invite gate owns `pending`/no
       // record), and it names no seat, so there is no subject to file a touch
@@ -1867,6 +2182,9 @@ Deno.test("flush: every flushed row writes one out touch, and a skipped or suppr
   });
 
   const result = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: envOf({
       SMS_DEV_MODE: "dry_run",
       TWILIO_FROM_NUMBER: "+15550000000",
@@ -1894,7 +2212,11 @@ Deno.test("flush: a touch the database refuses never fails the send", async () =
   const now = new Date("2026-07-08T18:00:00Z");
   const fake = createFakeSupabase({
     sms_conversations: [
-      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+      {
+        id: "conv1",
+        twilio_number: "+15550000000",
+        phone_e164: "+15551230001",
+      },
     ],
     sms_messages: [
       {
@@ -1923,6 +2245,9 @@ Deno.test("flush: a touch the database refuses never fails the send", async () =
   });
 
   const result = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: envOf({
       SMS_DEV_MODE: "dry_run",
       TWILIO_FROM_NUMBER: "+15550000000",
@@ -2000,7 +2325,11 @@ Deno.test("GATE 1: suppression refuses ahead of a granted consent record", async
   });
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "hello" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "dry_run",
@@ -2029,7 +2358,11 @@ Deno.test("GATE 1: an unreadable suppression ledger refuses, it does not fall th
   });
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "hello" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "dry_run",
@@ -2057,7 +2390,12 @@ Deno.test("GATE 3: FIELD_LINE_PHASE decides whether a new automation may send", 
   });
   const off = await sendPartySms(
     offFake as never,
-    { partyId: "p1", body: "hello", automationPhase: 1 },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+      automationPhase: 1,
+    },
     { getEnv: envOf(base), now: OPEN },
   );
   assert(!off.sent, "phase 1 must not send while the server says 0");
@@ -2071,7 +2409,12 @@ Deno.test("GATE 3: FIELD_LINE_PHASE decides whether a new automation may send", 
   });
   const on = await sendPartySms(
     onFake as never,
-    { partyId: "p1", body: "hello", automationPhase: 1 },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+      automationPhase: 1,
+    },
     { getEnv: envOf({ ...base, FIELD_LINE_PHASE: "1" }), now: OPEN },
   );
   assert(on.sent, "the server turned the phase on");
@@ -2083,7 +2426,11 @@ Deno.test("GATE 3: FIELD_LINE_PHASE decides whether a new automation may send", 
   });
   const legacy = await sendPartySms(
     legacyFake as never,
-    { partyId: "p1", body: "hello" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "hello",
+    },
     { getEnv: envOf(base), now: OPEN },
   );
   assert(legacy.sent, "a phase-0 send never asks the gate");
@@ -2097,7 +2444,11 @@ Deno.test("S6: a quiet-hours defer MINTS NOTHING and stores a recipe, not a toke
   const { fake, mints } = linkWorld();
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", templateKey: "field_digest" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      templateKey: "field_digest",
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "off",
@@ -2105,8 +2456,8 @@ Deno.test("S6: a quiet-hours defer MINTS NOTHING and stores a recipe, not a toke
         TWILIO_ACCOUNT_SID: "AC",
         TWILIO_AUTH_TOKEN: "tok",
       }),
-      fetchImpl: (() => Promise.reject("must not send")) as unknown as
-        typeof fetch,
+      fetchImpl:
+        (() => Promise.reject("must not send")) as unknown as typeof fetch,
       now: QUIET,
     },
   );
@@ -2138,9 +2489,16 @@ Deno.test("S6: the flush renders FRESH from the recipe and mints at the send", a
   const { fake, mints } = linkWorld();
   await sendPartySms(
     fake as never,
-    { partyId: "p1", templateKey: "field_digest" },
     {
-      getEnv: envOf({ SMS_DEV_MODE: "off", TWILIO_FROM_NUMBER: "+15550000000" }),
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      templateKey: "field_digest",
+    },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "off",
+        TWILIO_FROM_NUMBER: "+15550000000",
+      }),
       now: QUIET,
     },
   );
@@ -2151,6 +2509,9 @@ Deno.test("S6: the flush renders FRESH from the recipe and mints at the send", a
 
   let wireBody = "";
   const result = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: envOf({
       SMS_DEV_MODE: "off",
       TWILIO_FROM_NUMBER: "+15550000000",
@@ -2182,7 +2543,9 @@ Deno.test("S6: the flush renders FRESH from the recipe and mints at the send", a
   );
   assert(wireBody.includes("Field & Form"), "studio name first (contract S8)");
   assert(
-    wireBody.includes("Msg&data rates may apply. Reply HELP for help, STOP to opt out."),
+    wireBody.includes(
+      "Msg&data rates may apply. Reply HELP for help, STOP to opt out.",
+    ),
     "every outbound body ends with the compliance line (contract S8)",
   );
   // …and what the thread keeps is not.
@@ -2206,7 +2569,11 @@ Deno.test("S6: no raw token reaches a log line", async () => {
   try {
     await sendPartySms(
       fake as never,
-      { partyId: "p1", templateKey: "field_digest" },
+      {
+        authority: { kind: "designer", userId: "designer-1" },
+        partyId: "p1",
+        templateKey: "field_digest",
+      },
       {
         getEnv: envOf({
           SMS_DEV_MODE: "dry_run",
@@ -2295,14 +2662,24 @@ Deno.test("S5: one logical send — the second writer loses the claim", async ()
   };
   const first = await sendPartySms(
     claimed as never,
-    { partyId: "p1", body: "on my way", dedupeKey: "arrival:2026-07-08" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "on my way",
+      dedupeKey: "arrival:2026-07-08",
+    },
     deps,
   );
   assert(first.sent, "the first writer sends");
 
   const second = await sendPartySms(
     claimed as never,
-    { partyId: "p1", body: "on my way", dedupeKey: "arrival:2026-07-08" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "on my way",
+      dedupeKey: "arrival:2026-07-08",
+    },
     deps,
   );
   assert(!second.sent, "the second writer does not send a second text");
@@ -2317,7 +2694,12 @@ Deno.test("S5: one logical send — the second writer loses the claim", async ()
   // A DIFFERENT logical send is untouched by the claim.
   const other = await sendPartySms(
     claimed as never,
-    { partyId: "p1", body: "running late", dedupeKey: "delay:2026-07-08" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "running late",
+      dedupeKey: "delay:2026-07-08",
+    },
     deps,
   );
   assert(other.sent, "a different send has its own claim");
@@ -2340,6 +2722,7 @@ Deno.test("S5: one word for what happened — sent, queued, failed", async () =>
 
   // A dev dry run has no carrier to wait for: it is gone.
   const dry = await sendPartySms(world() as never, {
+    authority: { kind: "designer", userId: "designer-1" },
     partyId: "p1",
     body: "hi",
   }, {
@@ -2350,6 +2733,7 @@ Deno.test("S5: one word for what happened — sent, queued, failed", async () =>
 
   // A provider ACCEPT is 'queued'. It is not delivery and it is never "read".
   const accepted = await sendPartySms(world() as never, {
+    authority: { kind: "designer", userId: "designer-1" },
     partyId: "p1",
     body: "hi",
   }, {
@@ -2368,6 +2752,7 @@ Deno.test("S5: one word for what happened — sent, queued, failed", async () =>
   // A provider refusal carries Twilio's own code.
   const failFake = world();
   const refused = await sendPartySms(failFake as never, {
+    authority: { kind: "designer", userId: "designer-1" },
     partyId: "p1",
     body: "hi",
   }, {
@@ -2400,12 +2785,16 @@ Deno.test("S6: a defer that could only store the wrong words refuses instead", a
   const res = await sendPartySms(
     fake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "p1",
       body: "Open https://client.patina.cloud/field/sr_SECRET_RAW_TOKEN",
       auditBody: "Patina Site Request private link [redacted]",
     },
     {
-      getEnv: envOf({ SMS_DEV_MODE: "off", TWILIO_FROM_NUMBER: "+15550000000" }),
+      getEnv: envOf({
+        SMS_DEV_MODE: "off",
+        TWILIO_FROM_NUMBER: "+15550000000",
+      }),
       now: QUIET,
     },
   );
@@ -2453,7 +2842,12 @@ async function deferDigest(
 ) {
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", templateKey: "field_digest", ...input },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      templateKey: "field_digest",
+      ...input,
+    },
     {
       getEnv: envOf({ ...LIVE_TWILIO, ...envExtra }),
       fetchImpl: mustNotSend(),
@@ -2486,11 +2880,21 @@ Deno.test("R1: two concurrent flushes of one deferred row make exactly ONE wire 
     now: OPEN,
   };
   const [first, second] = await Promise.all([
-    flushDeferredMessages(fake as never, deps),
-    flushDeferredMessages(fake as never, deps),
+    flushDeferredMessages(fake as never, {
+      kind: "designer",
+      userId: "designer-1",
+    }, deps),
+    flushDeferredMessages(fake as never, {
+      kind: "designer",
+      userId: "designer-1",
+    }, deps),
   ]);
 
-  assertEquals(wires.length, 1, "one deferred row must have one provider attempt");
+  assertEquals(
+    wires.length,
+    1,
+    "one deferred row must have one provider attempt",
+  );
   assertEquals(
     first.flushed + second.flushed,
     1,
@@ -2510,7 +2914,10 @@ Deno.test("R2: a caller's own raw link never survives in the stored recipe", asy
   // is the whole reason the stored body is a redacted preview.
   const { fake } = linkWorld();
   const row = await deferDigest(fake, {
-    vars: { link: `https://client.patina.cloud/field/${RAW_BEARER}`, foo: "bar" },
+    vars: {
+      link: `https://client.patina.cloud/field/${RAW_BEARER}`,
+      foo: "bar",
+    },
   });
 
   const recipeJson = JSON.stringify(row.recipe);
@@ -2555,17 +2962,31 @@ Deno.test("R3: a phase turned off while the row waited stops the flush", async (
   );
 
   const out = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "0" }),
     fetchImpl: mustNotSend(),
     now: OPEN,
   });
   assertEquals(out.flushed, 0, "nothing goes out");
   assertEquals(mints.length, 0, "and nothing is minted for it");
-  assertEquals(row.twilio_status, "deferred", "the row keeps its place in the queue");
-  assertEquals(row.error_message, "field_line_phase_off", "and says why it stayed");
+  assertEquals(
+    row.twilio_status,
+    "deferred",
+    "the row keeps its place in the queue",
+  );
+  assertEquals(
+    row.error_message,
+    "field_line_phase_off",
+    "and says why it stayed",
+  );
 
   // The phase comes back up inside the window and the same row goes.
   const resumed = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }),
     fetchImpl: (() =>
       Promise.resolve(
@@ -2590,6 +3011,9 @@ Deno.test("R3: a 'never text' rule written after the defer still stops the send"
   }];
 
   const out = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, {
     getEnv: envOf(LIVE_TWILIO),
     fetchImpl: mustNotSend(),
     now: OPEN,
@@ -2642,7 +3066,12 @@ Deno.test("R4: an accepted send whose id cannot be recorded FAILS, it never read
 
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "on my way", dedupeKey: "arrival:1" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "on my way",
+      dedupeKey: "arrival:1",
+    },
     {
       getEnv: envOf(LIVE_TWILIO),
       fetchImpl: (() =>
@@ -2680,7 +3109,11 @@ Deno.test("R4: a delivery callback that lands mid-flight is never walked back", 
   });
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", body: "on my way" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      body: "on my way",
+    },
     {
       getEnv: envOf(LIVE_TWILIO),
       fetchImpl: (() => {
@@ -2738,7 +3171,11 @@ Deno.test("R5: a deferred row that did not write is not reported as deferred", a
 
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", templateKey: "field_digest" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      templateKey: "field_digest",
+    },
     { getEnv: envOf(LIVE_TWILIO), fetchImpl: mustNotSend(), now: QUIET },
   );
   assertEquals(res.deferred, false);
@@ -2792,6 +3229,7 @@ Deno.test("R1: a crash before the provider call hands the claim back, and the te
   const wires: string[] = [];
   const first = await flushDeferredMessages(
     fake as never,
+    { kind: "designer", userId: "designer-1" },
     wireDeps(wires, OPEN),
   );
   assertEquals(wires.length, 0, "nothing reached the provider");
@@ -2811,6 +3249,7 @@ Deno.test("R1: a crash before the provider call hands the claim back, and the te
 
   const second = await flushDeferredMessages(
     fake as never,
+    { kind: "designer", userId: "designer-1" },
     wireDeps(wires, new Date(OPEN.getTime() + 16 * 60 * 1000)),
   );
   assertEquals(second.flushed, 1, "the next flush sends what was never sent");
@@ -2835,6 +3274,7 @@ Deno.test("R1: a claim abandoned with no release at all comes back after the TTL
   const wires: string[] = [];
   const fresh = await flushDeferredMessages(
     fake as never,
+    { kind: "designer", userId: "designer-1" },
     wireDeps(wires, OPEN),
   );
   assertEquals(fresh.flushed, 0);
@@ -2844,6 +3284,7 @@ Deno.test("R1: a claim abandoned with no release at all comes back after the TTL
   row.claimed_at = new Date(OPEN.getTime() - 20 * 60 * 1000).toISOString();
   const stale = await flushDeferredMessages(
     fake as never,
+    { kind: "designer", userId: "designer-1" },
     wireDeps(wires, OPEN),
   );
   assertEquals(stale.flushed, 1, "a twenty-minute-old claim is abandoned");
@@ -2864,8 +3305,14 @@ Deno.test("R1: two flushes racing over one abandoned claim still make ONE wire c
   const wires: string[] = [];
   const deps = wireDeps(wires, OPEN);
   const [a, b] = await Promise.all([
-    flushDeferredMessages(fake as never, deps),
-    flushDeferredMessages(fake as never, deps),
+    flushDeferredMessages(fake as never, {
+      kind: "designer",
+      userId: "designer-1",
+    }, deps),
+    flushDeferredMessages(fake as never, {
+      kind: "designer",
+      userId: "designer-1",
+    }, deps),
   ]);
   assertEquals(wires.length, 1, "one abandoned row, one provider attempt");
   assertEquals(a.flushed + b.flushed, 1, "exactly one flush owns the resume");
@@ -2883,6 +3330,7 @@ Deno.test("R1: an abandoned claim with nothing to render from is never re-sent f
   await sendPartySms(
     fake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "p1",
       body: "Open the private link we sent you.",
       auditBody: "Patina Site Request private link [redacted]",
@@ -2898,7 +3346,10 @@ Deno.test("R1: an abandoned claim with nothing to render from is never re-sent f
   row.claimed_at = new Date(OPEN.getTime() - 20 * 60 * 1000).toISOString();
 
   const wires: string[] = [];
-  const res = await flushDeferredMessages(fake as never, wireDeps(wires, OPEN));
+  const res = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, wireDeps(wires, OPEN));
   assertEquals(wires.length, 0, "the audit copy never reaches the wire");
   assertEquals(res.flushed, 0);
   assertEquals(row.twilio_status, "claimed");
@@ -2952,7 +3403,9 @@ Deno.test("R2: delimiter-bounded bearer tokens never persist in audit copy", asy
       vars: { link: `https://client.patina.cloud/field/${RAW_BEARER}` },
     });
     const deferredStored = String(deferredRow.body ?? "");
-    const deferredAuditLog = JSON.stringify(deferredFake._data.sms_messages ?? []);
+    const deferredAuditLog = JSON.stringify(
+      deferredFake._data.sms_messages ?? [],
+    );
     for (const text of [deferredStored, deferredAuditLog]) {
       assert(!/[0-9a-f]{64}/i.test(text), `no bearer token persists: ${text}`);
       assert(!text.includes("/field/"), `no field URL persists: ${text}`);
@@ -2962,7 +3415,12 @@ Deno.test("R2: delimiter-bounded bearer tokens never persist in audit copy", asy
     const wires: string[] = [];
     const row = await sendPartySms(
       fake as never,
-      { partyId: "p1", body: wireText, auditBody },
+      {
+        authority: { kind: "designer", userId: "designer-1" },
+        partyId: "p1",
+        body: wireText,
+        auditBody,
+      },
       wireDeps(wires, OPEN),
     );
     assert(row.sent);
@@ -3028,6 +3486,7 @@ function pacedSend(
   return sendPartySms(
     fake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "p1",
       body: "Studio A at the job site today.",
       automationPhase: 1,
@@ -3046,24 +3505,57 @@ Deno.test("P5: the day the counters reset is the ZONE's day, never UTC's", () =>
 
   // Fall back: 2:00 CDT becomes 1:00 CST on 2026-11-01. The local hour 1:30
   // happens TWICE, and both times it is still the same local day.
-  assertEquals(localDayInTimezone(new Date("2026-11-01T05:30:00Z"), TZ), "2026-11-01");
-  assertEquals(localMinutesInTimezone(new Date("2026-11-01T06:30:00Z"), TZ), 90);
-  assertEquals(localDayInTimezone(new Date("2026-11-01T06:30:00Z"), TZ), "2026-11-01");
-  assertEquals(localMinutesInTimezone(new Date("2026-11-01T07:30:00Z"), TZ), 90);
-  assertEquals(localDayInTimezone(new Date("2026-11-01T07:30:00Z"), TZ), "2026-11-01");
+  assertEquals(
+    localDayInTimezone(new Date("2026-11-01T05:30:00Z"), TZ),
+    "2026-11-01",
+  );
+  assertEquals(
+    localMinutesInTimezone(new Date("2026-11-01T06:30:00Z"), TZ),
+    90,
+  );
+  assertEquals(
+    localDayInTimezone(new Date("2026-11-01T06:30:00Z"), TZ),
+    "2026-11-01",
+  );
+  assertEquals(
+    localMinutesInTimezone(new Date("2026-11-01T07:30:00Z"), TZ),
+    90,
+  );
+  assertEquals(
+    localDayInTimezone(new Date("2026-11-01T07:30:00Z"), TZ),
+    "2026-11-01",
+  );
 
   // And the reason a fixed offset cannot be used: 24 hours after 00:30 local on
   // the fall-back day is 23:30 local ON THE SAME DAY. A "+1 day" that adds
   // 86,400,000 ms would have reset this party's counters a day early.
-  assertEquals(localDayInTimezone(new Date("2026-11-02T05:30:00Z"), TZ), "2026-11-01");
-  assertEquals(localDayInTimezone(new Date("2026-11-02T06:30:00Z"), TZ), "2026-11-02");
+  assertEquals(
+    localDayInTimezone(new Date("2026-11-02T05:30:00Z"), TZ),
+    "2026-11-01",
+  );
+  assertEquals(
+    localDayInTimezone(new Date("2026-11-02T06:30:00Z"), TZ),
+    "2026-11-02",
+  );
 
   // Spring forward: 2:00 CST becomes 3:00 CDT on 2026-03-08. 23:30 the evening
   // before is still the 7th, and the local clock skips 02:00–02:59 entirely.
-  assertEquals(localDayInTimezone(new Date("2026-03-08T05:30:00Z"), TZ), "2026-03-07");
-  assertEquals(localMinutesInTimezone(new Date("2026-03-08T05:30:00Z"), TZ), 23 * 60 + 30);
-  assertEquals(localDayInTimezone(new Date("2026-03-08T08:30:00Z"), TZ), "2026-03-08");
-  assertEquals(localMinutesInTimezone(new Date("2026-03-08T08:30:00Z"), TZ), 3 * 60 + 30);
+  assertEquals(
+    localDayInTimezone(new Date("2026-03-08T05:30:00Z"), TZ),
+    "2026-03-07",
+  );
+  assertEquals(
+    localMinutesInTimezone(new Date("2026-03-08T05:30:00Z"), TZ),
+    23 * 60 + 30,
+  );
+  assertEquals(
+    localDayInTimezone(new Date("2026-03-08T08:30:00Z"), TZ),
+    "2026-03-08",
+  );
+  assertEquals(
+    localMinutesInTimezone(new Date("2026-03-08T08:30:00Z"), TZ),
+    3 * 60 + 30,
+  );
 });
 
 Deno.test("GATE 5: an over-budget event text is FOLDED into the next digest", async () => {
@@ -3119,8 +3611,16 @@ Deno.test("GATE 5: an unreadable budget SENDS — pacing is politeness, not cons
   ) {
     const { fake, asked } = pacedWorld(answers);
     const res = await pacedSend(fake, OPEN);
-    assert(res.sent, `an unanswerable budget must not silence the rail: ${JSON.stringify(answers)}`);
-    assertEquals(asked.filter((a) => a.rpc === "sms_claim_party_budget").length, 1);
+    assert(
+      res.sent,
+      `an unanswerable budget must not silence the rail: ${
+        JSON.stringify(answers)
+      }`,
+    );
+    assertEquals(
+      asked.filter((a) => a.rpc === "sms_claim_party_budget").length,
+      1,
+    );
   }
 });
 
@@ -3150,7 +3650,11 @@ Deno.test("GATE 4: a dead end pauses the rail and is handed off ONCE", async () 
   const second = await pacedSend(fake, OPEN, { dedupeKey: "ask-2" });
   assert(!second.sent);
   assertEquals(second.reason, "dead_end");
-  assertEquals(second.dueAt, "2026-07-09T18:00:00.000Z", "the caller learns when the pause lifts");
+  assertEquals(
+    second.dueAt,
+    "2026-07-09T18:00:00.000Z",
+    "the caller learns when the pause lifts",
+  );
 
   const third = await pacedSend(fake, OPEN, { dedupeKey: "ask-3" });
   assert(!third.sent);
@@ -3196,14 +3700,15 @@ Deno.test("GATE 5: the flush spends the slot, and hands the row back when it can
     email_templates: [{
       slug: "field_card",
       is_active: true,
-      html_content:
-        "{{studio_name}} at the job site today. " +
+      html_content: "{{studio_name}} at the job site today. " +
         "Msg&data rates may apply. Reply HELP for help, STOP to opt out.",
     }],
   }, {
     sms_claim_party_budget: (args: Record<string, unknown>) => {
       asked.push(args);
-      const answer = claimed ? { claimed: true } : { claimed: false, reason: "budget" };
+      const answer = claimed
+        ? { claimed: true }
+        : { claimed: false, reason: "budget" };
       claimed = true;
       return { data: answer, error: null };
     },
@@ -3212,15 +3717,23 @@ Deno.test("GATE 5: the flush spends the slot, and hands the row back when it can
   const deferred = await sendPartySms(
     fake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "p1",
       templateKey: "field_card",
       dedupeKey: "card:quiet",
       automationPhase: 1,
       cadenceClass: "event",
     } as never,
-    { getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }), fetchImpl: mustNotSend(), now: QUIET },
+    {
+      getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }),
+      fetchImpl: mustNotSend(),
+      now: QUIET,
+    },
   );
-  assert(deferred.deferred, `quiet hours stores it: ${JSON.stringify(deferred)}`);
+  assert(
+    deferred.deferred,
+    `quiet hours stores it: ${JSON.stringify(deferred)}`,
+  );
   assertEquals(asked.length, 0, "quiet hours spends NOTHING — the flush will");
   assertEquals(
     (fake._data.sms_messages ?? [])[0].error_message,
@@ -3234,7 +3747,10 @@ Deno.test("GATE 5: the flush spends the slot, and hands the row back when it can
     ...wireDeps(wires, OPEN),
     getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }),
   };
-  const refused = await flushDeferredMessages(fake as never, openDeps);
+  const refused = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, openDeps);
   assertEquals(refused.flushed, 0);
   assertEquals(wires.length, 0, "no wire call for a folded row");
   const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
@@ -3246,7 +3762,10 @@ Deno.test("GATE 5: the flush spends the slot, and hands the row back when it can
   assertEquals(asked[0].p_class, "event");
 
   // Second flush: the counters have room, so it goes — once.
-  const sent = await flushDeferredMessages(fake as never, openDeps);
+  const sent = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, openDeps);
   assertEquals(sent.flushed, 1);
   assertEquals(wires.length, 1);
   assertEquals((fake._data.sms_messages ?? [])[0].twilio_status, "queued");
@@ -3272,7 +3791,10 @@ Deno.test("GATE 4: the flush re-asks the dead end — yesterday's fold never wal
       owner_user_id: "u-designer",
     },
   ];
-  const budget: Array<Record<string, unknown>> = [{ claimed: false, reason: "budget" }];
+  const budget: Array<Record<string, unknown>> = [{
+    claimed: false,
+    reason: "budget",
+  }];
   const fake = createFakeSupabase({
     projects: ORG_ALPHA_PROJECTS,
     studio_channel_consent: [grant()],
@@ -3297,16 +3819,25 @@ Deno.test("GATE 4: the flush re-asks the dead end — yesterday's fold never wal
   const folded = await sendPartySms(
     fake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "p1",
       templateKey: "field_card",
       dedupeKey: "card:2026-07-08",
       automationPhase: 1,
       cadenceClass: "event",
     } as never,
-    { getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }), fetchImpl: mustNotSend(), now: OPEN },
+    {
+      getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }),
+      fetchImpl: mustNotSend(),
+      now: OPEN,
+    },
   );
   assertEquals(folded.status, "deferred");
-  assertEquals(folded.reason, "budget", "day D: over budget, so it waits for the digest");
+  assertEquals(
+    folded.reason,
+    "budget",
+    "day D: over budget, so it waits for the digest",
+  );
 
   // Tomorrow, ~noon Chicago: a new local day, inside the 24h TTL, and the budget
   // WOULD now say yes. The dead-end gate is therefore the only thing that can
@@ -3316,26 +3847,48 @@ Deno.test("GATE 4: the flush re-asks the dead end — yesterday's fold never wal
     ...wireDeps(wires, new Date("2026-07-09T17:00:00Z")),
     getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }),
   };
-  const held = await flushDeferredMessages(fake as never, nextDay);
+  const held = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, nextDay);
 
   assertEquals(held.flushed, 0, "the pause holds the fold");
   assertEquals(wires.length, 0, "and nothing reached the provider");
   const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
   assertEquals(row.twilio_status, "deferred", "still waiting, not failed");
-  assertEquals(row.claimed_at, null, "and a refused gate never cost the row its claim");
-  assertEquals(row.error_message, "prompts_paused", "the row says which gate held it");
+  assertEquals(
+    row.claimed_at,
+    null,
+    "and a refused gate never cost the row its claim",
+  );
+  assertEquals(
+    row.error_message,
+    "prompts_paused",
+    "the row says which gate held it",
+  );
   assertEquals(
     asked.map((a) => a.rpc),
-    ["sms_party_prompt_gate", "sms_claim_party_budget", "sms_party_prompt_gate"],
+    [
+      "sms_party_prompt_gate",
+      "sms_claim_party_budget",
+      "sms_party_prompt_gate",
+    ],
     "the flush asked the dead-end gate, once, and never reached the budget",
   );
   const flushAsk = asked[2].args;
   assertEquals(flushAsk.p_party_id, "p1");
   assertEquals(flushAsk.p_project_id, "proj1");
-  assertEquals(flushAsk.p_conversation_id, row.conversation_id, "about THIS thread");
+  assertEquals(
+    flushAsk.p_conversation_id,
+    row.conversation_id,
+    "about THIS thread",
+  );
 
   // A hold, not a drop: when the pause lifts, the same row goes out — once.
-  const released = await flushDeferredMessages(fake as never, nextDay);
+  const released = await flushDeferredMessages(fake as never, {
+    kind: "designer",
+    userId: "designer-1",
+  }, nextDay);
   assertEquals(released.flushed, 1, "the fold was kept, not thrown away");
   assertEquals(wires.length, 1);
   assertEquals((fake._data.sms_messages ?? [])[0].twilio_status, "queued");
@@ -3400,7 +3953,11 @@ function clientWorld(
       designer_id: "u-designer",
       name: "Okonkwo",
     }],
-    organizations: [{ id: "org-alpha", name: "Field & Form", type: "design_studio" }],
+    organizations: [{
+      id: "org-alpha",
+      name: "Field & Form",
+      type: "design_studio",
+    }],
     organization_members: [{
       organization_id: "org-alpha",
       user_id: "u-designer",
@@ -3429,8 +3986,7 @@ function clientWorld(
       {
         slug: "sms_selection_ready",
         is_active: true,
-        html_content:
-          "{{studio_name}} has {{picks}} ready for {{room}}. " +
+        html_content: "{{studio_name}} has {{picks}} ready for {{room}}. " +
           "Reply YES {{ref}} or open {{link}} Msg&data rates may apply. " +
           "Reply HELP for help, STOP to stop.",
       },
@@ -3478,6 +4034,7 @@ function firstLetter(
   return sendClientSms(
     fake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "cp1",
       projectId: "proj1",
       templateKey: "sms_client_first_letter",
@@ -3509,12 +4066,20 @@ Deno.test("sendClientSms refuses to carry anything but the client copy", async (
   const { fake } = clientWorld();
   const res = await sendClientSms(
     fake as never,
-    { partyId: "cp1", templateKey: "sms_daily_digest" },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "cp1",
+      templateKey: "sms_daily_digest",
+    },
     { getEnv: envOf(CLIENT_ENV), now: OPEN, fetchImpl: mustNotSend() },
   );
   assert(!res.sent);
   assertEquals(res.reason, "not_a_client_template");
-  assertEquals((fake._data.sms_messages ?? []).length, 0, "and nothing is written");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    0,
+    "and nothing is written",
+  );
 });
 
 Deno.test("GATE 3b: the campaign flag is the switch that stops her rail", async () => {
@@ -3557,7 +4122,11 @@ Deno.test("GATE 2: the kickoff record carries the letter, and nothing else does"
   assertEquals((await firstLetter(granted.fake)).sent, true, "a grant sends");
 
   const pending = clientWorld();
-  assertEquals((await firstLetter(pending.fake)).sent, true, "so does the tick");
+  assertEquals(
+    (await firstLetter(pending.fake)).sent,
+    true,
+    "so does the tick",
+  );
 
   const unsigned = clientWorld({
     consent: { ...KICKOFF_RECORD, source: null, recorded_by: null },
@@ -3593,7 +4162,8 @@ Deno.test("the letter carries a client capability, never a field link", async ()
   const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
   const body = String(row.body);
   assert(
-    body.includes(`/auth/invite/${CLIENT_TOKEN}`) || !body.includes(CLIENT_TOKEN),
+    body.includes(`/auth/invite/${CLIENT_TOKEN}`) ||
+      !body.includes(CLIENT_TOKEN),
     `the letter must point at her page: "${body}"`,
   );
   assert(!body.includes("/field/"), "a homeowner is never sent a crew link");
@@ -3612,7 +4182,11 @@ Deno.test("a letter whose capability cannot be minted is not sent at all", async
   assert(!res.sent, "no link, no letter");
   assertEquals(res.reason, "client_link_unavailable");
   assertEquals(mints.length, 1, "it was attempted");
-  assertEquals((fake._data.sms_messages ?? []).length, 0, "and nothing was logged");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    0,
+    "and nothing was logged",
+  );
 });
 
 Deno.test("an ordinary reply to a homeowner meets the client gate too", async () => {
@@ -3624,6 +4198,7 @@ Deno.test("an ordinary reply to a homeowner meets the client gate too", async ()
   const off = await sendPartySms(
     fake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "cp1",
       projectId: "proj1",
       templateKey: "sms_inbound_reply",
@@ -3642,6 +4217,7 @@ Deno.test("an ordinary reply to a homeowner meets the client gate too", async ()
   const on = await sendPartySms(
     onFake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "cp1",
       projectId: "proj1",
       templateKey: "sms_inbound_reply",
@@ -3657,7 +4233,12 @@ Deno.test("a trade text is untouched by the campaign flag", async () => {
   const { fake } = linkWorld();
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", templateKey: "field_digest", automationPhase: 1 },
+    {
+      authority: { kind: "designer", userId: "designer-1" },
+      partyId: "p1",
+      templateKey: "field_digest",
+      automationPhase: 1,
+    },
     {
       getEnv: envOf({
         SMS_DEV_MODE: "dry_run",
@@ -3680,6 +4261,7 @@ Deno.test("P13: the campaign flag is re-asked at the flush, and costs her no slo
   const stored = await sendClientSms(
     fake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "cp1",
       projectId: "proj1",
       templateKey: "sms_client_first_letter",
@@ -3687,12 +4269,20 @@ Deno.test("P13: the campaign flag is re-asked at the flush, and costs her no slo
       dedupeKey: "client_first_letter:inv-1",
     },
     {
-      getEnv: envOf({ ...CLIENT_ENV, ...LIVE_TWILIO, FIELD_LINE_PHASE: "2", FIELD_LINE_CAMPAIGN_APPROVED: "1" }),
+      getEnv: envOf({
+        ...CLIENT_ENV,
+        ...LIVE_TWILIO,
+        FIELD_LINE_PHASE: "2",
+        FIELD_LINE_CAMPAIGN_APPROVED: "1",
+      }),
       now: QUIET,
       fetchImpl: mustNotSend(),
     },
   );
-  assert(stored.deferred, `quiet hours must store it: ${JSON.stringify(stored)}`);
+  assert(
+    stored.deferred,
+    `quiet hours must store it: ${JSON.stringify(stored)}`,
+  );
   const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
   assertEquals(mints.length, 0, "and mint nothing overnight (contract S6)");
   assert(
@@ -3700,9 +4290,17 @@ Deno.test("P13: the campaign flag is re-asked at the flush, and costs her no slo
     "no capability is stored at rest",
   );
 
-  const budgetBefore = asked.filter((a) => a.rpc === "sms_claim_party_budget").length;
+  const budgetBefore =
+    asked.filter((a) => a.rpc === "sms_claim_party_budget").length;
   const held = await flushDeferredMessages(fake as never, {
-    getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "2", FIELD_LINE_CAMPAIGN_APPROVED: "0" }),
+    kind: "designer",
+    userId: "designer-1",
+  }, {
+    getEnv: envOf({
+      ...LIVE_TWILIO,
+      FIELD_LINE_PHASE: "2",
+      FIELD_LINE_CAMPAIGN_APPROVED: "0",
+    }),
     fetchImpl: mustNotSend(),
     now: OPEN,
   });
@@ -3718,11 +4316,20 @@ Deno.test("P13: the campaign flag is re-asked at the flush, and costs her no slo
 
   const wires: string[] = [];
   const resumed = await flushDeferredMessages(fake as never, {
-    getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "2", FIELD_LINE_CAMPAIGN_APPROVED: "1" }),
+    kind: "designer",
+    userId: "designer-1",
+  }, {
+    getEnv: envOf({
+      ...LIVE_TWILIO,
+      FIELD_LINE_PHASE: "2",
+      FIELD_LINE_CAMPAIGN_APPROVED: "1",
+    }),
     fetchImpl: ((_url: string, init: RequestInit) => {
       wires.push(new URLSearchParams(String(init.body)).get("Body") ?? "");
       return Promise.resolve(
-        new Response(JSON.stringify({ sid: "SM1", status: "queued" }), { status: 201 }),
+        new Response(JSON.stringify({ sid: "SM1", status: "queued" }), {
+          status: 201,
+        }),
       );
     }) as unknown as typeof fetch,
     now: OPEN,
@@ -3746,6 +4353,7 @@ Deno.test("P13: the phase is re-asked at the flush for a client row too", async 
   const stored = await sendClientSms(
     fake as never,
     {
+      authority: { kind: "designer", userId: "designer-1" },
       partyId: "cp1",
       projectId: "proj1",
       templateKey: "sms_client_first_letter",
@@ -3761,7 +4369,14 @@ Deno.test("P13: the phase is re-asked at the flush for a client row too", async 
   assert(stored.deferred);
   const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
   const out = await flushDeferredMessages(fake as never, {
-    getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1", FIELD_LINE_CAMPAIGN_APPROVED: "1" }),
+    kind: "designer",
+    userId: "designer-1",
+  }, {
+    getEnv: envOf({
+      ...LIVE_TWILIO,
+      FIELD_LINE_PHASE: "1",
+      FIELD_LINE_CAMPAIGN_APPROVED: "1",
+    }),
     fetchImpl: mustNotSend(),
     now: OPEN,
   });
@@ -3790,12 +4405,19 @@ Deno.test("a handset holding a client seat is gated as hers, whichever seat answ
   // leave partyKind null, which turned the client gate OFF for exactly the
   // ambiguous case. It now fails closed — ANY client seat on the number makes
   // the send hers — and it does so whatever order the rows come back in.
-  const trade = { id: "tp1", phone_e164: "+15551230001", project_id: "proj1", display_name: "Marcus Bell", party_kind: "vendor" };
+  const trade = {
+    id: "tp1",
+    phone_e164: "+15551230001",
+    project_id: "proj1",
+    display_name: "Marcus Bell",
+    party_kind: "vendor",
+  };
   const client = clientSeat();
   const phoneOnly = (fake: ReturnType<typeof clientWorld>["fake"]) =>
     sendPartySms(
       fake as never,
       {
+        authority: { kind: "designer", userId: "designer-1" },
         phone: "+15551230001",
         projectId: "proj1",
         templateKey: "sms_inbound_reply",
@@ -3808,10 +4430,12 @@ Deno.test("a handset holding a client seat is gated as hers, whichever seat answ
       },
     );
 
-  for (const [order, seats] of [
-    ["client first", [client, trade]],
-    ["trade first", [trade, client]],
-  ] as const) {
+  for (
+    const [order, seats] of [
+      ["client first", [client, trade]],
+      ["trade first", [trade, client]],
+    ] as const
+  ) {
     const { fake } = clientWorld({
       // A grant, so the only thing that can stop this send is the client gate.
       consent: { ...KICKOFF_RECORD, status: "granted" },
@@ -3820,7 +4444,11 @@ Deno.test("a handset holding a client seat is gated as hers, whichever seat answ
     const res = await phoneOnly(fake);
     assert(!res.sent, `[${order}] her gate applies to the number she shares`);
     assertEquals(res.reason, "campaign_not_approved", order);
-    assertEquals((fake._data.sms_messages ?? []).length, 0, `[${order}] and no row was written`);
+    assertEquals(
+      (fake._data.sms_messages ?? []).length,
+      0,
+      `[${order}] and no row was written`,
+    );
   }
 
   // The control: two seats and NO client among them is not her number, so the
@@ -3828,9 +4456,17 @@ Deno.test("a handset holding a client seat is gated as hers, whichever seat answ
   const { fake: tradeOnly } = clientWorld({
     consent: { ...KICKOFF_RECORD, status: "granted" },
     extra: {
-      project_parties: [trade, { ...trade, id: "tp2", display_name: "Sam Okafor", party_kind: "gc" }],
+      project_parties: [trade, {
+        ...trade,
+        id: "tp2",
+        display_name: "Sam Okafor",
+        party_kind: "gc",
+      }],
     },
   });
   const sent = await phoneOnly(tradeOnly);
-  assert(sent.sent, `two trade seats answer to no client flag: ${JSON.stringify(sent)}`);
+  assert(
+    sent.sent,
+    `two trade seats answer to no client flag: ${JSON.stringify(sent)}`,
+  );
 });
