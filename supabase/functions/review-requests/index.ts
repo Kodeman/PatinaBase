@@ -15,22 +15,6 @@
 
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
-  type ComplianceSendResult,
-  sendCompliantEmail,
-} from '../_shared/send-email.ts';
-import type { SendAuthority } from '../_shared/send-authority.ts';
-import {
-  renderBrandedShell,
-  paragraph,
-  muted,
-  ctaButton,
-  spacer,
-  escapeHtml,
-  givenName,
-  signOff,
-  type StudioSignOff,
-} from '../_shared/branded-email.ts';
-import {
   resolveStudioIdentity,
   studioCobrand,
   studioDisplayName,
@@ -72,82 +56,6 @@ interface DesignerClient {
   client_id: string | null;
   client_email: string | null;
   client_name: string | null;
-}
-
-async function sendReviewEmail(supabase: SupabaseClient, opts: {
-  projectId: string;
-  projectName: string;
-  designerClientId: string;
-  /** Minted before the send so notification_log can name the row it belongs to. */
-  reviewId: string;
-  clientEmail: string;
-  /** The client's auth user id, when she has an account. */
-  clientUserId: string | null;
-  /** Replies land on the designer, not on Patina. */
-  designerEmail: string | null;
-  clientName: string | null;
-  /** Display name for the subject/prose — studio, designer, or 'Patina'. */
-  senderName: string;
-  /** Studio co-brand byline (Designer Studios). */
-  studioName?: string;
-  studioLogoUrl?: string;
-  /** Who signs the letter (R7) — the studio, never Patina. */
-  signature: StudioSignOff;
-  authority: SendAuthority;
-}): Promise<ComplianceSendResult> {
-  const senderDisplay = opts.senderName;
-  const greeting = opts.clientName ? `Hi ${escapeHtml(opts.clientName)},` : 'Hi there,';
-  // Was `/review/<projectId>` — singular, and no such route ever existed, so
-  // every review request since this function shipped landed on a 404. The
-  // review lives on the doorstep of the project's own page now.
-  const reviewUrl = clientProjectLink(CLIENT_PORTAL_URL, opts.projectId, 'doorstep');
-  const subject = `Share your experience with ${senderDisplay}`;
-
-  const html = renderBrandedShell({
-    title: subject,
-    audience: 'client',
-    preview: `Your ${opts.projectName} project is complete — we'd love to hear what you thought.`,
-    eyebrow: 'Review request',
-    studioName: opts.studioName,
-    studioLogoUrl: opts.studioLogoUrl,
-    body: [
-      paragraph(greeting),
-      paragraph(`Your <strong style="color:#1F1B16; font-weight:600;">${escapeHtml(opts.projectName)}</strong> project is complete and we&apos;d love to hear what you thought.`),
-      paragraph(`Sharing a few words helps ${escapeHtml(senderDisplay)} understand what worked and helps future clients make informed decisions.`),
-      paragraph('It only takes a minute &mdash; click below to leave your feedback.'),
-      spacer(6),
-      ctaButton(reviewUrl, 'Share Your Experience', 'ink'),
-      spacer(10),
-      muted(`Can&apos;t click the button? Copy this link into your browser:<br><a href="${reviewUrl}" style="color:#4E7A66; text-decoration:underline; word-break:break-all;">${reviewUrl}</a>`),
-      signOff(opts.signature),
-    ].join(''),
-  });
-
-  const result = await sendCompliantEmail(supabase, {
-    authority: opts.authority,
-    to: opts.clientEmail,
-    subject,
-    html,
-    from: FROM_ADDRESS,
-    replyTo: opts.designerEmail ?? undefined,
-    userId: opts.clientUserId ?? undefined,
-    notificationType: 'review_request',
-    category: 'operational',
-    templateId: 'review-request',
-    ref: { type: 'client_review', id: opts.reviewId },
-    metadata: {
-      project_id: opts.projectId,
-      designer_client_id: opts.designerClientId,
-      review_id: opts.reviewId,
-    },
-  });
-
-  if (!result.success) {
-    console.error(
-      'review-requests: send failed for project', opts.projectId, result.error,
-    );
-  }
-  return result;
 }
 
 Deno.serve(async (_req: Request) => {
@@ -286,82 +194,41 @@ Deno.serve(async (_req: Request) => {
     const senderName = studioDisplayName(identity, designerName ?? 'Patina');
     const cobrand = studioCobrand(identity);
 
-    // The row is written before the send, at the id the letter names, so a
-    // send that lands can never leave notification_log pointing at a
-    // client_reviews row that was never created.
     const reviewId = crypto.randomUUID();
-    const { error: queueErr } = await supabase
-      .from('client_reviews')
-      .insert({
-        id: reviewId,
-        designer_client_id: dc.id,
-        project_id: project.id,
-        request_status: 'queued',
-      });
-
-    if (queueErr) {
-      console.error('review-requests: failed to queue review row for project', project.id, queueErr);
+    const subject = `Share your experience with ${senderName}`;
+    const body = `Hi ${clientName ?? 'there'},\n\nYour ${project.name} project is complete and we'd love to hear what you thought. Sharing a few words helps ${senderName} understand what worked and helps future clients make informed decisions.\n\nShare your experience: ${clientProjectLink(CLIENT_PORTAL_URL, project.id, 'doorstep')}`;
+    const { data: draftId, error: draftError } = await supabase.rpc('compose_outbound_draft', {
+      p_kind: 'review_request', p_org: identity!.studioId!, p_project: project.id,
+      p_channel: 'email', p_recipient_kind: 'client',
+      p_to: { client_id: project.client_id, address: clientEmail },
+      p_subject: subject, p_body: body,
+      p_payload: { review_id: reviewId, designer_client_id: dc.id },
+      p_ref_type: 'project', p_ref_id: project.id,
+      p_dedupe_key: `review:${project.id}:${project.client_id}`,
+      p_due_at: null, p_expires_at: null, p_composed_by: 'system',
+    });
+    if (draftError || !draftId) {
+      console.error('review-requests: failed to compose draft for project', project.id, draftError);
+      failed++;
       continue;
     }
-
-    const result = await sendReviewEmail(supabase, {
-      projectId: project.id,
-      projectName: project.name,
-      designerClientId: dc.id,
-      reviewId,
-      clientEmail,
-      clientUserId: clientProfile?.id ?? null,
-      designerEmail: designerProfile?.email ?? null,
-      clientName,
-      senderName,
-      studioName: cobrand.studioName,
-      studioLogoUrl: cobrand.studioLogoUrl,
-      authority: {
-        kind: 'studio_schedule',
-        studioId: identity!.studioId!,
-        outboundKind: 'review_request',
-      },
-      // R3-04: `profiles.city` first, then the studio org's address — the
-      // same precedence the approval letter signs with, so one studio's mail
-      // does not sign from two different places in one inbox.
-      signature: {
-        designerGivenName: givenName(designerName),
-        studioName: cobrand.studioName,
-        city: await studioSignatureCity(
-          supabase,
-          identity,
-          designerProfile?.city,
-        ) ?? null,
-      },
+    const { data: mode } = await supabase.rpc('studio_outbound_mode', {
+      p_studio: identity!.studioId!, p_kind: 'review_request',
     });
+    const { data: rolloutActive } = await supabase.rpc('outbound_review_active', {
+      p_studio: identity!.studioId!,
+    });
+    const scheduled = mode === 'scheduled' || rolloutActive !== true;
+    const result = scheduled
+      ? await (await import('../_shared/outbound-send.ts')).sendOutboundDraft(supabase, draftId, {
+        kind: 'studio_schedule', studioId: identity!.studioId!, outboundKind: 'review_request',
+      })
+      : { ok: true };
 
-    if (result.success) {
-      const { error: updateErr } = await supabase
-        .from('client_reviews')
-        .update({
-          request_status: 'sent',
-          request_sent_at: new Date().toISOString(),
-        })
-        .eq('id', reviewId);
-
-      if (updateErr) {
-        console.error('review-requests: failed to mark review sent for project', project.id, updateErr);
-      } else {
-        sent++;
-      }
+    if (result.ok) {
+      if (scheduled) sent++;
     } else {
-      // Nothing was sent and nothing is owed — drop the queued row so tomorrow
-      // retries this project instead of seeing it as already asked. A
-      // suppression lands here too: the candidate filter above, not a parked
-      // row, is what stops the daily retry.
-      const { error: deleteErr } = await supabase
-        .from('client_reviews')
-        .delete()
-        .eq('id', reviewId);
-
-      if (deleteErr) {
-        console.error('review-requests: failed to drop queued review for project', project.id, deleteErr);
-      }
+      console.error('review-requests: scheduled send failed for project', project.id, 'error' in result ? result.error : undefined);
       failed++;
     }
   }
