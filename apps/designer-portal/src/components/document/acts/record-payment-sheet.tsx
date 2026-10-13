@@ -10,9 +10,11 @@
  *   overdue_invoice  one client invoice → useRecordPayment
  *                    (record_invoice_payment), as the invoice folio does
  *
- * The sheet's one filled act carries the amount ("Record $3,400"). Recording
- * sends nothing to anyone; the need clears at its source once the record
- * covers it.
+ * The sheet's one filled act carries the amount ("Record $3,400.50"). Every
+ * figure prints to the cent, in the record's own currency, through the
+ * invoice folio's formatter: the label states exactly what the writer sends.
+ * Recording sends nothing to anyone; the need clears at its source once the
+ * record covers it.
  */
 
 import { useState } from 'react';
@@ -20,16 +22,17 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   useInvoice,
   usePOPayments,
+  usePurchaseOrders,
   useRecordPayment,
   useRecordVendorPayment,
   useVendorPayments,
   type InvoicePaymentMethod,
   type VendorPaymentMethodKind,
 } from '@patina/supabase';
-import { INVOICE_PAYMENT_METHOD_LABELS } from '@patina/shared';
+import { INVOICE_PAYMENT_METHOD_LABELS, formatCurrency } from '@patina/shared';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
-import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
+import { fmtDay, todayYmd } from '@/lib/document/format';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { METHOD_WORD, paidToward, parseUsdToCents } from '../line-unfold/record-payment';
@@ -59,11 +62,56 @@ const INVOICE_METHODS: readonly Exclude<InvoicePaymentMethod, 'stripe'>[] = [
 const capitalised = (words: string) => words.charAt(0).toUpperCase() + words.slice(1);
 const errText = (e: unknown) => (e instanceof Error && e.message ? ` ${e.message}` : '');
 
+/** One of the sheet's reads, as React Query reports it. */
+interface SheetRead {
+  data: unknown;
+  isError: boolean;
+  isFetching: boolean;
+  refetch: () => Promise<unknown>;
+}
+
+/** A read that failed with nothing to show, not one still on its way. */
+const failedRead = (read: SheetRead) => read.isError && read.data === undefined;
+
+/** A failed read says so and reads again on request. */
+function ReadFailed({ regionKey, reads }: { regionKey: string; reads: readonly SheetRead[] }) {
+  const failed = reads.filter(failedRead);
+  return (
+    <div data-act-read-failed className="space-y-4">
+      <p role="alert" className="t-body-sm">
+        This record could not be read, so the payment cannot be recorded yet.
+      </p>
+      <DocumentAction
+        actionKey={`${regionKey}-retry`}
+        surfaceKey="open-document"
+        regionKey={regionKey}
+        variant="secondary"
+        loading={failed.some((read) => read.isFetching)}
+        loadingLabel="Reading…"
+        onClick={() => void Promise.all(failed.map((read) => read.refetch()))}
+      >
+        Try again
+      </DocumentAction>
+    </div>
+  );
+}
+
+/** R9 — what stands in for the form until every read is here: the failure
+ *  and its retry, or "Loading" while a read is still on its way. A read that
+ *  has its data keeps the form up, so a failed background refresh never
+ *  takes the amount she typed. Null once the record can be read. */
+function unread(regionKey: string, reads: readonly SheetRead[]) {
+  if (reads.some(failedRead)) return <ReadFailed regionKey={regionKey} reads={reads} />;
+  if (reads.some((read) => read.data === undefined)) return <Reading />;
+  return null;
+}
+
 /** The one form both records share: amount, the day, how it was paid. */
 function PaymentForm<M extends string>({
   regionKey,
   record,
   balanceCents,
+  currency,
   dayLabel,
   methods,
   consequence,
@@ -75,6 +123,8 @@ function PaymentForm<M extends string>({
   record: string;
   /** The most this record can still take, in cents. */
   balanceCents: number;
+  /** The record's ISO-4217 currency: every figure the form prints is in it. */
+  currency: string;
   dayLabel: string;
   methods: readonly (readonly [M, string])[];
   consequence: (full: boolean) => string;
@@ -91,7 +141,7 @@ function PaymentForm<M extends string>({
   const amountCents = parseUsdToCents(amount);
   const over = amountCents != null && amountCents > balanceCents;
   const complete = amountCents != null && !over && !!day;
-  const label = amountCents != null ? `Record ${fmtUsd(amountCents)}` : 'Record the payment';
+  const label = amountCents != null ? `Record ${formatCurrency(amountCents, currency)}` : 'Record the payment';
 
   const submit = async () => {
     if (!complete || pending) return;
@@ -128,7 +178,7 @@ function PaymentForm<M extends string>({
         </span>
         {(amountCents == null || over) && (
           <span id={`${regionKey}-amount-reason`} className="reason t-body-sm">
-            {over ? `No more than ${fmtUsd(balanceCents)} is open.` : 'Enter the amount received.'}
+            {over ? `No more than ${formatCurrency(balanceCents, currency)} is open.` : 'Enter the amount received.'}
           </span>
         )}
       </div>
@@ -183,22 +233,33 @@ function MakerPayment({ need, onDone }: SheetProps) {
   const poPaymentId = need.need.recordId!;
   const purchaseOrderId = need.need.ledger?.context?.purchaseOrderId ?? '';
   const order = useOrder(need.projectId, purchaseOrderId);
+  // useOrder reports only a successful read. The same purchase-orders query
+  // (one cache entry) tells a failed read from one still on its way.
+  const orders = usePurchaseOrders({ projectId: need.projectId });
   const schedule = usePOPayments(purchaseOrderId);
   const records = useVendorPayments(purchaseOrderId);
   const record = useRecordVendorPayment({ errorSurface: 'inline' });
-  if (!order.loaded || !schedule.isSuccess || !records.isSuccess) return <Reading />;
+  const waiting = unread('act-record-payment', [orders, schedule, records]);
+  if (waiting) return waiting;
+  // A PO that is gone takes its schedule with it (po_payments cascades), so
+  // its payment reads as missing here.
   const row = schedule.data?.find((payment) => payment.id === poPaymentId);
   const remainder = row ? Math.max(row.amount_cents - paidToward(records.data, row.id), 0) : 0;
   if (!row || row.state === 'paid' || row.state === 'refunded' || remainder === 0) return <Missing />;
 
+  // USD by constraint: neither purchase_orders nor po_payments carries a
+  // currency column, and record_vendor_payment (00695) writes the ledger
+  // row's currency_code as USD when, as here, none is passed.
+  const currency = 'USD';
   const maker = order.maker ?? 'the maker';
   const word = row.label?.trim() || KIND_WORD[row.kind] || 'Payment';
   const due = row.due_date ? `, due ${fmtDay(row.due_date)}` : '';
   return (
     <PaymentForm<VendorPaymentMethodKind>
       regionKey="act-record-payment"
-      record={`${word} to ${maker}, ${fmtUsd(remainder)}${due}${order.label ? ` · ${order.label}` : ''}.`}
+      record={`${word} to ${maker}, ${formatCurrency(remainder, currency)}${due}${order.label ? ` · ${order.label}` : ''}.`}
       balanceCents={remainder}
+      currency={currency}
       dayLabel="Paid on"
       methods={VENDOR_METHODS.map((kind) => [kind, capitalised(METHOD_WORD[kind])] as const)}
       consequence={(full) =>
@@ -215,9 +276,12 @@ function MakerPayment({ need, onDone }: SheetProps) {
 /** A client invoice: the quiet door beside its reminder. */
 function InvoicePayment({ need, onDone }: SheetProps) {
   const invoiceId = need.need.recordId!;
-  const { data: invoice, isSuccess } = useInvoice(invoiceId);
+  const read = useInvoice(invoiceId);
   const record = useRecordPayment({ errorSurface: 'inline' });
-  if (!isSuccess) return <Reading />;
+  const waiting = unread('act-record-invoice-payment', [read]);
+  if (waiting) return waiting;
+  // A gone invoice reads back as null.
+  const invoice = read.data;
   const open = invoice && (invoice.status === 'sent' || invoice.status === 'partially_paid');
   const balance = invoice ? invoiceBalanceCents(invoice) : 0;
   if (!invoice || !open || balance === 0) return <Missing />;
@@ -229,8 +293,9 @@ function InvoicePayment({ need, onDone }: SheetProps) {
   return (
     <PaymentForm<Exclude<InvoicePaymentMethod, 'stripe'>>
       regionKey="act-record-invoice-payment"
-      record={`${label} · ${fmtUsd(balance)} open${due}.`}
+      record={`${label} · ${formatCurrency(balance, invoice.currency)} open${due}.`}
       balanceCents={balance}
+      currency={invoice.currency}
       dayLabel="Date received"
       methods={INVOICE_METHODS.map((method) => [method, INVOICE_PAYMENT_METHOD_LABELS[method]] as const)}
       consequence={(full) =>
