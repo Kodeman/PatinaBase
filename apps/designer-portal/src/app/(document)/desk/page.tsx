@@ -290,7 +290,7 @@ export default function DeskPage() {
   // A quiet Desk (no live jobs at all) lets the Studio index rise to fill the
   // space — larger, and earlier in the composition — rather than sitting as
   // bottom front matter. Only known once the read resolves.
-  const deskEmpty = !!data && data.live.length === 0;
+  const deskEmpty = !!data && data.live.length === 0 && !data.studioDrafts?.length;
   // SQ-778 N3 — her seat (the invite note and its writer); handoffNoteFor
   // decides per job whether the note is that job's.
   const mySeat = studioMembers?.find((m) => m.user_id === user?.id) ?? null;
