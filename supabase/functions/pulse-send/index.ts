@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "../_shared/send-email.ts";
+import { canSendOutbound } from "../_shared/outbound-can-send.ts";
 import { pulseEmailOptions } from "./lib.ts";
 
 const corsHeaders = {
@@ -41,22 +42,25 @@ Deno.serve(async (req) => {
     const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
     const { data: pulse } = await admin
       .from("weekly_pulses")
-      .select("id, project_id, designer_id, status, body, subject")
+      .select("id, project_id, status, body, subject")
       .eq("id", pulseId)
       .single();
-    if (!pulse || pulse.designer_id !== user.id) return json({ error: "pulse_not_found" }, 404);
+    if (!pulse) return json({ error: "pulse_not_found" }, 404);
     if (pulse.status !== "sent" || !pulse.body) return json({ error: "pulse_not_sent" }, 409);
 
     const { data: project } = await admin
       .from("projects")
-      .select("id, name, client_id, designer_id, studio_id")
+      .select("id, name, client_id, studio_id")
       .eq("id", pulse.project_id)
       .single();
-    if (!project || project.designer_id !== user.id) return json({ error: "project_not_found" }, 404);
+    if (!project) return json({ error: "project_not_found" }, 404);
+    if (!(await canSendOutbound(admin, { organization_id: project.studio_id, project_id: project.id }, user.id))) {
+      return json({ error: "not_authorized" }, 403);
+    }
 
     const { data: client } = await admin
       .from("profiles")
-      .select("email")
+      .select("id, email")
       .eq("id", project.client_id)
       .single();
     const recipient = client?.email?.trim();
@@ -68,7 +72,8 @@ Deno.serve(async (req) => {
     const result = await sendCompliantEmail(
       admin,
       pulseEmailOptions({
-        userId: user.id,
+        senderUserId: user.id,
+        recipientUserId: client?.id ?? null,
         pulseId,
         recipient,
         subject,

@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCaller } from "../_shared/caller.ts";
+import { canSendOutbound } from "../_shared/outbound-can-send.ts";
 import { sendOutboundDraft } from "../_shared/outbound-send.ts";
 import { sendDraftBatch } from "./batch.ts";
 
@@ -8,24 +8,6 @@ const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const url = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-async function canSend(admin: SupabaseClient<any>, draft: { organization_id: string; project_id: string | null }, userId: string): Promise<boolean> {
-  const { data: membershipData, error: membershipError } = await admin.from("organization_members")
-    .select("role").eq("organization_id", draft.organization_id).eq("user_id", userId).eq("status", "active").maybeSingle();
-  const membership = membershipData as { role: string } | null;
-  if (membershipError || !membership) return false;
-  if (membership.role === "owner" || membership.role === "admin") return true;
-  if (!draft.project_id) return false;
-  const [{ data: projectData, error: projectError }, { data: leadData, error: leadError }] = await Promise.all([
-    admin.from("projects").select("designer_id, lead_designer_id").eq("id", draft.project_id).maybeSingle(),
-    admin.from("project_team_members").select("user_id").eq("project_id", draft.project_id).eq("role", "lead_designer").is("removed_at", null),
-  ]);
-  const project = projectData as { designer_id: string | null; lead_designer_id: string | null } | null;
-  const leads = (leadData ?? []) as Array<{ user_id: string }>;
-  if (projectError || leadError || !project) return false;
-  if (leads.length) return leads.some((lead) => lead.user_id === userId);
-  return (project.lead_designer_id ?? project.designer_id) === userId;
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -45,7 +27,7 @@ Deno.serve(async (req) => {
       const { data, error } = await admin.from("outbound_drafts").select("id, organization_id, project_id").eq("id", id).maybeSingle();
       return error ? null : data;
     },
-    canSend: (draft, userId) => canSend(admin, draft, userId),
+    canSend: (draft, userId) => canSendOutbound(admin, draft, userId),
     send: (id, userId) => sendOutboundDraft(admin, id, { kind: "designer", userId, draftId: id }),
   });
   return json({ results });
