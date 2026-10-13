@@ -15,6 +15,7 @@ export interface OutboundDraft {
   ref_id: string; status: string; sent_by: string | null; edited_at?: string | null;
   message_id?: string | null; delivered_at?: string | null; delivery_message_id?: string | null;
   send_attempted_at?: string | null; finalizing_at?: string | null;
+  after_send_done_at?: string | null; last_send_outcome?: "rejected" | "unknown" | null;
 }
 export type OutboundSendResult = { id: string; ok: boolean; messageId?: string; error?: string };
 
@@ -37,13 +38,19 @@ export async function sendOutboundDraft(
     const { data, error: claimError } = await admin.rpc("claim_outbound_draft_for_send", { p_id: draftId });
     if (claimError || !data) {
       const message = claimError?.message ?? "claim returned no draft";
-      // A retry of a delivered draft, or of a stale attempted push (00784), finishes
-      // it and never reaches the provider.
-      if (/already (?:delivered|attempted)/i.test(message)) return await finalizeOutboundDraft(admin, draftId, authority);
+      // A retry of a delivered draft finishes it and never reaches the provider.
+      if (/already delivered/i.test(message)) return await finalizeOutboundDraft(admin, draftId, authority);
       return { id: draftId, ok: false, error: /not_sendable|not awaiting|expired|superseded|discarded/i.test(message) ? "not_sendable" : message };
     }
     draft = data as OutboundDraft;
+    // 00785: the claim handed a stale push attempt back to review, outcome unknown.
+    if (draft.status === "awaiting_review" && draft.last_send_outcome === "unknown") {
+      return { id: draftId, ok: false, error: "send_outcome_unknown" };
+    }
     if (draft.status !== "sending") return { id: draftId, ok: false, error: "not_sendable" };
+    // A draft whose last outcome is unknown may already have reached the
+    // recipient. Only the studio decides to send it again; automation never does.
+    if (draft.last_send_outcome === "unknown" && authority.kind !== "designer") return await fail("send_outcome_unknown");
     if (draft.channel === "email") {
       if (!draft.to_address || !draft.subject) return await fail("email recipient or subject missing");
       const kind = outboundKinds[draft.kind];
@@ -95,24 +102,22 @@ export async function sendOutboundDraft(
         cadenceClass: draft.payload.cadence_class === "event" || draft.payload.cadence_class === "recurring"
           ? draft.payload.cadence_class as "event" | "recurring"
           : undefined,
-        deferToCaller: ["trade_site_digest", "trade_day_of", "delivery_confirm", "homeowner_window_pick", "hours_prompt"].includes(draft.kind),
+        // 00785 F20: no outbound-draft text is queued inside sms.ts. A queued row is
+        // not a provider acceptance; outside the window the draft goes back to review.
+        deferToCaller: true,
         dedupeKey: `outbound-draft-${draft.id}`, authority,
       };
       const sent = draft.recipient_kind === "client" && templateKey
         ? await sendClientSms(admin, smsInput)
         : await sendPartySms(admin, smsInput);
-      // Field-line kinds ask sms.ts not to queue (deferToCaller); any other kind's
-      // "deferred" means a queued row now exists and will send in the window.
-      if (sent.status === "deferred" && smsInput.deferToCaller) {
-        return await fail("not_sendable_until_send_window");
-      }
-      // duplicate_send_claim: this draft's text already holds a live send row. It is
-      // a delivery only once the provider accepted that row; until then the send is
-      // in flight, so nothing is recorded and the draft is not released to review.
-      if (sent.reason === "duplicate_send_claim" && !(await smsSendAccepted(admin, smsInput.dedupeKey))) {
-        return { id: draftId, ok: false, error: "send_in_progress" };
-      }
-      if (sent.status !== "deferred" && !sent.sent && sent.reason !== "duplicate_send_claim") {
+      if (sent.status === "deferred") return await fail("not_sendable_until_send_window");
+      if (sent.reason === "duplicate_send_claim") {
+        // This draft's text already holds a live send row. It is a delivery only
+        // once the provider accepted that row; until then the send is in flight,
+        // so nothing is recorded and the draft is not released to review.
+        if (!(await smsSendAccepted(admin, smsInput.dedupeKey))) return { id: draftId, ok: false, error: "send_in_progress" };
+      } else if (!sent.sent && !sent.twilioSid) {
+        // A Twilio SID is an acceptance even when sms.ts could not record it (sid_unrecorded).
         return await fail(sent.reason ?? "sms_send_failed");
       }
       messageId = sent.messageId;
@@ -120,17 +125,22 @@ export async function sendOutboundDraft(
       const userId = typeof draft.payload.user_id === "string" ? draft.payload.user_id : draft.to_client_id;
       if (!userId) return await fail("push recipient missing");
       // Push has no provider idempotency key. The attempt is durable before APNs is
-      // called; from here 00784 refuses to release or reclaim the draft, so a failure
-      // below leaves it 'sending' and a retry finalizes it as delivered-unknown.
+      // called; from here 00784 refuses to release or reclaim the draft until the
+      // outcome is known.
       const { error: attemptError } = await admin.rpc("record_outbound_draft_send_attempt", { p_id: draft.id });
       if (attemptError) return await fail(attemptError.message);
-      const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/apns-send`, {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-        body: JSON.stringify({ user_id: userId, title: draft.subject ?? "", body: draft.body, entity_type: draft.ref_type, entity_id: draft.ref_id, audience: "app", authority }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || result?.failed > 0 || result?.error) return await fail(result?.error ?? `apns_http_${response.status}`);
-      messageId = typeof result?.message_id === "string" ? result.message_id : undefined;
+      const outcome = await pushOutboundDraft(draft, userId, authority);
+      if (outcome.rejected) {
+        // F21: the provider refused it, so nothing went out. Clear the attempt and
+        // hand the draft back to review.
+        const { error: rejectError } = await admin.rpc("record_outbound_draft_send_rejected", { p_id: draft.id });
+        if (rejectError) console.error("outbound draft rejection record failed", draft.id, rejectError);
+        return { id: draftId, ok: false, error: outcome.rejected };
+      }
+      // No answer came back: it may have gone out. The attempt stays recorded; once
+      // its claim is stale, 00785 hands it back to review marked 'unknown'.
+      if (!outcome.accepted) return { id: draftId, ok: false, error: "send_outcome_unknown" };
+      messageId = outcome.messageId;
     }
   } catch (error) {
     return await fail(error instanceof Error ? error.message : "send_failed");
@@ -149,11 +159,12 @@ export async function sendOutboundDraft(
 }
 
 /**
- * Finishes a draft the provider already accepted, or a stale attempted push
- * (delivered-unknown, 00784): runs its kind's afterSend, then marks it sent. Never
- * calls a provider. Only the caller that wins the per-draft finalize claim runs
- * the hook. Used after a send records its delivery, by a retry of a delivered or
- * attempted draft (sendOutboundDraft routes there) and by {finalize:true}.
+ * Finishes a draft the provider already accepted: runs its kind's afterSend
+ * once, then marks it sent. Never calls a provider. Only the caller that wins the
+ * per-draft finalize claim runs the hook, and after_send_done_at (00785) keeps a
+ * later finalize from running it again. Used after a send records its delivery,
+ * by a retry of a delivered draft (sendOutboundDraft routes there) and by
+ * {finalize:true}.
  */
 export async function finalizeOutboundDraft(
   admin: SupabaseClient,
@@ -181,8 +192,16 @@ export async function finalizeOutboundDraft(
     return { id: draft.id, ok: false, error: message };
   };
   try {
-    const afterSendContext: OutboundKindContext & { authority: SendAuthority } = { admin, draft, messageId, authority };
-    await outboundKinds[draft.kind]?.afterSend?.(afterSendContext);
+    if (!draft.after_send_done_at) {
+      const afterSendContext: OutboundKindContext & { authority: SendAuthority } = { admin, draft, messageId, authority };
+      await outboundKinds[draft.kind]?.afterSend?.(afterSendContext);
+      // F19: recorded by the claim holder as soon as the hook succeeds; a retry
+      // of this draft only re-attempts the mark.
+      const { error: doneError } = await admin.rpc("record_outbound_draft_after_send", {
+        p_id: draft.id, p_finalizing_at: draft.finalizing_at,
+      });
+      if (doneError) return await release(doneError.message);
+    }
     const { error: markError } = await admin.rpc("mark_outbound_draft_sent", {
       p_id: draft.id, p_sent_by: authority.kind === "designer" ? authority.userId : null,
       p_message_id: messageId,
@@ -192,6 +211,42 @@ export async function finalizeOutboundDraft(
   } catch (error) {
     return await release(error instanceof Error ? error.message : "finalize_failed");
   }
+}
+
+/**
+ * One apns-send call, read as delivery truth: accepted only when a device took
+ * it (sent > 0); rejected when apns-send refused the request (4xx) or answered
+ * that nothing went out (sent 0, failed, skipped, an error body); otherwise the
+ * outcome is unknown (no answer, a timeout, an unreadable reply, or a 5xx, which
+ * apns-send also returns when it throws after APNs took the push).
+ */
+async function pushOutboundDraft(
+  draft: OutboundDraft,
+  userId: string,
+  authority: SendAuthority,
+): Promise<{ accepted: boolean; messageId?: string; rejected?: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/apns-send`, {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+      body: JSON.stringify({ user_id: userId, title: draft.subject ?? "", body: draft.body, entity_type: draft.ref_type, entity_id: draft.ref_id, audience: "app", authority }),
+    });
+  } catch (error) {
+    console.error("outbound draft push outcome unknown", draft.id, error);
+    return { accepted: false };
+  }
+  const reply = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (reply && Number(reply.sent) > 0) {
+    const id = reply.provider_id ?? reply.message_id;
+    return { accepted: true, messageId: typeof id === "string" ? id : undefined };
+  }
+  if (response.status >= 400 && response.status < 500) {
+    return { accepted: false, rejected: typeof reply?.error === "string" ? reply.error : `apns_http_${response.status}` };
+  }
+  if (response.ok && reply && (typeof reply.error === "string" || typeof reply.skipped === "string" || typeof reply.sent === "number" || Number(reply.failed) > 0)) {
+    return { accepted: false, rejected: String(reply.error ?? reply.skipped ?? "push_not_accepted") };
+  }
+  return { accepted: false };
 }
 
 /** The statuses that free a send claim in sms_messages_send_claim_uniq (00640). */

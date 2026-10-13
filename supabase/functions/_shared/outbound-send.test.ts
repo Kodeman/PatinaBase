@@ -59,9 +59,9 @@ Deno.test("sendOutboundDraft releases a claim when the claimed row is invalid", 
   assertEquals(admin.calls, ["claim_outbound_draft_for_send", "release_outbound_draft_claim"]);
 });
 
-// ── Delivery finalization (00782, SQ-905 F11) ────────────────────────────────
-// The rpc handlers model the 00775/00780/00782 draft lifecycle; the SQL guards
-// themselves are proven in supabase/tests/outbound/outbound_delivery_finalization_test.sql.
+// ── Delivery finalization (00782, SQ-905 F11; 00785, F19/F20/F21) ────────────
+// The rpc handlers model the 00775/00780/00782/00784/00785 draft lifecycle; the
+// SQL guards themselves are proven in supabase/tests/outbound/.
 type Row = Record<string, unknown>;
 const DESIGNER = { kind: "designer", userId: "designer-1" } as const;
 const SITE_REQUEST_ID = "site-request-1";
@@ -73,7 +73,7 @@ function draftRow(id: string, overrides: Row = {}): Row {
     subject: "Site request due", body: "The tile sample is due tomorrow.", payload: { user_id: "trade-user-1" },
     ref_type: "site_request", ref_id: SITE_REQUEST_ID, status: "awaiting_review", sent_by: null,
     claimed_at: null, message_id: null, delivered_at: null, delivery_message_id: null,
-    send_attempted_at: null, finalizing_at: null, ...overrides,
+    send_attempted_at: null, finalizing_at: null, after_send_done_at: null, last_send_outcome: null, ...overrides,
   };
 }
 
@@ -104,7 +104,11 @@ function draftDb(
       }
       const staleSending = draft.status === "sending" && stale(draft.claimed_at);
       if (staleSending && draft.send_attempted_at) {
-        return { data: null, error: { message: "claim_outbound_draft_for_send: draft was already attempted; finalize it" } };
+        // 00785: an attempt with no answer goes back to review marked unknown.
+        Object.assign(draft, {
+          status: "awaiting_review", claimed_at: null, sent_by: null, send_attempted_at: null, last_send_outcome: "unknown",
+        });
+        return { data: structuredClone(draft), error: null };
       }
       if (draft.status !== "awaiting_review" && !staleSending) {
         return { data: null, error: { message: `claim_outbound_draft_for_send: draft is ${draft.status} or has a fresh claim` } };
@@ -132,8 +136,21 @@ function draftDb(
         if (draft.status !== "sending") {
           return { data: null, error: { message: `record_outbound_draft_delivery: draft is ${draft.status}, not sending` } };
         }
-        Object.assign(draft, { delivered_at: new Date().toISOString(), delivery_message_id: p_message_id ?? null });
+        Object.assign(draft, {
+          delivered_at: new Date().toISOString(), delivery_message_id: p_message_id ?? null, last_send_outcome: null,
+        });
       }
+      return { data: structuredClone(draft), error: null };
+    },
+    record_outbound_draft_send_rejected: ({ p_id }) => {
+      calls.push("record_outbound_draft_send_rejected");
+      const draft = row(p_id)!;
+      if (draft.status !== "sending" || draft.delivered_at || !draft.send_attempted_at) {
+        return { data: null, error: { message: `record_outbound_draft_send_rejected: draft is ${draft.status} and has no open provider attempt` } };
+      }
+      Object.assign(draft, {
+        status: "awaiting_review", claimed_at: null, sent_by: null, send_attempted_at: null, last_send_outcome: "rejected",
+      });
       return { data: structuredClone(draft), error: null };
     },
     release_outbound_draft_claim: ({ p_id }) => {
@@ -152,14 +169,22 @@ function draftDb(
       calls.push("claim_outbound_draft_finalize");
       const draft = row(p_id)!;
       if (draft.status === "sent") return { data: structuredClone(draft), error: null };
-      if (draft.status !== "sending" || (!draft.delivered_at && !(draft.send_attempted_at && stale(draft.claimed_at)))) {
+      if (draft.status !== "sending" || !draft.delivered_at) {
         return { data: null, error: { message: `claim_outbound_draft_finalize: draft is ${draft.status} and was not delivered` } };
       }
       if (draft.finalizing_at && !stale(draft.finalizing_at)) {
         return { data: null, error: { message: "claim_outbound_draft_finalize: draft is already being finalized" } };
       }
-      const now = new Date().toISOString();
-      Object.assign(draft, { finalizing_at: now, delivered_at: draft.delivered_at ?? now });
+      draft.finalizing_at = new Date().toISOString();
+      return { data: structuredClone(draft), error: null };
+    },
+    record_outbound_draft_after_send: ({ p_id, p_finalizing_at }) => {
+      calls.push("record_outbound_draft_after_send");
+      const draft = row(p_id)!;
+      if (draft.status !== "sending" || draft.finalizing_at !== p_finalizing_at) {
+        return { data: null, error: { message: `record_outbound_draft_after_send: draft is ${draft.status} and the caller does not hold its finalize claim` } };
+      }
+      draft.after_send_done_at ??= new Date().toISOString();
       return { data: structuredClone(draft), error: null };
     },
     release_outbound_draft_finalize: ({ p_id, p_finalizing_at }) => {
@@ -186,16 +211,21 @@ function draftDb(
   return { fake, client: fake as never, calls, row };
 }
 
-/** Stubs fetch (the push provider is apns-send) and counts every request. */
+/**
+ * Stubs fetch (the push provider is apns-send) and counts every request. An
+ * Error reply makes the request throw after it went out (an unknown outcome).
+ */
 async function withProvider<T>(
   fn: (requests: string[]) => Promise<T>,
-  reply: Row = { sent: 1, failed: 0, message_id: "apns-1" },
+  reply: Row | Error = { sent: 1, failed: 0, message_id: "apns-1" },
+  status = 200,
 ): Promise<T> {
   const original = globalThis.fetch;
   const requests: string[] = [];
   globalThis.fetch = ((input: string | URL | Request) => {
     requests.push(input instanceof Request ? input.url : String(input));
-    return Promise.resolve(new Response(JSON.stringify(reply), { status: 200 }));
+    if (reply instanceof Error) return Promise.reject(reply);
+    return Promise.resolve(new Response(JSON.stringify(reply), { status }));
   }) as typeof fetch;
   try {
     return await fn(requests);
@@ -213,6 +243,8 @@ Deno.test("a mark that fails once never resends: the retry finalizes with one pr
     assert(db.row("draft-mark")?.delivered_at, "the delivery is recorded before any hook runs");
     assertEquals(db.calls.includes("release_outbound_draft_claim"), false);
 
+    assert(db.row("draft-mark")?.after_send_done_at, "the hook's run is recorded before the mark");
+
     const retry = await sendOutboundDraft(db.client, "draft-mark", DESIGNER);
     assertEquals(retry, { id: "draft-mark", ok: true, messageId: "apns-1" });
     assertEquals(requests.length, 1, "exactly one provider call across the send and its retry");
@@ -220,7 +252,9 @@ Deno.test("a mark that fails once never resends: the retry finalizes with one pr
     assertEquals(db.row("draft-mark")?.message_id, "apns-1");
     assertEquals(db.calls, [
       "claim_outbound_draft_for_send", "record_outbound_draft_send_attempt", "record_outbound_draft_delivery",
-      "claim_outbound_draft_finalize", "mark_outbound_draft_sent", "release_outbound_draft_finalize",
+      "claim_outbound_draft_finalize", "record_outbound_draft_after_send", "mark_outbound_draft_sent",
+      "release_outbound_draft_finalize",
+      // F19: the retry skips the hook and only re-attempts the mark.
       "claim_outbound_draft_for_send", "claim_outbound_draft_finalize", "mark_outbound_draft_sent",
     ]);
   });
@@ -262,6 +296,25 @@ Deno.test("finalize mode refuses a draft the provider never accepted", async () 
 });
 
 
+/** A fixed-offset zone whose local hour right now passes the test, so the SMS send window is deterministic. */
+function zoneWhereHour(test: (hour: number) => boolean): string {
+  return Array.from({ length: 25 }, (_, i) => i - 12).map((n) => `Etc/GMT${n >= 0 ? "+" : ""}${n}`).find((tz) =>
+    test(Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(new Date())))
+  )!;
+}
+
+/** Runs fn with FIELD_TZ inside (8am–8pm) or outside the SMS send window, then restores it. */
+async function withSendWindow<T>(open: boolean, fn: () => Promise<T>): Promise<T> {
+  const saved = Deno.env.get("FIELD_TZ");
+  Deno.env.set("FIELD_TZ", zoneWhereHour((hour) => open ? hour >= 9 && hour < 19 : hour < 7));
+  try {
+    return await fn();
+  } finally {
+    if (saved === undefined) Deno.env.delete("FIELD_TZ");
+    else Deno.env.set("FIELD_TZ", saved);
+  }
+}
+
 /** Runs fn with sms.ts in dry-run mode against a consenting party, then restores the env. */
 async function withSmsParty<T>(smsMessages: Row[], fn: (db: ReturnType<typeof draftDb>, requests: string[]) => Promise<T>) {
   const env = { SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+15550000000" };
@@ -299,7 +352,7 @@ const smsRow = (overrides: Row): Row => ({
 
 Deno.test("an accepted SMS duplicate_send_claim is recorded as delivered and finalizes without a second text", async () => {
   // The live send row an earlier attempt of this draft wrote, which the provider accepted.
-  await withSmsParty([smsRow({ twilio_status: "dry_run", twilio_sid: "dev-1" })], async (db, requests) => {
+  await withSendWindow(true, () => withSmsParty([smsRow({ twilio_status: "dry_run", twilio_sid: "dev-1" })], async (db, requests) => {
     const result = await sendOutboundDraft(db.client, "draft-sms", DESIGNER);
     assertEquals(result, { id: "draft-sms", ok: true, messageId: undefined });
     assertEquals(db.row("draft-sms")?.status, "sent");
@@ -307,12 +360,12 @@ Deno.test("an accepted SMS duplicate_send_claim is recorded as delivered and fin
     assertEquals(db.calls.includes("release_outbound_draft_claim"), false);
     assertEquals(db.fake._data.sms_messages.length, 1, "no second send row");
     assertEquals(requests.length, 0, "Twilio is never called");
-  });
+  }));
 });
 
 Deno.test("a duplicate_send_claim on an SMS row with no provider sid is in flight: not ok, nothing recorded (F16)", async () => {
   for (const twilio_status of ["claimed", "queued", "deferred"]) {
-    await withSmsParty([
+    await withSendWindow(true, () => withSmsParty([
       // An earlier text the carrier failed: it holds a sid, but it freed the claim.
       smsRow({ id: "sms-0", twilio_status: "failed", twilio_sid: "SM-failed" }),
       smsRow({ twilio_status, twilio_sid: null }),
@@ -324,46 +377,149 @@ Deno.test("a duplicate_send_claim on an SMS row with no provider sid is in fligh
       assertEquals(db.row("draft-sms")?.status, "sending", "the in-flight send is not handed back to review");
       assertEquals(db.fake._data.sms_messages.length, 2, "no second send row");
       assertEquals(requests.length, 0, "Twilio is never called");
-    });
+    }));
   }
 });
 
-Deno.test("a failed delivery record followed by a stale reclaim pushes once and finalizes as delivered-unknown (F15)", async () => {
+Deno.test("quiet-hours SMS for site_request_due is not delivered, queues nothing and makes no provider call (F20)", async () => {
+  await withSendWindow(false, () => withSmsParty([], async (db, requests) => {
+    assertEquals(db.row("draft-sms")?.kind, "site_request_due");
+    const result = await sendOutboundDraft(db.client, "draft-sms", {
+      kind: "studio_schedule", studioId: "org-alpha", outboundKind: "site_request_due",
+    });
+    assertEquals(result, { id: "draft-sms", ok: false, error: "not_sendable_until_send_window" });
+    assertEquals(db.row("draft-sms")?.status, "awaiting_review", "the draft goes back to review");
+    assertEquals(db.row("draft-sms")?.delivered_at, null);
+    assertEquals(db.fake._data.sms_messages.length, 0, "no deferred send row is queued inside sms.ts");
+    assertEquals(requests.length, 0, "Twilio is never called");
+    assertEquals(db.calls, ["claim_outbound_draft_for_send", "release_outbound_draft_claim"]);
+    assertEquals(db.fake._data.site_requests[0].due_reminder_sent_at, null, "no afterSend");
+  }));
+});
+
+Deno.test("an in-window SMS for site_request_due still sends, records the acceptance and finalizes (F20)", async () => {
+  await withSendWindow(true, () => withSmsParty([], async (db, requests) => {
+    const result = await sendOutboundDraft(db.client, "draft-sms", {
+      kind: "studio_schedule", studioId: "org-alpha", outboundKind: "site_request_due",
+    });
+    assertEquals(result.ok, true, JSON.stringify(result));
+    assertEquals(db.row("draft-sms")?.status, "sent");
+    assert(db.row("draft-sms")?.delivered_at, "the provider acceptance is the delivery");
+    const sent = db.fake._data.sms_messages.filter((row) => row.dedupe_key === "outbound-draft-draft-sms");
+    assertEquals(sent.length, 1, "one send row");
+    assert(String(sent[0].twilio_sid ?? "").startsWith("dev-"), "the dry-run provider sid is on the row");
+    assertEquals(requests.length, 0, "dry run never calls Twilio over the network");
+    assert(db.fake._data.site_requests[0].due_reminder_sent_at, "afterSend ran");
+  }));
+});
+
+Deno.test("a push whose acceptance never came back is released marked unknown after the stale window, never auto-sent (F15/F21)", async () => {
+  await withProvider(async (requests) => {
+    const db = draftDb([draftRow("draft-unknown")]);
+    const first = await sendOutboundDraft(db.client, "draft-unknown", DESIGNER);
+    assertEquals(first, { id: "draft-unknown", ok: false, error: "send_outcome_unknown" });
+    assertEquals(requests.length, 1);
+    assert(db.row("draft-unknown")?.send_attempted_at, "the attempt is durable before APNs is called");
+    assertEquals(db.row("draft-unknown")?.status, "sending", "an unknown outcome is not released while its claim is fresh");
+    assertEquals(db.calls, ["claim_outbound_draft_for_send", "record_outbound_draft_send_attempt"]);
+
+    db.row("draft-unknown")!.claimed_at = minutesAgo(11);
+    const reclaim = await sendOutboundDraft(db.client, "draft-unknown", DESIGNER);
+    assertEquals(reclaim, { id: "draft-unknown", ok: false, error: "send_outcome_unknown" });
+    assertEquals(requests.length, 1, "the stale reclaim never pushes again");
+    assertEquals(db.row("draft-unknown")?.status, "awaiting_review", "the studio decides whether to send it again");
+    assertEquals(db.row("draft-unknown")?.last_send_outcome, "unknown");
+    assertEquals(db.row("draft-unknown")?.send_attempted_at, null);
+    assertEquals(db.row("draft-unknown")?.delivered_at, null, "an attempt is never delivery");
+    assertEquals(db.fake._data.site_requests[0].due_reminder_sent_at, null, "no afterSend for an unknown outcome");
+
+    const scheduled = await sendOutboundDraft(db.client, "draft-unknown", {
+      kind: "studio_schedule", studioId: "org-alpha", outboundKind: "site_request_due",
+    });
+    assertEquals(scheduled, { id: "draft-unknown", ok: false, error: "send_outcome_unknown" });
+    assertEquals(requests.length, 1, "automation never re-sends an unknown outcome");
+    assertEquals(db.row("draft-unknown")?.status, "awaiting_review");
+    assertEquals(db.calls.includes("claim_outbound_draft_finalize"), false, "never finalized or marked sent");
+    assertEquals(db.calls.includes("mark_outbound_draft_sent"), false);
+  }, new TypeError("error sending request: connection reset"));
+});
+
+Deno.test("a failed delivery record after an accepted push is an unknown outcome, never promoted to delivered (F15)", async () => {
   await withProvider(async (requests) => {
     const db = draftDb([draftRow("draft-receipt")], {}, { recordFailures: 1 });
     const first = await sendOutboundDraft(db.client, "draft-receipt", DESIGNER);
     assertEquals(first.ok, false);
-    assertEquals(requests.length, 1);
-    assert(db.row("draft-receipt")?.send_attempted_at, "the attempt is durable before APNs is called");
     assertEquals(db.row("draft-receipt")?.delivered_at, null);
     assertEquals(db.row("draft-receipt")?.status, "sending");
 
     db.row("draft-receipt")!.claimed_at = minutesAgo(11);
+    assertEquals(await finalizeOutboundDraft(db.client, "draft-receipt", DESIGNER), {
+      id: "draft-receipt", ok: false, error: "not_delivered",
+    });
     const reclaim = await sendOutboundDraft(db.client, "draft-receipt", DESIGNER);
-    assertEquals(reclaim, { id: "draft-receipt", ok: true, messageId: undefined });
-    assertEquals(requests.length, 1, "exactly one APNs call across the send and the stale reclaim");
+    assertEquals(reclaim, { id: "draft-receipt", ok: false, error: "send_outcome_unknown" });
+    assertEquals(requests.length, 1, "exactly one APNs call");
+    assertEquals(db.row("draft-receipt")?.status, "awaiting_review");
+    assertEquals(db.row("draft-receipt")?.last_send_outcome, "unknown");
+    assertEquals(db.row("draft-receipt")?.delivered_at, null);
+
+    // The studio sends it again: a fresh attempt that the provider accepts.
+    const resent = await sendOutboundDraft(db.client, "draft-receipt", DESIGNER);
+    assertEquals(resent, { id: "draft-receipt", ok: true, messageId: "apns-1" });
+    assertEquals(requests.length, 2);
     assertEquals(db.row("draft-receipt")?.status, "sent");
-    assert(db.row("draft-receipt")?.delivered_at, "the delivered-unknown push is recorded before its hook");
-    assert(db.fake._data.site_requests[0].due_reminder_sent_at, "the kind's afterSend ran once finalized");
-    assertEquals(db.calls, [
-      "claim_outbound_draft_for_send", "record_outbound_draft_send_attempt", "record_outbound_draft_delivery",
-      "claim_outbound_draft_for_send", "claim_outbound_draft_finalize", "mark_outbound_draft_sent",
-    ]);
+    assertEquals(db.row("draft-receipt")?.last_send_outcome, null, "a recorded delivery clears the marker");
   });
 });
 
-Deno.test("an APNs failure after the attempt leaves the push sending, never back in review", async () => {
-  await withProvider(async (requests) => {
-    const db = draftDb([draftRow("draft-apns-fail")]);
-    const first = await sendOutboundDraft(db.client, "draft-apns-fail", DESIGNER);
-    assertEquals(first, { id: "draft-apns-fail", ok: false, error: "push_failed" });
-    assertEquals(db.row("draft-apns-fail")?.status, "sending", "the release is refused once APNs was attempted");
-    assertEquals(db.row("draft-apns-fail")?.delivered_at, null);
+Deno.test("a push APNs rejects is a failure: not ok, the attempt is cleared and the draft goes back to review (F21)", async () => {
+  for (const [reply, error] of [
+    [{ sent: 0, failed: 1, error: "push_failed" }, "push_failed"],
+    [{ sent: 0, failed: 1, failures: [{ token: "t", status: 400, reason: "BadDeviceToken" }] }, "push_not_accepted"],
+    [{ sent: 0, skipped: "no_tokens" }, "no_tokens"],
+    [{ skipped: "apns_not_configured" }, "apns_not_configured"],
+  ] as Array<[Row, string]>) {
+    await withProvider(async (requests) => {
+      const db = draftDb([draftRow("draft-rejected")]);
+      const first = await sendOutboundDraft(db.client, "draft-rejected", DESIGNER);
+      assertEquals(first, { id: "draft-rejected", ok: false, error }, JSON.stringify(reply));
+      assertEquals(requests.length, 1);
+      assertEquals(db.row("draft-rejected")?.status, "awaiting_review");
+      assertEquals(db.row("draft-rejected")?.send_attempted_at, null, "the rejected attempt is cleared");
+      assertEquals(db.row("draft-rejected")?.last_send_outcome, "rejected");
+      assertEquals(db.row("draft-rejected")?.delivered_at, null);
+      assertEquals(db.calls, [
+        "claim_outbound_draft_for_send", "record_outbound_draft_send_attempt", "record_outbound_draft_send_rejected",
+      ]);
+      assertEquals(db.fake._data.site_requests[0].due_reminder_sent_at, null, "no afterSend for a rejection");
+    }, reply);
+  }
+});
 
-    const fresh = await sendOutboundDraft(db.client, "draft-apns-fail", DESIGNER);
-    assertEquals(fresh, { id: "draft-apns-fail", ok: false, error: "claim_outbound_draft_for_send: draft is sending or has a fresh claim" });
-    assertEquals(requests.length, 1, "no second push");
-  }, { sent: 0, failed: 1, error: "push_failed" });
+Deno.test("an apns-send 4xx is a rejection; a 5xx or unreadable answer is an unknown outcome", async () => {
+  await withProvider(async () => {
+    const db = draftDb([draftRow("draft-403")]);
+    assertEquals(await sendOutboundDraft(db.client, "draft-403", DESIGNER), { id: "draft-403", ok: false, error: "refused_unlabelled" });
+    assertEquals(db.row("draft-403")?.status, "awaiting_review");
+    assertEquals(db.row("draft-403")?.last_send_outcome, "rejected");
+  }, { error: "refused_unlabelled" }, 403);
+  // apns-send answers 500 {error} when it throws, which can be after APNs took the push.
+  await withProvider(async () => {
+    const db = draftDb([draftRow("draft-500")]);
+    assertEquals(await sendOutboundDraft(db.client, "draft-500", DESIGNER), { id: "draft-500", ok: false, error: "send_outcome_unknown" });
+    assertEquals(db.row("draft-500")?.status, "sending");
+    assert(db.row("draft-500")?.send_attempted_at, "the attempt stays recorded");
+  }, { error: "notification_log update failed" }, 500);
+  const original = globalThis.fetch;
+  globalThis.fetch = (() => Promise.resolve(new Response("upstream timeout", { status: 504 }))) as typeof fetch;
+  try {
+    const db = draftDb([draftRow("draft-504")]);
+    assertEquals(await sendOutboundDraft(db.client, "draft-504", DESIGNER), { id: "draft-504", ok: false, error: "send_outcome_unknown" });
+    assertEquals(db.row("draft-504")?.status, "sending");
+    assert(db.row("draft-504")?.send_attempted_at, "the attempt stays recorded");
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 
 Deno.test("two concurrent finalizers run afterSend exactly once", async () => {
@@ -402,3 +558,8 @@ Deno.test("two concurrent finalizers run afterSend exactly once", async () => {
     outboundKinds.site_request_due = original;
   }
 });
+
+// SQ-905 R3 reviewer probes, ported verbatim (verification/SQ-905/r3-probes.test.ts:406-408).
+Deno.test("R3 rejected push must not become successfully sent on stale retry",async()=>{await withProvider(async(requests)=>{const db=draftDb([draftRow("rejected")]);assertEquals((await sendOutboundDraft(db.client,"rejected",DESIGNER)).ok,false);db.row("rejected")!.claimed_at=minutesAgo(11);const retry=await sendOutboundDraft(db.client,"rejected",DESIGNER);console.log("REJECTED_PUSH",JSON.stringify({retry,row:db.row("rejected"),requests:requests.length}));assertEquals(retry.ok,false,"an explicitly rejected push is not delivery");},{sent:0,failed:1,error:"push_failed"})});
+Deno.test("R3 invoice finalization retry must not emit attention twice",async()=>{const db=draftDb([draftRow("invoice",{kind:"invoice_reminder",channel:"email",status:"sending",claimed_at:minutesAgo(1),delivered_at:minutesAgo(1),payload:{step:0,client_user_id:"client-1"},ref_id:"inv-1"})],{invoices:[{id:"inv-1",reminder_count:0}]},{markFailures:1});const rpc=db.fake.rpc.bind(db.fake);let attention=0;db.fake.rpc=((name:string,args:Record<string,unknown>)=>{if(name==="notify_client_attention")attention++;return rpc(name,args)}) as typeof db.fake.rpc;await finalizeOutboundDraft(db.client,"invoice",DESIGNER);await finalizeOutboundDraft(db.client,"invoice",DESIGNER);console.log("INVOICE_ATTENTION_CALLS",attention);assertEquals(attention,1,"retry must not enqueue a second client push");});
+Deno.test("R3 newly deferred site request SMS must not finalize before provider acceptance",async()=>{const saved=Deno.env.get("FIELD_TZ");const zone=Array.from({length:25},(_,i)=>i-12).map(n=>"Etc/GMT"+(n>=0?"+":"")+n).find(tz=>{try{return Number(new Intl.DateTimeFormat("en-US",{timeZone:tz,hour:"numeric",hourCycle:"h23"}).format(new Date()))<7}catch{return false}})!;Deno.env.set("FIELD_TZ",zone);try{await withSmsParty([],async(db,requests)=>{const result=await sendOutboundDraft(db.client,"draft-sms",DESIGNER);console.log("DEFERRED_SMS",JSON.stringify({result,draft:db.row("draft-sms"),sms:db.fake._data.sms_messages,requests:requests.length}));assertEquals(result.ok,false,"quiet-hours queue is not provider acceptance");});}finally{if(saved===undefined)Deno.env.delete("FIELD_TZ");else Deno.env.set("FIELD_TZ",saved)}});

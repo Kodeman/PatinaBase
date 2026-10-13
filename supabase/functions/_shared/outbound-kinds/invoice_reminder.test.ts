@@ -165,6 +165,9 @@ Deno.test("invoice reminder afterSend stamps cadence and sends first-step attent
   assertEquals(calls.some((call) => call.kind === "invoices.update" && (call.args as Record<string, unknown>).reminder_count === 1), true);
   assertEquals(calls.some((call) => call.kind === "invoices.update" && (call.args as Record<string, unknown>).last_reminder_at === draft.delivered_at), true);
   assertEquals(calls.some((call) => call.kind === "notify_client_attention" && (call.args as Record<string, unknown>).p_authority === authority), true);
+  // 00785: the attention push is keyed to the draft, so a re-run of this hook enqueues no second push.
+  const attention = calls.find((call) => call.kind === "notify_client_attention")?.args as Record<string, Record<string, unknown>>;
+  assertEquals(attention.p_metadata.idempotency_key, "outbound-draft-draft-1");
 });
 
 Deno.test("overdue designer notice uses studio voice, not automated wording", async () => {

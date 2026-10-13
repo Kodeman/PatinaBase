@@ -1,4 +1,5 @@
 -- US-31 SQ-923 (SQ-905 F15/F17): an attempted push is never pushed again, and one finalizer runs the hook (00784).
+-- SQ-926 (SQ-905 F21, 00785): a stale attempt is never finalized; it goes back to review marked 'unknown'.
 -- Run through `supabase test db supabase/tests/outbound/`; transaction is rolled back.
 BEGIN;
 SELECT no_plan();
@@ -28,7 +29,7 @@ SELECT ok((public.record_outbound_draft_send_attempt((SELECT id FROM public.outb
 SELECT throws_ok($$SELECT public.record_outbound_draft_send_attempt((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))$$,
   '23514','record_outbound_draft_send_attempt: draft is sending and cannot start a provider attempt','a second sender cannot start another attempt');
 
--- An attempted push is never handed back to review, fresh or stale.
+-- An attempted push is never released, reclaimed or finalized while its claim is fresh.
 SELECT throws_ok($$SELECT public.release_outbound_draft_claim((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))$$,
   '23514','release_outbound_draft_claim: draft was already attempted; finalize it','the sender cannot release an attempted push');
 SELECT throws_ok($$SELECT public.claim_outbound_draft_for_send((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))$$,
@@ -36,10 +37,13 @@ SELECT throws_ok($$SELECT public.claim_outbound_draft_for_send((SELECT id FROM p
 SELECT throws_ok($$SELECT public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))$$,
   '23514','claim_outbound_draft_finalize: draft is sending and was not delivered','an in-flight attempt is not finalized while its claim is fresh');
 
+-- 00785: a stale attempt with no recorded delivery is never finalized; it goes back to review marked unknown.
 UPDATE public.outbound_drafts SET claimed_at=now()-interval '11 minutes', expires_at=now()-interval '1 second' WHERE dedupe_key='dedupe-784-1';
-SELECT throws_ok($$SELECT public.claim_outbound_draft_for_send((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))$$,
-  '23514','claim_outbound_draft_for_send: draft was already attempted; finalize it','a stale, past-expiry attempted push is not reclaimed');
-SELECT is((SELECT status FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'),'sending','an attempted push is never expired, released or reclaimed');
+SELECT throws_ok($$SELECT public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))$$,
+  '23514','claim_outbound_draft_finalize: draft is sending and was not delivered','a stale attempted push is not finalized as delivered-unknown');
+SELECT is((public.claim_outbound_draft_for_send((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))).last_send_outcome,'unknown','a stale, past-expiry attempted push is handed back marked unknown, not reclaimed');
+SELECT ok((SELECT status='awaiting_review' AND claimed_at IS NULL AND send_attempted_at IS NULL AND delivered_at IS NULL AND sent_at IS NULL
+             FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'),'the unknown push is back in review, neither pushed again nor marked sent');
 RESET ROLE;
 
 SET LOCAL ROLE authenticated;
@@ -57,25 +61,23 @@ SELECT throws_ok($$SELECT public.release_outbound_draft_finalize((SELECT id FROM
 RESET ROLE;
 
 SET LOCAL ROLE service_role;
--- A stale attempted push finalizes as delivered-unknown: recorded, then claimed by one finalizer.
-SELECT ok((public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))).finalizing_at IS NOT NULL,'a stale attempted push is claimed for finalize');
-SELECT ok((SELECT delivered_at IS NOT NULL AND delivery_message_id IS NULL FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'),'the delivered-unknown push is recorded as delivered before any hook');
-SELECT throws_ok($$SELECT public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))$$,
-  '23514','claim_outbound_draft_finalize: draft is already being finalized','a second finalizer loses the claim');
-SELECT is(public.release_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'),now()-interval '1 minute'),false,'a release with another finalizer''s token changes nothing');
-SELECT ok((SELECT finalizing_at IS NOT NULL FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'),'the winning finalizer keeps its claim');
-SELECT is(public.release_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'),(SELECT finalizing_at FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1')),true,'a failed finalizer hands its own claim back');
-SELECT ok((public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))).finalizing_at IS NOT NULL,'a handed-back claim is taken at once');
-UPDATE public.outbound_drafts SET finalizing_at=now()-interval '11 minutes' WHERE dedupe_key='dedupe-784-1';
-SELECT is((public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))).finalizing_at,now(),'a crashed finalizer''s claim is recovered once stale');
-SELECT is((public.mark_outbound_draft_sent((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'),NULL,NULL)).status,'sent','the finalizer marks the draft sent');
-SELECT is((public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))).status,'sent','a finalize of a sent draft returns it for the caller to report');
-SELECT is(public.release_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'),(SELECT finalizing_at FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1')),false,'a sent draft has no finalize claim to release');
-
--- A recorded delivery finalizes at once; an unattempted claim still releases to review.
+-- A recorded delivery finalizes, claimed by one finalizer at a time.
 SELECT is((public.claim_outbound_draft_for_send((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'))).status,'sending','an email-like draft claims without an attempt stamp');
 SELECT ok((public.record_outbound_draft_delivery((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'),'provider-784')).delivered_at IS NOT NULL,'the delivery is recorded');
 SELECT is((public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'))).delivery_message_id,'provider-784','a delivered draft is claimed for finalize with its message id');
+SELECT throws_ok($$SELECT public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'))$$,
+  '23514','claim_outbound_draft_finalize: draft is already being finalized','a second finalizer loses the claim');
+SELECT is(public.release_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'),now()-interval '1 minute'),false,'a release with another finalizer''s token changes nothing');
+SELECT ok((SELECT finalizing_at IS NOT NULL FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'),'the winning finalizer keeps its claim');
+SELECT is(public.release_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'),(SELECT finalizing_at FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3')),true,'a failed finalizer hands its own claim back');
+SELECT ok((public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'))).finalizing_at IS NOT NULL,'a handed-back claim is taken at once');
+UPDATE public.outbound_drafts SET finalizing_at=now()-interval '11 minutes' WHERE dedupe_key='dedupe-784-3';
+SELECT is((public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'))).finalizing_at,now(),'a crashed finalizer''s claim is recovered once stale');
+SELECT is((public.mark_outbound_draft_sent((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'),NULL,NULL)).status,'sent','the finalizer marks the draft sent');
+SELECT is((public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'))).status,'sent','a finalize of a sent draft returns it for the caller to report');
+SELECT is(public.release_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3'),(SELECT finalizing_at FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-3')),false,'a sent draft has no finalize claim to release');
+
+-- An unattempted claim still releases to review.
 SELECT throws_ok($$SELECT public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-2'))$$,
   '23514','claim_outbound_draft_finalize: draft is awaiting_review and was not delivered','an open draft cannot be finalized');
 SELECT is((public.claim_outbound_draft_for_send((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-2'))).status,'sending','an open draft claims as before');

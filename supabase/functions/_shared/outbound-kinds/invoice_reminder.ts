@@ -107,6 +107,8 @@ export async function afterSendInvoiceReminder(ctx: OutboundKindContext): Promis
           amount_cents: numberValue(payload, "balance_cents"),
           due_date: value(payload, "due_date"),
           reminder_stage: stage,
+          // 00785: one client push per outbound draft, however often this hook runs.
+          idempotency_key: `outbound-draft-${draft.id}`,
         },
       });
       if (!attention.ok) console.warn("invoice reminder client attention failed", draft.ref_id, attention.error);
@@ -174,6 +176,8 @@ async function escalateInvoiceToDesigner({ admin, draft }: OutboundKindContext):
       to: designerEmail, subject: rendered.subject, html: rendered.html,
       userId: designerId ?? undefined, notificationType: "invoice_ar_flagged",
       category: "operational", templateId: "invoice-ar-escalation",
+      // One escalation email per outbound draft, however often this hook runs.
+      idempotencyKey: `invoice-ar-escalation-${draft.id}`,
       metadata: { invoice_id: draft.ref_id, project_id: value(payload, "project_id"), subject: rendered.subject, deep_link: "/desk?book=accounts&page=receivables" },
     });
     if (!result.success && !result.suppressed) console.error("invoice A/R escalation email failed", draft.ref_id, result.error);
