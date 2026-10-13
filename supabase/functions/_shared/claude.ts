@@ -1,6 +1,10 @@
 // Shared Claude Messages API adapter. Callers inject the model port and ledger
 // in tests; production defaults use the official Anthropic SDK and Supabase RPCs.
-import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
+import Anthropic, {
+  APIConnectionError,
+  APIConnectionTimeoutError,
+  APIUserAbortError,
+} from "npm:@anthropic-ai/sdk@0.133.0";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureServerEvent } from "./aesthete-events.ts";
 import {
@@ -24,6 +28,7 @@ export type ClaudeLedgerReason =
   | "global_daily"
   | "feature_daily"
   | "studio_monthly"
+  | "studio_unresolved"
   | string;
 export interface LlmLedgerPort {
   reserve(
@@ -31,10 +36,13 @@ export interface LlmLedgerPort {
     studioId: string | null,
     userId: string | null,
     estUsd: number,
+    role?: ClaudeRole,
+    promptVersion?: string,
   ): Promise<{
     granted: boolean;
     reason: ClaudeLedgerReason | null;
     usageId: number | null;
+    resetsAt?: string | null;
   }>;
   settle(usageId: number, fields: {
     model: string;
@@ -70,6 +78,7 @@ export function createClaudeCaller(
         output_tokens: response.usage.output_tokens,
         cache_creation_input_tokens: response.usage.cache_creation_input_tokens,
         cache_read_input_tokens: response.usage.cache_read_input_tokens,
+        cache_creation: response.usage.cache_creation,
       },
     };
   };
@@ -101,23 +110,27 @@ function buildClaudeParams(
 
 export function createLlmLedger(admin: SupabaseClient): LlmLedgerPort {
   return {
-    async reserve(feature, studioId, userId, estUsd) {
+    async reserve(feature, studioId, userId, estUsd, role, promptVersion) {
       const { data, error } = await admin.rpc("llm_reserve", {
         p_feature: feature,
         p_studio_id: studioId,
         p_user_id: userId,
         p_est_usd: estUsd,
+        p_role: role ?? null,
+        p_prompt_version: promptVersion ?? null,
       });
       if (error) throw error;
       const result = data as {
         granted: boolean;
         reason: ClaudeLedgerReason | null;
         usage_id: number | null;
+        resets_at: string | null;
       };
       return {
         granted: result.granted,
         reason: result.reason,
         usageId: result.usage_id,
+        resetsAt: result.resets_at ?? null,
       };
     },
     async settle(usageId, fields) {
@@ -149,13 +162,33 @@ export interface CallClaudeOptions {
   caller?: ClaudeCaller;
   ledger?: LlmLedgerPort;
   clientOptions?: ClaudeClientOptions;
+  /** From resolveCaller: the studio is unknown, so studio caps cannot apply. */
+  studioLookupFailed?: boolean;
 }
 
-export async function callClaude(opts: CallClaudeOptions): Promise<
+export interface ClaudeDenial {
+  ok: false;
+  denied: "kill" | "disabled" | "budget";
+  reason: ClaudeLedgerReason | null;
+  resetsAt: string | null;
+}
+
+export interface ClaudeCallError {
+  ok: false;
+  error: string;
+  status: number | null;
+  errorType: string | null;
+  transient: boolean;
+}
+
+export type CallClaudeResult =
   | { ok: true; response: ModelResponse; usd: number; model: string }
-  | { ok: false; denied: "kill" | "disabled" | "budget" }
-  | { ok: false; error: string }
-> {
+  | ClaudeDenial
+  | ClaudeCallError;
+
+export async function callClaude(
+  opts: CallClaudeOptions,
+): Promise<CallClaudeResult> {
   const environment = opts.clientOptions?.getEnv ??
     ((key: string) => Deno.env.get(key));
   const apiKey = opts.clientOptions?.apiKey ?? environment("ANTHROPIC_API_KEY");
@@ -167,7 +200,25 @@ export async function callClaude(opts: CallClaudeOptions): Promise<
       feature: opts.feature,
       reason: "missing_api_key",
     });
-    return { ok: false, denied: "disabled" };
+    return {
+      ok: false,
+      denied: "disabled",
+      reason: "disabled",
+      resetsAt: null,
+    };
+  }
+  if (opts.studioLookupFailed) {
+    log("claude_denied", {
+      feature: opts.feature,
+      reason: "studio_unresolved",
+    });
+    // Not a spent allowance: callers report it as unavailable, not over budget.
+    return {
+      ok: false,
+      denied: "disabled",
+      reason: "studio_unresolved",
+      resetsAt: null,
+    };
   }
 
   const model = ROLE_MODELS[opts.role].model;
@@ -183,7 +234,7 @@ export async function callClaude(opts: CallClaudeOptions): Promise<
     output_tokens: maxTokens,
   });
   const ledger = opts.ledger;
-  if (!ledger) return { ok: false, error: "Claude ledger is required" };
+  if (!ledger) return ledgerFailure("Claude ledger is required");
 
   let reservation: Awaited<ReturnType<LlmLedgerPort["reserve"]>>;
   try {
@@ -192,81 +243,165 @@ export async function callClaude(opts: CallClaudeOptions): Promise<
       opts.studioId,
       opts.userId,
       estUsd,
+      opts.role,
+      opts.promptVersion,
     );
   } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
+    return ledgerFailure(errorMessage(error));
   }
   if (!reservation.granted) {
-    const reason = reservation.reason === "kill"
+    const denied = reservation.reason === "kill"
       ? "kill"
       : reservation.reason === "disabled"
       ? "disabled"
       : "budget";
-    return { ok: false, denied: reason };
+    return {
+      ok: false,
+      denied,
+      reason: reservation.reason,
+      resetsAt: reservation.resetsAt ?? null,
+    };
   }
   if (reservation.usageId === null) {
-    return { ok: false, error: "Granted Claude reservation has no usage id" };
+    return ledgerFailure("Granted Claude reservation has no usage id");
   }
 
   const caller = opts.caller ?? opts.clientOptions?.caller ??
     createClaudeCaller(apiKey, opts.timeoutMs);
   const startedAt = Date.now();
+  let response: ModelResponse;
   try {
-    const response = await caller(request);
-    const usd = computeCostUsd(model, response.usage);
-    const latencyMs = Date.now() - startedAt;
-    await ledger.settle(reservation.usageId, {
+    response = await caller(request);
+  } catch (error) {
+    const knownUsage = usageFromError(error);
+    await settleUsage(
+      ledger,
+      reservation.usageId,
+      {
+        model,
+        usage: knownUsage ?? { input_tokens: 0, output_tokens: 0 },
+        usd: knownUsage ? computeCostUsd(model, knownUsage) : 0,
+        status: "error",
+        stopReason: stopReasonFromError(error),
+        latencyMs: Date.now() - startedAt,
+      },
+      log,
+      opts.feature,
+    );
+    return modelFailure(error);
+  }
+
+  // The response is paid for: a ledger failure from here on must not turn it
+  // into a failure the caller would retry and pay for again.
+  const usd = computeCostUsd(model, response.usage);
+  const latencyMs = Date.now() - startedAt;
+  await settleUsage(
+    ledger,
+    reservation.usageId,
+    {
       model,
       usage: response.usage,
       usd,
       status: "settled",
       stopReason: response.stop_reason,
       latencyMs,
-    });
-    void capture("claude", "$ai_generation", {
-      feature: opts.feature,
-      model,
-      role: opts.role,
-      prompt_version: opts.promptVersion,
-      input_tokens: response.usage.input_tokens,
-      output_tokens: response.usage.output_tokens,
-      cache_read_tokens: response.usage.cache_read_input_tokens ?? 0,
-      cache_write_tokens: response.usage.cache_creation_input_tokens ?? 0,
-      usd,
-      latency_ms: latencyMs,
-      stop_reason: response.stop_reason,
-      studio_id: opts.studioId,
-    });
-    return { ok: true, response, usd, model };
-  } catch (error) {
-    const knownUsage = usageFromError(error);
-    const usd = knownUsage ? computeCostUsd(model, knownUsage) : 0;
-    const stopReason = stopReasonFromError(error);
+    },
+    log,
+    opts.feature,
+  );
+  void capture("claude", "$ai_generation", {
+    feature: opts.feature,
+    model,
+    role: opts.role,
+    prompt_version: opts.promptVersion,
+    input_tokens: response.usage.input_tokens,
+    output_tokens: response.usage.output_tokens,
+    cache_read_tokens: response.usage.cache_read_input_tokens ?? 0,
+    cache_write_tokens: response.usage.cache_creation_input_tokens ?? 0,
+    usd,
+    latency_ms: latencyMs,
+    stop_reason: response.stop_reason,
+    studio_id: opts.studioId,
+  });
+  return { ok: true, response, usd, model };
+}
+
+/** Settles with one retry of the same fields; a lasting failure is logged and
+ * left to the stale-reservation sweep, which counts the reserved estimate. */
+async function settleUsage(
+  ledger: LlmLedgerPort,
+  usageId: number,
+  fields: Parameters<LlmLedgerPort["settle"]>[1],
+  log: NonNullable<ClaudeClientOptions["log"]>,
+  feature: string,
+): Promise<void> {
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      await ledger.settle(reservation.usageId, {
-        model,
-        usage: knownUsage ?? { input_tokens: 0, output_tokens: 0 },
-        usd,
-        status: "error",
-        stopReason,
-        latencyMs: Date.now() - startedAt,
-      });
-    } catch (settleError) {
-      log("claude_ledger_settle_failed", {
-        feature: opts.feature,
-        error: settleError instanceof Error
-          ? settleError.message
-          : String(settleError),
-      });
+      await ledger.settle(usageId, fields);
+      return;
+    } catch (error) {
+      if (attempt === 2) {
+        log("claude_ledger_settle_failed", {
+          feature,
+          usage_id: usageId,
+          status: fields.status,
+          usd: fields.usd,
+          attempts: attempt,
+          error: errorMessage(error),
+        });
+      }
     }
+  }
+}
+
+const TRANSIENT_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
+
+function modelFailure(error: unknown): ClaudeCallError {
+  const message = errorMessage(error);
+  // Abort and timeout extend the SDK's connection/API error classes, so they
+  // are checked first.
+  const connectionType = error instanceof APIUserAbortError
+    ? "abort"
+    : error instanceof APIConnectionTimeoutError
+    ? "timeout"
+    : error instanceof APIConnectionError
+    ? "network"
+    : null;
+  if (connectionType) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
+      status: null,
+      errorType: connectionType,
+      transient: true,
     };
   }
+  const fields = (error && typeof error === "object" ? error : {}) as {
+    status?: unknown;
+    type?: unknown;
+  };
+  const status = typeof fields.status === "number" ? fields.status : null;
+  return {
+    ok: false,
+    error: message,
+    status,
+    errorType: typeof fields.type === "string" ? fields.type : null,
+    transient: status !== null && TRANSIENT_STATUSES.has(status),
+  };
+}
+
+function ledgerFailure(message: string): ClaudeCallError {
+  return {
+    ok: false,
+    error: message,
+    status: null,
+    errorType: "ledger_error",
+    transient: false,
+  };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function usageFromError(error: unknown): ModelUsage | null {

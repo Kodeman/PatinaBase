@@ -1,7 +1,11 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { resolveCaller } from "./caller.ts";
 
-function adminStub(userId: string | null, studioId: string | null) {
+function adminStub(
+  userId: string | null,
+  studioId: string | null,
+  studioError: Error | null = null,
+) {
   const calls: Array<{ name: string; args: unknown }> = [];
   const admin = {
     auth: {
@@ -15,11 +19,39 @@ function adminStub(userId: string | null, studioId: string | null) {
     },
     rpc: async (name: string, args: unknown) => {
       calls.push({ name, args });
-      return { data: studioId, error: null };
+      return { data: studioError ? null : studioId, error: studioError };
     },
   };
   return { admin: admin as never, calls };
 }
+
+const userRequest = () =>
+  new Request("https://example.test", {
+    headers: { authorization: "Bearer user-token" },
+  });
+
+Deno.test("resolveCaller surfaces a studio RPC error as studioLookupFailed", async () => {
+  const { admin } = adminStub(
+    "user-1",
+    null,
+    new Error("permission denied for function _primary_studio_for"),
+  );
+  assertEquals(await resolveCaller(userRequest(), admin), {
+    userId: "user-1",
+    studioId: null,
+    service: false,
+    studioLookupFailed: true,
+  });
+});
+
+Deno.test("resolveCaller keeps a user with no studio as a plain null studio", async () => {
+  const { admin } = adminStub("user-1", null);
+  assertEquals(await resolveCaller(userRequest(), admin), {
+    userId: "user-1",
+    studioId: null,
+    service: false,
+  });
+});
 
 Deno.test("resolveCaller verifies user then resolves the primary studio", async () => {
   const { admin, calls } = adminStub("user-1", "studio-1");

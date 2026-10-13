@@ -5,6 +5,8 @@ export interface ResolvedCaller {
   userId: string | null;
   studioId: string | null;
   service: boolean;
+  /** The studio RPC errored, so studioId is unknown rather than absent. */
+  studioLookupFailed?: true;
 }
 
 export async function resolveCaller(
@@ -26,9 +28,8 @@ export async function resolveCaller(
     "_primary_studio_for",
     { p_user: userId },
   );
-  return {
-    service: false,
-    userId,
-    studioId: studioError ? null : (studioId as string | null),
-  };
+  if (studioError) {
+    return { service: false, userId, studioId: null, studioLookupFailed: true };
+  }
+  return { service: false, userId, studioId: studioId as string | null };
 }
