@@ -323,10 +323,12 @@ describe("T-7 — the item editor's Room select", () => {
 });
 
 describe('T-7 — the spec book says "lines"', () => {
-  it("counts lines in the header and names its list lines", () => {
+  // US-28 S7b (SPEC §S7b.4): the title meta is words, not counts — the
+  // edition and "working copy".
+  it("names the working edition in the header and its list lines", () => {
     render(<SpecBookWorkspace projectId="project-1" />);
 
-    expect(screen.getByText(/Working book · 3 lines ·/)).toBeInTheDocument();
+    expect(screen.getByText(/Edition \d+ · working copy/)).toBeInTheDocument();
     expect(
       screen.getByRole("region", { name: "Specification register" }),
     ).toBeInTheDocument();

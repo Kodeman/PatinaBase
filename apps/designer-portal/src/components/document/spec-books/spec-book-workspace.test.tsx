@@ -6,7 +6,7 @@
  * `useUpdateProjectFfeSpec` is exercised — every other hook this module
  * imports (for `SpecBookWorkspace`, not rendered here) is a harmless stub.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { SpecBookWorkItem } from "@patina/supabase";
 import {
@@ -263,10 +263,10 @@ describe("SelectionEditor — structured dimensions", () => {
         missingFields={["finish", "selected_dimensions"]}
       />,
     );
-    expect(screen.getByText("incomplete")).toHaveAttribute(
-      "title",
-      "Missing: finish, selected_dimensions",
-    );
+    // US-28 S7b: the ink word names what is missing, not a tooltip.
+    const word = screen.getByText("No finish, dimensions");
+    expect(word).toHaveClass("word");
+    expect(word).not.toHaveAttribute("title");
     expect(screen.queryByRole("combobox", { name: "Issue readiness" })).not.toBeInTheDocument();
   });
 
@@ -468,11 +468,11 @@ describe("SP-19/F57 — the spec book lands on the addressed FF&E line", () => {
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
     expect(container.querySelector("#spec-book-item-item-3")).toHaveAttribute(
-      "aria-pressed",
+      "aria-expanded",
       "true",
     );
     expect(container.querySelector("#spec-book-item-item-1")).toHaveAttribute(
-      "aria-pressed",
+      "aria-expanded",
       "false",
     );
   });
@@ -483,7 +483,7 @@ describe("SP-19/F57 — the spec book lands on the addressed FF&E line", () => {
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
     expect(container.querySelector("#spec-book-item-item-1")).toHaveAttribute(
-      "aria-pressed",
+      "aria-expanded",
       "true",
     );
   });
@@ -495,7 +495,7 @@ describe("SP-19/F57 — the spec book lands on the addressed FF&E line", () => {
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
     expect(container.querySelector("#spec-book-item-item-1")).toHaveAttribute(
-      "aria-pressed",
+      "aria-expanded",
       "true",
     );
   });
@@ -553,7 +553,155 @@ describe("F58 — the workbench names no lifecycle word", () => {
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
     expect(
-      container.querySelector("#spec-book-item-item-1"),
-    ).toHaveTextContent("incomplete");
+      container.querySelector("#spec-book-item-item-1")?.closest("li"),
+    ).toHaveTextContent("Incomplete");
+  });
+});
+
+// R1's margin read needs the studio seat; the print preview below is a
+// client edition, which never shows trade price either way.
+jest.mock("@/hooks/use-can-see-margin", () => ({ useCanSeeMargin: () => false }));
+
+/**
+ * US-28 S7b — the spec book, full uplift (V20 U-Q18; SPEC §S7b). Chapters are
+ * trades (00767); each is a Section; pieces are rows that unfold in place.
+ */
+describe("US-28 S7b — the spec book by trade", () => {
+  function chapter(id: string, title: string, trade: string | null) {
+    return {
+      id,
+      spec_book_id: "book-1",
+      project_room_id: null,
+      trade,
+      title,
+      position: 0,
+      hero_media: null,
+      included: true,
+      page_template: null,
+      review_state: "draft",
+    };
+  }
+  function setting(id: string, chapterId: string | null) {
+    return {
+      id: `setting-${id}`,
+      spec_book_id: "book-1",
+      ffe_item_id: id,
+      chapter_id: chapterId,
+      position: 0,
+      included: true,
+      page_template: null,
+      review_state: "draft",
+      publication_overrides: {},
+    };
+  }
+  function withTradeBook() {
+    const base = mockWorkbenchHookResult as { data: Record<string, unknown> };
+    base.data.chapters = [
+      chapter("ch-joinery", "Joinery", "joinery"),
+      chapter("ch-lighting", "Lighting", "lighting"),
+      chapter("ch-textiles", "Textiles", "textiles"),
+      chapter("ch-unsorted", "Unsorted", "unsorted"),
+    ];
+    base.data.items = [
+      buildItem({}, { id: "bench", name: "Built-in bench", document_code: "HD-01", setting: setting("bench", "ch-joinery") }),
+      buildItem({}, { id: "lamp", name: "Halo floor lamp", document_code: "HD-05", setting: setting("lamp", "ch-lighting") }),
+      // a soft-removed line keeps no chapter visible (SQ-842 F8b)
+      buildItem({}, { id: "gone", name: "Old throw", setting: setting("gone", "ch-textiles"), removed_at: "2026-10-01T00:00:00.000Z" } as Partial<SpecBookWorkItem>),
+      // a roomless, unfiled line lands once, under Unsorted (SQ-842 F4)
+      buildItem({}, { id: "loose", name: "Loose stool", setting: null }),
+    ];
+  }
+
+  it("draws one closing Section per trade that holds an active line", () => {
+    withTradeBook();
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    const register = screen.getByRole("region", { name: "Specification register" });
+    const sections = Array.from(register.querySelectorAll("section.section"));
+    expect(sections.map((node) => node.getAttribute("aria-label"))).toEqual([
+      "Joinery",
+      "Lighting",
+      "Unsorted",
+    ]);
+    expect(screen.queryByRole("region", { name: "Textiles" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Loose stool")).toHaveLength(1);
+    expect(
+      within(screen.getByRole("navigation", { name: "In this book" }))
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["Joinery", "Lighting", "Unsorted"]);
+  });
+
+  it("unfolds one piece in place and puts it back", async () => {
+    withTradeBook();
+    const user = userEvent.setup();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    // the book opens on its first piece, unfolded with its editor, as before
+    expect(container.querySelector("#spec-book-item-bench")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Save specification" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Halo floor lamp" }));
+    expect(container.querySelector("#spec-book-item-lamp")).toHaveAttribute("aria-expanded", "true");
+    expect(container.querySelector("#spec-book-item-bench")).toHaveAttribute("aria-expanded", "false");
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: "Put back" }));
+    expect(container.querySelector("#spec-book-item-lamp")).toHaveAttribute("aria-expanded", "false");
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(0);
+  });
+
+  it("closes the fold on Esc", async () => {
+    withTradeBook();
+    const user = userEvent.setup();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    await user.click(screen.getByLabelText("Finish"));
+    await user.keyboard("{Escape}");
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(0);
+  });
+
+  it("prints state as ink words, never a pigment class", () => {
+    withTradeBook();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    const row = container.querySelector("#spec-book-item-lamp")?.closest("li");
+    expect(within(row as HTMLElement).getByText("Incomplete")).toHaveClass("word");
+    expect(container.innerHTML).not.toMatch(/#66765f|#a47f33|#e7e2d8/i);
+  });
+
+  it("names the four views as words and the empty book with one act", () => {
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    const tabs = within(screen.getByRole("navigation", { name: "Spec book workspace" }))
+      .getAllByRole("button")
+      .map((button) => button.textContent);
+    expect(tabs).toEqual([
+      "Specification editor",
+      "Audience editions",
+      "Issue readiness",
+      "Revision history",
+    ]);
+    expect(
+      screen.getByText(/No pieces in this book yet\. Add pieces to Oak project/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open the pieces" })).toHaveAttribute(
+      "href",
+      "/doc/project-1/pieces",
+    );
+    expect(screen.queryByRole("button", { name: "Run issue checks" })).not.toBeInTheDocument();
+  });
+
+  it("previews the client sheet as paper, without trade price", async () => {
+    withTradeBook();
+    const user = userEvent.setup();
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    await user.click(screen.getByRole("button", { name: "Preview the client sheet" }));
+    const preview = screen.getByRole("region", { name: "client edition preview" });
+    expect(within(preview).getByRole("article")).toHaveClass("sb-page");
+    expect(within(preview).getByText("Built-in bench")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Client" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("Trade price", { exact: true })).not.toBeInTheDocument();
   });
 });

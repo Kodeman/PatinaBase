@@ -2821,3 +2821,94 @@ html:has([data-document-shell]) {
 /* ——— the job's boards tab: the Card's Present act ——— */
 .s12-card-acts { margin: 8px 0 0 -6px; }
 /* ═══ end US-28 S12 board room ═════════════════════════════════════════════ */
+
+/* US-28 S7b spec book ═══════════════════════════════════════════════════════
+   The spec book, full uplift (V20 U-Q18; specimens/specbook-{1440,390}.html,
+   SPEC §S7b). One stock: the book stands on --paper; only the printed sheet
+   is --paper-doc. Chapters are trades (00767) and close as Sections on
+   --rule-mid; pieces are ledger rows that unfold in place. This block places
+   the S1 components; it restyles none of them. */
+.sb-ground { min-height: 100vh; background: var(--paper); color: var(--text-primary); }
+.sb-main { max-width: 1200px; margin: 0 auto; padding: 0 24px 72px; overflow-wrap: anywhere; }
+.sb-title-meta { color: var(--text-subtle); }
+.sb-wait { padding-top: 48px; }
+/* the four views as underline words that wrap (424px at 390 today) */
+.sb-tabs { margin: -24px 0 32px; border-bottom: 1px solid var(--doc-ink-border); }
+.sb-tabs button[aria-current="page"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.sb-front { margin-bottom: 40px; max-width: 72ch; }
+.sb-front .word { margin-right: 8px; }
+.sb-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
+.sb-index .eb { margin-bottom: 4px; }
+.sb-index .sb-index-show { margin-top: 24px; }
+.sb-index ol { display: flex; flex-wrap: wrap; gap: 0 20px; }
+.sb-index a { display: inline-flex; align-items: center; min-height: 44px; color: var(--text-primary); text-decoration: underline; text-decoration-color: var(--oak); text-underline-offset: 4px; }
+.sb-index a:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.sb-index .filters { margin-top: 4px; }
+.sb-chapter { scroll-margin-top: 24px; }
+/* a piece: plate where an image exists, the name that opens it, its code */
+.sb-piece { display: flex; align-items: center; gap: 12px; }
+.sb-thumb { width: 72px; flex: none; }
+.sb-name { text-align: left; scroll-margin-top: 96px; }
+.sb-code { display: block; color: var(--text-subtle); }
+.sb-words { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+/* the spec, unfolded under its own row */
+.sb-open { padding: 8px 0 28px; border-bottom: 1px solid var(--doc-ink-border); }
+.sb-spec { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.sb-spec-head { margin-bottom: 12px; }
+.sb-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: baseline; }
+.sb-facts dt { font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.sb-facts dd { color: var(--text-primary); }
+.sb-facts dd .t-meta { display: block; color: var(--text-subtle); }
+.sb-group { margin-top: 24px; padding-top: 12px; border-top: var(--rule-hair); }
+.sb-group-head { margin-bottom: 12px; }
+.sb-label { display: block; font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
+.sb-label :is(input, select, textarea) { text-transform: none; letter-spacing: normal; }
+.sb-help { margin-top: 8px; color: var(--text-subtle); }
+.sb-warn { margin-top: 8px; color: var(--terracotta-ink); }
+.sb-drift { margin-bottom: 16px; }
+.sb-drift .t-body-sm { color: var(--terracotta-ink); }
+.sb-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin: 20px 0 0 -6px; }
+.sb-foot .check { margin-left: 6px; }
+.sb-check-sub { display: block; color: var(--text-subtle); }
+/* the print preview: picks, then the item sheet laid as paper on the ground */
+.sb-picks .eb { margin-bottom: 4px; }
+.sb-picks + .sb-picks { margin-top: 24px; }
+.sb-page { max-width: 640px; padding: 48px 56px 40px; background: var(--paper-doc); color: var(--text-primary); }
+.sb-page-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; color: var(--text-subtle); }
+.sb-page h2 { margin-top: 28px; }
+.sb-sub { margin-top: 6px; color: var(--text-muted); }
+.sb-page .plate { margin-top: 28px; }
+.sb-page .sb-facts { margin-top: 28px; padding-top: 16px; border-top: var(--rule-mid); }
+.sb-note { margin-top: 24px; padding-top: 12px; border-top: var(--rule-hair); white-space: pre-wrap; }
+.sb-page-foot { margin-top: 32px; color: var(--text-subtle); }
+/* issue readiness and the revision register */
+.sb-issue-head { margin-bottom: 40px; }
+.sb-issue-head .t-d2 { margin-top: 4px; }
+.sb-picks-col > .eb { margin-bottom: 4px; }
+.sb-history-head { margin-bottom: 40px; }
+.sb-history-head .t-d2 { margin-top: 4px; }
+.sb-artifact-name { text-transform: capitalize; min-height: 44px; display: flex; align-items: center; }
+.sb-artifact-acts { flex-wrap: wrap; gap: 0 12px; }
+.sb-share { grid-column: 1 / -1; margin-top: 8px; }
+@container (min-width: 900px) {
+  .lrow.sb-issue-row { grid-template-columns: minmax(0, 1fr) 150px; column-gap: 20px; }
+  .lrow.sb-artifact-row { grid-template-columns: 236px minmax(200px, 1fr) minmax(150px, auto); column-gap: 20px; }
+}
+@media (min-width: 900px) {
+  .sb-body { grid-template-columns: 184px minmax(0, 1fr); gap: 48px; }
+  .sb-index ol, .sb-index .filters { display: block; }
+  .sb-index .filters button { display: flex; align-items: center; }
+  .sb-spec.has-plate { grid-template-columns: 320px minmax(0, 1fr); gap: 40px; }
+  .sb-preview { display: grid; grid-template-columns: 296px minmax(0, 1fr); gap: 48px; align-items: start; }
+  .sb-issue { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 48px; align-items: start; }
+}
+@media (max-width: 899px) {
+  .sb-preview > * + *, .sb-issue > * + * { margin-top: 32px; }
+}
+@media (max-width: 599px) {
+  .sb-main { padding: 0 16px 48px; }
+  .sb-tabs { margin: -12px 0 24px; }
+  .sb-front { margin-bottom: 32px; }
+  .sb-page { padding: 28px 16px 24px; }
+}
+/* end US-28 S7b spec book */
