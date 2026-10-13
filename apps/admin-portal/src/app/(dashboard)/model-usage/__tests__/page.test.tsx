@@ -51,7 +51,7 @@ describe('ModelUsagePage', () => {
     expect(screen.getByLabelText('aesthete-dna-draft daily cap in USD')).toHaveValue('20');
   });
 
-  it('asks for confirmation before turning the kill switch on, then posts both controls', async () => {
+  it('asks for confirmation before turning the kill switch on, then posts the switch alone, never the cap', async () => {
     const fetchMock = setup();
     fireEvent.click(await screen.findByLabelText('Kill switch'));
     const dialog = await screen.findByRole('dialog');
@@ -62,7 +62,7 @@ describe('ModelUsagePage', () => {
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         '/api/admin/model-usage/controls',
-        expect.objectContaining({ method: 'POST', body: JSON.stringify({ killSwitch: true, globalDailyCapUsd: 25 }) }),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ killSwitch: true }) }),
       ),
     );
   });
