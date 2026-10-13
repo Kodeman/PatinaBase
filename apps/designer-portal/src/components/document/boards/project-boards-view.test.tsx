@@ -84,8 +84,12 @@ describe('the boards page', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Design boards' })).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: /Living room, warm/ }),
+      screen.getByRole('link', { name: 'Living room, warm' }),
     ).toHaveAttribute('href', expect.stringContaining('/board/b1'));
+    // US-28 S12: the Card's tertiary "Present" act opens the room in Present.
+    const present = screen.getByRole('link', { name: 'Present Living room, warm' });
+    expect(present).toHaveAttribute('href', expect.stringContaining('/board/b1?'));
+    expect(present.getAttribute('href')).toMatch(/[?&]present=1(&|$)/);
     expect(screen.getByText('7 pieces')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Signed design direction' })).toBeInTheDocument();
     expect(screen.getByText(/Signed snapshot · 3 items/)).toBeInTheDocument();

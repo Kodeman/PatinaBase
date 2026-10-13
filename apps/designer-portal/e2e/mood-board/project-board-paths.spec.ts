@@ -269,7 +269,7 @@ test.describe("Project-owned board save path", () => {
       waitUntil: "domcontentloaded",
     });
     // The project boards page mounts the builder behind its own act.
-    await page.getByRole("button", { name: "Start a board" }).click();
+    await page.getByRole("button", { name: "New board" }).click();
     await page
       .getByRole("button", { name: /new board|start the first mood board/i })
       .first()

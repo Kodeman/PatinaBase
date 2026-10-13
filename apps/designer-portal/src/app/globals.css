@@ -2740,3 +2740,84 @@ html:has([data-document-shell]) {
 .piece-used .tick { display: inline-block; }
 .piece-taught { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 12px; }
 /* ═══ end US-28 S10 library ════════════════════════════════════════════════ */
+
+/* US-28 S12 board room ═════════════════════════════════════════════════════
+   The board room (`/board/[boardId]`) after specimens/boardroom-{1440,390}
+   (SQ-816; SPEC §S12). Places the S1 components; restyles none. The house
+   Header line, the Tools Section (a side column at md and up, one sheet over
+   the veil below md), plate-and-caption items, caption words for state, and
+   lone lines in place of pills. The canvas's own zone, selection-ring and
+   handle drawing lives in @patina/design-system and is not touched here. */
+
+/* ——— the Header line ——— */
+.br-head { padding: 0 16px; background: var(--paper-doc); border-bottom: 1px solid var(--card-edge); }
+@media (min-width: 768px) { .br-head { padding: 0 24px; } }
+.br-hline { padding: 4px 0; gap: 0 24px; }
+.br-hline-l { flex: 1 1 280px; align-items: center; gap: 0 16px; }
+.br-owner { margin: 0; }
+.br-name-wrap { flex: 1 1 220px; min-width: 0; }
+.br-hline-r { gap: 0 16px; }
+.br-check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); cursor: pointer; }
+.br-check input { width: 16px; height: 16px; accent-color: var(--clay-ink); }
+.br-check:has(input:focus-visible) { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* ——— the Tools Section: a side column at md and up ——— */
+.br-tools { flex: none; margin: 0; padding: 16px 20px 24px; border-bottom: 0; background: var(--paper-doc); overflow-y: auto; overscroll-behavior: contain; }
+.br-tools .sec-head { align-items: center; margin-bottom: 4px; }
+.br-tools-group { margin-top: 24px; }
+.br-tools-group--first { margin-top: 8px; }
+.br-tools-group > .eb { margin-bottom: 4px; }
+.br-tools-sub { margin-top: 12px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.br-tool-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin-left: -6px; }
+.br-tool { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 6px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.br-tool:hover:not(:disabled) { color: var(--text-primary); }
+.br-tool[aria-pressed="true"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.br-tool:disabled { opacity: .4; cursor: default; }
+.br-tool:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.br-zoom-tools { display: contents; }
+.br-zoom-word { min-width: 40px; text-align: center; font-family: var(--font-meta); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+/* sources as underline words that wrap (rail tablist) */
+.br-source-tabs { display: flex; flex-wrap: wrap; gap: 0 16px; padding: 0 12px; }
+.br-source-tab { min-height: 44px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.br-source-tab[aria-selected="true"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.br-source-tab:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.br-fb-row { border-bottom: 1px solid var(--doc-ink-border); }
+.br-fb-row:hover { background: var(--bg-hover); }
+
+@media (min-width: 768px) {
+  .br-tools { width: 300px; border-right: 1px solid var(--card-edge); }
+  .br-tools[data-folded="true"] { display: none; }
+  .br-tools-putback { display: none; }
+  .br-tools-act:not(.br-tools-act--folded) { display: none; }
+}
+/* below md: one sheet from the foot over the veil (frame p8) */
+@media (max-width: 767px) {
+  .br-tools { display: none; }
+  .br-tools[data-open="true"] { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; max-height: 85dvh; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); border-top: 1px solid var(--card-edge); }
+  .br-tools-veil { position: fixed; inset: 0; z-index: 65; }
+  .br-tools-fold { display: none; }
+  .br-hline-r { gap: 0 8px; }
+}
+/* Zoom and Fit under the board below md, or with Tools folded (frame p7; CI-02) */
+.br-viewbar { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 12px; background: var(--paper-doc); border-top: 1px solid var(--card-edge); }
+
+/* ——— items: plate and caption (SPEC §S12.2.1) ——— */
+.br-plate { display: flex; flex: 1 1 auto; min-height: 0; align-items: center; justify-content: center; overflow: hidden; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 3px; }
+.br-plate--slot { border-style: dashed; }
+.br-plate-word { padding: 8px; text-align: center; font-family: var(--font-meta); font-size: 12px; line-height: 16px; color: var(--text-subtle); overflow-wrap: anywhere; }
+.br-cap { flex: none; margin-top: 6px; }
+.br-cap-name { display: block; font-family: var(--font-body); font-size: 13px; line-height: 18px; color: var(--text-primary); overflow-wrap: anywhere; }
+.br-cap-meta { display: block; font-family: var(--font-meta); font-size: 12px; line-height: 16px; color: var(--text-subtle); overflow-wrap: anywhere; }
+/* state as caption words: verdict, open directions, the deck caption */
+.br-item-words { display: flex; flex: none; flex-wrap: wrap; align-items: baseline; gap: 0 8px; margin: 4px 0 0; }
+.br-deck-caption { font-family: var(--font-meta); font-size: 12px; line-height: 16px; color: var(--text-muted); overflow-wrap: anywhere; }
+/* Present places the verdict over the plate: a paper ground and a 1px edge */
+.br-verdict--plate { display: inline-block; padding: 2px 6px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+
+/* ——— the empty board and the lone lines ——— */
+.br-empty { position: absolute; left: 50%; top: 50%; z-index: 5; width: 520px; max-width: calc(100% - 48px); transform: translate(-50%, -50%); }
+.br-line { background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: .04em; color: var(--text-muted); }
+
+/* ——— the job's boards tab: the Card's Present act ——— */
+.s12-card-acts { margin: 8px 0 0 -6px; }
+/* ═══ end US-28 S12 board room ═════════════════════════════════════════════ */

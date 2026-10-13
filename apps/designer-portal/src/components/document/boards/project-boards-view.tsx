@@ -113,6 +113,19 @@ function BoardCard({
           )}
         </div>
       </div>
+      {/* US-28 S12: opens the room straight into Present (`?present=1`). */}
+      <div className="s12-card-acts">
+        <DocumentAction
+          actionKey="present-board"
+          surfaceKey={SURFACE_KEY}
+          regionKey="project-boards-card"
+          variant="tertiary"
+          href={`${href}&present=1`}
+          aria-label={`Present ${board.name}`}
+        >
+          Present
+        </DocumentAction>
+      </div>
     </article>
   );
 }
