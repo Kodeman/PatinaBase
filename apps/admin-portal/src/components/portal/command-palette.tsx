@@ -24,6 +24,7 @@ import {
   Activity,
   Inbox,
   Building2,
+  Coins,
 } from 'lucide-react';
 import { useCommandPalette } from '@/contexts/command-palette-context';
 
@@ -94,6 +95,9 @@ export function CommandPalette() {
           </CommandItem>
           <CommandItem onSelect={() => navigate('/flags')}>
             <Flag className="mr-2 h-4 w-4" /> Feature Flags
+          </CommandItem>
+          <CommandItem onSelect={() => navigate('/model-usage')}>
+            <Coins className="mr-2 h-4 w-4" /> Model Usage
           </CommandItem>
           <CommandItem onSelect={() => navigate('/health')}>
             <Activity className="mr-2 h-4 w-4" /> System Health
