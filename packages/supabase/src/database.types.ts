@@ -2361,7 +2361,9 @@ export type Database = {
           created_by: string | null
           decision_ids: string[]
           id: string
+          outbound_draft_id: string | null
           party_id: string
+          pending_send: boolean
           presented_at: string
           presented_local_day: string
           presented_snapshot: Json | null
@@ -2375,7 +2377,9 @@ export type Database = {
           created_by?: string | null
           decision_ids: string[]
           id?: string
+          outbound_draft_id?: string | null
           party_id: string
+          pending_send?: boolean
           presented_at?: string
           presented_local_day?: string
           presented_snapshot?: Json | null
@@ -2389,7 +2393,9 @@ export type Database = {
           created_by?: string | null
           decision_ids?: string[]
           id?: string
+          outbound_draft_id?: string | null
           party_id?: string
+          pending_send?: boolean
           presented_at?: string
           presented_local_day?: string
           presented_snapshot?: Json | null
@@ -2398,6 +2404,13 @@ export type Database = {
           version?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "client_decision_batches_outbound_draft_id_fkey"
+            columns: ["outbound_draft_id"]
+            isOneToOne: false
+            referencedRelation: "outbound_drafts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "client_decision_batches_party_project_fkey"
             columns: ["party_id", "project_id"]
@@ -10598,6 +10611,7 @@ export type Database = {
           latency_ms: number | null
           model: string | null
           output_tokens: number
+          products: number | null
           prompt_version: string | null
           request_id: string | null
           reserved_usd: number
@@ -10618,6 +10632,7 @@ export type Database = {
           latency_ms?: number | null
           model?: string | null
           output_tokens?: number
+          products?: number | null
           prompt_version?: string | null
           request_id?: string | null
           reserved_usd?: number
@@ -10638,6 +10653,7 @@ export type Database = {
           latency_ms?: number | null
           model?: string | null
           output_tokens?: number
+          products?: number | null
           prompt_version?: string | null
           request_id?: string | null
           reserved_usd?: number
@@ -27519,7 +27535,9 @@ export type Database = {
           id: string
           invite_evidence: Json | null
           kind: string
+          outbound_draft_id: string | null
           party_id: string
+          pending_send: boolean
           project_id: string
           proposed_effect: Json | null
           recipient_phone: string
@@ -27543,7 +27561,9 @@ export type Database = {
           id?: string
           invite_evidence?: Json | null
           kind: string
+          outbound_draft_id?: string | null
           party_id: string
+          pending_send?: boolean
           project_id: string
           proposed_effect?: Json | null
           recipient_phone: string
@@ -27567,7 +27587,9 @@ export type Database = {
           id?: string
           invite_evidence?: Json | null
           kind?: string
+          outbound_draft_id?: string | null
           party_id?: string
+          pending_send?: boolean
           project_id?: string
           proposed_effect?: Json | null
           recipient_phone?: string
@@ -27582,6 +27604,13 @@ export type Database = {
           voided_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sms_prompts_outbound_draft_id_fkey"
+            columns: ["outbound_draft_id"]
+            isOneToOne: false
+            referencedRelation: "outbound_drafts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sms_prompts_party_project_fkey"
             columns: ["party_id", "project_id"]
@@ -42042,6 +42071,8 @@ export type Database = {
         Args: {
           p_est_usd: number
           p_feature: string
+          p_prompt_version: string
+          p_role: string
           p_studio_id: string
           p_user_id: string
         }
@@ -42635,6 +42666,7 @@ export type Database = {
       notification_time_zone: { Args: { p_user_id: string }; Returns: string }
       notify_client_attention: {
         Args: {
+          p_authority?: Json
           p_body: string
           p_entity_id: string
           p_entity_type: string
