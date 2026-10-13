@@ -23,7 +23,8 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { deliverDecisionNotification } from "../_shared/decision-notify.ts";
+import { renderDecisionEmail } from "../_shared/decision-notify.ts";
+import { sendOutboundDraft } from "../_shared/outbound-send.ts";
 import {
   type EmbeddedApprovalArtifact,
   type EmbeddedAuthoritySnapshot,
@@ -123,6 +124,15 @@ Deno.serve(async (_req: Request) => {
         continue;
       }
 
+      if (!recipient?.email) continue;
+      const { data: preferences } = recipient.userId
+        ? await supabase.from("notification_preferences")
+          .select("channels_email, type_project_milestone, timezone")
+          .eq("user_id", recipient.userId)
+          .maybeSingle()
+        : { data: null };
+      if (preferences?.channels_email === false || preferences?.type_project_milestone === false) continue;
+
       // Who signs the letter (R7): the studio's brand for the byline, the
       // designer's given name and city for the sign-off.
       const identity = await resolveStudioIdentity(supabase, {
@@ -134,58 +144,66 @@ Deno.serve(async (_req: Request) => {
         designerId: d.designer_id,
       });
 
-      const result = await deliverDecisionNotification(
-        supabase,
-        "decision_overdue",
-        {
-          id: d.id,
+      const rendered = renderDecisionEmail("decision_overdue", recipient!.name ?? "", {
+        id: d.id,
+        title: d.title,
+        dueDate: d.due_date,
+        artifact,
+        sentAt: d.sent_at,
+      }, signature, { timeZone: preferences?.timezone ?? undefined });
+      const mode = await supabase.rpc("studio_outbound_mode", {
+        p_studio: identity!.studioId!, p_kind: "decision_overdue",
+      });
+      const rollout = await supabase.rpc("outbound_review_active", {
+        p_studio: identity!.studioId!,
+      });
+      const overdueDate = new Date().toISOString().slice(0, 10);
+      const { data: draftId, error: composeError } = await supabase.rpc("compose_outbound_draft", {
+        p_kind: "decision_overdue",
+        p_org: identity!.studioId!,
+        p_project: d.project_id,
+        p_channel: "email",
+        p_recipient_kind: "client",
+        p_to: { client_id: recipient!.userId, address: recipient!.email },
+        p_subject: rendered.subject,
+        p_body: rendered.html.replace(/<\/(p|div|h[1-6]|li)>/gi, "\n").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/[ \t]+/g, " ").trim(),
+        p_payload: {
+          recipient_id: recipient!.userId,
+          recipient_name: recipient!.name,
+          designer_id: d.designer_id,
           title: d.title,
-          dueDate: d.due_date,
+          due_date: d.due_date,
+          sent_at: d.sent_at,
           artifact,
-          // "Still open, Leah asked on August 28" needs the day she was asked.
-          sentAt: d.sent_at,
         },
-        recipient!,
-        {
-          kind: "studio_schedule",
-          studioId: identity!.studioId!,
-          outboundKind: "decision_overdue",
-        },
-        signature,
-      );
-      if (result.emailSent || result.inAppOk) overdueNotified++;
-
-      // R16. The overdue notice is the last automated letter about this
-      // approval; from here the studio chases by hand. So the moment the
-      // notice lands, the designer gets one line on her own inbox rail saying
-      // exactly that — otherwise the hand-off is a silence nobody was told
-      // about. Idempotent in SQL (00572): a second run writes no second line.
-      if (result.emailSent || result.inAppOk) {
-        const { error: handoffErr } = await supabase.rpc(
-          "record_decision_studio_handoff",
-          { p_decision_id: d.id },
-        );
-        if (handoffErr) {
-          console.warn(
-            "expire-decisions: studio hand-off row failed",
-            d.id,
-            handoffErr,
-          );
-        }
+        p_ref_type: "client_decision",
+        p_ref_id: d.id,
+        p_dedupe_key: `decision:${d.id}:decision_overdue:${overdueDate}`,
+        p_due_at: now,
+        p_expires_at: null,
+        p_composed_by: "system",
+      });
+      if (composeError || !draftId) {
+        console.error("expire-decisions: overdue draft composition failed", d.id, composeError);
+        continue;
       }
 
-      if (
-        result.emailSkipped &&
-        result.reason &&
-        result.reason !== "already_sent" &&
-        result.reason !== "cadence_digest"
-      ) {
-        console.warn(
-          "expire-decisions: overdue email skipped",
-          d.id,
-          result.reason,
-        );
+      const scheduled = mode.data === "scheduled" || rollout.data !== true;
+      if (scheduled) {
+        // Scheduled mode retains the historical 8am-local, non-Sunday window.
+        // A designer's explicit Send click is intentionally allowed at any hour.
+        const local = new Intl.DateTimeFormat("en-US", {
+          timeZone: preferences?.timezone?.trim() || "America/New_York", weekday: "short", hour: "numeric", hour12: false,
+        }).formatToParts(new Date());
+        const weekday = local.find((part) => part.type === "weekday")?.value;
+        const hour = Number(local.find((part) => part.type === "hour")?.value);
+        if (weekday === "Sun" || hour < 8) continue;
+        const result = await sendOutboundDraft(supabase, draftId as string, {
+          kind: "studio_schedule", studioId: identity!.studioId!, outboundKind: "decision_overdue",
+        });
+        if (result.ok) overdueNotified++;
       }
+
     }
   }
 
