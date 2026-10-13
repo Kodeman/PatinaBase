@@ -73,7 +73,6 @@ import {
   type CeremonyRow,
 } from '@/lib/document/desk-ceremonies';
 import { documentEvents } from '@/lib/analytics/document-events';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
@@ -95,6 +94,8 @@ export interface DeskData {
    *  the Desk prints ("Not checked: invoices, deliveries."). Empty only when
    *  every feed answered, which is the one state that may say nothing is open. */
   unreadFeeds: string[];
+  /** Studio-scoped outbound drafts have no project folder to rise on. */
+  studioDrafts?: DeskDraftSignal[];
 }
 
 /**
@@ -260,6 +261,7 @@ export function buildDeskDrafts(rows: any, outboundRows?: any): Map<string, Desk
         body: row.body,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        claimed_at: row.claimed_at ?? null,
         outbound: { channel: row.channel, recipientKind: row.recipient_kind },
       },
     ]);
@@ -294,6 +296,26 @@ export function buildDeskDrafts(rows: any, outboundRows?: any): Map<string, Desk
     ]);
   }
   return map;
+}
+
+// Studio-level drafts have no project map key; keep them as a separate Desk population.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildDeskStudioDrafts(rows: any): DeskDraftSignal[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .filter((row) => row?.id && !row.project_id)
+    .map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      status: row.status,
+      to_email: row.to_address ?? null,
+      subject: row.subject ?? '',
+      body: row.body,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      claimed_at: row.claimed_at ?? null,
+      outbound: { channel: row.channel, recipientKind: row.recipient_kind },
+    }));
 }
 
 /** C-29: live quotes whose valid-until is near. The read takes a day of slack
@@ -662,8 +684,6 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
   // never breadcrumbs on first load. Lives outside TanStack's own cache
   // because the queryFn needs it read-and-write on every call, synchronously.
   const previousResultRef = useRef<DeskData | null>(null);
-  // US-31 B5a — staged outbound drafts join the draft need only behind the flag.
-  const outboundReview = useFeatureFlag('outbound-review').value === true;
 
   return useQuery<DeskData>({
     queryKey: ['document-state', 'desk'],
@@ -679,21 +699,18 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       const horizon = new Date(Date.now() + CONFLICT_WINDOW_DAYS * 86_400_000)
         .toISOString()
         .slice(0, 10);
-      // US-31 B5a (`outbound-review`, fail-closed): messages to the job's
-      // clients, vendors and trades staged for review, read beside the batch
-      // below. Flag off, nothing is read.
-      const outboundRead: Promise<{ data: unknown; error: unknown }> = outboundReview
-        ? Promise.resolve(
-            supabase
-              .from('outbound_drafts')
-              .select(
-                'id, project_id, kind, channel, recipient_kind, status, to_address, subject, body, created_at, updated_at',
-              )
-              .in('status', ['awaiting_review', 'sending'])
-              .order('created_at')
-              .limit(DESK_DRAFT_LIMIT),
-          ).catch((outboundError) => ({ data: null, error: outboundError }))
-        : Promise.resolve({ data: [], error: null });
+      // Existing drafts remain reviewable regardless of the UI feature flag;
+      // the database rollout gates composition, not visibility of stored rows.
+      const outboundRead: Promise<{ data: unknown; error: unknown }> = Promise.resolve(
+        supabase
+          .from('outbound_drafts')
+          .select(
+            'id, project_id, kind, channel, recipient_kind, status, to_address, subject, body, created_at, updated_at, claimed_at',
+          )
+          .in('status', ['awaiting_review', 'sending'])
+          .order('created_at')
+          .limit(DESK_DRAFT_LIMIT),
+      ).catch((outboundError) => ({ data: null, error: outboundError }));
       const [
         { data, error },
         { data: events, error: eventsError },
@@ -1050,6 +1067,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         draftRowsError && outboundRowsError
           ? undefined
           : buildDeskDrafts(draftRowsError ? [] : draftRows, outboundRowsError ? [] : outboundRows);
+      const studioDrafts = outboundRowsError ? [] : buildDeskStudioDrafts(outboundRows);
       const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
       const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
       const heldReleases = heldRowsError ? undefined : buildDeskHeldReleases(heldRows);
@@ -1118,7 +1136,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         purchaseOrders,
         leads,
       );
-      const desk: DeskData = { ...result, unreadFeeds };
+      const desk: DeskData = { ...result, unreadFeeds, studioDrafts };
       previousResultRef.current = desk;
       return desk;
     },

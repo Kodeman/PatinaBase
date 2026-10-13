@@ -40,6 +40,11 @@ describe('Desk scope and custody', () => {
     expect(scopeDeskNeeds([mine], leads, null, 'mine')).toEqual([]);
   });
 
+  it('keeps studio-level needs visible in Mine without assigning them to a project', () => {
+    const studioNeed = { ...deskNeed('studio-1', 'designer'), studioLevel: true, studioId: 'studio-1' };
+    expect(scopeDeskNeeds([studioNeed], leads, 'u-me', 'mine')).toEqual([studioNeed]);
+  });
+
   describe('a job no one leads yet (no lead_designer row)', () => {
     const inquiry = deskNeed('eng-inquiry', 'designer', { kind: 'new_lead' });
     const hers = deskNeed('eng-hers', 'designer');

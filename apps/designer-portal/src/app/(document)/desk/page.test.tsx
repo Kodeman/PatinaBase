@@ -219,6 +219,35 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
     expect(screen.getAllByText('No current action alerts.')).toHaveLength(1);
   });
 
+  it('shows a studio-level outbound need in the Desk day sheet', () => {
+    mockDeskRead = {
+      ...settledDeskRead(),
+      data: {
+        folders: [],
+        chips: [],
+        live: [],
+        studioDrafts: [
+          {
+            id: 'studio-draft',
+            kind: 'invoice_reminder',
+            status: 'awaiting_review',
+            to_email: 'owner@example.test',
+            subject: 'Invoice reminder',
+            body: 'Please review.',
+            created_at: new Date().toISOString(),
+            outbound: { channel: 'email', recipientKind: 'client' },
+          },
+        ],
+      },
+    };
+    render(<DeskPage />);
+    const sheet = screen.getByTestId('day-sheet');
+    expect(sheet.querySelector('[data-day-sheet-line="po_unsent:studio:studio-draft"]')).toHaveTextContent(
+      'One ready to send, review and send',
+    );
+    expect(within(sheet).getByText('Studio')).toBeInTheDocument();
+  });
+
   it('never says nothing needs her while a feed is unread (fix-now 6)', () => {
     mockDeskRead = {
       ...settledDeskRead(),

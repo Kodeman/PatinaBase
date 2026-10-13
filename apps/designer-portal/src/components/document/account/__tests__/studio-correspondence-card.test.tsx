@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
 const mockUseStudioOutboundModes = jest.fn();
+const mockRolloutState = { data: true as boolean | undefined, isLoading: false, isError: false };
 const mockSetMode = jest.fn();
 const mockMutation: {
   mutate: jest.Mock;
@@ -12,7 +13,9 @@ const mockMutation: {
 jest.mock('@patina/supabase', () => ({
   useStudioOutboundModes: (id: string) => mockUseStudioOutboundModes(id),
   useSetStudioOutboundMode: () => mockMutation,
+  createBrowserClient: () => ({ rpc: jest.fn() }),
 }));
+jest.mock('@tanstack/react-query', () => ({ useQuery: () => mockRolloutState }));
 
 import { StudioCorrespondenceCard } from '../studio-correspondence-card';
 import { OUTBOUND_KIND_GROUPS, OUTBOUND_KIND_LABELS } from '@/lib/outbound/kind-labels';
@@ -22,6 +25,9 @@ const ALL_KINDS = OUTBOUND_KIND_GROUPS.flatMap((g) => g.kinds);
 beforeEach(() => {
   mockSetMode.mockClear();
   mockMutation.isError = false;
+  mockRolloutState.data = true;
+  mockRolloutState.isLoading = false;
+  mockRolloutState.isError = false;
   mockUseStudioOutboundModes.mockReturnValue({
     data: [{ studio_id: 'studio-1', kind: 'trade_site_digest', mode: 'scheduled' }],
     isLoading: false,
@@ -72,6 +78,15 @@ describe('StudioCorrespondenceCard (US-31 B5b)', () => {
     expect(within(trades).getByText('Send on schedule')).toBeInTheDocument();
     expect(screen.getAllByText('Review before sending')).toHaveLength(ALL_KINDS.length - 1);
     expect(mockSetMode).not.toHaveBeenCalled();
+  });
+
+  it('reflects rollout-off rather than claiming drafts wait for review', () => {
+    mockRolloutState.data = false;
+    render(<StudioCorrespondenceCard studioId="studio-1" canManage />);
+    expect(screen.getByText('Draft review is not active for this studio.')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Messages to clients, vendors and trades wait for your Send unless you choose otherwise here.'),
+    ).not.toBeInTheDocument();
   });
 
   it('says so inline when the server refuses the change', () => {

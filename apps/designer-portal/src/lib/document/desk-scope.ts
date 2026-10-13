@@ -54,7 +54,9 @@ export function scopeDeskNeeds(
   designers?: DeskDesigners,
 ): DeskNeed[] {
   if (scope === 'studio') return needs;
-  return needs.filter((entry) => isMyJob(entry.projectId, leads, meUserId, designers));
+  return needs.filter(
+    (entry) => entry.studioLevel || isMyJob(entry.projectId, leads, meUserId, designers),
+  );
 }
 
 function firstName(name: string | null | undefined): string | null {

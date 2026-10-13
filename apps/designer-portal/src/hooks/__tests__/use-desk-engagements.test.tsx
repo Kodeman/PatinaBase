@@ -54,7 +54,10 @@ jest.mock('@tanstack/react-query', () => {
 });
 
 import { replaceEqualDeep } from '@tanstack/react-query';
-import {
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
+}));
+import { buildDeskStudioDrafts,
   buildDeskExceptions,
   buildDeskLandedPayments,
   buildDeskLeads,
@@ -139,7 +142,7 @@ describe('useDeskEngagements', () => {
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ folders: [], chips: [], live: [], composed: {}, unreadFeeds: [] });
+    expect(result.current.data).toEqual({ folders: [], chips: [], live: [], composed: {}, unreadFeeds: [], studioDrafts: [] });
     expect(result.current.isError).toBe(false);
     // A genuinely quiet desk on first load has nothing to compare against —
     // no breadcrumb.
@@ -189,7 +192,11 @@ describe('useDeskEngagements', () => {
       await result.current.refetch();
     });
 
-    await waitFor(() => expect(result.current.data).toEqual({ folders: [], chips: [], live: [], composed: {}, unreadFeeds: [] }));
+    await waitFor(() =>
+      expect(result.current.data).toEqual({
+        folders: [], chips: [], live: [], composed: {}, unreadFeeds: [], studioDrafts: [],
+      }),
+    );
     expect(mockDeskZeroRowRead).toHaveBeenCalledWith({
       previous_folder_count: 1,
       previous_chip_count: 0,
@@ -321,6 +328,39 @@ describe('useDeskEngagements', () => {
 
     expect(limits).toHaveLength(2);
     for (const n of limits) expect(n).toBeGreaterThan(0);
+  });
+
+  it('keeps existing outbound drafts visible when the UI feature flag is off', async () => {
+    const studioDraft = {
+      id: 'studio-draft',
+      project_id: null,
+      kind: 'invoice_reminder',
+      channel: 'email',
+      recipient_kind: 'client',
+      status: 'awaiting_review',
+      to_address: 'owner@example.test',
+      subject: 'Invoice reminder',
+      body: 'Please review.',
+      created_at: '2026-10-13T08:00:00Z',
+      claimed_at: null,
+    };
+    mockFrom.mockImplementation((table: string) =>
+      chainResult({
+        data:
+          table === 'document_state'
+            ? [NEW_LEAD_ROW]
+            : table === 'outbound_drafts'
+              ? [studioDraft]
+              : [],
+        error: null,
+      }),
+    );
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockFrom).toHaveBeenCalledWith('outbound_drafts');
+    expect(result.current.data?.studioDrafts?.map((draft) => draft.id)).toEqual(['studio-draft']);
+    expect(buildDeskStudioDrafts([studioDraft])).toHaveLength(1);
   });
 });
 

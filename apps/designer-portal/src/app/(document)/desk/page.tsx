@@ -36,6 +36,7 @@ import {
 } from '@/lib/document/desk-roster-derivation';
 import { useDeskLineState } from '@/components/document/desk-arbiter';
 import { deriveDeskNeedList } from '@/lib/document/desk-need-list';
+import { studioOutboundNeed } from '@/lib/document/desk-derivation';
 import {
   deriveHandoffNeeds,
   deskDesignersOf,
@@ -268,6 +269,17 @@ export default function DeskPage() {
       at,
       handoffs,
     );
+    const studioNeed = studioOutboundNeed(data?.studioDrafts ?? [], at);
+    if (studioNeed && studioId) {
+      needs.push({
+        key: studioNeed.key,
+        projectId: studioId,
+        projectName: 'Studio',
+        studioLevel: true,
+        studioId,
+        need: studioNeed,
+      });
+    }
     return deriveDaySheet({
       needs,
       states: needStates ?? new Map(),

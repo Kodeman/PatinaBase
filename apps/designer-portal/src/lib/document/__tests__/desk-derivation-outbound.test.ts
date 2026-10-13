@@ -3,13 +3,14 @@
  * project folder, counting procurement letters and outbound messages together
  * ("4 ready to send — review and send"), under the existing DRAFTED stamp.
  */
-import { buildDeskDrafts } from '@/hooks/use-desk-engagements';
+import { buildDeskDrafts, buildDeskStudioDrafts } from '@/hooks/use-desk-engagements';
 import {
   deskActionLabel,
   deskNeedText,
   deriveNeeds,
   partitionDesk,
   readyToSendText,
+  studioOutboundNeed,
   type DeskDraftSignal,
   type DocumentStateRow,
 } from '../desk-derivation';
@@ -139,6 +140,22 @@ describe('US-31 B5a ready-to-send need', () => {
     expect(need?.outbound).toEqual({ count: 1 });
   });
 
+  it('surfaces a sending draft only after its ten-minute claim stalls, with Retry access', () => {
+    const need = draftNeedOf([
+      staged({
+        status: 'sending',
+        claimed_at: '2026-10-13T11:49:00Z',
+        updated_at: '2026-10-13T11:49:00Z',
+      }),
+    ]);
+    expect(need?.text).toBe("1 didn't finish sending — check it");
+    expect(need?.outbound).toEqual({ count: 1 });
+    expect(need?.actionLabel).toBe('Review and send');
+    expect(
+      draftNeedOf([staged({ status: 'sending', claimed_at: '2026-10-13T11:51:00Z' })]),
+    ).toBeUndefined();
+  });
+
   it('keeps the procurement-only line exactly as before', () => {
     const one = draftNeedOf([letter()]);
     expect(one?.text).toBe('Reply to the maker drafted — the acknowledgment differs');
@@ -168,6 +185,31 @@ describe('US-31 B5a ready-to-send need', () => {
     expect(out.to_email).toBe('+15550100');
     expect(out.subject).toBe('');
     expect(p1.find((d) => d.id === 'letter-1')!.outbound).toBeUndefined();
+  });
+
+  it('builds null-project drafts as a separate studio population and need', () => {
+    const studioDrafts = buildDeskStudioDrafts([
+      {
+        id: 'studio-invoice',
+        project_id: null,
+        kind: 'invoice_reminder',
+        channel: 'email',
+        recipient_kind: 'client',
+        status: 'awaiting_review',
+        to_address: 'owner@example.test',
+        subject: 'Invoice reminder',
+        body: 'Please review.',
+        created_at: '2026-10-13T08:00:00Z',
+      },
+      { id: 'project-draft', project_id: 'p1', status: 'awaiting_review' },
+    ]);
+    expect(studioDrafts.map((draft) => draft.id)).toEqual(['studio-invoice']);
+    expect(studioOutboundNeed(studioDrafts, NOW)).toMatchObject({
+      recordId: 'studio-invoice',
+      kind: 'po_unsent',
+      text: 'One ready to send — review and send',
+      outbound: { count: 1 },
+    });
   });
 
   it('lands on the folder through partitionDesk', () => {

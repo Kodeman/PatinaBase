@@ -50,7 +50,12 @@ const SHEETS: Record<
   'ready-to-send': {
     title: 'Ready to send',
     icon: Inbox,
-    Body: ({ need }) => <ReadyToSendSheet projectId={need.projectId} />,
+    Body: ({ need }) => (
+      <ReadyToSendSheet
+        projectId={need.studioLevel ? undefined : need.projectId}
+        studioId={need.studioId}
+      />
+    ),
   },
 };
 

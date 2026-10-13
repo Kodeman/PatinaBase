@@ -18,9 +18,12 @@ const mockUpdate = jest.fn();
 const mockDiscard = jest.fn();
 const mockRecheck = jest.fn();
 let mockCanSend = true;
+let mockStudioMembers: Array<{ user_id: string; role: string }> = [];
+const mockRefetchMembers = jest.fn();
 
 const row = (over: Record<string, unknown>) => ({
   id: 'x',
+  project_id: 'p1',
   kind: 'invoice_reminder',
   channel: 'email',
   recipient_kind: 'client',
@@ -41,10 +44,12 @@ const OUTBOUND = [
   row({ id: 'out-text-2', kind: 'trade_day_of', channel: 'sms', recipient_kind: 'trade', to_address: '+15550102', subject: null, body: 'Tomorrow 9am at Whitfield.', created_at: '2026-10-13T08:03:00Z' }),
   row({ id: 'out-sent', status: 'sent', created_at: '2026-10-13T07:00:00Z' }),
 ];
+let mockOutbound = OUTBOUND;
 
 jest.mock('@patina/supabase', () => ({
   OPEN_PROCUREMENT_DRAFT_STATUSES: ['awaiting_review', 'sending'],
-  useOutboundDrafts: () => ({ data: OUTBOUND, isLoading: false, isError: false }),
+  useOrganizationMembers: () => ({ data: mockStudioMembers, isSuccess: true, refetch: mockRefetchMembers }),
+  useOutboundDrafts: () => ({ data: mockOutbound, isLoading: false, isError: false }),
   useProcurementDrafts: () => ({
     data: [{ id: 'letter-1', kind: 'ack_chase', status: 'awaiting_review', to_email: 'orders@hale.test', subject: 'PO 1042', body: 'Hello' }],
   }),
@@ -59,6 +64,8 @@ jest.mock('../../buying/draft-review', () => ({
   ),
 }));
 
+jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'user-1' } }) }));
+
 jest.mock('../../acts/act-viewer', () => ({
   useActViewer: () => ({
     ready: true,
@@ -72,6 +79,9 @@ jest.mock('../../acts/act-viewer', () => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockCanSend = true;
+  mockStudioMembers = [];
+  mockOutbound = OUTBOUND;
+  mockRefetchMembers.mockResolvedValue({ data: [], isError: false });
   mockRecheck.mockResolvedValue(true);
   mockSend.mockResolvedValue({ results: [] });
   mockUpdate.mockResolvedValue({});
@@ -97,6 +107,48 @@ describe('ReadyToSendSheet', () => {
     // A sent message this sheet did not send is not on it.
     expect(document.querySelector('[data-outbound-row="out-sent"]')).toBeNull();
     expect(batchButton()).toHaveTextContent('Send the 0 checked');
+  });
+
+  it('lists only studio-level drafts and holds sending for owner/admin roles', () => {
+    mockOutbound = [
+      row({ id: 'studio-outbound', project_id: null }),
+      row({ id: 'project-outbound', project_id: 'p1' }),
+    ];
+    render(<ReadyToSendSheet studioId="studio-1" />);
+    expect(screen.getByText('Invoice reminder')).toBeInTheDocument();
+    expect(document.querySelector('[data-outbound-row="studio-outbound"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-outbound-row="project-outbound"]')).toBeNull();
+    expect(screen.getByText('Only an owner or admin can send studio-level messages.')).toBeInTheDocument();
+    expect(batchButton()).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('allows a studio owner to send a studio-level draft after rechecking the seat', async () => {
+    mockOutbound = [row({ id: 'studio-outbound', project_id: null })];
+    mockStudioMembers = [{ user_id: 'user-1', role: 'owner' }];
+    mockRefetchMembers.mockResolvedValue({
+      data: [{ user_id: 'user-1', role: 'owner' }],
+      isError: false,
+    });
+    mockSend.mockResolvedValue({ results: [{ id: 'studio-outbound', ok: true }] });
+    render(<ReadyToSendSheet studioId="studio-1" />);
+    fireEvent.click(within(group('client')).getByRole('button', { name: /Invoice reminder/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(mockSend).toHaveBeenCalledWith(['studio-outbound']));
+    expect(mockRefetchMembers).toHaveBeenCalled();
+  });
+
+  it('offers Retry for a stalled sending draft after reload', () => {
+    mockOutbound = [
+      row({
+        id: 'stalled-outbound',
+        status: 'sending',
+        claimed_at: new Date(Date.now() - 11 * 60_000).toISOString(),
+        updated_at: new Date(Date.now() - 11 * 60_000).toISOString(),
+      }),
+    ];
+    render(<ReadyToSendSheet projectId="p1" />);
+    fireEvent.click(within(group('client')).getByRole('button', { name: /Invoice reminder/ }));
+    expect(screen.getByRole('button', { name: 'Send again' })).toBeInTheDocument();
   });
 
   it('sends the checked rows, opened or not, and says how each went', async () => {

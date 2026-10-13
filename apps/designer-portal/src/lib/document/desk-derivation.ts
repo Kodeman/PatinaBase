@@ -388,6 +388,7 @@ export interface DeskDraftSignal {
   created_at: string;
   /** While sending, the claim time (00720: a stalled send offers Send again). */
   updated_at?: string;
+  claimed_at?: string | null;
   /** R42's maker for a line-level draft (`maker_eta_request`,
    *  `maker_follow_up`): the line's
    *  vendor, else its PO's vendor, else its product's brand. Absent otherwise. */
@@ -1665,7 +1666,38 @@ export function readyToSendText(count: number): string {
   return `${count === 1 ? 'One' : count} ready to send — review and send`;
 }
 
-const needDraftReview: NeedRule = ({ drafts, purchaseOrders }) => {
+const STALLED_DRAFT_MS = 10 * 60_000;
+
+export function studioOutboundNeed(
+  drafts: readonly DeskDraftSignal[],
+  now: Date,
+): NeedLine | null {
+  const open = drafts.filter((draft) => {
+    if (draft.status === 'awaiting_review') return true;
+    const claimedAt = draft.claimed_at ?? draft.updated_at;
+    return draft.status === 'sending' && !!claimedAt && now.getTime() - Date.parse(claimedAt) > STALLED_DRAFT_MS;
+  });
+  if (open.length === 0) return null;
+  const stalled = open.filter((draft) => draft.status === 'sending');
+  return {
+    key: `po_unsent:studio:${open[0].id}`,
+    kind: 'po_unsent',
+    recordId: open[0].id,
+    at: open[0].created_at,
+    text:
+      stalled.length > 0
+        ? `${stalled.length} didn't finish sending — check it`
+        : readyToSendText(open.length),
+    actionLabel: 'Review and send',
+    stamp: { label: 'DRAFTED', ...STAMP.dustyBlue },
+    urgent: false,
+    owner: 'designer',
+    outbound: { count: open.length },
+    namedAct: true,
+  };
+}
+
+const needDraftReview: NeedRule = ({ drafts, purchaseOrders, now }) => {
   // N3: a chase for a PO the maker has since acknowledged asks for nothing.
   const acked = new Set(
     (purchaseOrders ?? []).filter((po) => po.acknowledgedAt).map((po) => po.purchaseOrderId),
@@ -1677,8 +1709,19 @@ const needDraftReview: NeedRule = ({ drafts, purchaseOrders }) => {
   const ready = (drafts ?? [])
     .filter((d) => d.outbound && d.status === 'awaiting_review')
     .sort(byCreated);
+  const stalled = (drafts ?? [])
+    .filter((d) => {
+      const claimedAt = d.claimed_at ?? d.updated_at;
+      return (
+        d.outbound &&
+        d.status === 'sending' &&
+        !!claimedAt &&
+        now.getTime() - Date.parse(claimedAt) > STALLED_DRAFT_MS
+      );
+    })
+    .sort(byCreated);
   const first = open[0];
-  const oldest = [first, ready[0]].filter((d): d is DeskDraftSignal => !!d).sort(byCreated)[0];
+  const oldest = [first, ready[0], stalled[0]].filter((d): d is DeskDraftSignal => !!d).sort(byCreated)[0];
   if (!oldest) return null;
   const shape = first ? DRAFT_NEED[first.kind]! : null;
   return {
@@ -1689,16 +1732,20 @@ const needDraftReview: NeedRule = ({ drafts, purchaseOrders }) => {
     recordId: (first ?? oldest).id,
     at: oldest.created_at,
     text:
-      ready.length > 0
-        ? readyToSendText(open.length + ready.length)
-        : open.length > 1
-          ? `${open.length} letters drafted — review and send`
-          : shape!.text,
+      stalled.length > 0
+        ? `${stalled.length} ${stalled.length === 1 ? "didn't" : "didn't"} finish sending — check it`
+        : ready.length > 0
+          ? readyToSendText(open.length + ready.length)
+          : open.length > 1
+            ? `${open.length} letters drafted — review and send`
+            : shape!.text,
     actionLabel: 'Review and send',
     stamp: { label: 'DRAFTED', ...STAMP.dustyBlue },
     urgent: false,
     owner: 'designer',
-    ...(ready.length > 0 ? { outbound: { count: ready.length }, namedAct: true as const } : {}),
+    ...(ready.length + stalled.length > 0
+      ? { outbound: { count: ready.length + stalled.length }, namedAct: true as const }
+      : {}),
     // FR7 F7-1: `poNumber` rides the signal from the read (`linePoNumber`).
     ...(first ? { draft: first.makerLine ? { ...first, ffeItemId: first.makerLine.id } : first } : {}),
   };

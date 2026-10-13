@@ -22,6 +22,9 @@ export interface DeskNeed {
   key: NeedKey;
   projectId: string;
   projectName: string;
+  /** A studio-wide action is visible in either Mine or Studio scope. */
+  studioLevel?: true;
+  studioId?: string;
   need: NeedLine;
 }
 

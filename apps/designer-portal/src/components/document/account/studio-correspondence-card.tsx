@@ -9,7 +9,8 @@
  */
 
 import { useState } from 'react';
-import { useSetStudioOutboundMode, useStudioOutboundModes } from '@patina/supabase';
+import { useQuery } from '@tanstack/react-query';
+import { createBrowserClient, useSetStudioOutboundMode, useStudioOutboundModes } from '@patina/supabase';
 import { Select } from '@/components/ui/controls';
 import { OUTBOUND_KIND_GROUPS, OUTBOUND_KIND_LABELS, type OutboundKind } from '@/lib/outbound/kind-labels';
 
@@ -37,6 +38,17 @@ export function StudioCorrespondenceCard({
   canManage: boolean;
 }) {
   const { data: rows, isLoading } = useStudioOutboundModes(studioId);
+  const rollout = useQuery({
+    queryKey: ['outbound-review-active', studioId],
+    enabled: Boolean(studioId),
+    queryFn: async () => {
+      const { data, error } = await createBrowserClient().rpc('outbound_review_active', {
+        p_studio: studioId,
+      });
+      if (error) throw error;
+      return data;
+    },
+  });
   const setMode = useSetStudioOutboundMode();
   // The choice just made; dropped again if the server refuses it.
   const [chosen, setChosen] = useState<Partial<Record<OutboundKind, Mode>>>({});
@@ -60,7 +72,13 @@ export function StudioCorrespondenceCard({
     return (
       <div className="mb-6 border-t border-[var(--color-pearl)] pt-5" data-correspondence-readonly>
         <h3 className={`${LABEL} mb-3`}>Correspondence</h3>
-        <p className={`${HELP} mb-4 mt-0`}>{INTRO}</p>
+        <p className={`${HELP} mb-4 mt-0`}>
+          {rollout.isLoading
+            ? 'Checking this studio’s message review settings…'
+            : rollout.data === false
+              ? 'Draft review is not active for this studio.'
+              : INTRO}
+        </p>
         {OUTBOUND_KIND_GROUPS.map(({ group, heading, kinds }) => (
           <dl key={group} className="mb-4 max-w-md" aria-label={heading}>
             <p className={LABEL}>{heading}</p>
@@ -83,7 +101,13 @@ export function StudioCorrespondenceCard({
     <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
       <fieldset disabled={isLoading} data-correspondence>
         <legend className={`${LABEL} mb-3`}>Correspondence</legend>
-        <p className={`${HELP} mb-4 mt-0`}>{INTRO}</p>
+        <p className={`${HELP} mb-4 mt-0`}>
+          {rollout.isLoading
+            ? 'Checking this studio’s message review settings…'
+            : rollout.data === false
+              ? 'Draft review is not active for this studio.'
+              : INTRO}
+        </p>
         {OUTBOUND_KIND_GROUPS.map(({ group, heading, kinds }) => (
           <div key={group} role="group" aria-label={heading} className="mb-4 max-w-md">
             <p className={LABEL}>{heading}</p>

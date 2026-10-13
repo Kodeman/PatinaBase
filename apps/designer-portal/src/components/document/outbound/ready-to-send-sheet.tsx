@@ -19,12 +19,14 @@
 import { useMemo, useRef, useState } from 'react';
 import {
   OPEN_PROCUREMENT_DRAFT_STATUSES,
+  useOrganizationMembers,
   useOutboundDrafts,
   useProcurementDrafts,
   useSendOutboundDrafts,
   useUpdateOutboundDraft,
 } from '@patina/supabase';
 import { useActViewer } from '../acts/act-viewer';
+import { useAuth } from '@/hooks/use-auth';
 import { DraftReview } from '../buying/draft-review';
 import { DocumentAction } from '../document-action';
 import { LABEL_CLS } from '../line-unfold/cell';
@@ -48,12 +50,21 @@ export const LEAD_CHANGED = 'Who leads this project changed since this opened, s
 const SEND_UNCONFIRMED =
   'The send could not be confirmed. Some messages may have gone; check each one before sending again.';
 
-export function ReadyToSendSheet({ projectId }: { projectId: string }) {
-  const viewer = useActViewer(projectId);
+export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; studioId?: string }) {
+  const viewer = useActViewer(projectId ?? null);
+  const { user } = useAuth();
+  const studioMembers = useOrganizationMembers(studioId ?? '');
   const outbound = useOutboundDrafts({ projectId });
-  const procurement = useProcurementDrafts(projectId, OPEN_PROCUREMENT_DRAFT_STATUSES);
+  const procurement = useProcurementDrafts(projectId ?? '', OPEN_PROCUREMENT_DRAFT_STATUSES);
   const sendDrafts = useSendOutboundDrafts();
   const update = useUpdateOutboundDraft();
+
+  const studioMember = studioMembers.data?.find((member) => member.user_id === user?.id);
+  const studioReady = Boolean(studioId && user?.id && studioMembers.isSuccess);
+  const studioCanSend = studioReady && (studioMember?.role === 'owner' || studioMember?.role === 'admin');
+  const ready = projectId ? viewer.ready : studioReady;
+  const canSend = projectId ? viewer.ready && viewer.canSend : studioCanSend;
+  const leadName = projectId ? viewer.leadFirstName ?? 'the lead' : 'the studio owner or admin';
 
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
@@ -63,14 +74,12 @@ export function ReadyToSendSheet({ projectId }: { projectId: string }) {
   // Unsaved edits, by draft id: each send saves its own first.
   const edits = useRef(new Map<string, OutboundDraftText>());
 
-  const leadName = viewer.leadFirstName ?? 'the lead';
-  const canSend = viewer.ready && viewer.canSend;
-
   // A message stays on the sheet while it is open, and once this sheet sent
   // it, so its row can say how the send went.
   const rows = useMemo(
     () =>
       (outbound.data ?? [])
+        .filter((d) => (projectId ? d.project_id === projectId : d.project_id === null))
         .filter((d) => OPEN_STATUSES.has(d.status) || results.has(d.id))
         .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0)),
     [outbound.data, results],
@@ -118,7 +127,14 @@ export function ReadyToSendSheet({ projectId }: { projectId: string }) {
         await update.mutateAsync({ id, subject: text.subject.trim(), body: text.body });
         edits.current.delete(id);
       }
-      if (viewer.recheck && !(await viewer.recheck())) throw new Error(LEAD_CHANGED);
+      if (projectId && viewer.recheck && !(await viewer.recheck())) throw new Error(LEAD_CHANGED);
+      if (!projectId) {
+        const fresh = await studioMembers.refetch();
+        const member = fresh.data?.find((row) => row.user_id === user?.id);
+        if (fresh.isError || (member?.role !== 'owner' && member?.role !== 'admin')) {
+          throw new Error('Only a studio owner or admin can send studio-level messages.');
+        }
+      }
       let answer: Awaited<ReturnType<typeof sendDrafts.mutateAsync>>;
       try {
         answer = await sendDrafts.mutateAsync(ids);
@@ -194,8 +210,8 @@ export function ReadyToSendSheet({ projectId }: { projectId: string }) {
           <div id={`outbound-review-${d.id}`} className="pl-[52px] max-sm:pl-0">
             <OutboundDraftReview
               draft={d}
-              canSend={viewer.canSend}
-              ready={viewer.ready}
+              canSend={canSend}
+              ready={ready}
               leadName={leadName}
               sending={sendingIds.has(d.id)}
               result={result}
@@ -227,7 +243,9 @@ export function ReadyToSendSheet({ projectId }: { projectId: string }) {
         </p>
       )}
       {!outbound.isLoading && empty && (
-        <p className="text-[13px] text-[var(--text-muted)]">Nothing is waiting to send on this project.</p>
+        <p className="text-[13px] text-[var(--text-muted)]">
+          {`Nothing is waiting to send ${projectId ? 'on this project' : 'for this studio'}.`}
+        </p>
       )}
 
       {GROUPS.map((group) => {
@@ -296,13 +314,15 @@ export function ReadyToSendSheet({ projectId }: { projectId: string }) {
               {`Send the ${checkedIds.length} checked`}
             </DocumentAction>
           </div>
-          {!viewer.ready ? (
+          {!ready ? (
             <p id="ready-to-send-lead" className="text-[12px] text-[var(--text-muted)]">
-              Loading who leads this project…
+              {projectId ? 'Loading who leads this project…' : 'Checking studio permissions…'}
             </p>
-          ) : !viewer.canSend ? (
+          ) : !canSend ? (
             <p id="ready-to-send-lead" data-act-lead-first className="text-[12px] text-[var(--color-mocha)]">
-              {`${leadName.charAt(0).toUpperCase()}${leadName.slice(1)} sees this first.`}
+              {projectId
+                ? `${leadName.charAt(0).toUpperCase()}${leadName.slice(1)} sees this first.`
+                : 'Only an owner or admin can send studio-level messages.'}
             </p>
           ) : null}
           {batchError && (
