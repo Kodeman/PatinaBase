@@ -57,6 +57,7 @@ import { StudioRateRows } from './studio-rate-rows';
 import { StudioPaymentMethodsCard } from './studio-payment-methods';
 import { StudioMarginVisibilityCard } from './studio-margin-visibility';
 import { StudioReleaseGateCard } from './studio-release-gate';
+import { StudioCorrespondenceCard } from './studio-correspondence-card';
 import { StudioLocationsEditor } from '../people/studio-locations-editor';
 import { AgreementLibraryCard } from './agreement-library-card';
 import { LicensingAttestationCard } from './licensing-attestation-card';
@@ -214,6 +215,8 @@ export function AccountStudioPage() {
   // program's fail-closed rule, and the reason a studio the rollout has not
   // reached sees the Account page it has today.
   const { value: designBuildOn } = useFeatureFlag('design-build');
+  // US-31 B5b. Dark until the senders draft (B3); fail-closed while loading.
+  const { value: outboundReviewOn } = useFeatureFlag('outbound-review');
   const [seedReviewOpen, setSeedReviewOpen] = useState(false);
   const [skipSeedError, setSkipSeedError] = useState<string | null>(null);
 
@@ -1207,6 +1210,12 @@ export function AccountStudioPage() {
       {/* Held for release (US-16 C-32, R-PB2) — off by default; owners and
           admins set it, every other seat reads it. */}
       <StudioReleaseGateCard studioId={studio.id} canManage={canManage} />
+
+      {/* Correspondence (US-31 B5b) — which messages to clients and trades
+          wait for a Send; owners and admins set it, every other seat reads it. */}
+      {outboundReviewOn && (
+        <StudioCorrespondenceCard studioId={studio.id} canManage={canManage} />
+      )}
 
       {/* Locations (US-16 C-13) — every place the studio's goods go, the
           default receiver among them. The same editor hangs off each company
