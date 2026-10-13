@@ -91,3 +91,27 @@ describe('CeremonyArrival — scan doors navigate to the Room View', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 });
+
+describe('CeremonyArrival — US-28 S9 the quote on the note edge, the facts as a dl', () => {
+  it('sets the ask on the --edge-note quote and budget and timeline as dt/dd facts, tags as ink words', () => {
+    render(<CeremonyArrival lead={baseLead} scans={[]} tags={['warm minimal']} />);
+
+    const quote = screen.getByText('“A quiet reading corner.”');
+    expect(quote.tagName).toBe('BLOCKQUOTE');
+    expect(quote).toHaveClass('papers-note');
+    expect(quote.className).not.toMatch(/border-\[var\(--color-clay\)\]/);
+
+    const facts = document.querySelector('dl.papers-facts');
+    expect(facts).not.toBeNull();
+    const terms = Array.from(facts!.querySelectorAll('dt')).map((dt) => dt.textContent);
+    expect(terms).toEqual(expect.arrayContaining(['Budget band', 'Timeline']));
+    const timeline = Array.from(facts!.querySelectorAll('dt')).find(
+      (dt) => dt.textContent === 'Timeline',
+    );
+    expect(timeline?.nextElementSibling?.tagName).toBe('DD');
+
+    const tag = screen.getByText('warm minimal');
+    expect(tag).toHaveClass('word');
+    expect(tag.className).not.toMatch(/rounded-full/);
+  });
+});

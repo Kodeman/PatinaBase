@@ -20,7 +20,14 @@
  * the command bar (z-70).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { Bug, X } from 'lucide-react';
 import { useUnseenShipped, type FeedbackBucket } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
@@ -33,10 +40,24 @@ import {
   topDismissiblePopover,
 } from '@/components/document/overlays/active-dialog';
 import { FeedbackForm } from './feedback-form';
+import {
+  subscribeTesterSlots,
+  testerSlot,
+  testerSlotsVersion,
+} from './tester-slot';
 
 const YELLOW = '#ffd60a';
-/** Clears the Studio Drawer / MobileBar on document shells (globals.css). */
-const BOTTOM = 'var(--doc-shell-floating-bottom, 1rem)';
+/** F8 — the open panel (and the mark, when no dock slot is laid out) clears
+ *  the dock. The widget mounts in the root layout, outside
+ *  `.document-route-shell`, so the shell's floating-bottom token never reached
+ *  it. The MobileBar (below 1180) and the Studio Drawer (above it) each
+ *  publish their own height on `html` only while laid out. */
+const BOTTOM =
+  'calc(var(--doc-mobile-bar-height, var(--doc-drawer-height, 8px)) + 8px)';
+
+/** The dock that is laid out at this width: the drawer from 1180, the bar
+ *  below it (both components' own breakpoints). */
+const WIDE_DOCK = '(min-width: 1180px)';
 
 type Tab = 'new' | 'past';
 
@@ -175,51 +196,80 @@ function TesterInstrument({
 
   const hasUnseen = !!unseen && unseen.length > 0;
 
+  // SQ-856 — the dock slot laid out at this width, if any (see tester-slot).
+  useSyncExternalStore(subscribeTesterSlots, testerSlotsVersion, () => 0);
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia(WIDE_DOCK);
+    const read = () => setWide(query.matches);
+    read();
+    query.addEventListener('change', read);
+    return () => query.removeEventListener('change', read);
+  }, []);
+  // The board room covers the whole page, docks included, so its own slot
+  // (in its Header line) wins whenever it is laid out.
+  const slot = testerSlot('board') ?? testerSlot(wide ? 'drawer' : 'bar');
+
+  const pill = (
+    <button
+      ref={pillRef}
+      type="button"
+      data-tester-mark={slot ? 'dock' : 'fixed'}
+      onClick={() => {
+        openedFromPill.current = true;
+        openFeedbackSheet();
+      }}
+      /* SQ-856 (chrome-p6) — a quiet paper tag, not a filled pill. In a
+         dock, or the board room's Header line (SQ-865), it is one more act
+         in that row, so it covers nothing. With no slot (Preferences, Help)
+         it is fixed, and stands UNDER the chrome layer (z-40: the dock, its
+         popovers, the sheets) so it never takes a click meant for a live
+         control there. Opened, the panel still floats at z-68: that is an
+         instrument the tester asked for. */
+      className={slot ? 'shrink-0' : 'fixed left-4 z-[39]'}
+      style={{
+        bottom: slot ? undefined : BOTTOM,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        minHeight: 44,
+        minWidth: 44,
+        // Docked, it is one more worded act and keeps tight to its word so
+        // the dock's own label and acts keep their room.
+        padding: slot ? '0 8px' : '0 12px',
+        backgroundColor: 'var(--paper-doc)',
+        color: 'var(--text-primary)',
+        borderWidth: 1,
+        borderStyle: 'solid',
+        borderColor: 'var(--card-edge)',
+        borderRadius: 2,
+        fontFamily: 'var(--font-meta)',
+        fontSize: 12,
+        fontWeight: 500,
+        letterSpacing: slot ? '0.04em' : '0.08em',
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+      }}
+    >
+      Tester
+      {hasUnseen && (
+        <span
+          aria-label="shipped notes to see"
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: 999,
+            background: 'currentColor',
+            display: 'inline-block',
+          }}
+        />
+      )}
+    </button>
+  );
+
   return (
     <div data-feedback-layer style={{ fontFamily: 'system-ui, sans-serif' }}>
-      {!open && (
-        <button
-          ref={pillRef}
-          type="button"
-          onClick={() => {
-            openedFromPill.current = true;
-            openFeedbackSheet();
-          }}
-          className="fixed left-4 z-[68]"
-          style={{
-            bottom: BOTTOM,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            minHeight: 36,
-            padding: '0 12px',
-            background: '#000',
-            color: YELLOW,
-            border: `1px solid ${YELLOW}`,
-            borderRadius: 999,
-            fontFamily: 'inherit',
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            cursor: 'pointer',
-          }}
-        >
-          <Bug size={14} aria-hidden />
-          TESTER
-          {hasUnseen && (
-            <span
-              aria-label="shipped notes to see"
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 999,
-                background: YELLOW,
-                display: 'inline-block',
-              }}
-            />
-          )}
-        </button>
-      )}
+      {!open && (slot ? createPortal(pill, slot) : pill)}
 
       {open && (
         <div

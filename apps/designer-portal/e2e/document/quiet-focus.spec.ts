@@ -94,39 +94,41 @@ test.describe('Quiet Work focused rooms', () => {
     await expectNoHorizontalOverflow(page);
   });
 
-  test('People groups seven views without keeping a mobile rail in the room', async ({
+  // US-28 (Kody, 2026-10-13) — Studio contacts keeps no index or view
+  // selector in the room; its three sub-rooms open from More at their own
+  // `?view=` address, and a room's views are underline words.
+  test('People keeps no index in the room; its sub-rooms open from More', async ({
     authenticatedPage: page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/people', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle');
 
-    const selector = page.locator('[data-people-compact-selector]');
-    const trigger = page.locator('[data-people-selector-trigger]');
-    await expect(selector).toBeVisible();
-    await expect(page.locator('[data-people-desktop-rail]')).toBeHidden();
-    await trigger.click();
-    const selectorPanel = page.locator('[data-people-selector-panel]');
-    await expect(selectorPanel).toBeVisible();
-    await expect(
-      selectorPanel.locator('[data-people-view-group]'),
-    ).toHaveCount(3);
-    await selectorPanel.getByRole('button', { name: 'Reviews' }).click();
-    await expect(selector).toHaveAttribute('data-people-current-view', 'reviews');
-    await expect(selectorPanel).toBeHidden();
-    await expect(trigger).toBeFocused();
-    await expect(page.locator('[data-people-main-panel]')).toBeVisible();
+    const main = page.locator('[data-people-main-panel]');
+    await expect(main).toHaveAttribute('data-people-current-view', 'directory');
+    await expect(page.locator('[data-people-view-group]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'More studio actions' }).click();
+    const rooms = page.getByRole('group', { name: 'From Studio contacts' });
+    await expect(rooms.getByRole('link')).toHaveCount(3);
+    await rooms.getByRole('link', { name: /Client relations/ }).click();
+    await expect(page).toHaveURL(/\/people\?view=threads/);
+    await expect(main).toHaveAttribute('data-people-sub-room', 'client-relations');
+    await page
+      .locator('[data-people-sub-room-filters]')
+      .getByRole('button', { name: 'Client reviews' })
+      .click();
+    await expect(main).toHaveAttribute('data-people-current-view', 'reviews');
     await expectNoHorizontalOverflow(page);
 
     await page.setViewportSize({ width: 1280, height: 900 });
-    const rail = page.locator('[data-people-desktop-rail]');
-    await expect(selector).toBeHidden();
-    await expect(rail).toBeVisible();
-    await expect(rail.locator('[data-people-view-group]')).toHaveCount(3);
-    await rail.getByRole('button', { name: 'Threads' }).click();
-    await expect(
-      rail.locator('[data-people-view-option="threads"]'),
-    ).toHaveAttribute('aria-current', 'page');
+    await page.goto('/people', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'Ledgers' }).click();
+    await page
+      .getByRole('group', { name: 'From Studio contacts' })
+      .getByRole('button', { name: 'The Engine' })
+      .click();
+    await expect(page).toHaveURL(/\/people\?view=nurture/);
+    await expect(main).toHaveAttribute('data-people-sub-room', 'the-engine');
     await expectNoHorizontalOverflow(page);
   });
 });

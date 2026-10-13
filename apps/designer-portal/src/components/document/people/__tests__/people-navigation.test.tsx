@@ -1,166 +1,55 @@
-import { useState } from 'react';
-import { fireEvent, render, within } from '@testing-library/react';
+/**
+ * US-28 (Kody, 2026-10-13) — Studio contacts matches the specimen: no left
+ * index and no view selector in the Room. The views that index held stand in
+ * three sub-rooms (Client relations · Studio marketing · The Engine), which
+ * open from the dock's More and ⌘K at the `?view=<key>` address every view
+ * always had. These pins hold the grouping, the address, and the sub-room's
+ * own underline words.
+ */
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { PeopleView } from '../types';
 import {
-  PEOPLE_VIEW_GROUPS,
+  EngineNudgeLine,
+  PEOPLE_SUB_ROOMS,
   PEOPLE_VIEW_KEYS,
-  PeopleCompactSelector,
-  PeopleDesktopRail,
+  SubRoomFilters,
+  peopleSubRoomOf,
   peopleViewFromParam,
 } from '../view-shell';
+import {
+  PEOPLE_SUB_ROOM_HREF,
+  PEOPLE_SUB_ROOM_SURFACES,
+} from '@/lib/document/registry';
 
-const EXPECTED_GROUPS = [
-  { key: 'directory', name: 'Contact directory', views: ['directory'] },
+const EXPECTED_ROOMS = [
   {
-    key: 'relationships',
+    key: 'client-relations',
     name: 'Client relations',
-    views: ['threads', 'nurture', 'reviews'],
+    views: ['threads', 'reviews'],
   },
   {
-    key: 'practice',
+    key: 'studio-marketing',
     name: 'Studio marketing',
     views: ['portfolio', 'outreach', 'your-eye'],
   },
+  { key: 'the-engine', name: 'The Engine', views: ['nurture'] },
 ] as const;
 
-describe('People Room navigation', () => {
-  it('groups all seven stable views in the desktop relationship index', () => {
-    const onSelect = jest.fn();
-    const { container } = render(
-      <PeopleDesktopRail
-        activeView="nurture"
-        directoryCount={42}
-        nudge={{ count: 2, name: 'Leah Morgan', since: '8 months' }}
-        onSelect={onSelect}
-      />,
-    );
-
-    const rail = container.querySelector<HTMLElement>(
-      '[data-people-desktop-rail]',
-    );
-    expect(rail).not.toBeNull();
-    expect(rail).toHaveClass('hidden', 'min-[1180px]:block');
-
-    const groups = Array.from(
-      rail!.querySelectorAll<HTMLElement>('[data-people-view-group]'),
-    );
-    expect(groups.map((group) => group.dataset.peopleViewGroup)).toEqual(
-      EXPECTED_GROUPS.map((group) => group.key),
-    );
-
-    for (const expected of EXPECTED_GROUPS) {
-      const group = rail!.querySelector<HTMLElement>(
-        `[data-people-view-group="${expected.key}"]`,
-      );
-      expect(group).not.toBeNull();
-      expect(
-        within(group!).getByRole('heading', { name: expected.name }),
-      ).toHaveClass('doc-type-meta');
-      expect(
-        Array.from(
-          group!.querySelectorAll<HTMLElement>('[data-people-view-option]'),
-        ).map((option) => option.dataset.peopleViewOption),
-      ).toEqual([...expected.views]);
-    }
-
+describe('People sub-rooms', () => {
+  it('groups the six non-directory views into the three named rooms', () => {
     expect(
-      within(rail!).getByRole('button', { name: 'Relationship follow-ups' }),
-    ).toHaveAttribute('aria-current', 'page');
-    expect(
-      within(rail!).getByRole('button', { name: 'Directory 42' }),
-    ).toHaveClass('doc-type-control', 'min-h-11');
-
-    const nudge = rail!.querySelector<HTMLButtonElement>(
-      '[data-people-engine-nudge]',
-    );
-    // US-25 fix-now 9 — no scoreboard: the nudge names the tie, never a count.
-    expect(nudge).toHaveTextContent(/^The Engine/);
-    expect(nudge).not.toHaveTextContent(/drifting/);
-    expect(nudge!.textContent).not.toMatch(/\b2\b/);
-    expect(nudge).toHaveTextContent(
-      'Leah Morgan is the strongest dormant tie · 8 months.',
-    );
-    expect(nudge).not.toHaveClass('rounded-[8px]');
-  });
-
-  it('changes the current view through the compact disclosure and returns focus', () => {
-    function Harness() {
-      const [view, setView] = useState<PeopleView>('directory');
-      return (
-        <PeopleCompactSelector
-          currentView={view}
-          profileOpen={false}
-          directoryCount={42}
-          nudge={null}
-          onSelect={setView}
-        />
-      );
+      PEOPLE_SUB_ROOMS.map((room) => ({
+        key: room.key,
+        name: room.name,
+        views: room.views.map((view) => view.key),
+      })),
+    ).toEqual(EXPECTED_ROOMS);
+    expect(peopleSubRoomOf('directory')).toBeNull();
+    for (const room of EXPECTED_ROOMS) {
+      for (const view of room.views) {
+        expect(peopleSubRoomOf(view)?.key).toBe(room.key);
+      }
     }
-
-    const { container } = render(<Harness />);
-    const root = container.querySelector<HTMLElement>(
-      '[data-people-compact-selector]',
-    );
-    const trigger = container.querySelector<HTMLButtonElement>(
-      '[data-people-selector-trigger]',
-    );
-    const panel = container.querySelector<HTMLElement>(
-      '[data-people-selector-panel]',
-    );
-
-    expect(root).toHaveClass('min-[1180px]:hidden');
-    expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    expect(trigger).toHaveAccessibleName(
-      'Choose People view. Current view: Directory',
-    );
-    expect(panel).toHaveAttribute('hidden');
-
-    fireEvent.click(trigger!);
-
-    expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    expect(panel).not.toHaveAttribute('hidden');
-    expect(panel!.querySelectorAll('[data-people-view-group]')).toHaveLength(3);
-
-    fireEvent.click(within(panel!).getByRole('button', { name: 'Client reviews' }));
-
-    expect(trigger).toHaveAccessibleName(
-      'Choose People view. Current view: Client reviews',
-    );
-    expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    expect(panel).toHaveAttribute('hidden');
-    expect(trigger).toHaveFocus();
-    expect(root).toHaveAttribute('data-people-current-view', 'reviews');
-  });
-
-  it('closes the compact disclosure on Escape or an outside pointer', () => {
-    const { container } = render(
-      <PeopleCompactSelector
-        currentView="directory"
-        profileOpen={false}
-        nudge={null}
-        onSelect={jest.fn()}
-      />,
-    );
-    const trigger = container.querySelector<HTMLButtonElement>(
-      '[data-people-selector-trigger]',
-    )!;
-    const panel = container.querySelector<HTMLElement>(
-      '[data-people-selector-panel]',
-    )!;
-
-    fireEvent.click(trigger);
-    const threads = within(panel).getByRole('button', { name: 'Correspondence' });
-    threads.focus();
-    fireEvent.keyDown(window, { key: 'Escape' });
-
-    expect(panel).toHaveAttribute('hidden');
-    expect(trigger).toHaveFocus();
-
-    fireEvent.click(trigger);
-    expect(panel).not.toHaveAttribute('hidden');
-    fireEvent.pointerDown(document.body);
-    expect(panel).toHaveAttribute('hidden');
-    expect(trigger).toHaveFocus();
   });
 
   it('keeps every existing deep-link key mapped to the same People view', () => {
@@ -173,15 +62,56 @@ describe('People Room navigation', () => {
       'outreach',
       'your-eye',
     ];
-
-    expect(PEOPLE_VIEW_KEYS).toEqual(expected);
-    expect(
-      PEOPLE_VIEW_GROUPS.flatMap((group) =>
-        group.views.map((view) => view.key),
-      ),
-    ).toEqual(expected);
+    expect([...PEOPLE_VIEW_KEYS].sort()).toEqual([...expected].sort());
     for (const key of expected) expect(peopleViewFromParam(key)).toBe(key);
     expect(peopleViewFromParam('unknown')).toBeNull();
     expect(peopleViewFromParam(null)).toBeNull();
+  });
+
+  it('opens each room from More and ⌘K at the address its first view always had', () => {
+    expect(PEOPLE_SUB_ROOM_SURFACES.map((s) => [s.key, s.label])).toEqual(
+      EXPECTED_ROOMS.map((room) => [room.key, room.name]),
+    );
+    for (const room of EXPECTED_ROOMS) {
+      expect(PEOPLE_SUB_ROOM_HREF[room.key]).toBe(
+        `/people?view=${room.views[0]}`,
+      );
+    }
+  });
+
+  it("prints a room's views as pressed underline words, and none for a one-view room", () => {
+    const onSelect = jest.fn();
+    const relations = PEOPLE_SUB_ROOMS[0];
+    const { unmount } = render(
+      <SubRoomFilters room={relations} view="threads" onSelect={onSelect} />,
+    );
+    const group = screen.getByRole('group', { name: 'Client relations views' });
+    expect(group).toHaveClass('filters');
+    expect(
+      screen.getByRole('button', { name: 'Correspondence' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Client reviews' }));
+    expect(onSelect).toHaveBeenCalledWith('reviews');
+    unmount();
+
+    const { container } = render(
+      <SubRoomFilters
+        room={PEOPLE_SUB_ROOMS[2]}
+        view="nurture"
+        onSelect={onSelect}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("prints The Engine's one line naming the strongest dormant tie", () => {
+    render(
+      <EngineNudgeLine
+        nudge={{ count: 2, name: 'Leah Morgan', since: '8 months' }}
+      />,
+    );
+    expect(document.querySelector('[data-people-engine-nudge]')).toHaveTextContent(
+      'Leah Morgan is the strongest dormant tie · 8 months.',
+    );
   });
 });

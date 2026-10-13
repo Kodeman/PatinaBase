@@ -23,7 +23,7 @@ import {
   type ProposalPalette,
   type RoomScan,
 } from '@patina/supabase';
-import { Button, Input } from '@/components/ui/controls';
+import { Input } from '@/components/ui/controls';
 import {
   ProductPickerModal,
   type ProductPickResult,
@@ -652,14 +652,14 @@ function FeedbackPanel({
   });
   return (
     <div className="space-y-3" data-board-feedback-filter={boardId}>
-      <div className="flex flex-wrap gap-1">
+      {/* Underline words keeping aria-pressed (US-28 S12, frame p4). */}
+      <div className="filters" role="group" aria-label="Show feedback">
         {(['all', 'approved', 'rejected', 'comment', 'none'] as const).map((value) => (
           <button
             key={value}
             type="button"
             aria-pressed={filter === value}
             onClick={() => setFilter(value)}
-            className={`min-h-11 min-w-11 rounded-full border px-2 py-1 font-mono text-[8px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] ${filter === value ? 'border-[var(--color-clay)] text-[var(--color-clay-ink)]' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}
           >
             {value === 'rejected' ? 'flagged' : value === 'comment' ? 'noted' : value === 'none' ? 'no verdict' : value}
           </button>
@@ -680,19 +680,16 @@ function FeedbackPanel({
                 <button
                   type="button"
                   onClick={() => onSelectItem?.(item.id)}
-                  className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[4px] border border-[var(--border-default)] px-2.5 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                  className="br-fb-row flex min-h-11 w-full flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--clay-ink)]"
                 >
-                  <span className="truncate text-[11px]">{label}</span>
-                  <span className="flex shrink-0 items-center gap-1.5">
+                  <span className="min-w-0 break-words text-[13px] text-[var(--text-primary)]">{label}</span>
+                  <span className="flex flex-wrap items-baseline gap-x-2">
                     {row?.guest_share_id && (
-                      <span
-                        data-verdict-source="guest"
-                        className="rounded-full border border-[var(--border-default)] px-1.5 font-mono text-[8px] uppercase tracking-[0.04em] text-[var(--text-muted)]"
-                      >
-                        Guest
+                      <span data-verdict-source="guest" className="word word--quiet">
+                        guest link
                       </span>
                     )}
-                    <span className="font-mono text-[8px] uppercase" style={{ color: chip?.color ?? 'var(--text-muted)' }}>
+                    <span className={chip ? 'word' : 'word word--quiet'}>
                       {chip?.label ?? 'No verdict'}
                     </span>
                   </span>
@@ -916,7 +913,8 @@ export function BoardAddRail({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div role="tablist" aria-label="Board sources" className="flex shrink-0 overflow-x-auto border-b border-[var(--border-default)]">
+      {/* Sources as underline words that wrap, never scroll sideways (US-28 S12). */}
+      <div role="tablist" aria-label="Board sources" className="br-source-tabs">
         {([
           ...(owner.kind === 'project' ? ['project'] as const : []),
           'library',
@@ -932,7 +930,7 @@ export function BoardAddRail({
             role="tab"
             aria-selected={tab === value}
             onClick={() => selectTab(value)}
-            className={`min-h-11 min-w-11 shrink-0 px-2 font-mono text-[8px] uppercase tracking-[0.04em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] ${tab === value ? 'border-b-2 border-[var(--color-clay)] text-[var(--color-clay-ink)]' : 'text-[var(--text-muted)]'}`}
+            className="br-source-tab"
           >
             {BOARD_RAIL_TAB_LABEL[value]}
           </button>
@@ -979,9 +977,9 @@ export function BoardAddRail({
             <p className="text-[11px] leading-4 text-[var(--text-muted)]">
               Search personal, studio, and catalog pieces.
             </p>
-            <Button variant="secondary" size="sm" className="min-h-11 min-w-11" onClick={() => setPickerOpen(true)}>
+            <button type="button" className="br-tool br-tool--word" onClick={() => setPickerOpen(true)}>
               Browse resource library
-            </Button>
+            </button>
           </div>
         )}
 
@@ -1057,9 +1055,9 @@ export function BoardAddRail({
               className="sr-only"
               onChange={(event) => void upload(Array.from(event.target.files ?? []))}
             />
-            <Button variant="secondary" size="sm" className="min-h-11 min-w-11" disabled={uploading} onClick={() => inputRef.current?.click()}>
+            <button type="button" className="br-tool br-tool--word" disabled={uploading} onClick={() => inputRef.current?.click()}>
               {uploading ? 'Preparing images…' : 'Choose images'}
-            </Button>
+            </button>
             {onBringInDeck && (
               <button
                 type="button"
@@ -1169,7 +1167,7 @@ export function BoardAddRail({
             )
           }
         />
-        <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={addNote}>+ Note</Button>
+        <button type="button" className="br-tool br-tool--word" onClick={addNote}>+ Note</button>
         {error && <p role="alert" className="mt-2 text-[11px] text-[var(--color-clay-ink)]">{error}</p>}
       </div>
 

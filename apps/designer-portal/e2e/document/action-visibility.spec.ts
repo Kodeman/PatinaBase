@@ -154,14 +154,20 @@ test.describe("Inked Instruments action visibility", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
 
     await page.goto("/desk", { waitUntil: "domcontentloaded" });
-    await expectInlinePrimary(page, "desk-head", "Record an inquiry");
+    // US-28 S0 F1 — no filled act on the Desk: the head's creates are
+    // secondary, so the head region elects no leader either.
+    await expectInlineQuietAct(
+      page,
+      "desk-head",
+      "capture-lead",
+      "Record an inquiry",
+    );
     await expect(page.getByTestId("mobile-bar")).toBeHidden();
 
     // B2 — the four-up folio grid is ONE roster of every live job now, grouped
-    // by stage. Its acts are one region, and that region elects no leader: the
-    // Desk's single inked act is the head's `Capture a lead`, asserted above.
+    // by stage. Its acts are one region, and that region elects no leader.
     // C7 is kept honest in both directions — a roster that grew a leader back
-    // would put two primaries on one screen.
+    // would put a filled act on a Desk that has none.
     const roster = page.getByTestId("desk-roster");
     await expect(roster).toBeVisible({ timeout: COLD });
     const rosterActs = page.locator(
@@ -174,18 +180,38 @@ test.describe("Inked Instruments action visibility", () => {
       ),
     ).toHaveCount(0);
 
-    // R143 — a card for a claim, a line for the rest. Both halves carry the
-    // same one act per job at a real 44px target, and the region still elects
-    // no leader.
-    const firstCard = roster.locator("[data-claim-card]").first();
+    // US-28 S3 — Today's cards over the ledger of the rest. A Today line's act
+    // sits in the Day Sheet's own region at a real 44px target, and that
+    // region elects no leader either.
+    const todayActs = page.locator(
+      '[role="group"][data-action-region="day-sheet"]',
+    );
+    await expect(todayActs).toHaveCount(1, { timeout: COLD });
+    await expect(
+      todayActs.locator(
+        '[data-action-variant="primary"], [data-action-variant="inked"]',
+      ),
+    ).toHaveCount(0);
+    const firstCard = todayActs.locator("[data-desk-card]").first();
     await expect(firstCard).toBeVisible({ timeout: COLD });
-    const rosterAction = firstCard.locator('[data-action-key^="roster-"]');
-    await expect(rosterAction).toHaveCount(1, { timeout: COLD });
-    await expect(rosterAction).toContainText(ROSTER_ACTION, { timeout: COLD });
-    await expectMinTarget(rosterAction);
+    const todayAction = firstCard
+      .locator(
+        '[data-action-key^="day-sheet-"]:not([data-action-key="day-sheet-not-today"]):not([data-action-key="day-sheet-undo"])',
+      )
+      .first();
+    // A Today act is named for its line's need and its job ("Record payment —
+    // Chen Residence"); the roster's act vocabulary is the ledger's, below.
+    await expect(todayAction).toHaveAttribute("aria-label", / — .+$/, {
+      timeout: COLD,
+    });
+    await expect(todayAction).toContainText(/\S/);
+    await expectMinTarget(todayAction);
 
-    // The at-rest half's act is the same instrument at the same floor.
-    const firstRow = roster.locator("[data-ledger-row]").first();
+    // The ledger's act is the same instrument at the same floor, on a row she
+    // carries (a row with others or coming back prints none).
+    const firstRow = roster
+      .locator('[data-ledger-row]:has([data-action-key^="roster-"])')
+      .first();
     await expect(firstRow).toBeVisible({ timeout: COLD });
     const ledgerAction = firstRow.locator('[data-action-key^="roster-"]');
     await expect(ledgerAction).toHaveCount(1, { timeout: COLD });
@@ -200,8 +226,11 @@ test.describe("Inked Instruments action visibility", () => {
     await page.goto("/library", { waitUntil: "domcontentloaded" });
     await expectInlinePrimary(page, "room-head", "Capture");
 
+    // US-28 S10b (SQ-825, uplift (c) area 4, U-Q13): People has no filled
+    // act; Add contact is a secondary (people-room.tsx), so the head claims
+    // no leader and the one act still holds the 44px floor.
     await page.goto("/people", { waitUntil: "domcontentloaded" });
-    await expectInlinePrimary(page, "room-head", "Add contact");
+    await expectInlineQuietAct(page, "room-head", "add-person", "Add contact");
 
     // The Drafting Room claims no primary, and has not since f74e20b88
     // ("legacy send retirement"): a project-bound furnishing draft now reaches
@@ -247,23 +276,21 @@ test.describe("Inked Instruments action visibility", () => {
     );
     await expect(bar).toContainText(/In hand|Today/);
 
-    // The head keeps the act, at the same one-primary-per-region contract
+    // The head keeps the act, quiet (US-28 S0 F1), at the same 44px target
     // the desktop walk asserts.
-    const headAct = await expectInlinePrimary(
+    const headAct = await expectInlineQuietAct(
       page,
       "desk-head",
+      "capture-lead",
       "Record an inquiry",
     );
 
     // The head act is the FIRST thing on this route, so under `next dev` a
     // press can land on server markup whose handler has not attached yet and
-    // be silently lost. The roster's jobs only exist once React has run and
+    // be silently lost. The Desk's jobs only exist once React has run and
     // its query resolved, so waiting on one is the hydration barrier.
     await expect(
-      page
-        .getByTestId("desk-roster")
-        .locator("[data-claim-card], [data-ledger-row]")
-        .first(),
+      page.locator("[data-desk-card], [data-ledger-row]").first(),
     ).toBeVisible({ timeout: COLD });
 
     // Regression: the first client-journey form must remain usable without
@@ -321,10 +348,7 @@ test.describe("Inked Instruments action visibility", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/desk", { waitUntil: "domcontentloaded" });
     await expect(
-      page
-        .getByTestId("desk-roster")
-        .locator("[data-claim-card], [data-ledger-row]")
-        .first(),
+      page.locator("[data-desk-card], [data-ledger-row]").first(),
     ).toBeVisible({ timeout: COLD });
     await expect
       .poll(() =>

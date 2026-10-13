@@ -194,11 +194,9 @@
   --wash-golden-still: rgba(232, 197, 71, 0.18);
   --wash-terracotta-still: rgba(212, 160, 144, 0.12);
 
-  /* — The Life Review (R126): the one depth token —
-     D4 amended: one token, spent at exactly three sites (the margin chips, the
-     open ledger sheet, the studio drawer) and nowhere else. shadow-gate.test.ts
-     holds the budget at the CSS level, which the D4 ESLint rules cannot reach. */
-  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, 0.08);
+  /* R126's one depth token (`--elevation-sheet`) is retired (US-28 S1, V20
+     U-Q12; house sheet §G-2): depth is stock, edge and veil. shadow-gate.test.ts
+     holds the stylesheet half of zero at the CSS level. */
 
   /* — Animation Tokens — */
   --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
@@ -352,13 +350,6 @@
 }
 
 /* ===== The Life Review (R126) ===================================== */
-
-/* D4 as amended: the ONE depth declaration in this stylesheet, and the only
-   one shadow-gate.test.ts permits. Three sites spend it — the margin chips,
-   the open ledger sheet, the studio drawer. */
-.doc-elevated {
-  box-shadow: var(--elevation-sheet);
-}
 
 /* Three rule weights, three ranks. The strong rule is the double rule: the
    charcoal line the token holds, plus the fainter line under it. */
@@ -572,15 +563,29 @@
    container query, which Tailwind 3 cannot write; type and colour stay on the
    components as classes. ───────────────────────────────────────────────────── */
 
+/* US-28 S0 F2 — each Desk section closes on its own --rule-mid, every rule
+   runs the full measure, and the spacing sits on the 24px module (48 under
+   the header's double rule · 72 between sections · 24 above a group · 12/12
+   a row). The eyebrow (SectionEyebrow) carries no rule of its own. */
+.day-sheet,
+.desk-roster {
+  padding-bottom: 24px;
+  border-bottom: var(--rule-mid);
+}
+.desk-roster { margin-top: 72px; }
+@media (max-width: 599px) {
+  .desk-roster { margin-top: 48px; }
+}
 .day-sheet-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px 24px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--text-primary);
 }
+/* The action group is a flex row; without this the list shrinks to its
+   content and its hairlines stop short of the head rule. */
+.day-sheet-lines { width: 100%; }
 .day-sheet-scope {
   display: flex;
   align-items: baseline;
@@ -592,7 +597,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 8px 40px;
-  padding: 16px 0 15px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--doc-ink-border);
 }
 .day-sheet-line > p { max-width: 64ch; }
@@ -602,21 +607,21 @@
   justify-content: flex-end;
   gap: 16px;
 }
-.day-sheet-block { margin-top: 28px; }
+.day-sheet-block { margin-top: 24px; }
 .day-sheet-waiting {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 4px 24px;
-  padding: 11px 0 10px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--doc-ink-border);
   overflow-wrap: anywhere;
 }
-/* 390 — the sheet stacks: each act is a full-width row under its sentence. */
+/* 390 — the sheet stacks: the acts sit under the sentence, and the act and
+   Not today share one row when they fit (F3), wrapping when they do not. */
 @media (max-width: 639px) {
   .day-sheet-line { grid-template-columns: minmax(0, 1fr); }
-  .day-sheet-acts { flex-direction: column; align-items: stretch; gap: 0; }
-  .day-sheet-acts .da-act { width: 100%; justify-content: flex-start; }
+  .day-sheet-acts { flex-wrap: wrap; justify-content: flex-start; gap: 0 16px; }
   .day-sheet-waiting { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -634,7 +639,7 @@
   grid-template-columns: 220px 96px minmax(200px, 1fr) 132px 170px;
   align-items: baseline;
   column-gap: 20px;
-  padding: 11px 0 10px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--doc-ink-border);
 }
 .desk-ledger-row [data-ledger-cell='value'],
@@ -1932,25 +1937,6 @@ html:has([data-document-shell]) {
   --clay-ink: #7C5E30;
   --terracotta-ink: #9C5340;
 
-  /* — PR-v · the state pigments, by their house-sheet names —
-
-     The People room prints every state as ONE BORDERED WORD in one of four
-     pigments (direction §3.8, SPEC §2.2's `.word--*` rules): sage for what is
-     current, golden for what is pending, terracotta for what is blocked, and
-     the hairline + faint ink for what is dormant. The four pairs live in
-     @patina/types' STATE_WORD_PIGMENTS as `var(--sage)` / `var(--sage-ink)`
-     and so on, so these names must resolve here or the word prints unpigmented.
-
-     Base pigments alias the shipped `--color-*` values. The two inks are
-     LITERALS for the same reason --clay-ink above is one. --golden is aliased
-     rather than named `--golden-hour`, because the house sheet and the
-     specimens both spend the short name. */
-  --sage: var(--color-sage);
-  --golden: var(--color-golden-hour);
-  --terracotta: var(--color-terracotta);
-  --sage-ink: #5F6B57;
-  --golden-ink: #79651E;
-
   /* PR-v — the missing companion. --color-dusty-blue (#8B9CAD, hue 210°) is a
      material pigment: it paints the GC's avatar and role badge and reads 1.9:1
      on paper, so it was never legible AS TEXT and every site that wanted a
@@ -2202,3 +2188,864 @@ html:has([data-document-shell]) {
   color: var(--sheet-ink-muted);
 }
 .studio-note > p { max-width: 56ch; }
+
+/* ═══ US-28 S1 system ══════════════════════════════════════════════════════
+   The shared surface every US-28 slice consumes (artifacts/portal-uplift-
+   2026-10-12/synthesis/uplift.md (b); house sheet §G). The class names and
+   rules follow specimens/shared.css. Area slices never edit this block; they
+   add their own fenced block named after the slice.
+
+   Where this block departs from shared.css, and why:
+   - A stage class is matched as a CLASS (`[class^="st-"]`, `[class*=" st-"]`),
+     not as the substring `st-`, which Tailwind's list-none, last-of-type and
+     first-letter all contain.
+   - The act is the portal's DocumentAction (`.da-act`), so the specimens'
+     `.act` tiers are not copied and `.lact` addresses `.da-act`.
+   - No `.group`: Tailwind's `group` marker is on dozens of elements here.
+   - `.name` keeps the one focus ring wherever it stands; a card draws it on
+     its upper block instead.
+   - `.plate img` fills the mat as `.plate svg` does: the portal's plates are
+     photographs and drawings, not the specimens' vector stand-ins.
+   - No dark rules. Dark is documented only (V20 U-Q9; house sheet §G-4):
+     card edge #77736E, lift #1C1A17, veil rgba(0, 0, 0, .60), note edge
+     2px solid #B39572, and the six stage edges --tab-brief-edge #7D9EC0,
+     --tab-discovery-edge #5FA08F, --tab-direction-edge #73A374,
+     --tab-proposal-edge #A3A75C, --tab-project-edge #B98F5A and
+     --tab-install-edge #CC7A70, which a dark set spends under the stage
+     names. No light value is written for them: in light the edge is --tab-*.
+   - No shadow anywhere (V20 U-Q12): depth is the order of the stocks, the
+     weight of the edge, and the veil. */
+:root {
+  /* the one boundary grey, by its house short name. Every Card and sheet
+     frame (§G-1); never a ledger row, never on --rail (2.62:1). */
+  --card-edge: var(--color-card-edge);
+  /* L3: the card whose sheet is open. White means "working", here only. */
+  --paper-lift: var(--bg-surface);
+  /* L4: the veil under every sheet, named from DocSheet's old literal. */
+  --veil: rgba(20, 18, 16, 0.55);
+  /* one width per form: a card's or title block's stage rule, a row's tick */
+  --edge-stage: 3px;
+  --tick-stage: 2px;
+  /* the one non-stage note edge (a hand-off, a quoted client word) */
+  --edge-note: 2px solid var(--oak);
+  /* the house short name the specimens spend for the clay ornament */
+  --clay: var(--color-clay);
+}
+
+/* ——— type: §G-7 adds the ledger-row name step ——— */
+.t-d4 { font-family: var(--font-display); font-size: 17px; line-height: 24px; font-weight: 500; letter-spacing: 0; }
+
+/* ——— the eyebrow and its ornament (Section, Card, Empty state) ——— */
+.eb { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-family: var(--font-meta); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.orn { width: 34px; height: 12px; flex: none; fill: none; stroke: var(--clay); stroke-width: 1.4; }
+
+/* ——— (b)7 Stage edge: the colour and the still wash. Only on a unit that
+   stands for a job; the stage word always prints in ink beside it. ——— */
+.st-brief { --st: var(--tab-brief); --wash: var(--wash-brief-still); }
+.st-discovery { --st: var(--tab-discovery); --wash: var(--wash-discovery-still); }
+.st-direction { --st: var(--tab-direction); --wash: var(--wash-direction-still); }
+.st-proposal { --st: var(--tab-proposal); --wash: var(--wash-proposal-still); }
+.st-project { --st: var(--tab-project); --wash: var(--wash-project-still); }
+.st-install { --st: var(--tab-install); --wash: var(--wash-install-still); }
+.tick { position: relative; padding-left: 14px; }
+.tick:is([class^="st-"], [class*=" st-"])::before { content: ''; position: absolute; left: 0; top: 0; width: var(--tick-stage); height: 24px; background: var(--st); }
+.title-rule:is([class^="st-"], [class*=" st-"]) { border-left: var(--edge-stage) solid var(--st); padding-left: 16px; }
+
+/* ——— (b)6 Header line: one 44px row on --paper, then the double rule ——— */
+.hline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 24px; min-height: 44px; padding: 24px 0 12px; }
+.hline-l { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; min-width: 0; }
+.hline-r { display: flex; flex-wrap: wrap; align-items: center; gap: 0 20px; }
+.rule-strong { height: 6px; border-top: var(--rule-strong); border-bottom: 1px solid var(--doc-ink-border); margin-bottom: 48px; }
+@media (max-width: 599px) { .rule-strong { margin-bottom: 24px; } }
+
+/* ——— (b)1 Section: eyebrow, optional title, body, its own closing rule.
+   Never a box; never inside a card or a sheet. ——— */
+.section { padding-bottom: 24px; border-bottom: var(--rule-mid); }
+.section + .section { margin-top: 72px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; margin-bottom: 12px; }
+.sec-head .eb { color: var(--text-primary); }
+.sec-title { margin-bottom: 12px; }
+@media (max-width: 599px) { .section + .section { margin-top: 48px; } }
+.filters { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; color: var(--text-muted); }
+.filters button { min-height: 44px; min-width: 44px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.filters button[aria-pressed="true"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.filters button:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* ——— (b)2 Card, L2: a --paper-doc face, a 1px --card-edge, a 2px radius;
+   a job card's left side is the stage rule. Lifted (L3) while its sheet is
+   open. At most six per Section; the rest are ledger rows beneath. ——— */
+.cards-wrap { container-type: inline-size; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch; }
+@container (max-width: 899px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 599px) { .cards { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
+.card { display: flex; flex-direction: column; min-width: 0; padding: 16px 20px 4px 18px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+.card:is([class^="st-"], [class*=" st-"]) { border-left: var(--edge-stage) solid var(--st); }
+.card:hover { background-image: linear-gradient(var(--bg-hover), var(--bg-hover)); }
+.card:is([class^="st-"], [class*=" st-"]):hover { background-image: linear-gradient(var(--wash), var(--wash)); }
+.card.is-lifted { background: var(--paper-lift); border-top-color: var(--ink-faint); border-right-color: var(--ink-faint); border-bottom-color: var(--ink-faint); }
+.card.is-lifted:not([class^="st-"]):not([class*=" st-"]) { border-left-color: var(--ink-faint); }
+.card-up { position: relative; display: flex; flex-direction: column; border-radius: 2px; }
+.card-up:has(.name:focus-visible), .card-up.is-focus { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.name { color: var(--text-primary); text-decoration: underline; text-decoration-color: var(--oak); text-decoration-thickness: 1px; text-underline-offset: 5px; }
+.name:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.card-up .name { outline: none; }
+.card-up .name::after { content: ''; position: absolute; inset: 0; }
+.card:hover .name { text-decoration-color: var(--clay); }
+.name-h { margin-top: 8px; }
+.person { margin-top: 4px; color: var(--text-muted); }
+.lines { display: flex; flex-direction: column; flex: 1; margin-top: 12px; }
+.ln-item { display: flex; flex-direction: column; }
+.ln-item + .ln-item { margin-top: 12px; padding-top: 12px; border-top: var(--rule-hair); }
+.ln-item:last-child { flex: 1; }
+.ln-item:last-child .foot { margin-top: auto; }
+.line { color: var(--text-muted); }
+.settled .line { color: var(--text-faint); }
+.od { color: var(--terracotta-ink); }
+.foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; min-height: 44px; margin-top: 8px; margin-left: -6px; }
+/* §G-10's one exception: a Section of Cards that empties keeps one frame. */
+.card-empty { padding: 24px 20px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+
+/* ——— plate and caption (A10): an image-led unit in a browsed collection.
+   The plate's 1px --card-edge is a mat, not a card: no fill, padding or box. ——— */
+.plates-wrap { container-type: inline-size; }
+.plates { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+@container (max-width: 899px) { .plates { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 359px) { .plates { grid-template-columns: minmax(0, 1fr); } }
+.plate { display: block; width: 100%; aspect-ratio: 3 / 2; border: 1px solid var(--card-edge); border-radius: 3px; background: var(--paper-doc); overflow: hidden; }
+.plate svg, .plate img { display: block; width: 100%; height: 100%; }
+.plate img { object-fit: cover; }
+.cap { margin-top: 8px; }
+.cap .name { text-underline-offset: 4px; }
+.cap .t-meta { color: var(--text-subtle); }
+
+/* ——— (b)3 Ledger row: name, sentence, when, one act. One column until its
+   container reaches 900px. Full-measure separators; the group closes on its
+   Section's rule. ——— */
+.ledger { container-type: inline-size; }
+.rows { border-top: 1px solid var(--doc-ink-border); }
+.lrow { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 4px; align-items: baseline; padding: 11px 0 10px; border-bottom: 1px solid var(--doc-ink-border); }
+.lrow:hover { background: var(--bg-hover); }
+.lname { position: relative; }
+.lname .name { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; }
+.lphase, .lwhen { color: var(--text-subtle); }
+.lsent { color: var(--text-muted); }
+.lrow.settled .lsent { color: var(--text-faint); }
+.lact { display: flex; justify-content: flex-start; margin: 0 0 0 -6px; }
+.lact .da-act { width: 100%; }
+.lfig { font-family: var(--font-meta); font-size: 15px; font-variant-numeric: tabular-nums; }
+@container (min-width: 900px) {
+  .lrow { grid-template-columns: 236px 96px minmax(200px, 1fr) 132px 150px; column-gap: 20px; row-gap: 0; }
+  .lrow.plain { grid-template-columns: 236px minmax(200px, 1fr) 132px 150px; }
+  .lwhen, .lact, .lfig { text-align: right; }
+  .lact { justify-content: flex-end; margin: -12px 0; }
+  .lact .da-act { width: auto; }
+}
+
+/* ——— the ink state word: the word is the state (V20 U-Q13). Never a chip,
+   never a pigment. Terracotta-ink only for overdue, blocked or do-not-
+   contact. @patina/types' STATE_WORD_INKS names these three classes. ——— */
+.word { font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
+.word--quiet { color: var(--text-subtle); }
+.word--od { color: var(--terracotta-ink); }
+/* avatars are ink initials (V20 U-Q15); the role is already a word */
+.avatar { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: none; border: 1px solid var(--doc-ink-border); border-radius: 50%; font-family: var(--font-meta); font-size: 12px; color: var(--text-muted); }
+
+/* ——— (b)5 Empty state: the Section's eyebrow, one sentence with its act
+   inline, the Section's close. Never dashed, never boxed (but §G-10). ——— */
+.empty-t { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 20px; line-height: 1.35; color: var(--text-primary); max-width: 56ch; }
+.empty-s { color: var(--text-subtle); }
+
+/* ——— (b)4 Sheet frame, popover, modal: L4, L4′, L5. One stock for every
+   sheet; never a sheet over a sheet. DocSheet is the sheet primitive and
+   wears the same stock; these classes serve frames DocSheet does not draw. ——— */
+.veil { background: var(--veil); }
+.sheet { width: 100%; max-width: 640px; padding: 28px 40px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; color: var(--text-primary); }
+.sheet.wide { max-width: 880px; }
+.modal { width: 100%; max-width: 480px; padding: 24px; background: var(--paper-doc); border: 1px solid var(--text-primary); border-radius: 2px; color: var(--text-primary); }
+.popover { display: inline-block; min-width: 240px; padding: 12px 16px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+.popover li { border-bottom: 1px solid var(--doc-ink-border); }
+.popover li:last-child { border-bottom: 0; }
+.popover a { display: flex; align-items: center; min-height: 44px; text-decoration: none; color: var(--text-primary); }
+.popover a:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.sh-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 16px; padding-bottom: 8px; border-bottom: var(--rule-hair); }
+.sh-title { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-family: var(--font-meta); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
+.sh-ic { width: 16px; height: 16px; fill: none; stroke: var(--clay-ink); stroke-width: 1.2; flex: none; }
+.sh-body { margin-top: 20px; }
+.sh-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 20px; margin-top: 16px; padding-top: 8px; border-top: var(--rule-hair); margin-left: -6px; }
+@media (max-width: 599px) {
+  .sheet, .sheet.wide { padding: 24px 16px; }
+}
+
+@media (forced-colors: active) {
+  .card:is([class^="st-"], [class*=" st-"]) { border-left-color: CanvasText; }
+  .tick:is([class^="st-"], [class*=" st-"])::before { background: CanvasText; }
+  .title-rule:is([class^="st-"], [class*=" st-"]) { border-left-color: CanvasText; }
+}
+/* ═══ end US-28 S1 system ══════════════════════════════════════════════════ */
+
+/* US-28 S11 boards ═════════════════════════════════════════════════════════
+   The boards index (`/boards`) and a job's boards tab (`/doc/[id]/boards`),
+   after specimens/boards-1440 frames p1 and p2. Places the S1 components;
+   restyles none. The status filters are links (the filter lives in
+   `?status=`), so the S1 `.filters button` grammar is spelled for `a`:
+   underline words, the current one in ink and underlined, never dotted. */
+.s11-filters { margin-bottom: 48px; }
+.s11-filters a { font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); text-decoration: none; }
+.s11-filters a:hover { color: var(--text-primary); }
+.s11-filters a[aria-current="page"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.s11-filters a:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+@media (max-width: 599px) { .s11-filters { margin-bottom: 24px; } }
+.s11-eb-job { color: var(--text-primary); }
+.s11-hit { display: inline-flex; align-items: center; min-height: 44px; }
+.s11-cap-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.s11-cap-sentence { margin-top: 4px; color: var(--text-muted); }
+.s11-tab-job { margin-bottom: 4px; }
+.s11-first { margin-top: 24px; }
+[data-board-card] .plate { margin-top: 12px; }
+.s11-card-state { margin-top: 4px; }
+.s11-after-cards { margin-top: 24px; }
+.s11-lname-text { display: inline-flex; align-items: center; min-height: 44px; }
+/* ═══ end US-28 S11 boards ═════════════════════════════════════════════════ */
+
+/* ═══ US-28 S8 money ═══════════════════════════════════════════════════════
+   Area 8 (uplift.md (c)): Accounts, the Invoice folio in place, the Order
+   register. Built on the S1 block above; nothing here edits it.
+   - The totals are front matter in text, never figure tiles.
+   - The registers are one Section of Ledger rows closing on --rule-mid;
+     state is the ink word (.word); invoices are never Cards.
+   - .money-rows closes on the same hairline it opens on (globals.css
+     .money-rows had a top rule only), and its total row sits under a
+     --rule-mid.
+   - At 390 nothing truncates; the order register's lenses fold behind
+     "Filter". */
+
+/* — Accounts front matter and acts — */
+.money-front { margin: 0 0 4px; }
+.money-front .t-body { color: var(--text-primary); }
+.money-front-sub { margin-top: 2px; color: var(--text-subtle); }
+.money-num { font-variant-numeric: tabular-nums; }
+.money-front-acts { margin: 8px 0 24px -6px; }
+.money-plus { color: var(--clay-ink); }
+
+/* — the register's rows: name, sentence, state and when, figure — */
+.money-register .lname .name { text-align: left; }
+.money-job { color: var(--text-primary); }
+.money-clause { display: block; margin-top: 2px; color: var(--text-muted); }
+.money-row-act { display: block; margin: 4px 0 -8px -6px; }
+@container (min-width: 640px) {
+  .money-register .lrow.plain { grid-template-columns: 180px minmax(0, 1fr) 180px 112px; column-gap: 16px; row-gap: 0; }
+  .money-register .lwhen, .money-register .lfig { text-align: right; }
+}
+
+/* — the folio, in place: "← Accounts" heads the one sheet — */
+.money-back { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 0 6px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); text-decoration: underline; text-decoration-color: var(--oak); text-decoration-thickness: 1px; text-underline-offset: 5px; }
+.money-back:hover { color: var(--text-primary); }
+.money-back:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.money-folio-head { margin-bottom: 4px; }
+.money-folio-sec { margin-top: 24px; }
+.money-folio-sec + .money-folio-sec { margin-top: 40px; }
+
+/* — money rows close (they opened on a top rule only) — */
+.money-rows { border-bottom: 1px solid var(--hairline-strong); padding-bottom: 0; }
+.money-rows > .money-row { padding: 10px 0; margin: 0; border-bottom: var(--rule-hair); }
+.money-rows > .money-row:last-child { border-bottom: 0; }
+.money-rows > .money-row > :last-child { flex: none; text-align: right; }
+.money-rows > .money-row.money-total { border-top: var(--rule-mid); font-weight: 500; }
+
+/* — the order register: two labelled lines of underline words — */
+.money-head-acts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 16px; }
+.money-filter-toggle { display: none; min-height: 44px; min-width: 44px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); text-decoration: underline; text-decoration-color: var(--oak); text-underline-offset: 6px; }
+.money-filter-toggle:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.money-flines { margin-bottom: 16px; }
+.money-fline { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: baseline; column-gap: 12px; }
+.money-fline + .money-fline { border-top: var(--rule-hair); }
+.money-fline-l { color: var(--text-subtle); text-transform: uppercase; }
+@media (max-width: 599px) {
+  .money-filter-toggle { display: inline-flex; align-items: center; }
+  .money-flines:not([data-open]) { display: none; }
+  .money-fline { grid-template-columns: minmax(0, 1fr); }
+}
+/* ═══ end US-28 S8 money ══════════════════════════════════════════════════ */
+
+/* US-28 walk-fix money ═════════════════════════════════════════════════════
+   SQ-858, from the SQ-834 walk (WALK §2, §8) against money-p2 and money-p3.
+   - The folio's money rows keep label and figure apart at every width: the
+     §A14 <520px rule set them display:block, so "SUBTOTAL" ran into
+     "$9,200.00". A figure that wraps keeps to the right rule.
+   - The record-payment sheet: the amount field runs the sheet's width, and the
+     foot carries Put back beside the one filled act. */
+.money-folio-sec .money-rows > .money-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; }
+.money-folio-sec .money-rows > .money-row > :last-child { margin-left: auto; }
+[data-act-record-payment] .field-money { display: block; }
+[data-act-record-payment] .field-money .field-control { max-width: none; }
+.rec-foot { justify-content: space-between; gap: 8px 20px; margin: 16px 0 0 -6px; padding-top: 8px; border-top: var(--rule-hair); }
+/* end US-28 walk-fix money */
+
+/* ═══ US-28 S9 papers ═══════════════════════════════════════════════════════
+   Area 7, Making papers (uplift.md (c) 7; specimens/papers-{1440,390}.html):
+   drafting, compose and the ceremony. Facets are Cards on the shared edge
+   with one ink state word, and the open facet keeps the clay ring; the
+   client's copy is laid paper (L1) on the --paper ground; progress is words;
+   each movement is an S1 Section; a quoted client word takes --edge-note;
+   facts are a dl. Zero shadows. */
+.papers-ground { min-height: 100%; margin-bottom: -96px; padding-bottom: 96px; background: var(--paper); }
+@media (min-width: 1180px) { .papers-ground { margin-bottom: -84px; padding-bottom: 84px; } }
+.papers-tblock { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; min-width: 0; overflow-wrap: anywhere; }
+.papers-drafted { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: -24px 0 24px; }
+.papers-drafted-words { flex: 1 1 240px; min-width: 0; color: var(--text-muted); }
+.papers-saving { color: var(--text-subtle); text-transform: uppercase; }
+.papers-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 48px; padding-bottom: 48px; }
+@media (min-width: 1440px) { .papers-grid { grid-template-columns: minmax(0, 1fr) 400px; gap: 56px; align-items: start; } }
+.papers-facets { display: flex; flex-direction: column; gap: 16px; }
+.papers-meta { color: var(--text-subtle); text-transform: uppercase; }
+.papers-closing { margin-top: 32px; color: var(--text-muted); font-style: italic; }
+.papers-copy-eb { margin-bottom: 12px; }
+.papers-copy { padding: 28px 32px 32px; background: var(--paper-doc); color: var(--text-primary); }
+
+/* the facet: an S1 Card whose upper block is the toggle */
+.card.facet { padding: 0; }
+.card.facet:hover { background-image: none; }
+.card.facet.is-open { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.facet-toggle { display: flex; flex-direction: column; align-items: flex-start; width: 100%; min-height: 44px; padding: 16px 20px 14px 18px; border-radius: 2px; text-align: left; background: transparent; }
+.facet-toggle:hover { background: var(--bg-hover); }
+.facet-toggle:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.facet-toggle:hover .name { text-decoration-color: var(--clay); }
+.facet-toggle .line { margin-top: 4px; overflow-wrap: anywhere; }
+.facet-body { min-width: 0; margin: 0 20px 0 18px; padding: 12px 0 16px; border-top: var(--rule-hair); }
+
+/* the client's word on the note edge; the facts as a dl */
+.papers-note { border-left: var(--edge-note); padding: 4px 0 4px 16px; }
+.papers-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: baseline; }
+.papers-facts dt { font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.papers-facts dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+
+@media (max-width: 599px) {
+  .papers-drafted { margin: -8px 0 16px; }
+  .papers-facets { gap: 12px; }
+  .papers-copy { padding: 24px 16px; }
+  .facet-toggle { padding: 14px 16px 12px 14px; }
+  .facet-body { margin: 0 16px 0 14px; }
+}
+@media (forced-colors: active) {
+  .card.facet.is-open { outline-color: Highlight; }
+}
+/* ═══ end US-28 S9 papers ═══════════════════════════════════════════════════ */
+
+/* US-28 S10 rooms ═══════════════════════════════════════════════════════════
+   Measured rooms, the room page and the room file (uplift.md (c) area 3;
+   specimens/rooms-{1440,390}.html). Area-local only: the shared classes are
+   the S1 block's. */
+.room-fig { margin-top: 12px; }
+.room-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: baseline; margin: 12px 0 0; padding-bottom: 16px; }
+.room-facts dt { font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.room-facts dd { margin: 0; color: var(--text-primary); overflow-wrap: break-word; }
+.room-pl-wall { fill: none; stroke: var(--text-primary); stroke-width: 1.2; stroke-linejoin: round; }
+.room-pl-thin { fill: none; stroke: var(--text-primary); stroke-width: 1; }
+.room-pl-sil { fill: none; stroke: var(--ink-faint); stroke-width: 1; }
+.room-pl-hatch { fill: none; stroke: var(--ink-faint); stroke-width: 1; stroke-opacity: .5; }
+.rooms-job-name { display: inline-flex; align-items: center; min-height: 44px; }
+.rooms-rows { margin-top: 24px; }
+.room-ctx { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; margin: -24px 0 48px; color: var(--text-muted); }
+.room-ctx .name { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; }
+.room-note { max-width: 64ch; color: var(--text-muted); }
+@media (max-width: 599px) { .room-ctx { margin: -12px 0 24px; } }
+/* end US-28 S10 rooms */
+
+/* US-28 S10 people ═══════════════════════════════════════════════════════════
+   Area 4 of the uplift (artifacts/portal-uplift-2026-10-12/synthesis/uplift.md,
+   specimens/people-{1440,390}.html). The directory is Sections of Ledger rows
+   (.section/.ledger/.lrow from the S1 block); state is the S1 ink word. These
+   rules only seat People's own pieces inside that grammar. The PR-v pigment
+   names (--sage, --golden, --terracotta, --sage-ink, --golden-ink) were retired
+   here: People was their last runtime user. */
+.people-notice {
+  border-left: var(--edge-note);
+  padding: 4px 0 4px 16px;
+  margin-bottom: 16px;
+}
+.people-sections {
+  margin-top: 24px;
+}
+.people-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.people-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 4px;
+}
+.people-row[data-highlighted] {
+  background: var(--bg-hover);
+}
+.people-seats {
+  grid-column: 1 / -1;
+  padding-left: 44px;
+}
+.people-seats[hidden] {
+  display: none;
+}
+.people-avatar-firm {
+  border-radius: 2px;
+}
+/* SQ-877 N2 — the record's words stand on the Header line's x, as people-p2
+   lays them: the paper face reaches out past the measure by exactly its own
+   inset (the measure's gutter below 1424px, the specimen's 64px above it). */
+.people-record {
+  --people-record-inset: 32px;
+  padding: 48px var(--people-record-inset);
+  margin: 12px calc(-1 * var(--people-record-inset)) 0;
+}
+@media (min-width: 1424px) {
+  .people-record { --people-record-inset: 64px; }
+}
+@media (max-width: 1179px) {
+  .people-record { --people-record-inset: 24px; }
+}
+@media (max-width: 639px) {
+  .people-record { --people-record-inset: 16px; }
+}
+.people-record-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin: 0 0 48px;
+}
+.people-job-row {
+  border-bottom: 1px solid var(--doc-ink-border);
+  padding: 8px 0;
+}
+@media (max-width: 599px) {
+  .people-record {
+    padding-block: 24px;
+  }
+  .people-seats {
+    padding-left: 0;
+  }
+}
+/* end US-28 S10 people ═══════════════════════════════════════════════════════ */
+
+/* US-28 people ════════════════════════════════════════════════════════════════
+   SQ-862 (Kody: "match specimen fully"). The search as one house field, the
+   filter words and the visibility lens on one wrapping line, the Engine's
+   line, and the ⌘K chord only for a fine pointer. specimens/people-*.html. */
+.people-search { margin-bottom: 12px; }
+.people-search .eb { margin-bottom: 8px; }
+.people-search-row { display: flex; align-items: center; gap: 8px; }
+.people-search-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  background: var(--paper-lift);
+  color: var(--text-primary);
+  border: 1px solid var(--card-edge);
+  border-radius: 2px;
+  font: inherit;
+}
+.people-search-field:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.people-filter-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 32px; }
+.people-engine-line { margin: 12px 0 0; max-width: 60ch; color: var(--text-muted); }
+.people-kbd { margin-left: 8px; font-family: var(--font-meta); font-size: 12px; color: var(--text-subtle); }
+@media (pointer: coarse) { .people-kbd { display: none; } }
+/* end US-28 people ════════════════════════════════════════════════════════════ */
+
+/* ═══ US-28 S6 chrome ══════════════════════════════════════════════════════
+   Area 9 (uplift.md (c)): ⌘K, Keys, preferences, help and the Ledgers
+   popover, on the S1 vocabulary. Only what S1 does not already draw. */
+
+/* the house check (specimens/shared.css `.check`): a visually hidden native
+   input, then a 20px box on --paper-doc in the card edge. Never browser blue. */
+.check { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
+.check-input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.check-box { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border: 1px solid var(--card-edge); border-radius: 2px; background: var(--paper-doc); }
+.check-box svg { display: block; width: 14px; height: 14px; fill: none; stroke: var(--text-primary); stroke-width: 1.6; visibility: hidden; }
+.check-input:checked + .check-box svg { visibility: visible; }
+.check-input:focus-visible + .check-box { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.check-input:disabled + .check-box { border-color: var(--doc-ink-border); }
+.check:has(.check-input:disabled) { cursor: default; }
+/* one of several (a radio): the same box, round, with an ink dot */
+.check-box.is-one { border-radius: 50%; }
+.check-box.is-one::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--text-primary); visibility: hidden; }
+.check-input:checked + .check-box.is-one::after { visibility: visible; }
+
+/* a key is a word in ink, not a keycap box */
+.keycap { font-family: var(--font-meta); font-size: 13px; line-height: 20px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-primary); }
+
+/* ⌘K: the one sheet frame, its field at the head, groups of ledger rows.
+   Every row wraps; nothing is ellipsised. */
+.cmd-sheet { display: flex; flex-direction: column; max-height: 76vh; padding: 20px 24px 12px; }
+.cmd-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -8px; padding: 0 8px 4px; }
+.cmd-group { margin-top: 24px; }
+.cmd-row { display: grid; width: calc(100% + 16px); margin: 0 -8px; padding-left: 8px; padding-right: 8px; text-align: left; overflow-wrap: anywhere; }
+.cmd-row.is-active { outline: 2px solid var(--clay-ink); outline-offset: -2px; background: var(--bg-hover); }
+.cmd-note { margin-top: 20px; }
+@media (max-width: 599px) {
+  .cmd-sheet { max-height: 100dvh; padding: 16px 16px 8px; }
+}
+
+/* the Ledgers popover: square, on --paper-doc with the edge (L4′) */
+.popover.ledgers-pop { display: block; min-width: 0; padding: 0; }
+/* ═══ end US-28 S6 chrome ══════════════════════════════════════════════════ */
+
+/* US-28 S7 document */
+/* The Document paper (uplift.md area 2; specimens/document-{1440,390}.html).
+   Each region is a Section that closes on its own --rule-mid, at full
+   measure. The region is the element RegionRule marks (`data-region-rule`),
+   so the close needs no caller to restructure; it is scoped to the paper, so
+   the Desk's own double rule (outside it) is not a region and closes nothing.
+   The double rule stays only where a movement opens (RegionRule
+   weight="strong"). No Cards on the paper body. */
+[data-document-paper] :has(> [data-region-rule]) {
+  padding-bottom: 24px;
+  border-bottom: var(--rule-mid);
+}
+/* The margin's first-touch note is a Card off the paper (L2 on the ground),
+   unclamped: its words and its × stay on one row. */
+.card.doc-margin-card {
+  flex-direction: row;
+}
+/* Below 600px the band no longer holds to its declared 56px: NEXT wraps and its
+   act takes a row of its own (U-Q19), so the band is as tall as its words and
+   publishes no length (D-1). The schedule's pinned glance stands under that
+   declared constant, so there it would slide beneath the band's second line.
+   At phone width the glance yields; the strip it repeats is in flow above. */
+@media (max-width: 599px) {
+  [data-document-shell] section[aria-label='Schedule rule'] {
+    visibility: hidden;
+  }
+}
+/* end US-28 S7 document */
+
+/* ═══ US-28 S10 library ════════════════════════════════════════════════════
+   Area 5 (uplift.md (c); specimens/library-{1440,390}.html). Places the S1
+   components for the Library, its piece page and the style comparisons;
+   restyles none of them. */
+
+/* the search: a full field that never yields its width to the act beside it
+   (the 390 walk clipped it to "P"); the act wraps beneath instead */
+.library-search { padding-top: 24px; }
+.library-search-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+.library-search-field { display: block; flex: 1 1 320px; min-width: 240px; max-width: 640px; min-height: 44px; padding: 10px 12px; background: var(--paper-lift); color: var(--text-primary); border: 1px solid var(--card-edge); border-radius: 2px; font: inherit; font-size: 16px; }
+.library-search-field::placeholder { color: var(--text-subtle); }
+.library-search-field:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.library-search-note { margin-top: 8px; max-width: 640px; color: var(--text-subtle); }
+.library-engine-results { margin-top: 24px; max-width: 640px; padding-top: 16px; border-top: var(--rule-hair); }
+.library-engine-results .eb { margin-bottom: 8px; color: var(--text-primary); }
+@media (max-width: 599px) { .library-search-field { flex-basis: 100%; max-width: none; } }
+
+/* one filter grammar: shelf and type as one row of underline words */
+.library-filters-wrap { margin: 24px 0 48px; padding-top: 4px; border-top: var(--rule-hair); }
+.library-filters { gap: 0 32px; }
+.library-filter-run { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; }
+.library-flabel { font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.library-filters [role="tab"][aria-selected="true"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.library-filters [role="tab"]:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.library-count { color: var(--text-subtle); }
+.library-add { position: relative; margin-left: auto; }
+.library-add-options { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; width: min(260px, calc(100vw - 32px)); }
+@media (max-width: 599px) {
+  .library-filters-wrap { margin: 16px 0 32px; }
+  .library-flabel { flex: 1 1 100%; }
+  .library-add { margin-left: 0; }
+}
+
+/* the shelf: a Section of plates that closes on its own rule */
+.library-shelf:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 4px; }
+.library-shelf-meta { color: var(--text-subtle); }
+.library-shelf-fold { margin: 16px 0 0 -6px; }
+/* SPEC §2.2: plates stay 2-up at 390, where the column is under 360px */
+@container (max-width: 359px) { .library-plates { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; } }
+
+/* plate and caption: the plate is the mat, the caption names piece, maker and job */
+.library-plate { display: flex; flex-direction: column; min-width: 0; }
+.library-plate-mat { display: flex; align-items: center; justify-content: center; }
+.library-plate-mat:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.library-plate-word, .judgment-plate-word { padding: 8px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); text-align: center; }
+.library-hit { display: inline-flex; align-items: center; min-height: 44px; }
+.library-cap-maker, .judgment-cap-maker { display: block; color: var(--text-muted); }
+.library-cap-used { margin-top: 6px; color: var(--text-muted); }
+.library-cap-words { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 6px; }
+.library-cap-words .library-cap-words { margin-top: 0; }
+.library-cap-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin: 4px 0 0 -6px; }
+.library-cap-fold { margin-top: 12px; padding-top: 12px; border-top: var(--rule-hair); }
+
+/* the style comparison: each side is one button, plate and caption */
+.judgment-plate { display: flex; flex-direction: column; min-width: 0; text-align: left; border-radius: 3px; }
+.judgment-plate:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.judgment-plate-mat { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 3; }
+.judgment-plate .cap { display: flex; flex-direction: column; }
+.judgment-plate .name { align-self: flex-start; }
+.judgment-plate:hover .name { text-decoration-color: var(--clay); }
+
+/* the piece page: tags as ink words, facts as a list, "Used on" as ticked rows */
+.piece-tags { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.piece-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: baseline; margin-top: 24px; }
+.piece-facts dt { font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.piece-facts dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+.piece-ready { margin-top: 20px; color: var(--text-muted); }
+.piece-used { margin-top: 48px; }
+.piece-used .tick { display: inline-block; }
+.piece-taught { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 12px; }
+/* ═══ end US-28 S10 library ════════════════════════════════════════════════ */
+
+/* US-28 S12 board room ═════════════════════════════════════════════════════
+   The board room (`/board/[boardId]`) after specimens/boardroom-{1440,390}
+   (SQ-816; SPEC §S12). Places the S1 components; restyles none. The house
+   Header line, the Tools Section (a side column at md and up, one sheet over
+   the veil below md), plate-and-caption items, caption words for state, and
+   lone lines in place of pills. The canvas's own zone, selection-ring and
+   handle drawing lives in @patina/design-system and is not touched here. */
+
+/* ——— the Header line ——— */
+.br-head { padding: 0 16px; background: var(--paper-doc); border-bottom: 1px solid var(--card-edge); }
+@media (min-width: 768px) { .br-head { padding: 0 24px; } }
+.br-hline { padding: 4px 0; gap: 0 24px; }
+.br-hline-l { flex: 1 1 280px; align-items: center; gap: 0 16px; }
+.br-owner { margin: 0; }
+.br-name-wrap { flex: 1 1 220px; min-width: 0; }
+.br-hline-r { gap: 0 16px; }
+.br-check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); cursor: pointer; }
+.br-check input { width: 16px; height: 16px; accent-color: var(--clay-ink); }
+.br-check:has(input:focus-visible) { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* ——— the Tools Section: a side column at md and up ——— */
+.br-tools { flex: none; margin: 0; padding: 16px 20px 24px; border-bottom: 0; background: var(--paper-doc); overflow-y: auto; overscroll-behavior: contain; }
+.br-tools .sec-head { align-items: center; margin-bottom: 4px; }
+.br-tools-group { margin-top: 24px; }
+.br-tools-group--first { margin-top: 8px; }
+.br-tools-group > .eb { margin-bottom: 4px; }
+.br-tools-sub { margin-top: 12px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.br-tool-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin-left: -6px; }
+.br-tool { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 6px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.br-tool:hover:not(:disabled) { color: var(--text-primary); }
+.br-tool[aria-pressed="true"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.br-tool:disabled { opacity: .4; cursor: default; }
+.br-tool:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.br-zoom-tools { display: contents; }
+.br-zoom-word { min-width: 40px; text-align: center; font-family: var(--font-meta); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+/* sources as underline words that wrap (rail tablist) */
+.br-source-tabs { display: flex; flex-wrap: wrap; gap: 0 16px; padding: 0 12px; }
+.br-source-tab { min-height: 44px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.br-source-tab[aria-selected="true"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.br-source-tab:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.br-fb-row { border-bottom: 1px solid var(--doc-ink-border); }
+.br-fb-row:hover { background: var(--bg-hover); }
+
+@media (min-width: 768px) {
+  .br-tools { width: 300px; border-right: 1px solid var(--card-edge); }
+  .br-tools[data-folded="true"] { display: none; }
+  .br-tools-putback { display: none; }
+  .br-tools-act:not(.br-tools-act--folded) { display: none; }
+}
+/* below md: one sheet from the foot over the veil (frame p8) */
+@media (max-width: 767px) {
+  .br-tools { display: none; }
+  .br-tools[data-open="true"] { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; max-height: 85dvh; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); border-top: 1px solid var(--card-edge); }
+  .br-tools-veil { position: fixed; inset: 0; z-index: 65; }
+  .br-tools-fold { display: none; }
+  .br-hline-r { gap: 0 8px; }
+}
+/* Zoom and Fit under the board below md, or with Tools folded (frame p7; CI-02) */
+.br-viewbar { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 12px; background: var(--paper-doc); border-top: 1px solid var(--card-edge); }
+
+/* ——— items: plate and caption (SPEC §S12.2.1) ——— */
+/* R13: the item is at least its saved box; the plate gives up height to the
+   caption down to 40px (MOOD_BOARD_VISUAL.plateMin), then the item grows so
+   the caption prints whole, as Present and the export painter do. The plate
+   is size-contained so a tall photo never sizes its row. */
+.br-item { display: grid; grid-template-rows: minmax(40px, 1fr); grid-auto-rows: auto; height: auto; min-height: 100%; }
+.br-plate { display: flex; flex: 1 1 auto; min-height: 40px; contain: size; align-items: center; justify-content: center; overflow: hidden; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 3px; }
+.br-plate--slot { border-style: dashed; }
+.br-plate-word { padding: 8px; text-align: center; font-family: var(--font-meta); font-size: 12px; line-height: 16px; color: var(--text-subtle); overflow-wrap: anywhere; }
+.br-cap { flex: none; margin-top: 6px; }
+.br-cap-name { display: block; font-family: var(--font-body); font-size: 13px; line-height: 18px; color: var(--text-primary); overflow-wrap: anywhere; }
+.br-cap-meta { display: block; font-family: var(--font-meta); font-size: 12px; line-height: 16px; color: var(--text-subtle); overflow-wrap: anywhere; }
+/* state as caption words: verdict, open directions, the deck caption */
+.br-item-words { display: flex; flex: none; flex-wrap: wrap; align-items: baseline; gap: 0 8px; margin: 4px 0 0; }
+.br-deck-caption { font-family: var(--font-meta); font-size: 12px; line-height: 16px; color: var(--text-muted); overflow-wrap: anywhere; }
+/* Present places the verdict over the plate: a paper ground and a 1px edge */
+.br-verdict--plate { display: inline-block; padding: 2px 6px; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; }
+
+/* ——— the empty board and the lone lines ——— */
+.br-empty { position: absolute; left: 50%; top: 50%; z-index: 5; width: 520px; max-width: calc(100% - 48px); transform: translate(-50%, -50%); }
+.br-line { background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 2px; font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: .04em; color: var(--text-muted); }
+
+/* ——— the job's boards tab: the Card's Present act ——— */
+.s12-card-acts { margin: 8px 0 0 -6px; }
+/* ═══ end US-28 S12 board room ═════════════════════════════════════════════ */
+
+/* US-28 walk-fix board room ═════════════════════════════════════════════════
+   SQ-859 (WALK §6): the Header line closes on the house double rule (no
+   extra hairline under it, and none of the page's 48px below it — the board
+   is right there); the back act keeps its job name on one wrapping line;
+   tool words are tertiary acts, scored at rest; the room's fields wear the
+   house field; Share and Export are the one sheet stock, no shadow; Export's
+   options are rows under a hairline, never edged cards. */
+.br-head { border-bottom: 0; }
+.br-rule { margin-bottom: 0; }
+.br-back { text-align: left; }
+.br-tool { color: var(--color-quiet-ink); }
+.br-tool:not(:disabled) { text-decoration: underline; text-decoration-color: var(--color-aged-oak); text-decoration-thickness: 1px; text-underline-offset: 6px; }
+.br-tool:not(:disabled):hover { text-decoration-thickness: 1.5px; }
+.br-tool[aria-pressed="true"] { text-decoration-color: var(--text-primary); text-decoration-thickness: 1.5px; }
+.br-tool--word { margin-left: -6px; text-align: left; }
+.br-field { min-height: 44px; padding: 10px 12px; font-size: 14px; line-height: 20px; color: var(--text-primary); }
+.br-sheet { box-shadow: none; border-radius: 2px; }
+.br-export-options { border-top: 1px solid var(--doc-ink-border); }
+.br-export-option { display: block; width: 100%; min-height: 44px; padding: 12px 0; text-align: left; border-bottom: 1px solid var(--doc-ink-border); }
+.br-export-option:hover:not(:disabled) { background: var(--bg-hover); }
+.br-export-option:disabled { cursor: wait; opacity: .6; }
+.br-export-option:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+/* SQ-877 N10 — inside the 2px square sheet, every row and act is square at the
+   house 2px too (the option rows, Done, and the sheet's close). */
+.br-export-sheet button, .br-export-option { border-radius: 2px; }
+/* ═══ end US-28 walk-fix board room ═════════════════════════════════════════ */
+
+/* US-28 S7b spec book ═══════════════════════════════════════════════════════
+   The spec book, full uplift (V20 U-Q18; specimens/specbook-{1440,390}.html,
+   SPEC §S7b). One stock: the book stands on --paper; only the printed sheet
+   is --paper-doc. Chapters are trades (00767) and close as Sections on
+   --rule-mid; pieces are ledger rows that unfold in place. This block places
+   the S1 components; it restyles none of them. */
+.sb-ground { min-height: 100vh; background: var(--paper); color: var(--text-primary); }
+.sb-main { max-width: 1200px; margin: 0 auto; padding: 0 24px 72px; overflow-wrap: anywhere; }
+.sb-title-meta { color: var(--text-subtle); }
+.sb-wait { padding-top: 48px; }
+/* the four views as underline words that wrap (424px at 390 today) */
+.sb-tabs { margin: -24px 0 32px; border-bottom: 1px solid var(--doc-ink-border); }
+.sb-tabs button[aria-current="page"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.sb-front { margin-bottom: 40px; max-width: 72ch; }
+.sb-front .word { margin-right: 8px; }
+.sb-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
+.sb-index .eb { margin-bottom: 4px; }
+.sb-index .sb-index-show { margin-top: 24px; }
+.sb-index ol { display: flex; flex-wrap: wrap; gap: 0 20px; }
+.sb-index a { display: inline-flex; align-items: center; min-height: 44px; color: var(--text-primary); text-decoration: underline; text-decoration-color: var(--oak); text-underline-offset: 4px; }
+.sb-index a:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.sb-index .filters { margin-top: 4px; }
+.sb-chapter { scroll-margin-top: 24px; }
+/* a piece: plate where an image exists, the name that opens it, its code */
+.sb-piece { display: flex; align-items: center; gap: 12px; }
+.sb-thumb { width: 72px; flex: none; }
+.sb-name { text-align: left; scroll-margin-top: 96px; }
+.sb-code { display: block; color: var(--text-subtle); }
+.sb-words { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+/* the spec, unfolded under its own row */
+.sb-open { padding: 8px 0 28px; border-bottom: 1px solid var(--doc-ink-border); }
+.sb-spec { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.sb-spec-head { margin-bottom: 12px; }
+.sb-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: baseline; }
+.sb-facts dt { font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.sb-facts dd { color: var(--text-primary); }
+.sb-facts dd .t-meta { display: block; color: var(--text-subtle); }
+.sb-group { margin-top: 24px; padding-top: 12px; border-top: var(--rule-hair); }
+.sb-group-head { margin-bottom: 12px; }
+.sb-label { display: block; font-family: var(--font-meta); font-size: 12px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
+.sb-label :is(input, select, textarea) { text-transform: none; letter-spacing: normal; }
+.sb-help { margin-top: 8px; color: var(--text-subtle); }
+.sb-warn { margin-top: 8px; color: var(--terracotta-ink); }
+.sb-drift { margin-bottom: 16px; }
+.sb-drift .t-body-sm { color: var(--terracotta-ink); }
+.sb-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin: 20px 0 0 -6px; }
+.sb-foot .check { margin-left: 6px; }
+.sb-check-sub { display: block; color: var(--text-subtle); }
+/* the print preview: picks, then the item sheet laid as paper on the ground */
+.sb-picks .eb { margin-bottom: 4px; }
+.sb-picks + .sb-picks { margin-top: 24px; }
+.sb-page { max-width: 640px; padding: 48px 56px 40px; background: var(--paper-doc); color: var(--text-primary); }
+.sb-page-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; color: var(--text-subtle); }
+.sb-page h2 { margin-top: 28px; }
+.sb-sub { margin-top: 6px; color: var(--text-muted); }
+.sb-page .plate { margin-top: 28px; }
+.sb-page .sb-facts { margin-top: 28px; padding-top: 16px; border-top: var(--rule-mid); }
+.sb-note { margin-top: 24px; padding-top: 12px; border-top: var(--rule-hair); white-space: pre-wrap; }
+.sb-page-foot { margin-top: 32px; color: var(--text-subtle); }
+/* issue readiness and the revision register */
+.sb-issue-head { margin-bottom: 40px; }
+.sb-issue-head .t-d2 { margin-top: 4px; }
+.sb-picks-col > .eb { margin-bottom: 4px; }
+.sb-history-head { margin-bottom: 40px; }
+.sb-history-head .t-d2 { margin-top: 4px; }
+.sb-artifact-name { text-transform: capitalize; min-height: 44px; display: flex; align-items: center; }
+.sb-artifact-acts { flex-wrap: wrap; gap: 0 12px; }
+.sb-share { grid-column: 1 / -1; margin-top: 8px; }
+@container (min-width: 900px) {
+  .lrow.sb-issue-row { grid-template-columns: minmax(0, 1fr) 150px; column-gap: 20px; }
+  .lrow.sb-artifact-row { grid-template-columns: 236px minmax(200px, 1fr) minmax(150px, auto); column-gap: 20px; }
+}
+@media (min-width: 900px) {
+  .sb-body { grid-template-columns: 184px minmax(0, 1fr); gap: 48px; }
+  .sb-index ol, .sb-index .filters { display: block; }
+  .sb-index .filters button { display: flex; align-items: center; }
+  .sb-spec.has-plate { grid-template-columns: 320px minmax(0, 1fr); gap: 40px; }
+  .sb-preview { display: grid; grid-template-columns: 296px minmax(0, 1fr); gap: 48px; align-items: start; }
+  .sb-issue { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 48px; align-items: start; }
+}
+@media (max-width: 899px) {
+  .sb-preview > * + *, .sb-issue > * + * { margin-top: 32px; }
+}
+@media (max-width: 599px) {
+  .sb-main { padding: 0 16px 48px; }
+  .sb-tabs { margin: -12px 0 24px; }
+  .sb-front { margin-bottom: 32px; }
+  .sb-page { padding: 28px 16px 24px; }
+}
+/* end US-28 S7b spec book */
+
+/* US-28 walk-fix spec book (SQ-857) — the opened piece's row reads as one
+   with its fold below, untinted, as the specimen draws it (SPEC §S7b p2). */
+.sb-ground .lrow:has(.sb-name[aria-expanded="true"]):hover { background: none; }
+/* end US-28 walk-fix spec book */
+
+/* US-28 S3 desk — Today's cards and the ledger under them. Only the S1
+   tokens and classes; the old .day-sheet-* and .desk-ledger-* rules above are
+   no longer drawn by the Desk. */
+.desk-quiet { margin: 4px 0 20px; max-width: 56ch; }
+.desk-ledger .sub { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin: 24px 0 8px; }
+.desk-ledger .sec-head + .desk-ledger-group .sub { margin-top: 4px; }
+.desk-ledger [data-ledger-section] + [data-ledger-section] { margin-top: 48px; }
+.desk-rest-note { margin-top: 20px; color: var(--text-muted); }
+.desk-loading-frame { height: 120px; border: 1px solid var(--border-subtle); border-radius: 2px; }
+.day-sheet + .desk-ledger { margin-top: 72px; }
+@media (max-width: 599px) { .day-sheet + .desk-ledger { margin-top: 48px; } }
+
+/* US-28 walk-fix chrome ════════════════════════════════════════════════════
+   SQ-856. Above 1180 the Studio Drawer wraps (its doors take a second line
+   when the crumb and the right zone need the room), so the persistent edge is
+   the drawer's own published box, not a constant 60px. The drawer publishes
+   `--doc-drawer-height` on `html` only while it is laid out; 60px is its
+   one-line floor and the contract this edge always carried. */
+@media (min-width: 1180px) {
+  .document-route-shell {
+    --doc-shell-bottom-inset: var(--doc-drawer-height, 60px);
+  }
+  html:has([data-document-shell]) {
+    /* The base rule resolves to 72px here (no bar is published above 1180);
+       it only grows when the drawer wraps taller than that. */
+    scroll-padding-bottom: max(72px, var(--doc-drawer-height, 0px));
+  }
+}
+
+/* US-28 walk-fix header line ═══════════════════════════════════════════════
+   RoomShell's head is the house Header line (the S1 `.hline`); these rules
+   are only what the walk-fix adds around it (SQ-861). */
+@media (max-width: 1179px) { .hline-r.room-acts-wide { display: none; } }
+.room-card-foot { margin-top: auto; }
+/* end US-28 walk-fix header line */
+
+/* US-28 walk-fix paper */
+/* The Document paper (SQ-834 WALK §2; specimens/document-{1440,390}.html
+   `.sec-head .eb`). A region opens on the Section header, the ornament and
+   its name in the mono eyebrow in full ink, open (RegionHead) or folded
+   (FoldSeam) alike. */
+[data-region-head] h2.eb,
+[data-fold-seam] .eb {
+  color: var(--text-primary);
+}
+/* end US-28 walk-fix paper */

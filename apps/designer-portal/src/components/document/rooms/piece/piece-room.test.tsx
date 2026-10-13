@@ -220,6 +220,9 @@ jest.mock("./custom-commission-sheet", () => ({
 jest.mock("../library/deep-analysis-sheet", () => ({
   DeepAnalysisSheet: () => null,
 }));
+jest.mock("../library/piece-used-on", () => ({
+  PieceUsedOn: () => null,
+}));
 
 jest.mock("@/components/products/promotion/promote-to-studio-modal", () => ({
   PromoteToStudioModal: () => null,

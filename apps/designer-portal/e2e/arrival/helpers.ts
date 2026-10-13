@@ -13,10 +13,13 @@ import { WORKFLOW_GATE_PROJECT_ID } from '../helpers/workflow-gate-fixture';
 export const SEEDED_DESIGNER = 'a0000000-0000-0000-0000-000000000004';
 
 /** The workflow-gate fixture's project: its `overdue` gate gives this designer's
- *  Desk a roster line, so this id is both a `/doc/{id}` route AND a
- *  `[data-ledger-row]`/`#roster-line-{id}` row on the Desk (US-25 retired the
- *  claim cards for the Day Sheet and the line roster). */
+ *  Desk a job, so this id is both a `/doc/{id}` route AND a job on the Desk
+ *  (US-25 retired the claim cards for the Day Sheet and the line roster). */
 export const ARRIVAL_PROJECT_ID = WORKFLOW_GATE_PROJECT_ID;
+
+/** The job on the Desk: a Today card while it needs her, a ledger row once it
+ *  does not (US-28 S3). Both name it with a token-writing `data-roster-name`. */
+export const ARRIVAL_JOB_ON_DESK = `[data-desk-card="${ARRIVAL_PROJECT_ID}"], [data-ledger-row="${ARRIVAL_PROJECT_ID}"]`;
 
 /** sessionStorage key the gate reads to opt a real Chromium/WebKit run out of
  *  the `navigator.webdriver` decline (types.ts `KEYS.E2E`, CONTRACT §3 "Test

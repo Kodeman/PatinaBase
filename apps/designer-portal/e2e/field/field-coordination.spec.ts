@@ -59,7 +59,7 @@ test.describe('Field Coordination · People Room add a sub', () => {
     await page.waitForLoadState('networkidle');
 
     // Open the add sheet from the Room header.
-    await page.getByRole('button', { name: 'Add person' }).click();
+    await page.getByRole('button', { name: 'Add contact' }).click();
     // Choose the sub kind (DM-mono page link).
     await page.getByRole('button', { name: 'a sub' }).click();
 

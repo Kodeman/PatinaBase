@@ -17,6 +17,7 @@ const mockUseStudioContacts = jest.fn(() => ({ data: [], isLoading: false }));
 // QA-R2-2: a firm's open jobs come off the SEATS view now — v4 nulls
 // `project_id` on every carded human's directory row.
 const mockUsePeopleSeats = jest.fn(() => ({ data: [] as unknown[] }));
+const mockUseContactRules = jest.fn(() => ({ data: [] as unknown[] }));
 
 jest.mock("@patina/supabase", () => ({
   // W3/P2 — the Compare & merge sheet the duplicate band now opens.
@@ -38,12 +39,21 @@ jest.mock("@patina/supabase", () => ({
   usePeopleSeats: (...args: unknown[]) => mockUsePeopleSeats(...(args as [])),
   // W2 r1 fixes: the Directory now reads the rule ROWS, the routed people's
   // channels and the consent records behind the word (CR-5/6/13/14/22).
-  useContactRules: () => ({ data: [] }),
+  useContactRules: () => mockUseContactRules(),
   useStudioContactChannelsFor: () => ({ data: [] }),
   useChannelConsentRecords: () => ({ data: [] }),
 }));
 
-jest.mock("@/hooks/use-projects", () => ({ useProjects: () => ({ data: [] }) }));
+jest.mock("@/hooks/use-projects", () => ({
+  useProjects: () => ({ data: [] }),
+}));
+
+// US-28 — an Inbound row's act opens the brief when the lead has one on the
+// desk ("Open the brief"); otherwise it opens the record.
+const mockDeskEngagements = jest.fn(() => ({ data: undefined as unknown }));
+jest.mock("@/hooks/use-desk-engagements", () => ({
+  useDeskEngagements: () => mockDeskEngagements(),
+}));
 
 jest.mock("../directory/makers-marketplace", () => ({
   MakersMarketplace: () => <div data-testid="marketplace" />,
@@ -182,6 +192,8 @@ beforeEach(() => {
   mockUseStudioContacts.mockReturnValue({ data: [], isLoading: false });
   mockUsePeopleSeats.mockReset();
   mockUsePeopleSeats.mockReturnValue({ data: [] });
+  mockUseContactRules.mockReturnValue({ data: [] });
+  mockDeskEngagements.mockReturnValue({ data: undefined });
 });
 
 describe("the six chips", () => {
@@ -192,15 +204,36 @@ describe("the six chips", () => {
       within(group)
         .getAllByRole("button")
         .map((b) => b.textContent),
-    ).toEqual(["All contacts", "Clients", "Trades & contractors", "Makers & suppliers", "Studio team", "Companies"]);
+    ).toEqual([
+      // US-28 (people specimen) — the filter words, not chip names.
+      "Everyone",
+      "Clients",
+      "Trades",
+      "Makers",
+      "Studio",
+      "Companies",
+    ]);
   });
 
   it("Everyone is the pressed chip on open", () => {
     renderDirectory([]);
-    expect(screen.getByRole("button", { name: "All contacts" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      screen.getByRole("button", { name: "Everyone" }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("US-28 — the scope lens sits on the one filter line as pressed words", () => {
+    renderDirectory([]);
+    const line = document.querySelector(".people-filter-line") as HTMLElement;
+    const lens = within(line).getByRole("group", {
+      name: "Contact visibility",
+    });
+    expect(
+      within(lens).getByRole("button", { name: "Studio contacts" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(lens).getByRole("button", { name: "My contacts" }),
+    ).toHaveAttribute("aria-pressed", "false");
   });
 
   it("shows the trade line only under Crew and Makers", () => {
@@ -410,5 +443,169 @@ describe("the duplicate band", () => {
       within(band).getByRole("button", { name: "Chidi Okonkwo" }),
     );
     expect(NAV.openPerson).toHaveBeenCalledWith("card-chidi", "contact");
+  });
+});
+
+describe("Inbound first (US-28 S10, uplift (c) area 4)", () => {
+  it("lifts a new own lead into the Inbound Section, ahead of and out of the Directory", () => {
+    renderDirectory([
+      row(),
+      row({
+        person_id: "card-ines",
+        role: "lead",
+        display_name: "Ines Varga",
+        scope: "mine",
+        status_raw: "new",
+        meta: { entity_kind: "person" },
+      }),
+    ]);
+    const inbound = document.querySelector(
+      "[data-people-inbound]",
+    ) as HTMLElement;
+    const directory = document.querySelector(
+      "[data-directory-list]",
+    ) as HTMLElement;
+    expect(
+      within(inbound).getByRole("button", { name: "Ines Varga" }),
+    ).toBeInTheDocument();
+    expect(within(directory).queryByText("Ines Varga")).toBeNull();
+    expect(
+      within(directory).getByRole("button", { name: "Dana Kowalski" }),
+    ).toBeInTheDocument();
+    expect(
+      inbound.compareDocumentPosition(directory) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("US-28 — an inbound row names its kind and opens the brief when the Desk holds one, else the record", () => {
+    const ines = row({
+      person_id: "card-ines",
+      role: "lead",
+      display_name: "Ines Varga",
+      scope: "mine",
+      status_raw: "new",
+      meta: { entity_kind: "person", contact_kind: "client" },
+    });
+    const { unmount } = renderDirectory([ines]);
+    let inboundRow = document.querySelector(
+      '[data-inbound-person="card-ines"]',
+    ) as HTMLElement;
+    expect(inboundRow.querySelector("[data-row-kind]")).toHaveTextContent(
+      /\S/,
+    );
+    fireEvent.click(
+      within(inboundRow).getByRole("button", {
+        name: "Open the record for Ines Varga",
+      }),
+    );
+    expect(NAV.openPerson).toHaveBeenCalledWith("card-ines", "lead");
+    unmount();
+
+    mockDeskEngagements.mockReturnValue({
+      data: { live: [{ lead_id: "card-ines", engagement_id: "eng-ines" }] },
+    });
+    renderDirectory([ines]);
+    inboundRow = document.querySelector(
+      '[data-inbound-person="card-ines"]',
+    ) as HTMLElement;
+    expect(
+      within(inboundRow).getByRole("link", {
+        name: "Open the brief for Ines Varga",
+      }),
+    ).toHaveAttribute("href", "/doc/eng-ines");
+  });
+
+  it("prints no Inbound Section when nothing is new", () => {
+    renderDirectory([row()]);
+    expect(document.querySelector("[data-people-inbound]")).toBeNull();
+  });
+
+  /** A rule ROW, the ground truth the Directory's faces read (CR-5 / CR-22). */
+  function contactRule(over: Record<string, unknown>) {
+    return {
+      id: "rule-ines",
+      subject_type: "person",
+      subject_id: "card-ines",
+      channels_allowed: [],
+      channels_forbidden: [],
+      route_to_person_id: null,
+      contact_hours: null,
+      escalation_by_class: {},
+      reason: null,
+      set_by: null,
+      set_at: "2026-01-01T00:00:00Z",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+      ...over,
+    };
+  }
+
+  const INES = row({
+    person_id: "card-ines",
+    role: "lead",
+    display_name: "Ines Varga",
+    phone: "(612) 555-0177",
+    scope: "mine",
+    status_raw: "new",
+    meta: { entity_kind: "person" },
+    reach_state: "phone_only",
+    consent_status: "opted_out",
+    paper_state: null,
+  });
+
+  it("R8 — a do-not-contact, opted-out inbound lead prints its restriction", () => {
+    mockUseContactRules.mockReturnValue({
+      data: [
+        contactRule({
+          channels_forbidden: ["sms", "email", "mobile", "office"],
+        }),
+      ],
+    });
+    renderDirectory([INES]);
+    const inboundRow = document.querySelector(
+      '[data-inbound-person="card-ines"]',
+    ) as HTMLElement;
+    expect(within(inboundRow).getByText("Opted out")).toBeInTheDocument();
+    const clause = inboundRow.querySelector("[data-contact-rule]");
+    expect(clause).toHaveAttribute("data-contact-rule-blocked", "true");
+    expect(clause).toHaveTextContent(/Never text\./);
+  });
+
+  it("R8 — a routed inbound lead prints its contact rule and the routed person", () => {
+    mockUseContactRules.mockReturnValue({
+      data: [
+        contactRule({
+          channels_forbidden: ["sms"],
+          route_to_person_id: "card-rosa",
+          reason: "Her assistant handles scheduling.",
+        }),
+      ],
+    });
+    mockUseStudioContacts.mockReturnValue({
+      data: [
+        {
+          id: "card-rosa",
+          entity_kind: "person",
+          full_name: "Rosa Delgado",
+          email: "rosa@twincitiesdrywall.com",
+          phone: null,
+          phone_e164: null,
+        },
+      ] as never,
+      isLoading: false,
+    });
+    renderDirectory([{ ...INES, consent_status: "granted" } as never]);
+    const inboundRow = document.querySelector(
+      '[data-inbound-person="card-ines"]',
+    ) as HTMLElement;
+    const clause = inboundRow.querySelector(
+      "[data-contact-rule]",
+    ) as HTMLElement;
+    expect(clause).toHaveTextContent("Her assistant handles scheduling.");
+    expect(clause).toHaveTextContent("Write Rosa Delgado instead.");
+    expect(
+      within(clause).getByRole("link", { name: "rosa@twincitiesdrywall.com" }),
+    ).toHaveAttribute("href", "mailto:rosa@twincitiesdrywall.com");
   });
 });

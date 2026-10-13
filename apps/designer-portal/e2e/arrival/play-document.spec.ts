@@ -20,6 +20,7 @@ import type { Page } from '@playwright/test';
 import { seedWorkflowGateFixture } from '../helpers/workflow-gate-fixture';
 import {
   ARRIVAL_PROJECT_ID,
+  ARRIVAL_JOB_ON_DESK,
   armE2EOptIn,
   installArrivalInstruments,
   arrivalEndedEvents,
@@ -95,7 +96,7 @@ test.describe('Document plays', () => {
       await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
     }
 
-    const rosterLine = page.locator(`[data-ledger-row="${ARRIVAL_PROJECT_ID}"]`);
+    const rosterLine = page.locator(ARRIVAL_JOB_ON_DESK);
     await expect(rosterLine).toBeVisible();
     // arrival-mount.tsx TOKEN_LINKS: the roster line's name link is a
     // token-writing link, a soft client navigation into the Document.
@@ -180,7 +181,7 @@ test.describe('Document plays', () => {
     }
     // Write a real pending token by clicking the roster line's link (this
     // is what a reload must NOT honour).
-    const rosterLine = page.locator(`[data-ledger-row="${ARRIVAL_PROJECT_ID}"]`);
+    const rosterLine = page.locator(ARRIVAL_JOB_ON_DESK);
     await rosterLine.locator('[data-register="act"] a, a[href^="/doc/"]').first().click();
     await page.waitForURL(new RegExp(`/doc/${ARRIVAL_PROJECT_ID}`));
     await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });

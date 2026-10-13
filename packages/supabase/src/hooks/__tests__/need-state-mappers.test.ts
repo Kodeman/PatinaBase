@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapNeedStateRows } from '../use-need-states';
+import { mapNeedStateRows, mapTeammateActedRows } from '../use-need-states';
 import { mapProjectLeadRows } from '../use-project-leads';
 
 describe('mapNeedStateRows', () => {
@@ -20,7 +20,37 @@ describe('mapNeedStateRows', () => {
       waitingOn: null,
       setAsideUntil: null,
       setAsideReason: null,
+      updatedAt: null,
     }]]));
+  });
+
+  const row = (userId: string, actedAt: string | null) => ({
+    user_id: userId,
+    need_key: 'order:one',
+    project_id: 'project-one',
+    deferred_until: null,
+    acted_at: actedAt,
+    waiting_on: null,
+    set_aside_until: null,
+    set_aside_reason: null,
+    updated_at: actedAt,
+  });
+
+  it('keeps only her row when a need key repeats across users, in either order (US-28 S5b)', () => {
+    for (const rows of [[row('me', 'a'), row('jordan', 'b')], [row('jordan', 'b'), row('me', 'a')]]) {
+      const states = mapNeedStateRows(rows, 'me');
+      expect(states.size).toBe(1);
+      expect(states.get('order:one')).toMatchObject({ actedAt: 'a', updatedAt: 'a' });
+    }
+  });
+});
+
+describe('mapTeammateActedRows', () => {
+  it('keeps every teammate who acted on a repeated need key, in either order', () => {
+    const jordan = { user_id: 'jordan', need_key: 'k', acted_at: '09:30' };
+    const sam = { user_id: 'sam', need_key: 'k', acted_at: '08:00' };
+    expect(mapTeammateActedRows([jordan, sam]).get('k')).toEqual([{ userId: 'jordan', actedAt: '09:30' }, { userId: 'sam', actedAt: '08:00' }]);
+    expect(mapTeammateActedRows([sam, jordan]).get('k')).toEqual([{ userId: 'sam', actedAt: '08:00' }, { userId: 'jordan', actedAt: '09:30' }]);
   });
 });
 

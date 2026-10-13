@@ -44,6 +44,11 @@ jest.mock('@patina/supabase', () => ({
   useSubmitValidation: () => ({ mutateAsync: jest.fn(), isPending: false, variables: undefined }),
 }));
 
+jest.mock('../use-piece-usage', () => ({
+  ...jest.requireActual('../use-piece-usage'),
+  usePieceUsage: () => ({ data: {} }),
+}));
+
 jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));

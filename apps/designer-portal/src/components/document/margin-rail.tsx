@@ -329,7 +329,9 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
         tabIndex={openAsSheet ? -1 : undefined}
         data-margin-panel
         data-margin-mode={isFullRail ? 'rail' : 'sheet'}
-        className={`z-[32] hidden border-[var(--color-pearl)] bg-[var(--doc-rail-stock)] motion-safe:transition-transform motion-safe:duration-200 motion-reduce:transition-none min-[1180px]:fixed min-[1180px]:inset-y-0 min-[1180px]:right-0 min-[1180px]:block min-[1180px]:h-screen min-[1180px]:w-[min(360px,calc(100vw-56px))] min-[1180px]:overflow-y-auto min-[1180px]:border-l min-[1440px]:sticky min-[1440px]:top-0 min-[1440px]:col-start-3 min-[1440px]:h-screen min-[1440px]:w-auto min-[1440px]:translate-x-0 min-[1440px]:overflow-y-auto ${
+        // US-28 S7 — the margin sits on the ground (L0), so its notes can be
+        // Cards: --card-edge never stands on --rail (2.62:1).
+        className={`z-[32] hidden border-[var(--color-pearl)] bg-[var(--paper)] motion-safe:transition-transform motion-safe:duration-200 motion-reduce:transition-none min-[1180px]:fixed min-[1180px]:inset-y-0 min-[1180px]:right-0 min-[1180px]:block min-[1180px]:h-screen min-[1180px]:w-[min(360px,calc(100vw-56px))] min-[1180px]:overflow-y-auto min-[1180px]:border-l min-[1440px]:sticky min-[1440px]:top-0 min-[1440px]:col-start-3 min-[1440px]:h-screen min-[1440px]:w-auto min-[1440px]:translate-x-0 min-[1440px]:overflow-y-auto ${
           openAsSheet
             ? 'min-[1180px]:translate-x-0 min-[1180px]:pointer-events-auto'
             : 'min-[1180px]:translate-x-full min-[1180px]:pointer-events-none min-[1440px]:pointer-events-auto'
@@ -620,8 +622,9 @@ export function MarginRail({
           §E.2): what the margin is, and the Esc/timer contract. Projects only
           (the timer claim is only true with a project in hand); the primitive
           owns once-only + recede. */}
+      {/* US-28 S7 — a Card off the paper (L2 on the ground), unclamped. */}
       {projectId && (
-        <MarginNote noteKey="doc-first-touch" clamp className="mb-5">
+        <MarginNote noteKey="doc-first-touch" className="card doc-margin-card mb-5">
           One client, one paper. The rail on the left says where this stands;
           the margin here is where decisions, messages, and money gather.
           Nothing is a form — it fills as the work happens.

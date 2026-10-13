@@ -34,30 +34,25 @@ export function ScopeLens({
   scope: ContactScope;
   onScope: (scope: ContactScope) => void;
 }) {
+  // US-28 (people specimen) — the lens is underline filter words (the S1
+  // `.filters`), on the same line as the Directory's own, never a scored tab.
   return (
-    <p
+    <div
       role="group"
       aria-label="Contact visibility"
-      className="mb-4 flex items-baseline gap-x-3 border-b border-[var(--color-pearl)]/70 pb-2"
+      className="filters people-scope"
     >
-      {LENS.map(([key, label]) => {
-        const on = scope === key;
-        return (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onScope(key)}
-            aria-current={on ? 'true' : undefined}
-            className={`da-score-hover min-h-11 inline-flex items-center font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${
-              on
-                ? 'da-score-on text-[var(--color-charcoal)]'
-                : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
-            }`}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </p>
+      {LENS.map(([key, label]) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onScope(key)}
+          aria-pressed={scope === key}
+          data-scope-lens={key}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }

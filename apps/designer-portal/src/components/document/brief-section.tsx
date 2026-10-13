@@ -19,14 +19,13 @@ import { TriageBar } from './triage-bar';
 import { BriefScanStrip } from './brief-scan-strip';
 import { SectionLoadingLine } from './section-loading-line';
 
+/** One fact (US-28 S9): a `dt`/`dd` pair, never a boxed tile. */
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[4px] border border-[var(--color-pearl)] bg-[rgba(229,226,221,0.3)] px-3 py-2.5">
-      <p className="mb-0.5 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-        {label}
-      </p>
-      <p className="text-[12px] font-medium text-[var(--color-charcoal)]">{value}</p>
-    </div>
+    <>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </>
   );
 }
 
@@ -194,16 +193,19 @@ export function BriefSection({
         </div>
       )}
 
-      <div className="mb-3.5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-        {lead.match_score != null && <Stat label="Match" value={String(lead.match_score)} />}
-        {lead.budget_range && <Stat label="Budget" value={formatBudgetRange(lead.budget_range)} />}
-        {lead.timeline && <Stat label="Timeline" value={formatTimeline(lead.timeline)} />}
-      </div>
-
+      {/* US-28 S9 — her words on the note edge, then the facts as a `dl`. */}
       {lead.project_description && (
-        <blockquote className="mb-3.5 rounded-r-[5px] border-l-[3px] border-[var(--color-clay)] bg-[rgba(196,165,123,0.05)] px-4 py-3 font-heading text-[14px] italic leading-relaxed text-[var(--color-charcoal)]">
+        <blockquote className="papers-note mb-3.5 font-heading text-[16px] italic leading-relaxed text-[var(--text-primary)]">
           “{lead.project_description}”
         </blockquote>
+      )}
+
+      {(lead.match_score != null || lead.budget_range || lead.timeline) && (
+        <dl className="papers-facts mb-3.5">
+          {lead.match_score != null && <Stat label="Match" value={String(lead.match_score)} />}
+          {lead.budget_range && <Stat label="Budget" value={formatBudgetRange(lead.budget_range)} />}
+          {lead.timeline && <Stat label="Timeline" value={formatTimeline(lead.timeline)} />}
+        </dl>
       )}
 
       {(lead.match_reasons ?? []).length > 0 && (

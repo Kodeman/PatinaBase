@@ -642,11 +642,11 @@ test.describe("MoodBoard GA browser acceptance", () => {
     authenticatedPage: page,
   }) => {
     await openBoard(page);
-    await page.getByRole("tab", { name: "palettes", exact: true }).click();
+    await page.getByRole("tab", { name: "Palettes", exact: true }).click();
     // Scoped to the rail's landmark: a dropped pin announces its own name
     // now (CI-13), so an unscoped /GA rail palette/ matches the pin too.
     const source = page
-      .getByRole("complementary", { name: "Add to board" })
+      .getByRole("complementary", { name: "Tools" })
       .getByRole("button", { name: /GA rail palette/i });
     await expect(source).toBeVisible();
     await expect(source).toHaveAttribute("draggable", "true");
@@ -805,7 +805,7 @@ test.describe("MoodBoard GA browser acceptance", () => {
       page.getByText("Leave breathing room", { exact: true }).first(),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Edit", exact: true }),
+      page.getByRole("button", { name: "Back to editing", exact: true }),
     ).toBeVisible();
 
     await page.keyboard.press("Escape");
@@ -818,6 +818,18 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await expect(
       page.getByRole("tablist", { name: "Board sources" }),
     ).toBeVisible();
+
+    // US-28 S12: `?present=1` (the boards tab's Present act) opens the room
+    // straight into Present, and "Back to editing" returns to the canvas.
+    await page.goto(`/board/${BOARD_ID}?from=%2Fdesk&source=project_surface&present=1`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(controller).toHaveAttribute("data-board-room-mode", "present", {
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("checkbox", { name: "Show notes" })).toBeChecked();
+    await page.getByRole("button", { name: "Back to editing", exact: true }).click();
+    await expect(controller).toHaveAttribute("data-board-room-mode", "edit");
   });
 
   test("shows verdicts in Edit and Present, focuses Feedback, and drops feedback across delete/undo (AC2.12/AC2.13)", async ({
@@ -848,11 +860,11 @@ test.describe("MoodBoard GA browser acceptance", () => {
         .locator(`[data-board-item-id="${NOTE_ID}"]`)
         .locator('[data-board-verdict="rejected"]'),
     ).toHaveText("Flagged");
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("button", { name: "Back to editing", exact: true }).click();
 
     const boardCanvas = page.getByTestId("board-room-canvas");
     const transformBefore = await boardCanvas.getAttribute("style");
-    await page.getByRole("tab", { name: "feedback", exact: true }).click();
+    await page.getByRole("tab", { name: "Board feedback", exact: true }).click();
     const feedbackRail = page.locator(
       `[data-board-feedback-filter="${BOARD_ID}"]`,
     );
@@ -966,10 +978,30 @@ test.describe("MoodBoard GA browser acceptance", () => {
           : null;
       })
       .toEqual([0, 0, 390, 844]);
+    // US-28 S12 (frames p7/p8): every tool folds behind the header's
+    // "Tools" act; Zoom and Fit stay under the board; nothing scrolls
+    // sideways with the sheet open, and "Put back" returns focus to Tools.
+    await expect(
+      page.getByRole("tablist", { name: "Board sources" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Fit to screen" })).toBeVisible();
+    const toolsAct = page.getByRole("button", { name: "Tools", exact: true });
+    await toolsAct.click();
     await expect(
       page.getByRole("tablist", { name: "Board sources" }),
     ).toBeVisible();
-    await expect(page.getByText("More", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Snap to grid" })).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+    await page.getByRole("button", { name: "Put back", exact: true }).click();
+    await expect(toolsAct).toBeFocused();
+    await expect(
+      page.getByRole("tablist", { name: "Board sources" }),
+    ).toHaveCount(0);
     await expect
       .poll(() =>
         page
@@ -1050,11 +1082,11 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await openBoard(page);
     const assertNoNavigation = armNavigationSentinel(page);
 
-    await page.getByRole("tab", { name: "palettes", exact: true }).click();
+    await page.getByRole("tab", { name: "Palettes", exact: true }).click();
     // Scoped to the rail's landmark: a dropped pin announces its own name
     // now (CI-13), so an unscoped /GA rail palette/ matches the pin too.
     const source = page
-      .getByRole("complementary", { name: "Add to board" })
+      .getByRole("complementary", { name: "Tools" })
       .getByRole("button", { name: /GA rail palette/i });
     await expect(source).toBeVisible();
     const header = page.locator("header");

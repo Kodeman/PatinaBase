@@ -116,44 +116,22 @@ describe('markMarginNoteSeen', () => {
   });
 });
 
-describe('MarginNote — the two-line cap (RF-03), scoped to the caller', () => {
+describe('MarginNote — never clamped (US-28 S7: wrap, never truncate)', () => {
   const LONG =
-    'The margin on the right is where decisions and money gather. Esc puts the document down — and the hours log themselves while it is in your hand.';
+    'One client, one paper. The rail on the left says where this stands; the margin here is where decisions, messages, and money gather. Nothing is a form — it fills as the work happens.';
 
-  it('does not clamp by default — the primitive is shared, the cap is not', () => {
+  it('prints the whole note, with no two-line cap and no More', () => {
     render(<MarginNote noteKey="k-unclamped">{LONG}</MarginNote>);
 
-    const body = screen.getByText(/where decisions and money gather/);
-    expect(body).not.toHaveClass('line-clamp-2');
-    expect(screen.queryByRole('button', { name: 'More' })).toBeNull();
-    // The pointer-only recovery is gone with the blanket cap.
-    expect(body).not.toHaveAttribute('title');
-  });
-
-  it('clamps to two lines when the caller asks, and `More` expands it in place', () => {
-    render(
-      <MarginNote noteKey="k-clamp" clamp>
-        {LONG}
-      </MarginNote>,
-    );
-
-    const body = screen.getByText(/where decisions and money gather/);
-    expect(body).toHaveClass('line-clamp-2');
+    const body = screen.getByText(/where decisions, messages, and money gather/);
     expect(body).toHaveTextContent(LONG);
-    // The mono footnote is its own block below the clamp, never inside it.
-    expect(body).not.toHaveTextContent('Appears once');
-
-    const more = screen.getByRole('button', { name: 'More' });
-    expect(more).toHaveAttribute('aria-expanded', 'false');
-    expect(more).toHaveAttribute('aria-controls', body.id);
-
-    fireEvent.click(more);
-
-    expect(body).not.toHaveClass('line-clamp-2');
-    expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
+    let node: HTMLElement | null = body;
+    while (node) {
+      expect(node).not.toHaveClass('line-clamp-2');
+      node = node.parentElement;
+    }
+    expect(screen.queryByRole('button', { name: 'More' })).toBeNull();
+    expect(body).not.toHaveAttribute('title');
   });
 
   it('never clips a focusable child at the call sites that carry one', () => {

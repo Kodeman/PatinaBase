@@ -1,0 +1,88 @@
+"use client";
+
+/**
+ * A Today card (US-28 S3; uplift.md change 1): one job and its lines on the
+ * Day Sheet. The S1 Card — the stage edge on the left, the eyebrow (stage ·
+ * holder · freshness), the job's name in display type, then its lines. The
+ * name's link covers the card's upper block; the lines keep their own acts.
+ */
+
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { STAGE_WORD } from "@/lib/document/act-names";
+import type { SectionKey } from "@/lib/document/desk-derivation";
+import type { DeskScope } from "@/lib/document/desk-scope";
+import { timeWord, type SheetCard } from "@/lib/document/day-sheet";
+
+/** The S1 stage class for a job's stage. Care has no edge of its own: it
+ *  stands on the install edge it grew out of. */
+export function stageClass(stage: SectionKey): string {
+  return `st-${stage === "care" ? "install" : stage}`;
+}
+
+/** The holder word: "Leah’s". */
+export const holderWord = (name: string) => `${name}’s`;
+
+/** "9:30" — the clock time a line settled at. */
+export function clockTime(at: string | null | undefined): string {
+  const date = at ? new Date(at) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return `${date.getHours() % 12 || 12}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+export function DeskJobCard({
+  card,
+  scope,
+  now,
+  first = false,
+  children,
+}: {
+  card: SheetCard;
+  scope: DeskScope;
+  now: Date;
+  /** Card one carries the arrival's `job` mark on its name. */
+  first?: boolean;
+  children: ReactNode;
+}) {
+  const { stage, holder } = card;
+  // The holder prints wherever the job could be someone else's: always in
+  // the studio's scope, and in Mine only on a job she does not carry.
+  const showHolder = !!holder?.name && (scope === "studio" || !holder.mine);
+  const latest = card.lines
+    .map((line) => line.need.at)
+    .filter((at): at is string => !!at)
+    .sort()
+    .at(-1);
+  const fresh = timeWord(latest, now);
+  const eyebrow = [
+    stage ? STAGE_WORD[stage] : null,
+    showHolder ? holderWord(holder!.name!) : null,
+    fresh,
+  ].filter(Boolean);
+
+  return (
+    <article
+      className={stage ? `card ${stageClass(stage)}` : "card"}
+      data-stage={stage ?? undefined}
+      data-desk-card={card.jobId}
+    >
+      <div className="card-up">
+        {eyebrow.length > 0 && <p className="eb">{eyebrow.join(" · ")}</p>}
+        <h3 className="t-d3 name-h">
+          <Link
+            href={`/doc/${card.jobId}`}
+            className="name"
+            data-part={first ? "job" : undefined}
+            data-day-sheet-job
+            // arrival-mount.tsx TOKEN_LINKS: opening the job from its card is
+            // a soft entry into the Document, as the claim card's name was.
+            data-roster-name
+          >
+            {card.name}
+          </Link>
+        </h3>
+      </div>
+      <ul className="lines">{children}</ul>
+    </article>
+  );
+}

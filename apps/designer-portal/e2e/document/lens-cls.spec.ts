@@ -26,7 +26,7 @@
  *      convention); a programmatic `window.scrollTo` sets no recent input,
  *      so the filter cannot hide a real lens-caused shift.
  *   4. The gate is `toBe(0)` exactly, never a tolerance: density promotion
- *      happens at/beyond the 240px lookahead line (D-B16, below the
+ *      happens at/beyond the 288px lookahead line (D-B16, below the
  *      viewport) and the band is sticky and excluded, so true 0 is
  *      reachable by construction — a tolerance would admit a real shift.
  *      A nonzero reading is reported as a bug: each surviving entry names

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,8 +15,9 @@ import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
 import {
   exportMoodBoardPng,
   formatMoodBoardExportScale,
-  getMoodBoardPngExportPlan,
+  measureMoodBoardPngExportPlan,
   safeMoodBoardFilename,
+  type MoodBoardPngExportPlan,
 } from '@/lib/mood-board-assets/export-board';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 
@@ -94,7 +95,23 @@ export function BoardExportDialog({
   const [progress, setProgress] = useState(0);
   const [outcome, setOutcome] = useState<BoardExportOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const pngPlan = useMemo(() => getMoodBoardPngExportPlan(input), [input]);
+  // Measured on open, and only once the fonts the painter waits for are
+  // ready: a plan measured earlier wraps captions in a fallback font and
+  // promises dimensions the raster will not have (SQ-865).
+  const [pngPlan, setPngPlan] = useState<MoodBoardPngExportPlan | null>(null);
+  useEffect(() => {
+    // A plan belongs to one input: drop it the moment the board changes, so
+    // the dialog never promises (or exports under) the last board's size.
+    setPngPlan(null);
+    if (!open) return;
+    let current = true;
+    void measureMoodBoardPngExportPlan(input).then((plan) => {
+      if (current) setPngPlan(plan);
+    });
+    return () => {
+      current = false;
+    };
+  }, [input, open]);
 
   const requestOwner = owner.kind === 'proposal'
     ? { proposalId: owner.id }
@@ -176,7 +193,10 @@ export function BoardExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent className="max-w-lg">
+      {/* The shared Dialog keeps `shadow-lg` for the other portals; the
+          designer portal carries no shadow (US-28 S1, R5), and the sheet is
+          the one house stock: 2px corner on --card-edge (U-Q12). */}
+      <DialogContent className="br-sheet br-export-sheet rounded-[2px] border-[var(--card-edge)] bg-[var(--paper-doc)] shadow-none sm:rounded-[2px] max-w-lg">
         <DialogHeader>
           <DialogTitle>Export {boardName}</DialogTitle>
           <DialogDescription>
@@ -184,25 +204,27 @@ export function BoardExportDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3">
+        <div className="br-export-options grid">
           <button
             type="button"
             onClick={exportPng}
-            disabled={busy !== null}
-            className="rounded-[5px] border border-[var(--border-default)] p-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
+            disabled={busy !== null || !pngPlan}
+            className="br-export-option"
           >
             <span className="font-heading text-[14px] text-[var(--text-primary)]">Board composition · PNG</span>
             <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
-              {pngPlan.capped
-                ? `${formatMoodBoardExportScale(pngPlan.effectiveScale)}× effective scale · ${pngPlan.width} × ${pngPlan.height}px (8192px cap).`
-                : `2× raster · ${pngPlan.width} × ${pngPlan.height}px.`}
+              {!pngPlan
+                ? 'Measuring the raster…'
+                : pngPlan.capped
+                  ? `${formatMoodBoardExportScale(pngPlan.effectiveScale)}× effective scale · ${pngPlan.width} × ${pngPlan.height}px (8192px cap).`
+                  : `2× raster · ${pngPlan.width} × ${pngPlan.height}px.`}
             </span>
           </button>
           <button
             type="button"
             onClick={() => exportPdf('board-composition')}
             disabled={busy !== null}
-            className="rounded-[5px] border border-[var(--border-default)] p-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
+            className="br-export-option"
           >
             <span className="font-heading text-[14px] text-[var(--text-primary)]">Board composition · PDF</span>
             <span className="mt-1 block text-[11px] text-[var(--text-muted)]">Single landscape page preserving the composition.</span>
@@ -211,7 +233,7 @@ export function BoardExportDialog({
             type="button"
             onClick={() => exportPdf('board')}
             disabled={busy !== null}
-            className="rounded-[5px] border border-[var(--border-default)] p-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
+            className="br-export-option"
           >
             <span className="font-heading text-[14px] text-[var(--text-primary)]">Product specification sheet · PDF</span>
             <span className="mt-1 block text-[11px] text-[var(--text-muted)]">Product references grouped by composition section.</span>

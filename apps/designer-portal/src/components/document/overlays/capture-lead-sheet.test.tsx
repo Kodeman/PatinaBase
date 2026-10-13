@@ -2,9 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { CaptureLeadSheet } from './capture-lead-sheet';
 
 const mutate = jest.fn();
+const mockPush = jest.fn();
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock('@patina/supabase', () => ({
@@ -156,5 +157,41 @@ describe('CaptureLeadSheet layout', () => {
     );
     expect(name).toHaveAttribute('aria-invalid', 'true');
     expect(name).toHaveAttribute('aria-describedby', 'capture-lead-name-error');
+  });
+});
+
+describe('CaptureLeadSheet closing (U-Q7)', () => {
+  beforeEach(() => {
+    mutate.mockReset();
+    mockPush.mockReset();
+  });
+
+  const record = (props: { onCreated?: jest.Mock; onClose: jest.Mock }) => {
+    render(<CaptureLeadSheet open {...props} />);
+    fireEvent.change(screen.getByLabelText(/Client name/), { target: { value: '  Ainsley Moore ' } });
+    fireEvent.change(screen.getByLabelText(/Project summary/), {
+      target: { value: 'Primary bedroom, budget $25–35k' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /create inquiry brief/i }));
+    const [, options] = mutate.mock.calls[0] as [unknown, { onSuccess: (lead: { id: string }) => void }];
+    options.onSuccess({ id: 'lead-ainsley' });
+  };
+
+  it('closes back onto the Desk with the new inquiry, and navigates nowhere', () => {
+    const onCreated = jest.fn();
+    const onClose = jest.fn();
+    record({ onCreated, onClose });
+    expect(screen.getByText('Returns to the Desk')).toBeInTheDocument();
+    expect(onClose).toHaveBeenCalled();
+    expect(onCreated).toHaveBeenCalledWith({ id: 'lead-ainsley', name: 'Ainsley Moore' });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('still opens the new Brief where no caller takes it back', () => {
+    const onClose = jest.fn();
+    record({ onClose });
+    expect(screen.getByText('Opens the inquiry brief')).toBeInTheDocument();
+    expect(onClose).toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith('/doc/lead-ainsley');
   });
 });

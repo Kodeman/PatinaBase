@@ -20,6 +20,8 @@
  *
  * R62: `response_deadline` defaults to +1 day so the new lead rises as a
  * `new_lead` need on the Desk.
+ * US-28 S4 (U-Q7): given `onCreated`, the sheet closes back onto the Desk,
+ * which prints the visit line; without it the R65 landing below stands.
  * R65: on submit the capture **opens the new Brief** (`/doc/{leadId}`) so the
  * designer keeps filling it in the document; the **"Where from" field is free
  * text with suggestion chips**, stored in the canonical `leads.source` column
@@ -43,12 +45,22 @@ const SOURCE_CHIPS = [
   'Past client',
 ] as const;
 
+/** The inquiry just recorded, as the Desk's visit line names it. */
+export interface CapturedLead {
+  id: string;
+  name: string;
+}
+
 export function CaptureLeadSheet({
   open,
   onClose,
+  onCreated,
 }: {
   open: boolean;
   onClose: () => void;
+  /** US-28 S4 (U-Q7) — when set, the sheet closes back onto its caller
+   *  (the Desk) with the new inquiry instead of opening the Brief. */
+  onCreated?: (lead: CapturedLead) => void;
 }) {
   const router = useRouter();
   const createLead = useCreateLead();
@@ -127,7 +139,10 @@ export function CaptureLeadSheet({
             queryKey: ['document-state', 'desk'],
           });
           onClose();
-          router.push(`/doc/${lead.id}`);
+          // U-Q7 — on the Desk it closes back onto the Desk, which prints
+          // the visit line; elsewhere it still opens the Brief.
+          if (onCreated) onCreated({ id: lead.id, name: name.trim() });
+          else router.push(`/doc/${lead.id}`);
         },
         onError: (err: Error) => {
           setError(err.message ?? "The inquiry couldn't be saved. Try again.");
@@ -293,7 +308,7 @@ export function CaptureLeadSheet({
             Cancel
           </DocumentAction>
           <span className="ml-auto font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-body)]">
-            Opens the inquiry brief
+            {onCreated ? 'Returns to the Desk' : 'Opens the inquiry brief'}
           </span>
         </DocumentActionGroup>
         {!canSubmit && (

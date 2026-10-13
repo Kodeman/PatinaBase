@@ -89,16 +89,20 @@ jest.mock('../room-shell', () => ({
   RoomShell: ({
     action,
     backLabel,
+    heading,
     children,
   }: {
     action?: React.ReactNode;
     backLabel?: string;
+    heading?: React.ReactNode;
     children: React.ReactNode;
   }) => (
     <>
       {backLabel && (
         <span data-testid="room-shell-back-label">{backLabel}</span>
       )}
+      {/* US-28 walk-fix: the Room's title block rides in the shell's Header line. */}
+      {heading}
       {action}
       {children}
     </>
@@ -299,6 +303,51 @@ describe('DraftingRoom quiet deep work', () => {
       document.querySelector('[data-action-key="send-proposal"]'),
     ).toBeNull();
     expect(useMobilePrimaryAction).toHaveBeenLastCalledWith(null);
+  });
+
+  it('US-28 S9 — states progress in words, never a percentage', () => {
+    render(<DraftingRoom proposalId="proposal-1" />);
+
+    expect(screen.getByTestId('drafted-words')).toHaveTextContent(
+      'Drafted: rooms, FF&E schedule, project phases · To draft: material palette, design boards, exclusions, payment schedule, terms',
+    );
+    expect(document.body.textContent).not.toMatch(/\d+\s*%\s*drafted/);
+    expect(screen.queryByTestId('strata-mark')).toBeNull();
+  });
+
+  it('US-28 S9 — facets are Cards with one ink state word; the open one keeps the ring', async () => {
+    render(<DraftingRoom proposalId="proposal-1" />);
+
+    const palette = screen.getByRole('button', { name: /Palette/i });
+    await waitFor(() =>
+      expect(palette).toHaveAttribute('aria-expanded', 'true'),
+    );
+    const paletteCard = palette.closest('article');
+    expect(paletteCard).toHaveClass('card', 'facet', 'is-open');
+    expect(palette).toHaveTextContent('To draft · open');
+
+    const rooms = screen.getByRole('button', { name: /Rooms/i });
+    expect(rooms.closest('article')).toHaveClass('card', 'facet');
+    expect(rooms.closest('article')).not.toHaveClass('is-open');
+    expect(rooms).toHaveTextContent('Drafted');
+
+    // the stage once: one 3 px proposal title rule on the title block
+    const titleBlocks = document.querySelectorAll('.title-rule.st-proposal');
+    expect(titleBlocks).toHaveLength(1);
+    expect(titleBlocks[0]).toHaveTextContent('Whitfield House');
+  });
+
+  it('US-28 S9 — movements are Sections that close; the client copy is laid paper', () => {
+    render(<DraftingRoom proposalId="proposal-1" />);
+
+    const sections = document.querySelectorAll('section.section');
+    expect(
+      Array.from(sections).map((s) => s.querySelector('.eb')?.textContent),
+    ).toEqual(['Scope of work', 'Design concept', 'Commercial terms']);
+
+    const copy = screen.getByRole('article', { name: 'The client’s copy' });
+    expect(copy).toHaveClass('papers-copy');
+    expect(copy.className).not.toMatch(/rounded|bg-white|border/);
   });
 
   it('threads the exit label to RoomShell instead of duplicating its own exit act', () => {

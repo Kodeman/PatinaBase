@@ -28,31 +28,16 @@ export function LibrarianBar({
   };
 
   return (
-    <div className="border-b border-[var(--doc-ink-border)] px-6 pb-8 pt-10 text-center sm:px-9">
-      {/* CR11-1: <h2>, not <h1>. RoomShell's band now carries the page's one
-          heading ("The Library"), and this line sits inside that Room — two
-          <h1>s on one page is the structure SPEC §7 #11 forbids. The type is
-          untouched; only the element changed. */}
-      <h2 className="m-0 font-heading text-[2.1rem] font-normal leading-[1.08] text-[var(--color-charcoal)] min-[700px]:text-[2.5rem]">
-        Find a product or <em className="italic text-[var(--color-charcoal)]">ask a sourcing question.</em>
-      </h2>
-      <p className="mx-auto mt-3 max-w-[52ch] text-[14px] leading-relaxed text-[var(--color-charcoal)]">
-        Product matches appear as you type. Questions search the personal library, studio library, and Patina catalog.
-      </p>
-
+    <div className="library-search">
       <form
         role="search"
         aria-label="Search the resource library or ask a sourcing question"
         onSubmit={ask}
-        className="mx-auto mt-6 max-w-[680px]"
       >
-        <div className="flex min-h-12 items-center rounded-[5px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-2 focus-within:border-[var(--color-clay)]">
-          <span
-            aria-hidden
-            className="flex h-11 w-11 shrink-0 items-center justify-center font-mono text-[14px] text-[var(--color-charcoal)]"
-          >
-            ⌕
-          </span>
+        {/* US-28 S10c: the field never yields its width to the act beside it.
+            It holds at least 240px and the act wraps beneath at 390, so the
+            query is never clipped to a letter. */}
+        <div className="library-search-row">
           <input
             type="search"
             value={query}
@@ -62,15 +47,15 @@ export function LibrarianBar({
             }}
             aria-label="Find a product or ask a sourcing question"
             aria-describedby="library-omnibox-hint"
-            placeholder="Product, maker, SKU, category, or material question…"
+            placeholder="Product, maker, SKU or a sourcing question"
             data-library-omnibox
-            className="min-h-11 min-w-0 flex-1 bg-transparent px-1 py-2 text-left text-[16px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-body)]"
+            className="library-search-field"
           />
           <DocumentAction
             actionKey="ask-library"
             surfaceKey="library"
             regionKey="library-omnibox"
-            variant="secondary"
+            variant="tertiary"
             type="submit"
             trailing="→"
             disabled={!query.trim()}
@@ -78,12 +63,9 @@ export function LibrarianBar({
             Ask a sourcing question
           </DocumentAction>
         </div>
-        <p
-          id="library-omnibox-hint"
-          className="mt-2 text-left font-mono text-[12px] leading-relaxed text-[var(--color-charcoal)]"
-        >
-          Exact matches update as you type · Enter asks the Library · Try “white oak console under
-          72 inches.”
+        <p id="library-omnibox-hint" className="t-body-sm library-search-note">
+          Exact matches update as you type. Enter asks the Library; try
+          “white oak console under 72 inches.”
         </p>
       </form>
 
@@ -93,12 +75,9 @@ export function LibrarianBar({
         <section
           aria-labelledby="library-engine-results"
           data-library-engine-results
-          className="mx-auto mt-6 max-w-[680px] border-t border-[var(--doc-ink-border)] pt-4 text-left"
+          className="library-engine-results"
         >
-          <h2
-            id="library-engine-results"
-            className="mb-2 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]"
-          >
+          <h2 id="library-engine-results" className="eb">
             Sourcing answer
           </h2>
           <EngineResults query={asking} inDocument={null} onPlaced={onPlaced} />

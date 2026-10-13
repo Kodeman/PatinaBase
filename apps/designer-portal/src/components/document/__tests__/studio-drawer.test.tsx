@@ -98,7 +98,7 @@ describe('StudioDrawer — Keys beside Find anything (F6, SQ-715)', () => {
   it('keeps the right zone at its own width so the row cannot print over it', () => {
     render(<StudioDrawer />);
     expect(screen.getByRole('navigation', { name: 'Studio drawer' })).toHaveClass(
-      'grid-cols-[1fr_auto_minmax(max-content,1fr)]',
+      'grid-cols-[minmax(max-content,1fr)_auto_minmax(max-content,1fr)]',
     );
   });
 
@@ -124,7 +124,7 @@ describe('StudioDrawer — Keys beside Find anything (F6, SQ-715)', () => {
     expect(findAnything()).toHaveClass('min-h-11');
     expect(findAnything().parentElement).toHaveClass('contents');
     expect(screen.getByRole('navigation', { name: 'Studio drawer' })).toHaveClass(
-      'grid-cols-[1fr_auto_1fr]',
+      'grid-cols-[minmax(max-content,1fr)_auto_minmax(max-content,1fr)]',
     );
   });
 });
@@ -139,7 +139,10 @@ describe('StudioDrawer — breadcrumb copy (SQ-752)', () => {
   ])('prints the %s breadcrumb as "%s" (SQ-752)', (path, label) => {
     mockPathname = path;
     const { container } = render(<StudioDrawer />);
-    const crumb = container.querySelector('span.truncate.font-mono');
+    const crumb = container.querySelector('[data-drawer-crumb]');
     expect(crumb).toHaveTextContent(label);
+    // F8 — never truncates. SQ-856 holds it to one line on its own
+    // max-content track (studio-drawer.test.tsx), so nowrap is allowed.
+    expect(crumb?.className).not.toMatch(/\btruncate\b|ellipsis/);
   });
 });

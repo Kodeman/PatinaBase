@@ -6,6 +6,7 @@ import {
   type BoardCompositionBoard,
   type BoardsBlockBoard,
 } from './BoardsBlock'
+import { MOOD_BOARD_VISUAL } from '../../mood-board/visual-contract'
 
 // A product pin whose snapshot carries detail-only lead time and always-visible
 // captured-source provenance.
@@ -409,5 +410,245 @@ describe('BoardComposition unified renderer props', () => {
       />,
     )
     expect(a.container.innerHTML).toBe(b.container.innerHTML)
+  })
+})
+
+describe('Present tiles: plate and caption, zones with an ink word (US-28 S12)', () => {
+  function zonedBoard(): BoardCompositionBoard {
+    const board = allPinTypesBoard()
+    return {
+      ...board,
+      sections: [{ id: 'pieces', name: 'Pieces and the long name of this zone', color: '#718573' }],
+      items: board.items.map((item) => ({
+        ...item,
+        data: { ...(item.data as Record<string, unknown>), section_id: 'pieces' },
+      })),
+    }
+  }
+
+  it('prints the zone word in ink inside a dashed edge: no fill, no white-on-colour pill, and it wraps', () => {
+    const { container } = render(<BoardComposition board={zonedBoard()} />)
+    const zone = container.querySelector('[data-composition-section="pieces"]') as HTMLElement
+    expect(zone.style.border).toBe('1px dashed rgb(113, 133, 115)')
+    expect(zone.style.backgroundColor).toBe('')
+    const word = container.querySelector('[data-composition-section-word="pieces"]') as HTMLElement
+    expect(word).toHaveTextContent('Pieces and the long name of this zone')
+    expect(word.style.backgroundColor).toBe('')
+    expect(word.style.color).toBe('rgb(44, 41, 38)')
+    expect(word.style.textTransform).toBe('uppercase')
+    expect(word.style.overflowWrap).toBe('anywhere')
+    expect(word.className).not.toMatch(/whitespace-nowrap|rounded/)
+  })
+
+  it('draws every picture pin as a plate on a 1px card edge and its caption whole, never clamped or truncated', () => {
+    const { container } = render(<BoardComposition board={productBoard()} />)
+    const canvas = container.querySelector('[data-board-composition-canvas="true"]')!
+    const pin = canvas.querySelector('[data-board-item-id="i1"]') as HTMLElement
+    const plate = pin.querySelector('[data-board-plate]') as HTMLElement
+    expect(plate.style.border).toBe('1px solid rgb(143, 140, 136)')
+    expect(plate.style.backgroundColor).toBe('rgb(252, 250, 246)')
+    const caption = pin.querySelector('[data-board-caption]') as HTMLElement
+    expect(caption).toHaveTextContent('Halyard Lounge Chair')
+    expect(caption).toHaveTextContent('West Elm · $1,200')
+    expect(caption).toHaveTextContent('west-elm.com')
+    expect(container.querySelector('.truncate, .line-clamp-2, [class*="shadow"]')).toBeNull()
+    expect(container.innerHTML).not.toMatch(/ring-2|#fff\b|rgb\(255, 255, 255\)/)
+  })
+
+  it('keeps a long caption whole at the minimum tile size: the plate keeps 40px and the tile grows (R13)', () => {
+    const name = 'Halyard Lounge Chair in a very long walnut and boucle finish with a deep seat'
+    const board = productBoard()
+    board.items = [{ ...board.items[0]!, width: 40, height: 40, data: { ...board.items[0]!.data, name } }]
+    const { container } = render(<BoardComposition board={board} />)
+    const pin = container.querySelector('[data-board-item-id="i1"]') as HTMLElement
+    expect(pin.style.height).toBe('40px')
+    const tile = pin.querySelector('[data-board-plate-item]') as HTMLElement
+    // At least the saved box, never capped at it — the grid grows past it.
+    expect(tile.style.minHeight).toBe('100%')
+    expect(tile.style.height).toBe('')
+    expect(tile.style.gridTemplateRows).toBe(`minmax(${MOOD_BOARD_VISUAL.plateMin}px, 1fr)`)
+    const plate = pin.querySelector('[data-board-plate]') as HTMLElement
+    expect(plate.style.minHeight).toBe(`${MOOD_BOARD_VISUAL.plateMin}px`)
+    expect(plate.style.contain).toBe('size')
+    const caption = pin.querySelector('[data-board-caption]') as HTMLElement
+    expect(caption).toHaveTextContent(name)
+    expect(caption.innerHTML).not.toMatch(/truncate|line-clamp|text-overflow|…/)
+    expect(tile.contains(caption)).toBe(true)
+  })
+
+  it('gives every pin family the same plate stock and the note its oak edge', () => {
+    const { container } = render(<BoardComposition board={allPinTypesBoard()} />)
+    const canvas = container.querySelector('[data-board-composition-canvas="true"]')!
+    for (const type of ['product', 'capture', 'image', 'palette', 'room_scan']) {
+      expect(
+        canvas.querySelector(`[data-board-item-id="pin-${type}"] [data-board-plate]`),
+      ).toBeInTheDocument()
+    }
+    const note = canvas.querySelector('[data-board-item-id="pin-note"] > div') as HTMLElement
+    expect(note.style.borderLeft).toBe('2px solid rgb(139, 115, 85)')
+    expect(note.style.backgroundColor).toBe('')
+  })
+
+  it('keeps the guest view token-only: with no host acts it offers no buttons or focusable pins', () => {
+    const { container } = render(<BoardsBlock boards={[zonedBoard() as BoardsBlockBoard]} />)
+    expect(container.querySelector('button, [role="button"], [tabindex]')).toBeNull()
+    expect(container.querySelector('[data-pin-overlay], [data-pin-interaction]')).toBeNull()
+  })
+})
+
+describe('BoardComposition never clips a caption at the canvas bottom (R13b)', () => {
+  const longName =
+    'Halyard lounge chair in a long walnut and boucle finish, with the matching ottoman'
+  function captionBoard(): BoardCompositionBoard {
+    const tile = (id: string, x: number, y: number) => ({
+      id,
+      type: 'product',
+      x,
+      y,
+      width: 40,
+      height: 40,
+      z_index: 0,
+      data: { name: longName, vendor_name: 'West Elm' },
+    })
+    return {
+      id: 'b-captions',
+      name: 'Captions',
+      canvas_width: 400,
+      canvas_height: 300,
+      background_color: '#FAF8F5',
+      // A bottom-edge tile, and two tiles stacked one above the other.
+      items: [tile('bottom', 300, 260), tile('upper', 40, 100), tile('lower', 40, 150)],
+    }
+  }
+
+  /** Layout px a browser reports: each 40px tile prints 40 + its caption. */
+  function stubLayout(printed: Record<string, number>) {
+    const scroll = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return printed[this.dataset.boardItemId ?? ''] ?? 0
+      })
+    const width = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.dataset.boardCompositionCanvas ? 400 : 0
+      })
+    return () => {
+      scroll.mockRestore()
+      width.mockRestore()
+    }
+  }
+
+  it('grows the composition to the bottom tile’s printed caption, at any tile', () => {
+    const restore = stubLayout({ bottom: 160, upper: 140, lower: 140 })
+    try {
+      const { container } = render(<BoardComposition board={captionBoard()} />)
+      const canvas = container.querySelector('[data-board-composition-canvas]') as HTMLElement
+      const world = canvas.firstElementChild as HTMLElement
+      // 260 + 160: the bottom tile's caption ends 120px past the 300px canvas.
+      expect(canvas).toHaveAttribute('data-canvas-height', '300')
+      expect(canvas).toHaveAttribute('data-content-height', '420')
+      expect(world.style.height).toBe('420px')
+      // At scale 1 the visible frame is the grown height, so nothing is cut.
+      expect(canvas.style.height).toBe('420px')
+      // Every tile's printed bottom sits inside the composition.
+      for (const [id, y, printed] of [
+        ['bottom', 260, 160],
+        ['upper', 100, 140],
+        ['lower', 150, 140],
+      ] as const) {
+        const tile = container.querySelector(`[data-board-item-id="${id}"]`) as HTMLElement
+        expect(tile.style.top).toBe(`${y}px`)
+        expect(y + printed).toBeLessThanOrEqual(420)
+        expect(within(tile).getByText(longName)).toBeInTheDocument()
+      }
+    } finally {
+      restore()
+    }
+  })
+
+  it('keeps the saved canvas when every caption fits its tile', () => {
+    const restore = stubLayout({ bottom: 40, upper: 40, lower: 40 })
+    try {
+      const { container } = render(<BoardComposition board={captionBoard()} />)
+      const canvas = container.querySelector('[data-board-composition-canvas]') as HTMLElement
+      expect(canvas).toHaveAttribute('data-content-height', '300')
+      expect(canvas.style.height).toBe('300px')
+    } finally {
+      restore()
+    }
+  })
+
+  it('grows to a rotated caption’s turned corner, not its unturned height (SQ-855 repro)', () => {
+    // Board 400×300; a product at (100,190), saved 200×40, turned 45°. The
+    // browser lays the tile out 82px tall (plate and caption) before turning
+    // it about the centre of its saved box, (200, 210).
+    const turned: BoardCompositionBoard = {
+      id: 'b-turned',
+      name: 'Turned',
+      canvas_width: 400,
+      canvas_height: 300,
+      background_color: '#FAF8F5',
+      items: [
+        {
+          id: 'turned',
+          type: 'product',
+          x: 100,
+          y: 190,
+          width: 200,
+          height: 40,
+          rotation: 45,
+          z_index: 0,
+          data: { name: 'Arden lounge chair' },
+        },
+      ],
+    }
+    const restore = stubLayout({ turned: 82 })
+    try {
+      const { container } = render(<BoardComposition board={turned} />)
+      const canvas = container.querySelector('[data-board-composition-canvas]') as HTMLElement
+      // The oracle is plane geometry, worked here by hand: the lowest turned
+      // corner of the 200×82 box is (100, 62) from the centre, which lands at
+      // 210 + (100 + 62)·sin 45° = 324.55 — past the 300px canvas, and past
+      // the 190 + 82 = 272 an unturned measure would give.
+      const lowestCorner = 210 + (100 + 62) * Math.SQRT1_2
+      expect(lowestCorner).toBeCloseTo(324.55, 2)
+      expect(canvas).toHaveAttribute('data-content-height', String(Math.ceil(lowestCorner)))
+      expect((canvas.firstElementChild as HTMLElement).style.height).toBe(`${Math.ceil(lowestCorner)}px`)
+    } finally {
+      restore()
+    }
+  })
+})
+
+describe('the stacked reading view keeps a template’s empty slots (SQ-859)', () => {
+  it('prints each Materials placeholder on a plate at phone width, as the canvas does', () => {
+    const board: BoardCompositionBoard = {
+      id: 'b-slots',
+      name: 'Palette + materials study',
+      canvas_width: 1200,
+      canvas_height: 800,
+      background_color: '#FAF8F5',
+      sections: [{ id: 'materials', name: 'Materials', color: '#D9E0D7' }],
+      items: ['Textile', 'Stone or surface', 'Wood or finish'].map((name, index) => ({
+        id: `slot-${index}`,
+        type: 'image',
+        x: 40 + index * 300,
+        y: 300,
+        width: 260,
+        height: 200,
+        z_index: index,
+        image_url: null,
+        data: { name, section_id: 'materials' },
+      })),
+    }
+    const { container } = render(<BoardComposition board={board} />)
+    const stacked = container.querySelector('.sm\\:hidden') as HTMLElement
+    expect(stacked.querySelector('[data-stacked-section="materials"]')).toHaveTextContent('Materials')
+    const plates = stacked.querySelectorAll('[data-board-plate="true"]')
+    expect(plates).toHaveLength(3)
+    for (const name of ['Textile', 'Stone or surface', 'Wood or finish']) {
+      expect(within(stacked).getByText(name)).toBeInTheDocument()
+    }
   })
 })

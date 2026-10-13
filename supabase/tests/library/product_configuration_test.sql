@@ -899,8 +899,9 @@ BEGIN
         = (SELECT snapshot_hash FROM public.product_configurations WHERE id = v_bed_project_config_v2)
       AND v_item_snapshot#>>'{configuration,lockedAt}' IS NOT NULL,
     'spec publication materializer must carry exact configuration identity, snapshot hash, and lock time';
+  -- 00767: the snapshot names its chapter (chapterId), which the hash leaves out.
   ASSERT v_content_hash = encode(extensions.digest(
-      public._spec_book_canonical_json(v_item_snapshot), 'sha256'), 'hex'),
+      public._spec_book_canonical_json(v_item_snapshot - 'chapterId'), 'sha256'), 'hex'),
     'configuration envelope must participate in canonical revision content hashing';
   ASSERT NOT has_function_privilege('authenticated',
       'public._spec_book_current_item_snapshots(uuid)', 'EXECUTE'),

@@ -30,39 +30,42 @@ export default function HelpTopicPage() {
   const prefixes = topic ? topic.prefixes : [decodedPrefix];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-          {decodedPrefix}
-        </p>
-        <h1 className="mt-1 font-heading text-[24px] font-medium text-[var(--color-charcoal)]">
-          {title}
-        </h1>
+    // US-28 S6 — the topic's title, the search, then a Section per prefix.
+    <div>
+      <div className="mb-8">
+        <p className="eb">{decodedPrefix}</p>
+        <h1 className="t-d2 mt-2">{title}</h1>
         {topic ? (
-          <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-muted)]">
+          <p className="t-body-sm mt-2 max-w-[64ch] text-[var(--text-muted)]">
             {topic.description}
           </p>
         ) : null}
       </div>
 
-      <HelpSearch placeholder={`Search within ${title}…`} />
+      <div className="mb-12 max-w-[560px]">
+        <HelpSearch placeholder={`Search within ${title}…`} />
+      </div>
 
       {prefixes.length === 1 ? (
         <RelatedArticles surfaceKeyPrefix={prefixes[0]} max={20} heading="Articles" />
       ) : (
         prefixes.map((sectionPrefix) => (
-          // One quiet sub-section per prefix in the topic. RelatedArticles
-          // renders nothing while a prefix has no published articles, so the
-          // `:has()` gate keeps the sub-heading hidden with it.
+          // One Section per prefix in the topic. RelatedArticles renders
+          // nothing while a prefix has no published articles, so the `:has()`
+          // gate keeps the Section hidden with it.
           <section
             key={sectionPrefix}
             aria-label={prefixSectionLabel(sectionPrefix)}
-            className="space-y-3 [&:not(:has([data-testid=related-articles]))]:hidden"
+            className="section [&:not(:has([data-testid=related-articles]))]:hidden"
           >
-            <p className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-              {prefixSectionLabel(sectionPrefix)}
-              <span className="h-px flex-1 bg-[var(--color-pearl)]" />
-            </p>
+            <div className="sec-head">
+              <p className="eb">
+                <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+                  <path d="M0 2h34M0 6h28M0 10h20" />
+                </svg>
+                <span>{prefixSectionLabel(sectionPrefix)}</span>
+              </p>
+            </div>
             <RelatedArticles surfaceKeyPrefix={sectionPrefix} max={20} heading="" />
           </section>
         ))

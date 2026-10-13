@@ -15,6 +15,7 @@ import type { DeskRosterInput } from './desk-roster-derivation';
 import { rankStanding } from './lens-band-derivation';
 import { compareForNext } from './need-class';
 import { deskDesignersOf, scopeDeskNeeds } from './desk-scope';
+import { deskJobName } from './desk-job-name';
 import type { NeedKey } from './need-key';
 import { needTieBreakRank } from './need-tie-break';
 
@@ -79,7 +80,7 @@ export function rankByNext<T>(
 }
 
 /** The needs, one line per key — the first handed in — ranked. */
-export function rankDeskNeeds(needs: readonly DeskNeed[], now: Date): DeskNeed[] {
+export function rankDeskNeeds<T extends DeskNeed>(needs: readonly T[], now: Date): T[] {
   const seen = new Set<NeedKey>();
   const unique = needs.filter((entry) => {
     if (seen.has(entry.key)) return false;
@@ -108,7 +109,7 @@ export function deriveDeskNeedList(
     if (!folder) continue;
     const projectId = row.project_id ?? row.engagement_id;
     for (const need of folder.needs ?? [folder.need]) {
-      needs.push({ key: need.key, projectId, projectName: row.title, need });
+      needs.push({ key: need.key, projectId, projectName: deskJobName(row), need });
     }
   }
   const all = [...needs, ...handoffs];

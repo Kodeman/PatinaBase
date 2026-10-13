@@ -8,7 +8,10 @@
  * ("Send the chase to Fenmoor Joinery"), and the need is then marked `acted`,
  * waiting on the counterpart (Q8). Any other member sends nothing (Q11): where
  * the draft store holds the letter she saves it for the lead, otherwise the
- * draft is shown read-only. Either way it reads "<Lead> sees this first".
+ * draft is shown read-only. Either way it reads "<Lead> sees this first". A
+ * saved draft marks the need `acted` too, waiting on the lead by first name,
+ * so her line settles as "Drafted for Leah · she sees this first" (US-28
+ * change 7, `draftedForWords`).
  */
 
 import { useRef, useState, type ReactNode } from 'react';
@@ -211,16 +214,18 @@ export function ActDraft({
     }
     // SQ-778 N5 — every line holds a state, a pre-project one included: the
     // need's engagement names its studio. Q8 — the act is taken; the need now
-    // waits on the counterpart.
+    // waits on the counterpart. US-28 change 7 — a draft saved for the lead
+    // is her act too: the need waits on the lead, who sees it first.
+    const waitingOn = acted ? counterpart : lead;
     const markActed: RecordAct = async () => {
       await setNeedState.mutateAsync({
         needKey: need.key,
         engagementId: need.projectId,
         action: 'acted',
-        ...(counterpart ? { waitingOn: counterpart } : {}),
+        ...(waitingOn ? { waitingOn } : {}),
       });
     };
-    recordings.current = [...(recordAct ? [recordAct] : []), ...(acted ? [markActed] : [])];
+    recordings.current = [...(recordAct ? [recordAct] : []), markActed];
     await runRecordings(
       !acted ? SAVED_UNRECORDED : regionKey === 'act-release-order' ? RELEASED_UNRECORDED : SENT_UNRECORDED,
     );

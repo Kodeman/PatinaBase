@@ -13,11 +13,12 @@
  */
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { Inbox, MessageSquare, PackageCheck, Receipt, Send, type LucideIcon } from 'lucide-react';
+import { Banknote, Inbox, MessageSquare, PackageCheck, Receipt, Send, type LucideIcon } from 'lucide-react';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
 import { DocSheet } from '../overlays/doc-sheet';
 import { ReadyToSendSheet } from '../outbound/ready-to-send-sheet';
-import { actSheetKindOf, type ActSheetKind } from './act-sheet-kind';
+import { actSheetKindOf, recordsPayment, type ActSheetKind } from './act-sheet-kind';
+import { RecordPaymentSheet } from './record-payment-sheet';
 import {
   InvoiceReminderSheet,
   PoChaseSheet,
@@ -26,8 +27,10 @@ import {
 } from './act-sheets';
 
 export interface NeedActSheetApi {
-  /** False means no scoped sheet for that need; fall back to its landing. */
-  open(need: DeskNeed): boolean;
+  /** False means no scoped sheet for that need; fall back to its landing.
+   *  `as` asks for another sheet the need can take (US-28 S4: an overdue
+   *  invoice's quiet "Record payment" door); false where it cannot. */
+  open(need: DeskNeed, as?: ActSheetKind): boolean;
 }
 
 const NONE: NeedActSheetApi = { open: () => false };
@@ -41,7 +44,14 @@ type SheetKind = ActSheetKind | 'ready-to-send';
 
 const SHEETS: Record<
   SheetKind,
-  { title: string; icon: LucideIcon; Body: (props: { need: DeskNeed; onDone: () => void }) => ReactNode }
+  {
+    title: string;
+    icon: LucideIcon;
+    Body: (props: { need: DeskNeed; onDone: () => void }) => ReactNode;
+    /** SQ-858 (money-p3) — the body prints its own head and puts Put back
+     *  in its foot, beside its filled act. */
+    ownsHead?: true;
+  }
 > = {
   'po-chase': { title: 'Follow up on this purchase order', icon: Send, Body: PoChaseSheet },
   'invoice-reminder': { title: 'Send an invoice reminder', icon: Receipt, Body: InvoiceReminderSheet },
@@ -57,6 +67,7 @@ const SHEETS: Record<
       />
     ),
   },
+  'record-payment': { title: 'Record a payment', icon: Banknote, Body: RecordPaymentSheet, ownsHead: true },
 };
 
 function sheetKindOf(need: DeskNeed): SheetKind | null {
@@ -69,8 +80,8 @@ export function NeedActSheetProvider({ children }: { children: ReactNode }) {
     null,
   );
   const [isOpen, setOpen] = useState(false);
-  const open = useCallback((need: DeskNeed) => {
-    const kind = sheetKindOf(need);
+  const open = useCallback((need: DeskNeed, as?: ActSheetKind) => {
+    const kind = as === 'record-payment' ? (recordsPayment(need) ? as : null) : sheetKindOf(need);
     if (!kind) return false;
     setCurrent((was) => ({ need, kind, seq: (was?.seq ?? 0) + 1 }));
     setOpen(true);
@@ -88,7 +99,8 @@ export function NeedActSheetProvider({ children }: { children: ReactNode }) {
           open={isOpen}
           onClose={close}
           title={sheet.title}
-          icon={sheet.icon}
+          icon={sheet.ownsHead ? undefined : sheet.icon}
+          headOwnedByChild={sheet.ownsHead}
           kind={`act-${current.kind}`}
         >
           {/* A fresh body per open, so a reopened sheet prefills again. */}

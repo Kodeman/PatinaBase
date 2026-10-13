@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type MutableRefObject,
   type ReactNode,
 } from 'react';
@@ -51,6 +52,10 @@ import {
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { lockBodyScroll, trapTabWithin } from '@/lib/full-screen-boundary';
+import {
+  topActiveModalDialog,
+  topDismissiblePopover,
+} from '@/components/document/overlays/active-dialog';
 import {
   consumeMaterializedTemplateFlag,
   moodBoardOpenSource,
@@ -108,6 +113,9 @@ import {
   useDeckImportDecisions,
   type DeckReviewRoom,
 } from '@/hooks/use-board-deck-import-review';
+import { DocumentAction } from '@/components/document/document-action';
+import { EmptyState } from '@/components/document/empty-state';
+import { TesterSlot } from '@/components/tester/tester-slot';
 import { BoardRoomInspector } from './board-room-inspector';
 import { BoardRoomSectionsMenu } from './board-room-sections-menu';
 import { BoardShareDialog } from './board-share-dialog';
@@ -165,44 +173,45 @@ function latestFeedback(rows: readonly ItemFeedback[]): Map<string, ItemFeedback
   return result;
 }
 
-function VerdictBadge({ feedback }: { feedback: ItemFeedback | undefined }) {
+/**
+ * The client's verdict as an ink state word (US-28 S12; V20 U-Q13): no pill,
+ * no dot, no colour grading — the word already says which it is. In Edit it
+ * stands in the item's caption; in Present (`onPlate`) BoardComposition
+ * places it over the plate, where it keeps a paper ground and a 1px edge for
+ * legibility over a photograph, never a shadow.
+ */
+function VerdictBadge({ feedback, onPlate = false }: { feedback: ItemFeedback | undefined; onPlate?: boolean }) {
   const chip = verdictChipSpec(feedback?.verdict, feedback?.resolved_at);
   if (!chip) return null;
   const fromGuest = Boolean(feedback?.guest_share_id);
   return (
     <span
-      // Deviation from the D4 zero-shadow reconciliation above: this badge
-      // floats over uncontrolled photo imagery, not app chrome, so a
-      // minimal shadow is kept for legibility. The zero-shadow rule applies
-      // to chrome on app surfaces (toolbar, popovers, panels), not pins.
-      className="inline-flex items-center gap-1 rounded-full border border-black/15 bg-white/95 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.04em] shadow-sm"
-      style={{ color: chip.color }}
+      className={onPlate ? 'word br-verdict br-verdict--plate' : 'word br-verdict'}
       data-board-verdict={feedback?.verdict}
       data-verdict-source={fromGuest ? 'guest' : 'client'}
     >
-      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
       {chip.label}
       {fromGuest && (
-        <span className="text-[var(--text-muted)]">· guest</span>
+        <span className="word--quiet"> · guest link</span>
       )}
     </span>
   );
 }
 
 /**
- * Unresolved-direction pin indicator (board-paths W3c, DV6). Wired ONLY into
- * editRenderItem below — never into renderVerdictOverlay, which is the
- * Present-mode (and guest-share) render path via BoardComposition. Internal
- * direction must never render there.
+ * Unresolved-direction count as a caption word (board-paths W3c, DV6). Wired
+ * ONLY into editRenderItem below — never into renderVerdictOverlay, which is
+ * the Present-mode (and guest-share) render path via BoardComposition.
+ * Internal direction must never render there.
  */
 function DirectionIndicator({ count }: { count: number }) {
   if (!count) return null;
   return (
     <span
       aria-label={`${count} unresolved direction note${count === 1 ? '' : 's'}`}
-      className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/10 bg-white/95 px-1 font-mono text-[8px] text-[var(--color-clay-ink)] shadow-sm"
+      className="word br-directions"
     >
-      {count}
+      {count} {count === 1 ? 'direction' : 'directions'} open
     </span>
   );
 }
@@ -261,10 +270,140 @@ function InlineNoteEditor({
           event.currentTarget.blur();
         }
       }}
-      className="h-full w-full resize-none overflow-auto rounded-sm border border-[var(--border-warm)] bg-[var(--bg-warm)] p-3 text-[0.78rem] leading-[1.5] text-[var(--color-bark)] outline-none focus:ring-2 focus:ring-[var(--color-clay)]"
-      style={{ fontFamily: 'var(--font-body)' }}
+      className="h-full w-full resize-none overflow-auto bg-transparent py-1 pl-4 pr-0 text-[0.875rem] leading-[1.5] text-[var(--text-primary)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
+      style={{ fontFamily: 'var(--font-body)', borderLeft: 'var(--edge-note)' }}
     />
   );
+}
+
+const WIDE_ROOM_QUERY = '(min-width: 768px)';
+function subscribeWideRoom(onChange: () => void) {
+  const query = window.matchMedia(WIDE_ROOM_QUERY);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+/**
+ * md and up: Zoom and Fit live in Tools › View; below md they sit under the
+ * board (US-28 S12, frame p7). One set is mounted at a time, so the zoom
+ * word and its controls exist once in the room at any width.
+ */
+function useWideRoom(): boolean {
+  return useSyncExternalStore(
+    subscribeWideRoom,
+    () => window.matchMedia(WIDE_ROOM_QUERY).matches,
+    () => true,
+  );
+}
+
+/**
+ * Marks every region of the room outside the sheet `inert` (the veil stays live
+ * so a tap on it still puts the sheet back), including regions that mount while
+ * the sheet is open. Returns the undo, which clears only what it marked.
+ */
+function inertRoomOutside(root: HTMLElement, sheet: HTMLElement): () => void {
+  const path: HTMLElement[] = [];
+  for (let node: HTMLElement | null = sheet; node && node !== root; node = node.parentElement) {
+    path.push(node);
+  }
+  const marked = new Set<Element>();
+  const mark = () => {
+    for (const kept of path) {
+      for (const sibling of Array.from(kept.parentElement?.children ?? [])) {
+        if (path.includes(sibling as HTMLElement) || sibling.classList.contains('veil')) continue;
+        if (sibling.hasAttribute('inert')) continue;
+        sibling.setAttribute('inert', '');
+        marked.add(sibling);
+      }
+    }
+  };
+  mark();
+  const observer = new MutationObserver(mark);
+  for (const kept of path) {
+    if (kept.parentElement) observer.observe(kept.parentElement, { childList: true });
+  }
+  return () => {
+    observer.disconnect();
+    marked.forEach((element) => element.removeAttribute('inert'));
+  };
+}
+
+/**
+ * Below md the open Tools Section is a modal sheet over the veil (R3): it wears
+ * dialog semantics, the room's Tab trap narrows to it (useBoardRoomBoundary),
+ * the rest of the room goes inert, and Escape from anywhere puts it back. At md
+ * and up it stays the side column.
+ */
+export function useToolsSheetModal(
+  rootRef: MutableRefObject<HTMLElement | null>,
+  sheetRef: MutableRefObject<HTMLElement | null>,
+  open: boolean,
+  onClose: () => void,
+) {
+  const wide = useWideRoom();
+  const modal = open && !wide;
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    if (!modal) return;
+    const root = rootRef.current;
+    const sheet = sheetRef.current;
+    if (!root || !sheet || !root.contains(sheet)) return;
+    return inertRoomOutside(root, sheet);
+  }, [modal, rootRef, sheetRef]);
+  useEffect(() => {
+    if (!modal) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      // A sheet or popover opened over the Tools sheet takes its own Escape.
+      if (topActiveModalDialog() !== sheetRef.current || topDismissiblePopover()) return;
+      event.preventDefault();
+      onCloseRef.current();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [modal, sheetRef]);
+  return modal ? ({ role: 'dialog', 'aria-modal': true } as const) : {};
+}
+
+/**
+ * The room's Tidy keys: Shift+T tidies the selection, Escape ends an open
+ * spacing session. Window capture, so they run before the canvas — and so
+ * they stand down entirely while a modal (the narrow Tools sheet) holds the
+ * room: Escape then belongs to the modal and Shift+T acts on nothing behind it.
+ */
+export function useTidyShortcuts({
+  enabled,
+  sessionOpen,
+  suppressed,
+  onTidy,
+  onEndSession,
+}: {
+  enabled: boolean;
+  sessionOpen: boolean;
+  suppressed: boolean;
+  onTidy: () => void;
+  onEndSession: () => void;
+}) {
+  useEffect(() => {
+    if (!enabled || suppressed) return;
+    const handleTidyShortcut = (event: KeyboardEvent) => {
+      if (isTextEntryTarget(event.target)) return;
+      if (event.key === 'Escape' && sessionOpen) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onEndSession();
+        return;
+      }
+      if (!event.shiftKey || event.key.toLowerCase() !== 't') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onTidy();
+    };
+    window.addEventListener('keydown', handleTidyShortcut, true);
+    return () => window.removeEventListener('keydown', handleTidyShortcut, true);
+  }, [enabled, onEndSession, onTidy, sessionOpen, suppressed]);
 }
 
 /** Route-level focus and scroll isolation; portalled nested dialogs keep their own trap. */
@@ -279,7 +418,9 @@ export function useBoardRoomBoundary(
     const unlockBodyScroll = lockBodyScroll();
     const frame = requestAnimationFrame(() => root.focus({ preventScroll: true }));
     const handleKeyDown = (event: KeyboardEvent) => {
-      trapTabWithin(event, root);
+      // A modal inside the room (the narrow Tools sheet) narrows the trap to itself.
+      const scope = root.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]') ?? root;
+      trapTabWithin(event, scope);
     };
     document.addEventListener('keydown', handleKeyDown, true);
     // A drop that misses the canvas must never navigate the browser to the dragged
@@ -320,6 +461,16 @@ function BoardNameField({ api }: { api: BoardRoomControllerApi }) {
       aria-label="Board name"
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}
+      // A rail piece carries its envelope as text/plain too; dropped on the
+      // (now heading-wide) name field it must never become the board's name.
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes(BOARD_ROOM_CLIPBOARD_MIME)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'none';
+      }}
+      onDrop={(event) => {
+        if (event.dataTransfer.types.includes(BOARD_ROOM_CLIPBOARD_MIME)) event.preventDefault();
+      }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') event.currentTarget.blur();
         if (event.key === 'Escape') {
@@ -327,7 +478,11 @@ function BoardNameField({ api }: { api: BoardRoomControllerApi }) {
           event.currentTarget.blur();
         }
       }}
-      className="h-11 min-w-[120px] border-transparent bg-transparent px-1 font-heading text-[15px] hover:border-[var(--border-default)] focus:border-[var(--color-clay)]"
+      // The board's name is the room's heading (US-28 S12): Playfair at the
+      // house display step, edited in place — input chrome only on focus.
+      // The face is set inline because Input pins the body face inline.
+      className="br-name h-11 w-full min-w-[120px] border-transparent bg-transparent px-1 text-[20px] font-medium leading-[1.2] shadow-none hover:border-transparent focus:border-[var(--clay-ink)] md:text-[26px]"
+      style={{ fontFamily: 'var(--font-display)' }}
     />
   );
 }
@@ -402,6 +557,12 @@ function BoardRoomSurface({
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const replaceTargetIdRef = useRef<string | null>(null);
   const [railCollapsed, setRailCollapsed] = useState(false);
+  /** Below md the Tools Section is one sheet over the veil (US-28 S12). */
+  const [toolsSheetOpen, setToolsSheetOpen] = useState(false);
+  const toolsActRef = useRef<HTMLButtonElement | HTMLAnchorElement | null>(null);
+  const toolsHeadRef = useRef<HTMLParagraphElement | null>(null);
+  const toolsSheetRef = useRef<HTMLElement | null>(null);
+  const wideRoom = useWideRoom();
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
@@ -416,6 +577,7 @@ function BoardRoomSurface({
    *  shortcuts stay out of the way mid-drag, exactly as the edit shortcuts
    *  already do (CI-17). */
   const gestureActiveRef = useRef(false);
+  const roomShortcutsSuppressedRef = useRef(false);
   const upsertBoard = useUpsertBoard();
   const applyBoardState = useApplyBoardRoomState();
   const boardQuery = useBoard(api.state?.boardId);
@@ -595,24 +757,6 @@ function BoardRoomSurface({
   }, [lastCommand]);
 
   useEffect(() => {
-    const handleTidyShortcut = (event: KeyboardEvent) => {
-      if (api.mode !== 'edit' || isTextEntryTarget(event.target)) return;
-      if (event.key === 'Escape' && tidySession) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        setTidySession(null);
-        return;
-      }
-      if (!event.shiftKey || event.key.toLowerCase() !== 't') return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      runTidy();
-    };
-    window.addEventListener('keydown', handleTidyShortcut, true);
-    return () => window.removeEventListener('keydown', handleTidyShortcut, true);
-  }, [api.mode, runTidy, tidySession]);
-
-  useEffect(() => {
     if (!railPreferenceKey || !gridPreferenceKey || !snapPreferenceKey) return;
     try {
       setRailCollapsed(window.localStorage.getItem(railPreferenceKey) === 'true');
@@ -636,6 +780,29 @@ function BoardRoomSurface({
       return next;
     });
   };
+
+  /** "Put back": close the Tools sheet and return focus to the "Tools" act. */
+  const closeToolsSheet = () => {
+    setToolsSheetOpen(false);
+    requestAnimationFrame(() => toolsActRef.current?.focus());
+  };
+  const toolsSheetModalProps = useToolsSheetModal(
+    rootRef,
+    toolsSheetRef,
+    api.mode === 'edit' && toolsSheetOpen,
+    closeToolsSheet,
+  );
+  /** While the narrow Tools sheet is a modal, the room's shortcuts stand down (R3b). */
+  const toolsSheetModal = 'aria-modal' in toolsSheetModalProps;
+  roomShortcutsSuppressedRef.current = toolsSheetModal;
+  const endTidySession = useCallback(() => setTidySession(null), []);
+  useTidyShortcuts({
+    enabled: api.mode === 'edit',
+    sessionOpen: tidySession !== null,
+    suppressed: toolsSheetModal,
+    onTidy: runTidy,
+    onEndSession: endTidySession,
+  });
 
   const toggleGrid = () => {
     setShowGrid((current) => {
@@ -855,9 +1022,9 @@ function BoardRoomSurface({
     );
   }, [api]);
 
-  const fit = useCallback(() => {
+  const fittedView = useCallback(() => {
     const current = api.state;
-    if (!current) return;
+    if (!current) return null;
     const rect = workspaceRef.current?.getBoundingClientRect();
     const geometry = resolveMoodBoardGeometry({
       canvasWidth: current.canvasWidth,
@@ -866,14 +1033,39 @@ function BoardRoomSurface({
       sections: current.sections,
       items: current.items,
     });
-    api.canvasProps?.onViewChange?.(
-      fitBoardGeometry(geometry, {
-        width: rect?.width ?? 800,
-        height: rect?.height ?? 600,
-      }),
-      'fit',
-    );
-  }, [api]);
+    const size = { width: rect?.width ?? 800, height: rect?.height ?? 600 };
+    return { view: fitBoardGeometry(geometry, size), size };
+  }, [api.state]);
+
+  const fit = useCallback(() => {
+    const fitted = fittedView();
+    if (fitted) api.canvasProps?.onViewChange?.(fitted.view, 'fit');
+  }, [api, fittedView]);
+
+  // The room opens at fit (US-28 walk-fix): every zone and piece inside the
+  // window at 1440 and at 390, never a fragment of the first zone. Once per
+  // board, after layout gives the window its size; a board smaller than the
+  // window opens centred at 100% rather than blown up past it.
+  const openedAtFitRef = useRef<string | null>(null);
+  const boardIdForFit = api.state?.boardId ?? null;
+  useEffect(() => {
+    if (!boardIdForFit || openedAtFitRef.current === boardIdForFit) return;
+    const frame = requestAnimationFrame(() => {
+      const rect = workspaceRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+      const fitted = fittedView();
+      if (!fitted) return;
+      openedAtFitRef.current = boardIdForFit;
+      const { view, size } = fitted;
+      api.canvasProps?.onViewChange?.(
+        view.zoom > 1
+          ? zoomBoardViewAtPoint(view, { x: size.width / 2, y: size.height / 2 }, 1)
+          : view,
+        'fit',
+      );
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [api.canvasProps, boardIdForFit, fittedView]);
 
   // View shortcuts are room-scoped, not canvas-scoped: after a click in the
   // rail or the inspector, Cmd+0, 1 and the zoom keys kept working for edit
@@ -909,7 +1101,7 @@ function BoardRoomSurface({
       // No view change while a pointer gesture is in flight — zoom or fit
       // re-anchors the frame the gesture was measured against. Bare '1'
       // needed this as much as the mod+ combos did (A3).
-      if (gestureActiveRef.current) return;
+      if (gestureActiveRef.current || roomShortcutsSuppressedRef.current) return;
       const mod = event.metaKey || event.ctrlKey;
       if (!mod && event.key === '1') {
         event.preventDefault();
@@ -1175,7 +1367,7 @@ function BoardRoomSurface({
   };
 
   const renderVerdictOverlay = (item: { id?: string }) => (
-    item.id ? <VerdictBadge feedback={feedbackByItem.get(item.id)} /> : null
+    item.id ? <VerdictBadge feedback={feedbackByItem.get(item.id)} onPlate /> : null
   );
   const originalRenderItem = api.canvasProps.renderItem;
   const deckCaption = (item: EditableMoodBoardItem): string | null => {
@@ -1200,36 +1392,39 @@ function BoardRoomSurface({
       </div>
     );
   };
-  const editRenderItem = (item: EditableMoodBoardItem): ReactNode => (
-    <div className="relative h-full w-full">
-      {item.type === 'note' && editingNoteId === item.id ? (
-        <InlineNoteEditor
-          item={item}
-          onFocus={() => api.setFocusedItemId(item.id)}
-          onCommit={(content) => api.updateItem(item.id, { content })}
-          onDone={() => setEditingNoteId(null)}
-        />
-      ) : originalRenderItem(item)}
-      {feedbackByItem.has(item.id) && (
-        <span className="pointer-events-none absolute right-1 top-1 z-20">
-          <VerdictBadge feedback={feedbackByItem.get(item.id)} />
-        </span>
-      )}
-      {(unresolvedDirectionCountByItem.get(item.id) ?? 0) > 0 && (
-        <span className="pointer-events-none absolute left-1 top-1 z-20">
-          <DirectionIndicator count={unresolvedDirectionCountByItem.get(item.id) ?? 0} />
-        </span>
-      )}
-      {deckCaption(item) && (
-        <span
-          data-deck-caption
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 truncate bg-[var(--bg-surface)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--text-muted)]"
-        >
-          {deckCaption(item)}
-        </span>
-      )}
-    </div>
-  );
+  // The item's state as caption words beneath it (US-28 S12; SPEC §S12.2.4):
+  // the verdict, the open-direction count and the deck caption no longer sit
+  // over the plate as badges, and nothing in them truncates.
+  const editRenderItem = (item: EditableMoodBoardItem): ReactNode => {
+    const directionCount = unresolvedDirectionCountByItem.get(item.id) ?? 0;
+    const caption = deckCaption(item);
+    const hasWords = feedbackByItem.has(item.id) || directionCount > 0 || Boolean(caption);
+    return (
+      <div className="flex h-full w-full flex-col">
+        <div className="relative min-h-0 flex-1">
+          {item.type === 'note' && editingNoteId === item.id ? (
+            <InlineNoteEditor
+              item={item}
+              onFocus={() => api.setFocusedItemId(item.id)}
+              onCommit={(content) => api.updateItem(item.id, { content })}
+              onDone={() => setEditingNoteId(null)}
+            />
+          ) : originalRenderItem(item)}
+        </div>
+        {hasWords && (
+          <p className="br-item-words pointer-events-none">
+            {feedbackByItem.has(item.id) && <VerdictBadge feedback={feedbackByItem.get(item.id)} />}
+            <DirectionIndicator count={directionCount} />
+            {caption && (
+              <span data-deck-caption className="br-deck-caption">
+                {caption}
+              </span>
+            )}
+          </p>
+        )}
+      </div>
+    );
+  };
 
   const adjustTidyGap = (gap: number) => {
     if (!tidySession) return;
@@ -1263,66 +1458,98 @@ function BoardRoomSurface({
       aria-label={`${state.name} design board workspace`}
       className="fixed inset-0 z-[40] flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden overscroll-contain bg-[var(--bg-primary)] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] outline-none"
     >
-      <header className="relative z-50 flex min-h-14 shrink-0 items-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-2 sm:px-4">
-        <div className="min-w-0 flex-1 sm:max-w-[300px]"><BoardNameField api={api} /></div>
-        <span className="hidden max-w-[180px] truncate rounded-full border border-[var(--border-default)] px-2.5 py-1 font-mono text-[8px] uppercase text-[var(--text-muted)] sm:block">
-          {ownerLabel}
-        </span>
-
-        {api.mode === 'present' ? (
-          <label className="hidden min-h-11 min-w-11 items-center justify-center gap-1.5 text-[10px] text-[var(--text-muted)] sm:flex">
-            <input type="checkbox" checked={api.showNotes} onChange={(event) => api.setShowNotes(event.target.checked)} />
-            Show annotations
-          </label>
-        ) : (
-          <>
-            <button type="button" onClick={toggleRail} className="hidden min-h-11 min-w-11 px-2 font-mono text-[9px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] md:block">
-              {railCollapsed ? 'Show resources' : 'Hide resources'}
-            </button>
-            <button type="button" disabled={!api.canUndo} onClick={api.undo} className="hidden min-h-11 min-w-11 px-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30 sm:block" aria-label="Undo">↶</button>
-            <button type="button" disabled={!api.canRedo} onClick={api.redo} className="hidden min-h-11 min-w-11 px-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30 sm:block" aria-label="Redo">↷</button>
-            {/* Zoom/Fit stay visible at every viewport width (CI-02) — only
-                Grid/Snap/Tidy below keep their lg:/xl: gating. */}
-            <button type="button" aria-label="Zoom out" onClick={() => zoomBy(-0.1)} className="flex min-h-11 min-w-11 items-center justify-center text-sm text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">−</button>
-            <span className="min-w-10 text-center font-mono text-[9px] tabular-nums text-[var(--text-muted)]">{Math.round(api.view.zoom * 100)}%</span>
-            <button type="button" aria-label="Zoom in" onClick={() => zoomBy(0.1)} className="flex min-h-11 min-w-11 items-center justify-center text-sm text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">+</button>
-            <Button variant="ghost" size="sm" className="min-h-11 min-w-11 inline-flex" onClick={fit}>Fit to screen</Button>
-            <button type="button" aria-label="Show grid" aria-pressed={showGrid} onClick={toggleGrid} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Grid</button>
-            <button type="button" aria-label="Snap to grid" aria-pressed={snapToGrid} onClick={toggleSnap} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Snap</button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="hidden min-h-11 min-w-11 xl:inline-flex"
-              disabled={!tidyTarget.enabled}
-              onClick={runTidy}
+      {/* The house Header line (US-28 S12; SPEC §S12.4): the job as an
+          eyebrow, the board's name in Playfair, and three acts — Present and
+          Save and close scored, Share tertiary. No filled act. Every tool
+          lives in the Tools Section below; below md the "Tools" act opens it
+          as one sheet. */}
+      <header className="br-head relative z-50 shrink-0">
+        <div className="hline br-hline">
+          <div className="hline-l br-hline-l">
+            {/* Back to the job (boardroom-p1): the same leave as Save and
+                close, so the board and its cover are written before it goes. */}
+            <DocumentAction
+              actionKey="board-room-back"
+              surfaceKey="board-room"
+              regionKey="board-room-head"
+              variant="tertiary"
+              leading="←"
+              className="br-back"
+              disabled={api.isExiting}
+              onClick={() => void api.requestExit()}
             >
-              Arrange composition
-            </Button>
-          </>
-        )}
-
-        <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)} aria-label="Share design board">Share</Button>
-          {api.mode === 'edit' && <Button variant="ghost" size="sm" className="hidden min-h-11 min-w-11 sm:inline-flex" onClick={() => setExportOpen(true)} aria-label="Export design board">Export</Button>}
-          <Button variant={api.mode === 'present' ? 'secondary' : 'ghost'} size="sm" className="min-h-11 min-w-11" onClick={api.togglePresent}>
-            {api.mode === 'present' ? 'Edit design board' : 'Present design board'}
-          </Button>
-          {api.mode === 'edit' && (
-            <BoardRoomSectionsMenu
-              api={api}
-              showGrid={showGrid}
-              snapToGrid={snapToGrid}
-              onToggleGrid={toggleGrid}
-              onToggleSnap={toggleSnap}
-              tidyEnabled={tidyTarget.enabled}
-              onTidy={runTidy}
-              onSaveTemplate={() => setTemplateOpen(true)}
-            />
-          )}
-          <Button variant="primary" size="sm" className="min-h-11 min-w-11" disabled={api.isExiting} onClick={() => void api.requestExit()}>
-            {api.isExiting ? 'Saving…' : 'Save and close'}
-          </Button>
+              {ownerLabel}
+            </DocumentAction>
+            <div className="br-name-wrap"><BoardNameField api={api} /></div>
+          </div>
+          <div className="hline-r br-hline-r">
+            {api.mode === 'edit' && (
+              <DocumentAction
+                ref={toolsActRef}
+                actionKey="board-room-tools"
+                surfaceKey="board-room"
+                regionKey="board-room-head"
+                variant="tertiary"
+                className={railCollapsed ? 'br-tools-act br-tools-act--folded' : 'br-tools-act'}
+                aria-expanded={toolsSheetOpen}
+                aria-controls="board-room-tools"
+                onClick={() => {
+                  // Below md the act opens the sheet; at md and up it unfolds
+                  // the side Section the designer folded away.
+                  if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
+                    if (railCollapsed) toggleRail();
+                    return;
+                  }
+                  setToolsSheetOpen(true);
+                  requestAnimationFrame(() => toolsHeadRef.current?.focus());
+                }}
+              >
+                Tools
+              </DocumentAction>
+            )}
+            {api.mode === 'present' && (
+              <label className="br-check">
+                <input type="checkbox" checked={api.showNotes} onChange={(event) => api.setShowNotes(event.target.checked)} />
+                Show notes
+              </label>
+            )}
+            <DocumentAction
+              actionKey={api.mode === 'present' ? 'board-room-back-to-editing' : 'board-room-present'}
+              surfaceKey="board-room"
+              regionKey="board-room-head"
+              variant="secondary"
+              onClick={api.togglePresent}
+            >
+              {api.mode === 'present' ? 'Back to editing' : 'Present'}
+            </DocumentAction>
+            <DocumentAction
+              actionKey="board-room-save-and-close"
+              surfaceKey="board-room"
+              regionKey="board-room-head"
+              variant="secondary"
+              disabled={api.isExiting}
+              onClick={() => void api.requestExit()}
+            >
+              {api.isExiting ? 'Saving…' : 'Save and close'}
+            </DocumentAction>
+            <DocumentAction
+              actionKey="board-room-share"
+              surfaceKey="board-room"
+              regionKey="board-room-head"
+              variant="tertiary"
+              aria-label="Share design board"
+              onClick={() => setShareOpen(true)}
+            >
+              Share
+            </DocumentAction>
+            {/* The room sheds the docks and covers the page, so the TESTER
+                mark takes its place here, one more act in this wrapping row:
+                it covers no control, and the sheets and dialogs still stand
+                over it (SQ-865). */}
+            <TesterSlot kind="board" />
+          </div>
         </div>
+        <div className="rule-strong br-rule" role="presentation" />
       </header>
 
       {(surfaceError || api.persistenceError) && (
@@ -1442,32 +1669,95 @@ function BoardRoomSurface({
       />
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        {api.mode === 'edit' && !railCollapsed && (
-          <aside aria-label="Add to board" className="flex max-h-48 w-full shrink-0 flex-col border-b border-[var(--border-default)] bg-[var(--bg-surface)] md:max-h-none md:w-[264px] md:border-b-0 md:border-r">
-            <BoardAddRail
-              owner={owner}
-              boardId={state.boardId}
-              projectRoomId={owner.kind === 'project' ? boardQuery.data?.project_room_id ?? null : null}
-              items={state.items}
-              preferenceScope={preferenceScope}
-              nextPoint={nextPoint}
-              nextZ={nextZ}
-              onAddItems={addFromRail}
-              onSelectItem={focusFeedbackItem}
-              onBringInDeck={onBringInDeck}
+        {api.mode === 'edit' && toolsSheetOpen && (
+          <div
+            aria-hidden
+            className="veil br-tools-veil md:hidden"
+            onClick={() => closeToolsSheet()}
+          />
+        )}
+        {api.mode === 'edit' && (
+          // The Tools Section (US-28 S12; SPEC §S12.4, frames p1 and p8): at md
+          // and up it is the side column; below md it is one sheet over the
+          // veil, opened by the header's "Tools" act and put back by its own.
+          <aside
+            ref={toolsSheetRef}
+            id="board-room-tools"
+            aria-labelledby="board-room-tools-head"
+            {...toolsSheetModalProps}
+            data-open={toolsSheetOpen ? 'true' : 'false'}
+            data-folded={railCollapsed ? 'true' : 'false'}
+            className="section br-tools"
+          >
+            <div className="sec-head">
+              <p className="eb" id="board-room-tools-head" ref={toolsHeadRef} tabIndex={-1}>
+                <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false"><path d="M0 2h34M0 6h28M0 10h20" /></svg>
+                <span>Tools</span>
+              </p>
+              <button type="button" className="br-tool br-tools-fold" onClick={toggleRail}>Fold tools</button>
+              <button type="button" className="br-tool br-tools-putback" onClick={() => closeToolsSheet()}>Put back</button>
+            </div>
+            <div className="br-tools-group br-tools-group--first" role="group" aria-labelledby="br-tools-bring">
+              <p className="eb" id="br-tools-bring">Bring pieces in</p>
+              <BoardAddRail
+                owner={owner}
+                boardId={state.boardId}
+                projectRoomId={owner.kind === 'project' ? boardQuery.data?.project_room_id ?? null : null}
+                items={state.items}
+                preferenceScope={preferenceScope}
+                nextPoint={nextPoint}
+                nextZ={nextZ}
+                onAddItems={addFromRail}
+                onSelectItem={focusFeedbackItem}
+                onBringInDeck={onBringInDeck}
+              />
+            </div>
+            <div className="br-tools-group" role="group" aria-labelledby="br-tools-view">
+              <p className="eb" id="br-tools-view">View</p>
+              <div className="br-tool-acts">
+                <button type="button" className="br-tool" disabled={!api.canUndo} onClick={api.undo} aria-label="Undo">Undo</button>
+                <button type="button" className="br-tool" disabled={!api.canRedo} onClick={api.redo} aria-label="Redo">Redo</button>
+                {wideRoom && !railCollapsed && (
+                <span className="br-zoom-tools">
+                  <button type="button" className="br-tool" aria-label="Zoom out" onClick={() => zoomBy(-0.1)}>−</button>
+                  <span className="br-zoom-word">{Math.round(api.view.zoom * 100)}%</span>
+                  <button type="button" className="br-tool" aria-label="Zoom in" onClick={() => zoomBy(0.1)}>+</button>
+                  <button type="button" className="br-tool" onClick={fit}>Fit to screen</button>
+                </span>
+                )}
+                <button type="button" className="br-tool" aria-label="Show grid" aria-pressed={showGrid} onClick={toggleGrid}>Grid</button>
+                <button type="button" className="br-tool" aria-label="Snap to grid" aria-pressed={snapToGrid} onClick={toggleSnap}>Snap</button>
+              </div>
+            </div>
+            <BoardRoomSectionsMenu
+              api={api}
+              tidyEnabled={tidyTarget.enabled}
+              onTidy={runTidy}
+              onExport={() => setExportOpen(true)}
+              onSaveTemplate={() => setTemplateOpen(true)}
             />
           </aside>
         )}
 
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           ref={workspaceRef}
           className={`relative min-h-0 flex-1 ${api.mode === 'present' ? 'overflow-y-auto sm:overflow-hidden' : 'overflow-hidden'}`}
         >
+          {api.mode === 'edit' && state.items.length === 0 && (
+            // The one empty state, on the surface (frame p6) — not a canvas
+            // item, and transparent to the pointer so a drop still lands.
+            <div className="br-empty pointer-events-none">
+              <EmptyState eyebrow="An empty board">
+                Nothing on this board yet. Bring pieces in from Tools, or drop a photo or a link here.
+              </EmptyState>
+            </div>
+          )}
           {api.mode === 'edit' && tidySession && (
             <div
               role="group"
               aria-label="Tidy spacing"
-              className="absolute left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2"
+              className="br-line absolute left-1/2 top-3 z-50 flex -translate-x-1/2 items-center gap-2 px-3 py-2"
             >
               <label className="flex items-center gap-2 font-mono text-[9px] uppercase text-[var(--text-muted)]">
                 Spacing
@@ -1489,7 +1779,7 @@ function BoardRoomSurface({
                 type="button"
                 aria-label="Close Tidy spacing"
                 onClick={() => setTidySession(null)}
-                className="min-h-8 min-w-8 rounded-full text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                className="min-h-11 min-w-11 text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
               >
                 ×
               </button>
@@ -1513,7 +1803,7 @@ function BoardRoomSurface({
                 <div
                   role="status"
                   aria-live="polite"
-                  className="pointer-events-none absolute bottom-3 right-3 z-40 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] shadow-sm"
+                  className="br-line pointer-events-none absolute bottom-3 right-3 z-40 px-3 py-1"
                 >
                   Loading images {presentPrefetchProgress.loaded}/{presentPrefetchProgress.total}
                 </div>
@@ -1522,7 +1812,7 @@ function BoardRoomSurface({
                 <div
                   role="status"
                   aria-live="polite"
-                  className="absolute bottom-3 right-3 z-40 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] shadow-sm"
+                  className="br-line absolute bottom-3 right-3 z-40 flex items-center gap-2 px-3 py-1"
                 >
                   <span>
                     {presentPrefetchResult.failed} image{presentPrefetchResult.failed === 1 ? '' : 's'} may load during presentation
@@ -1531,7 +1821,7 @@ function BoardRoomSurface({
                     type="button"
                     aria-label="Dismiss"
                     onClick={() => setPresentPrefetchResult(null)}
-                    className="min-h-4 min-w-4 text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+                    className="min-h-11 min-w-11 text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
                   >
                     ×
                   </button>
@@ -1576,6 +1866,18 @@ function BoardRoomSurface({
             renderDeckActions={deckImportOn ? renderDeckActions : undefined}
           />
         </div>
+        {api.mode === 'edit' && (!wideRoom || railCollapsed) && (
+          // Zoom and Fit stay visible at every width (CI-02): at md and up in
+          // Tools › View, below md (or with Tools folded) here, under the board
+          // (frame p7).
+          <div className="br-viewbar" role="group" aria-label="Board view">
+            <button type="button" className="br-tool" aria-label="Zoom out" onClick={() => zoomBy(-0.1)}>−</button>
+            <span className="br-zoom-word">{Math.round(api.view.zoom * 100)}%</span>
+            <button type="button" className="br-tool" aria-label="Zoom in" onClick={() => zoomBy(0.1)}>+</button>
+            <button type="button" className="br-tool" onClick={fit}>Fit to screen</button>
+          </div>
+        )}
+        </div>
       </div>
 
       {/* Persistence status keeps its OWN region. Sharing one with the
@@ -1600,7 +1902,7 @@ function BoardRoomSurface({
         aria-atomic="true"
         data-testid="board-room-live-region"
         className={api.exitPromptArmed
-          ? 'pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-[var(--border-subtle,#DED6C9)] bg-[var(--bg-raised,#FFFDF9)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]'
+          ? 'br-line pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 px-4 py-2'
           : 'sr-only'}
       >
         {api.announcement}
@@ -1782,6 +2084,13 @@ export function MoodBoardRoom({
     materializedRouter.replace(strippedHref, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // `?present=1` opens the room straight into Present (US-28 S12: the job's
+  // boards tab links a board's "Present" act here). Read once, like
+  // `navigation` below; the controller only takes it as its initial mode.
+  const [startMode] = useState<BoardRoomMode>(() => {
+    if (typeof window === 'undefined') return 'edit';
+    return new URLSearchParams(window.location.search).get('present') === '1' ? 'present' : 'edit';
+  });
   const [navigation] = useState(() => {
     if (typeof window === 'undefined') {
       return { source: 'direct_url' as const, returnTarget: owner.kind === 'proposal' ? `/drafting/${owner.id}` : `/doc/${owner.id}` };
@@ -1935,6 +2244,7 @@ export function MoodBoardRoom({
     <BoardRoomController
       owner={owner}
       boardId={boardId}
+      defaultMode={startMode}
       onExit={() => exitHandlerRef.current?.()}
       onItemsDropped={dropped}
       onPasteImages={pasteImages}

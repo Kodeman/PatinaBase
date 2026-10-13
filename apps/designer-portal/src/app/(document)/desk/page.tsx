@@ -7,7 +7,14 @@
  * No metric tiles, badges, feeds, or dashboard furniture.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import {
   useProfile,
   useOrganizations,
@@ -17,6 +24,7 @@ import {
   useStudioUnbilledTime,
   useProjectLeads,
   useNeedStates,
+  useTeammateActed,
 } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useViewerStudio } from '@/hooks/use-viewer-studio';
@@ -31,8 +39,11 @@ import {
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DeskRoster } from '@/components/document/desk-roster';
 import {
+  deriveDeskLedger,
   deriveDeskRoster,
+  deriveRosterPeople,
   pinnedProjectIdsFromRoster,
+  type DeskRosterInput,
 } from '@/lib/document/desk-roster-derivation';
 import { useDeskLineState } from '@/components/document/desk-arbiter';
 import { deriveDeskNeedList } from '@/lib/document/desk-need-list';
@@ -40,6 +51,7 @@ import { studioOutboundNeed } from '@/lib/document/desk-derivation';
 import {
   deriveHandoffNeeds,
   deskDesignersOf,
+  deskHolderOf,
   type DeskScope,
 } from '@/lib/document/desk-scope';
 import { WEEKDAY_FORMAT, dayMonth } from '@/lib/document/dates';
@@ -49,32 +61,63 @@ import { DeskBoardsReactionRollup } from '@/components/document/desk-boards-reac
 import { MarginNote } from '@/components/document/margin-note';
 import { useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
 import { DaySheet } from '@/components/document/day-sheet';
-import { deriveDaySheet } from '@/lib/document/day-sheet';
+import { EmptyState } from '@/components/document/empty-state';
+import { deriveDaySheet, groupSheetByJob } from '@/lib/document/day-sheet';
 import {
   START_DESK_WALKTHROUGH_EVENT,
   clearDeskWalkthroughLater,
   useDeskWalkthroughOffer,
   useSuppressDeskFirstTouch,
 } from '@/components/document/help/desk-walkthrough';
-import { CaptureLeadSheet } from '@/components/document/overlays/capture-lead-sheet';
+import { CaptureLeadSheet, type CapturedLead } from '@/components/document/overlays/capture-lead-sheet';
 import { OpenProjectSheet } from '@/components/document/overlays/open-project-sheet';
 import {
   DocumentAction,
   DocumentActionGroup,
 } from '@/components/document/document-action';
+import { RegionRule } from '@/components/document/region/region-rule';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
-import { STUDIO_VERBS } from '@/lib/document/registry';
 
-// F24 — the two header acts print their registry sub-labels; the registry
-// (A3-L3's file) is the one place these strings are stored, so the header
-// reads the same words the Desk Contents' Begin column and ⌘K do.
-const CAPTURE_LEAD_SUBLABEL = STUDIO_VERBS.find(
-  (verb) => verb.key === 'capture-lead',
-)?.subLabel;
-const OPEN_PROJECT_SUBLABEL = STUDIO_VERBS.find(
-  (verb) => verb.key === 'open-project',
-)?.subLabel;
+// F6 — Back keeps the place. The Desk holds its scroll offset (and the row
+// last pressed) for this tab when it is left, and puts it back only when a
+// history traversal lands here; a fresh entry belongs to the arrival.
+const DESK_PLACE_KEY = 'patina.desk.place';
+
+interface DeskPlace {
+  y: number;
+  anchor: string | null;
+}
+
+let deskMounted = false;
+// Read when a Back lands on the Desk, before the Desk mounts and holds again.
+let placeToRestore: DeskPlace | null = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', () => {
+    placeToRestore =
+      !deskMounted && window.location.pathname === '/desk' ? heldDeskPlace() : null;
+  });
+}
+
+function holdDeskPlace(anchor: string | null): void {
+  try {
+    const place: DeskPlace = { y: window.scrollY, anchor };
+    window.sessionStorage.setItem(DESK_PLACE_KEY, JSON.stringify(place));
+  } catch {
+    /* storage disabled — Back lands where the browser puts it */
+  }
+}
+
+function heldDeskPlace(): DeskPlace | null {
+  try {
+    const raw = window.sessionStorage.getItem(DESK_PLACE_KEY);
+    const held = raw ? (JSON.parse(raw) as Partial<DeskPlace> | null) : null;
+    if (!held || typeof held.y !== 'number') return null;
+    return { y: held.y, anchor: typeof held.anchor === 'string' ? held.anchor : null };
+  } catch {
+    return null;
+  }
+}
 
 /** `desk-first-touch` is a first-hour line (return-teaching §2). */
 const FIRST_HOUR_MS = 60 * 60 * 1000;
@@ -92,6 +135,8 @@ export default function DeskPage() {
   const suppressFirstTouch = useSuppressDeskFirstTouch(); // R97 — hold the note during modal/tour
   const showWalkthroughOffer = useDeskWalkthroughOffer(); // R97 — existing-designer tour offer
   const [captureOpen, setCaptureOpen] = useState(false);
+  // U-Q7 — the inquiry she just recorded, for this visit's one line.
+  const [recorded, setRecorded] = useState<CapturedLead | null>(null);
   const [openProjectOpen, setOpenProjectOpen] = useState(false);
 
   const oneVoice = useFeatureFlag('one-voice').value === true;
@@ -102,6 +147,8 @@ export default function DeskPage() {
   } = useOrganizationMembers(studio?.id ?? '');
   const { data: projectLeads, isSuccess: projectLeadsRead } = useProjectLeads(studioId);
   const { data: needStates } = useNeedStates(studio?.id ?? '');
+  // U-Q4 — teammates' acts, as facts; never merged into her own states.
+  const { data: teammateActed, isSuccess: teammateActedRead } = useTeammateActed(studio?.id ?? '');
   // N4 — Mine by default, held per person in this browser.
   const [deskScope, setDeskScopeState] = useState<DeskScope>('mine');
   const scopeStoreKey = user?.id ? `patina.desk.scope.${user.id}` : null;
@@ -195,11 +242,9 @@ export default function DeskPage() {
       : now.getHours() < 18
         ? 'Good afternoon'
         : 'Good evening';
-  // PP-2 — the Desk's one date style. The greeting says the same idiom the
-  // day's line says beneath it, and neither composes its own formatter.
-  const dateLabel = hydrated
-    ? `${WEEKDAY_FORMAT.format(now)} · ${dayMonth(now)}`.toUpperCase()
-    : '';
+  // PP-2 — the Desk's one date style. U-Q3 — it prints in Today's eyebrow,
+  // "Monday 12 October · Today"; the eyebrow sets the caps.
+  const dateLabel = hydrated ? `${WEEKDAY_FORMAT.format(now)} ${dayMonth(now)}` : '';
   const name =
     profile?.display_name || profile?.full_name || user?.name || null;
   // The Desk greeting uses the real first name; with none resolved we greet
@@ -208,26 +253,23 @@ export default function DeskPage() {
 
   // The roster is the Desk's one population — every live job, grouped by
   // stage, in the paper's own section order.
-  const roster = useMemo(
-    () =>
-      deriveDeskRoster(
-        {
-          folders: data?.folders ?? [],
-          chips: data?.chips ?? [],
-          live: data?.live ?? [],
-          oneVoice,
-          unreadFeeds: data?.unreadFeeds,
-          scope: deskScope,
-          leads: projectLeads,
-          meUserId: user?.id,
-        },
-        new Date(),
-      ),
+  const rosterInput = useMemo<DeskRosterInput>(
+    () => ({
+      folders: data?.folders ?? [],
+      chips: data?.chips ?? [],
+      live: data?.live ?? [],
+      oneVoice,
+      unreadFeeds: data?.unreadFeeds,
+      scope: deskScope,
+      leads: projectLeads,
+      meUserId: user?.id,
+    }),
     [data, deskScope, oneVoice, projectLeads, user?.id],
   );
+  const roster = useMemo(() => deriveDeskRoster(rosterInput, new Date()), [rosterInput]);
 
-  // R-DM21 A — a Day Sheet line finds its job's roster line by the need's
-  // project id, to land where that job's act lands.
+  // Today's cards take each job's name and stage from the full roster, keyed
+  // by the id the sheet's lines carry (`project_id ?? engagement_id`).
   const rosterJobs = useMemo(
     () =>
       new Map(
@@ -235,11 +277,20 @@ export default function DeskPage() {
       ),
     [roster],
   );
+  const people = useMemo(() => deriveRosterPeople(studioMembers ?? []), [studioMembers]);
+  const names = useMemo(
+    () => new Map(people.map((person) => [person.id, person.name] as const)),
+    [people],
+  );
+  const holderOf = useMemo(
+    () => deskHolderOf(projectLeads ?? new Map(), user?.id, deskDesignersOf(data?.live ?? []), names),
+    [projectLeads, user?.id, data, names],
+  );
 
   // A quiet Desk (no live jobs at all) lets the Studio index rise to fill the
   // space — larger, and earlier in the composition — rather than sitting as
   // bottom front matter. Only known once the read resolves.
-  const deskEmpty = !!data && roster.liveCount === 0;
+  const deskEmpty = !!data && data.live.length === 0;
   // SQ-778 N3 — her seat (the invite note and its writer); handoffNoteFor
   // decides per job whether the note is that job's.
   const mySeat = studioMembers?.find((m) => m.user_id === user?.id) ?? null;
@@ -253,6 +304,7 @@ export default function DeskPage() {
       user?.id,
       needStates,
       mySeat,
+      at,
     );
     // SQ-751 F8 — the person scope runs before the studio errands collapse to
     // one line, so her own Pulse survives in Mine.
@@ -286,15 +338,56 @@ export default function DeskPage() {
       meUserId: user?.id,
       scope: deskScope,
       designers: deskDesignersOf(data?.live ?? []),
+      teammateActs: teammateActed,
       // SQ-751 F5 — who leads each job is a feed: until a studio's leads
       // answer, Mine is not known to be empty. A seat with no studio has none.
       unreadFeeds: [
         ...(data?.unreadFeeds ?? []),
         ...(studioId && !projectLeadsRead ? ['project leads'] : []),
+        // R14 — the studio's scope settles a line on its holder's act (U-Q4):
+        // until those facts answer, an open line there may already be done.
+        ...(studioId && deskScope === 'studio' && !teammateActedRead ? ['teammates’ acts'] : []),
       ],
       now: at,
     });
-  }, [data, projectLeads, projectLeadsRead, studioId, user?.id, needStates, mySeat, deskScope]);
+  }, [
+    data,
+    projectLeads,
+    projectLeadsRead,
+    studioId,
+    user?.id,
+    needStates,
+    teammateActed,
+    teammateActedRead,
+    mySeat,
+    deskScope,
+  ]);
+
+  // US-28 change 1/2 — Today as cards, one per job; the ledger takes every
+  // job Today does not, read on the same ranked list.
+  const cards = useMemo(
+    () => groupSheetByJob(sheet.lines, rosterJobs, holderOf),
+    [sheet, rosterJobs, holderOf],
+  );
+  const ledger = useMemo(
+    () => deriveDeskLedger({ roster: rosterInput, sheet, cards, people, holderOf, now: new Date() }),
+    [rosterInput, sheet, cards, people, holderOf],
+  );
+  // Mine — whose the rest of the studio's jobs are, by the names that carry them.
+  const othersHold = useMemo(() => {
+    if (deskScope !== 'mine') return null;
+    const holders = [
+      ...new Set(
+        (data?.live ?? [])
+          .map((row) => holderOf(row.project_id ?? row.engagement_id))
+          .filter((holder) => !holder.mine && holder.name)
+          .map((holder) => `${holder.name}’s`),
+      ),
+    ];
+    if (holders.length === 0) return null;
+    const list = holders.length === 1 ? holders[0] : `${holders.slice(0, -1).join(', ')} and ${holders.at(-1)}`;
+    return `The rest of the studio’s jobs are ${list}.`;
+  }, [deskScope, data, holderOf]);
 
   // The Desk arbiter (return-teaching §2): these four lines keep their own
   // conditions, and at most one of them, or the teaching note, renders per
@@ -418,34 +511,143 @@ export default function DeskPage() {
     if (arrivalRoot) arrivalRootShown.current = true;
   }, [arrivalRoot]);
 
+  // F6 — the row last pressed, held with the offset as its fallback.
+  const pressedAnchor = useRef<string | null>(null);
+  const deskRoot = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    deskMounted = true;
+    const onHide = () => holdDeskPlace(pressedAnchor.current);
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      // A layout cleanup runs before the Desk leaves the page, so the offset
+      // is still the Desk's own, whichever way she left.
+      holdDeskPlace(pressedAnchor.current);
+      window.removeEventListener('pagehide', onHide);
+      deskMounted = false;
+      // A real leave drops a place the Desk never got to put back; React's
+      // dev rehearsal of an unmount remounts before this runs.
+      window.setTimeout(() => {
+        if (!deskMounted) placeToRestore = null;
+      });
+    };
+  }, []);
+  // Restored once the root latches. The roster can still be filling in then,
+  // so a place the page cannot yet hold is tried again as the page grows,
+  // until it lands, her hand moves the page, or the wait runs out.
+  useLayoutEffect(() => {
+    const place = placeToRestore;
+    if (!arrivalRoot || !place) return;
+    const land = (): boolean => {
+      const room = document.documentElement.scrollHeight - window.innerHeight;
+      if (place.y <= room) {
+        window.scrollTo({ top: place.y, behavior: 'auto' });
+        return true;
+      }
+      const row = place.anchor ? document.getElementById(place.anchor) : null;
+      if (!row) return false;
+      row.scrollIntoView({ block: 'start', behavior: 'auto' });
+      return true;
+    };
+    if (land()) {
+      placeToRestore = null;
+      return;
+    }
+    const hands = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+    const grow = new ResizeObserver(() => {
+      if (land()) settle();
+    });
+    const wait = window.setTimeout(settle, 3000);
+    // A cleanup only stops watching: a dev rehearsal remount tries again.
+    function stop() {
+      grow.disconnect();
+      window.clearTimeout(wait);
+      hands.forEach((hand) => window.removeEventListener(hand, settle));
+    }
+    function settle() {
+      placeToRestore = null;
+      stop();
+    }
+    // The Desk's own root grows as the roster fills in; the body does not.
+    grow.observe(deskRoot.current ?? document.body);
+    hands.forEach((hand) => window.addEventListener(hand, settle, { passive: true }));
+    return stop;
+  }, [arrivalRoot]);
+  const notePress = (event: ReactMouseEvent<HTMLElement>) => {
+    const target = event.target as Element | null;
+    if (!target?.closest?.('a[href]')) return;
+    pressedAnchor.current = target.closest('[data-ledger-row]')?.id ?? null;
+  };
+
   const rosterBlock =
     (isLoading && !data) || arrivalHeld ? (
-      <div
-        className="space-y-3"
-        aria-hidden
+      // Loading is not empty: Today's eyebrow and three quiet frames where
+      // its cards will stand, no ledger yet.
+      <section
+        className="section"
+        aria-labelledby="desk-loading-head"
+        aria-busy="true"
         data-tour-anchor="desk-needs-your-hand"
       >
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="h-6 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
-          />
-        ))}
+        <div className="sec-head">
+          <p id="desk-loading-head" className="eb">
+            <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+              <path d="M0 2h34M0 6h28M0 10h20" />
+            </svg>
+            <span>{dateLabel ? `${dateLabel} · Today` : 'Today'}</span>
+          </p>
+        </div>
+        <p className="sr-only">Loading today’s lines.</p>
+        <div className="cards-wrap" aria-hidden="true">
+          <div className="cards">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="desk-loading-frame" />
+            ))}
+          </div>
+        </div>
+      </section>
+    ) : deskEmpty && sheet.unchecked.length === 0 ? (
+      <div data-tour-anchor="desk-needs-your-hand">
+        <EmptyState eyebrow={dateLabel ? `${dateLabel} · Today` : 'Today'}>
+          No project files yet. Record an inquiry or create a project file to begin.
+        </EmptyState>
       </div>
     ) : (
       <>
         <DaySheet
           sheet={sheet}
+          cards={cards}
           scope={deskScope}
           onScope={setDeskScope}
           oneVoice={oneVoice}
           now={now}
-          jobs={rosterJobs}
+          dateLabel={dateLabel}
+          teammateActed={teammateActed}
+          names={names}
         />
         <DeskRoster
-          roster={roster}
-          studioMembers={studioMembers}
-          belowHead={deskLine}
+          ledger={ledger}
+          holderOf={holderOf}
+          belowHead={
+            <>
+              {deskLine}
+              {/* U-Q7 — the visit line, above Also yours; the inquiry
+                  itself is a row of the ledger, read like any other. */}
+              {recorded && (
+                <p data-desk-visit role="status" className="t-body-sm text-[var(--text-muted)] [overflow-wrap:anywhere]">
+                  {`${recorded.name} recorded · just now · `}
+                  <DocumentAction
+                    actionKey="desk-visit-open-brief"
+                    variant="tertiary"
+                    href={`/doc/${recorded.id}`}
+                    aria-label={`Open the brief — ${recorded.name}`}
+                  >
+                    Open the brief
+                  </DocumentAction>
+                </p>
+              )}
+            </>
+          }
+          othersHold={othersHold}
         />
       </>
     );
@@ -455,82 +657,92 @@ export default function DeskPage() {
       data-arrival={arrivalRoot ? 'desk' : undefined}
       data-arrival-ready={arrivalReady ? '' : undefined}
       className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14"
+      ref={deskRoot}
+      onClickCapture={notePress}
     >
-      <header className="mb-12 flex items-baseline justify-between gap-4">
-        <div>
-          {/* The signature move: greeting in Playfair, the first name in
-              Playfair italic, Aged Oak. Kept modest so the folios lead. */}
-          <h1
+      {/* F1 — one header line: the greeting, then the acts on its baseline.
+          The date moved to Today's eyebrow (U-Q3). */}
+      <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 pb-3">
+        {/* The signature move: greeting in Playfair, the first name in
+            Playfair italic, Aged Oak. Kept modest so the folios lead. */}
+        <h1
             data-tour-anchor="desk-greeting"
-            className="font-heading text-[1.7rem] font-normal text-[var(--text-primary)]"
+          className="font-heading text-[1.7rem] font-normal text-[var(--text-primary)]"
+        >
+          {firstName ? (
+            <>
+              {greetingWord},{' '}
+              <span className="italic text-[var(--text-muted)]">
+                {firstName}
+              </span>
+            </>
+          ) : (
+            <>{greetingWord}.</>
+          )}
+        </h1>
+        {/* At 390 the header is two rows: Find on the greeting's, then the
+            creates. This Find stands only there, so focus follows the eye
+            at both widths; the wide one closes the acts' row. */}
+        <DocumentActionGroup
+          surfaceKey="desk"
+          regionKey="desk-find"
+          aria-label="Find"
+          className="min-[600px]:hidden"
+        >
+          <DocumentAction
+            actionKey="find-anything"
+            variant="tertiary"
+            leading="⌕"
+            aria-label="Find anything"
+            onClick={() => openCommandBar()}
           >
-            {firstName ? (
-              <>
-                {greetingWord},{' '}
-                <span className="italic text-[var(--text-muted)]">
-                  {firstName}
-                </span>
-              </>
-            ) : (
-              <>{greetingWord}.</>
-            )}
-          </h1>
-          {/* US-14 `head` is the arrival's landing focus on both surfaces
-              (the Document's is its letterhead header); here its text is
-              also the card's place line. */}
-          <p
-            data-part="head"
-            tabIndex={-1}
-            className="doc-type-meta mt-1 uppercase tracking-[0.09em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-          >
-            {dateLabel || ' '}
-          </p>
-        </div>
+            Find
+          </DocumentAction>
+        </DocumentActionGroup>
+        {/* No filled act on the Desk: both creates are secondary (F1). At
+            390 each prints its short word; its name stays whole (2.5.3). */}
         <DocumentActionGroup
           surfaceKey="desk"
           regionKey="desk-head"
           aria-label="Desk actions"
+          className="max-[599px]:basis-full"
         >
-          <div className="flex flex-col items-end gap-0.5">
-            <DocumentAction
-              actionKey="capture-lead"
-              variant="primary"
-              leading="＋"
-              data-tour-anchor="desk-capture-lead"
-              onClick={() => setCaptureOpen(true)}
-            >
-              Record an inquiry
-            </DocumentAction>
-            {CAPTURE_LEAD_SUBLABEL && (
-              <span className="doc-type-meta uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                {CAPTURE_LEAD_SUBLABEL}
-              </span>
-            )}
-          </div>
-          {/* R79 — the quiet secondary act beside capture: a project that
-              skips the proposal (a repeat client, handshake work). */}
-          <div className="flex flex-col items-end gap-0.5">
-            <DocumentAction
-              actionKey="open-project"
-              variant="secondary"
-              leading="＋"
-              onClick={() => setOpenProjectOpen(true)}
-            >
-              Create a project file
-            </DocumentAction>
-            {OPEN_PROJECT_SUBLABEL && (
-              <span className="doc-type-meta uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                {OPEN_PROJECT_SUBLABEL}
-              </span>
-            )}
-          </div>
+          <DocumentAction
+            actionKey="capture-lead"
+            variant="secondary"
+            leading="＋"
+            aria-label="Record an inquiry"
+            data-tour-anchor="desk-capture-lead"
+            onClick={() => setCaptureOpen(true)}
+          >
+            <span className="max-[599px]:hidden">Record an inquiry</span>
+            <span aria-hidden="true" className="min-[600px]:hidden">
+              Inquiry
+            </span>
+          </DocumentAction>
+          {/* R79 — the quiet act beside capture: a project that skips the
+              proposal (a repeat client, handshake work). */}
+          <DocumentAction
+            actionKey="open-project"
+            variant="secondary"
+            leading="＋"
+            aria-label="Create a project file"
+            onClick={() => setOpenProjectOpen(true)}
+          >
+            <span className="max-[599px]:hidden">Create a project file</span>
+            <span aria-hidden="true" className="min-[600px]:hidden">
+              Project
+            </span>
+          </DocumentAction>
           <DocumentAction
             actionKey="find-anything"
             variant="tertiary"
             data-tour-anchor="desk-find-anything"
+            className="max-[599px]:hidden"
             onClick={() => openCommandBar()}
             trailing={
-              <kbd className="rounded-[3px] border border-[var(--border-default)] px-1 py-px font-mono">
+              // The ⌘K hint is for a fine pointer only.
+              <kbd className="hidden rounded-[3px] border border-[var(--border-default)] px-1 py-px font-mono [@media(hover:hover)_and_(pointer:fine)]:inline">
                 ⌘K
               </kbd>
             }
@@ -539,6 +751,8 @@ export default function DeskPage() {
           </DocumentAction>
         </DocumentActionGroup>
       </header>
+      {/* F2 — the double rule opens the day under the header. */}
+      <RegionRule weight="strong" className="mb-12 max-[599px]:mb-6" />
 
       {isError ? (
         // I64 whole-desk error state: one coherent surface, not a half-desk.
@@ -616,6 +830,7 @@ export default function DeskPage() {
       <CaptureLeadSheet
         open={captureOpen}
         onClose={() => setCaptureOpen(false)}
+        onCreated={setRecorded}
       />
 
       {/* R79 — the no-proposal front door: same overlay contract as capture. */}

@@ -19,9 +19,9 @@
  * Look/feel authority: patina-library-room-prototype.html (ported as intent).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { StrataMark } from '@/components/document/strata-mark';
+import { DocumentAction } from '@/components/document/document-action';
 import { suppressNextArrival } from '@/lib/arrival/nav';
 import {
   clearRoomOrigin,
@@ -37,12 +37,30 @@ export function RoomShell({
   count,
   countAtEveryWidth = false,
   action,
+  actionAtEveryWidth = false,
+  topLevel = false,
+  heading,
+  measure = 'mx-auto max-w-[976px] px-4 sm:px-6',
   backTo,
   backLabel,
   children,
 }: {
-  /** The Room's name, shown small + mono in the head (e.g. "The Library"). */
+  /** The Room's name: the Header line's `.t-d2` heading (e.g. "Resource
+   *  library"), and the words on the put-down veil. */
   title: string;
+  /** A richer heading in place of the plain title (Drafting's eyebrow and
+   *  proposal title); it must carry the page's one h1. `null` prints no
+   *  title: the page's own body carries the h1 (a product record). */
+  heading?: ReactNode;
+  /** The Header line's container classes: the Room's own content column, so
+   *  the title sits on the same edge as the page below it. */
+  measure?: string;
+  /** A top-level Room, reached from the dock (Measured rooms, the Library,
+   *  Studio contacts), has no back act (uplift.md (b)6). Esc still leaves. */
+  topLevel?: boolean;
+  /** The acts show at every width. By default they show from 1180 px, where
+   *  the Room's mobile primary act does not already carry them. */
+  actionAtEveryWidth?: boolean;
   /** A quiet count beside the title (e.g. "336 pieces"). */
   count?: string;
   /**
@@ -57,7 +75,7 @@ export function RoomShell({
    * wraps instead of widening, so a narrow screen never scrolls sideways.
    */
   countAtEveryWidth?: boolean;
-  /** The Room's single head action (e.g. the Capture button). */
+  /** The Room's acts, at the right of the Header line. */
   action?: React.ReactNode;
   /** A nested Room (one reached FROM another Room, e.g. Compose from the
    *  Library) overrides the stashed origin so leaving returns to its parent —
@@ -134,56 +152,57 @@ export function RoomShell({
         style={{ background: PAPER_GRAIN }}
       />
 
-      {/* The thin band that frames a Room: leave · ident · one action. */}
-      <header className="sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-[var(--doc-ink-border)] bg-[rgba(252,250,246,0.85)] px-4 py-2 backdrop-blur-sm sm:px-6 min-[1180px]:py-3">
-        {/* The way out is a word, not a box (I107). The Room's own action sits
-            at the other end of this same row as a scored DocumentAction, so the
-            leave reads as its quietest relative: tertiary ink values, the score
-            drawn only on hover/focus, and the 44px target kept as invisible
-            padding around a ~26px word. */}
-        <button
-          type="button"
-          onClick={leave}
-          className="inline-flex min-h-11 min-w-11 max-w-full items-center gap-1.5 justify-self-start px-2 py-1 font-mono text-[12px] font-light uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-        >
-          <span aria-hidden>←</span>{' '}
-          <span className="da-score-hover">
-            <span className="hidden sm:inline">
-              {backLabel ?? originLabel(origin)}
-            </span>
-            <span className="sm:hidden">Back</span>
-          </span>
-        </button>
-
-        {/* The Room's name is the page's ONE heading (QA-8). It rendered as a
-            plain <span>, so a heading query returned nothing on every Room
-            and a screen-reader user had nothing to navigate to. The type is
-            unchanged — the element is what was wrong, not the treatment. */}
-        <div
-          className={`flex items-center justify-self-center gap-2.5 ${
-            countAtEveryWidth ? 'min-w-0 flex-wrap justify-center gap-y-0.5' : ''
-          }`}
-        >
-          <StrataMark state="active" size="sm" />
-          <h1 className="m-0 font-mono text-[12px] font-semibold uppercase tracking-[0.2em] text-[var(--color-aged-oak)]">
-            {title}
-          </h1>
-          {count && (
-            <span
-              data-room-count
-              className={`font-mono text-[12px] tracking-[0.04em] text-[var(--color-aged-oak)] opacity-70 ${
-                countAtEveryWidth ? 'inline' : 'hidden sm:inline'
-              }`}
+      {/* The house Header line (US-28 walk-fix; uplift.md (b)6): one row on
+          --paper at the Room's own measure, the back act when nested, the
+          `.t-d2` title, the acts at the right, then the double rule. It wraps,
+          never truncates. The S1 classes (`.hline`, `.rule-strong`); the old
+          white band (leave · ornament · mono title) is retired. */}
+      <div className={`relative z-10 w-full ${measure}`}>
+        <header className="hline" data-room-header-line>
+          <div className="hline-l">
+            {/* The way out is a word, not a box (I107): a tertiary act. A
+                top-level Room, reached from the dock, carries none; Esc still
+                leaves. */}
+            {!topLevel && (
+              <DocumentAction
+                actionKey="room-leave"
+                surfaceKey="room"
+                regionKey="room-header-line"
+                variant="tertiary"
+                leading="←"
+                wrap
+                onClick={leave}
+              >
+                {backLabel ?? originLabel(origin)}
+              </DocumentAction>
+            )}
+            {/* The Room's name is the page's ONE heading (QA-8). */}
+            {heading !== undefined ? (
+              heading
+            ) : (
+              <h1 className="t-d2 m-0 text-[var(--text-primary)]">{title}</h1>
+            )}
+            {count && (
+              <span
+                data-room-count
+                className={`t-meta text-[var(--text-muted)] ${
+                  countAtEveryWidth ? 'inline' : 'hidden sm:inline'
+                }`}
+              >
+                {count}
+              </span>
+            )}
+          </div>
+          {action && (
+            <div
+              className={actionAtEveryWidth ? 'hline-r' : 'hline-r room-acts-wide'}
             >
-              · {count}
-            </span>
+              {action}
+            </div>
           )}
-        </div>
-
-        <div className="justify-self-end">
-          <div className="hidden min-[1180px]:block">{action}</div>
-        </div>
-      </header>
+        </header>
+        <div className="rule-strong" role="presentation" />
+      </div>
 
       {/* The paper itself. Bottom padding clears the fixed Drawer + log strip. */}
       <div className="relative z-10 flex-1 pb-[96px] min-[1180px]:pb-[84px]">

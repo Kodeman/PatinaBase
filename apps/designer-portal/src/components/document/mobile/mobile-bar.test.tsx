@@ -319,6 +319,28 @@ describe('the More menu · Ledgers (C20)', () => {
     mockCallSheetOn = true;
   });
 
+  it("US-28 — carries Studio contacts' three rooms, each a link to its own address", () => {
+    mountBar();
+    const menu = openMore();
+    const rooms = menu.getByRole('group', { name: 'From Studio contacts' });
+    expect(
+      within(rooms)
+        .getAllByRole('link')
+        .map((link) => [
+          link.textContent?.replace('→', ''),
+          link.getAttribute('href'),
+        ]),
+    ).toEqual([
+      ['Client relations', '/people?view=threads'],
+      ['Studio marketing', '/people?view=portfolio'],
+      ['The Engine', '/people?view=nurture'],
+    ]);
+    fireEvent.click(within(rooms).getByRole('link', { name: /The Engine/ }));
+    expect(
+      screen.queryByRole('group', { name: 'More studio actions' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('calls the books Ledgers, as the drawer and the Desk do', () => {
     mountBar();
     const menu = openMore();
@@ -840,6 +862,26 @@ describe('the dock · Next centre and More order (US-19 D7)', () => {
     expect(within(bar).queryByRole('button', { name: 'Open the project' })).toBeNull();
   });
 
+  // US-28 walk-fix paper (WALK §2, 390: "SEND REMINDER appears twice") — the
+  // band prints its Next on line 2 at every width, so a Next the letterhead
+  // registers from the band is never printed again in the dock's centre.
+  it('never prints the band’s Next in the centre: the band is its one printing', () => {
+    render(
+      <TestProviders>
+        <HoldDocument doc={heldDocument} />
+        <Primary action={press('Open the project')} priority={MOBILE_ACTION_PRIORITY.lifecycle} />
+        <Primary
+          action={{ ...press('Send reminder', 'next:remind'), regionKey: 'lens-band' }}
+          priority={MOBILE_ACTION_PRIORITY.next}
+        />
+        <MobileBar />
+      </TestProviders>,
+    );
+    const bar = screen.getByTestId('mobile-bar');
+    expect(within(bar).queryByRole('button', { name: 'Send reminder' })).toBeNull();
+    expect(bar.querySelector('[data-action-key="next:remind"]')).toBeNull();
+  });
+
   it('leads More with the ruled acts, in order, and keeps one Call sheet door', () => {
     mountDock();
     const menu = openMore();
@@ -1102,5 +1144,51 @@ describe('the studio surface label on the phone bar (SQ-752)', () => {
     mockPathname = path;
     mountBar({ doc: null });
     expect(screen.getByText(label)).toBeInTheDocument();
+  });
+});
+
+describe('the phone dock on the paper stock (SQ-856, chrome-p6)', () => {
+  beforeEach(() => {
+    mockCallSheetOn = true;
+    mockPathname = '/rooms';
+  });
+
+  it('is the --paper-doc bar on a --hairline-strong rule, not the dark ink band', () => {
+    mountBar({ doc: null });
+    const bar = screen.getByTestId('mobile-bar');
+    expect(bar).toHaveClass('bg-[var(--paper-doc)]', 'border-[var(--hairline-strong)]');
+    expect(bar.className).not.toContain('charcoal');
+    expect(bar.className).not.toContain('rgba(250,247,242');
+  });
+
+  it('reads "Studio section" over the place, and "More" on its act', () => {
+    mountBar({ doc: null });
+    expect(screen.getByText('Studio section')).toBeInTheDocument();
+    expect(screen.queryByText('Studio navigation')).not.toBeInTheDocument();
+    const more = screen.getByRole('button', { name: 'More studio actions' });
+    expect(more).toHaveTextContent(/^More$/);
+  });
+
+  it('opens More as the square popover on --paper-doc with the card edge', () => {
+    mountBar({ doc: null });
+    openMore();
+    const menu = screen.getByRole('group', { name: 'More studio actions' });
+    expect(menu).toHaveClass('popover', 'ledgers-pop');
+    expect(menu.className).not.toContain('charcoal');
+    expect(menu.className).not.toContain('rounded-[6px]');
+  });
+
+  it('prints the TESTER mark its place in the bar row', () => {
+    mountBar({ doc: null });
+    expect(
+      screen.getByTestId('mobile-bar').querySelector('[data-tester-slot="bar"]'),
+    ).toHaveClass('contents');
+  });
+
+  it('collapses the empty act slot, so the place keeps the room the mark and More take', () => {
+    mountBar({ doc: null });
+    const slot = screen.getByTestId('mobile-bar').querySelector('[class~="empty:hidden"]');
+    expect(slot).not.toBeNull();
+    expect(slot).toBeEmptyDOMElement();
   });
 });

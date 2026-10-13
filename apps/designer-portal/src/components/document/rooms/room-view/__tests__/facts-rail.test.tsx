@@ -105,7 +105,9 @@ describe('FactsRail — pure-prop content given geometry fixtures', () => {
       />,
     );
     expect(screen.getByText(/15 July/)).toBeInTheDocument();
-    expect(screen.getByText(/quality high/)).toBeInTheDocument();
+    // Quality is an ink word, never a graded dot (US-28 S10a; V20 U-Q13).
+    const quality = screen.getByText('Quality high');
+    expect(quality).toHaveClass('word');
     expect(screen.getByText(/0\.92/)).toBeInTheDocument();
   });
 

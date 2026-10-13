@@ -81,6 +81,20 @@ export function trapTabWithin(event: KeyboardEvent, panel: HTMLElement): boolean
     (event.shiftKey ? last : first).focus();
     return true;
   }
+  // Focus parked on a non-tabbable element inside (a heading with tabIndex -1):
+  // the browser would step from its DOM position, so wrap when no tabbable lies
+  // that way inside the boundary instead of leaving for the page behind.
+  if (active instanceof HTMLElement && !focusable.includes(active)) {
+    const noneThatWay = event.shiftKey
+      ? !focusable.some((el) => active.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING)
+      : !focusable.some((el) => active.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+    if (noneThatWay) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+      return true;
+    }
+    return false;
+  }
   if (!event.shiftKey && active === last) {
     event.preventDefault();
     first.focus();

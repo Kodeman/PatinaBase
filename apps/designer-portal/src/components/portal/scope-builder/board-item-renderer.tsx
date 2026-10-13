@@ -87,18 +87,43 @@ export function renderBoardRoomItem(item: EditableMoodBoardItem): ReactNode {
   return renderBoardItem(row);
 }
 
-// ─── Product / capture card ──────────────────────────────────────────────────
+// ─── Plate and caption (US-28 S12; SPEC §S12.2.1) ───────────────────────────
+//
+// Every picture item is a plate and a caption: the photo or drawing on a 1px
+// card edge, then a sans name and a mono line of facts. No shadow, no pill,
+// no overlay on the plate, nothing truncated — the plate gives up height so
+// the caption always prints whole (the item's box is the canvas's geometry).
+
+function Plate({ children, dashed = false }: { children: ReactNode; dashed?: boolean }) {
+  return (
+    <div className={dashed ? 'br-plate br-plate--slot' : 'br-plate'}>
+      {children}
+    </div>
+  );
+}
+
+function Caption({ name, meta }: { name: ReactNode; meta?: ReactNode }) {
+  return (
+    <div className="br-cap">
+      <span className="br-cap-name">{name}</span>
+      {meta ? <span className="br-cap-meta">{meta}</span> : null}
+    </div>
+  );
+}
+
+// ─── Product / capture ───────────────────────────────────────────────────────
 
 function ProductCard({ row }: { row: ProposalBoardItem }) {
   const snap = (row.data ?? {}) as ProductSnapshot;
   const imageUrl = row.image_url ?? snap.image_url ?? null;
+  const facts = [
+    snap.vendor_name,
+    typeof snap.price_cents === 'number' ? formatDollars(snap.price_cents) : null,
+  ].filter(Boolean).join(' · ');
 
   return (
-    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-sm">
-      <div
-        className="relative w-full overflow-hidden bg-[var(--bg-muted)]"
-        style={{ aspectRatio: '1 / 1' }}
-      >
+    <div className="br-item flex h-full w-full select-none flex-col">
+      <Plate>
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -107,51 +132,10 @@ function ProductCard({ row }: { row: ProposalBoardItem }) {
             className="pointer-events-none h-full w-full object-cover"
           />
         ) : (
-          <div
-            className="flex h-full w-full items-center justify-center"
-            style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}
-          >
-            No image
-          </div>
+          <span className="br-plate-word">No image</span>
         )}
-      </div>
-      <div className="flex flex-col gap-0.5 p-2">
-        <div
-          className="line-clamp-2"
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.74rem',
-            color: 'var(--text-primary)',
-          }}
-        >
-          {snap.name ?? 'Untitled product'}
-        </div>
-        {snap.vendor_name && (
-          <div
-            className="truncate"
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: '0.64rem',
-              fontStyle: 'italic',
-              color: 'var(--color-aged-oak)',
-            }}
-          >
-            {snap.vendor_name}
-          </div>
-        )}
-        {typeof snap.price_cents === 'number' && (
-          <div
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 500,
-              fontSize: '0.74rem',
-              color: 'var(--text-primary)',
-            }}
-          >
-            {formatDollars(snap.price_cents)}
-          </div>
-        )}
-      </div>
+      </Plate>
+      <Caption name={snap.name ?? 'Untitled product'} meta={facts || null} />
     </div>
   );
 }
@@ -168,32 +152,31 @@ interface ImageSnapshot {
  * BoardsBlock.tsx) already names the item instead of a bare "missing" label;
  * this brings the same captioned treatment here so what a designer composes
  * matches what they present, while keeping the dashed border as an
- * edit-only affordance (Present's placeholder border is solid).
+ * edit-only affordance (Present's placeholder border is solid). The empty
+ * slot keeps its dashed placeholder (SPEC §S12.4).
  */
 function ImageTile({ row }: { row: ProposalBoardItem }) {
   if (!row.image_url) {
     const snap = (row.data ?? {}) as ImageSnapshot;
     return (
-      <div className="flex h-full w-full select-none flex-col items-center justify-center gap-1 rounded-sm border border-dashed border-[var(--border-default)] bg-[var(--bg-muted)] p-2 text-center">
-        <span
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.62rem',
-            color: 'var(--text-muted)',
-          }}
-        >
-          {snap.name?.trim() ? snap.name : 'No image'}
-        </span>
+      <div className="br-item flex h-full w-full select-none flex-col">
+        <Plate dashed>
+          <span className="br-plate-word">{snap.name?.trim() ? snap.name : 'No image'}</span>
+        </Plate>
       </div>
     );
   }
   return (
-    <img
-      src={row.image_url}
-      alt=""
-      draggable={false}
-      className="pointer-events-none h-full w-full select-none rounded-sm object-cover shadow-sm"
-    />
+    <div className="br-item flex h-full w-full select-none flex-col">
+      <Plate>
+        <img
+          src={row.image_url}
+          alt=""
+          draggable={false}
+          className="pointer-events-none h-full w-full object-cover"
+        />
+      </Plate>
+    </div>
   );
 }
 
@@ -202,8 +185,8 @@ function ImageTile({ row }: { row: ProposalBoardItem }) {
 function RoomScanTile({ row }: { row: ProposalBoardItem }) {
   const snap = (row.data ?? {}) as RoomScanSnapshot;
   return (
-    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-sm">
-      <div className="relative min-h-0 flex-1 bg-[var(--bg-muted)]">
+    <div className="br-item flex h-full w-full select-none flex-col">
+      <Plate>
         {row.image_url ? (
           <img
             src={row.image_url}
@@ -212,26 +195,10 @@ function RoomScanTile({ row }: { row: ProposalBoardItem }) {
             className="pointer-events-none h-full w-full object-cover"
           />
         ) : (
-          <div
-            className="flex h-full w-full items-center justify-center"
-            style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}
-          >
-            No preview
-          </div>
+          <span className="br-plate-word">No preview</span>
         )}
-      </div>
-      <div
-        className="truncate px-2 py-1"
-        style={{
-          fontFamily: 'var(--font-meta)',
-          fontSize: '0.56rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          color: 'var(--text-muted)',
-        }}
-      >
-        Scan · {snap.name ?? 'Room'}
-      </div>
+      </Plate>
+      <Caption name={snap.name ?? 'Room'} meta="Scan" />
     </div>
   );
 }
@@ -243,59 +210,47 @@ function PaletteStrip({ row }: { row: ProposalBoardItem }) {
   const swatches = snap.swatches ?? [];
 
   return (
-    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-sm">
-      <div className="flex min-h-0 flex-1">
+    <div className="br-item flex h-full w-full select-none flex-col">
+      <Plate>
         {swatches.length > 0 ? (
-          swatches.map((s, i) => (
-            <div
-              key={`${s.hex}-${i}`}
-              className="h-full flex-1"
-              style={{ backgroundColor: s.hex }}
-              title={s.name ?? s.hex}
-            />
-          ))
+          <span className="flex h-full w-full">
+            {swatches.map((s, i) => (
+              <span
+                key={`${s.hex}-${i}`}
+                className="h-full flex-1"
+                style={{ backgroundColor: s.hex }}
+                title={s.name ?? s.hex}
+              />
+            ))}
+          </span>
         ) : (
-          <div
-            className="flex h-full w-full items-center justify-center"
-            style={{ color: 'var(--text-muted)', fontSize: '0.62rem' }}
-          >
-            Empty palette
-          </div>
+          <span className="br-plate-word">Empty palette</span>
         )}
-      </div>
-      <div
-        className="truncate px-2 py-1"
-        style={{
-          fontFamily: 'var(--font-meta)',
-          fontSize: '0.56rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          color: 'var(--text-muted)',
-        }}
-      >
-        {snap.name ?? 'Palette'}
-      </div>
+      </Plate>
+      <Caption name={snap.name ?? 'Palette'} />
     </div>
   );
 }
 
-// ─── Note (kraft-paper sticky) ───────────────────────────────────────────────
+// ─── Note ────────────────────────────────────────────────────────────────────
 
+/**
+ * A note is text on the note edge (US-28 S12, frame p1): the house's one
+ * non-stage edge (`--edge-note`) and the board's own stock, no fill, no
+ * shadow. The editable InlineNoteEditor (board-room-shell.tsx) wears the
+ * same dress, so a note being edited does not jump.
+ */
 function NoteCard({ row }: { row: ProposalBoardItem }) {
   return (
     <div
-      className="h-full w-full select-none overflow-hidden rounded-sm p-3"
+      className="br-note h-full w-full select-none overflow-hidden"
       style={{
-        // VD1/VD18: tokens, not raw hex — the exact same warm-paper look via
-        // --bg-warm/--border-warm/--color-bark, kept in step with the
-        // editable InlineNoteEditor (board-room-shell.tsx) this card matches
-        // when a note isn't being edited. Zero shadow per the Document model.
-        backgroundColor: 'var(--bg-warm)',
-        border: '1px solid var(--border-warm)',
+        borderLeft: 'var(--edge-note)',
+        padding: '4px 0 4px 16px',
         fontFamily: 'var(--font-body)',
-        fontSize: '0.78rem',
+        fontSize: '0.875rem',
         lineHeight: 1.5,
-        color: 'var(--color-bark)',
+        color: 'var(--text-muted)',
       }}
     >
       <p className="whitespace-pre-wrap break-words">

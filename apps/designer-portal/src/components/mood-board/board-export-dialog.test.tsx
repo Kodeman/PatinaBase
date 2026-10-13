@@ -7,7 +7,7 @@ const downloadPdf = jest.fn();
 jest.mock('@/lib/mood-board-assets/export-board', () => ({
   exportMoodBoardPng: (...args: unknown[]) => exportPng(...args),
   formatMoodBoardExportScale: (scale: number) => scale.toFixed(2),
-  getMoodBoardPngExportPlan: (input: { canvasWidth: number; canvasHeight: number }) => {
+  measureMoodBoardPngExportPlan: async (input: { canvasWidth: number; canvasHeight: number }) => {
     const effectiveScale = Math.min(2, 8192 / Math.max(input.canvasWidth, input.canvasHeight));
     return {
       effectiveScale,
@@ -26,7 +26,9 @@ jest.mock('@/lib/scope/spec-pdf-client', () => ({
 jest.mock('@patina/design-system', () => ({
   Dialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
     open ? <div role="dialog">{children}</div> : null,
-  DialogContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogContent: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+    <div data-testid="export-dialog-content" className={className}>{children}</div>
+  ),
   DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
   DialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
@@ -73,6 +75,10 @@ describe('BoardExportDialog', () => {
       />,
     );
 
+    // PNG waits for its measured plan (SQ-876).
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Board composition · PNG/ })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole('button', { name: /Board composition · PNG/ }));
     await waitFor(() => expect(exportPng).toHaveBeenCalled());
     expect(calls).toEqual(['flush', 'png']);
@@ -100,7 +106,7 @@ describe('BoardExportDialog', () => {
       />,
     );
 
-    expect(screen.getByText(/1\.64× effective scale/)).toBeInTheDocument();
+    expect(await screen.findByText(/1\.64× effective scale/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Board composition · PNG/ }));
     await waitFor(() =>
       expect(screen.getByText(/PNG downloaded at 1\.64× effective scale/)).toBeInTheDocument(),
@@ -166,6 +172,53 @@ describe('BoardExportDialog', () => {
         { kind: 'board', projectId: 'project-1', boardId: 'board-1' },
         'Install options-spec-sheet.pdf',
       ),
+    );
+  });
+
+  it('asks the shared Dialog for no shadow (R5); the Dialog merge drops its shadow-lg', async () => {
+    render(
+      <BoardExportDialog
+        boardId="board-1"
+        boardName="Living room"
+        owner={{ kind: 'proposal', id: 'proposal-1' }}
+        input={input}
+        open
+        onOpenChange={jest.fn()}
+        flush={jest.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    await screen.findByText('2× raster · 2400 × 1600px.');
+    const content = screen.getByTestId('export-dialog-content');
+    expect(content.className.split(/\s+/)).toContain('shadow-none');
+    expect(content.className).not.toMatch(/\bshadow-(sm|md|lg|xl|2xl)\b/);
+  });
+
+  it('SQ-877 N10 — the option rows and acts inside the square sheet are square at 2px', async () => {
+    render(
+      <BoardExportDialog
+        boardId="board-1"
+        boardName="Living room"
+        owner={{ kind: 'proposal', id: 'proposal-1' }}
+        input={input}
+        open
+        onOpenChange={jest.fn()}
+        flush={jest.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    await screen.findByText('2× raster · 2400 × 1600px.');
+    expect(screen.getByTestId('export-dialog-content')).toHaveClass('br-export-sheet');
+    expect(screen.getByRole('button', { name: /Board composition · PDF/ })).toHaveClass(
+      'br-export-option',
+    );
+    // The radius itself lives in globals.css; jsdom does not apply it.
+    const css = jest
+      .requireActual<typeof import('fs')>('fs')
+      .readFileSync(
+        jest.requireActual<typeof import('path')>('path').join(__dirname, '../../app/globals.css'),
+        'utf8',
+      );
+    expect(css).toMatch(
+      /\.br-export-sheet button, \.br-export-option \{ border-radius: 2px; \}/,
     );
   });
 });

@@ -16,14 +16,13 @@ import { formatBudgetBand } from '@/lib/document/ceremony-context';
 
 const pretty = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
+/** One fact (US-28 S9): a `dt`/`dd` pair inside the arrival's `dl.facts`. */
 function Fact({ k, children }: { k: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-[var(--color-pearl)] px-0.5 py-3">
-      <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        {k}
-      </span>
-      <span className="text-right text-[14px] text-[var(--text-primary)]">{children}</span>
-    </div>
+    <>
+      <dt>{k}</dt>
+      <dd>{children}</dd>
+    </>
   );
 }
 
@@ -54,10 +53,10 @@ export function CeremonyArrival({
       {/* The ask, verbatim — the pull quote is the arrival's voice. */}
       {lead.project_description && (
         <>
-          <blockquote className="border-l-2 border-[var(--color-clay)] pl-5 font-heading text-[19px] italic leading-[1.5] text-[var(--text-primary)]">
+          <blockquote className="papers-note t-authorship text-[var(--text-primary)]">
             “{lead.project_description}”
           </blockquote>
-          <p className="mt-2.5 pl-5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+          <p className="mt-2.5 pl-[18px] font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
             The ask, verbatim · from the request
           </p>
         </>
@@ -126,17 +125,14 @@ export function CeremonyArrival({
         </div>
       )}
 
-      {/* The facts — a hairline ledger of what the payload carried. */}
-      <div className="mt-7 border-t border-[var(--color-pearl)]">
+      {/* The facts (`dl`) — what the payload carried; tags are ink words. */}
+      <dl className="papers-facts mt-7">
         {roomLabel && <Fact k="Room">{roomLabel}</Fact>}
         {tags.length > 0 && (
           <Fact k="Style">
-            <span className="flex flex-wrap justify-end gap-1.5">
+            <span className="flex flex-wrap gap-x-3 gap-y-1">
               {tags.map((t) => (
-                <span
-                  key={t}
-                  className="rounded-full border border-[var(--color-clay)] px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-mocha)]"
-                >
+                <span key={t} className="word">
                   {t}
                 </span>
               ))}
@@ -150,7 +146,7 @@ export function CeremonyArrival({
             {[lead.location_city, lead.location_state].filter(Boolean).join(', ')}
           </Fact>
         )}
-      </div>
+      </dl>
     </div>
   );
 }

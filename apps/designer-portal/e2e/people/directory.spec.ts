@@ -37,15 +37,15 @@ test.describe("the Directory", () => {
     await page.goto("/people");
     const group = page.getByRole("group", { name: "Filter directory" });
     await expect(group.getByRole("button")).toHaveText([
-      "All contacts",
+      "Everyone",
       "Clients",
-      "Trades & contractors",
-      "Makers & suppliers",
-      "Studio team",
+      "Trades",
+      "Makers",
+      "Studio",
       "Companies",
     ]);
     await expect(
-      group.getByRole("button", { name: "All contacts" }),
+      group.getByRole("button", { name: "Everyone", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -56,7 +56,7 @@ test.describe("the Directory", () => {
     await expect(
       page.getByRole("group", { name: "Filter by trade" }),
     ).toHaveCount(0);
-    await page.getByRole("button", { name: "Trades & contractors" }).click();
+    await page.getByRole("button", { name: "Trades", exact: true }).click();
     await expect(
       page.getByRole("group", { name: "Filter by trade" }),
     ).toBeVisible();
@@ -70,11 +70,11 @@ test.describe("the Directory", () => {
     authenticatedPage: page,
   }) => {
     await page.goto("/people");
-    await page.getByRole("button", { name: "Trades & contractors" }).click();
+    await page.getByRole("button", { name: "Trades", exact: true }).click();
     await expect(page).toHaveURL(/role=crew/);
     await page.reload();
     await expect(
-      page.getByRole("button", { name: "Trades & contractors" }),
+      page.getByRole("button", { name: "Trades", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -83,7 +83,7 @@ test.describe("the Directory", () => {
   }) => {
     await page.goto("/people?role=sub");
     await expect(
-      page.getByRole("button", { name: "Trades & contractors" }),
+      page.getByRole("button", { name: "Trades", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
   });
 

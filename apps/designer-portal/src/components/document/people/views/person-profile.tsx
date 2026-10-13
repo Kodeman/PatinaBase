@@ -53,6 +53,7 @@ import { partyKindOwesPaper } from "@patina/types";
 import {
   directoryBandOf,
   directoryContactKind,
+  directoryKindWord,
   directoryEntryKind,
   isClientSideKind,
 } from "@/lib/document/people-derivation";
@@ -94,8 +95,38 @@ import { useViewerStudio } from "@/hooks/use-viewer-studio";
 import { openHoursForMember } from "@/lib/document/open-hours-scope";
 import type { PersonProfileProps } from "../types";
 
-const REGION = "border-t border-[var(--hairline-strong)] py-6";
-const REGION_HEAD = "t-head mb-3 text-[var(--ink-subtle)]";
+/**
+ * US-28 S10 — each region of the record is a Section (S1): its eyebrow, its
+ * body, its own closing rule. Never a box; the record's edge is the stock step
+ * of the laid paper it sits on.
+ */
+function RecordSection({
+  title,
+  children,
+  ...rest
+}: {
+  title: string;
+  children: React.ReactNode;
+} & React.HTMLAttributes<HTMLElement> & { [data: `data-${string}`]: unknown }) {
+  return (
+    <section className="section" {...rest}>
+      <div className="sec-head">
+        <h3 className="eb">
+          <svg
+            className="orn"
+            viewBox="0 0 34 12"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M0 2h34M0 6h28M0 10h20" />
+          </svg>
+          <span>{title}</span>
+        </h3>
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export const NO_AUTHORITY_SENTENCE = "No authority on this job";
 export const NO_PAST_SEATS_SENTENCE = "No closed seat on file.";
@@ -153,6 +184,14 @@ export function authorityPhrase(grant: {
 }
 
 /** The seat's own facts beneath its line, in the order SPEC §5.2 #7 prints. */
+/** "Maker · Fenmoor Joinery": the record's eyebrow, kind then firm. */
+function recordEyebrow(
+  person: Parameters<typeof directoryKindWord>[0],
+  firm: string | null,
+): string {
+  return [directoryKindWord(person), firm].filter(Boolean).join(" · ");
+}
+
 function SeatFacts({ seat }: { seat: PeopleDirectorySeat }) {
   const { data: authority } = usePartyAuthority(seat.seat_id);
   const phrases = (authority ?? []).map(authorityPhrase);
@@ -396,7 +435,7 @@ export function PersonProfile({
    * firm's affiliation or none.
    */
   const affiliation = firmId
-    ? (affiliations ?? []).find((a) => a.company_id === firmId) ?? null
+    ? ((affiliations ?? []).find((a) => a.company_id === firmId) ?? null)
     : (affiliations?.[0] ?? null);
   const firmName =
     (typeof person.meta?.["company_name"] === "string"
@@ -456,255 +495,254 @@ export function PersonProfile({
   const announce = notify;
 
   return (
-    <div data-person-card={person.person_id} className="mx-auto max-w-[720px]">
-      <DocumentAction
-        actionKey="back-to-directory"
-        surfaceKey="people"
-        regionKey="person-card"
-        variant="tertiary"
-        onClick={onBack}
+    <>
+      {/* US-28 — the record is a PAGE VIEW: the way back, "← Studio
+          contacts", is a word on the Room's Header line (people-room.tsx), and
+          the record itself is laid paper (L1), its edge the stock step rather
+          than a box. */}
+      <article
+        data-person-card={person.person_id}
+        aria-labelledby={`person-name-${person.person_id}`}
+        className="paper people-record"
       >
-        Back
-      </DocumentAction>
-
-      {/* R1 — Identity */}
-      <header className="flex items-center gap-4 pb-6">
-        <Avatar name={person.display_name} role={person.role} />
-        <div className="min-w-0">
-          <h2 className="t-d3 font-heading">{person.display_name}</h2>
-          {identityBits.length > 0 && (
-            <p className="t-meta mt-1 text-[var(--ink-subtle)]">
-              {identityBits.join(" · ")}
-            </p>
-          )}
-          {soleProprietor && (
-            <p className="t-meta mt-1 text-[var(--ink-subtle)]">
-              Sole proprietor
-            </p>
-          )}
-          {/* direction §8 P2 — archive and restore as a STANDING door, with
+        {/* The specimen's eyebrow: the kind, then the firm. */}
+        {recordEyebrow(person, firmName) && (
+          <p className="eb" data-person-eyebrow>
+            {recordEyebrow(person, firmName)}
+          </p>
+        )}
+        {/* R1 — Identity */}
+        <header className="people-record-head">
+          <Avatar name={person.display_name} role={person.role} />
+          <div className="min-w-0">
+            <h2 className="t-d1" id={`person-name-${person.person_id}`}>
+              {person.display_name}
+            </h2>
+            {identityBits.length > 0 && (
+              <p className="t-meta mt-1 text-[var(--ink-subtle)]">
+                {identityBits.join(" · ")}
+              </p>
+            )}
+            {soleProprietor && (
+              <p className="t-meta mt-1 text-[var(--ink-subtle)]">
+                Sole proprietor
+              </p>
+            )}
+            {/* direction §8 P2 — archive and restore as a STANDING door, with
               the reason line visible whether or not the caller may press it. */}
-          {card && (
-            <ArchiveCardDoor
-              contactId={card.id}
-              name={person.display_name}
-              archivedAt={card.archived_at}
-              canArchive={canArchiveCard}
-              onDone={announce}
-              className="mt-2"
-            />
-          )}
-        </div>
-        {/* HT-8 — the one door into the Hours sheet's member scope, which is
+            {card && (
+              <ArchiveCardDoor
+                contactId={card.id}
+                name={person.display_name}
+                archivedAt={card.archived_at}
+                canArchive={canArchiveCard}
+                onDone={announce}
+                className="mt-2"
+              />
+            )}
+          </div>
+          {/* HT-8 — the one door into the Hours sheet's member scope, which is
             studio-wide and so belongs to a studio member, never to a client
             who merely holds a portal account. */}
-        {viewerSeesStudioMember &&
-          person.profile_id &&
-          viewerIsOwnerOrAdmin && (
-            <div className="ml-auto shrink-0">
-              <DocumentAction
-                actionKey="open-person-hours"
-                surfaceKey="people"
-                regionKey="person-card"
-                variant="secondary"
-                onClick={() =>
-                  openHoursForMember(
-                    person.profile_id as string,
-                    person.display_name,
-                  )
-                }
-              >
-                Time records
-              </DocumentAction>
-            </div>
-          )}
-      </header>
+          {viewerSeesStudioMember &&
+            person.profile_id &&
+            viewerIsOwnerOrAdmin && (
+              <div className="ml-auto shrink-0">
+                <DocumentAction
+                  actionKey="open-person-hours"
+                  surfaceKey="people"
+                  regionKey="person-card"
+                  variant="secondary"
+                  onClick={() =>
+                    openHoursForMember(
+                      person.profile_id as string,
+                      person.display_name,
+                    )
+                  }
+                >
+                  Time records
+                </DocumentAction>
+              </div>
+            )}
+        </header>
 
-      {/* R2 — Reach & access: Channels, Contact rule, Access grants */}
-      <section className={REGION}>
-        <h3 className="t-head mb-4 text-[var(--ink-subtle)]">
-          Reach &amp; access
-        </h3>
-        <ReachAccess
-          cardId={person.person_id}
-          cardKind="person"
-          organizationId={cardOrgId}
-          personName={person.display_name}
-          routeTo={routeTo}
-          routeCandidates={routeCandidates}
-          grantSubjectIds={grantSubjectIds}
-          seatId={firstSeat?.seat_id ?? null}
-          seatProjectId={firstSeat?.project_id ?? null}
-          seatProjectName={firstSeat?.project_name ?? null}
-          seatWindowEnd={firstSeat?.on_site_to ?? null}
-          seatWindowStart={firstSeat?.on_site_from ?? null}
-          mintSeatId={mintSeat?.seat_id ?? null}
-          mintProjectId={mintSeat?.project_id ?? null}
-          mintProjectName={mintSeat?.project_name ?? null}
-          mintWindowEnd={mintSeat?.on_site_to ?? null}
-          mintHeldSentence={
-            clientSide ? MINT_CLIENT_SIDE_SENTENCE : MINT_WITHOUT_SEAT_SENTENCE
-          }
-          warrantyEnd={
-            mintSeat?.warranty_until ?? card?.warranty_until ?? null
-          }
-          onAnnounce={announce}
-          now={now}
-        />
-        <p
-          id={`person-text-consequence-${person.person_id}`}
-          className="t-body-sm mt-2 max-w-[56ch] text-[var(--ink-subtle)]"
-        >
-          {canText
-            ? textableSeat
-              ? SEND_TEXT_CONSEQUENCE
-              : NO_TEXT_SEAT_SENTENCE
-            : ruleHoldsText && ruleHeldClause
-              ? ruleHeldTextSentence(ruleHeldClause)
-              : CANNOT_TEXT_SENTENCE}
-        </p>
-        <DocumentAction
-          actionKey="send-a-text"
-          surfaceKey="people"
-          regionKey="reach-access"
-          variant="secondary"
-          held={!canText || !textableSeat}
-          disabled={!canText || !textableSeat}
-          aria-describedby={`person-text-consequence-${person.person_id}`}
-          onClick={() => {
-            if (textableSeat && onOpenSeat) onOpenSeat(textableSeat);
-          }}
-        >
-          Send text message
-        </DocumentAction>
-      </section>
-
-      {/* R4 — Seats on projects */}
-      <section className={REGION}>
-        <h3 className={REGION_HEAD}>Project assignments</h3>
-        {liveSeats.length === 0 ? (
-          <p className="t-body-sm text-[var(--ink-subtle)]">
-            {NO_SEAT_SENTENCE}
+        {/* R2 — their rules and how to reach them: Channels, Contact rule,
+          Access grants (ReachAccess's own order). */}
+        <RecordSection title="Rules and how to reach them">
+          <ReachAccess
+            cardId={person.person_id}
+            cardKind="person"
+            organizationId={cardOrgId}
+            personName={person.display_name}
+            routeTo={routeTo}
+            routeCandidates={routeCandidates}
+            grantSubjectIds={grantSubjectIds}
+            seatId={firstSeat?.seat_id ?? null}
+            seatProjectId={firstSeat?.project_id ?? null}
+            seatProjectName={firstSeat?.project_name ?? null}
+            seatWindowEnd={firstSeat?.on_site_to ?? null}
+            seatWindowStart={firstSeat?.on_site_from ?? null}
+            mintSeatId={mintSeat?.seat_id ?? null}
+            mintProjectId={mintSeat?.project_id ?? null}
+            mintProjectName={mintSeat?.project_name ?? null}
+            mintWindowEnd={mintSeat?.on_site_to ?? null}
+            mintHeldSentence={
+              clientSide
+                ? MINT_CLIENT_SIDE_SENTENCE
+                : MINT_WITHOUT_SEAT_SENTENCE
+            }
+            warrantyEnd={
+              mintSeat?.warranty_until ?? card?.warranty_until ?? null
+            }
+            onAnnounce={announce}
+            now={now}
+          />
+          <p
+            id={`person-text-consequence-${person.person_id}`}
+            className="t-body-sm mt-2 max-w-[56ch] text-[var(--ink-subtle)]"
+          >
+            {canText
+              ? textableSeat
+                ? SEND_TEXT_CONSEQUENCE
+                : NO_TEXT_SEAT_SENTENCE
+              : ruleHoldsText && ruleHeldClause
+                ? ruleHeldTextSentence(ruleHeldClause)
+                : CANNOT_TEXT_SENTENCE}
           </p>
-        ) : (
-          <ul className="m-0 list-none p-0">
-            {liveSeats.map((seat) => (
-              <li
-                key={seat.seat_id}
-                className="border-t border-[var(--hairline-strong)] py-2"
-              >
-                <SeatLine seat={seat} onOpen={(s) => onOpenSeat?.(s)} />
-                <SeatFacts seat={seat} />
-                {/* direction §3.2 R4 names this act on the person card, and
+          <DocumentAction
+            actionKey="send-a-text"
+            surfaceKey="people"
+            regionKey="reach-access"
+            variant="secondary"
+            held={!canText || !textableSeat}
+            disabled={!canText || !textableSeat}
+            aria-describedby={`person-text-consequence-${person.person_id}`}
+            onClick={() => {
+              if (textableSeat && onOpenSeat) onOpenSeat(textableSeat);
+            }}
+          >
+            Send text message
+          </DocumentAction>
+        </RecordSection>
+
+        {/* R5 — Paper. A sole proprietor IS their own firm, so their own
+          documents are the firm's (direction §3.2 R5). */}
+        {soleProprietor && (
+          <RecordSection title="Paperwork" data-person-paper>
+            {!owesPaper ? (
+              <p className="t-body-sm text-[var(--ink-subtle)]">
+                {NO_PAPER_OWED_SENTENCE}
+              </p>
+            ) : (
+              <>
+                {docs.length > 0 ? (
+                  <ComplianceTable documents={docs} today={now} />
+                ) : (
+                  <p>
+                    <StateWord
+                      family="paper"
+                      value={
+                        person.paper_state ?? ownPaperState ?? "not_on_file"
+                      }
+                    />
+                  </p>
+                )}
+                {heldClause && (
+                  <p className="t-body-sm mt-3 border-l-2 border-[var(--terracotta-ink)] bg-[var(--rail)] py-[6px] pl-[11px] text-[var(--ink)]">
+                    {heldClause}
+                  </p>
+                )}
+                <DocumentAction
+                  actionKey="record-compliance-document"
+                  surfaceKey="people"
+                  regionKey="person-paper"
+                  variant="secondary"
+                  onClick={() => setRecordOpen(true)}
+                >
+                  Add document record
+                </DocumentAction>
+              </>
+            )}
+          </RecordSection>
+        )}
+
+        {/* R4 — Seats on projects */}
+        <RecordSection title="On these jobs">
+          {liveSeats.length === 0 ? (
+            <p className="t-body-sm text-[var(--ink-subtle)]">
+              {NO_SEAT_SENTENCE}
+            </p>
+          ) : (
+            <ul className="rows m-0 list-none p-0">
+              {liveSeats.map((seat) => (
+                <li key={seat.seat_id} className="people-job-row">
+                  <SeatLine seat={seat} onOpen={(s) => onOpenSeat?.(s)} />
+                  <SeatFacts seat={seat} />
+                  {/* direction §3.2 R4 names this act on the person card, and
                     the card had none: the seat could only be closed from the
                     Call Sheet. One component, two surfaces (W3/P2). */}
-                <CloseSeatAct
-                  seatId={seat.seat_id}
-                  projectId={seat.project_id}
-                  organizationId={cardOrgId}
-                  name={person?.display_name ?? seat.display_name ?? "This person"}
-                  stage={seat.stage}
-                  onClosed={(message) => notify(message)}
-                  className="mt-1"
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                  <CloseSeatAct
+                    seatId={seat.seat_id}
+                    projectId={seat.project_id}
+                    organizationId={cardOrgId}
+                    name={
+                      person?.display_name ?? seat.display_name ?? "This person"
+                    }
+                    stage={seat.stage}
+                    onClosed={(message) => notify(message)}
+                    className="mt-1"
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </RecordSection>
 
-      {/* R4b — Past seats, folded */}
-      <section className={REGION}>
-        <h3 className={REGION_HEAD}>Past assignments</h3>
-        {pastSeats.length === 0 ? (
-          <p className="t-body-sm text-[var(--ink-subtle)]">
-            {NO_PAST_SEATS_SENTENCE}
-          </p>
-        ) : (
-          <ul className="m-0 list-none p-0">
-            {pastSeats.map((seat) => (
-              <li
-                key={seat.seat_id}
-                className="border-t border-[var(--hairline-strong)] py-2"
-              >
-                <p className="t-body-sm flex flex-wrap items-center gap-x-2 text-[var(--ink-subtle)]">
-                  {/* CR-11: the studio's words, never the schema's. The live
+        {/* R4b — Past seats, folded */}
+        <RecordSection title="Past jobs">
+          {pastSeats.length === 0 ? (
+            <p className="t-body-sm text-[var(--ink-subtle)]">
+              {NO_PAST_SEATS_SENTENCE}
+            </p>
+          ) : (
+            <ul className="rows m-0 list-none p-0">
+              {pastSeats.map((seat) => (
+                <li key={seat.seat_id} className="people-job-row">
+                  <p className="t-body-sm flex flex-wrap items-center gap-x-2 text-[var(--ink-subtle)]">
+                    {/* CR-11: the studio's words, never the schema's. The live
                       SeatLine beside this one already labels both axes; this
                       one printed `client_rep` raw — the one string C5 and SPEC
                       §8 #3 forbid by name. */}
-                  <span>{seatLineParts(seat).join(" · ")}</span>
-                  <StateWord family="stage" value={seat.stage} />
-                  {formatSeatDate(seat.off_job_at) && (
-                    <span>Closed {formatSeatDate(seat.off_job_at)}</span>
-                  )}
-                  {formatSeatDate(seat.warranty_until) && (
-                    <span>
-                      Warranty through {formatSeatDate(seat.warranty_until)}
-                    </span>
-                  )}
-                  {!seat.off_job_at &&
-                    seatWindowText(seat.on_site_from, seat.on_site_to) && (
+                    <span>{seatLineParts(seat).join(" · ")}</span>
+                    <StateWord family="stage" value={seat.stage} />
+                    {formatSeatDate(seat.off_job_at) && (
+                      <span>Closed {formatSeatDate(seat.off_job_at)}</span>
+                    )}
+                    {formatSeatDate(seat.warranty_until) && (
                       <span>
-                        {seatWindowText(seat.on_site_from, seat.on_site_to)}
+                        Warranty through {formatSeatDate(seat.warranty_until)}
                       </span>
                     )}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* R5 — Paper. A sole proprietor IS their own firm, so their own
-          documents are the firm's (direction §3.2 R5). */}
-      {soleProprietor && (
-        <section className={REGION} data-person-paper>
-          <h3 className={REGION_HEAD}>Documents on file</h3>
-          {!owesPaper ? (
-            <p className="t-body-sm text-[var(--ink-subtle)]">
-              {NO_PAPER_OWED_SENTENCE}
-            </p>
-          ) : (
-            <>
-              {docs.length > 0 ? (
-                <ComplianceTable documents={docs} today={now} />
-              ) : (
-                <p>
-                  <StateWord
-                    family="paper"
-                    value={
-                      person.paper_state ?? ownPaperState ?? "not_on_file"
-                    }
-                  />
-                </p>
-              )}
-              {heldClause && (
-                <p className="t-body-sm mt-3 border-l-2 border-[var(--terracotta-ink)] bg-[var(--rail)] py-[6px] pl-[11px] text-[var(--ink)]">
-                  {heldClause}
-                </p>
-              )}
-              <DocumentAction
-                actionKey="record-compliance-document"
-                surfaceKey="people"
-                regionKey="person-paper"
-                variant="secondary"
-                onClick={() => setRecordOpen(true)}
-              >
-                Add document record
-              </DocumentAction>
-            </>
+                    {!seat.off_job_at &&
+                      seatWindowText(seat.on_site_from, seat.on_site_to) && (
+                        <span>
+                          {seatWindowText(seat.on_site_from, seat.on_site_to)}
+                        </span>
+                      )}
+                  </p>
+                </li>
+              ))}
+            </ul>
           )}
-        </section>
-      )}
+        </RecordSection>
 
-      {/* R6 — History */}
-      <section className={REGION}>
-        <h3 className={REGION_HEAD}>Relationship history</h3>
-        <p className="t-body-sm text-[var(--ink)]">
-          {`Worked ${projectCount} of the studio's ${
-            projectCount === 1 ? "project" : "projects"
-          }.`}{" "}
-          {/* E13 / direction §7 P3 — the RECORD of the last contact, with its
+        {/* R6 — History */}
+        <RecordSection title="Relationship history">
+          <p className="t-body-sm text-[var(--ink)]">
+            {`Worked ${projectCount} of the studio's ${
+              projectCount === 1 ? "project" : "projects"
+            }.`}{" "}
+            {/* E13 / direction §7 P3 — the RECORD of the last contact, with its
               channel, the decision it filed and whether the person who sent it
               had the standing to (CRM-22). It outranks
               `people_directory.last_touch_at`, which is the rolodex's own
@@ -713,7 +751,7 @@ export function PersonProfile({
               dates on one line would be the two-words-two-clicks-apart defect
               this room keeps closing. The coarse date still prints for the
               population E13 has no row for yet. */}
-          {/* THE STUDIO'S OWN CALENDAR, NOT UTC'S (R-CB, W4 r10 M-1).
+            {/* THE STUDIO'S OWN CALENDAR, NOT UTC'S (R-CB, W4 r10 M-1).
               `people_directory.last_touch_at` is a timestamptz —
               COALESCE(last_contacted_at, last_project_at, updated_at),
               00626:1478 — and PostgREST answers it in UTC, so slicing it to
@@ -724,28 +762,29 @@ export function PersonProfile({
               absolute print of `last_touch_at` in the room — nothing else
               could contradict it. `touchInstantDay` is the function that
               already exists for exactly this. */}
-          <LastTouchLine
-            subjectIds={touchSubjectIds}
-            fallback={
-              touchInstantDay(person.last_touch_at)
-                ? `Last touch ${touchInstantDay(person.last_touch_at)}.`
-                : null
-            }
-          />
-        </p>
-      </section>
+            <LastTouchLine
+              subjectIds={touchSubjectIds}
+              fallback={
+                touchInstantDay(person.last_touch_at)
+                  ? `Last touch ${touchInstantDay(person.last_touch_at)}.`
+                  : null
+              }
+            />
+          </p>
+        </RecordSection>
 
-      {cardOrgId && (
-        <RecordDocumentSheet
-          open={recordOpen}
-          onClose={() => setRecordOpen(false)}
-          organizationId={cardOrgId}
-          holderId={person.person_id}
-          holderName={person.display_name}
-          holderType="person"
-          onRecorded={announce}
-        />
-      )}
-    </div>
+        {cardOrgId && (
+          <RecordDocumentSheet
+            open={recordOpen}
+            onClose={() => setRecordOpen(false)}
+            organizationId={cardOrgId}
+            holderId={person.person_id}
+            holderName={person.display_name}
+            holderType="person"
+            onRecorded={announce}
+          />
+        )}
+      </article>
+    </>
   );
 }

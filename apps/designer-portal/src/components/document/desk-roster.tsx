@@ -1,116 +1,156 @@
 'use client';
 
 /**
- * The Desk — every live job, one dense line each (US-25 slice 4, R143).
- *
- * The line roster sits under the Day Sheet in three groups: Owed by you ·
- * Waiting on others · at rest. Each line prints its job's head need, the
- * same need the Day Sheet and the job's band read. Monochrome: the stage
- * plates became an ink word on the line (Q7). "By person" regroups the same
- * lines; the Day Sheet's Mine · The studio's scope replaced "Only what needs
- * me" (fix-now 1).
+ * The ledger under Today (US-25 slice 4; US-28 S3 change 2): every live job
+ * not on Today's cards, one S1 ledger row each, in four groups — Also yours ·
+ * With others · Coming back · No current alert. In the studio's scope each
+ * person is a section ("Leah’s"). In the quiet group a job on a project
+ * always prints; its leads and drafts fold behind one Show and are not
+ * rendered until it opens. Never a count.
  */
 
-import { useMemo, useState, type ReactNode } from 'react';
-import {
-  deriveDeskClaims,
-  deriveRosterPeople,
-  groupRosterByPerson,
-  type DeskRoster as DeskRosterModel,
-  type RosterMember,
-} from '@/lib/document/desk-roster-derivation';
-import { SectionEyebrow } from './section-eyebrow';
+import { useState, type ReactNode } from 'react';
+import type { DeskLedger, DeskLedgerGroup } from '@/lib/document/desk-roster-derivation';
+import type { DeskHolder } from '@/lib/document/desk-scope';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { DeskLedgerRow, rosterLineAnchorId } from './desk-ledger-row';
 
 /** Moved to desk-ledger-row.tsx; re-exported for this module's importers. */
 export { rosterLineAnchorId };
 
-const GROUP_HEAD =
-  'border-b border-[color:var(--text-primary)] pb-2 font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]';
+function LedgerGroup({
+  group,
+  sectionKey,
+  sectionLabel,
+  holderOf,
+  first,
+  onUndone,
+}: {
+  group: DeskLedgerGroup;
+  sectionKey: string;
+  sectionLabel: string | null;
+  holderOf?: (jobId: string) => DeskHolder;
+  first: boolean;
+  onUndone: (words: string) => void;
+}) {
+  // A job that stands on a project never folds: a studio building it out
+  // must see it at rest (Kody 2026-10-13). Only leads and drafts fold.
+  const standing = group.key === 'rest' ? group.lines.filter((l) => l.line.projectId) : group.lines;
+  const folded = group.key === 'rest' ? group.lines.filter((l) => !l.line.projectId) : [];
+  const folds = folded.length > 0;
+  const [open, setOpen] = useState(false);
+  const lines = open ? group.lines : standing;
+  return (
+    <div
+      data-roster-group={group.key}
+      data-tour-anchor={first ? 'desk-folio' : undefined}
+      className="desk-ledger-group"
+    >
+      <p className="eb sub">
+        <span>{group.label}</span>
+        {folds && (
+          // The label never changes with state (IX18): `aria-expanded` does.
+          <DocumentAction
+            actionKey={`roster-show-rest-${sectionKey}`}
+            variant="tertiary"
+            aria-expanded={open}
+            aria-label={`Show ${sectionLabel ? `${sectionLabel} ` : ''}jobs with no current alert`}
+            onClick={() => setOpen((was) => !was)}
+          >
+            Show
+          </DocumentAction>
+        )}
+      </p>
+      {lines.length > 0 && (
+        <ul className="rows">
+          {lines.map((ledgerLine) => (
+            <DeskLedgerRow
+              key={ledgerLine.line.engagementId}
+              {...ledgerLine}
+              holder={holderOf?.(ledgerLine.line.projectId ?? ledgerLine.line.engagementId) ?? null}
+              onUndone={onUndone}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export function DeskRoster({
-  roster,
-  studioMembers,
+  ledger,
+  holderOf,
   belowHead,
+  othersHold,
 }: {
-  roster: DeskRosterModel;
-  studioMembers?: readonly RosterMember[];
-  /** The Desk arbiter's one line (§2), set above the roster. */
+  ledger: DeskLedger;
+  /** Who carries each job (`deskHolderOf`): a row she does not carry prints
+   *  whose move it is, and no act. */
+  holderOf?: (jobId: string) => DeskHolder;
+  /** The Desk arbiter's one line (§2), set above the ledger. */
   belowHead?: ReactNode;
+  /** Mine: whose the rest of the studio's jobs are ("…are Jordan’s."). */
+  othersHold?: string | null;
 }) {
-  const [byPerson, setByPerson] = useState(false);
-  const claims = useMemo(
-    () => deriveDeskClaims({ roster, now: new Date() }),
-    [roster],
-  );
-  const people = useMemo(
-    () => deriveRosterPeople(studioMembers ?? []),
-    [studioMembers],
-  );
-  const groups = byPerson
-    ? groupRosterByPerson(roster.groups, people)
-    : claims.groups;
+  const sections = ledger.sections.filter((section) => section.groups.some((group) => group.lines.length > 0));
+  const [said, setSaid] = useState('');
+  let firstGroup = true;
 
   return (
     <section
       aria-labelledby="every-job"
       data-testid="desk-roster"
       data-tour-anchor="desk-needs-your-hand"
-      className="mt-10"
+      className="section desk-ledger"
     >
+      <h2 id="every-job" className="sr-only">
+        The rest of the jobs
+      </h2>
       {belowHead}
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <SectionEyebrow>
-          <span id="every-job">Studio workload</span>
-        </SectionEyebrow>
-        {people.length > 0 && (
-          // Labels never change with state (IX18) — `aria-pressed` carries it.
-          <DocumentAction
-            actionKey="roster-facet-by-person"
-            surfaceKey="desk"
-            regionKey="every-job-facets"
-            variant="tertiary"
-            className="!text-[11px] !font-medium !tracking-[0.08em] aria-pressed:!text-[var(--text-primary)]"
-            aria-pressed={byPerson}
-            onClick={() => setByPerson((on) => !on)}
-          >
-            By team member
-          </DocumentAction>
-        )}
-      </div>
-
-      <DocumentActionGroup
-        surfaceKey="desk"
-        regionKey="every-job"
-        aria-label="Studio workload actions"
-      >
-        <div className="w-full">
-          {groups.map((group, position) => (
-            <div key={group.key} data-roster-group={group.key} className="mt-7">
-              <h3 className={GROUP_HEAD}>{group.label}</h3>
-              {/* The query container the rows' 899px collapse measures. */}
-              <ul
-                className="desk-ledger-list"
-                data-tour-anchor={position === 0 ? 'desk-folio' : undefined}
-              >
-                {group.lines.map((line) => (
-                  <DeskLedgerRow key={line.engagementId} line={line} />
-                ))}
-              </ul>
+      <DocumentActionGroup surfaceKey="desk" regionKey="every-job" aria-label="The rest of the jobs, actions">
+        <div className="ledger w-full">
+          {sections.map((section) => (
+            <div key={section.key} data-ledger-section={section.key}>
+              {section.label && (
+                <div className="sec-head">
+                  <p className="eb">
+                    <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+                      <path d="M0 2h34M0 6h28M0 10h20" />
+                    </svg>
+                    <span>{section.label}</span>
+                  </p>
+                </div>
+              )}
+              {section.groups
+                .filter((group) => group.lines.length > 0)
+                .map((group) => {
+                  const first = firstGroup;
+                  firstGroup = false;
+                  return (
+                    <LedgerGroup
+                      key={group.key}
+                      group={group}
+                      sectionKey={section.key}
+                      sectionLabel={section.label}
+                      holderOf={holderOf}
+                      first={first}
+                      onUndone={setSaid}
+                    />
+                  );
+                })}
             </div>
           ))}
         </div>
       </DocumentActionGroup>
-
-      {roster.groups.length === 0 && (
-        <p
-          data-tour-anchor="desk-folio"
-          className="mt-4 font-heading text-[15px] italic text-[var(--text-muted)]"
-        >
-          {roster.notChecked ?? 'The work is in motion.'}
+      {othersHold && <p className="desk-rest-note t-body-sm">{othersHold}</p>}
+      {sections.length === 0 && ledger.notChecked && (
+        <p data-tour-anchor="desk-folio" className="t-body-sm text-[var(--text-muted)]">
+          {ledger.notChecked}
         </p>
       )}
+      <p role="status" className="sr-only">
+        {said}
+      </p>
     </section>
   );
 }

@@ -57,26 +57,33 @@ export function CompanyRow({
   onOpen,
 }: CompanyRowProps) {
   return (
-    <li
-      data-company-row={firmId}
-      className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline-strong)] px-4 py-3"
-    >
-      <Avatar name={name} role={kind} shape="square" />
-      <div className="min-w-0 flex-1 basis-[320px]">
-        <button
-          type="button"
-          data-open-firm={firmId}
-          onClick={onOpen}
-          className="min-h-11 text-left text-[14px] font-semibold leading-[1.4] text-[var(--ink)]"
-        >
-          {name}
-        </button>
+    <li data-company-row={firmId} className="lrow people-row">
+      <div className="lname">
+        <span className="people-who">
+          <Avatar name={name} role={kind} shape="square" />
+          <button
+            type="button"
+            data-open-firm={firmId}
+            onClick={onOpen}
+            className="name t-d4 text-left"
+          >
+            {name}
+          </button>
+        </span>
+      </div>
+      {/* US-28 (people specimen) — the kind column. */}
+      <span className="lphase t-meta" data-row-kind>
+        Company
+      </span>
+      <div className="lsent t-body-sm min-w-0">
         <p className="t-meta text-[var(--ink-subtle)]">{line}</p>
+        <p className="people-words">
+          <StateWord family="paper" value={paperState} />
+          {payeeMarker ? <PlainFact>{payeeMarker}</PlainFact> : null}
+        </p>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <StateWord family="paper" value={paperState} className="w-[108px]" />
-        {payeeMarker ? <PlainFact>{payeeMarker}</PlainFact> : null}
-      </div>
+      <span className="lwhen t-meta" />
+      <span className="lact" />
     </li>
   );
 }

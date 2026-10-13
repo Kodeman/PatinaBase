@@ -170,10 +170,7 @@ export function BulkPromoteToStudioModal({
     >
       <div
         className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-[var(--bg-surface)]"
-        style={{
-          boxShadow: '0 32px 80px rgba(44, 41, 38, 0.3)',
-          border: '1px solid var(--border-default)',
-        }}
+        style={{ border: '1px solid var(--border-default)' }}
       >
         <header className="flex items-start justify-between gap-3 border-b border-[var(--border-default)] px-6 pt-6 pb-4">
           <div className="flex flex-col gap-2">

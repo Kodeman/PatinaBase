@@ -20,7 +20,9 @@ const mockPush = jest.fn();
 const mergedSurvivor: { current: string | null } = { current: null };
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
+jest.mock("../../command-bar", () => ({ openCommandBar: jest.fn() }));
 
 const ROWS = [
   {
@@ -77,15 +79,17 @@ jest.mock("../../mobile/mobile-shell", () => ({
 jest.mock("../../rooms/room-shell", () => ({
   RoomShell: ({
     title,
+    heading,
     count,
     children,
   }: {
     title: string;
+    heading?: React.ReactNode;
     count?: string;
     children: React.ReactNode;
   }) => (
     <div>
-      <h1>{title}</h1>
+      {heading ?? <h1>{title}</h1>}
       {count && <p data-testid="room-count">{count}</p>}
       {children}
     </div>
@@ -154,6 +158,17 @@ describe("the head", () => {
     render(<PeopleRoom />);
     expect(screen.getByTestId("room-count")).toHaveTextContent(
       "1 person · 1 firm",
+    );
+  });
+
+  it("SQ-877 N11 — the 390 dock act and the head's act share one name", () => {
+    const { useMobilePrimaryAction } = jest.requireMock(
+      "../../mobile/mobile-shell",
+    ) as { useMobilePrimaryAction: jest.Mock };
+    useMobilePrimaryAction.mockClear();
+    render(<PeopleRoom />);
+    expect(useMobilePrimaryAction).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: "add-person", label: "Add contact" }),
     );
   });
 });
@@ -243,18 +258,77 @@ describe("the address", () => {
   /**
    * CR3-4 — the body is chosen `openFirm ? <CompanyCard/> : openPerson ? … :
    * view`, and `goView` cleared everything EXCEPT `openFirm`. So choosing a
-   * rail view with a firm card open left the card standing, the rail showing
-   * nothing active, and the card's own Back the only way out.
+   * view with a firm card open left the card standing.
+   *
+   * US-28 — the views are no longer a rail in the Room; a sub-room opens from
+   * More or ⌘K at `/people?view=<key>`, and the standing Room follows it.
    */
-  it("choosing a view puts the company card down", () => {
+  it("walking to a sub-room's address puts the company card down", () => {
     goTo("?firm=firm-northgate");
-    render(<PeopleRoom />);
+    const { rerender } = render(<PeopleRoom />);
     expect(screen.getByTestId("company-card")).toBeInTheDocument();
-    const rail = document.querySelector<HTMLElement>(
-      "[data-people-desktop-rail]",
-    );
-    fireEvent.click(within(rail!).getByRole("button", { name: /Correspondence/ }));
+    goTo("?view=threads");
+    rerender(<PeopleRoom />);
     expect(screen.queryByTestId("company-card")).toBeNull();
+    expect(
+      document.querySelector("[data-people-sub-room]"),
+    ).toHaveAttribute("data-people-sub-room", "client-relations");
+  });
+
+  it("US-28 — a fresh arrival at a sub-room's address opens it and never strips ?view=", async () => {
+    goTo("?view=threads");
+    render(<PeopleRoom />);
+    expect(document.querySelector("[data-people-main-panel]")).toHaveAttribute(
+      "data-people-current-view",
+      "threads",
+    );
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-people-main-panel]"),
+      ).toHaveAttribute("data-people-sub-room", "client-relations"),
+    );
+    expect(mockReplace).not.toHaveBeenCalledWith("/people", expect.anything());
+  });
+
+  it("the Header line's way back from a record returns to the Directory", () => {
+    goTo("?person=card-dana");
+    render(<PeopleRoom />);
+    expect(screen.getByTestId("person-card")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Back to Studio contacts" }),
+    );
+    expect(screen.queryByTestId("person-card")).toBeNull();
+    expect(screen.getByTestId("directory-view")).toBeInTheDocument();
+  });
+
+  /**
+   * SQ-872 F1 — ⌘K's person row pushes `/people?person=<id>` while the Room
+   * already stands at a sub-room's address. The first read has run, so the
+   * Room has to follow the card the new address names, and never strip it.
+   */
+  it("follows ⌘K's ?person= into the record while the Room stands at a sub-room", () => {
+    goTo("?view=threads");
+    const { rerender } = render(<PeopleRoom />);
+    expect(screen.queryByTestId("person-card")).toBeNull();
+
+    mockReplace.mockClear();
+    goTo("?person=card-dana");
+    rerender(<PeopleRoom />);
+
+    expect(screen.getByTestId("person-card")).toHaveAttribute(
+      "data-person",
+      "card-dana",
+    );
+    // The address sync never writes the named card back out of the address.
+    for (const [href] of mockReplace.mock.calls) {
+      expect(href).toContain("person=card-dana");
+    }
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Back to Studio contacts" }),
+    );
+    expect(screen.queryByTestId("person-card")).toBeNull();
+    expect(screen.getByTestId("directory-view")).toBeInTheDocument();
   });
 });
 

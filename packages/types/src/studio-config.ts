@@ -191,8 +191,9 @@ export function getReachStateLabel(state: string | null | undefined): string {
 // pigment table they all reduce through.
 // ============================================================================
 
-/** The four pigments a state word may wear. Never a fill — a border and text
- *  on a transparent ground (SPEC §8 #10). */
+/** The four classes of state a word falls in. PR-v printed each in its own
+ *  pigment; since V20 U-Q13 they are classes only, and `STATE_WORD_INKS`
+ *  (below) says which ink each prints in. */
 export type StateWordPigment = 'current' | 'pending' | 'blocked' | 'dormant';
 
 /** Which family a word belongs to. Used by the shared `StateWord` primitive to
@@ -200,22 +201,48 @@ export type StateWordPigment = 'current' | 'pending' | 'blocked' | 'dormant';
  *  re-deriving either. */
 export type StateWordFamily = 'reach' | 'consent' | 'stage' | 'paper';
 
-/** The house-sheet token names each pigment resolves to. The alias block in
- *  the designer portal's `globals.css` maps these onto the shipped
- *  `--color-*` values (PR-v); SPEC §2.2's `.word--*` rules are the same four
- *  pairs, stated in CSS. */
-export interface StateWordPigmentTokens {
-  /** `border-color` for the bordered word box. */
-  border: string;
-  /** `color` for the word itself — always a text-grade ink. */
+// ============================================================================
+// THE INK STATE WORD (US-28 S1 · V20 U-Q13 · house sheet §G)
+//
+// The word is the state. Every state prints as one unboxed mono word in ink —
+// never a chip, never a border, never a pigment that grades. Terracotta-ink
+// marks only an overdue, blocked or do-not-contact word, and the sentence
+// beside it says so, so meaning never rests on colour (WCAG 1.4.1).
+// ============================================================================
+
+/** The three inks a state word may print in. `ink` is the default; `quiet`
+ *  is a secondary word beside a louder one; `od` is overdue, blocked or
+ *  do-not-contact, and nothing else. */
+export type StateWordInk = 'ink' | 'quiet' | 'od';
+
+export interface StateWordInkTokens {
+  /** The designer portal's shared class list (globals.css, the US-28 S1
+   *  block). Spend this; it carries the face as well as the colour. */
+  className: string;
+  /** The text colour the class prints in, for a surface that cannot take
+   *  the class. Always a text-grade ink token. */
   color: string;
 }
 
-export const STATE_WORD_PIGMENTS: Record<StateWordPigment, StateWordPigmentTokens> = {
-  current: { border: 'var(--sage)', color: 'var(--sage-ink)' },
-  pending: { border: 'var(--golden)', color: 'var(--golden-ink)' },
-  blocked: { border: 'var(--terracotta)', color: 'var(--terracotta-ink)' },
-  dormant: { border: 'var(--hairline-strong)', color: 'var(--ink-faint)' },
+export const STATE_WORD_INK_TOKENS: Record<StateWordInk, StateWordInkTokens> = {
+  ink: { className: 'word', color: 'var(--text-primary)' },
+  quiet: { className: 'word word--quiet', color: 'var(--text-subtle)' },
+  od: { className: 'word word--od', color: 'var(--terracotta-ink)' },
+};
+
+/**
+ * The one ink state-word map. Each of the four word families reduces to a
+ * pigment class (`REACH_STATE_PIGMENTS`, `CONSENT_WORD_PIGMENTS`,
+ * `SEAT_STAGE_WORD_PIGMENTS`, `PAPER_STATE_PIGMENTS`); this map replaces
+ * the grading those classes used to carry. Only `blocked` (a lapsed paper,
+ * an opted-out number) keeps terracotta-ink; current, pending and dormant
+ * all print in ink, because the word already says which it is.
+ */
+export const STATE_WORD_INKS: Record<StateWordPigment, StateWordInk> = {
+  current: 'ink',
+  pending: 'ink',
+  blocked: 'od',
+  dormant: 'ink',
 };
 
 // ── Reach (E6/E9) ───────────────────────────────────────────────────────────
@@ -427,7 +454,9 @@ export interface StateWordResolution {
   /** The word as the studio reads it. */
   label: string;
   pigment: StateWordPigment;
-  tokens: StateWordPigmentTokens;
+  /** The ink the word prints in (`STATE_WORD_INKS`); spend it through
+   *  `STATE_WORD_INK_TOKENS[ink]`. */
+  ink: StateWordInk;
 }
 
 /**
@@ -451,7 +480,7 @@ export function resolveStateWord(
         value: reach,
         label: REACH_STATE_LABELS[reach],
         pigment,
-        tokens: STATE_WORD_PIGMENTS[pigment],
+        ink: STATE_WORD_INKS[pigment],
       };
     }
     case 'consent': {
@@ -463,7 +492,7 @@ export function resolveStateWord(
         value: word,
         label: CONSENT_WORD_LABELS[word],
         pigment,
-        tokens: STATE_WORD_PIGMENTS[pigment],
+        ink: STATE_WORD_INKS[pigment],
       };
     }
     case 'stage': {
@@ -475,7 +504,7 @@ export function resolveStateWord(
         value: word,
         label: SEAT_STAGE_WORD_LABELS[word],
         pigment,
-        tokens: STATE_WORD_PIGMENTS[pigment],
+        ink: STATE_WORD_INKS[pigment],
       };
     }
     case 'paper': {
@@ -487,7 +516,7 @@ export function resolveStateWord(
         value: state,
         label: PAPER_STATE_LABELS[state],
         pigment,
-        tokens: STATE_WORD_PIGMENTS[pigment],
+        ink: STATE_WORD_INKS[pigment],
       };
     }
     default:

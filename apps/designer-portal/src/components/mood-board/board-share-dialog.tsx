@@ -138,7 +138,9 @@ export function BoardShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85dvh] max-w-xl overflow-y-auto">
+      {/* The one house sheet stock (U-Q12): 2px corner, --card-edge, no
+          shadow. The shared Dialog keeps its own dress for other portals. */}
+      <DialogContent className="br-sheet rounded-[2px] border-[var(--card-edge)] bg-[var(--paper-doc)] shadow-none sm:rounded-[2px] max-h-[85dvh] max-w-xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Share {boardName}</DialogTitle>
           <DialogDescription>

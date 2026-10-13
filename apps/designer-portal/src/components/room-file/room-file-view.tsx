@@ -18,7 +18,8 @@
  */
 
 import { useState } from "react";
-import Link from "next/link";
+import { RoomHeaderLine } from "@/components/document/rooms/room-view/room-header-line";
+import { EmptyState } from "@/components/document/empty-state";
 import {
   useRoomScan,
   useRoomFiles,
@@ -112,28 +113,19 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
           is the Room View of the same scan — an address that always resolves,
           project or no project (the old link needed a projectId the deliverable
           never actually depended on). */}
-      <Link
-        href={`/room/${scanId}`}
-        className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)]"
-      >
-        {C.backToRoom(roomLabel)}
-      </Link>
+      {/* US-28 S10a: the room file shares the room's Header line. */}
+      <RoomHeaderLine
+        as="h1"
+        title={roomLabel}
+        back={{ href: `/room/${scanId}`, label: roomLabel }}
+      />
 
-      {/* Header */}
-      <header className="mt-4">
-        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
-          {C.eyebrow}
-        </p>
-        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <h1 className="font-heading text-[30px] font-medium text-[var(--color-charcoal)] sm:text-[36px]">
-            {roomLabel}
-            {roomType && (
-              <span className="italic text-[var(--color-mocha)]">
-                {" "}
-                · {roomType}.
-              </span>
-            )}
-          </h1>
+      <header>
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <p className="eb">
+            {C.eyebrow}
+            {roomType && <span>{roomType}</span>}
+          </p>
           {current?.unverified && (
             <span className="rounded-[2px] border border-[var(--color-clay)] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
               {C.unverifiedBadge}
@@ -167,7 +159,7 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
 
       {/* Body */}
       {!current ? (
-        <EmptyState />
+        <NoDrawingSet />
       ) : current.status !== "generated" ? (
         <>
           <NotGeneratedState />
@@ -194,16 +186,13 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
   );
 }
 
-function EmptyState() {
+/** No drawing set yet: the one empty state (US-28 S1), never a centred
+ *  italic message on an empty page. */
+function NoDrawingSet() {
   return (
-    <div className="mt-16 text-center">
-      <p className="font-heading text-[1.2rem] italic text-[var(--color-charcoal)]">
-        {C.notGeneratedYet}
-      </p>
-      <p className="mt-2 font-heading text-[13px] italic text-[var(--color-mocha)]">
-        {C.notGeneratedBody}
-      </p>
-    </div>
+    <EmptyState eyebrow={C.drawingsTitle} className="mt-10">
+      {C.notGeneratedYet} <span className="empty-s">{C.notGeneratedBody}</span>
+    </EmptyState>
   );
 }
 

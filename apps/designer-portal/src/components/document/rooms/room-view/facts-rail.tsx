@@ -158,7 +158,12 @@ export function FactsRail({
 
       <Fact k="Survey details">
         {scanDate ? fmtDay(scanDate) : '—'}
-        {qualityGrade ? ` · quality ${qualityGrade}` : ''}
+        {qualityGrade && (
+          <>
+            {' · '}
+            <span className="word">Quality {qualityGrade}</span>
+          </>
+        )}
         {coveragePercentage != null
           ? ` · ${coveragePercentage.toFixed(2)}`
           : ''}
@@ -249,7 +254,7 @@ function Fact({ k, children }: { k: string; children: ReactNode }) {
 
 function Sub({ children }: { children: ReactNode }) {
   return (
-    <span className="mt-1 block font-heading text-[12px] italic text-[var(--color-mocha)]">
+    <span className="room-note mt-1 block text-[13px] leading-[1.5]">
       {children}
     </span>
   );

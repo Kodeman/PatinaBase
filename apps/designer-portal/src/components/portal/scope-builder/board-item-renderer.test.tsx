@@ -77,7 +77,7 @@ describe('renderBoardRoomItem — note card tokens, not raw hex (VD1/VD18)', () 
     expect(card.className).not.toMatch(/shadow-/);
   });
 
-  it('uses design tokens for the warm-paper palette, not raw parchment hex', () => {
+  it('draws the note as text on the house note edge, in tokens, never raw hex (US-28 S12)', () => {
     // jsdom's cssstyle validates color-typed CSS properties and silently
     // drops var(...) values from computed inline style, so the token swap
     // can't be asserted by inspecting rendered style — read the source
@@ -88,8 +88,29 @@ describe('renderBoardRoomItem — note card tokens, not raw hex (VD1/VD18)', () 
     );
     const noteCardSource = source.slice(source.indexOf('function NoteCard'));
     expect(noteCardSource).not.toMatch(/#E0D2B8|#F3E9D5|#4A4137/i);
-    expect(noteCardSource).toContain('var(--bg-warm)');
-    expect(noteCardSource).toContain('var(--border-warm)');
-    expect(noteCardSource).toContain('var(--color-bark)');
+    // US-28 S12 (frame p1): the warm-paper sticky became text on the one
+    // non-stage note edge, on the board's own stock.
+    expect(noteCardSource).toContain('var(--edge-note)');
+    expect(noteCardSource).not.toMatch(/shadow-|backgroundColor/);
+  });
+});
+
+describe('renderBoardRoomItem — plate and caption (US-28 S12)', () => {
+  it('prints a product as a plate and a whole caption: no shadow, clamp or truncate', () => {
+    const { container } = render(
+      <>
+        {renderBoardRoomItem(
+          item({
+            type: 'product',
+            data: { name: 'Arden lounge chair', vendor_name: 'Calloway & Brandt Upholstery', price_cents: 418000 },
+          }),
+        )}
+      </>,
+    );
+
+    expect(screen.getByText('Arden lounge chair')).toBeInTheDocument();
+    expect(screen.getByText('Calloway & Brandt Upholstery · $4,180')).toBeInTheDocument();
+    expect(container.querySelector('.br-plate')).not.toBeNull();
+    expect(container.innerHTML).not.toMatch(/shadow-|truncate|line-clamp/);
   });
 });

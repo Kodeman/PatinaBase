@@ -28,17 +28,19 @@ import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
 import { DeliveryWord } from '../delivery-word';
 import { DocumentAction } from '../document-action';
-import { Stamp } from '../stamp';
 import { openInvoiceFolio } from './invoice-overlays';
 
 export function AccountsReceivablesPage({
   aging,
   highlightInvoiceId,
   onOpenDocument,
+  onOpenFolio = openInvoiceFolio,
 }: {
   aging: ArAging;
   highlightInvoiceId: string | null;
   onOpenDocument: (projectId: string | null) => void;
+  /** U-Q16 — the Accounts book opens the folio in place, in its own sheet. */
+  onOpenFolio?: (invoiceId: string) => void;
 }) {
   const { openInvoices, buckets, totalBalanceCents } = aging;
   // One read for the whole page — a per-row hook would open N queries.
@@ -84,6 +86,7 @@ export function AccountsReceivablesPage({
             delivery={emailDelivery.byRef[inv.id] ?? null}
             highlight={inv.id === highlightInvoiceId}
             onOpenDocument={onOpenDocument}
+            onOpenFolio={onOpenFolio}
           />
         ))}
       </ul>
@@ -96,11 +99,13 @@ function ReceivableRow({
   delivery,
   highlight,
   onOpenDocument,
+  onOpenFolio,
 }: {
   invoice: Invoice;
   delivery: EmailDelivery | null;
   highlight: boolean;
   onOpenDocument: (projectId: string | null) => void;
+  onOpenFolio: (invoiceId: string) => void;
 }) {
   // R83 — the chase renders its failure inline (the `note` under the row);
   // errorSurface:'inline' keeps the global mutation toast from duplicating it
@@ -166,8 +171,9 @@ function ReceivableRow({
             record payment / resend / void live there; the chase stays here. */}
         <button
           type="button"
-          onClick={() => openInvoiceFolio(invoice.id)}
-          className="block w-full truncate rounded-[3px] text-left text-[12.5px] font-medium text-[var(--color-charcoal)] hover:bg-[rgba(196,165,123,0.06)]"
+          onClick={() => onOpenFolio(invoice.id)}
+          data-invoice-folio-opener={invoice.id}
+          className="block min-h-11 w-full break-words rounded-[3px] text-left text-[12.5px] font-medium text-[var(--color-charcoal)] hover:bg-[rgba(196,165,123,0.06)]"
         >
           {invoice.invoice_number
             ? `Invoice ${invoice.invoice_number}`
@@ -180,19 +186,20 @@ function ReceivableRow({
           </span>
         </button>
         {/* Sentence case, terracotta — so it sits OUTSIDE the facts line,
-            which is uppercase and truncating. */}
+            which is uppercase. Neither truncates (US-28 S8): both wrap. */}
         <DeliveryWord
           delivery={delivery}
           recipient={invoice.client?.email}
           mode="attention"
-          className="block truncate"
+          className="block"
         />
-        <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+        <p className="break-words font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
           {invoice.project?.name ?? invoice.title ?? 'Studio'}
           {studioInvoice && (
-            <span className="ml-1.5 align-middle">
-              <Stamp label="studio" color="var(--color-clay-ink)" />
-            </span>
+            <>
+              {' '}
+              <span className="word word--quiet">studio</span>
+            </>
           )}
           {` · ${[
             invoice.due_date ? `due ${fmtDay(invoice.due_date)}` : null,
@@ -232,7 +239,7 @@ function ReceivableRow({
           {chasedAt ? 'Chase again' : 'Send reminder'}
         </DocumentAction>
       ) : (
-        <span className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <span className="word word--quiet">
           in motion
         </span>
       )}

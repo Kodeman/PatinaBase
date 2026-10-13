@@ -1,129 +1,151 @@
 'use client';
 
 /**
- * RoomCard — one entry in The Rooms roster (R107 §1, prototype scene 01's
- * `.roomcard`). Pure props: takes an already-built `RoomRosterEntry`
- * (apps/designer-portal/src/lib/room-view/geometry.ts — the pure adapter in
- * roster-from-rows.ts resolves the client-name fallback and the docRef), does
- * no fetching of its own.
+ * RoomCard and RoomRow — one room in a job's Section of Measured rooms
+ * (US-28 S10a; uplift.md (c) area 3; specimens/rooms-1440.html frame p1).
  *
- * The whole card is a real link to `/room/[id]` — no dead surfaces (the
- * room-view package's P2 lesson). It uses the "stretched link" pattern
- * (a full-cover `<Link>` at the base of the stack, aria-labelled) rather than
- * wrapping every child in one `<a>`: the docref line is its OWN real `<Link>`
- * to the Document, and nesting an `<a>` inside an `<a>` is invalid HTML (React
- * warns on it — verified while building this component). Both links are real,
- * independently focusable, and never nested.
+ * The Card (L2): on --paper-doc with one 1px --card-edge (`.card`, the S1
+ * block). Its upper block is the hit area: the room's name is a real link to
+ * `/room/[id]` whose `::after` covers the eyebrow and name (`.card-up`). The
+ * plate slot holds the drawn plan or the A10 silhouette, captioned with the
+ * ink word AWAITING DRAWING when the plan is not drawn yet. Size and quality
+ * are facts; quality is the ink word "Quality good", never a graded dot.
+ * The client and the job's Document link stand in the Section's eyebrow and
+ * title, so the Card names only the room.
  *
- * The stretched link stashes the Rooms origin on click — the SAME mechanism
+ * The Row (ledger row): the fourth room on in a Section, the same facts in
+ * one line.
+ *
+ * Both links stash the Rooms origin on click, the same mechanism
  * studio-drawer.tsx's `enterRoom` uses (`rememberRoomOrigin`), so leaving a
- * room opened from `/rooms` reads "← the Scans" and returns here, rather
- * than degrading to the Desk (the Phase-2 gate finding; room-origin.ts's
- * `isRoomPath` deliberately excludes bare `/rooms` from its no-op guard so
- * this stash actually lands).
+ * room opened from `/rooms` returns here rather than to the Desk.
  */
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { RoomRosterEntry } from '@/lib/room-view/geometry';
-import { qualityGradeColor } from '@/components/portal/scan-card';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
+import { DocumentAction } from '../../document-action';
 import { RoomPlanThumb } from './room-plan-thumb';
+import { qualityWord, roomName, roomSize, scanDay } from './rooms-by-job';
 
-export function RoomCard({ entry }: { entry: RoomRosterEntry }) {
+const AWAITING_DRAWING = 'Awaiting drawing';
+
+export function RoomCard({
+  entry,
+  roomFileOn = false,
+}: {
+  entry: RoomRosterEntry;
+  /** The `room-file` flag: a drawn room's act opens its room file. */
+  roomFileOn?: boolean;
+}) {
   const pathname = usePathname();
-  const displayName = entry.clientName ?? 'Unnamed room';
-  const whatLine = buildWhatLine(entry);
-  const metasLeft = buildMetasLeft(entry);
-  const grade = entry.quality.grade;
+  const name = roomName(entry);
+  const day = scanDay(entry.scanDate);
+  const size = roomSize(entry);
+  const quality = qualityWord(entry.quality.grade);
+  const drawn = entry.geometry != null;
+  // rooms-p1: the card's one act. A drawn room opens its room file; an undrawn
+  // one (or any room while the room file is off) opens the scan.
+  const opensFile = drawn && roomFileOn;
 
   return (
-    <div className="relative rounded-[2px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-front)] p-5 transition-colors hover:border-[var(--color-clay)]">
-      <div className="font-heading text-[1.25rem] font-medium text-[var(--color-charcoal)]">
-        {displayName}
-      </div>
-      {whatLine && (
-        <div className="mt-0.5 text-[0.78rem] text-[var(--color-mocha)]">{whatLine}</div>
-      )}
-
-      <div className="my-3.5">
-        <RoomPlanThumb geometry={entry.geometry} />
-      </div>
-
-      <div className="flex items-center justify-between gap-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-        <span>{metasLeft}</span>
-        {grade && (
-          <span className="flex shrink-0 items-center gap-1" style={{ color: qualityGradeColor(grade) }}>
-            <span aria-hidden>●</span> quality {grade}
-          </span>
-        )}
-      </div>
-
-      {entry.docRef && (
-        <div className="relative z-10 mt-2.5 w-fit border-t border-[var(--doc-ink-border)] pt-2.5">
+    <article className="card" data-room-card>
+      <div className="card-up">
+        <p className="eb">{day ? `Room · scanned ${day}` : 'Room'}</p>
+        <h3 className="name-h t-d3">
           <Link
-            href={`/doc/${entry.docRef.engagementId}`}
-            className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-mocha)] hover:text-[var(--color-clay-ink)]"
+            href={`/room/${entry.roomId}`}
+            className="name"
+            onClick={() => rememberRoomOrigin(pathname)}
           >
-            → the document · {entry.docRef.phaseLabel}
+            {name}
           </Link>
-        </div>
-      )}
+        </h3>
+      </div>
 
-      {/* The stretched link — covers the whole card, sits BELOW the docref
-          link (z-0 vs z-10) so the docref stays independently clickable. */}
-      <Link
-        href={`/room/${entry.roomId}`}
-        aria-label={`Open the room for ${displayName}`}
-        className="absolute inset-0 z-0"
-        onClick={() => rememberRoomOrigin(pathname)}
-      >
-        <span className="sr-only">{displayName}</span>
-      </Link>
-    </div>
+      <figure className="room-fig">
+        <RoomPlanThumb
+          geometry={entry.geometry}
+          dims={entry.dims}
+          label={
+            drawn
+              ? `Plan of the ${name.toLowerCase()}, drawn from the scan`
+              : `Scanned outline of the ${name.toLowerCase()}, not yet drawn`
+          }
+        />
+        {drawn ? (
+          <figcaption className="cap t-meta">{name} · plan drawn from the scan</figcaption>
+        ) : (
+          <figcaption className="cap">
+            <span className="word">{AWAITING_DRAWING}</span>{' '}
+            <span className="t-meta">· the scan is in; the plan is drawn next</span>
+          </figcaption>
+        )}
+      </figure>
+
+      <dl className="room-facts">
+        <dt>Size</dt>
+        <dd className="t-money">{size ?? 'Geometry pending'}</dd>
+        {quality && (
+          <>
+            <dt>Scan</dt>
+            <dd>
+              <span className="word">{quality}</span>
+            </dd>
+          </>
+        )}
+      </dl>
+
+      <div className="foot room-card-foot">
+        <DocumentAction
+          href={opensFile ? `/room/${entry.roomId}/file` : `/room/${entry.roomId}`}
+          actionKey={opensFile ? 'open-room-file' : 'open-room-scan'}
+          surfaceKey="rooms"
+          regionKey="room-card"
+          variant="tertiary"
+          aria-label={opensFile ? `Open the room file for the ${name.toLowerCase()}` : `Open the scan of the ${name.toLowerCase()}`}
+          onClick={() => rememberRoomOrigin(pathname)}
+        >
+          {opensFile ? 'Open the room file' : 'Open the scan'}
+        </DocumentAction>
+      </div>
+    </article>
   );
 }
 
-/** "Dining room · scanned Jul 14" — degrades gracefully when either half is
- *  missing; returns null (render nothing) when neither is known. */
-function buildWhatLine(entry: RoomRosterEntry): string | null {
-  const type = humanizeRoomType(entry.roomType);
-  const date = formatScanDate(entry.scanDate);
-  if (type && date) return `${type} · scanned ${date}`;
-  if (type) return type;
-  if (date) return `Scanned ${date}`;
-  return null;
-}
+export function RoomRow({ entry }: { entry: RoomRosterEntry }) {
+  const pathname = usePathname();
+  const name = roomName(entry);
+  const day = scanDay(entry.scanDate);
+  const size = roomSize(entry);
+  const quality = qualityWord(entry.quality.grade);
+  const drawn = entry.geometry != null;
 
-/** "14′ × 14′ · 196 SQ FT" in whole feet (the roster's quiet read, distinct
- *  from ftIn's feet-and-inches precision used elsewhere) — degrades to a
- *  quiet placeholder before the scan's geometry has parsed. */
-function buildMetasLeft(entry: RoomRosterEntry): string {
-  const parts: string[] = [];
-  if (entry.dims) {
-    parts.push(`${wholeFeet(entry.dims.w)} × ${wholeFeet(entry.dims.d)}`);
-  }
-  if (entry.areaSqFt != null) {
-    parts.push(`${Math.round(entry.areaSqFt)} SQ FT`);
-  }
-  return parts.length > 0 ? parts.join(' · ') : 'Geometry pending';
-}
-
-function wholeFeet(ft: number): string {
-  // Whole-foot display per the prototype's roster metas (ftIn's feet+inches
-  // precision is for the interactive Plan, not this quiet card line).
-  return `${Math.round(ft)}′`;
-}
-
-function humanizeRoomType(roomType: string | null): string | null {
-  if (!roomType) return null;
-  const spaced = roomType.replace(/_/g, ' ');
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
-
-function formatScanDate(scanDate: string | null): string | null {
-  if (!scanDate) return null;
-  const d = new Date(scanDate);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return (
+    <div className="lrow plain" data-room-row>
+      <div className="lname">
+        <Link
+          href={`/room/${entry.roomId}`}
+          className="name t-d4"
+          onClick={() => rememberRoomOrigin(pathname)}
+        >
+          {name}
+        </Link>
+      </div>
+      <span className="lsent t-body-sm">
+        <span className={drawn ? 'word word--quiet' : 'word'}>
+          {drawn ? 'Plan drawn' : AWAITING_DRAWING}
+        </span>
+        {quality && (
+          <>
+            {' · '}
+            <span className="word">{quality}</span>
+          </>
+        )}
+      </span>
+      <span className="lfig">{size ?? 'Geometry pending'}</span>
+      <span className="lwhen t-body-sm">{day ? `Scanned ${day}` : ''}</span>
+    </div>
+  );
 }

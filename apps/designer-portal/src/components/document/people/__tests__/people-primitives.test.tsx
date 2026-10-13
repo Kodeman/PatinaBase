@@ -20,7 +20,8 @@ import { StateWord, PlainFact } from '../state-word';
 import { ContactRuleLine, routedSentence } from '../contact-rule-line';
 import { SeatLine, seatWindowText, formatSeatDate, seatLineParts } from '../seat-line';
 import { TelLink, telDisplay, telHref } from '../tel-link';
-import { STATE_WORD_PIGMENTS, resolveStateWord } from '@patina/types';
+import * as patinaTypes from '@patina/types';
+import { resolveStateWord } from '@patina/types';
 import type { PeopleDirectorySeat } from '@patina/supabase';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -136,30 +137,23 @@ describe('StateWord · one bordered word for all four families', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('is a border and text on a transparent ground — never a fill (SPEC §8 #10)', () => {
-    render(<StateWord family="paper" value="lapsed" />);
-    const word = screen.getByText('Lapsed');
-    // jsdom discards a `var(--x)` declaration entirely, so the TOKEN pairing is
-    // asserted at its source below and the DOM is asserted for what jsdom does
-    // keep: the transparent ground, the border box, and no shadow (D4).
-    expect(word.getAttribute('style') ?? '').toMatch(/background:\s*transparent/);
-    expect(word.className).toMatch(/\bborder\b/);
-    expect(word.className).not.toMatch(/shadow/);
+  it('is an unboxed ink word — no border, no fill, no inline paint (US-28 S10, uplift (c) area 4)', () => {
+    render(<StateWord family="paper" value="current" />);
+    const word = screen.getByText('Current');
+    expect(word.className).toMatch(/\bword\b/);
+    expect(word.className).not.toMatch(/\bborder\b|shadow|word--od/);
+    expect(word).not.toHaveAttribute('style');
   });
 
-  it('binds each pigment to its house-sheet token pair, and never to a fill', () => {
-    // The four pairs are SPEC §2.2's `.word--*` rules, stated once in
-    // @patina/types so the room and the specimens cannot drift.
-    expect(STATE_WORD_PIGMENTS).toEqual({
-      current: { border: 'var(--sage)', color: 'var(--sage-ink)' },
-      pending: { border: 'var(--golden)', color: 'var(--golden-ink)' },
-      blocked: { border: 'var(--terracotta)', color: 'var(--terracotta-ink)' },
-      dormant: { border: 'var(--hairline-strong)', color: 'var(--ink-faint)' },
-    });
-    // Every `color` is an ink; a material pigment is never asked to be read.
-    for (const pair of Object.values(STATE_WORD_PIGMENTS)) {
-      expect(pair.color).toMatch(/-ink\)$|--ink-faint\)$/);
-    }
+  it('inks a blocked word terracotta and nothing else (word--od)', () => {
+    render(<StateWord family="paper" value="lapsed" />);
+    const word = screen.getByText('Lapsed');
+    expect(word.className).toMatch(/\bword--od\b/);
+    expect(word).toHaveAttribute('data-state-ink', 'od');
+  });
+
+  it('no longer exports the deprecated pigment map (V20 U-Q13)', () => {
+    expect(patinaTypes).not.toHaveProperty('STATE_WORD_PIGMENTS');
   });
 
   it('resolves a value to its word AND its pigment in one reduction', () => {
@@ -168,17 +162,18 @@ describe('StateWord · one bordered word for all four families', () => {
       value: 'lapsed',
       label: 'Lapsed',
       pigment: 'blocked',
-      tokens: { border: 'var(--terracotta)', color: 'var(--terracotta-ink)' },
+      ink: 'od',
     });
     expect(resolveStateWord('consent', null)).toBeNull();
     expect(resolveStateWord('stage', 'nonsense')).toBeNull();
   });
 
-  it('drops the box but keeps the word and its pigment at 390 (R-M)', () => {
+  it('prints the same unboxed word whether or not a caller still passes `plain`', () => {
     render(<StateWord family="consent" value="opted_out" plain />);
     const word = screen.getByText('Opted out');
     expect(word.className).not.toMatch(/\bborder\b/);
     expect(word).toHaveAttribute('data-state-pigment', 'blocked');
+    expect(word).toHaveAttribute('data-state-ink', 'od');
     expect(word).toHaveAttribute('data-state-word', 'opted_out');
   });
 

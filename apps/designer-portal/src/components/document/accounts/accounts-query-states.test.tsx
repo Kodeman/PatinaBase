@@ -73,11 +73,7 @@ jest.mock('@/hooks/use-invoice-checkout-reconciliation', () => ({
   useReconcileInvoiceCheckout: () => ({ mutate: jest.fn(), isPending: false }),
 }));
 
-jest.mock('../ledger-front-matter', () => ({
-  LedgerFrontMatter: ({ stats = [] }: { stats?: { label: string; value: string }[] }) => (
-    <div data-testid="ledger-front-matter">{stats.map((stat) => `${stat.label}: ${stat.value}`).join(' | ')}</div>
-  ),
-}));
+const frontMatter = () => document.querySelector('[data-accounts-front-matter]');
 
 jest.mock('./accounts-ledger-page', () => ({
   AccountsLedgerPage: ({ invoices = [], canExport = false }: { invoices?: { id: string }[]; canExport?: boolean }) => (
@@ -141,7 +137,7 @@ describe('designer Accounts query failures', () => {
     render(<AccountsBook onClose={jest.fn()} />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(/studio book could not be opened/i);
-    expect(screen.queryByTestId('ledger-front-matter')).not.toBeInTheDocument();
+    expect(frontMatter()).toBeNull();
     expect(screen.queryByTestId('accounts-ledger')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
@@ -167,7 +163,10 @@ describe('designer Accounts query failures', () => {
     expect(screen.getByTestId('accounts-ledger')).toHaveAttribute('data-invoice-ids', 'invoice-1');
     // Q10 (walk W-D5): no studio-wide export for a member.
     expect(screen.getByTestId('accounts-ledger')).toHaveAttribute('data-can-export', 'false');
-    expect(screen.getByTestId('ledger-front-matter')).toBeEmptyDOMElement();
+    // V18 Q10 — a non-owner reads no studio totals at all, not an empty strip.
+    expect(frontMatter()).toBeNull();
+    expect(screen.queryByText(/is out with clients/)).toBeNull();
+    expect(screen.queryByText(/collected/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Earnings' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Receivables' }));
     expect(screen.getByTestId('accounts-receivables')).toHaveTextContent('Receivables 100');
@@ -203,10 +202,11 @@ describe('designer Accounts query failures', () => {
     // Her own studio's book, and on her employer's only the job she leads.
     expect(screen.getByTestId('accounts-ledger')).toHaveAttribute('data-invoice-ids', 'solo-1,employer-2');
     // The studio totals sum her own studio's records alone.
-    const frontMatter = screen.getByTestId('ledger-front-matter');
-    expect(frontMatter).toHaveTextContent('revenue: $500');
-    expect(frontMatter).toHaveTextContent('A/R: $1');
-    expect(frontMatter).not.toHaveTextContent(/\$9,000|\$7,000|\$3,000|\$19,000/);
+    // US-28 S8 — said once as text, never figure tiles.
+    const front = frontMatter() as HTMLElement;
+    expect(front).toHaveTextContent('$1 is out with clients; none of it is overdue.');
+    expect(front).toHaveTextContent('$500 collected.');
+    expect(front).not.toHaveTextContent(/\$9,000|\$7,000|\$3,000|\$19,000/);
     expect(mockMarginStudios.at(-1)).toEqual(['solo']);
   });
 

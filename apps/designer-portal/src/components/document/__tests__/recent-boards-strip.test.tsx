@@ -25,8 +25,9 @@ jest.mock('@patina/supabase', () => ({
   useProfile: () => ({ data: undefined }),
   useOrganizations: () => ({ data: undefined }),
   useOrganizationMembers: () => ({ data: undefined }),
-  useProjectLeads: () => ({ data: [] }),
-  useNeedStates: () => ({ data: [] }),
+  useProjectLeads: () => ({ data: new Map() }),
+  useNeedStates: () => ({ data: new Map() }),
+  useTeammateActed: () => ({ data: new Map() }),
   useProjects: () => ({ data: undefined }),
   useStudioContacts: () => ({ data: undefined }),
   useBoardsReactionRollup: () => ({
@@ -42,7 +43,12 @@ jest.mock('@patina/supabase', () => ({
 // grid/rail wiring under test here is inert.
 jest.mock('@/hooks/use-desk-engagements', () => ({
   useDeskEngagements: () => ({
-    data: { folders: [], chips: [], live: [] },
+    // One live job: an empty studio prints its own sentence, not the ledger.
+    data: {
+      folders: [],
+      chips: [],
+      live: [{ engagement_id: 'eng-1', project_id: 'proj-1', title: 'Holloway Den', active_section: 'project' }],
+    },
     isLoading: false,
     isError: false,
     refetch: jest.fn(),

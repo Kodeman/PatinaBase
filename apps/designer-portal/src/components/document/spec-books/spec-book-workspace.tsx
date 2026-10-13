@@ -2,18 +2,15 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertCircle,
-  Check,
-  ChevronRight,
-  CircleDashed,
-  FileClock,
-  FileText,
-  RefreshCw,
-  Share2,
-  Sparkles,
-} from "lucide-react";
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   useCreateSpecBookShare,
   usePrepareSpecBookIssue,
@@ -30,13 +27,9 @@ import {
   type SpecBookWorkItem,
 } from "@patina/supabase";
 import type { FfeAssignmentScope } from "@patina/types";
-import {
-  Button,
-  FilterPill,
-  Input,
-  Select,
-  Textarea,
-} from "@/components/ui/controls";
+import { Input, Select, Textarea } from "@/components/ui/controls";
+import { DocumentAction } from "@/components/document/document-action";
+import { EmptyState } from "@/components/document/empty-state";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useAssignLineRoom, useDocumentRooms } from "@/hooks/use-document-rooms";
 import { useCanSeeMargin } from "@/hooks/use-can-see-margin";
@@ -53,6 +46,7 @@ import {
   hasIssuedDrift,
   resolveSpecValue,
   runSpecBookPreflight,
+  type ResolvedSpecValue,
   type SpecField,
 } from "@/lib/spec-books/model";
 
@@ -60,20 +54,39 @@ const AUDIENCES: Array<{
   id: SpecBookAudience;
   label: string;
   description: string;
+  /** What the edition shows, in one sentence (the print preview). */
+  sentence: string;
 }> = [
   {
     id: "client",
     label: "Client",
     description: "Line, client pricing, care",
+    sentence: "The client edition shows the piece, its room and the client note.",
   },
-  { id: "vendor", label: "Vendor", description: "Order-facing facts" },
+  {
+    id: "vendor",
+    label: "Vendor",
+    description: "Order-facing facts",
+    sentence: "The vendor edition shows the facts an order needs and the vendor note.",
+  },
   {
     id: "installer",
     label: "Installer",
     description: "Location and install notes",
+    sentence: "The installer edition shows where each piece goes and the install note.",
   },
-  { id: "internal", label: "Internal", description: "Complete frozen record" },
-  { id: "care", label: "Care", description: "Care and warranty only" },
+  {
+    id: "internal",
+    label: "Internal",
+    description: "Complete frozen record",
+    sentence: "The internal edition is the complete frozen record.",
+  },
+  {
+    id: "care",
+    label: "Care",
+    description: "Care and warranty only",
+    sentence: "The care edition shows care and warranty only.",
+  },
 ];
 
 type WorkspaceView = "workbench" | "preview" | "preflight" | "history";
@@ -92,21 +105,128 @@ export function specBookArtifactRetryLabel(
   return null;
 }
 
-function readinessLabel(value: DerivedReadiness): string {
-  return value;
+/* US-28 S7b — the spec book (U-Q18; specimens/specbook-{1440,390}.html).
+   State is an ink word (U-Q13): the word is the state, never a pigment, and a
+   missing field names itself instead of hiding behind a tooltip.
+
+   Readiness (get_project_ffe_readiness, 00733) names what a line lacks by
+   schema key. No key ever reaches the screen: each known key has its plain
+   words, listed in the order a designer settles them, and an unknown key is
+   left unnamed (the line still reads Incomplete). */
+const MISSING_WORDS = new Map<string, string>([
+  ["finish", "No finish"],
+  ["removed", "Removed"],
+  ["releaseBlock", "On hold"],
+  ["parent_not_ready", "Waits on its piece"],
+  ["designDisposition", "Not chosen yet"],
+  ["selection", "No library piece"],
+  ["vendor", "No maker"],
+  ["itemType", "Fixed or allowance not set"],
+  ["clientPrice", "No client price"],
+  ["allowanceCeiling", "No allowance ceiling"],
+  ["quantity", "No quantity"],
+  ["room", "No room"],
+  ["name", "No name"],
+  ["documentCode", "No document code"],
+  ["image", "No image"],
+  ["sku", "No SKU"],
+  ["material", "No material"],
+  ["color_fabric", "No colour / fabric"],
+  ["colorFabric", "No colour / fabric"],
+  ["selected_dimensions", "No dimensions"],
+  ["dimensions", "No dimensions"],
+  ["exact_location", "No location"],
+  ["exactLocation", "No location"],
+]);
+const MISSING_ORDER = [...MISSING_WORDS.keys()];
+
+/** What a line lacks, in plain words and settling order. */
+function missingWords(missingFields: readonly string[]): string[] {
+  const known = missingFields
+    .filter((field) => MISSING_WORDS.has(field))
+    .sort((a, b) => MISSING_ORDER.indexOf(a) - MISSING_ORDER.indexOf(b));
+  return [...new Set(known.map((field) => MISSING_WORDS.get(field) as string))];
 }
 
-function readinessColor(value: DerivedReadiness): string {
+/** The line's finish is empty and not declared as not applying. */
+function finishMissing(item: SpecBookWorkItem): boolean {
+  const finish = resolveSpecValue(item, "finish");
+  return finish.value == null && !finish.na;
+}
+
+const FACT_LABELS: Record<SpecField, string> = {
+  sku: "SKU",
+  finish: "Finish",
+  material: "Material",
+  color_fabric: "Colour / fabric",
+  selected_dimensions: "Dimensions",
+  exact_location: "Exact location",
+};
+
+const FACT_FIELDS: SpecField[] = [
+  "sku",
+  "finish",
+  "material",
+  "color_fabric",
+  "selected_dimensions",
+  "exact_location",
+];
+
+/** Where a fact comes from, in words (SPEC §S7b.4). */
+const SOURCE_WORDS: Record<ResolvedSpecValue["source"], string> = {
+  project_override: "Set for this job",
+  ffe_line: "From the line",
+  product_master: "From the library piece",
+  studio_custom: "Not specified",
+  declaration: "Does not apply",
+};
+
+/** The state word. A row names the first thing a line lacks and counts the
+ *  rest; the opened piece (`full`) names them all. A line without a finish
+ *  leads with "No finish", as its "Add a finish" act does (SPEC §S7b p1). */
+function readinessWord(
+  value: DerivedReadiness,
+  missingFields: readonly string[] = [],
+  item?: SpecBookWorkItem,
+  full = false,
+): { text: string; quiet: boolean } {
   switch (value) {
     case "ready":
-      return "text-[#66765f]";
+      return { text: "Ready", quiet: false };
+    case "checking":
+      return { text: "Checking", quiet: true };
     case "unavailable":
-      return "text-[var(--color-terracotta-ink)]";
-    case "incomplete":
-      return "text-[#a47f33]";
-    default:
-      return "text-[var(--text-muted)]";
+      return { text: "Readiness unavailable", quiet: true };
+    default: {
+      const words = missingWords(
+        item && finishMissing(item) ? ["finish", ...missingFields] : missingFields,
+      );
+      if (words.length === 0) return { text: "Incomplete", quiet: false };
+      if (full || words.length === 1) {
+        return { text: words.join(" · "), quiet: false };
+      }
+      return { text: `${words[0]} and ${words.length - 1} more`, quiet: false };
+    }
   }
+}
+
+function ReadinessWord({
+  status,
+  missingFields = [],
+  item,
+  full = false,
+}: {
+  status: DerivedReadiness;
+  missingFields?: readonly string[];
+  item?: SpecBookWorkItem;
+  full?: boolean;
+}) {
+  const word = readinessWord(status, missingFields, item, full);
+  return (
+    <span className={word.quiet ? "word word--quiet" : "word"}>
+      {word.text}
+    </span>
+  );
 }
 
 function imageFor(item: SpecBookWorkItem): string | null {
@@ -127,121 +247,115 @@ function imageFor(item: SpecBookWorkItem): string | null {
     : null;
 }
 
-function FieldProvenance({
-  item,
-  field,
-}: {
-  item: SpecBookWorkItem;
-  field: SpecField;
-}) {
-  const resolved = resolveSpecValue(item, field);
-  return (
-    <div className="border-b border-[var(--color-pearl)] py-2">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[11px] capitalize text-[var(--text-muted)]">
-          {field.replaceAll("_", " ")}
-        </span>
-        <span className="max-w-[65%] text-right text-[12px] text-[var(--color-charcoal)]">
-          {displayResolvedValue(resolved)}
-        </span>
-      </div>
-      <p className="mt-1 text-right font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-        {resolved.source.replaceAll("_", " ")}
-        {resolved.verifiedAt
-          ? ` · verified ${new Date(resolved.verifiedAt).toLocaleDateString()}`
-          : ""}
-      </p>
-    </div>
-  );
-}
-
-function ReadinessMark({
-  status,
-  missingFields = [],
-}: {
-  status: DerivedReadiness;
-  missingFields?: readonly string[];
-}) {
-  const ready = status === "ready";
-  return (
-    <span
-      className={`inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] ${readinessColor(status)}`}
-    >
-      {ready ? (
-        <Check className="h-3 w-3" />
-      ) : (
-        <CircleDashed className="h-3 w-3" />
-      )}
-      <span title={missingFields.length ? `Missing: ${missingFields.join(", ")}` : undefined}>
-        {readinessLabel(status)}
-      </span>
-    </span>
-  );
-}
-
 /** SP-19/F57 — the id an FF&E line's `Edit spec details →` lands on. */
 function specBookItemDomId(itemId: string) {
   return `spec-book-item-${itemId}`;
 }
 
-function ItemCard({
+function specBookFoldDomId(itemId: string) {
+  return `spec-book-fold-${itemId}`;
+}
+
+/** The line's room as the row's sentence says it. */
+function roomWord(item: SpecBookWorkItem): string {
+  if (item.room?.name) return item.room.name;
+  return roomChoiceOf(item) === "throughout" ? "Throughout" : "No room yet";
+}
+
+/** Finish · maker · room: the row's one sentence (SPEC §S7b.4). */
+function rowSentence(item: SpecBookWorkItem): string {
+  const finishWord = finishMissing(item)
+    ? "No finish yet"
+    : displayResolvedValue(resolveSpecValue(item, "finish"));
+  return [finishWord, item.vendor_name, roomWord(item)]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** A piece as a ledger row: a plate where an image exists, the name that
+ *  opens it in place, the sentence, the ink word, one tertiary act. */
+function PieceRow({
   item,
   readiness,
   missingFields,
-  selected,
+  open,
   drift,
-  onSelect,
+  onOpen,
+  onClose,
+  nameRef,
 }: {
   item: SpecBookWorkItem;
   readiness: DerivedReadiness;
   missingFields: readonly string[];
-  selected: boolean;
+  open: boolean;
   drift: boolean;
-  onSelect: () => void;
+  onOpen: (focusField?: SpecField) => void;
+  onClose: () => void;
+  nameRef?: (node: HTMLButtonElement | null) => void;
 }) {
   const image = imageFor(item);
-  const finish = resolveSpecValue(item, "finish");
+  const name = item.name ?? "Untitled item";
+  // The readiness rules never name the finish; the line says it (SPEC §S7b p1).
+  const needsFinish = finishMissing(item);
   return (
-    <button
-      type="button"
-      // SP-19/F57 — the address an `?ffeItemId=` arrival scrolls to.
-      id={specBookItemDomId(item.id)}
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={`grid w-full scroll-mt-24 grid-cols-[72px_1fr_auto] gap-3 border-b px-2 py-3 text-left transition-colors ${
-        selected
-          ? "border-[var(--color-clay)] bg-[rgba(196,165,123,0.08)]"
-          : "border-[var(--color-pearl)] hover:bg-[rgba(196,165,123,0.04)]"
-      }`}
-    >
-      <div className="h-[72px] overflow-hidden bg-[var(--color-pearl)]">
-        {image ? (
-          <img src={image} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full items-center justify-center text-[11px] text-[var(--text-muted)]">
-            No image
-          </div>
-        )}
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-[13px] font-medium text-[var(--color-charcoal)]">
-          {item.document_code ? `${item.document_code} · ` : ""}
-          {item.name ?? "Untitled item"}
-        </p>
-        <p className="mt-1 truncate text-[11px] text-[var(--text-muted)]">
-          {displayResolvedValue(finish)}
-        </p>
-        <div className="mt-3 flex items-center gap-3">
-          <ReadinessMark status={readiness} missingFields={missingFields} />
-          {drift && (
-            <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
-              changed since issue
+    <li className="lrow plain">
+      <span className="lname">
+        <span className="sb-piece">
+          {image && (
+            <span className="sb-thumb">
+              <span className="plate">
+                <img src={image} alt="" />
+              </span>
             </span>
           )}
-        </div>
-      </div>
-      <ChevronRight className="mt-1 h-4 w-4 text-[var(--text-muted)]" />
-    </button>
+          <span>
+            <button
+              type="button"
+              ref={nameRef}
+              // SP-19/F57 — the address an `?ffeItemId=` arrival scrolls to.
+              id={specBookItemDomId(item.id)}
+              className="name t-d4 sb-name"
+              aria-expanded={open}
+              aria-controls={open ? specBookFoldDomId(item.id) : undefined}
+              onClick={() => onOpen()}
+            >
+              {name}
+            </button>
+            {item.document_code && (
+              <span className="t-meta sb-code">{item.document_code}</span>
+            )}
+          </span>
+        </span>
+      </span>
+      <span className="lsent">{rowSentence(item)}</span>
+      <span className="lwhen sb-words">
+        <ReadinessWord
+          status={readiness}
+          missingFields={missingFields}
+          item={item}
+        />
+        {drift && <span className="word">Changed since issue</span>}
+      </span>
+      <span className="lact">
+        {open ? (
+          <DocumentAction
+            actionKey="spec-book-put-back"
+            variant="tertiary"
+            onClick={onClose}
+          >
+            Put back
+          </DocumentAction>
+        ) : (
+          <DocumentAction
+            actionKey={needsFinish ? "spec-book-add-finish" : "spec-book-open"}
+            variant="tertiary"
+            onClick={() => onOpen(needsFinish ? "finish" : undefined)}
+          >
+            {needsFinish ? "Add a finish" : "Open"}
+          </DocumentAction>
+        )}
+      </span>
+    </li>
   );
 }
 
@@ -291,10 +405,10 @@ function LineRoomSelect({
 
   return (
     <div className="mb-5">
-      <label className="text-[11px] text-[var(--text-muted)]">
+      <label className="sb-label">
         Room
         <Select
-          className="mt-1"
+          className="mt-1.5"
           value={chosen ?? current}
           disabled={assignRoom.isPending}
           onChange={(event) => {
@@ -320,7 +434,7 @@ function LineRoomSelect({
         </Select>
       </label>
       {assignRoom.isError && (
-        <p className="mt-1 text-[11px] text-[var(--color-terracotta-ink)]">
+        <p className="t-body-sm sb-warn">
           {assignRoom.error instanceof Error
             ? assignRoom.error.message
             : "The room could not be changed."}
@@ -336,14 +450,34 @@ export function SelectionEditor({
   missingFields = [],
   onSaved,
   onRoomAssigned,
+  heading,
+  focusField,
+  onClose,
+  foot,
 }: {
   item: SpecBookWorkItem;
   readiness?: DerivedReadiness;
   missingFields?: readonly string[];
   onSaved?: () => void;
   onRoomAssigned?: () => void;
+  /** The fold's eyebrow lead: code · chapter. */
+  heading?: string;
+  /** "Add a finish" opens the fold on this field, focused. */
+  focusField?: SpecField;
+  /** "Put back · Esc": closes the fold. */
+  onClose?: () => void;
+  /** The fold's own acts after the save (preview, the edition check). */
+  foot?: ReactNode;
 }) {
+  const fieldRefs = useRef<Partial<Record<string, HTMLInputElement | null>>>(
+    {},
+  );
+  useEffect(() => {
+    if (focusField) fieldRefs.current[focusField]?.focus();
+  }, [focusField, item.id]);
   const updateSpec = useUpdateProjectFfeSpec();
+  // R1: the trade price shows only to a viewer who may see margin.
+  const canSeeMargin = useCanSeeMargin();
   const [draft, setDraft] = useState<Record<string, string>>(
     item.spec ? editableSpecSeed(item.spec) : {},
   );
@@ -494,14 +628,28 @@ export function SelectionEditor({
     }
   };
 
+  const putBack = onClose ? (
+    <DocumentAction
+      actionKey="spec-book-put-back-esc"
+      variant="tertiary"
+      onClick={onClose}
+    >
+      Put back · Esc
+    </DocumentAction>
+  ) : null;
+
   if (!item.spec) {
     return (
-      <div className="border border-[var(--color-terracotta)] p-4 text-sm text-[var(--color-terracotta-ink)]">
-        This schedule line has no project line record. Route or repair it
-        before editing; the product itself remains safe.
+      <div className="sb-editor">
+        <p className="sb-warn">
+          This schedule line has no project line record. Route or repair it
+          before editing; the product itself remains safe.
+        </p>
+        {putBack && <div className="sb-foot">{putBack}</div>}
       </div>
     );
   }
+
 
   const textFields = [
     ["sku", "SKU"],
@@ -527,23 +675,74 @@ export function SelectionEditor({
     Boolean(configuration?.hash) && !revisionClosed;
 
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            Project line · v{item.spec.row_version}
-          </p>
-          <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
-            {item.name}
-          </h2>
-        </div>
-        <ReadinessMark status={readiness} missingFields={missingFields} />
-      </div>
+    <div
+      className="sb-editor"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && onClose) {
+          event.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      <p className="eb sb-spec-head">
+        {heading && <span>{heading}</span>}
+        <span>Project line · v{item.spec.row_version}</span>
+        <ReadinessWord
+          status={readiness}
+          missingFields={missingFields}
+          item={item}
+          full
+        />
+      </p>
 
-      <LineRoomSelect key={item.id} item={item} onAssigned={onRoomAssigned} />
+      <dl className="sb-facts">
+        {item.vendor_name && (
+          <>
+            <dt>Maker</dt>
+            <dd>{item.vendor_name}</dd>
+          </>
+        )}
+        {FACT_FIELDS.map((field) => {
+          const resolved = resolveSpecValue(item, field);
+          return (
+            <Fragment key={field}>
+              <dt>{FACT_LABELS[field]}</dt>
+              <dd>
+                {displayResolvedValue(resolved)}
+                {/* An empty fact says "Not specified" once, with no source
+                    under it (SPEC §S7b p3). */}
+                {(resolved.value != null || resolved.na) && (
+                  <span className="t-meta">
+                    {SOURCE_WORDS[resolved.source]}
+                    {resolved.verifiedAt
+                      ? ` · verified ${new Date(resolved.verifiedAt).toLocaleDateString()}`
+                      : ""}
+                  </span>
+                )}
+              </dd>
+            </Fragment>
+          );
+        })}
+        {item.lead_time && (
+          <>
+            <dt>Lead time</dt>
+            <dd>{item.lead_time}</dd>
+          </>
+        )}
+        {canSeeMargin && item.trade_price_cents != null && (
+          <>
+            <dt>Trade price</dt>
+            <dd>
+              <span className="lfig">
+                ${(item.trade_price_cents / 100).toFixed(2)}
+              </span>
+            </dd>
+          </>
+        )}
+      </dl>
 
       {configuration && (
-        <div className="mb-5 border-y border-[var(--color-pearl)] py-3">
+        <div className="sb-group">
           <ConfigurationSnapshotCard
             snapshot={configuration.snapshot}
             configurationHash={configuration.hash}
@@ -552,158 +751,158 @@ export function SelectionEditor({
             label="Project product configuration"
           />
           {item.product_id && configuration.configurationId && (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--color-pearl)] pt-3">
-              <p className="text-[11px] text-[var(--text-muted)]">
+            <div className="sb-foot">
+              <p className="t-body-sm sb-help basis-full">
                 {revisionClosed
                   ? "Released lines and their custom promises stay intact; changes begin on a new project line."
                   : "A replacement creates a new snapshot and returns this line to approval."}
               </p>
-              <Link
+              <DocumentAction
+                actionKey="spec-book-configuration"
+                variant="tertiary"
                 href={
                   !canReviseConfiguration
                     ? `/library/${item.product_id}`
                     : `/library/${item.product_id}?projectId=${encodeURIComponent(item.project_id)}&ffeItemId=${encodeURIComponent(item.id)}&configurationId=${encodeURIComponent(configuration.configurationId)}&snapshotHash=${encodeURIComponent(configuration.hash ?? "")}`
                 }
-                className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-4 hover:underline"
               >
                 {!canReviseConfiguration
                   ? "View source piece"
                   : "Review or revise configuration"}
-              </Link>
+              </DocumentAction>
             </div>
           )}
         </div>
       )}
 
-      <div className="mb-5 border-y border-[var(--color-pearl)]">
-        {(
-          [
-            "sku",
-            "finish",
-            "material",
-            "color_fabric",
-            "selected_dimensions",
-            "exact_location",
-          ] as SpecField[]
-        ).map((field) => (
-          <FieldProvenance key={field} item={item} field={field} />
-        ))}
-      </div>
+      <section className="sb-group" aria-label="Edit the specification">
+        <p className="eb sb-group-head">Edit the specification</p>
+        <LineRoomSelect key={item.id} item={item} onAssigned={onRoomAssigned} />
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {textFields.map(([field, label]) => (
-          <label key={field} className="text-[11px] text-[var(--text-muted)]">
-            {label}
-            <Input
-              className="mt-1"
-              value={draft[field] ?? ""}
-              onChange={(event) => set(field, event.target.value)}
-            />
-          </label>
-        ))}
-        <div className="text-[11px] text-[var(--text-muted)] sm:col-span-2">
-          <span>Specified dimensions</span>
-          <div className="mt-1">
-            {rawDimensionsMode ? (
-              <div>
-                <Textarea
-                  className="min-h-20 font-mono text-[11px]"
-                  value={rawDimensionsText}
-                  placeholder='{"width":"32 in","height":"30 in"}'
-                  onChange={(event) =>
-                    setRawDimensionsText(event.target.value)
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={switchToStructuredDimensions}
-                  className="mt-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-4 hover:underline"
-                >
-                  Use dimension fields
-                </button>
-              </div>
-            ) : (
-              <div>
-                <DimensionFields
-                  value={dimensionsValue}
-                  onChange={setDimensionsValue}
-                />
-                <button
-                  type="button"
-                  onClick={switchToRawDimensions}
-                  className="mt-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-4 hover:underline"
-                >
-                  Advanced: edit dimensions as JSON
-                </button>
-              </div>
-            )}
+        <div className="grid gap-4 sm:grid-cols-2">
+          {textFields.map(([field, label]) => (
+            <label key={field} className="sb-label">
+              {label}
+              <Input
+                ref={(node) => {
+                  fieldRefs.current[field] = node;
+                }}
+                className="mt-1.5"
+                value={draft[field] ?? ""}
+                onChange={(event) => set(field, event.target.value)}
+              />
+            </label>
+          ))}
+          <div className="sb-label sm:col-span-2">
+            <span>Specified dimensions</span>
+            <div className="mt-1.5 normal-case tracking-normal">
+              {rawDimensionsMode ? (
+                <div>
+                  <Textarea
+                    className="min-h-20 font-mono text-[12px]"
+                    value={rawDimensionsText}
+                    placeholder='{"width":"32 in","height":"30 in"}'
+                    onChange={(event) =>
+                      setRawDimensionsText(event.target.value)
+                    }
+                  />
+                  <DocumentAction
+                    actionKey="spec-book-dimension-fields"
+                    variant="tertiary"
+                    onClick={switchToStructuredDimensions}
+                  >
+                    Use dimension fields
+                  </DocumentAction>
+                </div>
+              ) : (
+                <div>
+                  <DimensionFields
+                    value={dimensionsValue}
+                    onChange={setDimensionsValue}
+                  />
+                  <DocumentAction
+                    actionKey="spec-book-dimension-json"
+                    variant="tertiary"
+                    onClick={switchToRawDimensions}
+                  >
+                    Advanced: edit dimensions as JSON
+                  </DocumentAction>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {(
-          [
-            ["client_notes", "Client note"],
-            ["trade_notes", "Vendor note"],
-            ["install_notes", "Install note"],
-            ["care_notes", "Care"],
-            ["warranty_notes", "Warranty"],
-          ] as const
-        ).map(([field, label]) => (
-          <label key={field} className="text-[11px] text-[var(--text-muted)]">
-            {label}
-            <Textarea
-              className="mt-1 min-h-20"
-              value={draft[field] ?? ""}
-              onChange={(event) => set(field, event.target.value)}
-            />
-          </label>
-        ))}
-      </div>
-
-      <div className="mt-5 border-t border-[var(--color-pearl)] pt-4">
-        <p className="text-[11px] font-medium text-[var(--color-charcoal)]">
-          Mark field not applicable
-        </p>
-        <div className="mt-2 grid gap-2 sm:grid-cols-[150px_1fr_auto]">
-          <Select
-            aria-label="Field that does not apply"
-            value={naField}
-            onChange={(event) => setNaField(event.target.value as SpecField)}
-          >
-            <option value="sku">SKU / product code</option>
-            <option value="finish">Finish</option>
-            <option value="material">Material</option>
-            <option value="color_fabric">Color / fabric</option>
-            <option value="selected_dimensions">Dimensions</option>
-            <option value="exact_location">Location</option>
-          </Select>
-          <Input
-            aria-label="Reason for not applicable"
-            value={naReason}
-            placeholder="Explain why this field does not apply"
-            onChange={(event) => setNaReason(event.target.value)}
-          />
-          <Button variant="secondary" onClick={() => void declareNa()}>
-            Mark N/A
-          </Button>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          {(
+            [
+              ["client_notes", "Client note"],
+              ["trade_notes", "Vendor note"],
+              ["install_notes", "Install note"],
+              ["care_notes", "Care"],
+              ["warranty_notes", "Warranty"],
+            ] as const
+          ).map(([field, label]) => (
+            <label key={field} className="sb-label">
+              {label}
+              <Textarea
+                className="mt-1.5 min-h-20"
+                value={draft[field] ?? ""}
+                onChange={(event) => set(field, event.target.value)}
+              />
+            </label>
+          ))}
         </div>
-      </div>
+
+        <div className="sb-group">
+          <p className="sb-label">Mark field not applicable</p>
+          <div className="mt-1.5 grid gap-2 sm:grid-cols-[150px_1fr_auto] sm:items-center">
+            <Select
+              aria-label="Field that does not apply"
+              value={naField}
+              onChange={(event) => setNaField(event.target.value as SpecField)}
+            >
+              <option value="sku">SKU / product code</option>
+              <option value="finish">Finish</option>
+              <option value="material">Material</option>
+              <option value="color_fabric">Color / fabric</option>
+              <option value="selected_dimensions">Dimensions</option>
+              <option value="exact_location">Location</option>
+            </Select>
+            <Input
+              aria-label="Reason for not applicable"
+              value={naReason}
+              placeholder="Explain why this field does not apply"
+              onChange={(event) => setNaReason(event.target.value)}
+            />
+            <DocumentAction
+              actionKey="spec-book-mark-na"
+              variant="secondary"
+              onClick={() => void declareNa()}
+            >
+              Mark N/A
+            </DocumentAction>
+          </div>
+        </div>
+      </section>
 
       {feedback && (
-        <p
-          className="mt-4 text-[11px] text-[var(--text-muted)]"
-          role="status"
-          aria-live="polite"
-        >
+        <p className="t-body-sm sb-help" role="status" aria-live="polite">
           {feedback}
         </p>
       )}
-      <div className="mt-5 flex justify-end">
-        <Button loading={updateSpec.isPending} onClick={() => void save()}>
-          Save specification
-        </Button>
+      <div className="sb-foot">
+        <DocumentAction
+          actionKey="spec-book-save"
+          variant="terminal"
+          loading={updateSpec.isPending}
+          onClick={() => void save()}
+        >
+          {/* The one filled act names the change (SPEC §S7b p3). */}
+          {focusField === "finish" ? "Save the finish" : "Save the specification"}
+        </DocumentAction>
+        {putBack}
+        {foot}
       </div>
     </div>
   );
@@ -712,18 +911,17 @@ export function SelectionEditor({
 function AudiencePreview({
   item,
   audience,
+  footLine,
 }: {
   item: SpecBookWorkItem | null;
   audience: SpecBookAudience;
+  /** The sheet's foot: the book and its edition, as it prints. */
+  footLine: string;
 }) {
   // R1 — trade price and markup show only to a viewer who may see margin.
   const canSeeMargin = useCanSeeMargin();
   if (!item) {
-    return (
-      <p className="py-16 text-center font-heading italic text-[var(--text-muted)]">
-        Choose an item to preview its sheet.
-      </p>
-    );
+    return <p className="empty-t">Choose an item to preview its sheet.</p>;
   }
   const image = imageFor(item);
   const publicFields: SpecField[] = [
@@ -745,91 +943,69 @@ function AudiencePreview({
           ? item.spec?.client_notes
           : null;
   return (
-    <div className="mx-auto min-h-[680px] max-w-[540px] bg-white px-10 py-12 text-[#2f302d]">
-      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#857f74]">
-        {audience} edition · item sheet
+    <article className="sb-page" aria-label={`${audience} edition, item sheet`}>
+      <p className="sb-page-meta t-meta">
+        <span>{audience} edition · item sheet</span>
+        {item.document_code && <span>{item.document_code}</span>}
       </p>
-      <div className="mt-8 grid grid-cols-[1fr_auto] gap-6">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#857f74]">
-            {item.document_code}
-          </p>
-          <h2 className="mt-2 font-heading text-3xl">{item.name}</h2>
-          {(audienceAllows(audience, "room") ||
-            audienceAllows(audience, "quantity")) && (
-            <p className="mt-2 text-sm text-[#6d6a64]">
-              {audienceAllows(audience, "room")
-                ? (item.room?.name ?? "Unassigned")
-                : null}
-              {audienceAllows(audience, "room") &&
-              audienceAllows(audience, "quantity")
-                ? " · "
-                : null}
-              {audienceAllows(audience, "quantity")
-                ? `Quantity ${item.quantity ?? "—"}`
-                : null}
-            </p>
-          )}
-        </div>
-      </div>
-      {image && (
-        <img
-          src={image}
-          alt=""
-          className="mt-8 aspect-[4/3] w-full object-cover"
-        />
+      <h2 className="t-d2">{item.name}</h2>
+      {(audienceAllows(audience, "room") ||
+        audienceAllows(audience, "quantity")) && (
+        <p className="sb-sub">
+          {audienceAllows(audience, "room")
+            ? (item.room?.name ?? "Unassigned")
+            : null}
+          {audienceAllows(audience, "room") &&
+          audienceAllows(audience, "quantity")
+            ? " · "
+            : null}
+          {audienceAllows(audience, "quantity")
+            ? `Quantity ${item.quantity ?? "—"}`
+            : null}
+        </p>
       )}
-      <dl className="mt-8 grid grid-cols-2 gap-x-8">
+      {image && (
+        <span className="plate">
+          <img src={image} alt="" />
+        </span>
+      )}
+      <dl className="sb-facts">
         {publicFields
           .filter((field) => audienceAllows(audience, field))
-          .map((field) => {
-            const value = resolveSpecValue(item, field);
-            return (
-              <div key={field} className="border-t border-[#ddd8ce] py-3">
-                <dt className="text-[11px] uppercase tracking-[0.08em] text-[#857f74]">
-                  {field.replaceAll("_", " ")}
-                </dt>
-                <dd className="mt-1 text-sm">{displayResolvedValue(value)}</dd>
-              </div>
-            );
-          })}
+          .map((field) => (
+            <Fragment key={field}>
+              <dt>{FACT_LABELS[field]}</dt>
+              <dd>{displayResolvedValue(resolveSpecValue(item, field))}</dd>
+            </Fragment>
+          ))}
         {audienceAllows(audience, "exact_location") && (
-          <div className="border-t border-[#ddd8ce] py-3">
-            <dt className="text-[11px] uppercase tracking-[0.08em] text-[#857f74]">
-              Exact location
-            </dt>
-            <dd className="mt-1 text-sm">
+          <>
+            <dt>Exact location</dt>
+            <dd>
               {displayResolvedValue(resolveSpecValue(item, "exact_location"))}
             </dd>
-          </div>
+          </>
         )}
         {canSeeMargin && audienceAllows(audience, "trade_price") && (
           <>
-            <div className="border-t border-[#ddd8ce] py-3">
-              <dt className="text-[11px] uppercase tracking-[0.08em] text-[#857f74]">
-                Trade price
-              </dt>
-              <dd className="mt-1 text-sm">
+            <dt>Trade price</dt>
+            <dd>
+              <span className="lfig">
                 {item.trade_price_cents == null
                   ? "—"
                   : `$${(item.trade_price_cents / 100).toFixed(2)}`}
-              </dd>
-            </div>
-            <div className="border-t border-[#ddd8ce] py-3">
-              <dt className="text-[11px] uppercase tracking-[0.08em] text-[#857f74]">
-                Markup
-              </dt>
-              <dd className="mt-1 text-sm">{item.markup_percent ?? "—"}%</dd>
-            </div>
+              </span>
+            </dd>
+            <dt>Markup</dt>
+            <dd>
+              <span className="lfig">{item.markup_percent ?? "—"}%</span>
+            </dd>
           </>
         )}
       </dl>
-      {notes && (
-        <div className="mt-8 border-t border-[#b9ad9b] pt-4">
-          <p className="whitespace-pre-wrap text-sm leading-6">{notes}</p>
-        </div>
-      )}
-    </div>
+      {notes && <p className="sb-note">{notes}</p>}
+      <p className="sb-page-foot t-meta">{footLine}</p>
+    </article>
   );
 }
 
@@ -851,6 +1027,10 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   const [view, setView] = useState<WorkspaceView>("workbench");
   const [readiness, setReadiness] = useState<ReadinessFilter>("all");
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  // The piece unfolded in place under its row: one at a time, null at rest.
+  const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const [openFocusField, setOpenFocusField] = useState<SpecField | null>(null);
+  const nameRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [previewAudience, setPreviewAudience] =
     useState<SpecBookAudience>("client");
   const [audiences, setAudiences] = useState<SpecBookAudience[]>([
@@ -913,28 +1093,52 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
     return items.filter((item) => derivedReadiness(item.id) === readiness);
   }, [data?.items, derivedReadiness, latestIssued?.issued_at, readiness]);
 
+  // The book's Sections are its chapters, by trade (00767, V20 U-Q18), in
+  // the hook's order (position, then title). A trade or hand-made chapter has
+  // no room, so a line matches its chapter by chapter_id; the legacy room
+  // fallback holds only where both sides name a room (SQ-842 F4). A line no
+  // chapter takes files under Unsorted. A chapter shows only while it holds
+  // an active line (SQ-842 F8b); a filter that empties it prints a sentence.
   const groups = useMemo(() => {
-    const chapters = data?.chapters ?? [];
-    const assigned = new Set<string>();
+    const chapters = (data?.chapters ?? []).filter(
+      (chapter) => chapter.included !== false,
+    );
+    const chapterOf = new Map<string, string>();
+    for (const item of data?.items ?? []) {
+      const chapter =
+        chapters.find((entry) => item.setting?.chapter_id === entry.id) ??
+        (!item.setting?.chapter_id && item.project_room_id
+          ? chapters.find(
+              (entry) =>
+                entry.project_room_id != null &&
+                entry.project_room_id === item.project_room_id,
+            )
+          : undefined) ??
+        chapters.find((entry) => entry.trade === "unsorted");
+      chapterOf.set(item.id, chapter?.id ?? "unsorted");
+    }
+    const isActive = (item: SpecBookWorkItem) =>
+      !(item as SpecBookWorkItem & { removed_at?: string | null }).removed_at;
+    const holdsActive = (chapterId: string) =>
+      (data?.items ?? []).some(
+        (item) => chapterOf.get(item.id) === chapterId && isActive(item),
+      );
     const result = chapters
-      .filter((chapter) => chapter.included !== false)
-      .map((chapter) => {
-        const items = visibleItems.filter((item) => {
-          const belongs =
-            item.setting?.chapter_id === chapter.id ||
-            (!item.setting?.chapter_id &&
-              item.project_room_id === chapter.project_room_id);
-          if (belongs) assigned.add(item.id);
-          return belongs;
-        });
-        return { id: chapter.id, title: chapter.title, items };
+      .filter((chapter) => holdsActive(chapter.id))
+      .map((chapter) => ({
+        id: chapter.id,
+        title: chapter.title,
+        items: visibleItems.filter((item) => chapterOf.get(item.id) === chapter.id),
+      }));
+    if (holdsActive("unsorted")) {
+      result.push({
+        id: "unsorted",
+        title: "Unsorted",
+        items: visibleItems.filter((item) => chapterOf.get(item.id) === "unsorted"),
       });
-    const unassigned = visibleItems.filter((item) => !assigned.has(item.id));
-    if (unassigned.length > 0) {
-      result.push({ id: "unassigned", title: "Unassigned", items: unassigned });
     }
     return result;
-  }, [data?.chapters, visibleItems]);
+  }, [data?.chapters, data?.items, visibleItems]);
 
   useEffect(() => {
     if (!data || openedRef.current) return;
@@ -950,7 +1154,10 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
     const requested = requestedItemId
       ? data.items.find((item) => item.id === requestedItemId)
       : undefined;
+    // The book opens at rest (SPEC §S7b p1). Only an addressed line arrives
+    // unfolded, since its `Edit spec details →` asked for that line.
     setSelectedItemId((requested ?? data.items[0]).id);
+    if (requested) setOpenItemId(requested.id);
   }, [data?.items, requestedItemId, selectedItemId]);
 
   const scrolledToRef = useRef<string | null>(null);
@@ -1132,628 +1339,722 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
     }
   };
 
+  // SQ-877 N8 — the browser tab carries the book's name, as the head does
+  // ("<project> · specification book"), not the route group's default.
+  const tabProjectName = project.data?.name ?? project.data?.title ?? null;
+  useEffect(() => {
+    if (!tabProjectName) return;
+    const previous = document.title;
+    const title = `${tabProjectName} · specification book · Patina`;
+    document.title = title;
+    return () => {
+      // Hand the tab back only if the next route has not already named it.
+      if (document.title === title) document.title = previous;
+    };
+  }, [tabProjectName]);
+
   if (!hydrated || workbench.isLoading) {
     return (
-      <main className="min-h-screen bg-[var(--doc-paper)] px-8 py-12" aria-busy>
-        <p
-          className="font-heading italic text-[var(--text-muted)]"
-          role="status"
-          aria-live="polite"
-        >
-          Opening the working book…
-        </p>
+      <main className="sb-ground" aria-busy>
+        <div className="sb-main">
+          <p className="empty-t sb-wait" role="status" aria-live="polite">
+            Opening the working book…
+          </p>
+        </div>
       </main>
     );
   }
 
   if (workbench.error || !data) {
     return (
-      <main className="min-h-screen bg-[var(--doc-paper)] px-8 py-12">
-        <h1 className="font-heading text-2xl text-[var(--color-charcoal)]">
-          The working book could not be opened.
-        </h1>
-        <p className="mt-3 max-w-lg text-sm text-[var(--text-muted)]">
-          {workbench.error instanceof Error
-            ? workbench.error.message
-            : "The project may not be available to this studio."}
-        </p>
-        <Button
-          className="mt-5"
-          variant="secondary"
-          onClick={() => workbench.refetch()}
-        >
-          Try again
-        </Button>
+      <main className="sb-ground">
+        <div className="sb-main">
+          <h1 className="t-d2 sb-wait">The working book could not be opened.</h1>
+          <p className="t-body sb-help">
+            {workbench.error instanceof Error
+              ? workbench.error.message
+              : "The project may not be available to this studio."}
+          </p>
+          <div className="sb-foot">
+            <DocumentAction
+              actionKey="spec-book-try-again"
+              variant="secondary"
+              onClick={() => {
+                void workbench.refetch();
+              }}
+            >
+              Try again
+            </DocumentAction>
+          </div>
+        </div>
       </main>
     );
   }
 
   const projectName = project.data?.name ?? project.data?.title ?? "Project";
+  // The workspace is named by its job (SPEC §S7b p1); the preview prints the
+  // stored title, the one issuance freezes into the PDF.
+  const bookTitle = project.data
+    ? `${projectName} · specification book`
+    : "Specification book";
+  const printedTitle = data?.book.title.trim() || bookTitle;
   const issueBusy =
     prepareIssue.isPending ||
     renderArtifact.isPending;
+  const hasLines = data.items.length > 0;
+  const workingEdition =
+    data.revisions.reduce(
+      (high, revision) =>
+        revision.status === "issued"
+          ? Math.max(high, revision.revision_number)
+          : high,
+      0,
+    ) + 1;
+  const editionWord = `Edition ${workingEdition}`;
+  const frontSentence = preflight.ready
+    ? preflight.warnings.length > 0
+      ? `Nothing blocks ${editionWord.toLowerCase()}; ${preflight.warnings.length === 1 ? "one warning needs" : `${preflight.warnings.length} warnings need`} a reason before it issues.`
+      : `Everything is ready for ${editionWord.toLowerCase()}.`
+    : `${preflight.blockers.length === 1 ? "One thing stands" : `${preflight.blockers.length} things stand`} between this book and ${editionWord.toLowerCase()}. ${preflight.blockers[0]?.message ?? ""}`;
+  const openPiece = (itemId: string, focusField?: SpecField) => {
+    setSelectedItemId(itemId);
+    setOpenItemId(itemId);
+    setOpenFocusField(focusField ?? null);
+  };
+  const putBack = (itemId: string) => {
+    setOpenItemId(null);
+    setOpenFocusField(null);
+    window.requestAnimationFrame(() => nameRefs.current[itemId]?.focus());
+  };
 
   return (
-    <main className="min-h-screen bg-[var(--doc-paper)] text-[var(--color-charcoal)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--color-pearl)] bg-[var(--doc-paper)]/95 px-4 py-3 backdrop-blur md:px-8">
-        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-4">
-          <Link
-            href={
-              requestedItemId
-                ? `/doc/${projectId}#line-${requestedItemId}`
-                : `/doc/${projectId}`
-            }
-            className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
-          >
-            ← {projectName}
-          </Link>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate font-heading text-xl">{data.book.title}</h1>
-            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-              Working book · {data.items.length} lines ·{" "}
-              {data.revisions.length} revisions
-            </p>
+    <main className="sb-ground">
+      <div className="sb-main">
+        <header className="hline">
+          <div className="hline-l">
+            <DocumentAction
+              actionKey="spec-book-back"
+              variant="tertiary"
+              href={
+                requestedItemId
+                  ? `/doc/${projectId}#line-${requestedItemId}`
+                  : `/doc/${projectId}`
+              }
+            >
+              ← {projectName}
+            </DocumentAction>
+            <h1 className="t-d2">{bookTitle}</h1>
+            <span className="t-meta sb-title-meta">
+              {editionWord} · working copy
+            </span>
           </div>
-          <nav
-            aria-label="Spec book workspace"
-            className="flex items-center gap-1"
-          >
-            {(
-              [
-                ["workbench", "Specification editor"],
-                ["preview", "Audience editions"],
-                ["preflight", "Issue readiness"],
-                ["history", "Revision history"],
-              ] as Array<[WorkspaceView, string]>
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setView(id)}
-                aria-current={view === id ? "page" : undefined}
-                className={`px-3 py-2 font-mono text-[11px] uppercase tracking-[0.08em] ${
-                  view === id
-                    ? "border-b border-[var(--color-clay)] text-[var(--color-charcoal)]"
-                    : "text-[var(--text-muted)]"
-                }`}
+          {hasLines && (
+            <div className="hline-r">
+              <DocumentAction
+                actionKey="spec-book-run-checks"
+                variant="secondary"
+                onClick={runPreflight}
               >
-                {label}
-              </button>
-            ))}
-          </nav>
-          <Button size="sm" variant="secondary" onClick={runPreflight}>
-            Run issue checks
-          </Button>
-        </div>
-      </header>
-
-      {view === "workbench" && (
-        <div className="mx-auto grid max-w-[1500px] md:grid-cols-[220px_minmax(340px,1fr)_minmax(360px,0.9fr)]">
-          <aside className="border-r border-[var(--color-pearl)] p-4 md:min-h-[calc(100vh-70px)]">
-            <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-              Specification sections
-            </p>
-            <ol className="mt-3 space-y-1">
-              {groups.map((group, index) => (
-                <li key={group.id}>
-                  <a
-                    href={`#chapter-${group.id}`}
-                    className="flex items-center justify-between gap-2 px-2 py-2 text-[12px] hover:bg-[rgba(196,165,123,0.05)]"
-                  >
-                    <span>
-                      <span className="mr-2 font-mono text-[11px] text-[var(--text-muted)]">
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
-                      {group.title}
-                    </span>
-                    <span className="font-mono text-[11px] text-[var(--text-muted)]">
-                      {group.items.length}
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ol>
-            <div className="mt-8">
-              <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-                Issue readiness
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(
-                  [
-                    "all",
-                    "incomplete",
-                    "ready",
-                    "unassigned",
-                    "drift",
-                  ] as ReadinessFilter[]
-                ).map((value) => (
-                  <FilterPill
-                    key={value}
-                    active={readiness === value}
-                    onClick={() => setReadiness(value)}
-                  >
-                    {value}
-                  </FilterPill>
-                ))}
-              </div>
-              <p className="mt-4 text-[11px] leading-4 text-[var(--text-muted)]">
-                Readiness is calculated from the active spec template. Complete the listed fields to advance it.
-              </p>
+                Run issue checks
+              </DocumentAction>
             </div>
-          </aside>
+          )}
+        </header>
+        <div className="rule-strong" role="presentation" />
+        <nav aria-label="Spec book workspace" className="filters sb-tabs">
+          {(
+            [
+              ["workbench", "Specification"],
+              ["preview", "Audience editions"],
+              ["preflight", "Issue readiness"],
+              ["history", "Revision history"],
+            ] as Array<[WorkspaceView, string]>
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setView(id)}
+              aria-current={view === id ? "page" : undefined}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
 
-          <section
-            aria-label="Specification register"
-            className="border-r border-[var(--color-pearl)]"
-          >
-            {groups.map((group) => (
-              <div
-                key={group.id}
-                id={`chapter-${group.id}`}
-                className="scroll-mt-24"
-              >
-                <div className="sticky top-[69px] z-10 flex items-center justify-between border-b border-[var(--color-pearl)] bg-[var(--doc-paper)] px-4 py-3">
-                  <h2 className="font-heading text-base italic">
-                    {group.title}
-                  </h2>
-                  <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                    {group.items.length} items
-                  </span>
-                </div>
-                {group.items.length === 0 ? (
-                  <p className="px-5 py-6 text-[12px] italic text-[var(--text-muted)]">
-                    Nothing in this chapter matches the filter.
-                  </p>
-                ) : (
-                  group.items.map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      readiness={derivedReadiness(item.id)}
-                      missingFields={missingReadinessFields(item.id)}
-                      selected={selectedItem?.id === item.id}
-                      drift={hasIssuedDrift(
-                        item,
-                        latestIssued?.issued_at ?? null,
-                      )}
-                      onSelect={() => setSelectedItemId(item.id)}
-                    />
-                  ))
-                )}
-              </div>
-            ))}
-          </section>
-
-          <aside className="p-5 md:max-h-[calc(100vh-70px)] md:overflow-y-auto">
-            {selectedItem ? (
-              <>
-                {selectedItem.setting && (
-                  <label className="mb-5 flex items-center justify-between gap-4 border-b border-[var(--color-pearl)] pb-3 text-[11px] text-[var(--text-muted)]">
-                    Include in issue
-                    <input
-                      type="checkbox"
-                      checked={selectedItem.setting.included}
-                      disabled={updateSetting.isPending}
-                      onChange={(event) =>
-                        updateSetting.mutate({
-                          settingId: selectedItem.setting!.id,
-                          changes: { included: event.target.checked },
-                        })
-                      }
-                      className="accent-[var(--color-clay)]"
-                    />
-                  </label>
-                )}
-                {hasIssuedDrift(
-                  selectedItem,
-                  latestIssued?.issued_at ?? null,
-                ) && (
-                  <div className="mb-5 border border-[var(--color-terracotta)] p-3">
-                    <p className="text-[11px] font-medium">
-                      Source changed after revision{" "}
-                      {latestIssued?.revision_number}.
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {(
-                        [
-                          ["accept_source", "Accept source"],
-                          ["preserve_override", "Keep override"],
-                          ["acknowledge", "Acknowledge"],
-                        ] as const
-                      ).map(([decision, label]) => (
-                        <Button
-                          key={decision}
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            specBookEvents.driftDecision({
-                              project_id: projectId,
-                              item_id: selectedItem.id,
-                              decision,
-                            })
-                          }
-                        >
-                          {label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <SelectionEditor
-                  item={selectedItem}
-                  readiness={derivedReadiness(selectedItem.id)}
-                  missingFields={missingReadinessFields(selectedItem.id)}
-                  onRoomAssigned={workbench.refetch}
-                />
-              </>
-            ) : (
-              <p className="py-16 text-center italic text-[var(--text-muted)]">
-                Select an item to view its specification.
-              </p>
-            )}
-          </aside>
-        </div>
-      )}
-
-      {view === "preview" && (
-        <div className="mx-auto grid max-w-[1300px] gap-6 px-5 py-8 lg:grid-cols-[230px_1fr]">
-          <aside>
-            <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-              Audience edition
-            </p>
-            <div className="mt-3 space-y-2">
-              {AUDIENCES.map((audience) => (
-                <button
-                  key={audience.id}
-                  type="button"
-                  onClick={() => setPreviewAudience(audience.id)}
-                  className={`w-full border px-3 py-3 text-left ${
-                    previewAudience === audience.id
-                      ? "border-[var(--color-clay)]"
-                      : "border-[var(--color-pearl)]"
-                  }`}
+        {view === "workbench" &&
+          (!hasLines ? (
+            <EmptyState
+              eyebrow="Specification"
+              act={
+                <DocumentAction
+                  actionKey="spec-book-open-pieces"
+                  variant="secondary"
+                  href={`/doc/${projectId}/pieces`}
                 >
-                  <span className="block text-[12px] font-medium">
-                    {audience.label}
-                  </span>
-                  <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
-                    {audience.description}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <label className="mt-6 block text-[11px] text-[var(--text-muted)]">
-              Specification sheet
-              <Select
-                className="mt-1"
-                value={selectedItem?.id ?? ""}
-                onChange={(event) => setSelectedItemId(event.target.value)}
-              >
-                {data.items.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.document_code} · {item.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          </aside>
-          <section
-            aria-label={`${previewAudience} edition preview`}
-            className="overflow-auto bg-[#e7e2d8] p-6"
-          >
-            <AudiencePreview item={selectedItem} audience={previewAudience} />
-          </section>
-        </div>
-      )}
+                  Open the pieces
+                </DocumentAction>
+              }
+            >
+              No pieces in this book yet. Add pieces to {projectName} and they
+              arrive here by trade.
+            </EmptyState>
+          ) : (
+            <>
+              <p className="sb-front t-body">
+                <span className="word word--quiet">Issue readiness</span>
+                {frontSentence}
+              </p>
+              <div className="sb-body">
+                <nav className="sb-index" aria-label="In this book">
+                  <p className="eb">In this book</p>
+                  <ol>
+                    {groups.map((group) => (
+                      <li key={group.id}>
+                        <a href={`#chapter-${group.id}`}>{group.title}</a>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="eb sb-index-show">Show</p>
+                  <div className="filters">
+                    {(
+                      [
+                        ["all", "All"],
+                        ["incomplete", "Incomplete"],
+                        ["ready", "Ready"],
+                        ["unassigned", "Unassigned"],
+                        ["drift", "Changed since issue"],
+                      ] as Array<[ReadinessFilter, string]>
+                    ).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={readiness === value}
+                        onClick={() => setReadiness(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </nav>
 
-      {view === "preflight" && (
-        <div className="mx-auto grid max-w-[1200px] gap-8 px-5 py-8 lg:grid-cols-[1fr_360px]">
-          <section>
-            <div className="flex items-center gap-3">
-              {preflight.ready ? (
-                <Check className="h-6 w-6 text-[#66765f]" />
-              ) : (
-                <AlertCircle className="h-6 w-6 text-[var(--color-terracotta-ink)]" />
-              )}
-              <div>
-                <h2 className="font-heading text-2xl">
+                <div aria-label="Specification register" role="region">
+                  {groups.map((group) => (
+                    <section
+                      key={group.id}
+                      id={`chapter-${group.id}`}
+                      aria-label={group.title}
+                      className="section sb-chapter"
+                    >
+                      <div className="sec-head">
+                        <p className="eb">
+                          <svg
+                            className="orn"
+                            viewBox="0 0 34 12"
+                            aria-hidden="true"
+                            focusable="false"
+                          >
+                            <path d="M0 2h34M0 6h28M0 10h20" />
+                          </svg>
+                          <span>{group.title}</span>
+                        </p>
+                      </div>
+                      {group.items.length === 0 ? (
+                        <p className="empty-s">
+                          Nothing in {group.title} matches the filter.
+                        </p>
+                      ) : (
+                        <div className="ledger">
+                          <ul className="rows">
+                            {group.items.map((item) => {
+                              const open = openItemId === item.id;
+                              const itemReadiness = derivedReadiness(item.id);
+                              const itemMissing = missingReadinessFields(item.id);
+                              const drift = hasIssuedDrift(
+                                item,
+                                latestIssued?.issued_at ?? null,
+                              );
+                              const image = imageFor(item);
+                              return (
+                                <Fragment key={item.id}>
+                                  <PieceRow
+                                    item={item}
+                                    readiness={itemReadiness}
+                                    missingFields={itemMissing}
+                                    open={open}
+                                    drift={drift}
+                                    onOpen={(field) => openPiece(item.id, field)}
+                                    onClose={() => putBack(item.id)}
+                                    nameRef={(node) => {
+                                      nameRefs.current[item.id] = node;
+                                    }}
+                                  />
+                                  {open && (
+                                    <li
+                                      id={specBookFoldDomId(item.id)}
+                                      className="sb-open"
+                                      aria-label={`${item.name ?? "Untitled item"}, the specification`}
+                                    >
+                                      <div
+                                        className={
+                                          image ? "sb-spec has-plate" : "sb-spec"
+                                        }
+                                      >
+                                        {image ? (
+                                          <div>
+                                            <span className="plate">
+                                              <img src={image} alt="" />
+                                            </span>
+                                          </div>
+                                        ) : null}
+                                        <div>
+                                          {drift && (
+                                            <div className="sb-drift">
+                                              <p className="t-body-sm">
+                                                Source changed after revision{" "}
+                                                {latestIssued?.revision_number}.
+                                              </p>
+                                              <div className="sb-foot">
+                                                {(
+                                                  [
+                                                    ["accept_source", "Accept source"],
+                                                    ["preserve_override", "Keep override"],
+                                                    ["acknowledge", "Acknowledge"],
+                                                  ] as const
+                                                ).map(([decision, label]) => (
+                                                  <DocumentAction
+                                                    key={decision}
+                                                    actionKey={`spec-book-drift-${decision}`}
+                                                    variant="tertiary"
+                                                    onClick={() =>
+                                                      specBookEvents.driftDecision({
+                                                        project_id: projectId,
+                                                        item_id: item.id,
+                                                        decision,
+                                                      })
+                                                    }
+                                                  >
+                                                    {label}
+                                                  </DocumentAction>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                          <SelectionEditor
+                                            item={item}
+                                            readiness={itemReadiness}
+                                            missingFields={itemMissing}
+                                            onRoomAssigned={workbench.refetch}
+                                            heading={[item.document_code, group.title]
+                                              .filter(Boolean)
+                                              .join(" · ")}
+                                            focusField={openFocusField ?? undefined}
+                                            onClose={() => putBack(item.id)}
+                                            foot={
+                                              <>
+                                                <DocumentAction
+                                                  actionKey="spec-book-preview-sheet"
+                                                  variant="tertiary"
+                                                  onClick={() => {
+                                                    setSelectedItemId(item.id);
+                                                    setPreviewAudience("client");
+                                                    setView("preview");
+                                                  }}
+                                                >
+                                                  Preview the client sheet
+                                                </DocumentAction>
+                                                {item.setting && (
+                                                  <label className="check">
+                                                    <input
+                                                      className="check-input"
+                                                      type="checkbox"
+                                                      checked={item.setting.included}
+                                                      disabled={updateSetting.isPending}
+                                                      onChange={(event) =>
+                                                        updateSetting.mutate({
+                                                          settingId: item.setting!.id,
+                                                          changes: {
+                                                            included: event.target.checked,
+                                                          },
+                                                        })
+                                                      }
+                                                    />
+                                                    <span className="check-box" aria-hidden="true">
+                                                      <svg viewBox="0 0 14 14">
+                                                        <path d="M2.5 7.5l3 3 6-7" />
+                                                      </svg>
+                                                    </span>
+                                                    In {editionWord.toLowerCase()}
+                                                  </label>
+                                                )}
+                                              </>
+                                            }
+                                          />
+                                        </div>
+                                      </div>
+                                    </li>
+                                  )}
+                                </Fragment>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                    </section>
+                  ))}
+                </div>
+              </div>
+            </>
+          ))}
+
+        {view === "preview" && (
+          <div className="sb-preview">
+            <div>
+              <div className="sb-picks">
+                <p className="eb">Edition for</p>
+                <div className="filters">
+                  {AUDIENCES.map((audience) => (
+                    <button
+                      key={audience.id}
+                      type="button"
+                      aria-pressed={previewAudience === audience.id}
+                      onClick={() => setPreviewAudience(audience.id)}
+                    >
+                      {audience.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="t-body-sm sb-help">
+                  {
+                    AUDIENCES.find((audience) => audience.id === previewAudience)
+                      ?.sentence
+                  }
+                </p>
+              </div>
+              <div className="sb-picks">
+                <label className="sb-label">
+                  Specification sheet
+                  <Select
+                    className="mt-1.5"
+                    value={selectedItem?.id ?? ""}
+                    onChange={(event) => setSelectedItemId(event.target.value)}
+                  >
+                    {data.items.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.document_code} · {item.name}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+              </div>
+            </div>
+            <section aria-label={`${previewAudience} edition preview`}>
+              <AudiencePreview
+                item={selectedItem}
+                audience={previewAudience}
+                footLine={`${printedTitle} · ${editionWord}`}
+              />
+            </section>
+          </div>
+        )}
+
+        {view === "preflight" && (
+          <div className="sb-issue">
+            <div>
+              <div className="sb-issue-head">
+                <span
+                  className={preflight.ready ? "word" : "word word--od"}
+                >
+                  {preflight.ready ? "Ready" : "Blocked"}
+                </span>
+                <h2 className="t-d2">
                   {preflight.ready
                     ? "Ready to issue"
                     : `${preflight.blockers.length} blockers remain`}
                 </h2>
-                <p className="mt-1 text-[12px] text-[var(--text-muted)]">
+                <p className="t-body-sm sb-help">
                   {preflight.warnings.length} warnings · {data.items.length}{" "}
                   lines checked
                 </p>
               </div>
-            </div>
 
-            <div className="mt-8">
-              <h3 className="font-mono text-[11px] uppercase tracking-[0.1em]">
-                Issue blockers
-              </h3>
-              <ul className="mt-3 divide-y divide-[var(--color-pearl)] border-y border-[var(--color-pearl)]">
+              <section className="section" aria-label="Issue blockers">
+                <div className="sec-head">
+                  <p className="eb">Issue blockers</p>
+                </div>
                 {preflight.blockers.length === 0 ? (
-                  <li className="py-4 text-[12px] text-[#66765f]">
-                    No blockers.
-                  </li>
+                  <p className="empty-s">No blockers.</p>
                 ) : (
-                  preflight.blockers.map((issue, index) => (
-                    <li
-                      key={`${issue.code}-${issue.itemId}-${index}`}
-                      className="flex items-start justify-between gap-4 py-3"
-                    >
-                      <span className="text-[12px]">{issue.message}</span>
-                      {issue.itemId && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedItemId(issue.itemId!);
-                            setView("workbench");
-                          }}
-                          className="min-h-11 px-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
+                  <div className="ledger">
+                    <ul className="rows">
+                      {preflight.blockers.map((issue, index) => (
+                        <li
+                          key={`${issue.code}-${issue.itemId}-${index}`}
+                          className="lrow sb-issue-row"
                         >
-                          Resolve issue
-                        </button>
-                      )}
-                    </li>
-                  ))
+                          <span className="lsent">{issue.message}</span>
+                          {issue.itemId && (
+                            <span className="lact">
+                              <DocumentAction
+                                actionKey="spec-book-resolve-issue"
+                                variant="tertiary"
+                                onClick={() => {
+                                  openPiece(issue.itemId!);
+                                  setView("workbench");
+                                }}
+                              >
+                                Resolve issue
+                              </DocumentAction>
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
-              </ul>
+              </section>
+
+              <section className="section" aria-label="Issue warnings">
+                <div className="sec-head">
+                  <p className="eb">Issue warnings</p>
+                </div>
+                {preflight.warnings.length === 0 ? (
+                  <p className="empty-s">No warnings.</p>
+                ) : (
+                  <div className="ledger">
+                    <ul className="rows">
+                      {preflight.warnings.map((issue, index) => (
+                        <li
+                          key={`${issue.code}-${issue.itemId}-${index}`}
+                          className="lrow sb-issue-row"
+                        >
+                          <span className="lsent">{issue.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {preflight.warnings.length > 0 && (
+                  <label className="sb-label sb-group">
+                    Issue-with-warnings reason
+                    <Textarea
+                      className="mt-1.5"
+                      value={warningReason}
+                      placeholder="Explain why you are issuing with these warnings"
+                      onChange={(event) => setWarningReason(event.target.value)}
+                    />
+                  </label>
+                )}
+              </section>
             </div>
 
-            <div className="mt-8">
-              <h3 className="font-mono text-[11px] uppercase tracking-[0.1em]">
-                Issue warnings
-              </h3>
-              <ul className="mt-3 divide-y divide-[var(--color-pearl)] border-y border-[var(--color-pearl)]">
-                {preflight.warnings.map((issue, index) => (
-                  <li
-                    key={`${issue.code}-${issue.itemId}-${index}`}
-                    className="py-3 text-[12px] text-[var(--text-muted)]"
-                  >
-                    {issue.message}
-                  </li>
+            <div className="sb-picks-col">
+              <p className="eb">Issue specification set</p>
+              <div>
+                {AUDIENCES.map((audience) => (
+                  <label key={audience.id} className="check">
+                    <input
+                      className="check-input"
+                      type="checkbox"
+                      checked={audiences.includes(audience.id)}
+                      onChange={() => toggleAudience(audience.id)}
+                    />
+                    <span className="check-box" aria-hidden="true">
+                      <svg viewBox="0 0 14 14">
+                        <path d="M2.5 7.5l3 3 6-7" />
+                      </svg>
+                    </span>
+                    <span>
+                      {audience.label}
+                      <span className="t-body-sm sb-check-sub">
+                        {audience.description}
+                      </span>
+                    </span>
+                  </label>
                 ))}
-              </ul>
-              {preflight.warnings.length > 0 && (
-                <label className="mt-4 block text-[11px] text-[var(--text-muted)]">
-                  Issue-with-warnings reason
+              </div>
+              <label className="sb-label sb-group">
+                Issue type
+                <Select
+                  className="mt-1.5"
+                  value={issueType}
+                  onChange={(event) =>
+                    setIssueType(event.target.value as SpecBookIssueType)
+                  }
+                >
+                  <option value="full">Full issue</option>
+                  <option value="replacement" disabled={!latestIssued}>
+                    Full replacement
+                  </option>
+                  <option value="addendum" disabled={!latestIssued}>
+                    Changed-items addendum
+                  </option>
+                </Select>
+              </label>
+              {issueType !== "full" && (
+                <label className="sb-label sb-group">
+                  Issue reason
                   <Textarea
-                    className="mt-1"
-                    value={warningReason}
-                    placeholder="Explain why you are issuing with these warnings"
-                    onChange={(event) => setWarningReason(event.target.value)}
+                    className="mt-1.5"
+                    value={issueReason}
+                    onChange={(event) => setIssueReason(event.target.value)}
                   />
                 </label>
               )}
-            </div>
-          </section>
-
-          <aside className="border-l border-[var(--color-pearl)] pl-6">
-            <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-              Issue specification set
-            </p>
-            <div className="mt-4 space-y-2">
-              {AUDIENCES.map((audience) => (
-                <label
-                  key={audience.id}
-                  className="flex cursor-pointer items-start gap-3 border border-[var(--color-pearl)] p-3"
+              {issueFeedback && (
+                <p className="t-body-sm sb-help" role="status">
+                  {issueFeedback}
+                </p>
+              )}
+              <div className="sb-foot">
+                <DocumentAction
+                  actionKey="spec-book-issue"
+                  variant="terminal"
+                  loading={issueBusy}
+                  disabled={!preflight.ready || audiences.length === 0}
+                  onClick={() => void issue()}
                 >
-                  <input
-                    type="checkbox"
-                    checked={audiences.includes(audience.id)}
-                    onChange={() => toggleAudience(audience.id)}
-                    className="mt-0.5 accent-[var(--color-clay)]"
-                  />
-                  <span>
-                    <span className="block text-[12px] font-medium">
-                      {audience.label}
-                    </span>
-                    <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">
-                      {audience.description}
-                    </span>
-                  </span>
-                </label>
-              ))}
+                  Issue {audiences.length} edition
+                  {audiences.length === 1 ? "" : "s"}
+                </DocumentAction>
+              </div>
+              <p className="t-body-sm sb-help">
+                Issuing freezes an immutable revision. Each audience renders
+                independently and failed artifacts retry in place.
+              </p>
             </div>
-            <label className="mt-5 block text-[11px] text-[var(--text-muted)]">
-              Issue type
-              <Select
-                className="mt-1"
-                value={issueType}
-                onChange={(event) =>
-                  setIssueType(event.target.value as SpecBookIssueType)
-                }
-              >
-                <option value="full">Full issue</option>
-                <option value="replacement" disabled={!latestIssued}>
-                  Full replacement
-                </option>
-                <option value="addendum" disabled={!latestIssued}>
-                  Changed-items addendum
-                </option>
-              </Select>
-            </label>
-            {issueType !== "full" && (
-              <label className="mt-4 block text-[11px] text-[var(--text-muted)]">
-                Issue reason
-                <Textarea
-                  className="mt-1"
-                  value={issueReason}
-                  onChange={(event) => setIssueReason(event.target.value)}
-                />
-              </label>
-            )}
+          </div>
+        )}
+
+        {view === "history" && (
+          <div>
+            <div className="sec-head sb-history-head">
+              <div>
+                <p className="eb">Issued revision register</p>
+                <h2 className="t-d2">Revisions</h2>
+              </div>
+              {latestIssued && (
+                <DocumentAction
+                  actionKey="spec-book-addendum"
+                  variant="secondary"
+                  onClick={() => {
+                    setIssueType("addendum");
+                    setView("preflight");
+                    specBookEvents.addendumStarted({
+                      project_id: projectId,
+                      base_revision_id: latestIssued.id,
+                    });
+                  }}
+                >
+                  Create specification addendum
+                </DocumentAction>
+              )}
+            </div>
+
             {issueFeedback && (
-              <p
-                className="mt-4 text-[11px] text-[var(--text-muted)]"
-                role="status"
-              >
+              <p className="t-body-sm sb-help" role="status">
                 {issueFeedback}
               </p>
             )}
-            <Button
-              className="mt-5 w-full"
-              loading={issueBusy}
-              disabled={!preflight.ready || audiences.length === 0}
-              onClick={() => void issue()}
-            >
-              Issue {audiences.length} edition
-              {audiences.length === 1 ? "" : "s"}
-            </Button>
-            <p className="mt-3 text-[11px] leading-4 text-[var(--text-muted)]">
-              Issuing freezes an immutable revision. Each audience renders
-              independently and failed artifacts retry in place.
-            </p>
-          </aside>
-        </div>
-      )}
 
-      {view === "history" && (
-        <div className="mx-auto max-w-[1100px] px-5 py-8">
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-                Issued revision register
-              </p>
-              <h2 className="mt-2 font-heading text-2xl">Revisions</h2>
-            </div>
-            {latestIssued && (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setIssueType("addendum");
-                  setView("preflight");
-                  specBookEvents.addendumStarted({
-                    project_id: projectId,
-                    base_revision_id: latestIssued.id,
-                  });
-                }}
-              >
-                <Sparkles className="h-4 w-4" />
-                Create specification addendum
-              </Button>
-            )}
-          </div>
-
-          {issueFeedback && (
-            <p
-              className="mt-5 text-[11px] text-[var(--text-muted)]"
-              role="status"
-            >
-              {issueFeedback}
-            </p>
-          )}
-
-          <ol className="mt-8 space-y-5">
-            {data.revisions.map((revision) => {
-              const artifacts = data.artifacts.filter(
-                (artifact) => artifact.revision_id === revision.id,
-              );
-              return (
-                <li
-                  key={revision.id}
-                  className="border-t border-[var(--color-charcoal)] pt-4"
-                >
-                  <div className="grid gap-5 md:grid-cols-[180px_1fr]">
-                    <div>
-                      <p className="font-heading text-xl">
-                        Revision {revision.revision_number}
-                      </p>
-                      <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                        {revision.issue_type} · {revision.status}
-                      </p>
-                      <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-                        {new Date(revision.created_at).toLocaleString()}
+            {data.revisions.length === 0 ? (
+              <p className="empty-t sb-wait">No revisions issued yet.</p>
+            ) : (
+              data.revisions.map((revision) => {
+                const artifacts = data.artifacts.filter(
+                  (artifact) => artifact.revision_id === revision.id,
+                );
+                return (
+                  <section
+                    key={revision.id}
+                    className="section sb-revision"
+                    aria-label={`Revision ${revision.revision_number}`}
+                  >
+                    <div className="sec-head">
+                      <p className="eb">
+                        <span>Revision {revision.revision_number}</span>
+                        <span>
+                          {revision.issue_type} · {revision.status}
+                        </span>
+                        <span>{new Date(revision.created_at).toLocaleString()}</span>
                       </p>
                     </div>
-                    <div className="space-y-2">
-                      {revision.reason && (
-                        <p className="mb-3 text-[12px] italic text-[var(--text-muted)]">
-                          {revision.reason}
-                        </p>
-                      )}
-                      {artifacts.map((artifact) => (
-                        <div
-                          key={artifact.id}
-                          className="flex flex-wrap items-center gap-3 border border-[var(--color-pearl)] px-3 py-2"
-                        >
-                          {artifact.status === "ready" ? (
-                            <FileText className="h-4 w-4 text-[#66765f]" />
-                          ) : artifact.status === "failed" ? (
-                            <AlertCircle className="h-4 w-4 text-[var(--color-terracotta-ink)]" />
-                          ) : (
-                            <FileClock className="h-4 w-4 text-[#a47f33]" />
-                          )}
-                          <span className="min-w-24 text-[12px] capitalize">
-                            {artifact.audience} PDF
-                          </span>
-                          <span className="flex-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                            {artifact.status}
-                            {artifact.error_message
-                              ? ` · ${artifact.error_message}`
-                              : ""}
-                          </span>
-                          {specBookArtifactRetryLabel(
+                    {revision.reason && (
+                      <p className="t-body sb-help">{revision.reason}</p>
+                    )}
+                    <div className="ledger">
+                      <ul className="rows">
+                        {artifacts.map((artifact) => {
+                          const retryLabel = specBookArtifactRetryLabel(
                             artifact.status,
                             revision.status,
-                          ) && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              loading={renderArtifact.isPending}
-                              onClick={() => void retryArtifact(artifact)}
-                            >
-                              <RefreshCw className="h-3 w-3" />
-                              {specBookArtifactRetryLabel(
-                                artifact.status,
-                                revision.status,
-                              )}
-                            </Button>
-                          )}
-                          {artifact.status === "ready" && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              loading={createShare.isPending}
-                              onClick={() => void shareArtifact(artifact)}
-                            >
-                              <Share2 className="h-3 w-3" />
-                              Share issued set
-                            </Button>
-                          )}
-                          {shareResult?.artifactId === artifact.id && (
-                            <div className="basis-full border-t border-[var(--color-pearl)] pt-2">
-                              <label className="text-[11px] text-[var(--text-muted)]">
-                                Copy this tokenized link now; the raw token is
-                                shown only once.
-                                <Input
-                                  readOnly
-                                  className="mt-1 font-mono text-[11px]"
-                                  value={shareResult.url}
-                                  onFocus={(event) =>
-                                    event.currentTarget.select()
+                          );
+                          return (
+                            <li key={artifact.id} className="lrow sb-artifact-row">
+                              <span className="lname sb-artifact-name">
+                                {artifact.audience} PDF
+                              </span>
+                              <span className="lsent">
+                                <span
+                                  className={
+                                    artifact.status === "failed"
+                                      ? "word word--od"
+                                      : "word"
                                   }
-                                />
-                              </label>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                                >
+                                  {artifact.status}
+                                </span>
+                                {artifact.error_message
+                                  ? ` ${artifact.error_message}`
+                                  : ""}
+                              </span>
+                              <span className="lact sb-artifact-acts">
+                                {retryLabel && (
+                                  <DocumentAction
+                                    actionKey={`spec-book-artifact-${retryLabel.toLowerCase()}`}
+                                    variant="tertiary"
+                                    loading={renderArtifact.isPending}
+                                    onClick={() => void retryArtifact(artifact)}
+                                  >
+                                    {retryLabel}
+                                  </DocumentAction>
+                                )}
+                                {artifact.status === "ready" && (
+                                  <DocumentAction
+                                    actionKey="spec-book-artifact-share"
+                                    variant="tertiary"
+                                    loading={createShare.isPending}
+                                    onClick={() => void shareArtifact(artifact)}
+                                  >
+                                    Share issued set
+                                  </DocumentAction>
+                                )}
+                              </span>
+                              {shareResult?.artifactId === artifact.id && (
+                                <label className="sb-label sb-share">
+                                  Copy this tokenized link now; the raw token is
+                                  shown only once.
+                                  <Input
+                                    readOnly
+                                    className="mt-1.5 font-mono text-[12px]"
+                                    value={shareResult.url}
+                                    onFocus={(event) =>
+                                      event.currentTarget.select()
+                                    }
+                                  />
+                                </label>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-          {data.revisions.length === 0 && (
-            <p className="mt-12 text-center font-heading italic text-[var(--text-muted)]">
-              No revisions issued yet.
-            </p>
-          )}
-        </div>
-      )}
+                  </section>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
     </main>
   );
 }

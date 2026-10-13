@@ -163,63 +163,73 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
         stageFiles(Array.from(event.dataTransfer.files ?? []));
       }}
     >
-      <header className="sticky top-0 z-20 border-b border-[var(--color-pearl)] bg-[var(--doc-paper)]/95 px-4 py-3 backdrop-blur md:px-8">
-        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-4">
-          <Link
-            href={`/doc/${routeId}`}
-            className="inline-flex min-h-11 items-center py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
-          >
-            ← {projectName}
-          </Link>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate font-heading text-xl">Drawing sets</h1>
-            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+      {/* SQ-877 N6 — the house Header line (`.hline`, then the double rule),
+          as the other rooms carry it, on the body's own measure (each view's
+          `px-4 md:px-8`), so the head and the drawings share one left edge. */}
+      <div className="px-4 md:px-8">
+        <header className="hline" data-plan-room-header-line>
+          <div className="hline-l">
+            <DocumentAction
+              actionKey="plan-room-leave"
+              surfaceKey="plan-room"
+              regionKey="room-header-line"
+              variant="tertiary"
+              wrap
+              href={`/doc/${routeId}`}
+            >
+              ← {projectName}
+            </DocumentAction>
+            <h1 className="t-d2 m-0 text-[var(--text-primary)]">Drawing sets</h1>
+            <span className="t-meta text-[var(--text-muted)]">
               {bundle?.sheets.length ?? 0}{' '}
               {(bundle?.sheets.length ?? 0) === 1 ? 'sheet' : 'sheets'}
               {lastFiledAt ? ` · last filed ${fmtDay(lastFiledAt)}` : ''} ·{' '}
               {bundle?.issues.length ?? 0}{' '}
               {(bundle?.issues.length ?? 0) === 1 ? 'issue' : 'issues'} to date
-            </p>
+            </span>
           </div>
-          <nav aria-label="Drawing sets" className="flex items-center gap-1">
-            {VIEW_TABS.map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setView(id)}
-                aria-current={view === id ? 'page' : undefined}
-                className={`min-h-[44px] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.08em] ${
-                  view === id
-                    ? 'border-b border-[var(--color-clay)] text-[var(--color-charcoal)]'
-                    : 'text-[var(--text-muted)]'
-                }`}
+          <div className="hline-r">
+            <nav aria-label="Drawing sets" className="flex flex-wrap items-center gap-1">
+              {VIEW_TABS.map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setView(id)}
+                  aria-current={view === id ? 'page' : undefined}
+                  className={`min-h-[44px] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.08em] ${
+                    view === id
+                      ? 'border-b border-[var(--color-clay)] text-[var(--color-charcoal)]'
+                      : 'text-[var(--text-muted)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+            <DocumentActionRow surfaceKey="plan-room" regionKey="plan-room-intake">
+              <DocumentAction
+                actionKey="choose-plan-pdf"
+                variant="secondary"
+                onClick={() => fileInput.current?.click()}
               >
-                {label}
-              </button>
-            ))}
-          </nav>
-          <DocumentActionRow surfaceKey="plan-room" regionKey="plan-room-intake">
-            <DocumentAction
-              actionKey="choose-plan-pdf"
-              variant="secondary"
-              onClick={() => fileInput.current?.click()}
-            >
-              Upload drawing PDFs
-            </DocumentAction>
-          </DocumentActionRow>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="application/pdf"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              stageFiles(Array.from(event.target.files ?? []));
-              event.target.value = '';
-            }}
-          />
-        </div>
-      </header>
+                Upload drawing PDFs
+              </DocumentAction>
+            </DocumentActionRow>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="application/pdf"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                stageFiles(Array.from(event.target.files ?? []));
+                event.target.value = '';
+              }}
+            />
+          </div>
+        </header>
+        <div className="rule-strong" role="presentation" />
+      </div>
 
       {dragging && (
         <p

@@ -54,44 +54,41 @@ export function AskBar({
   /** Fires on Enter / the send affordance with the current trimmed query. */
   onAsk: () => void;
 }) {
+  // US-28 (people specimen) — "Search the directory": an eyebrow over one
+  // house field on --paper-lift with the card edge, never a borderless line.
+  // It sits in the Room's own measure (people-room.tsx).
   return (
-    <div
+    <form
       data-people-ask-bar
-      className="mx-auto w-full max-w-[1100px] px-4 pt-4 sm:px-6"
+      className="people-search"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onAsk();
+      }}
     >
-      <form
-        className="w-full max-w-[640px]"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onAsk();
-        }}
-      >
-        <label
-          htmlFor="people-engine-ask"
-          className="doc-type-meta block font-semibold uppercase tracking-[0.1em]"
-        >
-          Search directory
-        </label>
-        <div className="mt-1 flex min-h-12 items-center gap-2 border-b border-[var(--border-default)] transition-colors focus-within:border-[var(--color-charcoal)] motion-reduce:transition-none">
-          <input
-            id="people-engine-ask"
-            data-people-ask-input
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="Search contacts and relationship history"
-            className="doc-type-control min-h-11 min-w-0 flex-1 bg-transparent px-1 text-[var(--text-primary)] placeholder:text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-          />
-          {value.trim() && (
-            <button
-              type="submit"
-              aria-label="Ask the Engine"
-              className="doc-type-control flex min-h-11 min-w-11 shrink-0 items-center justify-center text-[var(--text-primary)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
-            >
-              →
-            </button>
-          )}
-        </div>
-      </form>
-    </div>
+      <label htmlFor="people-engine-ask" className="eb">
+        Search the directory
+      </label>
+      <div className="people-search-row">
+        <input
+          id="people-engine-ask"
+          data-people-ask-input
+          type="search"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="A name, a firm or an email"
+          className="people-search-field"
+        />
+        {value.trim() && (
+          <button
+            type="submit"
+            aria-label="Ask the Engine"
+            className="doc-type-control flex min-h-11 min-w-11 shrink-0 items-center justify-center text-[var(--text-primary)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)] motion-reduce:transition-none"
+          >
+            →
+          </button>
+        )}
+      </div>
+    </form>
   );
 }

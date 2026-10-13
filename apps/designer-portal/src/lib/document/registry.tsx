@@ -39,6 +39,7 @@ import {
   Hammer,
   Ruler,
 } from 'lucide-react';
+import type { PeopleView } from '@/components/document/people/types';
 
 export type StudioSurfaceKind = 'room' | 'ledger' | 'verb' | 'host';
 
@@ -356,6 +357,100 @@ export const STUDIO_VERBS: StudioSurface[] = [
   },
 ];
 
+/**
+ * US-28 (Kody, 2026-10-13: "match specimen fully") — the three rooms that used
+ * to stand in Studio contacts' left index. People is now the directory and
+ * Inbound only; these keep their components and their address (`/people?view=`,
+ * which every R21 redirect already lands on) and are reached from the dock's
+ * More and from ⌘K. They stay out of `ALL_STUDIO_SURFACES`: the dock's room
+ * doors and the Desk's Contents read that list, and these are not dock doors.
+ */
+/**
+ * The aliases that name one of a room's own views rather than the room, with
+ * the `?view=` key People already honours for that view (view-shell's
+ * PEOPLE_SUB_ROOMS). The room's label and its other aliases open its default.
+ */
+const PEOPLE_SUB_VIEW_ALIASES: Record<string, readonly { view: PeopleView; aliases: readonly string[] }[]> = {
+  'client-relations': [{ view: 'reviews', aliases: ['reviews', 'client reviews'] }],
+  'studio-marketing': [
+    { view: 'outreach', aliases: ['campaigns', 'email campaigns', 'outreach'] },
+    { view: 'your-eye', aliases: ['design profile', 'your eye'] },
+  ],
+};
+
+export const PEOPLE_SUB_ROOM_SURFACES: StudioSurface[] = [
+  {
+    key: 'client-relations',
+    kind: 'room',
+    label: 'Client relations',
+    subLabel: 'correspondence · client reviews',
+    aliases: ['correspondence', 'conversations', 'threads', 'reviews', 'client reviews', 'relations'],
+    icon: Users,
+    weight: 'room',
+    scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/people',
+      blurb: 'Correspondence with clients, and the reviews they leave.',
+    },
+  },
+  {
+    key: 'studio-marketing',
+    kind: 'room',
+    label: 'Studio marketing',
+    subLabel: 'portfolio · email campaigns · design profile',
+    aliases: ['marketing', 'portfolio', 'campaigns', 'email campaigns', 'outreach', 'design profile', 'your eye'],
+    icon: Users,
+    weight: 'room',
+    scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/people',
+      blurb: 'The portfolio, email campaigns and the studio’s design profile.',
+    },
+  },
+  {
+    key: 'the-engine',
+    kind: 'room',
+    label: 'The Engine',
+    subLabel: 'relationship follow-ups',
+    aliases: ['engine', 'nurture', 'follow-ups', 'follow up', 'dormant', 'reconnect'],
+    icon: Users,
+    weight: 'room',
+    scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/people',
+      blurb: 'Who is drifting out of touch, and who to reconnect with.',
+    },
+  },
+];
+
+/** Where each of the three opens: the view key People has always honoured. */
+export const PEOPLE_SUB_ROOM_HREF: Record<string, string> = {
+  'client-relations': '/people?view=threads',
+  'studio-marketing': '/people?view=portfolio',
+  'the-engine': '/people?view=nurture',
+};
+
+/**
+ * Where a ⌘K row for one of the three opens, given what was typed: a query
+ * that matches only an alias naming one of the room's own views ("client
+ * reviews", "email campaigns", "design profile") opens that view; the label,
+ * a room-level alias, or no query opens the room's default.
+ */
+export function peopleSubRoomHref(key: string, query = ''): string | undefined {
+  const fallback = PEOPLE_SUB_ROOM_HREF[key];
+  const surface = PEOPLE_SUB_ROOM_SURFACES.find((s) => s.key === key);
+  const q = query.trim().toLowerCase();
+  if (!fallback || !surface || !q) return fallback;
+  const subViews = PEOPLE_SUB_VIEW_ALIASES[key] ?? [];
+  const named = new Set(subViews.flatMap((v) => v.aliases));
+  const roomMatched =
+    surface.label.toLowerCase().includes(q) ||
+    surface.aliases.some((alias) => !named.has(alias) && alias.includes(q));
+  if (roomMatched) return fallback;
+  const view = subViews.find((v) => v.aliases.some((alias) => alias.includes(q)))?.view;
+  return view ? `/people?view=${view}` : fallback;
+}
+
 /** Every surface, in the order they're presented across consumers (rooms,
  *  then ledgers, then verbs). Consumers that need "all of it" — ⌘K's default
  *  list, the Desk Contents page — read this rather than concatenating the
@@ -505,7 +600,7 @@ export function matchSurfaces(query: string): StudioSurface[] {
   // The call sheet is read from STUDIO_LEDGERS into DOCUMENT_SCOPED_SURFACES,
   // so it stands in both lists — one surface may only ever match once.
   const seen = new Set<string>();
-  return [...ALL_STUDIO_SURFACES, ...DOCUMENT_SCOPED_SURFACES].filter((surface) => {
+  return [...ALL_STUDIO_SURFACES, ...PEOPLE_SUB_ROOM_SURFACES, ...DOCUMENT_SCOPED_SURFACES].filter((surface) => {
     if (seen.has(surface.key)) return false;
     const matched =
       surface.label.toLowerCase().includes(q) ||

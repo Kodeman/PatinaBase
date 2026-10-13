@@ -248,7 +248,8 @@ describe('BoardAddRail feedback tab', () => {
     renderRail();
     fireEvent.click(screen.getByRole('tab', { name: 'Board feedback' }));
 
-    expect(screen.getByText('Guest')).toBeInTheDocument();
+    // US-28 S12 (frame p4): the Guest pill became the words "guest link".
+    expect(screen.getByText('guest link')).toBeInTheDocument();
     expect(
       screen.queryByText('Client verdicts stay with proposal boards.'),
     ).not.toBeInTheDocument();
@@ -259,7 +260,7 @@ describe('BoardAddRail feedback tab', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Board feedback' }));
 
     expect(screen.getByText('No verdict')).toBeInTheDocument();
-    expect(screen.queryByText('Guest')).not.toBeInTheDocument();
+    expect(screen.queryByText('guest link')).not.toBeInTheDocument();
   });
 });
 

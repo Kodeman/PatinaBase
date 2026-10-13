@@ -1,6 +1,6 @@
 /**
  * W5 (Call Sheet nudge leak fix) — the Engine nudge on the People Room
- * (PeopleCompactSelector / PeopleDesktopRail's `nudge` prop) is a personal
+ * (US-28: The Engine sub-room's EngineNudgeLine, `?view=nurture`) is a personal
  * relationship-action surface, same posture as NurtureView (see
  * nurture-view-scope.test.tsx): "studio visibility ≠ shared nurture queues."
  * Post-00420, `usePeopleDirectory({ role: 'all' })` reads studio-wide, so
@@ -11,13 +11,14 @@
  * the nudge fed to the rail is derived from the MINE-scoped read, not the
  * studio-wide one. It fails if the nudge feed ever loses its mine pin.
  */
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { PeopleRoom } from '../people-room';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 type DirectoryRow = {
@@ -28,6 +29,7 @@ type DirectoryRow = {
   phone: string | null;
   last_touch_at: string | null;
   scope: 'mine' | 'studio';
+  status_raw?: string;
 };
 
 // A studio-mate's badly-dormant tie — present ONLY in the unscoped (studio)
@@ -41,6 +43,8 @@ const STUDIO_MATE_DORMANT: DirectoryRow = {
   phone: null,
   last_touch_at: '2020-01-01T00:00:00.000Z',
   scope: 'studio',
+  // Completed and untouched for years: due, were it the designer's own.
+  status_raw: 'completed',
 };
 
 const mockUsePeopleDirectory = jest.fn((filters?: { role?: string; scope?: string }) => {
@@ -111,18 +115,17 @@ jest.mock('../directory/add-person-sheet', () => ({
   AddPersonSheet: () => <div data-testid="add-person-sheet" />,
 }));
 
+jest.mock('../../command-bar', () => ({ openCommandBar: jest.fn() }));
+
+// US-28 — the nudge prints on The Engine's own Header line (`?view=nurture`).
 let capturedNudge: unknown;
 jest.mock('../view-shell', () => {
   const actual = jest.requireActual('../view-shell');
   return {
     ...actual,
-    PeopleCompactSelector: (props: { nudge: unknown }) => {
+    EngineNudgeLine: (props: { nudge: { name: string } }) => {
       capturedNudge = props.nudge;
-      return <div data-testid="people-compact-selector" />;
-    },
-    PeopleDesktopRail: (props: { nudge: unknown }) => {
-      capturedNudge = props.nudge;
-      return <div data-testid="people-desktop-rail" />;
+      return <p data-testid="engine-nudge">{props.nudge.name}</p>;
     },
   };
 });
@@ -131,6 +134,10 @@ describe('PeopleRoom — Engine nudge stays MINE-scoped', () => {
   beforeEach(() => {
     mockUsePeopleDirectory.mockClear();
     capturedNudge = undefined;
+    window.history.replaceState({}, '', '/people?view=nurture');
+  });
+  afterEach(() => {
+    window.history.replaceState({}, '', '/people');
   });
 
   it('queries usePeopleDirectory both unscoped (browse/deep-link) and scope:"mine" (nudge)', () => {
@@ -149,6 +156,26 @@ describe('PeopleRoom — Engine nudge stays MINE-scoped', () => {
     // The studio-mate's dormant tie only exists in the unscoped read; the
     // mine-scoped read (feeding the nudge) is empty, so the nudge must be
     // null — never "Studio-Mate Client".
-    expect(capturedNudge).toBeNull();
+    expect(screen.getByTestId('nurture-view')).toBeInTheDocument();
+    expect(capturedNudge).toBeUndefined();
+    expect(screen.queryByTestId('engine-nudge')).toBeNull();
+  });
+
+  it("prints the designer's OWN dormant tie on The Engine's line (positive control)", () => {
+    // A completed client untouched for years is due (isNurtureDue).
+    const own = {
+      ...STUDIO_MATE_DORMANT,
+      person_id: 'own',
+      display_name: 'Own Dormant Client',
+      scope: 'mine' as const,
+      status_raw: 'completed',
+    };
+    mockUsePeopleDirectory.mockImplementation((filters?: { scope?: string }) =>
+      filters?.scope === 'mine'
+        ? { data: [own], isLoading: false }
+        : { data: [STUDIO_MATE_DORMANT, own], isLoading: false },
+    );
+    render(<PeopleRoom />);
+    expect(screen.getByTestId('engine-nudge')).toHaveTextContent('Own Dormant Client');
   });
 });

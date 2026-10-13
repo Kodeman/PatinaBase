@@ -27,6 +27,7 @@ jest.mock('@patina/supabase', () => ({
   useOrganizationMembers: () => ({ data: mockMembers() }),
   useProjectLeads: () => ({ data: mockLeads() }),
   useNeedStates: () => ({ data: mockNeedStates() }),
+  useTeammateActed: () => ({ data: new Map() }),
   useSetNeedState: () => ({ mutate: jest.fn(), isPending: false }),
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useInvoice, useInvoicePaymentOptions, useStudioIdentity } from '@patina/supabase';
 import { InvoicePaper } from '@patina/design-system';
 import { AccountsQueryFailure } from '@/components/document/accounts/accounts-query-failure';
+import { DocumentAction } from '@/components/document/document-action';
 
 /**
  * The printable invoice, designer side (BIL-01 refit).
@@ -96,21 +97,25 @@ export default function DesignerInvoicePrintPage({
         }
       `}</style>
 
-      {/* Screen-only toolbar */}
-      <div className="invoice-print-toolbar sticky top-0 z-10 flex items-center justify-end gap-3 border-b border-[#E5E2DD] bg-white px-6 py-3">
+      {/* Screen-only toolbar, on the print stock itself (US-28 S8): no bar,
+          no fill. The page holds no filled act — Print is the scored
+          secondary, the way back the tertiary beside it. */}
+      <div className="invoice-print-toolbar sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-6 bg-white px-6 py-3">
         <Link
           href={backHref}
-          className="inline-flex min-h-[44px] items-center px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-[#2B2925] no-underline hover:opacity-70"
+          className="inline-flex min-h-[44px] items-center px-1.5 font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-subtle)] underline decoration-[var(--oak)] underline-offset-[5px] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
         >
           ← Back to invoice
         </Link>
-        <button
-          type="button"
+        <DocumentAction
+          actionKey="print-invoice-page"
+          surfaceKey="accounts"
+          regionKey="invoice-print"
+          variant="secondary"
           onClick={() => window.print()}
-          className="inline-flex min-h-[44px] items-center rounded-md bg-[#2B2925] px-4 text-sm text-white transition hover:opacity-90"
         >
           Print / Save PDF
-        </button>
+        </DocumentAction>
       </div>
 
       <InvoicePaper

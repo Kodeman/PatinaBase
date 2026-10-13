@@ -312,6 +312,59 @@ Deno.test("items sort deterministically by chapter, position, then id", async ()
   assertEquals(await sha256Hex(one), await sha256Hex(two));
 });
 
+Deno.test("audience hashes ignore chapter placement but retain finish changes", async () => {
+  const source = frozenSnapshot();
+  const sourceItem = source.items[0];
+  const { contentHash: _contentHash, ...itemWithoutStoredHash } = sourceItem;
+  const item = itemWithoutStoredHash as Record<string, unknown>;
+  const roomGrouped = frozenSnapshot({
+    items: [{ ...item, chapterId: "room-chapter" }, source.items[1]],
+  });
+  const tradeGrouped = frozenSnapshot({
+    items: [{ ...item, chapterId: "trade-chapter" }, source.items[1]],
+  });
+  const finishChanged = frozenSnapshot({
+    items: [{
+      ...item,
+      chapterId: "trade-chapter",
+      selection: { finish: { value: "Oxidized oak" } },
+    }, source.items[1]],
+  });
+
+  for (const audience of SPEC_BOOK_AUDIENCES) {
+    const [roomModel, tradeModel] = await Promise.all([
+      buildAudienceRenderModel(roomGrouped, audience, context),
+      buildAudienceRenderModel(tradeGrouped, audience, context),
+    ]);
+    const roomLine = roomModel.items.find((entry) => entry.id === "item-b")!;
+    const tradeLine = tradeModel.items.find((entry) => entry.id === "item-b")!;
+
+    assertEquals(
+      roomLine.contentHash,
+      tradeLine.contentHash,
+      `${audience} chapter move`,
+    );
+    assertEquals(roomLine.chapterId, "room-chapter");
+    assertEquals(tradeLine.chapterId, "trade-chapter");
+  }
+
+  const clientTradeLine = (await buildAudienceRenderModel(
+    tradeGrouped,
+    "client",
+    context,
+  )).items.find((entry) => entry.id === "item-b")!;
+  const clientFinishLine = (await buildAudienceRenderModel(
+    finishChanged,
+    "client",
+    context,
+  )).items.find((entry) => entry.id === "item-b")!;
+  assertEquals(
+    clientFinishLine.contentHash === clientTradeLine.contentHash,
+    false,
+    "client finish change",
+  );
+});
+
 Deno.test("addendum includes only added and changed current items plus removed ledger rows", async () => {
   const base = frozenSnapshot();
   const current = frozenSnapshot({

@@ -7,8 +7,12 @@
  * are one declaration.
  */
 
-/** L-4: a region mounts when its root's top reaches `viewportBottom + 240`. */
-export const LENS_LOOKAHEAD_PX = 240;
+/** L-4: a region mounts when its root's top reaches `viewportBottom + 288`.
+ *  288 (24 × 12, on the 24px module) since 2026-10-13 (SQ-879): US-28 S7a's
+ *  region close moved the seeded long paper's `ffe` 54px down, and at 240 the
+ *  D-B31 fling census read 2 blank frames — its own rule is "blank paper >1
+ *  frame -> lookahead grows". */
+export const LENS_LOOKAHEAD_PX = 288;
 
 /** L-9: the settle gate — scroll velocity below this, for `LENS_SETTLE_MS`. */
 export const LENS_SETTLE_VELOCITY_PX = 40;

@@ -10,12 +10,15 @@
  * proposal is always a real draft; there is no Save button gate, no tab strip,
  * no stepper, no "Step N of 8".
  *
- * The Strata Mark (R35) is the ONLY progress indicator there is. The three
- * movements map to the three lines, and the state reads Outline → Drafting →
- * Ready to send off the same fill (drafting-progress.ts):
- *   · line 1 — SCOPE      (the rooms + what fills them)
- *   · line 2 — THE OFFER  (phases, exclusions, payments, terms)
- *   · line 3 — THE VISION (palette + boards)
+ * US-28 S9: progress is words, never a percentage — "Drafted: rooms, … · To
+ * draft: …" under the title, whose one 3 px `--tab-proposal` rule is the
+ * stage. The three movements are Sections that close on their own rule:
+ *   · SCOPE OF WORK     (the rooms + what fills them)
+ *   · DESIGN CONCEPT    (palette + boards)
+ *   · COMMERCIAL TERMS  (phases, exclusions, payments, terms)
+ * Each facet is a Card on the shared edge (ComposeSection) whose state is one
+ * ink word; the open facet keeps the clay ring. The client's copy is laid
+ * paper (L1) beside them.
  *
  * R43: the right rail mirrors what the CLIENT's copy carries as the designer
  * composes (ProposalPreviewRail — "Sarah's copy"). Two-column at 1440px+;
@@ -30,7 +33,14 @@
  * A Room — full-bleed paper, zero shadows (D4); reuses RoomShell's physics.
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -42,21 +52,17 @@ import {
 } from '@patina/supabase';
 import { latestVerdictByLine } from '@patina/utils';
 import { RoomShell } from '../room-shell';
-import { StrataMark } from '../../strata-mark';
 import { StatusChip } from '../../status-chip';
 import { ProposalShareInstrument } from '../../proposal-share-instrument';
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
-import { FacetSection } from './facet-section';
+import { ComposeSection, PaperEyebrow } from '../../compose/compose-section';
 import { ProposalPreviewRail } from '../../drafting/proposal-mirror';
 import { DocSheet } from '../../overlays/doc-sheet';
 import {
   useDraftingState,
   useDraftingWritesPending,
 } from '@/hooks/use-drafting-state';
-import {
-  displayDraftingState,
-  type DraftingFacets,
-} from '@/lib/document/drafting-progress';
+import type { DraftingFacets } from '@/lib/document/drafting-progress';
 
 // The eight legacy editors — proven, proposalId-addressed, self-persisting.
 import { RoomsInScope } from '@/components/portal/scope-builder/rooms-in-scope';
@@ -79,18 +85,6 @@ import { commercialDocumentExperience } from '@/lib/document/commercial-document
 import { draftingEditability } from '@/lib/document/drafting-editability';
 import { suppressNextArrival } from '@/lib/arrival/nav';
 import { ServiceAgreementDraftingRoom } from './service-agreement-drafting-room';
-
-const STATE_TONE: Record<string, { color: string; bg: string }> = {
-  Outline: { color: 'var(--color-aged-oak)', bg: 'transparent' },
-  Drafting: { color: '#b89a2e', bg: 'transparent' },
-  'Fully drafted': { color: 'var(--color-sage)', bg: 'rgba(168,181,160,0.12)' },
-};
-
-const MOVEMENT = {
-  scope: 'var(--color-mocha)',
-  offer: 'var(--color-clay)',
-  vision: 'var(--color-dusty-blue)',
-};
 
 const num = (n: unknown) =>
   typeof n === 'number' && Number.isFinite(n) ? n : 0;
@@ -129,6 +123,33 @@ function firstIncompleteDraftingFacet(
   facets: DraftingFacets,
 ): DraftingFacetId {
   return DRAFTING_FACET_ORDER.find((id) => !facets[id]) ?? 'rooms';
+}
+
+const FACET_WORD: Record<DraftingFacetId, string> = {
+  rooms: 'rooms',
+  ffe: 'FF&E schedule',
+  palette: 'material palette',
+  boards: 'design boards',
+  phases: 'project phases',
+  exclusions: 'exclusions',
+  payments: 'payment schedule',
+  terms: 'terms',
+};
+
+/** Progress in words, never a percentage: "Drafted: … · To draft: …". */
+export function draftedWords(facets: DraftingFacets): string {
+  const drafted = DRAFTING_FACET_ORDER.filter((id) => facets[id]);
+  const toDraft = DRAFTING_FACET_ORDER.filter((id) => !facets[id]);
+  return [
+    drafted.length
+      ? `Drafted: ${drafted.map((id) => FACET_WORD[id]).join(', ')}`
+      : null,
+    toDraft.length
+      ? `To draft: ${toDraft.map((id) => FACET_WORD[id]).join(', ')}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 export function DraftingRoom({ proposalId }: { proposalId: string }) {
@@ -237,10 +258,6 @@ function DraftingRoomEditor({
     facets,
     summary: s,
     items,
-    fill,
-    pct,
-    state,
-    gaps,
     isLoading: facetsLoading,
   } = useDraftingState(proposalId);
   const draftingWritePending = useDraftingWritesPending(proposalId);
@@ -307,9 +324,6 @@ function DraftingRoomEditor({
   const totalProjectCents =
     num(summary?.totalFFEEstimateCents) + num(summary?.totalDesignFeeCents);
 
-  const displayState = displayDraftingState(state);
-  const tone = STATE_TONE[displayState];
-
   // Keep exactly one facet in hand. Once the composite read resolves, returning
   // designers land directly in the first unfinished facet; their own selection
   // then stays put while the live query catches up with edits.
@@ -331,7 +345,7 @@ function DraftingRoomEditor({
     let frame = 0;
     let handle = 0;
     const land = () => {
-      const body = document.querySelector<HTMLElement>('[data-drafting-facet-body]:not([hidden])');
+      const body = document.querySelector<HTMLElement>('[data-compose-section-body]:not([hidden])');
       const control =
         body?.querySelector<HTMLElement>(
           'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])',
@@ -384,13 +398,6 @@ function DraftingRoomEditor({
 
   const title = proposal?.title ?? proposal?.client_name ?? 'A proposal';
 
-  const guide =
-    pct === 0
-      ? 'Start anywhere. Every facet saves into the same sendable draft.'
-      : pct >= 100
-        ? 'Fully drafted. Every facet is written.'
-        : `Still open: ${gaps.slice(0, 3).join(', ')}${gaps.length > 3 ? '…' : ''}. Choose any facet.`;
-
   // Legacy retirement: the Room's head act is a quiet exit, not a send — this
   // Drafting Room stays for facet editing only (a project-bound furnishing
   // draft reaches the client via a named furnishings authorization released
@@ -408,8 +415,17 @@ function DraftingRoomEditor({
   return (
     <RoomShell
       title="Proposal drafting"
-      count={pct > 0 ? `${pct}% drafted` : undefined}
       backLabel={exitLabel}
+      // US-28 walk-fix: one Header line. The proposal's title block (the
+      // stage once, a 3 px rule) heads RoomShell's own line beside the back
+      // act and Sharing; the old band no longer stacks above a second line.
+      heading={
+        <div className="title-rule st-proposal papers-tblock">
+          <PaperEyebrow>Proposal · draft</PaperEyebrow>
+          <h1 className="t-d2">{title}</h1>
+        </div>
+      }
+      measure="mx-auto max-w-[1240px] px-4 sm:px-8"
       // C2 — the share instrument is the Room's sole head action: a quiet
       // mono doorway into the tokenized share-link sheet (view-only client
       // copy), seeded from the proposal's client-visibility tier.
@@ -429,76 +445,36 @@ function DraftingRoomEditor({
       // S10: no backTo — leaving returns to the stashed origin (the document the
       // designer walked in from, "← the document"), not the legacy proposals route.
     >
-      <div className="mx-auto max-w-[1240px] px-6 sm:px-8">
-        {/* ── The proposal taking shape — the Strata Mark is the ONLY progress ── */}
-        <section className="sticky top-[57px] z-[5] border-b border-[var(--doc-ink-border)] bg-[var(--doc-paper)] pb-4 pt-6">
-          <div className="flex items-center gap-5">
-            {/* The ONE Strata Mark — three movements map to the three lines. */}
-            <StrataMark size="lg" fill={fill} />
-            <div className="min-w-0 flex-1">
-              <p className="font-heading text-[1.5rem] leading-tight text-[var(--color-charcoal)]">
-                {title}
-              </p>
-              <div className="mt-1 flex flex-wrap items-center gap-3">
-                <span className="doc-type-meta tracking-[0.04em]">
-                  <b className="font-heading text-[0.95rem] text-[var(--color-charcoal)]">
-                    {pct}
-                  </b>
-                  % drafted
-                </span>
-                <span
-                  className="doc-type-meta rounded-[3px] border px-2 py-0.5 uppercase tracking-[0.1em]"
-                  style={{
-                    color: tone.color,
-                    borderColor: tone.color,
-                    background: tone.bg,
-                  }}
-                >
-                  {displayState}
-                </span>
-                <span className="doc-type-meta uppercase tracking-[0.08em] opacity-70">
-                  Scope · The Offer · The Vision
-                </span>
-                <span
-                  aria-live="polite"
-                  className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
-                >
-                  {draftingWritePending ? 'Saving proposal changes…' : ''}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-            <p className="doc-type-body min-w-[240px] flex-1 border-l-2 border-[var(--color-clay)] pl-3 text-[var(--color-quiet-ink)]">
-              {guide}
-            </p>
-            <DocumentAction
-              actionKey="preview-client-copy"
-              surfaceKey="drafting"
-              regionKey="drafting-progress"
-              variant="secondary"
-              className="min-[1440px]:hidden"
-              onClick={openPreview}
-            >
-              Preview client edition
-            </DocumentAction>
-          </div>
-        </section>
+      <div className="papers-ground">
+      <div className="mx-auto max-w-[1240px] px-4 sm:px-8">
+        <div className="papers-drafted">
+          <p className="t-body-sm papers-drafted-words" data-testid="drafted-words">
+            {draftedWords(facets)}
+          </p>
+          <span aria-live="polite" className="t-meta papers-saving">
+            {draftingWritePending ? 'Saving proposal changes…' : ''}
+          </span>
+          <DocumentAction
+            actionKey="preview-client-copy"
+            surfaceKey="drafting"
+            regionKey="drafting-progress"
+            variant="secondary"
+            className="min-[1440px]:hidden"
+            onClick={openPreview}
+          >
+            Preview client edition
+          </DocumentAction>
+        </div>
 
-        {/* ── The live 360px copy stays permanent only where it does not crowd. ── */}
-        <div className="grid gap-8 pt-6 min-[1440px]:grid-cols-[minmax(0,1fr)_360px]">
+        {/* ── The live copy stays permanent only where it does not crowd. ── */}
+        <div className="papers-grid">
           {/* ── The facets — eight, in order, no tab strip, no stepper. ── */}
-          <div>
+          <div className="min-w-0">
             {/* Movement 1 · Scope */}
-            <MovementRule
-              name="Scope of work"
-              meta="Line 1 · the rooms & what fills them"
-              hue={MOVEMENT.scope}
-            />
+            <Movement id="drafting-scope" name="Scope of work" meta="The rooms and what fills them">
 
             <FacetSection
               name="Rooms"
-              accent={MOVEMENT.scope}
               done={facets.rooms}
               status={
                 facets.rooms
@@ -513,7 +489,6 @@ function DraftingRoomEditor({
 
             <FacetSection
               name="FF&E schedule"
-              accent={MOVEMENT.scope}
               done={facets.ffe}
               status={
                 facets.ffe
@@ -585,19 +560,15 @@ function DraftingRoomEditor({
                 />
               </div>
             </FacetSection>
+            </Movement>
 
             {/* Movement 3 · The Vision (palette + boards) — placed before the
                 offer so the page reads scope → vision → commerce, but the lines
                 still map by facet, not by order. */}
-            <MovementRule
-              name="Design concept"
-              meta="Line 3 · palette & boards"
-              hue={MOVEMENT.vision}
-            />
+            <Movement id="drafting-concept" name="Design concept" meta="Palette and boards">
 
             <FacetSection
               name="Material palette"
-              accent={MOVEMENT.vision}
               done={facets.palette}
               status={
                 facets.palette
@@ -614,7 +585,6 @@ function DraftingRoomEditor({
 
             <FacetSection
               name="Design boards"
-              accent={MOVEMENT.vision}
               done={facets.boards}
               status={
                 facets.boards
@@ -626,17 +596,13 @@ function DraftingRoomEditor({
             >
               <BoardsBuilder proposalId={proposalId} />
             </FacetSection>
+            </Movement>
 
             {/* Movement 2 · The Offer (commerce) */}
-            <MovementRule
-              name="Commercial terms"
-              meta="Line 2 · phases, exclusions, payments, terms"
-              hue={MOVEMENT.offer}
-            />
+            <Movement id="drafting-terms" name="Commercial terms" meta="Phases, exclusions, payments, terms">
 
             <FacetSection
               name="Project phases"
-              accent={MOVEMENT.offer}
               done={facets.phases}
               status={
                 facets.phases
@@ -651,7 +617,6 @@ function DraftingRoomEditor({
 
             <FacetSection
               name="Exclusions"
-              accent={MOVEMENT.offer}
               done={facets.exclusions}
               status={
                 facets.exclusions ? `${s?.exclusions} stated` : 'none stated'
@@ -664,7 +629,6 @@ function DraftingRoomEditor({
 
             <FacetSection
               name="Payment schedule"
-              accent={MOVEMENT.offer}
               done={facets.payments}
               status={
                 facets.payments
@@ -682,7 +646,6 @@ function DraftingRoomEditor({
 
             <FacetSection
               name="Terms & conditions"
-              accent={MOVEMENT.offer}
               done={facets.terms}
               status={
                 facets.terms ? 'change-order terms written' : 'not yet written'
@@ -696,28 +659,30 @@ function DraftingRoomEditor({
               <TermsAgreementBody proposalId={proposalId} />
               <ChangeOrderTermsEditor proposalId={proposalId} />
             </FacetSection>
+            </Movement>
 
-            <p className="doc-type-body mx-auto mt-8 max-w-[620px] border-t border-[var(--doc-ink-border)] py-5 text-center italic text-[var(--color-quiet-ink)]">
-              Work in any order. Every edit belongs to the same sendable draft;
-              there are no steps to unlock.
+            <p className="t-body-sm papers-closing">
+              Work in any order. Every edit belongs to the same draft; there
+              are no steps to unlock.
             </p>
           </div>
 
-          {/* ── The right rail — "Sarah's copy": what the client sees (R43). ── */}
+          {/* ── The right rail — the client's copy as laid paper (L1, R43). ── */}
           <aside className="hidden min-[1440px]:block">
-            <div className="sticky top-[150px]">
-              <p className="doc-type-meta mb-3 font-semibold uppercase tracking-[0.1em]">
-                The client&apos;s copy · live
-              </p>
-              <div className="rounded-[10px] border border-[var(--doc-ink-border)] bg-white px-5 py-5">
+            <div className="sticky top-[88px]">
+              <div className="papers-copy-eb">
+                <PaperEyebrow>The client&apos;s copy · live</PaperEyebrow>
+              </div>
+              <article className="papers-copy" aria-label="The client’s copy">
                 <ProposalPreviewRail
                   proposalId={proposalId}
                   clientName={proposal?.client_name ?? undefined}
                 />
-              </div>
+              </article>
             </div>
           </aside>
         </div>
+      </div>
       </div>
 
       <DocSheet
@@ -767,31 +732,35 @@ function DraftingRoomEditor({
   );
 }
 
-function MovementRule({
+/** A drafting facet: the shared facet Card, its state word Drafted / To draft. */
+function FacetSection(
+  props: Omit<
+    ComponentProps<typeof ComposeSection>,
+    'doneWord' | 'todoWord'
+  >,
+) {
+  return <ComposeSection doneWord="Drafted" todoWord="To draft" {...props} />;
+}
+
+/** One movement: a Section that closes on its own rule (S1 `.section`). */
+function Movement({
+  id,
   name,
   meta,
-  hue,
+  children,
 }: {
+  id: string;
   name: string;
   meta: string;
-  hue: string;
+  children: ReactNode;
 }) {
   return (
-    <section className="pb-1 pt-8 first:pt-2">
-      <div className="mb-1 flex items-baseline gap-3">
-        <span
-          aria-hidden
-          className="h-[4px] w-[34px] shrink-0 self-center rounded-[2px]"
-          style={{ background: hue }}
-        />
-        <h2 className="font-heading text-[1.2rem] font-medium italic text-[var(--color-charcoal)]">
-          {name}
-        </h2>
-        <span className="doc-type-meta ml-auto uppercase tracking-[0.06em]">
-          {meta}
-        </span>
+    <section className="section" aria-labelledby={id}>
+      <div className="sec-head">
+        <PaperEyebrow id={id}>{name}</PaperEyebrow>
+        <span className="t-meta papers-meta">{meta}</span>
       </div>
-      <div className="mb-4 h-px bg-[var(--doc-ink-border)]" />
+      <div className="papers-facets">{children}</div>
     </section>
   );
 }

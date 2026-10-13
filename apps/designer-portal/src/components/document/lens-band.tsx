@@ -6,8 +6,10 @@
  * Two lines in a declared 56px box: line one is the job's identity, its stage
  * and one right-flush fact; line two is the sentence that changes (L-1) — the
  * worst standing exception with its act, or the stage's guide sentence when
- * nothing stands. Both lines are single lines by construction (`nowrap` +
- * ellipsis), which is the whole of the height contract.
+ * nothing stands. US-28 S7 (V20 U-Q19): nothing in the band truncates. The
+ * box is a 56px MINIMUM; the rungs still pick the form that fits one line, and
+ * when even the last rung cannot, the sentence wraps onto a second line and
+ * the act keeps its score (at 390, on its own 44px row).
  *
  * It publishes nothing: no `ResizeObserver`, no CSS variable, no measured
  * height. `--doc-band-height` is a declared constant (D-1), and a name that no
@@ -42,18 +44,21 @@ import { StandingSheet } from './standing-sheet';
  *  the 390 measure has moved the `Standing · N` door into More (D2). */
 export const OPEN_STANDING_SHEET_EVENT = 'document:open-standing-sheet';
 
-/** Both lines, at every width — the backstop only, after the derivation has
- *  chosen the form that fits (D-B24). */
-const LINE_CLIP = 'overflow-hidden text-ellipsis whitespace-nowrap';
+/** A rung on trial: held to one line so the measure can see it overflow
+ *  (D-B24). The layout effect drops the rung before paint, so this never
+ *  prints a clipped sentence; the last rung wraps instead (U-Q19). */
+const RUNG_TRIAL = 'overflow-hidden whitespace-nowrap';
+/** Wrap, never truncate. */
+const LINE_WRAP = 'whitespace-normal [overflow-wrap:anywhere]';
 
-/** F2-1 — the eyebrow's two halves: the stage word never clips; the job's
- *  name, with its separator, is what ellipsises. */
+/** F2-1 — the eyebrow's two halves: the stage word first; the job's name,
+ *  with its separator, wraps after it (US-28 S7: never ellipsised). */
 function Eyebrow({ voice }: { voice: LensVoice }) {
   return (
     <>
       <span className="shrink-0">{voice.eyebrowStage}</span>
       {voice.eyebrowDetail && (
-        <span className="min-w-0 overflow-hidden text-ellipsis whitespace-pre">
+        <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
           {` · ${voice.eyebrowDetail}`}
         </span>
       )}
@@ -164,6 +169,8 @@ export function LensBand({
     voice,
     sameVoice,
   );
+  /** Line 1's right-flush slot, from whichever voice is printing. */
+  const rightSlot = spoken ?? line1;
   const [sheetOpen, setSheetOpen] = useState(false);
   const moreRef = useRef<HTMLButtonElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -331,7 +338,7 @@ export function LensBand({
         tabIndex={-1}
         data-lens-band=""
         data-lens-open={open ? 'true' : 'false'}
-        className="doc-rule-mid sticky top-0 z-[4] box-border flex h-[var(--doc-band-height,56px)] flex-col justify-center gap-[2px] bg-[var(--doc-paper)]"
+        className="doc-rule-mid sticky top-0 z-[4] box-border flex min-h-[var(--doc-band-height,56px)] flex-col justify-center gap-[2px] bg-[var(--doc-paper)]"
       >
         <p
           data-lens-line="1"
@@ -343,13 +350,13 @@ export function LensBand({
           // what D-B34's cause gate caught. `min-h` is the ONE line of 11px mono
           // at `leading-[1.4]` (11 × 1.4 = 15.4px, a literal because the root is
           // 18px and `rem` would not land on the same number).
-          className={`flex min-h-[15.4px] items-baseline justify-between gap-4 font-mono text-[11px] uppercase leading-[1.4] tracking-[0.08em] text-[var(--text-muted)] ${LINE_CLIP}`}
+          className={`flex min-h-[15.4px] flex-wrap items-baseline justify-between gap-x-4 font-mono text-[11px] uppercase leading-[1.4] tracking-[0.08em] text-[var(--text-muted)] ${LINE_WRAP}`}
         >
           {/* At s0 the letterhead 60px above prints the household at 40px, the
               stage as its arc and the date in its vitals, so both yield; the
               letterhead prints no money, so money keeps its printing. */}
           <span
-            className={`min-w-0 ${spoken ? 'flex items-baseline overflow-hidden whitespace-nowrap' : LINE_CLIP}`}
+            className={`min-w-0 ${spoken ? 'flex flex-wrap items-baseline' : LINE_WRAP}`}
             data-lens-identity
           >
             {spoken ? (
@@ -386,14 +393,28 @@ export function LensBand({
               </>
             )}
           </span>
-          <span className="shrink-0 whitespace-nowrap" data-lens-right-flush>
-            {spoken
-              ? open
-                ? spoken.moneyOnly
-                : spoken.rightFlush
-              : open
-                ? line1.moneyOnly
-                : line1.rightFlush}
+          <span className="shrink-0" data-lens-right-flush>
+            {open
+              ? rightSlot.moneyOnly
+              : // D-B38 at 390 — line 1 prints the same words pinned as at
+                // rest, so it holds the same rows and line 2 keeps its y.
+                // The dated half (`INSTALL …`, `SENT …`) is what wrapped it
+                // to a second row; at the phone's measure it yields, and the
+                // figure stays (U-Q19: only NEXT takes a second line). Both
+                // voices: the stage-guide line (no NEXT) pins the same way.
+                rightSlot.rightFlush &&
+                (rightSlot.rightFlush === rightSlot.moneyOnly ? (
+                  rightSlot.rightFlush
+                ) : (
+                  <>
+                    <span className="max-[599px]:hidden" data-lens-right-flush-wide>
+                      {rightSlot.rightFlush}
+                    </span>
+                    {rightSlot.moneyOnly && (
+                      <span className="hidden max-[599px]:inline">{rightSlot.moneyOnly}</span>
+                    )}
+                  </>
+                ))}
           </span>
         </p>
 
@@ -411,7 +432,12 @@ export function LensBand({
             data-lens-sentence-rung={rung.form === 'sentence' ? rung.alone : undefined}
             aria-live="polite"
             aria-atomic="true"
-            className={`flex items-center gap-2 whitespace-nowrap text-[15px] leading-[1.3] ${
+            // While a rung is on trial the line holds to one row, so the
+            // sentence (not the act) is what the measure sees overflow; the
+            // last rung wraps (U-Q19).
+            className={`flex items-center gap-x-2 gap-y-1 text-[15px] leading-[1.3] ${
+              dropped < lastRung ? 'flex-nowrap' : 'flex-wrap'
+            } ${
               nextIsException
                 ? 'text-[var(--color-terracotta-ink)]'
                 : 'text-[var(--text-primary)]'
@@ -436,7 +462,9 @@ export function LensBand({
                   ? spoken.next.sentence
                   : undefined
               }
-              className={`min-w-0 ease-[var(--ease-editorial)] transition-opacity motion-reduce:transition-none ${LINE_CLIP} ${
+              className={`min-w-0 ease-[var(--ease-editorial)] transition-opacity motion-reduce:transition-none ${
+                dropped < lastRung ? RUNG_TRIAL : `${LINE_WRAP} max-[599px]:basis-full`
+              } ${
                 voiceTurning
                   ? 'opacity-0 duration-[90ms]'
                   : 'opacity-100 duration-[150ms]'
@@ -455,7 +483,12 @@ export function LensBand({
                 // no room for (D3, R141).
                 variant="primary"
                 data-part="act"
-                className="my-[-12px] shrink-0"
+                // U-Q19 — at 390 the last rung's act takes its own 44px row
+                // under the wrapped sentence, so its box is not inset into the
+                // line. A rung on trial keeps the inset: it shares the one row.
+                className={`my-[-12px] shrink-0 ${
+                  dropped < lastRung ? '' : 'max-[599px]:my-0'
+                }`}
                 disabled={spoken.next.act.disabled}
                 onClick={() => {
                   onActed?.();
@@ -479,7 +512,7 @@ export function LensBand({
                 // D2 — `All open · 3`, the word and the count, in her words:
                 // not caps, never a kind summary. F2-22 — terracotta only for
                 // money or a signature behind it, clay otherwise.
-                className={`ml-auto shrink-0 whitespace-nowrap font-mono text-[11px] tracking-[0.04em] underline underline-offset-[3px] ${
+                className={`ml-auto shrink-0 font-mono text-[11px] tracking-[0.04em] underline underline-offset-[3px] ${
                   door.doorClassOne
                     ? 'text-[var(--color-terracotta-ink)]'
                     : 'text-[var(--color-clay-ink)]'
@@ -499,7 +532,7 @@ export function LensBand({
           data-lens-line2-form={printed.form}
           aria-live="polite"
           aria-atomic="true"
-          className={`flex items-center gap-2 whitespace-nowrap text-[16px] leading-[1.3] ${
+          className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-[16px] leading-[1.3] ${
             standing
               ? 'text-[var(--color-terracotta-ink)]'
               : 'text-[var(--text-primary)]'
@@ -515,7 +548,7 @@ export function LensBand({
             data-arr-long={
               printed.sentence && printed.form === 'short' ? printed.long.sentence : undefined
             }
-            className={`min-w-0 ease-[var(--ease-editorial)] transition-opacity motion-reduce:transition-none ${LINE_CLIP} ${
+            className={`min-w-0 ease-[var(--ease-editorial)] transition-opacity motion-reduce:transition-none ${LINE_WRAP} ${
               turning
                 ? 'opacity-0 duration-[90ms]'
                 : 'opacity-100 duration-[150ms]'
@@ -556,7 +589,7 @@ export function LensBand({
               // D1 — the door is painted in the register of what it holds: an
               // open input is not an exception, so a door over inputs alone is
               // clay, and terracotta returns the moment one of them is.
-              className={`shrink-0 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.08em] underline underline-offset-[3px] ${
+              className={`shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] underline underline-offset-[3px] ${
                 printed.withheldHasException
                   ? 'text-[var(--color-terracotta-ink)]'
                   : 'text-[var(--color-clay-ink)]'

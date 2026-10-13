@@ -55,46 +55,44 @@ export function openKeys(source: KeysOpenSource = 'palette'): void {
   );
 }
 
-/** One key cap. DM Mono, pearl rule, no fill and no shadow — the same ink the
- *  ⌘K rows already wear for their chord chips. */
-function Cap({ children }: { children: React.ReactNode }) {
-  return (
-    <kbd className="inline-flex min-w-[22px] items-center justify-center rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
-      {children}
-    </kbd>
-  );
-}
-
 /**
  * The reference itself, frameless — shared by the sheet and the Help Center
  * article so the two can never drift apart.
+ *
+ * US-28 S6 — text rows, not keycap boxes: a group is a head and its rows, and
+ * a key is a word in ink (`.keycap`), never a bordered cap.
  */
 export function KeysReferenceList({ sections }: { sections?: KeysSection[] }) {
   const rendered = sections ?? buildKeysReference();
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-8">
       {rendered.map((section) => (
-        <section key={section.heading} className="space-y-3">
-          <h3 className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            {section.heading}
-          </h3>
-          <dl className="divide-y divide-[var(--color-pearl)] border-t border-[var(--color-pearl)]">
+        <section key={section.heading}>
+          <div className="sec-head">
+            <h3 className="eb">
+              <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+                <path d="M0 2h34M0 6h28M0 10h20" />
+              </svg>
+              <span>{section.heading}</span>
+            </h3>
+          </div>
+          <dl className="rows">
             {section.rows.map((row, index) => (
               <div
                 key={`${section.heading}-${index}`}
-                className="grid grid-cols-[minmax(96px,auto)_1fr] items-baseline gap-x-5 py-2.5"
+                className="grid grid-cols-[minmax(96px,auto)_minmax(0,1fr)] items-baseline gap-x-5 gap-y-1 border-b border-[var(--doc-ink-border)] py-2.5 max-[599px]:grid-cols-1"
               >
-                <dt className="flex flex-wrap items-center gap-1">
+                <dt className="flex flex-wrap items-baseline gap-x-2">
                   {row.keys.map((cap, capIndex) => (
-                    <Cap key={`${cap}-${capIndex}`}>{cap}</Cap>
+                    <kbd key={`${cap}-${capIndex}`} className="keycap">
+                      {cap}
+                    </kbd>
                   ))}
                 </dt>
                 <dd className="min-w-0">
-                  <span className="text-[13px] text-[var(--color-charcoal)]">{row.label}</span>
-                  <span className="block text-[12px] leading-relaxed text-[var(--text-muted)]">
-                    {row.where}
-                  </span>
+                  <span className="t-body-sm text-[var(--text-primary)]">{row.label}</span>
+                  <span className="t-body-sm block text-[var(--text-subtle)]">{row.where}</span>
                 </dd>
               </div>
             ))}
@@ -124,7 +122,7 @@ export function KeysSheet() {
       helpKey={THE_KEYS_SURFACE_KEY}
       kind="keys"
     >
-      <p className="mb-6 font-heading text-[15px] italic leading-relaxed text-[var(--text-muted)]">
+      <p className="mb-6 t-body-sm text-[var(--text-muted)]">
         Every key the studio answers to. Two keys open any room or book; the rest
         are for the work you are already in the middle of.
       </p>

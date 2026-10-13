@@ -5,11 +5,14 @@ import type {
 } from '@patina/types'
 import {
   MOOD_BOARD_BODY_FONT,
-  MOOD_BOARD_DISPLAY_FONT,
   MOOD_BOARD_MONO_FONT,
   MOOD_BOARD_VISUAL,
-  resolveMoodBoardMediaLayout,
-  resolveMoodBoardProductLayout,
+  moodBoardCaptionHeight,
+  moodBoardItemExtent,
+  moodBoardPrintedRect,
+  moodBoardZoneColor,
+  resolveMoodBoardContentBounds,
+  resolveMoodBoardPlate,
 } from './visual-contract'
 
 /** Minimal structural 2D context; implemented by browser and worker canvases. */
@@ -18,6 +21,8 @@ export interface MoodBoardPainterContext {
   strokeStyle: string
   lineWidth: number
   font: string
+  /** Canvas text tracking (e.g. `0.96px`); optional where a context lacks it. */
+  letterSpacing?: string
   textAlign: CanvasTextAlign
   textBaseline: CanvasTextBaseline
   globalAlpha: number
@@ -208,59 +213,257 @@ function drawContainedImage(
   )
 }
 
-function drawPlaceholder(
-  context: MoodBoardPainterContext,
-  rect: BoardRect,
-  label: string,
-) {
-  context.fillStyle = MOOD_BOARD_VISUAL.colors.placeholder
-  context.fillRect(rect.x, rect.y, rect.width, rect.height)
-  context.strokeStyle = MOOD_BOARD_VISUAL.colors.placeholderBorder
-  context.lineWidth = 1
-  context.strokeRect(rect.x, rect.y, rect.width, rect.height)
-  context.fillStyle = MOOD_BOARD_VISUAL.colors.placeholderText
-  context.font = `12px ${MOOD_BOARD_BODY_FONT}`
-  context.textAlign = 'center'
-  context.textBaseline = 'middle'
-  context.fillText(
-    label,
-    rect.x + rect.width / 2,
-    rect.y + rect.height / 2,
-    rect.width - 16,
-  )
-}
-
+/**
+ * Wraps text to `maxWidth` the way the DOM caption does (`overflow-wrap:
+ * anywhere`): on spaces first, and a word too long for a line breaks inside
+ * itself. Never clamps or adds an ellipsis — every line prints.
+ */
 function wrapText(
   context: MoodBoardPainterContext,
   text: string,
   maxWidth: number,
-  maxLines: number,
 ): string[] {
   const words = text.trim().split(/\s+/).filter(Boolean)
   const lines: string[] = []
+  const fits = (value: string) => context.measureText(value).width <= maxWidth
   let current = ''
   for (const word of words) {
     const candidate = current ? `${current} ${word}` : word
-    if (
-      context.measureText(candidate).width <= maxWidth ||
-      current.length === 0
-    ) {
+    if (fits(candidate)) {
       current = candidate
       continue
     }
-    lines.push(current)
-    current = word
-    if (lines.length === maxLines - 1) break
+    if (current) lines.push(current)
+    current = ''
+    let rest = word
+    while (rest.length > 1 && !fits(rest)) {
+      let cut = rest.length - 1
+      while (cut > 1 && !fits(rest.slice(0, cut))) cut -= 1
+      lines.push(rest.slice(0, cut))
+      rest = rest.slice(cut)
+    }
+    current = rest
   }
-  if (current && lines.length < maxLines) lines.push(current)
-  if (
-    lines.length === maxLines &&
-    words.join(' ').length > lines.join(' ').length
-  ) {
-    const last = lines.at(-1) ?? ''
-    lines[lines.length - 1] = `${last.replace(/[.…]+$/, '')}…`
-  }
+  if (current) lines.push(current)
   return lines
+}
+
+function setTracking(context: MoodBoardPainterContext, value: string) {
+  if ('letterSpacing' in context) context.letterSpacing = value
+}
+
+/** The house word: mono, tracked, uppercase (SPEC §S12.2.2). */
+function setWordFont(context: MoodBoardPainterContext) {
+  const { size, letterSpacing } = MOOD_BOARD_VISUAL.word
+  context.font = `${size}px ${MOOD_BOARD_MONO_FONT}`
+  setTracking(context, `${letterSpacing}px`)
+}
+
+/** Lines of text, each vertically centred in its CSS line box. */
+function fillLines(
+  context: MoodBoardPainterContext,
+  lines: readonly string[],
+  x: number,
+  top: number,
+  lineHeight: number,
+) {
+  context.textBaseline = 'middle'
+  lines.forEach((line, index) =>
+    context.fillText(line, x, top + index * lineHeight + lineHeight / 2),
+  )
+}
+
+/** The plate's 1px card edge, drawn inside its box like a CSS border. */
+function strokePlate(context: MoodBoardPainterContext, plate: BoardRect) {
+  if (plate.width < 1 || plate.height < 1) return
+  context.lineWidth = 1
+  strokeRoundedRect(
+    context,
+    {
+      x: plate.x + 0.5,
+      y: plate.y + 0.5,
+      width: plate.width - 1,
+      height: plate.height - 1,
+    },
+    MOOD_BOARD_VISUAL.plateRadius,
+    MOOD_BOARD_VISUAL.colors.cardEdge,
+  )
+}
+
+/** Inside the 1px edge: where a photo or swatches sit. */
+function plateMedia(plate: BoardRect): BoardRect {
+  return {
+    x: plate.x + 1,
+    y: plate.y + 1,
+    width: Math.max(0, plate.width - 2),
+    height: Math.max(0, plate.height - 2),
+  }
+}
+
+/**
+ * Paints a plate: the board stock, then its contents clipped to the rounded
+ * edge, then the edge itself. Nothing paints when the caption took it all.
+ */
+function drawPlate(
+  context: MoodBoardPainterContext,
+  plate: BoardRect,
+  paintContents: () => void,
+) {
+  if (plate.width < 1 || plate.height < 1) return
+  fillRoundedRect(
+    context,
+    plate,
+    MOOD_BOARD_VISUAL.plateRadius,
+    MOOD_BOARD_VISUAL.colors.plate,
+  )
+  context.save()
+  roundedRectPath(
+    context,
+    plate.x,
+    plate.y,
+    plate.width,
+    plate.height,
+    MOOD_BOARD_VISUAL.plateRadius,
+  )
+  context.clip()
+  paintContents()
+  context.restore()
+  strokePlate(context, plate)
+}
+
+/** A word printed in an empty plate ("No image"), centred and wrapping. */
+function drawPlateWord(
+  context: MoodBoardPainterContext,
+  plate: BoardRect,
+  word: string,
+) {
+  const padding = MOOD_BOARD_VISUAL.plateWordPadding
+  const { line } = MOOD_BOARD_VISUAL.word
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.subtle
+  context.font = `${MOOD_BOARD_VISUAL.word.size}px ${MOOD_BOARD_MONO_FONT}`
+  setTracking(context, '0px')
+  context.textAlign = 'center'
+  const lines = wrapText(context, word, Math.max(1, plate.width - padding * 2))
+  const top = plate.y + (plate.height - lines.length * line) / 2
+  fillLines(context, lines, plate.x + plate.width / 2, top, line)
+}
+
+interface CaptionLines {
+  name: string[]
+  meta: string[]
+}
+
+/** Wraps a caption to the item's width; the plate takes what is left. */
+function measureCaption(
+  context: MoodBoardPainterContext,
+  width: number,
+  name: string | null,
+  meta: readonly string[],
+): CaptionLines {
+  const { nameSize, metaSize } = MOOD_BOARD_VISUAL.caption
+  setTracking(context, '0px')
+  context.font = `${nameSize}px ${MOOD_BOARD_BODY_FONT}`
+  const nameLines = name ? wrapText(context, name, width) : []
+  context.font = `${metaSize}px ${MOOD_BOARD_MONO_FONT}`
+  const metaLines = meta.flatMap((line) => wrapText(context, line, width))
+  return { name: nameLines, meta: metaLines }
+}
+
+function drawCaption(
+  context: MoodBoardPainterContext,
+  lines: CaptionLines,
+  top: number,
+) {
+  const { nameSize, nameLine, metaSize, metaLine } = MOOD_BOARD_VISUAL.caption
+  setTracking(context, '0px')
+  context.textAlign = 'left'
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.text
+  context.font = `${nameSize}px ${MOOD_BOARD_BODY_FONT}`
+  fillLines(context, lines.name, 0, top, nameLine)
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.subtle
+  context.font = `${metaSize}px ${MOOD_BOARD_MONO_FONT}`
+  fillLines(context, lines.meta, 0, top + lines.name.length * nameLine, metaLine)
+}
+
+/**
+ * The shared plate-and-caption item: wraps the caption first, gives the plate
+ * the rest of the box, paints the plate, then prints the caption whole.
+ */
+function drawPlateAndCaption(
+  context: MoodBoardPainterContext,
+  item: BoardItemGeometrySnapshot,
+  caption: { name: string | null; meta: readonly string[] },
+  paintContents: (media: BoardRect, plate: BoardRect) => void,
+) {
+  const lines = measureCaption(context, item.width, caption.name, caption.meta)
+  const { plate, captionTop } = resolveMoodBoardPlate(
+    item.width,
+    item.height,
+    moodBoardCaptionHeight(lines.name.length, lines.meta.length),
+  )
+  drawPlate(context, plate, () => paintContents(plateMedia(plate), plate))
+  drawCaption(context, lines, captionTop)
+}
+
+/**
+ * The caption a plate item prints under its plate, or null for an item with
+ * none (a bare image, a note). Product: the name, then one mono line of facts
+ * (maker · price), then the captured source — provenance prints on every
+ * presentation surface.
+ */
+function itemCaption(
+  item: BoardItemGeometrySnapshot,
+): { name: string | null; meta: string[] } | null {
+  if (item.type === 'product' || item.type === 'capture') {
+    const price = dataNumber(item, 'price_cents')
+    const facts = [
+      dataString(item, 'vendor_name'),
+      price !== null ? formatDollars(price) : null,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    const host = sourceHost(dataString(item, 'source_url'))
+    return {
+      name: dataString(item, 'name') ?? 'Selected piece',
+      meta: [facts, host].filter((line): line is string => Boolean(line)),
+    }
+  }
+  if (item.type === 'palette') return { name: dataString(item, 'name') ?? 'Palette', meta: [] }
+  if (item.type === 'room_scan') return { name: dataString(item, 'name') ?? 'Your space', meta: ['Scan'] }
+  return null
+}
+
+/**
+ * The composition the painter prints: the saved canvas, grown on every side
+ * to hold every caption that ran past its saved box, wrapped with the same
+ * text metrics the paint uses (R13b). Rasters size to this rectangle and move
+ * their origin by its `x`/`y`, so nothing is clipped at any edge.
+ */
+export function measureMoodBoardContentBounds(
+  context: MoodBoardPainterContext,
+  geometry: BoardGeometrySnapshot,
+): BoardRect {
+  return resolveMoodBoardContentBounds(
+    geometry.canvas,
+    geometry.items.map((item) => {
+      const caption = itemCaption(item)
+      if (!caption) return moodBoardPrintedRect(item, item.height)
+      const lines = measureCaption(context, item.width, caption.name, caption.meta)
+      // The plate and caption, turned with the item (drawItem rotates about
+      // the saved box's centre): a rotated caption's corners set the edges.
+      return moodBoardPrintedRect(
+        item,
+        moodBoardItemExtent(
+          item.height,
+          moodBoardCaptionHeight(lines.name.length, lines.meta.length),
+        ),
+      )
+    }),
+  )
+}
+
+function formatDollars(cents: number): string {
+  return `$${Math.round(cents / 100).toLocaleString('en-US')}`
 }
 
 interface ResolvedItemImage {
@@ -354,45 +557,41 @@ function drawSection(
   context: MoodBoardPainterContext,
   section: BoardGeometrySnapshot['sections'][number],
 ) {
-  const color = section.color ?? '#8c8175'
-  context.save()
-  context.globalAlpha = MOOD_BOARD_VISUAL.sectionFillAlpha
-  fillRoundedRect(
-    context,
-    section.bounds,
-    MOOD_BOARD_VISUAL.sectionRadius,
-    color,
-  )
-  context.restore()
+  // A zone is a 1px dashed edge in the designer's colour; no fill and no pill
+  // label. Its word prints in ink inside the edge (SPEC §S12.2.2).
+  const { bounds } = section
   context.lineWidth = 1
   context.setLineDash([...MOOD_BOARD_VISUAL.sectionDash])
   strokeRoundedRect(
     context,
-    section.bounds,
+    {
+      x: bounds.x + 0.5,
+      y: bounds.y + 0.5,
+      width: Math.max(0, bounds.width - 1),
+      height: Math.max(0, bounds.height - 1),
+    },
     MOOD_BOARD_VISUAL.sectionRadius,
-    color,
+    moodBoardZoneColor(section.color),
   )
   context.setLineDash([])
 
-  context.font = `500 11px ${MOOD_BOARD_BODY_FONT}`
-  const labelWidth =
-    context.measureText(section.name).width +
-    MOOD_BOARD_VISUAL.sectionLabelPaddingX * 2
-  const labelRect = {
-    x: section.bounds.x + 8,
-    y: section.bounds.y - MOOD_BOARD_VISUAL.sectionLabelHeight / 2,
-    width: labelWidth,
-    height: MOOD_BOARD_VISUAL.sectionLabelHeight,
-  }
-  fillRoundedRect(context, labelRect, labelRect.height / 2, color)
-  context.fillStyle = '#ffffff'
+  const insetX = MOOD_BOARD_VISUAL.zoneWordInsetX
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.text
   context.textAlign = 'left'
-  context.textBaseline = 'middle'
-  context.fillText(
-    section.name,
-    labelRect.x + MOOD_BOARD_VISUAL.sectionLabelPaddingX,
-    section.bounds.y,
+  setWordFont(context)
+  const lines = wrapText(
+    context,
+    section.name.toUpperCase(),
+    Math.max(1, bounds.width - insetX * 2),
   )
+  fillLines(
+    context,
+    lines,
+    bounds.x + insetX,
+    bounds.y + MOOD_BOARD_VISUAL.zoneWordInsetY,
+    MOOD_BOARD_VISUAL.word.line,
+  )
+  setTracking(context, '0px')
 }
 
 async function drawProduct(
@@ -400,70 +599,14 @@ async function drawProduct(
   item: BoardItemGeometrySnapshot,
   image: MoodBoardResolvedImage | null,
 ) {
-  const layout = resolveMoodBoardProductLayout(item.width, item.height)
-  fillRoundedRect(
+  drawPlateAndCaption(
     context,
-    layout.frame,
-    MOOD_BOARD_VISUAL.pinRadius,
-    MOOD_BOARD_VISUAL.colors.surface,
-  )
-  context.save()
-  roundedRectPath(
-    context,
-    layout.frame.x,
-    layout.frame.y,
-    layout.frame.width,
-    layout.frame.height,
-    MOOD_BOARD_VISUAL.pinRadius,
-  )
-  context.clip()
-  if (image) drawContainedImage(context, image, layout.image)
-  else drawPlaceholder(context, layout.image, itemLabel(item))
-
-  const name = itemLabel(item)
-  context.fillStyle = MOOD_BOARD_VISUAL.colors.text
-  context.font = `12px ${MOOD_BOARD_BODY_FONT}`
-  context.textAlign = 'left'
-  context.textBaseline = 'top'
-  const lines = wrapText(context, name, item.width - 16, 2)
-  lines.forEach((line, index) =>
-    context.fillText(line, 8, layout.nameTop + index * 14),
-  )
-
-  const vendor = dataString(item, 'vendor_name')
-  if (vendor) {
-    context.fillStyle = MOOD_BOARD_VISUAL.colors.muted
-    context.font = `italic 10px ${MOOD_BOARD_BODY_FONT}`
-    context.textBaseline = 'alphabetic'
-    context.fillText(vendor, 8, layout.metaBaseline, item.width - 16)
-  }
-  const price = dataNumber(item, 'price_cents')
-  if (price !== null) {
-    context.fillStyle = MOOD_BOARD_VISUAL.colors.text
-    context.font = `600 11px ${MOOD_BOARD_DISPLAY_FONT}`
-    context.textAlign = 'right'
-    context.textBaseline = 'alphabetic'
-    context.fillText(
-      `$${Math.round(price / 100).toLocaleString('en-US')}`,
-      item.width - 8,
-      layout.metaBaseline,
-    )
-  }
-  const host = sourceHost(dataString(item, 'source_url'))
-  if (host) {
-    context.fillStyle = MOOD_BOARD_VISUAL.colors.muted
-    context.font = `9px ${MOOD_BOARD_MONO_FONT}`
-    context.textAlign = 'left'
-    context.textBaseline = 'alphabetic'
-    context.fillText(host, 8, layout.sourceBaseline, item.width - 16)
-  }
-  context.restore()
-  context.lineWidth = 1
-  strokeRoundedRect(
-    context,
-    layout.frame,
-    MOOD_BOARD_VISUAL.pinRadius,
-    MOOD_BOARD_VISUAL.colors.border,
+    item,
+    itemCaption(item)!,
+    (media, plate) => {
+      if (image) drawContainedImage(context, image, media)
+      else drawPlateWord(context, plate, 'No image')
+    },
   )
 }
 
@@ -480,79 +623,63 @@ function drawPalette(
           typeof (swatch as { hex?: unknown }).hex === 'string',
       )
     : []
-  const layout = resolveMoodBoardMediaLayout(item.width, item.height)
-  fillRoundedRect(
+  drawPlateAndCaption(
     context,
-    layout.frame,
-    MOOD_BOARD_VISUAL.pinRadius,
-    MOOD_BOARD_VISUAL.colors.surface,
-  )
-  if (swatches.length === 0) {
-    context.fillStyle = MOOD_BOARD_VISUAL.colors.placeholder
-    context.fillRect(
-      layout.media.x,
-      layout.media.y,
-      layout.media.width,
-      layout.media.height,
-    )
-  } else {
-    const width = layout.media.width / swatches.length
-    swatches.forEach((swatch, index) => {
-      context.fillStyle = swatch.hex
-      context.fillRect(
-        layout.media.x + index * width,
-        layout.media.y,
-        width + 0.5,
-        layout.media.height,
-      )
-    })
-  }
-  context.fillStyle = MOOD_BOARD_VISUAL.colors.muted
-  context.font = `500 9px ${MOOD_BOARD_DISPLAY_FONT}`
-  context.textAlign = 'left'
-  context.textBaseline = 'middle'
-  context.fillText(
-    itemLabel(item).toUpperCase(),
-    8,
-    layout.labelTop + (item.height - layout.labelTop) / 2,
-    item.width - 16,
-  )
-  context.lineWidth = 1
-  strokeRoundedRect(
-    context,
-    layout.frame,
-    MOOD_BOARD_VISUAL.pinRadius,
-    MOOD_BOARD_VISUAL.colors.border,
+    item,
+    itemCaption(item)!,
+    (media, plate) => {
+      if (swatches.length === 0) {
+        drawPlateWord(context, plate, 'Empty palette')
+        return
+      }
+      const width = media.width / swatches.length
+      swatches.forEach((swatch, index) => {
+        context.fillStyle = swatch.hex
+        context.fillRect(
+          media.x + index * width,
+          media.y,
+          width + 0.5,
+          media.height,
+        )
+      })
+    },
   )
 }
 
+/**
+ * A note is text on the note edge (`--edge-note`): a 2px oak rule down its
+ * left side on the board's own stock — no fill, no box, no shadow. Lines past
+ * the item's height are clipped, as the DOM's `overflow: hidden` clips them.
+ */
 function drawNote(
   context: MoodBoardPainterContext,
   item: BoardItemGeometrySnapshot,
 ) {
-  fillRoundedRect(
-    context,
-    { x: 0, y: 0, width: item.width, height: item.height },
-    MOOD_BOARD_VISUAL.pinRadius,
-    MOOD_BOARD_VISUAL.colors.note,
-  )
-  strokeRoundedRect(
-    context,
-    { x: 0, y: 0, width: item.width, height: item.height },
-    MOOD_BOARD_VISUAL.pinRadius,
-    MOOD_BOARD_VISUAL.colors.noteBorder,
-  )
-  context.fillStyle = MOOD_BOARD_VISUAL.colors.noteText
-  context.font = `13px ${MOOD_BOARD_BODY_FONT}`
+  const { edge, padTop, padLeft, size, line } = MOOD_BOARD_VISUAL.note
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.noteEdge
+  context.fillRect(0, 0, edge, item.height)
+  context.save()
+  context.beginPath()
+  context.moveTo(0, 0)
+  context.lineTo(item.width, 0)
+  context.lineTo(item.width, item.height)
+  context.lineTo(0, item.height)
+  context.closePath()
+  context.clip()
+  context.fillStyle = MOOD_BOARD_VISUAL.colors.muted
+  context.font = `${size}px ${MOOD_BOARD_BODY_FONT}`
+  setTracking(context, '0px')
   context.textAlign = 'left'
-  context.textBaseline = 'top'
-  const lines = wrapText(
-    context,
-    item.content?.trim() || 'Empty note',
-    item.width - 24,
-    12,
-  )
-  lines.forEach((line, index) => context.fillText(line, 12, 12 + index * 18))
+  const text = item.content?.trim() || 'Empty note'
+  const lines = text
+    .split('\n')
+    .flatMap((paragraph) =>
+      paragraph.trim()
+        ? wrapText(context, paragraph, Math.max(1, item.width - edge - padLeft))
+        : [''],
+    )
+  fillLines(context, lines, edge + padLeft, padTop, line)
+  context.restore()
 }
 
 function drawRoomScan(
@@ -560,32 +687,28 @@ function drawRoomScan(
   item: BoardItemGeometrySnapshot,
   image: MoodBoardResolvedImage | null,
 ) {
-  const layout = resolveMoodBoardMediaLayout(item.width, item.height)
-  fillRoundedRect(
+  drawPlateAndCaption(
     context,
-    layout.frame,
-    MOOD_BOARD_VISUAL.pinRadius,
-    MOOD_BOARD_VISUAL.colors.surface,
+    item,
+    itemCaption(item)!,
+    (media, plate) => {
+      if (image) drawContainedImage(context, image, media)
+      else drawPlateWord(context, plate, 'No preview')
+    },
   )
-  if (image) drawContainedImage(context, image, layout.media)
-  else drawPlaceholder(context, layout.media, itemLabel(item))
-  context.fillStyle = MOOD_BOARD_VISUAL.colors.muted
-  context.font = `500 9px ${MOOD_BOARD_DISPLAY_FONT}`
-  context.textAlign = 'left'
-  context.textBaseline = 'middle'
-  context.fillText(
-    itemLabel(item).toUpperCase(),
-    8,
-    layout.labelTop + (item.height - layout.labelTop) / 2,
-    item.width - 16,
-  )
-  context.lineWidth = 1
-  strokeRoundedRect(
-    context,
-    layout.frame,
-    MOOD_BOARD_VISUAL.pinRadius,
-    MOOD_BOARD_VISUAL.colors.border,
-  )
+}
+
+/** A bare image is a plate with no caption; an empty one names itself. */
+function drawImage(
+  context: MoodBoardPainterContext,
+  item: BoardItemGeometrySnapshot,
+  image: MoodBoardResolvedImage | null,
+) {
+  const plate = { x: 0, y: 0, width: item.width, height: item.height }
+  drawPlate(context, plate, () => {
+    if (image) drawContainedImage(context, image, plateMedia(plate))
+    else drawPlateWord(context, plate, dataString(item, 'name')?.trim() || 'Image reference')
+  })
 }
 
 async function drawItem(
@@ -599,30 +722,8 @@ async function drawItem(
   context.translate(-item.width / 2, -item.height / 2)
   if (item.type === 'product' || item.type === 'capture')
     await drawProduct(context, item, image)
-  else if (item.type === 'image') {
-    if (image) {
-      roundedRectPath(
-        context,
-        0,
-        0,
-        item.width,
-        item.height,
-        MOOD_BOARD_VISUAL.pinRadius,
-      )
-      context.clip()
-      drawContainedImage(context, image, {
-        x: 0,
-        y: 0,
-        width: item.width,
-        height: item.height,
-      })
-    } else
-      drawPlaceholder(
-        context,
-        { x: 0, y: 0, width: item.width, height: item.height },
-        itemLabel(item),
-      )
-  } else if (item.type === 'room_scan') drawRoomScan(context, item, image)
+  else if (item.type === 'image') drawImage(context, item, image)
+  else if (item.type === 'room_scan') drawRoomScan(context, item, image)
   else if (item.type === 'palette') drawPalette(context, item)
   else if (item.type === 'note') drawNote(context, item)
   context.restore()

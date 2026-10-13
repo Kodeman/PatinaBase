@@ -1,13 +1,15 @@
 "use client";
 
 /**
- * Shared People Room chrome: the seven stable views, their relationship-index
- * navigation, and the quiet title / empty-state primitives each view uses.
+ * Shared People Room chrome: the seven stable views, the three rooms that hold
+ * the six beside the directory, and the quiet title / empty-state primitives
+ * each view uses.
  * Typography carries the hierarchy; the only pigment is the Strata mark and
  * active state. No shadows, lifts, menu/listbox ARIA, or dashboard furniture.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { PEOPLE_SUB_ROOM_SURFACES } from "@/lib/document/registry";
 import type { PeopleView } from "./types";
 
 export interface PeopleViewOption {
@@ -15,41 +17,55 @@ export interface PeopleViewOption {
   name: string;
 }
 
-export interface PeopleViewGroup {
-  key: "directory" | "relationships" | "practice";
+export type PeopleSubRoomKey = "client-relations" | "studio-marketing" | "the-engine";
+
+export interface PeopleSubRoom {
+  key: PeopleSubRoomKey;
   name: string;
   views: readonly PeopleViewOption[];
 }
 
-/** The seven existing views, regrouped without changing a key or destination. */
-export const PEOPLE_VIEW_GROUPS: readonly PeopleViewGroup[] = [
+function subRoomName(key: PeopleSubRoomKey): string {
+  return PEOPLE_SUB_ROOM_SURFACES.find((s) => s.key === key)?.label ?? key;
+}
+
+/**
+ * US-28 (Kody, 2026-10-13: "match specimen fully") — Studio contacts is the
+ * directory and Inbound only. The six views that stood beside it in the left
+ * index ("IN THIS ROOM") are three rooms of their own, reached from the dock's
+ * More and ⌘K, each at the `?view=` address it always had. The Engine's nudge
+ * always opened the follow-ups queue, so that queue is The Engine's room. No
+ * view key or destination changed.
+ */
+export const PEOPLE_SUB_ROOMS: readonly PeopleSubRoom[] = [
   {
-    key: "directory",
-    name: "Contact directory",
-    views: [{ key: "directory", name: "Directory" }],
-  },
-  {
-    key: "relationships",
-    name: "Client relations",
+    key: "client-relations",
+    name: subRoomName("client-relations"),
     views: [
       { key: "threads", name: "Correspondence" },
-      { key: "nurture", name: "Relationship follow-ups" },
       { key: "reviews", name: "Client reviews" },
     ],
   },
   {
-    key: "practice",
-    name: "Studio marketing",
+    key: "studio-marketing",
+    name: subRoomName("studio-marketing"),
     views: [
       { key: "portfolio", name: "Portfolio" },
       { key: "outreach", name: "Email campaigns" },
       { key: "your-eye", name: "Design profile" },
     ],
   },
+  {
+    key: "the-engine",
+    name: subRoomName("the-engine"),
+    views: [{ key: "nurture", name: "Relationship follow-ups" }],
+  },
 ];
 
-export const PEOPLE_VIEW_KEYS: readonly PeopleView[] =
-  PEOPLE_VIEW_GROUPS.flatMap((group) => group.views.map((view) => view.key));
+export const PEOPLE_VIEW_KEYS: readonly PeopleView[] = [
+  "directory",
+  ...PEOPLE_SUB_ROOMS.flatMap((room) => room.views.map((view) => view.key)),
+];
 
 /** The receiving end of `/people?view=<key>` redirects. */
 export function peopleViewFromParam(raw: string | null): PeopleView | null {
@@ -59,275 +75,64 @@ export function peopleViewFromParam(raw: string | null): PeopleView | null {
     : null;
 }
 
+/** The room a view stands in; the directory stands in none. */
+export function peopleSubRoomOf(view: PeopleView): PeopleSubRoom | null {
+  return (
+    PEOPLE_SUB_ROOMS.find((room) => room.views.some((v) => v.key === view)) ??
+    null
+  );
+}
+
 export interface PeopleEngineNudge {
   count: number;
   name: string;
   since: string;
 }
 
-function viewName(view: PeopleView): string {
-  return (
-    PEOPLE_VIEW_GROUPS.flatMap((group) => group.views).find(
-      (option) => option.key === view,
-    )?.name ?? view
-  );
-}
-
-/** One mark per true group, instead of a decorative mark on every view row. */
-function RelationshipIndexMark() {
-  return (
-    <span
-      aria-hidden
-      className="flex w-[18px] shrink-0 flex-col items-start gap-[2px]"
-    >
-      <i className="block h-[2px] w-[18px] rounded-[1px] bg-[var(--color-clay)]" />
-      <i className="block h-[2px] w-[12px] rounded-[1px] bg-[var(--color-clay)] opacity-60" />
-      <i className="block h-[2px] w-[7px] rounded-[1px] bg-[var(--color-clay)] opacity-30" />
-    </span>
-  );
-}
-
-function ViewGroups({
-  activeView,
-  directoryCount,
-  onSelect,
-  idPrefix,
-}: {
-  activeView: PeopleView | null;
-  directoryCount?: number;
-  onSelect: (view: PeopleView) => void;
-  idPrefix: string;
-}) {
-  return PEOPLE_VIEW_GROUPS.map((group) => {
-    const headingId = `${idPrefix}-${group.key}`;
-    return (
-      <section
-        key={group.key}
-        aria-labelledby={headingId}
-        data-people-view-group={group.key}
-      >
-        <h2
-          id={headingId}
-          className="doc-type-meta mb-2 flex items-center gap-2.5 font-semibold uppercase tracking-[0.12em]"
-        >
-          <RelationshipIndexMark />
-          {group.name}
-        </h2>
-        <ul className="space-y-0.5">
-          {group.views.map((option) => {
-            const active = activeView === option.key;
-            return (
-              <li key={option.key}>
-                <button
-                  type="button"
-                  data-people-view-option={option.key}
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => onSelect(option.key)}
-                  className={`doc-type-control relative flex min-h-11 w-full items-center gap-3 border-l-2 py-2 pl-5 pr-2 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none ${
-                    active
-                      ? "border-[var(--color-clay)] font-semibold text-[var(--text-primary)]"
-                      : "border-transparent text-[var(--color-quiet-ink)] hover:text-[var(--text-primary)]"
-                  }`}
-                >
-                  <span className="min-w-0 flex-1">{option.name}</span>
-                  {option.key === "directory" &&
-                    typeof directoryCount === "number" && (
-                      <span className="doc-type-meta shrink-0 tabular-nums">
-                        {directoryCount}
-                      </span>
-                    )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-    );
-  });
-}
-
-function EngineNudge({
-  nudge,
-  onOpen,
-}: {
-  nudge: PeopleEngineNudge;
-  onOpen: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      data-people-engine-nudge
-      onClick={onOpen}
-      className="group mt-5 flex min-h-11 w-full flex-col justify-center border-t border-[var(--border-subtle)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-    >
-      <span className="doc-type-meta font-semibold uppercase tracking-[0.1em]">
-        {/* US-25 fix-now 9 — no drifting count: the studio surface is never
-            scored. The nudge names the one tie, not a tally. */}
-        The Engine
-      </span>
-      <span className="doc-type-body mt-1 text-[var(--color-quiet-ink)]">
-        <span className="font-heading italic text-[var(--text-primary)]">
-          {nudge.name}
-        </span>{" "}
-        is the strongest dormant tie · {nudge.since}.{" "}
-        <span
-          aria-hidden
-          className="text-[var(--color-quiet-ink)] transition-colors group-hover:text-[var(--color-clay-ink)] motion-reduce:transition-none"
-        >
-          →
-        </span>
-      </span>
-    </button>
-  );
-}
-
-export function PeopleDesktopRail({
-  activeView,
-  directoryCount,
-  nudge,
+/** A room's own views as underline words (the S1 `.filters`), never tabs. */
+export function SubRoomFilters({
+  room,
+  view,
   onSelect,
 }: {
-  activeView: PeopleView | null;
-  directoryCount?: number;
-  nudge: PeopleEngineNudge | null;
+  room: PeopleSubRoom;
+  view: PeopleView;
   onSelect: (view: PeopleView) => void;
 }) {
-  return (
-    <aside
-      data-people-desktop-rail
-      data-people-active-view={activeView ?? "profile"}
-      className="hidden w-[220px] shrink-0 border-r border-[var(--doc-ink-border)]/40 px-4 py-6 min-[1180px]:block"
-    >
-      <p className="doc-type-meta mb-6 uppercase tracking-[0.1em]">
-        In this room
-      </p>
-      <nav aria-label="People views" className="space-y-6">
-        <ViewGroups
-          activeView={activeView}
-          directoryCount={directoryCount}
-          onSelect={onSelect}
-          idPrefix="people-rail-group"
-        />
-      </nav>
-      {nudge && (
-        <EngineNudge nudge={nudge} onOpen={() => onSelect("nurture")} />
-      )}
-    </aside>
-  );
-}
-
-export function PeopleCompactSelector({
-  currentView,
-  profileOpen,
-  directoryCount,
-  nudge,
-  onSelect,
-}: {
-  currentView: PeopleView;
-  profileOpen: boolean;
-  directoryCount?: number;
-  nudge: PeopleEngineNudge | null;
-  onSelect: (view: PeopleView) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelId = "people-view-selector-panel";
-  const currentLabel = profileOpen ? "Person profile" : viewName(currentView);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const onOutsidePointer = (event: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-    const onEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-
-    document.addEventListener("pointerdown", onOutsidePointer, true);
-    window.addEventListener("keydown", onEscape, true);
-    return () => {
-      document.removeEventListener("pointerdown", onOutsidePointer, true);
-      window.removeEventListener("keydown", onEscape, true);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    const desktop = window.matchMedia("(min-width: 1180px)");
-    const closeAtDesktop = (event: MediaQueryListEvent) => {
-      if (event.matches) setOpen(false);
-    };
-    desktop.addEventListener("change", closeAtDesktop);
-    return () => desktop.removeEventListener("change", closeAtDesktop);
-  }, []);
-
-  const selectView = (next: PeopleView) => {
-    onSelect(next);
-    setOpen(false);
-    triggerRef.current?.focus();
-  };
-
+  if (room.views.length < 2) return null;
   return (
     <div
-      ref={rootRef}
-      data-people-compact-selector
-      data-people-current-view={profileOpen ? "profile" : currentView}
-      className="mx-auto w-full max-w-[1296px] px-4 pt-4 sm:px-6 min-[1180px]:hidden"
+      role="group"
+      aria-label={`${room.name} views`}
+      data-people-sub-room-filters={room.key}
+      className="filters people-filter-line"
     >
-      <button
-        ref={triggerRef}
-        type="button"
-        data-people-selector-trigger
-        aria-expanded={open}
-        aria-controls={panelId}
-        aria-label={`Choose People view. Current view: ${currentLabel}`}
-        onClick={() => setOpen((value) => !value)}
-        className="flex min-h-11 w-full items-center justify-between gap-4 border-y border-[var(--border-subtle)] py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-      >
-        <span className="min-w-0">
-          <span className="doc-type-meta block uppercase tracking-[0.1em]">
-            Current view
-          </span>
-          <span className="doc-type-control block truncate font-semibold">
-            {currentLabel}
-          </span>
-        </span>
-        <span className="doc-type-meta shrink-0 uppercase tracking-[0.08em]">
-          {open ? "Close" : "Change"}{" "}
-          <span aria-hidden>{open ? "↑" : "↓"}</span>
-        </span>
-      </button>
-
-      <nav
-        id={panelId}
-        hidden={!open}
-        data-people-selector-panel
-        aria-label="Choose a People view"
-        className="space-y-6 border-b border-[var(--border-subtle)] py-5"
-      >
-        <ViewGroups
-          activeView={profileOpen ? null : currentView}
-          directoryCount={directoryCount}
-          onSelect={selectView}
-          idPrefix="people-selector-group"
-        />
-      </nav>
-
-      {nudge && (
-        <EngineNudge nudge={nudge} onOpen={() => selectView("nurture")} />
-      )}
+      {room.views.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          aria-pressed={view === option.key}
+          data-people-view-option={option.key}
+          onClick={() => onSelect(option.key)}
+        >
+          {option.name}
+        </button>
+      ))}
     </div>
   );
 }
 
+/** The Engine's one line: the strongest dormant tie, never a tally. */
+export function EngineNudgeLine({ nudge }: { nudge: PeopleEngineNudge }) {
+  return (
+    <p data-people-engine-nudge className="t-body people-engine-line">
+      <span className="font-heading italic text-[var(--text-primary)]">
+        {nudge.name}
+      </span>{" "}
+      is the strongest dormant tie · {nudge.since}.
+    </p>
+  );
+}
 export function ViewHeader({ title, sub }: { title: string; sub?: string }) {
   return (
     <div className="mb-5">

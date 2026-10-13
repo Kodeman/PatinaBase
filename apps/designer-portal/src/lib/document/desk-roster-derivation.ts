@@ -25,7 +25,17 @@ import {
   type NeedLine,
   type SectionKey,
 } from './desk-derivation';
-import { STAGE_WORD, householdDisplayName, ownAct, type OwnActFacts } from './act-names';
+import { STAGE_WORD, ownAct, type OwnActFacts } from './act-names';
+import type {
+  DaySheet,
+  DaySheetSetAside,
+  DaySheetWaiting,
+  DeskStanding,
+  SheetCard,
+  SheetEntry,
+  SheetSettled,
+} from './day-sheet';
+import { clientOf, deskJobName } from './desk-job-name';
 import { dayMonth, legalDate, parseSourceDate } from './dates';
 import { voiceFirstName } from './document-guide';
 import { classOfNeed, deskLeadNeed } from './need-class';
@@ -34,6 +44,7 @@ import {
   custodyFor,
   deskDesignersOf,
   isMyJob,
+  type DeskHolder,
   type DeskLeads,
   type DeskScope,
 } from './desk-scope';
@@ -84,12 +95,6 @@ const URGENT_NEED_KINDS: ReadonlySet<NeedKind> = new Set([
   'proposal_expired',
   'schedule_conflict',
 ]);
-
-/** The view's own "we don't know the client" fallbacks (desk-derivation's
- *  ROLE_NOUNS, which it keeps module-private). Read off the LAST word, exactly
- *  as `folderTab` reads it: the seed's placeholder is `Client User`, and a
- *  whole-string test lets it through as if it were a family name. */
-const PLACEHOLDER_CLIENT_NAMES: ReadonlySet<string> = new Set(['client', 'user']);
 
 const QUIET_STATE = 'No current alert';
 
@@ -227,33 +232,21 @@ function prettyPhase(phase: string | null): string | null {
     .join(' ');
 }
 
-/** Who the job is for. M1 draws a PLACE here; `document_state` carries no
- *  location column, so the client's name stands in its position — the nearest
- *  true thing, and never a role noun standing in for a name we do not have. */
-function clientOf(row: DocumentStateRow, voice = false): string | null {
-  // FR3 F3-13 (`one-voice`) — the seed's ` (no-login household)` never prints.
-  const name = (voice ? householdDisplayName(row.client_name) : (row.client_name ?? '')).trim();
-  if (!name) return null;
-  const last = name.split(/\s+/).filter(Boolean).pop() ?? '';
-  return PLACEHOLDER_CLIENT_NAMES.has(last.toLowerCase()) ? null : name;
-}
 
 const CUSTODY_YOUR_PEN = 'Action with you';
 const CUSTODY_AT_REST = 'No current alert';
 
-/** D6 — whose hand the job is in, named from the current lead and need owner. */
+/** D6 — whose hand the job is in, named from the current lead; once the
+ *  studio acted, who it waits on (US-28 change 5: the need's owner is the
+ *  sentence's subject only). */
 export function custodyWord(
   need: NeedLine | null,
   row: DocumentStateRow,
   leads: DeskLeads = new Map(),
   meUserId?: string | null,
+  awaiting?: string | null,
 ): string {
-  return custodyFor(
-    need ? { ...need, clientName: clientOf(row) } : null,
-    leads,
-    meUserId,
-    row.project_id ?? row.engagement_id,
-  );
+  return custodyFor(need, leads, meUserId, row.project_id ?? row.engagement_id, awaiting);
 }
 
 /**
@@ -481,125 +474,13 @@ export function deriveDeskRoster(
   );
 
   const voice = input.oneVoice === true;
-  // Fix-now 6: "at rest" is a claim about every feed, so it is sayable only
-  // when every feed answered; otherwise the quiet line names what went unread.
   const unreadFeeds = [...(input.unreadFeeds ?? [])];
-  const notChecked = unreadFeeds.length > 0 ? `Not checked: ${unreadFeeds.join(', ')}.` : null;
+  const notChecked = notCheckedOf(unreadFeeds);
+  const ctx: LineContext = { voice, now, notChecked, leads, meUserId };
   const entries: RosterEntry[] = rosterLive.map((row) => {
     const folder = folderByEngagement.get(row.engagement_id) ?? null;
     const chip = deskMotion(chipByEngagement.get(row.engagement_id) ?? null, voice);
-    // FR3 F3-4 (`one-voice`) — the line leads with the band's Next, so a setup
-    // row never outranks a need that blocks money or needs her. FR4 ruling 521
-    // (b) — setup never leads a card at all: a folder whose only needs are
-    // setup (D2/D10 class 3) prints at rest with `Open the job`.
-    const need = folder
-      ? voice
-        ? deskLeadNeed(
-            (folder.needs ?? [folder.need]).filter((n) => classOfNeed(n.kind) !== 3),
-            now,
-          )
-        : folder.need
-      : null;
-    const needText = need ? deskNeedText(need, voice) : null;
-    const actionLabel = need
-      ? voice
-        ? voicedActLabel(need, row)
-        : deskActionLabel(need, false)
-      : null;
-    const overdue = need ? deriveOverdue(need.dueOn, now) : NOT_OVERDUE;
-    // EVERY need is a mark (§2.1). A need with no due date is still a need —
-    // a damage claim, a flagged line, a PO nobody answered — and leaving those
-    // unmarked printed a roster where a studio's whole open workload was
-    // invisible at the margin.
-    const mark: RosterMark = !need
-      ? null
-      : overdue.isOverdue || URGENT_NEED_KINDS.has(need.kind)
-        ? 'urgent'
-        : 'quiet';
-
-    // A paused job says so. `deriveNeeds` returns nothing for one, so without
-    // this it read `quiet · nothing needs your hand` — the same sentence a job
-    // in motion prints, while the document's own guide says it is paused.
-    const body = row.is_paused
-      ? PAUSED_STATE
-      : overdue.isOverdue
-        ? null
-        : (needText ?? chip?.text ?? (notChecked ? notChecked.toLowerCase().replace(/\.$/, '') : QUIET_STATE));
-    const lineNotChecked = !need && !row.is_paused ? notChecked : null;
-    // FR3 F3-12 (`one-voice`) — a workflow word never prints as the card's
-    // stage word: where the phase printed (`Installation`), the stage's own
-    // word does (`Install`). Label only; a phase-less card stays phase-less.
-    const phaseWord =
-      voice && row.current_phase
-        ? STAGE_WORD[row.active_section]
-        : prettyPhase(row.current_phase);
-    const client = clientOf(row, voice);
-    const state = [client, phaseWord, body]
-      .filter((part): part is string => Boolean(part))
-      .join(' · ');
-
-    const sameAsName =
-      !!client &&
-      client.trim().toLowerCase() === (row.title ?? '').trim().toLowerCase();
-    const personLine = [sameAsName ? null : client, phaseWord]
-      .filter((part): part is string => Boolean(part))
-      .join(' · ');
-
-    const jobHref = `/doc/${row.engagement_id}`;
-    const act: RosterAct =
-      need && actionLabel != null
-        ? {
-            label: actionLabel,
-            href: need.deepLink ?? jobHref,
-            ...(need.ledger ? { ledger: need.ledger } : {}),
-          }
-        : { label: OPEN_THE_JOB, href: chip?.href ?? jobHref };
-
-    return {
-      line: {
-        engagementId: row.engagement_id,
-        name: row.title,
-        stage: row.active_section,
-        designerId: row.designer_id,
-        state,
-        personLine,
-        overdueText:
-          overdue.isOverdue && need
-            ? `Overdue ${overdueElapsedPhrase(overdue)} — ${needText}`
-            : null,
-        mark,
-        needKind: need?.kind ?? null,
-        needKey: need?.key ?? null,
-        overdue,
-        jobHref,
-        act,
-        projectId: row.project_id ?? null,
-        client,
-        dueOn: need?.dueOn ?? null,
-        needText,
-        custody: lineNotChecked
-          ? CUSTODY_NOT_CHECKED
-          : custodyWord(need, row, leads, meUserId),
-        needOwner: need?.owner ?? null,
-        needAt: need?.at ?? null,
-        // The need's own date first — a deadline outranks a provenance stamp.
-        valueText:
-          ledgerValueDate(need?.dueOn ?? null, now) ??
-          ledgerValueDate(motionAnchorDate(chip), now),
-        motionText: chip?.text ?? null,
-        notChecked: lineNotChecked,
-      },
-      stage: row.active_section,
-      tab: folderTab(row),
-      tier: overdue.isOverdue ? 0 : 1,
-      // ONE clock per tier. An overdue job is ordered by the promise it broke;
-      // every other job by when it was last touched. Mixing the two compared a
-      // future due date against a past timestamp, so a job with a real need due
-      // in December sorted behind a quiet one last touched in August.
-      at: overdue.isOverdue
-        ? anchorTime(need?.dueOn)
-        : anchorTime(row.updated_at),
-    };
+    return rosterEntryOn(row, folderHeadNeed(folder, voice, now), chip, ctx);
   });
 
   const groups: RosterGroup[] = [];
@@ -647,6 +528,151 @@ export function deriveDeskRoster(
   };
 }
 
+/** Fix-now 6: "at rest" is a claim about every feed, so it is sayable only
+ *  when every feed answered; otherwise the quiet line names what went unread. */
+function notCheckedOf(unreadFeeds: readonly string[]): string | null {
+  return unreadFeeds.length > 0 ? `Not checked: ${unreadFeeds.join(', ')}.` : null;
+}
+
+/** What a roster line reads besides its row, its need and its motion. */
+interface LineContext {
+  voice: boolean;
+  now: Date;
+  notChecked: string | null;
+  leads: DeskLeads;
+  meUserId: string | null | undefined;
+}
+
+/**
+ * The need a folder's line leads with. FR3 F3-4 (`one-voice`) — the band's
+ * Next, so a setup row never outranks a need that blocks money or needs her.
+ * FR4 ruling 521 (b) — setup never leads a card at all: a folder whose only
+ * needs are setup (D2/D10 class 3) prints at rest with `Open the job`.
+ */
+function folderHeadNeed(folder: DeskFolder | null, voice: boolean, now: Date): NeedLine | null {
+  if (!folder) return null;
+  if (!voice) return folder.need;
+  return (
+    deskLeadNeed(
+      (folder.needs ?? [folder.need]).filter((n) => classOfNeed(n.kind) !== 3),
+      now,
+    ) ?? null
+  );
+}
+
+/** One job's line, read on the need it leads with. `awaiting` names who the
+ *  studio waits on once it acted (US-28 change 5). */
+function rosterEntryOn(
+  row: DocumentStateRow,
+  need: NeedLine | null,
+  chip: MotionChip | null,
+  ctx: LineContext,
+  awaiting?: string | null,
+): RosterEntry {
+  const { voice, now, notChecked, leads, meUserId } = ctx;
+  const needText = need ? deskNeedText(need, voice) : null;
+  const actionLabel = need
+    ? voice
+      ? voicedActLabel(need, row)
+      : deskActionLabel(need, false)
+    : null;
+  const overdue = need ? deriveOverdue(need.dueOn, now) : NOT_OVERDUE;
+  // EVERY need is a mark (§2.1). A need with no due date is still a need —
+  // a damage claim, a flagged line, a PO nobody answered — and leaving those
+  // unmarked printed a roster where a studio's whole open workload was
+  // invisible at the margin.
+  const mark: RosterMark = !need
+    ? null
+    : overdue.isOverdue || URGENT_NEED_KINDS.has(need.kind)
+      ? 'urgent'
+      : 'quiet';
+
+  // A paused job says so. `deriveNeeds` returns nothing for one, so without
+  // this it read `quiet · nothing needs your hand` — the same sentence a job
+  // in motion prints, while the document's own guide says it is paused.
+  const body = row.is_paused
+    ? PAUSED_STATE
+    : overdue.isOverdue
+      ? null
+      : (needText ?? chip?.text ?? (notChecked ? notChecked.toLowerCase().replace(/\.$/, '') : QUIET_STATE));
+  const lineNotChecked = !need && !row.is_paused ? notChecked : null;
+  // FR3 F3-12 (`one-voice`) — a workflow word never prints as the card's
+  // stage word: where the phase printed (`Installation`), the stage's own
+  // word does (`Install`). Label only; a phase-less card stays phase-less.
+  const phaseWord =
+    voice && row.current_phase
+      ? STAGE_WORD[row.active_section]
+      : prettyPhase(row.current_phase);
+  const client = clientOf(row, voice);
+  const state = [client, phaseWord, body]
+    .filter((part): part is string => Boolean(part))
+    .join(' · ');
+
+  // F7 — a lead's name IS its person, so the person line never repeats it.
+  const name = deskJobName(row);
+  const sameAsName =
+    !!client && client.trim().toLowerCase() === name.trim().toLowerCase();
+  const personLine = [sameAsName ? null : client, phaseWord]
+    .filter((part): part is string => Boolean(part))
+    .join(' · ');
+
+  const jobHref = `/doc/${row.engagement_id}`;
+  const act: RosterAct =
+    need && actionLabel != null
+      ? {
+          label: actionLabel,
+          href: need.deepLink ?? jobHref,
+          ...(need.ledger ? { ledger: need.ledger } : {}),
+        }
+      : { label: OPEN_THE_JOB, href: chip?.href ?? jobHref };
+
+  return {
+    line: {
+      engagementId: row.engagement_id,
+      name,
+      stage: row.active_section,
+      designerId: row.designer_id,
+      state,
+      personLine,
+      overdueText:
+        overdue.isOverdue && need
+          ? `Overdue ${overdueElapsedPhrase(overdue)} — ${needText}`
+          : null,
+      mark,
+      needKind: need?.kind ?? null,
+      needKey: need?.key ?? null,
+      overdue,
+      jobHref,
+      act,
+      projectId: row.project_id ?? null,
+      client,
+      dueOn: need?.dueOn ?? null,
+      needText,
+      custody: lineNotChecked
+        ? CUSTODY_NOT_CHECKED
+        : custodyWord(need, row, leads, meUserId, awaiting),
+      needOwner: need?.owner ?? null,
+      needAt: need?.at ?? null,
+      // The need's own date first — a deadline outranks a provenance stamp.
+      valueText:
+        ledgerValueDate(need?.dueOn ?? null, now) ??
+        ledgerValueDate(motionAnchorDate(chip), now),
+      motionText: chip?.text ?? null,
+      notChecked: lineNotChecked,
+    },
+    stage: row.active_section,
+    tab: folderTab(row),
+    tier: overdue.isOverdue ? 0 : 1,
+    // ONE clock per tier. An overdue job is ordered by the promise it broke;
+    // every other job by when it was last touched. Mixing the two compared a
+    // future due date against a past timestamp, so a job with a real need due
+    // in December sorted behind a quiet one last touched in August.
+    at: overdue.isOverdue
+      ? anchorTime(need?.dueOn)
+      : anchorTime(row.updated_at),
+  };
+}
+
 
 /** A note this studio's client answered — `project_notes.answered_at`
  *  (00565). Read only by `use-answered-notes.ts`, whose Desk consumer (the
@@ -659,156 +685,229 @@ export interface AnsweredClientNote {
 /** "Replied last night" is only true inside a day. */
 export const ANSWERED_NOTE_WINDOW_MS = 86_400_000;
 
-/* ── The claims split (D5, D3, D8) ──────────────────────────────────────────
+/* ── The ledger (US-28 changes 2 and 5) ─────────────────────────────────────
  *
- * R143: one line per job in the at-rest ledger; a job with a claim on the
- * studio's hand takes a Claim card. The predicate is the mark the roster
- * already draws — `mark !== null`, every job carrying a need — so the split
- * reads the same fact the margin does rather than deriving a second one.
+ * Below Today, every job of the scope Today does not hold, grouped by where it
+ * stands on the one ranked list: Also yours · With others · Coming back · No
+ * current alert. Each row prints the job's line from that same list, so Today
+ * and the ledger never name two different needs for one job.
  * ─────────────────────────────────────────────────────────────────────────── */
 
-export interface ClaimCard {
+export type DeskLedgerGroupKey = 'yours' | 'others' | 'back' | 'rest';
+
+export interface DeskLedgerLine {
+  /** The job's line, read on the need the one ranked list gives it. */
   line: RosterLine;
-  stage: SectionKey;
-  stageLabel: string;
-  custody: string;
+  standing: DeskStanding;
+  /** How that need settled today: the row prints muted, in place. */
+  settled: SheetSettled | null;
+  /** `others`, acted on before today: who the studio waits on, since when. */
+  waiting: { who: string; since: string; by?: string } | null;
+  /** `back`: the day it comes back. */
+  back: { until: string; reason: string | null } | null;
 }
 
-export interface DeskClaimsInput {
-  roster: DeskRoster;
+export interface DeskLedgerGroup {
+  key: DeskLedgerGroupKey;
+  /** "Also yours" ("With Jordan" in a teammate's section), "With others",
+   *  "Coming back", "No current alert" (or "Not checked"). Never a count. */
+  label: string;
+  lines: DeskLedgerLine[];
+}
+
+export interface DeskLedgerSection {
+  /** `mine` or `studio`; `person-{id}` where the studio's scope groups by person. */
+  key: string;
+  /** "Leah's" where the studio's scope groups by person; null otherwise. */
+  label: string | null;
+  groups: DeskLedgerGroup[];
+}
+
+export interface DeskLedger {
+  sections: DeskLedgerSection[];
+  notChecked: string | null;
+}
+
+export interface DeskLedgerInput {
+  /** The roster's own input (its scope, leads and seat included): each row is
+   *  read again on the need the one ranked list gives its job. */
+  roster: DeskRosterInput;
+  sheet: Pick<DaySheet, 'lines' | 'alsoYours' | 'waitingOn' | 'setAside' | 'standing'>;
+  /** Today's cards (`groupSheetByJob`). */
+  cards: readonly Pick<SheetCard, 'jobId'>[];
+  /** The studio's members (`deriveRosterPeople`): the studio's scope groups
+   *  by person. */
+  people?: readonly RosterPerson[];
+  /** Who carries each job (`deskHolderOf`); absent, its designer. */
+  holderOf?: (jobId: string) => DeskHolder;
   now: Date;
 }
 
-/** US-25 slice 4 — the line roster's three groups, in this order. */
-export type CustodyGroupKey = 'owed' | 'waiting' | 'rest';
+const LEDGER_GROUP_ORDER: readonly DeskLedgerGroupKey[] = ['yours', 'others', 'back', 'rest'];
 
-export interface CustodyGroup {
-  key: CustodyGroupKey;
-  label: string;
-  lines: RosterLine[];
-}
-
-export interface DeskClaims {
-  cards: ClaimCard[];
-  ledger: RosterGroup[];
-  heading: string;
-  restHeading: string;
-  /** Owed by you · Waiting on others · at rest — empty groups dropped. */
-  groups: CustodyGroup[];
-}
-
-function restHeadingFor(count: number, notChecked: boolean): string {
-  if (count === 0) return '';
-  return `${notChecked ? CUSTODY_NOT_CHECKED : CUSTODY_AT_REST} · ${count} ${count === 1 ? 'job' : 'jobs'}`;
-}
-
-/** The ranked claims split by whose hand the head need is in; the at-rest
- *  half keeps its stage order and takes the honest word (fix-now 6). */
-function custodyGroups(
-  cards: readonly ClaimCard[],
-  ledger: readonly RosterGroup[],
-  notChecked: boolean,
-): CustodyGroup[] {
-  const groups: CustodyGroup[] = [
-    {
-      key: 'owed',
-      label: 'Owed by you',
-      lines: cards.filter((c) => c.line.needOwner === 'designer').map((c) => c.line),
-    },
-    {
-      key: 'waiting',
-      label: 'Waiting on others',
-      lines: cards.filter((c) => c.line.needOwner !== 'designer').map((c) => c.line),
-    },
-    {
-      key: 'rest',
-      label: notChecked ? CUSTODY_NOT_CHECKED : CUSTODY_AT_REST,
-      lines: ledger.flatMap((group) => group.lines),
-    },
-  ];
-  return groups.filter((group) => group.lines.length > 0);
-}
-
-/** N6 — leads stand in the order they wrote in: the lead cards trade places
- *  among their own slots by arrival, so every other card keeps its place. */
-function leadsByArrival(cards: ClaimCard[]): ClaimCard[] {
-  const slots = cards.flatMap((card, i) => (card.line.needKind === 'new_lead' ? [i] : []));
-  const arrival = (card: ClaimCard) =>
-    card.line.needAt ? new Date(card.line.needAt).getTime() : Number.POSITIVE_INFINITY;
-  const leads = slots.map((i) => cards[i]).sort((a, b) => arrival(a) - arrival(b));
-  const out = [...cards];
-  slots.forEach((slot, n) => {
-    out[slot] = leads[n];
-  });
-  return out;
+interface LedgerRow {
+  personId: string | null;
+  group: DeskLedgerGroupKey;
+  /** Rank on the one list (yours), the waiting order (others), the day it
+   *  comes back (back); then the roster's own order. */
+  order: [number, number];
+  ledgerLine: DeskLedgerLine;
 }
 
 /**
- * D5 · D3 · D8 — the Desk in two halves.
- *
- * Takes the roster `deriveDeskRoster` already built rather than rebuilding it,
- * so the head's counts, the stage grouping and every line's own derivation are
- * one computation with one source of truth. The card half is RE-ORDERED (D3:
- * rank, with the reason printed on the card); the ledger half keeps the
- * stage-first order it shipped with, because a ledger has headings to skip and
- * a grid does not.
+ * US-28 change 2 — the ledger replaces the claims split (`custodyGroups`).
+ * R1: a job in Today never appears here, in any scope, and the drop runs
+ * before the studio's scope regroups by person. Change 5: a job is with
+ * others only once the studio owes no act — acted on before today, or no need
+ * on the list but a motion under way. A silent overdue invoice or PO with an
+ * act owed stays yours.
  */
-export function deriveDeskClaims(input: DeskClaimsInput): DeskClaims {
-  const { roster, now } = input;
+export function deriveDeskLedger(input: DeskLedgerInput): DeskLedger {
+  const { roster: rosterInput, sheet, now } = input;
+  const roster = deriveDeskRoster(rosterInput, now);
+  const voice = rosterInput.oneVoice === true;
+  const ctx: LineContext = {
+    voice,
+    now,
+    notChecked: roster.notChecked,
+    leads: rosterInput.leads ?? new Map(),
+    meUserId: rosterInput.meUserId,
+  };
+  const rowByEngagement = new Map(rosterInput.live.map((row) => [row.engagement_id, row]));
+  const chipByEngagement = new Map(
+    rosterInput.chips.map((chip) => [chip.row.engagement_id, chip]),
+  );
+  const inToday = new Set(input.cards.map((card) => card.jobId));
 
-  const cards: ClaimCard[] = [];
-  const ledger: RosterGroup[] = [];
+  // Each job's line on the one list: its first open need, else its first
+  // settled one, at the place its first line holds.
+  const listed = new Map<string, { entry: SheetEntry; rank: number }>();
+  [...sheet.lines, ...sheet.alsoYours].forEach((entry, rank) => {
+    const held = listed.get(entry.projectId);
+    if (!held) listed.set(entry.projectId, { entry, rank });
+    else if (held.entry.settled && !entry.settled) listed.set(entry.projectId, { entry, rank: held.rank });
+  });
+  const waiting = new Map<string, { at: number; item: DaySheetWaiting }>();
+  sheet.waitingOn.forEach((item, at) => {
+    if (!waiting.has(item.need.projectId)) waiting.set(item.need.projectId, { at, item });
+  });
+  const back = new Map<string, DaySheetSetAside>();
+  for (const item of sheet.setAside) {
+    const held = back.get(item.need.projectId);
+    if (!held || item.until < held.until) back.set(item.need.projectId, item);
+  }
 
-  for (const group of roster.groups) {
-    const rest: RosterLine[] = [];
-    for (const line of group.lines) {
-      if (rosterLineNeedsAHand(line)) {
-        cards.push({
-          line,
-          stage: line.stage,
-          stageLabel: STAGE_LABEL[line.stage],
-          custody: line.custody,
-        });
-      } else {
-        rest.push(line);
-      }
-    }
-    if (rest.length > 0) {
-      ledger.push({ ...group, count: rest.length, lines: rest });
+  const rows: LedgerRow[] = [];
+  let position = 0;
+  for (const line of roster.groups.flatMap((group) => group.lines)) {
+    position += 1;
+    const jobId = line.projectId ?? line.engagementId;
+    if (inToday.has(jobId)) continue;
+    const row = rowByEngagement.get(line.engagementId);
+    const chip = deskMotion(chipByEngagement.get(line.engagementId) ?? null, voice);
+    const reline = (need: NeedLine, awaiting?: string) =>
+      row ? rosterEntryOn(row, need, chip, ctx, awaiting).line : line;
+    const standing: DeskStanding =
+      sheet.standing.get(jobId) ?? (line.motionText ? 'others' : 'rest');
+    const personId = input.holderOf?.(jobId).userId ?? line.designerId;
+    const base: DeskLedgerLine = { line, standing, settled: null, waiting: null, back: null };
+
+    const onList = listed.get(jobId);
+    const held = waiting.get(jobId);
+    const comes = back.get(jobId);
+    if ((standing === 'yours' || standing === 'settled') && onList) {
+      rows.push({
+        personId,
+        group: 'yours',
+        order: [onList.rank, position],
+        ledgerLine: {
+          ...base,
+          line: reline(onList.entry.need),
+          settled: onList.entry.settled ?? null,
+        },
+      });
+    } else if (standing === 'back' && comes) {
+      rows.push({
+        personId,
+        group: 'back',
+        order: [Date.parse(`${comes.until.slice(0, 10)}T00:00:00`), position],
+        ledgerLine: {
+          ...base,
+          line: reline(comes.need.need),
+          back: { until: comes.until, reason: comes.reason },
+        },
+      });
+    } else if (standing === 'others') {
+      // Acted on before today, or (no need on the list) a motion under way.
+      const ledgerLine: DeskLedgerLine = held
+        ? {
+            ...base,
+            line: reline(held.item.need.need, held.item.who),
+            waiting: {
+              who: held.item.who,
+              since: held.item.since,
+              ...(held.item.by ? { by: held.item.by } : {}),
+            },
+          }
+        : base;
+      rows.push({
+        personId,
+        group: 'others',
+        order: [held?.at ?? Number.POSITIVE_INFINITY, position],
+        ledgerLine,
+      });
+    } else {
+      rows.push({ personId, group: 'rest', order: [0, position], ledgerLine: base });
     }
   }
 
-  // N2 — the cards stand in the band's Next order of the need each leads
-  // with (class, deadline, age — `rankByNext`), never a second ranking by
-  // owner. Ties keep the name order they are handed in.
-  const byName = leadsByArrival(
-    [...cards].sort((a, b) => a.line.name.localeCompare(b.line.name)),
-  );
-  const ordered = [
-    ...rankByNext(
-      byName.filter((card) => card.line.needKind !== null),
-      ({ line }) => ({
-        kind: line.needKind!,
-        text: line.needText ?? '',
-        dueOn: line.dueOn ?? null,
-        at: line.needAt ?? null,
-      }),
-      now,
-    ),
-    ...byName.filter((card) => card.line.needKind === null),
-  ];
+  const groupsOf = (sectionRows: readonly LedgerRow[], yoursLabel: string): DeskLedgerGroup[] =>
+    LEDGER_GROUP_ORDER.flatMap((key) => {
+      const lines = sectionRows
+        .filter((row) => row.group === key)
+        .sort((a, b) => a.order[0] - b.order[0] || a.order[1] - b.order[1])
+        .map((row) => row.ledgerLine);
+      if (lines.length === 0) return [];
+      const label =
+        key === 'yours'
+          ? yoursLabel
+          : key === 'others'
+            ? 'With others'
+            : key === 'back'
+              ? 'Coming back'
+              : roster.notChecked
+                ? CUSTODY_NOT_CHECKED
+                : CUSTODY_AT_REST;
+      return [{ key, label, lines }];
+    });
 
-  const restCount = ledger.reduce((total, group) => total + group.count, 0);
+  const scope = rosterInput.scope ?? 'studio';
+  const people = input.people ?? [];
+  if (scope === 'mine' || people.length === 0) {
+    const groups = groupsOf(rows, 'Also yours');
+    return {
+      sections: groups.length > 0 ? [{ key: scope, label: null, groups }] : [],
+      notChecked: roster.notChecked,
+    };
+  }
 
-  return {
-    cards: ordered,
-    ledger,
-    heading: roster.heading,
-    restHeading: restHeadingFor(restCount, roster.notChecked != null),
-    groups: custodyGroups(ordered, ledger, roster.notChecked != null),
-  };
+  // The studio's scope regroups by person — after Today's jobs were dropped.
+  // A row whose holder is nobody on the list groups under the principal.
+  const principal = people.find((person) => person.isPrincipal) ?? people[0];
+  const known = new Set(people.map((person) => person.id));
+  const sections = people.flatMap((person): DeskLedgerSection[] => {
+    const own = rows.filter(
+      (row) => (row.personId && known.has(row.personId) ? row.personId : principal.id) === person.id,
+    );
+    const first = firstName(person.name, person.name);
+    const groups = groupsOf(
+      own,
+      person.id === rosterInput.meUserId ? 'Also yours' : `With ${first}`,
+    );
+    return groups.length > 0 ? [{ key: `person-${person.id}`, label: `${first}'s`, groups }] : [];
+  });
+  return { sections, notChecked: roster.notChecked };
 }
-
 
 /* ── The two facets (IA-11 / IA-12) ─────────────────────────────────────────
    Facets, not a density toggle: neither one changes what a row looks like or

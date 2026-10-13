@@ -64,6 +64,7 @@ import { expect, test } from '../fixtures/auth';
 import { seedWorkflowGateFixture } from '../helpers/workflow-gate-fixture';
 import {
   ARRIVAL_PROJECT_ID,
+  ARRIVAL_JOB_ON_DESK,
   armE2EOptIn,
   dwellOnCard,
   installArrivalInstruments,
@@ -78,8 +79,8 @@ const LATENCIES = [0, 150, 350] as const;
 const MODES = ['hard', 'soft'] as const;
 type Mode = (typeof MODES)[number];
 
-/** The job's roster-line name link (desk-ledger-row.tsx `data-roster-name`), never its act. */
-const NAME_LINK = `[data-ledger-row="${ARRIVAL_PROJECT_ID}"] a[data-roster-name]`;
+/** The job's name link on the Desk (`data-roster-name`, a Today card or a ledger row), never its act. */
+const NAME_LINK = `:is(${ARRIVAL_JOB_ON_DESK}) a[data-roster-name]`;
 
 type SurfaceRec = {
   firstSeenAt: number | null;

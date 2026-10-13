@@ -10,18 +10,23 @@
  * Three pages in the R28 grammar — DM-mono links, never tabs: LEDGER (every
  * invoice), RECEIVABLES (A/R aging + the dunning chase, the Desk's act surface),
  * EARNINGS (design fees + commissions).
- * The opening front-matter (I23) states Revenue · A/R · margin. STUDIO EYES
- * ONLY — this book never reaches the client mirror.
+ * The opening front matter states the studio's totals as text (US-28 S8:
+ * "$13,700 is out with clients; $3,800 of it is overdue."), never figure
+ * tiles, and only to a seat that holds the studio's money (V18 Q10). STUDIO
+ * EYES ONLY — this book never reaches the client mirror.
+ *
+ * The Invoice folio opens IN PLACE (V20 U-Q16): it replaces the book inside
+ * this one sheet, with "← Accounts" in its head — never a second dialog
+ * stacked on the first.
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   computeArAging,
   useEarningsStats,
   useInvoices,
 } from '@patina/supabase';
-import { LedgerFrontMatter } from '../ledger-front-matter';
 import { useStudioMargin } from '@/hooks/use-studio-accounts';
 import { useStudioMoney } from '@/hooks/use-studio-money';
 import { mixedCurrenciesText } from '@/lib/currency-totals';
@@ -31,6 +36,7 @@ import type { OpenLedgerContext } from '../command-bar';
 import { AccountsLedgerPage } from './accounts-ledger-page';
 import { AccountsReceivablesPage } from './accounts-receivables-page';
 import { AccountsEarningsPage } from './accounts-earnings-page';
+import { InvoiceFolio } from './invoice-folio';
 import { DocSheetHead } from '../overlays/doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
@@ -76,10 +82,51 @@ export function AccountsBook({
     [invoices, money],
   );
   const visibleAging = useMemo(() => computeArAging(visibleInvoices), [visibleInvoices]);
-  const bookArCents = useMemo(
-    () => computeArAging(bookInvoices).totalBalanceCents,
-    [bookInvoices],
-  );
+  const bookAr = useMemo(() => {
+    const aging = computeArAging(bookInvoices);
+    return {
+      outCents: aging.totalBalanceCents,
+      overdueCents: aging.buckets
+        .filter((b) => b.key !== 'current')
+        .reduce((sum, b) => sum + b.balanceCents, 0),
+    };
+  }, [bookInvoices]);
+
+  // U-Q16 — the folio this sheet is showing in place of the book, if any.
+  const [folioId, setFolioId] = useState<string | null>(null);
+  // The doorway's invoice (/desk?book=accounts&…&invoiceId=) is spent by the
+  // first folio this sheet opens: the ledger remounts on "← Accounts", and
+  // an unspent doorway would swap the folio straight back in.
+  // A new doorway re-arms it; reset during render, not in an effect, which
+  // would run after the ledger's own effect had already spent it.
+  const doorwayProp = initialContext?.invoiceId ?? null;
+  const [doorwayId, setDoorwayId] = useState<string | null>(doorwayProp);
+  const [doorwaySeen, setDoorwaySeen] = useState<string | null>(doorwayProp);
+  if (doorwaySeen !== doorwayProp) {
+    setDoorwaySeen(doorwayProp);
+    setDoorwayId(doorwayProp);
+  }
+  const openFolio = useCallback((invoiceId: string) => {
+    setDoorwayId(null);
+    setFolioId(invoiceId);
+  }, []);
+  const backRef = useRef<HTMLButtonElement>(null);
+  const lastFolioId = useRef<string | null>(null);
+  // Focus follows the swap: onto "← Accounts" when the folio opens, and back
+  // onto the row that opened it when the book returns.
+  useEffect(() => {
+    if (folioId) {
+      lastFolioId.current = folioId;
+      backRef.current?.focus();
+      return;
+    }
+    const returning = lastFolioId.current;
+    if (!returning) return;
+    lastFolioId.current = null;
+    sheetRef.current
+      ?.querySelector<HTMLElement>(`[data-invoice-folio-opener="${CSS.escape(returning)}"]`)
+      ?.focus();
+  }, [folioId]);
 
   // page is a free string on the shared context — narrow it to this book.
   const [page, setPage] = useState<BookPage>(
@@ -94,21 +141,51 @@ export function AccountsBook({
     router.push(`/doc/${projectId}`);
   };
 
-  const stats = !isLoading && canSeeMargin
-    ? [
-        { label: 'revenue', value: fmtUsd(collectedCents(bookInvoices)) },
-        { label: 'A/R', value: fmtUsd(bookArCents) },
-        {
-          label: 'margin',
-          value: margin.data?.mixedCurrencies
-            ? mixedCurrenciesText(margin.data.mixedCurrencies)
-            : margin.data?.marginPct != null
-              ? `${margin.data.marginPct}%`
-              : '—',
-        },
-      ]
-    : [];
+  const marginText = margin.data?.mixedCurrencies
+    ? mixedCurrenciesText(margin.data.mixedCurrencies)
+    : margin.data?.marginPct != null
+      ? `${margin.data.marginPct}%`
+      : null;
   const availablePages = canSeeMargin ? PAGES : PAGES.filter((p) => p.key !== 'earnings');
+
+  if (folioId) {
+    const folioInvoice = (invoices ?? []).find((inv) => inv.id === folioId);
+    return (
+      <div ref={sheetRef} className="mx-auto max-w-3xl" data-accounts-folio={folioId}>
+        <div className="sh-head money-folio-head">
+          <span className="sh-title">
+            <ACCOUNTS_ICON className="sh-ic" strokeWidth={1.2} aria-hidden />
+            <button
+              ref={backRef}
+              type="button"
+              onClick={() => setFolioId(null)}
+              className="money-back"
+            >
+              ← Accounts
+            </button>
+            <span>
+              {folioInvoice?.invoice_number
+                ? folioInvoice.invoice_number
+                : folioInvoice?.status === 'draft'
+                  ? 'Draft invoice'
+                  : 'Invoice'}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Put back · Esc"
+            className="money-back"
+          >
+            Put back · Esc
+          </button>
+        </div>
+        <div className="sh-body">
+          <InvoiceFolio invoiceId={folioId} onOpenDocument={openDocument} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={sheetRef} className="mx-auto max-w-3xl">
@@ -154,7 +231,7 @@ export function AccountsBook({
             type="button"
             onClick={() => setPage(p.key)}
             aria-current={page === p.key ? 'page' : undefined}
-            className={`font-mono text-[11px] uppercase tracking-[0.08em] transition-colors ${
+            className={`inline-flex min-h-11 items-center font-mono text-[11px] uppercase tracking-[0.08em] transition-colors ${
               page === p.key
                 ? 'text-[var(--color-clay-ink)]'
                 : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -177,21 +254,55 @@ export function AccountsBook({
         <SectionLoadingLine label="Opening the book" className="py-3" />
       ) : (
         <>
-          <LedgerFrontMatter caption="the studio" stats={stats} />
+          {/* The totals said once, as text — a ledger is not a dashboard.
+              V18 Q10: a seat without the studio's book reads no studio totals. */}
+          {canSeeMargin && (
+            <div className="money-front" data-accounts-front-matter>
+              <p className="t-body">
+                {bookAr.outCents > 0 ? (
+                  <>
+                    <span className="money-num">{fmtUsd(bookAr.outCents)}</span> is out with clients;{' '}
+                    {bookAr.overdueCents > 0 ? (
+                      <span className="od">
+                        <span className="money-num">{fmtUsd(bookAr.overdueCents)}</span> of it is
+                        overdue
+                      </span>
+                    ) : (
+                      'none of it is overdue'
+                    )}
+                    .
+                  </>
+                ) : (
+                  'Nothing is out with clients.'
+                )}
+              </p>
+              <p className="t-body-sm money-front-sub">
+                <span className="money-num">{fmtUsd(collectedCents(bookInvoices))}</span> collected
+                {marginText ? (
+                  <>
+                    ; margin <span className="money-num">{marginText}</span>
+                  </>
+                ) : null}
+                .
+              </p>
+            </div>
+          )}
 
           {page === 'ledger' && (
             <AccountsLedgerPage
               invoices={visibleInvoices}
               canExport={canSeeMargin}
-              highlightInvoiceId={initialContext?.invoiceId ?? null}
+              highlightInvoiceId={doorwayId}
               onOpenDocument={openDocument}
+              onOpenFolio={openFolio}
             />
           )}
           {page === 'receivables' && (
             <AccountsReceivablesPage
               aging={visibleAging}
-              highlightInvoiceId={initialContext?.invoiceId ?? null}
+              highlightInvoiceId={doorwayId}
               onOpenDocument={openDocument}
+              onOpenFolio={openFolio}
             />
           )}
           {canSeeMargin && page === 'earnings' && (

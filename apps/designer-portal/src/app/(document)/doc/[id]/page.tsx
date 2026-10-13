@@ -3452,6 +3452,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // FR3 F3-12 (`one-voice`) — the vitals print the stage word, never
           // the workflow phase (`Install`, not `Installation`).
           stageWord={oneVoice ? STAGE_WORD[row.active_section] : undefined}
+          // US-28 S7 (V20 U-Q14) — the stage once, as the 3px title rule.
+          stage={row.active_section}
           fill={deriveFillState(sections)}
           client={
             row.engagement_kind === 'project' || row.engagement_kind === 'proposal' ? (

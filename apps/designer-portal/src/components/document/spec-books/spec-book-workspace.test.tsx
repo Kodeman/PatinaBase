@@ -6,7 +6,7 @@
  * `useUpdateProjectFfeSpec` is exercised — every other hook this module
  * imports (for `SpecBookWorkspace`, not rendered here) is a harmless stub.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { SpecBookWorkItem } from "@patina/supabase";
 import {
@@ -21,6 +21,11 @@ const artifactRetry = jest.fn();
 const opened = jest.fn();
 const renderArtifactMutateAsync = jest.fn();
 let mockWorkbenchHookResult: unknown;
+let mockReadinessData: Array<{
+  selectionId: string;
+  ready: boolean;
+  missingFields: string[];
+}> = [];
 
 jest.mock("@patina/supabase", () => ({
   useCreateSpecBookShare: () => ({
@@ -32,7 +37,7 @@ jest.mock("@patina/supabase", () => ({
     isPending: false,
   }),
   useProjectFfeReadiness: () => ({
-    data: [],
+    data: mockReadinessData,
     isLoading: false,
     isError: false,
   }),
@@ -171,6 +176,8 @@ beforeEach(() => {
   artifactRetry.mockClear();
   opened.mockClear();
   mockSearchParams = new URLSearchParams();
+  mockCanSeeMargin = false;
+  mockReadinessData = [];
   mockWorkbenchHookResult = {
     data: {
       book: { id: "book-1", title: "Oak project specification" },
@@ -263,10 +270,11 @@ describe("SelectionEditor — structured dimensions", () => {
         missingFields={["finish", "selected_dimensions"]}
       />,
     );
-    expect(screen.getByText("incomplete")).toHaveAttribute(
-      "title",
-      "Missing: finish, selected_dimensions",
-    );
+    // US-28 S7b: the ink word names what is missing, not a tooltip; the
+    // opened piece names every gap in plain words (SQ-857).
+    const word = screen.getByText("No finish · No dimensions");
+    expect(word).toHaveClass("word");
+    expect(word).not.toHaveAttribute("title");
     expect(screen.queryByRole("combobox", { name: "Issue readiness" })).not.toBeInTheDocument();
   });
 
@@ -284,7 +292,7 @@ describe("SelectionEditor — structured dimensions", () => {
     fireEvent.change(screen.getByLabelText("width"), {
       target: { value: "84" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
     await screen.findByText("Line saved.");
 
     expect(mutateAsync).toHaveBeenCalledTimes(1);
@@ -310,9 +318,18 @@ describe("SelectionEditor — structured dimensions", () => {
       />,
     );
     fireEvent.change(screen.getByLabelText("width"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
     await screen.findByText("Line saved.");
     expect(mutateAsync.mock.calls[0][0].changes.selected_dimensions).toBeNull();
+  });
+
+  it("names the finish as the change when Add a finish opened it (SPEC §S7b p3)", () => {
+    render(<SelectionEditor item={buildItem({ finish: null })} focusField="finish" />);
+    expect(screen.getByLabelText("Finish")).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Save the finish" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save the specification" }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -337,7 +354,7 @@ describe("SelectionEditor — legacy non-object fallback", () => {
         item={buildItem({ selected_dimensions: "32x30x18" as never })}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
     await screen.findByText("Line saved.");
     expect(mutateAsync.mock.calls[0][0].changes.selected_dimensions).toBe(
       "32x30x18",
@@ -354,7 +371,7 @@ describe("SelectionEditor — legacy non-object fallback", () => {
       screen.getByPlaceholderText('{"width":"32 in","height":"30 in"}'),
       { target: { value: "{not json" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
     expect(
       await screen.findByText(
         'Dimensions must be valid JSON, for example {"width":"32 in"}.',
@@ -468,36 +485,40 @@ describe("SP-19/F57 — the spec book lands on the addressed FF&E line", () => {
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
     expect(container.querySelector("#spec-book-item-item-3")).toHaveAttribute(
-      "aria-pressed",
+      "aria-expanded",
       "true",
     );
     expect(container.querySelector("#spec-book-item-item-1")).toHaveAttribute(
-      "aria-pressed",
+      "aria-expanded",
       "false",
     );
   });
 
-  it("falls back to the first item when no line is addressed", () => {
+  it("opens at rest when no line is addressed (SPEC §S7b p1)", () => {
     withItems();
 
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
-    expect(container.querySelector("#spec-book-item-item-1")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    for (const id of ["item-1", "item-2", "item-3"]) {
+      expect(container.querySelector(`#spec-book-item-${id}`)).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+    }
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(0);
   });
 
-  it("ignores an ffeItemId that is not in this book", () => {
+  it("ignores an ffeItemId that is not in this book, and rests", () => {
     withItems();
     mockSearchParams = new URLSearchParams("ffeItemId=not-in-this-project");
 
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
     expect(container.querySelector("#spec-book-item-item-1")).toHaveAttribute(
-      "aria-pressed",
-      "true",
+      "aria-expanded",
+      "false",
     );
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(0);
   });
 
   it("SP-14/F100 — the leaf's return link names the full project", () => {
@@ -508,6 +529,17 @@ describe("SP-19/F57 — the spec book lands on the addressed FF&E line", () => {
     expect(
       screen.getByRole("link", { name: "← Oak project" }),
     ).toBeInTheDocument();
+  });
+
+  it("SQ-877 N8 — the browser tab carries the book's name, and hands it back", () => {
+    withItems();
+    document.title = "Studio overview · Patina";
+
+    const { unmount } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    expect(document.title).toBe("Oak project · specification book · Patina");
+    unmount();
+    expect(document.title).toBe("Studio overview · Patina");
   });
 });
 
@@ -553,7 +585,354 @@ describe("F58 — the workbench names no lifecycle word", () => {
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
     expect(
-      container.querySelector("#spec-book-item-item-1"),
-    ).toHaveTextContent("incomplete");
+      container.querySelector("#spec-book-item-item-1")?.closest("li"),
+    ).toHaveTextContent("Incomplete");
+  });
+});
+
+// R1's margin read needs the studio seat; the print preview below is a
+// client edition, which never shows trade price either way. The opened
+// piece shows it only when this is true (reset in beforeEach).
+let mockCanSeeMargin = false;
+jest.mock("@/hooks/use-can-see-margin", () => ({
+  useCanSeeMargin: () => mockCanSeeMargin,
+}));
+
+/**
+ * US-28 S7b — the spec book, full uplift (V20 U-Q18; SPEC §S7b). Chapters are
+ * trades (00767); each is a Section; pieces are rows that unfold in place.
+ */
+describe("US-28 S7b — the spec book by trade", () => {
+  function chapter(id: string, title: string, trade: string | null) {
+    return {
+      id,
+      spec_book_id: "book-1",
+      project_room_id: null,
+      trade,
+      title,
+      position: 0,
+      hero_media: null,
+      included: true,
+      page_template: null,
+      review_state: "draft",
+    };
+  }
+  function setting(id: string, chapterId: string | null) {
+    return {
+      id: `setting-${id}`,
+      spec_book_id: "book-1",
+      ffe_item_id: id,
+      chapter_id: chapterId,
+      position: 0,
+      included: true,
+      page_template: null,
+      review_state: "draft",
+      publication_overrides: {},
+    };
+  }
+  function withTradeBook() {
+    const base = mockWorkbenchHookResult as { data: Record<string, unknown> };
+    base.data.chapters = [
+      chapter("ch-joinery", "Joinery", "joinery"),
+      chapter("ch-lighting", "Lighting", "lighting"),
+      chapter("ch-textiles", "Textiles", "textiles"),
+      chapter("ch-unsorted", "Unsorted", "unsorted"),
+    ];
+    base.data.items = [
+      buildItem({}, { id: "bench", name: "Built-in bench", document_code: "HD-01", setting: setting("bench", "ch-joinery") }),
+      buildItem({}, { id: "lamp", name: "Halo floor lamp", document_code: "HD-05", setting: setting("lamp", "ch-lighting") }),
+      // a soft-removed line keeps no chapter visible (SQ-842 F8b)
+      buildItem({}, { id: "gone", name: "Old throw", setting: setting("gone", "ch-textiles"), removed_at: "2026-10-01T00:00:00.000Z" } as Partial<SpecBookWorkItem>),
+      // a roomless, unfiled line lands once, under Unsorted (SQ-842 F4)
+      buildItem({}, { id: "loose", name: "Loose stool", setting: null }),
+    ];
+  }
+
+  it("draws one closing Section per trade that holds an active line", () => {
+    withTradeBook();
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    const register = screen.getByRole("region", { name: "Specification register" });
+    const sections = Array.from(register.querySelectorAll("section.section"));
+    expect(sections.map((node) => node.getAttribute("aria-label"))).toEqual([
+      "Joinery",
+      "Lighting",
+      "Unsorted",
+    ]);
+    expect(screen.queryByRole("region", { name: "Textiles" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Loose stool")).toHaveLength(1);
+    expect(
+      within(screen.getByRole("navigation", { name: "In this book" }))
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["Joinery", "Lighting", "Unsorted"]);
+  });
+
+  it("unfolds one piece in place and puts it back", async () => {
+    withTradeBook();
+    const user = userEvent.setup();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    // the book opens at rest: no piece unfolded, no save act (SPEC §S7b p1)
+    expect(container.querySelector("#spec-book-item-bench")).toHaveAttribute("aria-expanded", "false");
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /^Save/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Built-in bench" }));
+    expect(container.querySelector("#spec-book-item-bench")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Save the specification" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Halo floor lamp" }));
+    expect(container.querySelector("#spec-book-item-lamp")).toHaveAttribute("aria-expanded", "true");
+    expect(container.querySelector("#spec-book-item-bench")).toHaveAttribute("aria-expanded", "false");
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: "Put back" }));
+    expect(container.querySelector("#spec-book-item-lamp")).toHaveAttribute("aria-expanded", "false");
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(0);
+  });
+
+  it("closes the fold on Esc", async () => {
+    withTradeBook();
+    const user = userEvent.setup();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    await user.click(screen.getByRole("button", { name: "Built-in bench" }));
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(1);
+    await user.click(screen.getByLabelText("Finish"));
+    await user.keyboard("{Escape}");
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(0);
+  });
+
+  it("prints state as ink words, never a pigment class", () => {
+    withTradeBook();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    const row = container.querySelector("#spec-book-item-lamp")?.closest("li");
+    expect(within(row as HTMLElement).getByText("Incomplete")).toHaveClass("word");
+    expect(container.innerHTML).not.toMatch(/#66765f|#a47f33|#e7e2d8/i);
+  });
+
+  it("names the four views as words and the empty book with one act", () => {
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    const tabs = within(screen.getByRole("navigation", { name: "Spec book workspace" }))
+      .getAllByRole("button")
+      .map((button) => button.textContent);
+    expect(tabs).toEqual([
+      "Specification",
+      "Audience editions",
+      "Issue readiness",
+      "Revision history",
+    ]);
+    expect(
+      screen.getByText(/No pieces in this book yet\. Add pieces to Oak project/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open the pieces" })).toHaveAttribute(
+      "href",
+      "/doc/project-1/pieces",
+    );
+    expect(screen.queryByRole("button", { name: "Run issue checks" })).not.toBeInTheDocument();
+  });
+
+  describe("Spec Book workspace title (SQ-864 F5)", () => {
+    async function openPreview() {
+      withTradeBook();
+      const user = userEvent.setup();
+      render(<SpecBookWorkspace projectId="project-1" />);
+      await user.click(screen.getByRole("button", { name: "Built-in bench" }));
+      await user.click(screen.getByRole("button", { name: "Preview the client sheet" }));
+      return screen.getByRole("region", { name: "client edition preview" });
+    }
+
+    it("names the workspace by its job, but the preview prints the stored title issuance freezes", async () => {
+      const preview = await openPreview();
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+        /^Oak project · specification book$/,
+      );
+      expect(within(preview).getByText(/^Oak project specification · /)).toBeInTheDocument();
+    });
+
+    it("falls back to the job name in the preview when the stored title is empty", async () => {
+      const base = mockWorkbenchHookResult as { data: { book: object } };
+      mockWorkbenchHookResult = {
+        ...(mockWorkbenchHookResult as object),
+        data: { ...base.data, book: { ...base.data.book, title: "  " } },
+      };
+      const preview = await openPreview();
+      expect(within(preview).getByText(/^Oak project · specification book · /)).toBeInTheDocument();
+    });
+  });
+
+  it("previews the client sheet as paper, without trade price", async () => {
+    withTradeBook();
+    const user = userEvent.setup();
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    await user.click(screen.getByRole("button", { name: "Built-in bench" }));
+    await user.click(screen.getByRole("button", { name: "Preview the client sheet" }));
+    const preview = screen.getByRole("region", { name: "client edition preview" });
+    expect(within(preview).getByRole("article")).toHaveClass("sb-page");
+    expect(within(preview).getByText("Built-in bench")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Client" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("Trade price", { exact: true })).not.toBeInTheDocument();
+  });
+
+  it("shows an opened piece's trade price only to a viewer who may see margin (R1)", async () => {
+    withTradeBook();
+    const items = (mockWorkbenchHookResult as { data: { items: SpecBookWorkItem[] } }).data.items;
+    items[1].trade_price_cents = 418_050;
+    const user = userEvent.setup();
+
+    const { container, unmount } = render(<SpecBookWorkspace projectId="project-1" />);
+    await user.click(screen.getByRole("button", { name: "Halo floor lamp" }));
+    const hidden = container.querySelector(".sb-open") as HTMLElement;
+    expect(within(hidden).queryByText("Trade price", { exact: true })).not.toBeInTheDocument();
+    unmount();
+
+    mockCanSeeMargin = true;
+    const seen = render(<SpecBookWorkspace projectId="project-1" />);
+    await user.click(screen.getByRole("button", { name: "Halo floor lamp" }));
+    const fold = seen.container.querySelector(".sb-open") as HTMLElement;
+    expect(within(fold).getByText("Trade price", { exact: true }).tagName).toBe("DT");
+    expect(within(fold).getByText("$4180.50")).toHaveClass("lfig");
+  });
+});
+
+/**
+ * SQ-857 — the SQ-834 walk found the state column printing readiness schema
+ * keys ("NO DESIGNDISPOSITION, DOCUMENTCODE, IMAGE…"), "Open" where the line
+ * lacks a finish, the stored "— Spec Book" title, a doubled "Not specified",
+ * and a tinted opened row (CSS only, globals.css walk-fix block).
+ */
+describe("SQ-857 — the spec book walk fixes", () => {
+  // Every key get_project_ffe_readiness (00733) emits, the legacy spec-field
+  // keys, and keys this client has never seen.
+  const EVERY_KEY = [
+    "name",
+    "documentCode",
+    "room",
+    "quantity",
+    "image",
+    "selection",
+    "designDisposition",
+    "removed",
+    "releaseBlock",
+    "vendor",
+    "clientPrice",
+    "allowanceCeiling",
+    "itemType",
+    "parent_not_ready",
+    "sku",
+    "finish",
+    "material",
+    "color_fabric",
+    "colorFabric",
+    "selected_dimensions",
+    "exact_location",
+    "exactLocation",
+    "someFutureRule",
+    "another_future_rule",
+  ];
+  // A key a reader would see as a schema name: camelCase, snake_case, or the
+  // same run of letters once CSS uppercases it.
+  const COMPOUND_KEYS = EVERY_KEY.filter((key) => /[A-Z_]/.test(key));
+
+  function expectNoSchemaKey(node: Element) {
+    const text = node.textContent ?? "";
+    expect(text).not.toMatch(/[a-z][A-Z]/);
+    expect(text).not.toMatch(/_/);
+    // `.word` is uppercased by CSS, so "designDisposition" would read as the
+    // one run DESIGNDISPOSITION; plain words keep their spaces.
+    const shouted = text.toUpperCase();
+    for (const key of COMPOUND_KEYS) {
+      expect(shouted).not.toContain(key.toUpperCase().replace(/_/g, ""));
+    }
+  }
+
+  function withLines(...items: SpecBookWorkItem[]) {
+    (mockWorkbenchHookResult as { data: { items: SpecBookWorkItem[] } }).data.items =
+      items;
+  }
+
+  it("never prints a schema key in the state cell or the opened piece", async () => {
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench" }));
+    mockReadinessData = [
+      { selectionId: "bench", ready: false, missingFields: EVERY_KEY },
+    ];
+    const user = userEvent.setup();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    const cell = container.querySelector(".lrow .lwhen") as HTMLElement;
+    expectNoSchemaKey(cell);
+    // the row names the first gap and counts the rest
+    expect(cell).toHaveTextContent(/^No finish and \d+ more$/);
+
+    await user.click(screen.getByRole("button", { name: "Built-in bench" }));
+    const head = container.querySelector(".sb-open .sb-spec-head .word") as HTMLElement;
+    expectNoSchemaKey(head);
+    expect(head).toHaveTextContent("No document code");
+    expect(head).toHaveTextContent("No image");
+    expect(head).toHaveTextContent("Not chosen yet");
+  });
+
+  it("leaves an unknown key unnamed rather than print it", () => {
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench" }));
+    mockReadinessData = [
+      { selectionId: "bench", ready: false, missingFields: ["someFutureRule"] },
+    ];
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    const cell = container.querySelector(".lrow .lwhen") as HTMLElement;
+    expect(cell).toHaveTextContent("Incomplete");
+    expectNoSchemaKey(cell);
+  });
+
+  it("offers Add a finish where the line has none, and Open where it has one", async () => {
+    withLines(
+      buildItem({ finish: null }, { id: "table", name: "Turned side table", finish: null }),
+      buildItem({}, { id: "bench", name: "Built-in bench" }),
+    );
+    mockReadinessData = [
+      { selectionId: "table", ready: false, missingFields: [] },
+      { selectionId: "bench", ready: true, missingFields: [] },
+    ];
+    const user = userEvent.setup();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    const table = container.querySelector("#spec-book-item-table")?.closest("li") as HTMLElement;
+    const bench = container.querySelector("#spec-book-item-bench")?.closest("li") as HTMLElement;
+    expect(within(table).getByText("No finish")).toHaveClass("word");
+    expect(within(bench).getByText("Ready")).toHaveClass("word");
+    expect(within(bench).getByRole("button", { name: "Open" })).toBeInTheDocument();
+
+    await user.click(within(table).getByRole("button", { name: "Add a finish" }));
+    expect(screen.getByLabelText("Finish")).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Save the finish" })).toBeInTheDocument();
+  });
+
+  it("names the book by its job, as the specimen does", () => {
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      /^Oak project · specification book$/,
+    );
+  });
+
+  it("says Not specified once for an empty fact", async () => {
+    withLines(
+      buildItem({ sku: null }, { id: "bench", name: "Built-in bench", sku: null }),
+    );
+    const user = userEvent.setup();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    await user.click(screen.getByRole("button", { name: "Built-in bench" }));
+    const fold = container.querySelector(".sb-open") as HTMLElement;
+    const sku = within(fold).getByText("SKU", { selector: "dt" });
+    const value = sku.nextElementSibling as HTMLElement;
+    expect(value).toHaveTextContent(/^Not specified$/);
+    // a set fact still says where it comes from
+    const finish = within(fold).getByText("Finish", { selector: "dt" });
+    expect(finish.nextElementSibling).toHaveTextContent("Set for this job");
   });
 });

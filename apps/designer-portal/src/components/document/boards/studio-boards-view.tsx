@@ -3,12 +3,18 @@
 /**
  * Studio-wide boards status view (board-paths W3c, DV8/DV10). The desk
  * rollup's "N awaiting reaction / N with reactions in / N approved" counts
- * used to expand inline into a bare name list (desk-boards-reaction-rollup.tsx);
- * this page is now what they link to — a real cross-project surface with
- * cover, owner, the same reaction-status chip a board card uses, the client/
- * guest verdict split, and the unresolved-direction count from the internal
- * direction layer (00550). `?status=<bucket>` (set by the desk rollup's
- * links) narrows the list to one bucket; omit it to see every active board.
+ * link here: every active board across the studio, its reaction state, the
+ * client/guest verdict split, and the unresolved-direction count from the
+ * internal direction layer (00550). `?status=<bucket>` (set by the desk
+ * rollup's links) narrows the list to one bucket; omit it to see every
+ * active board.
+ *
+ * US-28 S11 (uplift.md (c) area 6; specimens/boards-1440 frame p1): Sections
+ * by job, each board a plate and caption (U-Q20: the index is an unbounded,
+ * browsed collection, so never Cards), status filters as underline words,
+ * state as ink words (U-Q13). The overview read carries the job's name and
+ * whether it is a proposal or a project, not its client or its stage, so the
+ * eyebrow prints what the read knows.
  */
 
 import Link from 'next/link';
@@ -20,11 +26,8 @@ import {
 } from '@patina/supabase';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
-import { BoardReactionStatusChip } from '@/components/mood-board/board-reaction-status-chip';
+import { EmptyState } from '@/components/document/empty-state';
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
-
-const LABEL =
-  'font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]';
 
 const STATUS_FILTERS: ReadonlyArray<{
   key: BoardReactionStatus;
@@ -52,45 +55,63 @@ const STATUS_FILTERS: ReadonlyArray<{
   },
 ];
 
+/** The board's state as its ink word: the filter's own words, so the caption
+ * and the filter it sits under say the same thing. */
+const STATE_WORD: Record<BoardReactionStatus, string> = {
+  awaiting_reaction: 'Awaiting board feedback',
+  reactions_in: 'Feedback received',
+  approved_pipeline: 'Approved items',
+};
+
 function isBoardReactionStatus(value: string | null): value is BoardReactionStatus {
   return value === 'awaiting_reaction' || value === 'reactions_in' || value === 'approved_pipeline';
 }
 
-/** "2 approved (1 client · 1 guest)" — client/guest split, W3c/DV10. Omits
- * the parenthetical when every verdict of that kind came from one source. */
-function VerdictSplitLine({ verdicts }: { verdicts: StudioBoardOverviewEntry['verdicts'] }) {
-  const kinds = (['approved', 'rejected', 'comment'] as const).flatMap((verdict) => {
+/** "2 approved (1 client · 1 guest) · 1 comment" — the client/guest split
+ * (W3c/DV10) as a sentence in ink, no pigment. Omits the parenthetical when
+ * every verdict of that kind came from one source. */
+function verdictSentence(verdicts: StudioBoardOverviewEntry['verdicts']): string | null {
+  const parts = (['approved', 'rejected', 'comment'] as const).flatMap((verdict) => {
     const count = verdicts[verdict];
     const spec = verdictChipSpec(verdict);
     if (!count || !spec) return [];
     const client = verdicts.bySource.client[verdict];
     const guest = verdicts.bySource.guest[verdict];
     const split = client > 0 && guest > 0 ? ` (${client} client · ${guest} guest)` : '';
-    return [{ verdict, count, spec, split }];
+    return [`${count} ${spec.label.toLowerCase()}${split}`];
   });
-
-  if (kinds.length === 0) {
-    return (
-      <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-        No reactions yet
-      </span>
-    );
-  }
-
-  return (
-    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-      {kinds.map(({ verdict, count, spec, split }) => (
-        <span key={verdict} className="inline-flex items-center gap-1 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-          <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: spec.color }} />
-          {count} {spec.label.toLowerCase()}
-          {split}
-        </span>
-      ))}
-    </span>
-  );
+  return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-function StudioBoardRow({
+interface JobGroup {
+  key: string;
+  ownerKind: StudioBoardOverviewEntry['ownerKind'];
+  ownerName: string;
+  boards: StudioBoardOverviewEntry[];
+}
+
+/** One Section per job, in the order the read returned their boards (the
+ * most recently touched job first). */
+function groupByJob(boards: readonly StudioBoardOverviewEntry[]): JobGroup[] {
+  const groups = new Map<string, JobGroup>();
+  for (const board of boards) {
+    const key = `${board.ownerKind}:${board.ownerId}`;
+    const group = groups.get(key);
+    if (group) {
+      group.boards.push(board);
+    } else {
+      groups.set(key, {
+        key,
+        ownerKind: board.ownerKind,
+        ownerName: board.ownerName,
+        boards: [board],
+      });
+    }
+  }
+  return Array.from(groups.values());
+}
+
+function BoardPlate({
   board,
   activeStatus,
 }: {
@@ -101,44 +122,36 @@ function StudioBoardRow({
   activeStatus: BoardReactionStatus | null;
 }) {
   const from = activeStatus ? `/boards?status=${activeStatus}` : '/boards';
+  const href = boardRoomHref({ boardId: board.id, from, source: 'studio_boards' });
+  const verdicts = verdictSentence(board.verdicts);
+  const directions = board.unresolvedDirectionCount;
   return (
-    <Link
-      href={boardRoomHref({ boardId: board.id, from, source: 'studio_boards' })}
-      className="flex min-h-[76px] w-full items-center gap-3 border-b border-[var(--color-pearl)] py-2.5 text-left last:border-b-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
-    >
-      <BoardCoverArt
-        name={board.name}
-        coverUrl={board.coverImageUrl}
-        className="h-14 w-14 shrink-0 rounded-[3px]"
-      />
-      <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-baseline gap-x-2">
-          <span className="truncate font-heading text-[15px] text-[var(--color-charcoal)]">
-            {board.name}
+    <li data-board-plate={board.id}>
+      {/* The plate opens the room too, for the hand that reaches for the
+          picture; the caption's name is the one link a reader hears. */}
+      <Link href={href} tabIndex={-1} aria-hidden className="plate">
+        <BoardCoverArt name={board.name} coverUrl={board.coverImageUrl} />
+      </Link>
+      <div className="cap">
+        <Link href={href} className="name t-d4 s11-hit">
+          {board.name}
+        </Link>
+        <p className="s11-cap-line">
+          <span className={board.reactionStatus ? 'word' : 'word word--quiet'}>
+            {board.reactionStatus ? STATE_WORD[board.reactionStatus] : 'Not shared'}
           </span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-            {board.ownerName}
-          </span>
-        </span>
-        <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <BoardReactionStatusChip status={board.reactionStatus} />
-          <VerdictSplitLine verdicts={board.verdicts} />
-          {board.unresolvedDirectionCount > 0 && (
+          {directions > 0 && (
             <span
-              aria-label={`${board.unresolvedDirectionCount} unresolved direction note${board.unresolvedDirectionCount === 1 ? '' : 's'}`}
-              className="inline-flex items-center gap-1 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]"
+              className="word"
+              aria-label={`${directions} unresolved direction note${directions === 1 ? '' : 's'}`}
             >
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[var(--color-clay)]" />
-              {board.unresolvedDirectionCount} direction
-              {board.unresolvedDirectionCount === 1 ? '' : 's'}
+              {directions} direction{directions === 1 ? '' : 's'}
             </span>
           )}
-        </span>
-      </span>
-      <span aria-hidden className="font-mono text-[13px] text-[var(--color-clay-ink)]">
-        →
-      </span>
-    </Link>
+        </p>
+        {verdicts && <p className="t-body-sm s11-cap-sentence">{verdicts}</p>}
+      </div>
+    </li>
   );
 }
 
@@ -154,20 +167,21 @@ export function StudioBoardsView() {
     ? boards.filter((board) => board.reactionStatus === activeStatus)
     : boards;
   const activeFilter = STATUS_FILTERS.find((filter) => filter.key === activeStatus) ?? null;
+  const jobs = groupByJob(filtered);
 
   return (
-    <main className="min-h-screen bg-[var(--doc-paper)] text-[var(--color-charcoal)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--color-pearl)] bg-[var(--doc-paper)]/95 px-4 py-3 backdrop-blur md:px-8">
-        <div className="mx-auto flex max-w-[1100px] flex-wrap items-center gap-4">
-          <Link
-            href="/desk"
-            className="inline-flex min-h-11 items-center py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
-          >
-            ← Studio overview
-          </Link>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate font-heading text-xl">Studio design boards</h1>
-            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+    <main className="min-h-screen bg-[var(--doc-paper)] text-[var(--text-primary)]">
+      <div className="mx-auto max-w-[1100px] px-4 pb-16 md:px-8">
+        <header className="hline">
+          <div className="hline-l">
+            <Link
+              href="/desk"
+              className="inline-flex min-h-11 items-center t-meta uppercase text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
+            >
+              ← Studio overview
+            </Link>
+            <h1 className="t-d2">Studio design boards</h1>
+            <p className="t-meta uppercase text-[var(--text-subtle)]">
               {overview.isLoading
                 ? 'Loading design boards…'
                 : activeFilter
@@ -175,14 +189,15 @@ export function StudioBoardsView() {
                   : `${boards.length} active board${boards.length === 1 ? '' : 's'}`}
             </p>
           </div>
-        </div>
+        </header>
+        <div className="rule-strong" />
+
         {!overview.isLoading && boards.length > 0 && (
-          <div className="mx-auto mt-2 flex max-w-[1100px] flex-wrap items-center gap-x-2 gap-y-0">
+          <nav className="filters s11-filters" aria-label="Board status">
             <Link
               href="/boards"
-              className={`inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.05em] underline decoration-dotted underline-offset-4 hover:text-[var(--color-clay-ink)] ${
-                activeStatus ? 'text-[var(--text-muted)]' : 'text-[var(--color-clay-ink)]'
-              }`}
+              aria-current={activeStatus ? undefined : 'page'}
+              className="inline-flex min-h-11 min-w-11 items-center"
             >
               All design boards
             </Link>
@@ -190,39 +205,54 @@ export function StudioBoardsView() {
               <Link
                 key={filter.key}
                 href={`/boards?status=${filter.key}`}
-                className={`inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.05em] underline decoration-dotted underline-offset-4 hover:text-[var(--color-clay-ink)] ${
-                  activeStatus === filter.key ? 'text-[var(--color-clay-ink)]' : 'text-[var(--text-muted)]'
-                }`}
+                aria-current={activeStatus === filter.key ? 'page' : undefined}
+                className="inline-flex min-h-11 min-w-11 items-center"
               >
                 {filter.label}
               </Link>
             ))}
-          </div>
+          </nav>
         )}
-      </header>
 
-      <div className="mx-auto max-w-[1100px] px-4 pb-16 pt-6 md:px-8">
         {overview.isLoading ? (
-          <p role="status" aria-live="polite" className={LABEL}>
+          <p role="status" aria-live="polite" className="t-meta uppercase text-[var(--text-subtle)]">
             Reading the boards…
           </p>
         ) : overview.isError ? (
-          <p role="alert" className="font-heading text-[1.05rem] italic text-[var(--color-clay-ink)]">
+          <p role="alert" className="empty-t">
             The studio’s design boards could not be loaded. Please try again.
           </p>
-        ) : filtered.length === 0 ? (
-          <p className="font-heading text-[1.05rem] italic text-[var(--text-muted)]">
+        ) : jobs.length === 0 ? (
+          <EmptyState eyebrow="Design boards">
             {activeFilter ? activeFilter.emptyPhrase : 'No active design boards yet.'}
-          </p>
+          </EmptyState>
         ) : (
-          <div className="border-t border-[var(--color-pearl)]">
-            {filtered.map((board) => (
-              <StudioBoardRow key={board.id} board={board} activeStatus={activeStatus} />
-            ))}
-          </div>
+          jobs.map((job) => {
+            const headingId = `studio-boards-${job.key.replace(/[^a-zA-Z0-9-]/g, '-')}`;
+            return (
+              <section key={job.key} className="section" aria-labelledby={headingId}>
+                <div className="sec-head">
+                  <h2 className="eb" id={headingId}>
+                    <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+                      <path d="M0 2h34M0 6h28M0 10h20" />
+                    </svg>
+                    <span className={`tick st-${job.ownerKind} s11-eb-job`}>{job.ownerName}</span>
+                    <span>{job.ownerKind === 'proposal' ? 'Proposal' : 'Project'}</span>
+                  </h2>
+                </div>
+                <div className="plates-wrap">
+                  <ul className="plates">
+                    {job.boards.map((board) => (
+                      <BoardPlate key={board.id} board={board} activeStatus={activeStatus} />
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            );
+          })
         )}
         {overview.data?.capped && (
-          <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+          <p className="mt-6 t-meta uppercase text-[var(--text-subtle)]">
             Showing the most recently updated design boards.
           </p>
         )}

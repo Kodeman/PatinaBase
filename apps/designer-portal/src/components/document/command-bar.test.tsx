@@ -495,6 +495,47 @@ describe('F04 — the empty query leads with Where the work stands', () => {
   });
 });
 
+describe('US-28 S6 — ⌘K rows are ledger rows that wrap', () => {
+  const studio = {
+    folders: [
+      folder(
+        {
+          engagement_id: 'eng-holloway',
+          project_id: 'proj-holloway',
+          client_name: 'Holloway',
+          title:
+            'Holloway Den — the den, with the built-in bench, the bookcase wall and the reading lamp by the window',
+          active_section: 'project',
+        },
+        'invoice INV-2026-0721 is overdue',
+      ),
+    ],
+    chips: [],
+  };
+
+  it('never truncates or ellipsises a row, and ticks a job row with its stage word in ink', () => {
+    mockDeskData.mockReturnValue(studio as never);
+    openPalette();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
+      target: { value: 'holloway' },
+    });
+
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBeGreaterThan(0);
+    for (const option of options) {
+      // The row wraps: no element in it clips its text to one line.
+      expect(option).not.toHaveClass('truncate');
+      expect(option.querySelector('.truncate, .text-ellipsis, [class*="line-clamp"]')).toBeNull();
+    }
+
+    const job = options.find((option) => option.querySelector('.lphase')?.textContent === 'Project');
+    expect(job).toBeDefined();
+    expect(job!.querySelector('.lname')).toHaveClass('tick', 'st-project');
+    expect(job!.querySelector('.lphase')).toHaveClass('word');
+    expect(job).toHaveTextContent(/the bookcase wall and the reading lamp by the window/);
+  });
+});
+
 describe('F39/F65 — a stage phrase opens the palette already typed', () => {
   it('pre-types the stage the doorway asked for', () => {
     mockDeskData.mockReturnValue({
@@ -775,6 +816,37 @@ describe('F37 / F13 / F17 — the order, the titles, and the renamed room', () =
     openPalette();
 
     expect(screen.getByText('Aspen guest house')).toBeInTheDocument();
+  });
+
+  it("US-28 — opens Studio contacts' three rooms at their own address", () => {
+    openPalette();
+    for (const name of ['Client relations', 'Studio marketing', 'The Engine']) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByText('Client relations').closest('button')!);
+    expect(mockPush).toHaveBeenCalledWith('/people?view=threads');
+  });
+
+  // SQ-872 F2 — an alias that names one of a room's own views opens that view;
+  // the room's label (and its room-level words) still open its default.
+  it.each([
+    ['Client reviews', 'Client relations', '/people?view=reviews'],
+    ['reviews', 'Client relations', '/people?view=reviews'],
+    ['Email campaigns', 'Studio marketing', '/people?view=outreach'],
+    ['outreach', 'Studio marketing', '/people?view=outreach'],
+    ['Design profile', 'Studio marketing', '/people?view=your-eye'],
+    ['your eye', 'Studio marketing', '/people?view=your-eye'],
+    ['Client relations', 'Client relations', '/people?view=threads'],
+    ['correspondence', 'Client relations', '/people?view=threads'],
+    ['Studio marketing', 'Studio marketing', '/people?view=portfolio'],
+    ['marketing', 'Studio marketing', '/people?view=portfolio'],
+  ])('typing "%s" walks %s to %s', (typed, room, href) => {
+    openPalette();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
+      target: { value: typed },
+    });
+    fireEvent.click(screen.getByText(room).closest('button')!);
+    expect(mockPush).toHaveBeenCalledWith(href);
   });
 
   it('names the scans, and the words "The Rooms" appear nowhere', () => {

@@ -359,9 +359,11 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
           </span>
         </p>
 
-        <header className="mb-10">
-          <p className="mb-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
-            The match ceremony
+        {/* US-28 S9 — the stage once: a 3 px brief title rule, the stage word
+            in ink in the eyebrow beside it. */}
+        <header className="mb-10 title-rule st-brief">
+          <p className="mb-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--text-primary)]">
+            Brief · the match ceremony
           </p>
           <h1 className="font-heading text-[34px] font-medium leading-[1.12] text-[var(--text-primary)] sm:text-[44px]">
             {firstName ? `Meet ${firstName}.` : 'A new arrival.'}
@@ -453,9 +455,10 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
                 surfaceKey="ceremony"
                 regionKey="introduction"
               >
+                {/* US-28 S9 — the ceremony fills nothing: the send is scored. */}
                 <DocumentAction
                   actionKey="send-ceremony-introduction"
-                  variant="primary"
+                  variant="secondary"
                   onClick={onSend}
                   disabled={!sendable || complete.isPending}
                   loading={complete.isPending}

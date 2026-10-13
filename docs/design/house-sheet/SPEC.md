@@ -52,8 +52,9 @@ not use a hex literal anywhere else in the file.
   /* — the rest rule pigment (4.20:1 on paper) — */
   --oak:              #8B7355;
 
-  /* — the one boundary grey (R144). A component boundary answers to 1.4.11's
-       3:1, which no hairline reaches. Claim cards ONLY. — */
+  /* — the one boundary grey (R144, amended §G-1). A component boundary answers to
+       1.4.11's 3:1, which no hairline reaches. Every Card and sheet frame (§G);
+       never a ledger row, never on --rail (2.62:1). — */
   --card-edge:        #8F8C88;  /* 3.21:1 on paper-doc · 3.13:1 on paper */
 
   /* — state pigments: material value / paper ink — */
@@ -71,9 +72,7 @@ not use a hex literal anywhere else in the file.
   --tab-install:   #823832;
   --tab-care:      #823832;   /* Care has no pigment of its own */
 
-  /* — the one depth token. Permitted on a temporary sheet ONLY.
-       None of the three specimens uses it. — */
-  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, .08);
+  /* — no depth token. Depth is stock, edge and veil (amended §G-2, §G). — */
 
   /* — rhythm — */
   --module: 24px;
@@ -84,6 +83,9 @@ not use a hex literal anywhere else in the file.
   --press-in:  70ms;
   --press-out: 240ms;
   --ease: cubic-bezier(.22, 1, .36, 1);
+  /* amended §G-3 */
+  --paper-lift: #FFFFFF;  --veil: rgba(20, 18, 16, .55);
+  --edge-stage: 3px;  --tick-stage: 2px;  --edge-note: 2px solid var(--oak);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -104,7 +106,13 @@ not use a hex literal anywhere else in the file.
     --golden-ink:      #E0C963;
     --terracotta-ink:  #E2A895;
     --sage-ink:        #AFC0A6;
-    /* dark mode keeps the light plate values (amended §F-J) */
+    /* amended §G-4 */
+    --paper-lift: #1C1A17;  --veil: rgba(0, 0, 0, .60);
+    --tab-brief-edge: #7D9EC0;  --tab-discovery-edge: #5FA08F;  --tab-direction-edge: #73A374;
+    --tab-proposal-edge: #A3A75C;  --tab-project-edge: #B98F5A;  --tab-install-edge: #CC7A70;
+    --rule-hair: rgba(242, 237, 230, .14);  --rule-mid: #F2EDE6;  --rule-strong: #F2EDE6;
+    --doc-ink-border: rgba(242, 237, 230, .22);
+    /* a stage PLATE keeps its light value in dark (§F-J); a stage EDGE takes --tab-*-edge (amended §G-5) */
   }
 }
 ```
@@ -137,10 +145,11 @@ synthesise a bold by asking for a weight not loaded.
 | `.t-d1` | display | 34px / 1.15 | 500 | 0 | sentence | page title (house name, greeting) |
 | `.t-d2` | display | 26px / 1.20 | 500 | 0 | sentence | section head, the announced money figure |
 | `.t-d3` | display | 20px / 1.30 | 500 | 0 | sentence | room name, job name, piece name |
+| `.t-d4` | display | 17px / 24px | 500 | 0 | sentence | a ledger-row name *(amended §G-7)* |
 | `.t-body` | body | 16px / 1.55 | 400 | 0 | sentence | prose, consequence sentences, state sentences |
 | `.t-body-sm` | body | 14px / 1.50 | 400 | 0 | sentence | roster state sentence, dense prose |
 | `.t-meta` | meta | 12px / 1.50 | 400 | .08em | **sentence** | values: dates, counts, captions, sub-labels |
-| `.t-head` | meta | 11px / 1.50 | 500 | .08em | **UPPER** | running heads only |
+| `.t-head` | meta | 12px / 16px | 500 | .08em | **UPPER** | running heads and every eyebrow *(amended §G-6)* |
 
 Additions, not new steps:
 
@@ -154,7 +163,7 @@ Additions, not new steps:
   carries the figure in the act's own family (A5). No block ever shows one
   payment in three families.
 
-Nothing else. No inline `font-size`. Playfair tracking stays `0` — never
+Nothing else. (`.t-d4` added §G-7.) No inline `font-size`. Playfair tracking stays `0` — never
 negative below 40px.
 
 ## A4. Rhythm, radius, rules
@@ -163,9 +172,9 @@ negative below 40px.
 |---|---|
 | Vertical module | 24px. Every block-level gap is 24 / 48 / 72 / 12 (half). Nothing else. |
 | Page measure | `max-width: 1100px` centred at ≥1200px; prose capped at `65ch` |
-| Radius | `2px` (marks, small plates), `3px` (image plates, stage plates, the terminal act), `50%` (the 7px mark dot only) |
+| Radius | `2px` (marks, small plates), `3px` (image plates, stage plates, the terminal act), `50%` (the 7px mark dot only); `2px` for every card, sheet, popover and modal frame, never 5px *(amended §G-8)* |
 | Hairline | `1px solid var(--hairline)` for structure; `1px solid var(--hairline-strong)` for a money rule or a totals rule |
-| Shadows | **none.** `box-shadow` must not appear in any specimen file. |
+| Shadows | **none, anywhere:** no specimen, stylesheet or component. Depth is the §G ladder. *(amended §G-9)* |
 | Truncation | none. `text-overflow: ellipsis` must not appear. Wrap. |
 
 ## A5. The three action tiers — exact CSS
@@ -510,8 +519,9 @@ Empty state — a region with something to say but nothing in it:
            color: var(--ink-subtle); max-width: 56ch; }
 ```
 
-Room name at `.t-d3`, a floor line at full band width, one sentence. **Never a
-rectangle.** A region with nothing at all to say renders nothing (no heading,
+The Section's eyebrow, one sentence, and the Section's closing rule (§G).
+**Never a rectangle, never dashed**, except that a Section of Cards which
+empties keeps one card frame for its sentence (US-26 A). *(amended §G-10)* A region with nothing at all to say renders nothing (no heading,
 no rule, no zero).
 
 ## A11. Reduced motion and forced colors
@@ -590,7 +600,9 @@ sits a slim meta strip:
 | Wordmark | No PATINA wordmark inside a client page (Specimens 1 and 3) |
 
 **Do not** (all three specimens): no shadows · no pills · no status dots · no
-badges · no olive · no green success fill · no ✓ glyph · no spinner · no
+badges · no state chips or coloured state edges on the reading paper (A15
+stamps stay on the drafting stock) · no translucent sticky heads · no sheet
+over a sheet *(amended §G-11)* · no olive · no green success fill · no ✓ glyph · no spinner · no
 `disabled` · no PATINA wordmark on client pages · no truncation · no
 placeholder text · no `opacity: .5` on a state.
 
@@ -1009,7 +1021,8 @@ layout change.
 ## Do not
 
 No shadows · no badges or count chips · no tinted band behind a stage group
-(the plate is the colour; the row stays on cream) · no pills · no olive · no
+(the 3px card edge and the 2px row tick are the colour, V19; the row stays on
+its stock) *(amended §G-12)* · no pills · no olive · no
 ✓ glyph · no spinner · no `disabled` · no truncation · no hero photograph · no
 "Ready for your hand" second queue · no dwell timer · no inline search field
 replacing ⌘K.
@@ -1241,3 +1254,13 @@ tool, not a letter the studio sends — may run to a **1200px** band. Prose
 inside it still caps at **65ch**. §A4's **1100px** page measure is unchanged
 and continues to govern every **client** page.
 Answers: AR-f (the Agreement Room, ruled by Kody 2026-09-10; R149).
+
+## §G · Card, section and depth (US-27, amended 2026-10)
+
+The depth ladder, the seven components, the card test and colour-orients
+rules of `artifacts/portal-uplift-2026-10-12/synthesis/uplift.md` (a)–(b), with
+PR-v's state pigments reversed: state is an ink word portal-wide, and
+terracotta-ink marks only an overdue, blocked or do-not-contact word.
+*(amended §G-13)*
+
+Answers: US-27 BRIEF §4; V19.

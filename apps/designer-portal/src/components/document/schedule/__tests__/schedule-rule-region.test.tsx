@@ -197,7 +197,9 @@ describe('the schedule frame region', () => {
       open!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
     ).toEqual(['mt-[var(--doc-region-gap)]']);
     expect(open!.className).not.toMatch(/\bmb-/);
+    // US-28 S7: Schedule opens no movement, so it is a Section that closes on
+    // --rule-mid; the double rule is the Pieces head's alone.
     const openRule = open!.querySelector('[data-rule-weight]');
-    expect(openRule).toHaveAttribute('data-rule-weight', 'strong');
+    expect(openRule).toHaveAttribute('data-rule-weight', 'mid');
   });
 });

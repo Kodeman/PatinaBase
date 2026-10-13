@@ -1,6 +1,13 @@
-import { render } from '@testing-library/react';
-import type { RosterLine } from '@/lib/document/desk-roster-derivation';
+import { act, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { DeskLedger, DeskLedgerLine, RosterLine } from '@/lib/document/desk-roster-derivation';
 import { DeskLedgerRow, actLanding } from './desk-ledger-row';
+import { DeskRoster } from './desk-roster';
+
+const mockMutate = jest.fn();
+jest.mock('@patina/supabase', () => ({
+  useSetNeedState: () => ({ mutate: mockMutate, isPending: false }),
+}));
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
@@ -53,11 +60,15 @@ describe('DeskLedgerRow — the roster line (US-25 slice 4)', () => {
     expect(container.querySelector('[style]')).toBeNull();
   });
 
-  it('carries the custody word under the name', () => {
+  it('sets the name on its stage’s 2 px tick, and prints no custody word (US-28 S3)', () => {
     const { container } = render(<DeskLedgerRow line={line({ custody: 'With Anneke' })} />);
     const nameCell = container.querySelector('[data-ledger-cell="name"]')!;
-    expect(nameCell).toHaveTextContent('Reinhardt lake house');
-    expect(nameCell).toHaveTextContent('With Anneke');
+    expect(nameCell).toHaveClass('tick', 'st-discovery');
+    expect(nameCell).toHaveTextContent(/^Reinhardt lake house$/);
+    expect(within(nameCell as HTMLElement).getByRole('link', { name: 'Reinhardt lake house' })).toHaveAttribute(
+      'href',
+      '/doc/reinhardt',
+    );
   });
 
   it('prints the head need’s sentence, its overdue form first', () => {
@@ -87,7 +98,7 @@ describe('DeskLedgerRow — the roster line (US-25 slice 4)', () => {
     const sentence = () => container.querySelector('[data-ledger-cell="sentence"]');
     expect(sentence()).toHaveTextContent('With client since 4 Aug');
     rerender(<DeskLedgerRow line={line()} />);
-    expect(sentence()).toHaveTextContent('No current action alerts.');
+    expect(sentence()).toHaveTextContent('No current alert');
     rerender(<DeskLedgerRow line={line({ notChecked: 'Not checked: invoices.' })} />);
     expect(sentence()).toHaveTextContent('Not checked: invoices.');
   });
@@ -143,6 +154,214 @@ describe('DeskLedgerRow — the roster line (US-25 slice 4)', () => {
   it('lands a return on the line’s own anchor', () => {
     const { container } = render(<DeskLedgerRow line={line()} />);
     expect(container.querySelector('#roster-line-reinhardt')).not.toBeNull();
+  });
+});
+
+describe('DeskLedgerRow — standing (US-28 S3 change 2)', () => {
+  const need = { needKind: 'po_unacknowledged', needKey: 'po_unacknowledged:po-1', needText: 'Fabric samples, not yet opened' } as const;
+  const actCell = (container: HTMLElement) => container.querySelector('[data-ledger-cell="act"]')!;
+
+  beforeEach(() => mockMutate.mockReset());
+
+  it('a row with others reads “waiting on {who} since {day}”, with no act', () => {
+    const { container } = render(
+      <DeskLedgerRow line={line(need)} standing="others" waiting={{ who: 'Mae Halloran', since: '2026-10-06' }} />,
+    );
+    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+      /^Fabric samples, not yet opened · waiting on Mae Halloran$/,
+    );
+    expect(container.querySelector('[data-ledger-cell="value"]')).toHaveTextContent(/^Since Tue 6 Oct$/);
+    expect(actCell(container).childElementCount).toBe(0);
+  });
+
+  it('a row coming back reads “Back {day}”, with no act', () => {
+    const { container } = render(
+      <DeskLedgerRow
+        line={line(need)}
+        standing="back"
+        back={{ until: '2026-10-16', reason: 'waiting on the Chens’ bench decision' }}
+      />,
+    );
+    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+      'Fabric samples, not yet opened · waiting on the Chens’ bench decision',
+    );
+    expect(container.querySelector('[data-ledger-cell="value"]')).toHaveTextContent(/^Back Fri 16 Oct$/);
+    expect(actCell(container).childElementCount).toBe(0);
+  });
+
+  it('a row settled today prints muted, in place, and carries no act', () => {
+    const at = new Date(2026, 9, 12, 14, 40).toISOString();
+    const { container } = render(
+      <DeskLedgerRow
+        line={line({ ...need, needKind: 'new_lead', needText: 'Replied' })}
+        standing="settled"
+        settled={{ kind: 'acted', at, who: 'Ainsley Moore' }}
+      />,
+    );
+    const row = container.querySelector('[data-ledger-row]')!;
+    expect(row).toHaveClass('lrow', 'settled');
+    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+      /^Replied · waiting on Ainsley Moore since 2:40$/,
+    );
+    expect(actCell(container).childElementCount).toBe(0);
+  });
+
+  it('her own “Not today”, settled today, offers Undo, which clears the state row', async () => {
+    const at = new Date(2026, 9, 12, 16, 15).toISOString();
+    const { container } = render(
+      <DeskLedgerRow
+        line={line({ ...need, projectId: 'p-reinhardt' })}
+        standing="settled"
+        settled={{ kind: 'not_today', at, until: '2026-10-13' }}
+      />,
+    );
+    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+      /^Not today · 4:15 · back Tue 13 Oct$/,
+    );
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Undo — Reinhardt lake house' }));
+    });
+    expect(mockMutate).toHaveBeenCalledWith(
+      { needKey: 'po_unacknowledged:po-1', engagementId: 'p-reinhardt', action: 'clear' },
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
+  });
+
+  it('says so in the row when Undo did not save', async () => {
+    mockMutate.mockImplementation((_vars, options) => options?.onError?.(new Error('refused')));
+    render(
+      <DeskLedgerRow
+        line={line(need)}
+        standing="settled"
+        settled={{ kind: 'set_aside', at: new Date().toISOString(), until: '2026-10-16' }}
+      />,
+    );
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: /^Undo — / }));
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Undo did not save. Try again.');
+  });
+
+  describe('after Undo lands (R6)', () => {
+    const ledgerOf = (ledgerLine: DeskLedgerLine): DeskLedger => ({
+      sections: [{ key: 'mine', label: null, groups: [{ key: 'yours', label: 'Also yours', lines: [ledgerLine] }] }],
+      notChecked: null,
+    });
+    const settledToday = { kind: 'not_today' as const, at: new Date(2026, 9, 12, 16, 15).toISOString(), until: '2026-10-13' };
+    const undo = async () => {
+      await act(async () => {
+        await userEvent.setup().click(screen.getByRole('button', { name: 'Undo — Reinhardt lake house' }));
+      });
+    };
+
+    it('moves focus to the restored row’s act, and the ledger’s status says “Undone.”', async () => {
+      const row = line({ ...need, projectId: 'p-reinhardt', act: { label: 'Chase the maker', href: '/doc/reinhardt' } });
+      const { rerender } = render(
+        <DeskRoster ledger={ledgerOf({ line: row, standing: 'settled', settled: settledToday, waiting: null, back: null })} />,
+      );
+      await undo();
+      // The clear lands: the row reads open again, in its place.
+      rerender(<DeskRoster ledger={ledgerOf({ line: row, standing: 'yours', settled: null, waiting: null, back: null })} />);
+      expect(screen.queryByRole('button', { name: /^Undo — / })).toBeNull();
+      expect(screen.getByRole('link', { name: 'Chase the maker — Reinhardt lake house' })).toHaveFocus();
+      expect(screen.getByRole('status')).toHaveTextContent(/^Reinhardt lake house: Undone\.$/);
+    });
+
+    it('moves focus to the row’s name where the restored row prints no act', async () => {
+      const row = line({ ...need, projectId: 'p-reinhardt' });
+      const jordan = { userId: 'u-jordan', name: 'Jordan', mine: false };
+      const { rerender } = render(
+        <DeskRoster
+          ledger={ledgerOf({ line: row, standing: 'settled', settled: settledToday, waiting: null, back: null })}
+          holderOf={() => jordan}
+        />,
+      );
+      await undo();
+      rerender(
+        <DeskRoster
+          ledger={ledgerOf({ line: row, standing: 'yours', settled: null, waiting: null, back: null })}
+          holderOf={() => jordan}
+        />,
+      );
+      expect(screen.getByRole('link', { name: 'Reinhardt lake house' })).toHaveFocus();
+      expect(screen.getByRole('status')).toHaveTextContent(/^Reinhardt lake house: Undone\.$/);
+    });
+
+    it('moves focus to the row’s name when the cleared “Not today” reveals the holder’s act today (R6b)', async () => {
+      const row = line({ ...need, projectId: 'p-reinhardt', act: { label: 'Chase the maker', href: '/doc/reinhardt' } });
+      const jordan = { userId: 'u-jordan', name: 'Jordan', mine: false };
+      const ledgerWith = (settled: DeskLedgerLine['settled']) => (
+        <DeskRoster
+          ledger={ledgerOf({ line: row, standing: 'settled', settled, waiting: null, back: null })}
+          holderOf={() => jordan}
+        />
+      );
+      const { container, rerender } = render(ledgerWith(settledToday));
+      await undo();
+      // The clear lands: her row is gone, and Jordan's act today, which her
+      // "Not today" masked, settles the row in its place.
+      const jordanActed = { kind: 'acted' as const, at: new Date(2026, 9, 12, 9, 30).toISOString(), who: 'Mae Halloran', by: 'u-jordan' };
+      rerender(ledgerWith(jordanActed));
+      expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+        /^Fabric samples, not yet opened · waiting on Mae Halloran since 9:30$/,
+      );
+      expect(screen.queryByRole('button', { name: /^Undo — / })).toBeNull();
+      expect(screen.getByRole('link', { name: 'Reinhardt lake house' })).toHaveFocus();
+      expect(screen.getByRole('status')).toHaveTextContent(/^Reinhardt lake house: Undone\.$/);
+      // The Undo is spent: a later deferral that lifts without one moves nothing.
+      rerender(ledgerWith(settledToday));
+      (document.activeElement as HTMLElement).blur();
+      rerender(ledgerWith(jordanActed));
+      expect(document.body).toHaveFocus();
+    });
+
+    it('a refused Undo keeps the row settled, says so, and announces nothing', async () => {
+      mockMutate.mockImplementation((_vars, options) => options?.onError?.(new Error('refused')));
+      const ledger = ledgerOf({ line: line(need), standing: 'settled', settled: settledToday, waiting: null, back: null });
+      const { rerender } = render(<DeskRoster ledger={ledger} />);
+      await undo();
+      rerender(<DeskRoster ledger={ledger} />);
+      expect(screen.getByRole('button', { name: 'Undo — Reinhardt lake house' })).toHaveFocus();
+      expect(screen.getByRole('alert')).toHaveTextContent('Undo did not save. Try again.');
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    });
+  });
+
+  it('a teammate’s settled deferral offers her no Undo', () => {
+    const { container } = render(
+      <DeskLedgerRow
+        line={line(need)}
+        standing="settled"
+        settled={{ kind: 'not_today', at: new Date().toISOString(), until: '2026-10-13', by: 'u-jordan' }}
+      />,
+    );
+    expect(actCell(container).childElementCount).toBe(0);
+  });
+
+  it('a row she does not carry prints whose move it is, with no act', () => {
+    const { container } = render(
+      <DeskLedgerRow
+        line={line({ ...need, act: { label: 'Chase the maker', href: '/doc/reinhardt' } })}
+        standing="yours"
+        holder={{ userId: 'u-jordan', name: 'Jordan', mine: false }}
+      />,
+    );
+    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+      /^Fabric samples, not yet opened The move is Jordan’s.$/,
+    );
+    expect(actCell(container).childElementCount).toBe(0);
+  });
+
+  it('a row she carries keeps its one act', () => {
+    const { container } = render(
+      <DeskLedgerRow
+        line={line({ ...need, act: { label: 'Chase the maker', href: '/doc/reinhardt' } })}
+        standing="yours"
+        holder={{ userId: 'me', name: 'Leah', mine: true }}
+      />,
+    );
+    expect(within(actCell(container) as HTMLElement).getByRole('link', { name: 'Chase the maker — Reinhardt lake house' }))
+      .toBeInTheDocument();
   });
 });
 

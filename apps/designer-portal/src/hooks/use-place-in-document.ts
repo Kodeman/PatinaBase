@@ -8,7 +8,7 @@
  * (00208) is the quiet, honest footprint the placed line wears.
  */
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePlaceProductInProjectV2 } from '@patina/supabase';
 import type { FfeAssignmentScope, FfeDuplicateMode } from '@patina/types';
 
@@ -25,7 +25,12 @@ export interface PlaceablePiece {
 
 export function usePlaceInDocument() {
   const place = usePlaceProductInProjectV2();
+  const queryClient = useQueryClient();
   return useMutation({
+    // US-28 R11: the Library's "Used on" read (use-piece-usage.ts) is a
+    // portal-local key the shared placement hook does not know, and the piece
+    // page keeps it mounted while the Add sheet places.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['library-piece-usage'] }),
     mutationFn: async ({
       projectId,
       piece,

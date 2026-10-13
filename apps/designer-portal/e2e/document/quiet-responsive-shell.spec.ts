@@ -129,7 +129,11 @@ test.describe("Quiet Work responsive document shell", () => {
     await page.goto(`/drafting/${DRAFT_PROPOSAL_ID}`, {
       waitUntil: "domcontentloaded",
     });
-    const ffeFacet = page.getByRole("button", { name: /^FF&E / });
+    // US-28 S9 (SQ-823): the facet is a ComposeSection Card whose toggle
+    // reads its ink state word ("Drafted" / "To draft") before the name.
+    const ffeFacet = page.getByRole("button", {
+      name: /^(?:Drafted|To draft)(?: · open)?\s*FF&E schedule/,
+    });
     await expect(async () => {
       if ((await ffeFacet.getAttribute("aria-expanded")) !== "true") {
         await ffeFacet.click();
@@ -252,11 +256,13 @@ test.describe("Quiet Work responsive document shell", () => {
     // reason: the box was right and the instrument was not.
     const bandLayoutHeight = () =>
       band.evaluate((el) => el.getBoundingClientRect().height);
-    await expect.poll(bandLayoutHeight).toBe(56);
+    // US-28 S7a, U-Q19 (V20): at 390 the NEXT band wraps to a second line
+    // rather than clip, so 56px is its floor here, not its height.
+    await expect.poll(bandLayoutHeight).toBeGreaterThanOrEqual(56);
 
-    // Scrolled, the band is still 56px and still un-unfoldable.
+    // Scrolled, the band is still at least 56px and still un-unfoldable.
     await scrollTo(page, 800);
-    await expect.poll(bandLayoutHeight).toBe(56);
+    await expect.poll(bandLayoutHeight).toBeGreaterThanOrEqual(56);
 
     // The bar is re-laid out by the 1440 -> 390 resize AND by the scroll that
     // follows it, and on webkit inside the full basket the second of those was

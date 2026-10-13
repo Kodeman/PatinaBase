@@ -18,10 +18,12 @@ import {
 import {
   deriveKindLine,
   isResolved,
-  marginAccent,
   type MarginItemRow,
 } from '@/lib/document/margin-derivation';
 import { MItemContent } from './m-item';
+
+/** The margin's kind word is ink, never a pigment (V20 U-Q13). */
+export const MARGIN_KIND_INK = 'var(--text-primary)';
 
 /**
  * The paper region a margin item is anchored to, or null for the whole job.
@@ -58,7 +60,6 @@ export function MarginItem({
   targetId?: string;
   children?: React.ReactNode;
 }) {
-  const accent = marginAccent(row.kind);
   const resolved = isResolved(row);
   const expandable = Boolean(onToggle);
   const hoverProps =
@@ -70,11 +71,14 @@ export function MarginItem({
       : {};
 
   return (
+    // US-28 S7 — a Card off the paper (L2): the one stock, the 1px card edge,
+    // and the kind printed in ink. No pigment edge, no pigment kind word: the
+    // kind is the word itself (V20 U-Q13).
     <div
-      className={`doc-elevated mb-2 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] transition-colors duration-150 hover:border-[#CFC8BB] ${
+      data-margin-kind={row.kind}
+      className={`mb-2 rounded-[2px] border border-[var(--card-edge)] bg-[var(--paper-doc)] ${
         resolved ? 'opacity-65' : ''
       }`}
-      style={{ borderLeft: `2.5px solid ${accent.border}` }}
       {...hoverProps}
     >
       <button
@@ -87,7 +91,7 @@ export function MarginItem({
       >
         <MItemContent
           kindLine={deriveKindLine(row)}
-          kindColor={accent.label}
+          kindColor={MARGIN_KIND_INK}
           title={row.title}
           detail={row.detail}
           tone="paper"

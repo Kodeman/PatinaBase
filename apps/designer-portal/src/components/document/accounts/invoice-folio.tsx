@@ -48,7 +48,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DeliveryWord } from '../delivery-word';
-import { Stamp } from '../stamp';
+import { InvoiceStateWord, MoneyWord } from './money-state-word';
 import { fmtDay, todayYmd } from '@/lib/document/format';
 import { voiceFirstName } from '@/lib/document/document-guide';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -60,23 +60,6 @@ import { AccountsQueryFailure } from './accounts-query-failure';
 
 const SAGE_INK = 'var(--color-sage-ink)';
 const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
-
-/** Paper-ink stamp palette (the ledger page's dark palette re-inked for cream). */
-const FOLIO_STAMP: Record<string, { label: string; color: string; ink?: string }> = {
-  draft: { label: 'draft', color: '#C9C2B6', ink: 'var(--text-muted)' },
-  sent: { label: 'sent', color: 'var(--color-dusty-blue)', ink: '#7E8FA6' },
-  partially_paid: {
-    label: 'part paid',
-    color: 'var(--color-golden-hour)',
-    ink: 'var(--color-golden-hour-ink)',
-  },
-  paid: { label: 'paid', color: 'var(--color-sage)', ink: SAGE_INK },
-  void: {
-    label: 'void',
-    color: 'var(--color-terracotta)',
-    ink: TERRACOTTA_INK,
-  },
-};
 
 const MANUAL_METHODS: Exclude<InvoicePaymentMethod, 'stripe'>[] = [
   'check',
@@ -240,7 +223,6 @@ export function InvoiceFolio({
   }
 
   const delivery = emailDelivery.byRef[invoice.id] ?? null;
-  const stamp = FOLIO_STAMP[invoice.status] ?? FOLIO_STAMP.draft;
   const overdue = isInvoiceOverdue(invoice);
   const balance = invoiceBalanceCents(invoice);
   const isDraft = invoice.status === 'draft';
@@ -448,12 +430,16 @@ export function InvoiceFolio({
   return (
     <div>
       {/* ── Head: number · stamp · household · the doorway ─────────────── */}
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div className="min-w-0">
           <h2 className="font-heading text-[20px] font-medium text-[var(--color-charcoal)]">
             {invoice.invoice_number ? `Invoice ${invoice.invoice_number}` : 'Draft invoice'}
           </h2>
-          <p className="mt-0.5 truncate font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          {/* U-Q13 — the state is one ink word under the title, never a chip. */}
+          <p className="mt-1" data-folio-state>
+            <InvoiceStateWord status={invoice.status} />
+          </p>
+          <p className="mt-0.5 break-words font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             {[
               invoice.client?.full_name ?? invoice.client?.email,
               // R136 — a studio invoice reads its regarding line where a
@@ -466,11 +452,10 @@ export function InvoiceFolio({
             {overdue && <span style={{ color: TERRACOTTA_INK }}> · overdue</span>}
           </p>
         </div>
-        {/* The word can be a full sentence with an address in it, so this
-            column shrinks and caps rather than pushing the letterhead wide. */}
-        <div className="flex min-w-0 max-w-[60%] flex-col items-end gap-1 text-right">
+        {/* The delivery word can be a full sentence with an address in it, so
+            this column wraps under the title at 390 rather than truncating. */}
+        <div className="flex min-w-0 flex-col items-start gap-1 sm:max-w-[60%] sm:items-end sm:text-right">
           <div className="flex items-center gap-2.5">
-            <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
             {documentProjectId && invoice.project && onOpenDocument && (
               <DocumentAction
                 actionKey="open-invoice-document"
@@ -554,16 +539,27 @@ export function InvoiceFolio({
         </p>
       )}
 
-      {/* ── Line items — typed lines, ledger grammar ─────────────────────── */}
-      <div className="mt-4">
-        <p className={`${LABEL} mb-1`}>line items</p>
-        <ul>
+      {/* ── Lines — a Section of money rows, the total under them (US-28 S8).
+          The lines sit above their sum and nothing is cut off; a folio with
+          no lines says so rather than printing an empty table over a total. */}
+      <section className="section money-folio-sec" aria-label="Lines" data-folio-lines>
+        <div className="sec-head">
+          <p className="eb">
+            <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+              <path d="M0 2h34M0 6h28M0 10h20" />
+            </svg>
+            <span>Lines</span>
+          </p>
+        </div>
+        <ul className="money-rows">
+          {(invoice.line_items ?? []).length === 0 && (
+            <li className="money-row">
+              <span className="t-body-sm text-[var(--text-muted)]">No lines on this invoice yet.</span>
+            </li>
+          )}
           {(invoice.line_items ?? []).map((line) => (
-            <li
-              key={line.id}
-              className="grid grid-cols-[1fr_44px_88px_92px] items-baseline gap-2 border-b border-dashed border-[var(--color-pearl)] py-1.5"
-            >
-              <span className="min-w-0 text-[11.5px] text-[var(--color-charcoal)]">
+            <li key={line.id} className="money-row">
+              <span className="t-body-sm min-w-0">
                 {line.description}
                 {line.kind === 'milestone' && (
                   <span className="ml-1.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
@@ -583,106 +579,93 @@ export function InvoiceFolio({
                       : ''}
                   </span>
                 )}
+                {/* Time lines are one rolled-up amount — "1 × $X" would read
+                    like an hourly rate, so they carry no quantity (the old
+                    page's rule). */}
+                {line.kind !== 'time' && (
+                  <span className="ml-1.5 font-mono text-[11px] text-[var(--text-muted)]">
+                    {Number(line.quantity)} × {formatCurrency(line.unit_amount_cents, invoice.currency)}
+                  </span>
+                )}
               </span>
-              {/* Time lines are one rolled-up amount — "1 × $X" would read like
-                  an hourly rate, so qty/unit dash (the old page's rule). */}
-              <span className="text-right font-mono text-[11px] text-[var(--text-muted)]">
-                {line.kind === 'time' ? '—' : Number(line.quantity)}
-              </span>
-              <span className="text-right font-mono text-[11px] text-[var(--text-muted)]">
-                {line.kind === 'time'
-                  ? '—'
-                  : formatCurrency(line.unit_amount_cents, invoice.currency)}
-              </span>
-              <span className="text-right font-mono text-[11px] text-[var(--color-charcoal)]">
-                {formatCurrency(line.amount_cents, invoice.currency)}
-              </span>
+              <span className="t-money">{formatCurrency(line.amount_cents, invoice.currency)}</span>
             </li>
           ))}
-        </ul>
-
-        {/* Totals block */}
-        <div className="ml-auto mt-2 max-w-[240px]">
-          <div className="flex justify-between py-0.5">
+          <li className="money-row">
             <span className={LABEL}>subtotal</span>
-            <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
-              {formatCurrency(invoice.subtotal_cents, invoice.currency)}
-            </span>
-          </div>
-          <div className="flex justify-between py-0.5">
+            <span className="t-money">{formatCurrency(invoice.subtotal_cents, invoice.currency)}</span>
+          </li>
+          <li className="money-row">
             <span className={LABEL}>
               tax ({(Number(invoice.tax_rate) * 100).toFixed(2).replace(/\.?0+$/, '') || '0'}
               %)
             </span>
-            <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
-              {formatCurrency(invoice.tax_cents, invoice.currency)}
-            </span>
-          </div>
-          <div className="flex justify-between border-t border-[var(--color-pearl)] py-1">
+            <span className="t-money">{formatCurrency(invoice.tax_cents, invoice.currency)}</span>
+          </li>
+          <li className="money-row money-total">
             <span className={LABEL}>total</span>
-            <span className="font-mono text-[11.5px] font-semibold text-[var(--color-charcoal)]">
-              {formatCurrency(invoice.total_cents, invoice.currency)}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {invoice.memo && (
-        <p className="mt-3 text-[11px] italic text-[var(--text-muted)]">{invoice.memo}</p>
-      )}
-
-      {/* ── Payment history ─────────────────────────────────────────────── */}
-      <div className="mt-4">
-        <p className={`${LABEL} mb-1`}>payments</p>
-        {(invoice.payments ?? []).length > 0 ? (
-          <ul>
-            {(invoice.payments ?? []).map((p) => (
-              <li
-                key={p.id}
-                className="grid grid-cols-[92px_1fr_auto_92px] items-baseline gap-2 border-b border-dashed border-[var(--color-pearl)] py-1.5"
-              >
-                <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
-                  {formatInvoiceDate(p.received_at ?? p.created_at)}
-                </span>
-                <span className="min-w-0 truncate text-[11px] text-[var(--color-charcoal)]">
-                  {invoicePaymentMethodLabel(p)}
-                  {(p.surcharge_cents ?? 0) > 0 && (
-                    <span className="ml-1.5 text-[var(--text-muted)]">
-                      + fee {formatCurrency(p.surcharge_cents ?? 0, invoice.currency)}
-                    </span>
-                  )}
-                  {p.reference && (
-                    <span className="ml-1.5 text-[var(--text-muted)]">{p.reference}</span>
-                  )}
-                  {p.note && (
-                    <span className="ml-1.5 italic text-[var(--text-muted)]">{p.note}</span>
-                  )}
-                </span>
-                <span
-                  className="font-mono text-[11px] uppercase tracking-[0.06em]"
-                  style={{
-                    color:
-                      p.status === 'succeeded'
-                        ? SAGE_INK
-                        : p.status === 'failed'
-                          ? TERRACOTTA_INK
-                          : 'var(--text-muted)',
-                  }}
-                >
-                  {p.status}
-                </span>
-                <span className="text-right font-mono text-[11px] text-[var(--color-charcoal)]">
-                  {formatCurrency(p.amount_cents, invoice.currency)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="py-1 text-[11px] italic text-[var(--text-muted)]">
-            No payments recorded yet.
-          </p>
+            <span className="t-money">{formatCurrency(invoice.total_cents, invoice.currency)}</span>
+          </li>
+        </ul>
+        {invoice.memo && (
+          <p className="mt-3 text-[11px] italic text-[var(--text-muted)]">{invoice.memo}</p>
         )}
-      </div>
+      </section>
+
+      {/* ── Payments — the same money rows, each status an ink word ──────── */}
+      <section className="section money-folio-sec" aria-label="Payments" data-folio-payments>
+        <div className="sec-head">
+          <p className="eb">
+            <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+              <path d="M0 2h34M0 6h28M0 10h20" />
+            </svg>
+            <span>Payments</span>
+          </p>
+        </div>
+        <ul className="money-rows">
+          {(invoice.payments ?? []).length === 0 && (
+            <li className="money-row">
+              <span className="t-body-sm italic text-[var(--text-muted)]">No payments recorded yet.</span>
+            </li>
+          )}
+          {(invoice.payments ?? []).map((p) => (
+            <li key={p.id} className="money-row">
+              <span className="t-body-sm min-w-0">
+                <span className="font-mono text-[11px]">
+                  {formatInvoiceDate(p.received_at ?? p.created_at)}
+                </span>{' '}
+                · {invoicePaymentMethodLabel(p)}
+                {(p.surcharge_cents ?? 0) > 0 && (
+                  <span className="ml-1.5 text-[var(--text-muted)]">
+                    + fee {formatCurrency(p.surcharge_cents ?? 0, invoice.currency)}
+                  </span>
+                )}
+                {p.reference && (
+                  <span className="ml-1.5 text-[var(--text-muted)]">{p.reference}</span>
+                )}
+                {p.note && <span className="ml-1.5 italic text-[var(--text-muted)]">{p.note}</span>}{' '}
+                <MoneyWord
+                  label={p.status}
+                  state={
+                    p.status === 'succeeded'
+                      ? 'current'
+                      : p.status === 'failed'
+                        ? 'blocked'
+                        : 'pending'
+                  }
+                />
+              </span>
+              <span className="t-money">{formatCurrency(p.amount_cents, invoice.currency)}</span>
+            </li>
+          ))}
+          {!isDraft && invoice.status !== 'void' && (
+            <li className="money-row money-total">
+              <span className={LABEL}>still owed</span>
+              <span className="t-money">{formatCurrency(balance, invoice.currency)}</span>
+            </li>
+          )}
+        </ul>
+      </section>
 
       {/* ── The acts row ────────────────────────────────────────────────── */}
       <div className="mt-5 border-t border-[var(--color-pearl)] pt-3">

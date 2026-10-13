@@ -1,13 +1,15 @@
 "use client";
 
 /**
- * LibraryCard — a piece on a shelf, in the document's paper grammar (R32/R39):
- * ink border, flat stacked depth on hover, zero shadows (D4). Teaching happens
- * in place — a needs-teaching card opens inline Quick Tags (the ~5-minute act,
+ * LibraryCard — a piece on a shelf as plate and caption (US-28 S10c, V20
+ * U-Q20): the plate is a picture mat on a 1px --card-edge, never a card, and
+ * the caption names the piece, its maker and the jobs it was used on, each
+ * with its job's tick. State is an ink word, never a chip. Teaching happens
+ * in place — a needs-teaching piece opens inline Quick Tags (the ~5-minute act,
  * reusing useStyleArchetypes + useAssignStyle) or escalates to Deep Analysis (a
  * paper sheet over the Room). Movement between shelves rides the existing
- * promote / nominate flows. No invented scores: a card shows only what its row
- * truthfully carries.
+ * promote / nominate flows. No invented scores: a caption shows only what its
+ * row truthfully carries.
  */
 
 import { useState } from "react";
@@ -27,6 +29,10 @@ import {
   readLibraryConfigurationSummary,
 } from "./library-configuration-summary";
 import type { ConfigurationMode } from "../piece/piece-configuration-model";
+import { usageStageClass, type PieceUse } from "./use-piece-usage";
+
+/** A caption names at most this many jobs; the rest are counted. */
+const USED_ON_SHOWN = 2;
 
 export interface LibraryItem {
   id: string;
@@ -66,9 +72,12 @@ export function LibraryCard({
   onDeep,
   onPromote,
   onNominate,
+  usedOn = [],
 }: {
   item: LibraryItem;
   needsTeaching: boolean;
+  /** The jobs this piece is on (usePieceUsage), named in the caption. */
+  usedOn?: readonly PieceUse[];
   /** In the validation queue (status='needs_validation') — a read awaiting a
    *  second eye. Distinct from needsTeaching; when set, the fold leads with the
    *  validate lens (R88). */
@@ -91,93 +100,72 @@ export function LibraryCard({
   const configuration = readLibraryConfigurationSummary(item);
   const configurationLabels = capabilityLabels(configuration);
   const fieldProvenance = fieldProvenanceLabel(item);
+  const shownUses = usedOn.slice(0, USED_ON_SHOWN);
+  const moreUses = usedOn.length - shownUses.length;
+  const stateWord = needsValidation
+    ? "Needs a look"
+    : needsTeaching
+      ? "Needs teaching"
+      : null;
 
   return (
-    <article className="group relative overflow-hidden rounded-[8px] border border-[var(--doc-ink-border)] bg-white transition-colors duration-200 hover:border-[var(--color-clay)] motion-reduce:transition-none">
+    <article className="library-plate" data-library-card={item.id}>
       <Link
         href={pieceHref}
         aria-label={`Open ${item.name}`}
-        className="relative flex h-[150px] items-center justify-center overflow-hidden bg-[var(--doc-sheet-2)]"
+        className="plate library-plate-mat"
       >
         {img ? (
-          <img
-            src={img}
-            alt=""
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
+          <img src={img} alt="" loading="lazy" />
         ) : (
-          <span className="font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]">
-            {item.category ?? "piece"}
-          </span>
-        )}
-
-        {needsValidation ? (
-          <span className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.94)] px-1.5 py-0.5 font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
-            <i
-              aria-hidden
-              className="h-1.5 w-1.5 rounded-full bg-[var(--color-dusty-blue)]"
-            />
-            Needs a look
-          </span>
-        ) : (
-          needsTeaching && (
-            <span className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-[3px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.94)] px-1.5 py-0.5 font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
-              <i
-                aria-hidden
-                className="h-1.5 w-1.5 rounded-full bg-[#d2ad2f]"
-              />
-              Needs teaching
-            </span>
-          )
-        )}
-        {item.layer === "catalog" && (
-          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-[3px] border border-[rgba(196,165,123,0.5)] bg-[rgba(252,250,246,0.92)] px-1.5 py-0.5 font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
-            <span aria-hidden className="inline-flex flex-col gap-[1px]">
-              <i className="block h-px w-2 bg-[var(--color-clay)]" />
-              <i className="block h-px w-1.5 bg-[var(--color-clay)] opacity-60" />
-              <i className="block h-px w-1 bg-[var(--color-clay)] opacity-30" />
-            </span>
-            Patina
-          </span>
+          <span className="library-plate-word">{item.category ?? "piece"}</span>
         )}
       </Link>
 
-      <div className="px-3.5 py-3">
-        <Link
-          href={pieceHref}
-          className="block text-[14px] font-medium leading-snug text-[var(--color-charcoal)] transition-colors hover:text-[var(--text-body)] motion-reduce:transition-none"
-        >
+      <div className="cap">
+        <Link href={pieceHref} className="name t-d4 library-hit">
           {item.name}
         </Link>
-        <div className="mt-0.5 text-[12px] text-[var(--color-charcoal)]">
-          {sub}
-        </div>
-        {fieldProvenance && (
-          <div className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-body)]">
-            {fieldProvenance}
+        <p className="t-body-sm library-cap-maker">{sub}</p>
+        {shownUses.map((use) => (
+          <p
+            key={use.projectId}
+            className={`t-body-sm library-cap-used tick ${usageStageClass(use.stage)}`}
+          >
+            Used on {use.title}
+          </p>
+        ))}
+        {moreUses > 0 && (
+          <p className="t-body-sm library-cap-used">
+            and {moreUses} more {moreUses === 1 ? "job" : "jobs"}
+          </p>
+        )}
+
+        {(stateWord ||
+          fieldProvenance ||
+          configurationLabels.length > 0) && (
+          <div className="library-cap-words">
+            {stateWord && <span className="word">{stateWord}</span>}
+            {fieldProvenance && (
+              <span className="word word--quiet">{fieldProvenance}</span>
+            )}
+            {configurationLabels.length > 0 && (
+              <ul
+                aria-label="Configuration capabilities"
+                className="library-cap-words"
+              >
+                {configurationLabels.map((label) => (
+                  <li key={label} className="word word--quiet">
+                    {label}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
-        <ul
-          aria-label="Configuration capabilities"
-          className="mt-2 flex flex-wrap gap-1"
-        >
-          {configurationLabels.map((label) => (
-            <li
-              key={label}
-              className="rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-charcoal)]"
-            >
-              {label}
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-2.5 flex items-center justify-between gap-2">
-          <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
-            {LAYER_FOOT[item.layer]}
-          </span>
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
+        {(foldable || onPromote || onNominate) && (
+          <div className="library-cap-acts">
             {foldable && (
               <CardLink
                 actionKey="open-piece-teaching"
@@ -189,7 +177,6 @@ export function LibraryCard({
             {onPromote && (
               <CardLink
                 actionKey="promote-piece"
-                subtle
                 onClick={() => onPromote(item.id)}
               >
                 Add to studio library
@@ -198,14 +185,13 @@ export function LibraryCard({
             {onNominate && (
               <CardLink
                 actionKey="nominate-maker"
-                subtle
                 onClick={() => onNominate(item.id)}
               >
                 Recommend maker
               </CardLink>
             )}
           </div>
-        </div>
+        )}
       </div>
 
       {open && needsValidation && (
@@ -226,21 +212,13 @@ export function LibraryCard({
   );
 }
 
-const LAYER_FOOT: Record<LayerProductLayer, string> = {
-  personal: "My Library",
-  studio: "Studio",
-  catalog: "Patina Catalog",
-};
-
 function CardLink({
   children,
   onClick,
-  subtle,
   actionKey,
 }: {
   children: React.ReactNode;
   onClick: () => void;
-  subtle?: boolean;
   actionKey: string;
 }) {
   return (
@@ -248,9 +226,8 @@ function CardLink({
       actionKey={actionKey}
       surfaceKey="library"
       regionKey="library-card"
-      variant="secondary"
+      variant="tertiary"
       onClick={onClick}
-      className={subtle ? "text-[var(--text-body)]" : undefined}
     >
       {children}
     </DocumentAction>
@@ -285,7 +262,7 @@ function InlineQuickTags({
   };
 
   return (
-    <div className="border-t border-[var(--color-pearl)] bg-[rgba(232,197,71,0.05)] px-3.5 py-3 motion-safe:animate-[doc-fade_200ms_ease-out]">
+    <div className="library-cap-fold motion-safe:animate-[doc-fade_200ms_ease-out]">
       <div className="mb-2 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
         What is its character?
       </div>
@@ -386,7 +363,7 @@ function InlineValidate({
   };
 
   return (
-    <div className="border-t border-[var(--color-pearl)] bg-[rgba(139,156,173,0.06)] px-3.5 py-3 motion-safe:animate-[doc-fade_200ms_ease-out]">
+    <div className="library-cap-fold motion-safe:animate-[doc-fade_200ms_ease-out]">
       <div className="mb-2 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
         Does this read look right?
       </div>
@@ -394,15 +371,11 @@ function InlineValidate({
       {isLoading ? (
         <StrataSweep size="sm" label="Loading the read" />
       ) : read.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="library-cap-words">
           {read.map((r) => (
             <span
               key={r.name}
-              className={`rounded-[14px] border px-2.5 py-1 text-[12px] ${
-                r.primary
-                  ? "border-[var(--color-dusty-blue)] text-[var(--color-charcoal)]"
-                  : "border-[var(--color-pearl)] text-[var(--text-body)]"
-              }`}
+              className={r.primary ? "word" : "word word--quiet"}
             >
               {r.name}
               {r.primary ? " · primary" : ""}

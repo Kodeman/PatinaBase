@@ -8,7 +8,7 @@
 import { render } from '@testing-library/react';
 import type { NeedLine } from '@/lib/document/desk-derivation';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
-import { deriveDaySheet } from '@/lib/document/day-sheet';
+import { deriveDaySheet, groupSheetByJob } from '@/lib/document/day-sheet';
 import {
   deriveLensBand,
   type LensBandInput,
@@ -92,7 +92,9 @@ function renderSheet(needs: DeskNeed[], unreadFeeds: string[] = []) {
     unreadFeeds,
     now: NOW,
   });
-  return render(<DaySheet sheet={sheet} scope="studio" onScope={() => {}} now={NOW} />);
+  return render(
+    <DaySheet sheet={sheet} cards={groupSheetByJob(sheet.lines, new Map())} scope="studio" onScope={() => {}} now={NOW} />,
+  );
 }
 
 describe('the Desk marks', () => {
@@ -134,7 +136,7 @@ describe('the Desk marks', () => {
     expect(parts(container, 'headline')).toHaveLength(1);
     const headline = part(container, 'headline');
     expectPrinted(headline);
-    expect(headline.textContent).toBe('No current action alerts.');
+    expect(headline.textContent).toBe('Nothing needs you today.');
     expect(parts(container, 'settle')).toEqual([headline]);
     expect(parts(container, 'act')).toHaveLength(0);
   });

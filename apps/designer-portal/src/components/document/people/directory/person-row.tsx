@@ -20,8 +20,9 @@
  * seats with many stages; a single person-level stage is a fabrication the
  * model does not claim. It prints on the seat line beneath, one line per seat.
  *
- * At 390 the three words print PLAIN and inline on line 2 of every row, folded
- * or not (R-M / C23): a narrow row that hides consent and paper until unfold
+ * The three words print as ink words in the sentence column at every width
+ * (US-28 S10, V20 U-Q13), so at 390 they still sit on every row, folded or
+ * not (R-M / C23): a narrow row that hides consent and paper until unfold
  * hides exactly the facts a studio scans fastest for.
  */
 
@@ -32,6 +33,7 @@ import {
   type StudioContactRule,
 } from "@patina/supabase";
 import {
+  directoryKindWord,
   entryPaperWord,
   personIdentityLine,
   splitRoutedClause,
@@ -115,6 +117,121 @@ export function PersonRow({
   });
   const seatsLoaded = seats !== undefined && !seatsFetching;
 
+  // The silenced phone (below) and the leading rule (PersonSafetyFacts) are
+  // DIFFERENT facts off the same rule row (CR-4 / CR-16).
+  const unreachable = contactRuleIsDoNotContact(rule);
+  const seatCount = person.seat_count ?? 0;
+
+  return (
+    <li
+      data-person-row={person.person_id}
+      data-highlighted={highlighted ? "true" : undefined}
+      className="lrow people-row"
+    >
+      <div className="lname">
+        <span className="people-who">
+          <Avatar name={person.display_name} role={person.role} />
+          <button
+            type="button"
+            data-open-person={person.person_id}
+            onClick={onOpen}
+            className="name t-d4 text-left"
+          >
+            {person.display_name}
+          </button>
+        </span>
+      </div>
+
+      {/* US-28 (people specimen) — the kind column. */}
+      <span className="lphase t-meta" data-row-kind>
+        {directoryKindWord(person)}
+      </span>
+
+      <div className="lsent t-body-sm min-w-0">
+        <p className="t-meta text-[var(--ink-subtle)]">
+          {personIdentityLine(person, seatTrade)}
+        </p>
+        <PersonSafetyFacts
+          person={person}
+          rule={rule}
+          routeTo={routeTarget}
+          consentClause={consentClause}
+          routeTargets={routeTargets}
+        />
+      </div>
+
+      {/* Its own control, 8px clear of the row's own (SPEC §5.1 #15).
+
+          A DO-NOT-CONTACT RULE TAKES THE NUMBER OFF THE ROW (SPEC §5.1 #10,
+          §5.4). Frank Bauer is "do not contact, write Rosa instead" and his own
+          mobile still printed here as a live `tel:` link — one tap away from
+          the call the rule forbids. Channels are HIDDEN, never deleted: the
+          number is still on his card, behind the rule that governs it. A rule
+          that merely forbids TEXT is not that rule — Ray Thao's own line is
+          what his clause tells the studio to use. */}
+      <span className="lwhen t-meta">
+        {unreachable ? null : (
+          <TelLink phone={person.phone} personName={person.display_name} />
+        )}
+      </span>
+
+      <span className="lact">
+        {seatCount > 0 && (
+          <button
+            type="button"
+            data-seats-disclosure={person.person_id}
+            aria-expanded={seatsOpen}
+            aria-controls={seatsPanelId}
+            onClick={() => setSeatsOpen((open) => !open)}
+            className="t-meta min-h-11 text-[var(--ink-subtle)] underline decoration-[var(--oak)] underline-offset-4"
+          >
+            {seatCount} {seatCount === 1 ? "seat" : "seats"}
+          </button>
+        )}
+      </span>
+
+      <ul
+        id={seatsPanelId}
+        hidden={!seatsOpen}
+        className="people-seats m-0 list-none p-0"
+      >
+        {(seats ?? []).map((seat) => (
+          <li key={seat.seat_id}>
+            <SeatLine
+              seat={seat}
+              onOpen={(s) => (onOpenSeat ? onOpenSeat(s) : onOpen())}
+            />
+          </li>
+        ))}
+        {seatsOpen && seatsLoaded && seats.length === 0 && (
+          <li className="t-body-sm py-2 text-[var(--ink-subtle)]">
+            {DIRECTORY_NO_SEAT_SENTENCE}
+          </li>
+        )}
+      </ul>
+    </li>
+  );
+}
+
+/**
+ * US-28 R8 — THE CONTACT-SAFETY FACTS, ONCE: reach, consent and paper as ink
+ * words, the rule clause, and the consent clause behind the word. PersonRow and
+ * the Directory's Inbound row both print these, so a do-not-contact lead that
+ * lands in Inbound reads its restriction exactly as it would in the Directory.
+ */
+export function PersonSafetyFacts({
+  person,
+  rule,
+  routeTo: routeTarget,
+  consentClause,
+  routeTargets,
+}: {
+  person: DirectoryPerson;
+  rule?: StudioContactRule | null;
+  routeTo?: ContactRouteTarget | null;
+  consentClause?: string | null;
+  routeTargets?: ReadonlyMap<string, ContactRouteTarget>;
+}) {
   const { routedName } = splitRoutedClause(person.contact_rule_summary);
   // CR3-2: THE SUMMARY IS NOT A FACE. `contact_rule_summary()` renders
   // `channels_forbidden`/`channels_allowed` as raw `channel_kind` tokens —
@@ -139,127 +256,33 @@ export function PersonRow({
   // whose rule has not loaded prints the clause without either rather than
   // guessing.
   const blocked = contactRuleIsHardBlock(rule);
-  const unreachable = contactRuleIsDoNotContact(rule);
   const paper = entryPaperWord(person);
-  const seatCount = person.seat_count ?? 0;
 
   return (
-    <li
-      data-person-row={person.person_id}
-      data-highlighted={highlighted ? "true" : undefined}
-      className={`flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--hairline-strong)] px-4 py-3 ${
-        highlighted ? "bg-[var(--rail)]" : ""
-      }`}
-    >
-      <Avatar name={person.display_name} role={person.role} />
+    <>
+      {/* US-28 S10 (U-Q13) — reach, consent and paper as INK WORDS in one
+          column, at every width: unboxed, so the 390 row no longer needs a
+          second, plain copy of the same three words. Terracotta-ink only
+          where a word itself is blocked or do-not-contact. */}
+      <p data-row-words className="people-words">
+        <StateWord family="reach" value={person.reach_state} />
+        <StateWord family="consent" value={person.consent_status} />
+        {paper ? <StateWord family="paper" value={paper} /> : null}
+      </p>
+      <ContactRuleLine summary={clause} blocked={blocked} routeTo={routeTo} />
 
-      <div className="min-w-0 flex-1 basis-[320px]">
-        <button
-          type="button"
-          data-open-person={person.person_id}
-          onClick={onOpen}
-          className="min-h-11 text-left text-[14px] font-semibold leading-[1.4] text-[var(--ink)]"
-        >
-          {person.display_name}
-        </button>
-        <p className="t-meta text-[var(--ink-subtle)]">
-          {personIdentityLine(person, seatTrade)}
-        </p>
-        <ContactRuleLine summary={clause} blocked={blocked} routeTo={routeTo} />
-
-        {/* SPEC §5.1 #9 — the consent WORD prints in its own column; the
-            clause behind it ("Opted out by text, 3 December 2025, on the
-            Lindqvist kitchen.") belongs here, under the identity, where a
-            studio reading the ledger can see WHY the word says what it says. */}
-        {consentClause ? (
-          <p data-consent-clause className="t-body-sm mt-1 text-[var(--ink-subtle)]">
-            {consentClause}
-          </p>
-        ) : null}
-
-        {/* 390 — line 2: reach · consent · paper, plain, on EVERY row (R-M). */}
+      {/* SPEC §5.1 #9 — the consent WORD prints in its own column; the
+          clause behind it ("Opted out by text, 3 December 2025, on the
+          Lindqvist kitchen.") belongs here, under the identity, where a
+          studio reading the ledger can see WHY the word says what it says. */}
+      {consentClause ? (
         <p
-          data-row-words-390
-          className="mt-1 flex flex-wrap items-center gap-x-2 sm:hidden"
+          data-consent-clause
+          className="t-body-sm mt-1 text-[var(--ink-subtle)]"
         >
-          <StateWord family="reach" value={person.reach_state} plain />
-          <span aria-hidden className="text-[var(--ink-faint)]">
-            ·
-          </span>
-          <StateWord family="consent" value={person.consent_status} plain />
-          {paper ? (
-            <>
-              <span aria-hidden className="text-[var(--ink-faint)]">
-                ·
-              </span>
-              <StateWord family="paper" value={paper} plain />
-            </>
-          ) : null}
+          {consentClause}
         </p>
-      </div>
-
-      {/* 1440 — three bordered word columns, in this order, and only three. */}
-      <div data-row-words className="hidden shrink-0 gap-3 sm:flex">
-        <StateWord
-          family="reach"
-          value={person.reach_state}
-          className="w-[108px]"
-        />
-        <StateWord
-          family="consent"
-          value={person.consent_status}
-          className="w-[108px]"
-        />
-        {paper ? (
-          <StateWord family="paper" value={paper} className="w-[108px]" />
-        ) : null}
-      </div>
-
-      {/* Its own control, 8px clear of the row's own (SPEC §5.1 #15).
-
-          A DO-NOT-CONTACT RULE TAKES THE NUMBER OFF THE ROW (SPEC §5.1 #10,
-          §5.4). Frank Bauer is "do not contact, write Rosa instead" and his own
-          mobile still printed here as a live `tel:` link — one tap away from
-          the call the rule forbids. Channels are HIDDEN, never deleted: the
-          number is still on his card, behind the rule that governs it. A rule
-          that merely forbids TEXT is not that rule — Ray Thao's own line is
-          what his clause tells the studio to use. */}
-      {unreachable ? null : (
-        <TelLink phone={person.phone} personName={person.display_name} />
-      )}
-
-      {seatCount > 0 && (
-        <button
-          type="button"
-          data-seats-disclosure={person.person_id}
-          aria-expanded={seatsOpen}
-          aria-controls={seatsPanelId}
-          onClick={() => setSeatsOpen((open) => !open)}
-          className="t-meta min-h-11 shrink-0 text-[var(--ink-faint)]"
-        >
-          {seatCount} {seatCount === 1 ? "seat" : "seats"}
-        </button>
-      )}
-
-      <ul
-        id={seatsPanelId}
-        hidden={!seatsOpen}
-        className="m-0 w-full list-none border-t border-[var(--hairline-strong)] p-0 pl-[50px]"
-      >
-        {(seats ?? []).map((seat) => (
-          <li key={seat.seat_id}>
-            <SeatLine
-              seat={seat}
-              onOpen={(s) => (onOpenSeat ? onOpenSeat(s) : onOpen())}
-            />
-          </li>
-        ))}
-        {seatsOpen && seatsLoaded && seats.length === 0 && (
-          <li className="t-body-sm py-2 text-[var(--ink-subtle)]">
-            {DIRECTORY_NO_SEAT_SENTENCE}
-          </li>
-        )}
-      </ul>
-    </li>
+      ) : null}
+    </>
   );
 }

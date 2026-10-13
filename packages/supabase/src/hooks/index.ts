@@ -17,7 +17,7 @@ export {
   useUpdateProduct,
   useCreateDraftProduct,
 } from "./use-products";
-export { useNeedStates, useSetNeedState, mapNeedStateRows, type NeedKey, type NeedState, type NeedStateAction, type SetNeedStateInput } from './use-need-states';
+export { useNeedStates, useSetNeedState, useTeammateActed, mapNeedStateRows, mapTeammateActedRows, type NeedKey, type NeedState, type NeedStateAction, type SetNeedStateInput, type TeammateActed } from './use-need-states';
 export {
   useLedProjectIds,
   useProjectLead,

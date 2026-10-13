@@ -17,11 +17,11 @@
  * A Room — full-bleed paper, zero shadows (D4); reuses RoomShell's physics.
  */
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useStyleArchetypes } from '@patina/supabase';
 import { RoomShell } from '../rooms/room-shell';
 import { StrataMark } from '../strata-mark';
-import { ComposeSection, ComposeField } from './compose-section';
+import { ComposeSection, ComposeField, PaperEyebrow } from './compose-section';
 import {
   useComposePiece,
   type ComposeDraftInput,
@@ -41,13 +41,31 @@ interface StyleArchetype {
   name: string;
 }
 
-const STATE_TONE: Record<string, { color: string; bg: string }> = {
-  Capture: { color: 'var(--color-aged-oak)', bg: 'transparent' },
-  Draft: { color: '#b89a2e', bg: 'transparent' },
-  'Catalog-ready': { color: 'var(--color-sage)', bg: 'rgba(168,181,160,0.12)' },
+type ComposeFacetId = keyof ComposeSections;
+
+const COMPOSE_FACET_WORD: Record<ComposeFacetId, string> = {
+  identity: 'identity',
+  piece: 'the piece',
+  commerce: 'commerce',
+  folio: 'the folio',
+  eye: 'style',
 };
 
-type ComposeFacetId = keyof ComposeSections;
+/** Progress in words, never a percentage (US-28 S9). */
+function writtenWords(sections: ComposeSections): string {
+  const written = COMPOSE_FACET_ORDER.filter((id) => sections[id]);
+  const toWrite = COMPOSE_FACET_ORDER.filter((id) => !sections[id]);
+  return [
+    written.length
+      ? `Written: ${written.map((id) => COMPOSE_FACET_WORD[id]).join(', ')}`
+      : null,
+    toWrite.length
+      ? `To write: ${toWrite.map((id) => COMPOSE_FACET_WORD[id]).join(', ')}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
 
 const COMPOSE_FACET_ORDER: ComposeFacetId[] = [
   'identity',
@@ -177,7 +195,7 @@ export function ComposingPage() {
       setToast(
         pct >= 100
           ? 'Saved — catalog-ready and taught. It joins the shelf at full strength.'
-          : `Saved as a draft at ${pct}%. It lives on your My Library shelf; deepen it anytime.`,
+          : 'Saved as a draft. It lives on your My Library shelf; deepen it anytime.',
       );
       window.setTimeout(() => setToast(null), 3600);
     } catch {
@@ -195,11 +213,10 @@ export function ComposingPage() {
     loading: save.isPending,
   });
 
-  const tone = STATE_TONE[state];
-
   return (
     <RoomShell
       title="Compose a piece"
+      measure="mx-auto max-w-[760px] px-4 sm:px-8"
       backTo="/library"
       backLabel="Resource library"
       action={
@@ -220,10 +237,11 @@ export function ComposingPage() {
         </DocumentActionGroup>
       }
     >
-      <div className="mx-auto max-w-[760px] px-6 sm:px-8">
+      <div className="papers-ground">
+      <div className="mx-auto max-w-[760px] px-4 sm:px-8">
         {/* ── The product taking shape — live preview + the Strata Mark ── */}
-        <section className="sticky top-[57px] z-[5] border-b border-[var(--doc-ink-border)] bg-[var(--doc-paper)] pb-4 pt-6">
-          <div className="flex items-center gap-5">
+        <section className="sticky top-[57px] z-[5] border-b border-[var(--doc-ink-border)] bg-[var(--paper)] pb-4 pt-6">
+          <div className="flex min-w-0 items-center gap-4 sm:gap-5">
             <span className="flex h-[84px] w-[84px] shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-[var(--doc-sheet-2)]">
               {images[0] ? (
                 <img
@@ -253,28 +271,18 @@ export function ComposingPage() {
                     ? `${width} × ${depth} × ${height}`
                     : 'Fill any section below. The piece composes itself as you go.')}
               </p>
-              <div className="mt-2 flex items-center gap-3">
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <StrataMark size="lg" fill={fill} />
-                <span className="doc-type-meta tracking-[0.04em]">
-                  <b className="font-heading text-[0.95rem] text-[var(--color-charcoal)]">
-                    {pct}
-                  </b>
-                  % composed
-                </span>
-                <span
-                  className="doc-type-meta rounded-[3px] border px-2 py-0.5 uppercase tracking-[0.1em]"
-                  style={{
-                    color: tone.color,
-                    borderColor: tone.color,
-                    background: tone.bg,
-                  }}
-                >
+                <span className="word" data-testid="compose-state">
                   {state}
                 </span>
               </div>
             </div>
           </div>
-          <p className="doc-type-body mt-3 border-l-2 border-[var(--color-clay)] pl-3 text-[var(--color-quiet-ink)]">
+          <p className="t-body-sm mt-3 text-[var(--text-muted)]" data-testid="written-words">
+            {writtenWords(sections)}
+          </p>
+          <p className="doc-type-body mt-1 text-[var(--color-quiet-ink)]">
             {guide}
           </p>
         </section>
@@ -283,7 +291,6 @@ export function ComposingPage() {
         <Movement
           name="The record"
           meta="Line 1 · what it is"
-          hue="var(--color-mocha)"
         >
           <ComposeSection
             name="Identity"
@@ -383,7 +390,6 @@ export function ComposingPage() {
         <Movement
           name="The catalog"
           meta="Line 2 · into the marketplace"
-          hue="var(--color-clay)"
         >
           <ComposeSection
             name="Commerce"
@@ -499,7 +505,6 @@ export function ComposingPage() {
         <Movement
           name="The eye"
           meta="Line 3 · the teaching"
-          hue="var(--color-dusty-blue)"
         >
           <ComposeSection
             name="Style & character"
@@ -557,10 +562,11 @@ export function ComposingPage() {
           </ComposeSection>
         </Movement>
 
-        <p className="doc-type-body mx-auto mt-8 max-w-[620px] border-t border-[var(--doc-ink-border)] py-5 text-center italic text-[var(--color-quiet-ink)]">
+        <p className="t-body-sm papers-closing">
           Work in any order. Every save is a usable draft; there are no steps to
           unlock.
         </p>
+      </div>
       </div>
 
       {toast && (
@@ -576,34 +582,24 @@ export function ComposingPage() {
   );
 }
 
+/** One movement: a Section that closes on its own rule; ink words, no hue. */
 function Movement({
   name,
   meta,
-  hue,
   children,
 }: {
   name: string;
   meta: string;
-  hue: string;
   children: React.ReactNode;
 }) {
+  const id = useId();
   return (
-    <section className="pb-1 pt-8">
-      <div className="mb-1 flex items-baseline gap-3">
-        <span
-          aria-hidden
-          className="h-[4px] w-[34px] shrink-0 self-center rounded-[2px]"
-          style={{ background: hue }}
-        />
-        <h2 className="font-heading text-[1.2rem] font-medium italic text-[var(--color-charcoal)]">
-          {name}
-        </h2>
-        <span className="doc-type-meta ml-auto uppercase tracking-[0.06em]">
-          {meta}
-        </span>
+    <section className="section" aria-labelledby={id}>
+      <div className="sec-head">
+        <PaperEyebrow id={id}>{name}</PaperEyebrow>
+        <span className="t-meta papers-meta">{meta}</span>
       </div>
-      <div className="mb-4 h-px bg-[var(--doc-ink-border)]" />
-      {children}
+      <div className="papers-facets">{children}</div>
     </section>
   );
 }

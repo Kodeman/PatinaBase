@@ -4,6 +4,7 @@ import {
   type MoodBoardGeometryInput,
 } from './geometry'
 import {
+  measureMoodBoardContentBounds,
   paintMoodBoardGeometry,
   type MoodBoardImageRequest,
   type MoodBoardPaintResult,
@@ -13,6 +14,8 @@ import {
 
 export const DEFAULT_MOOD_BOARD_EXPORT_SCALE = 2
 export const MOOD_BOARD_EXPORT_MAX_EDGE = 8192
+/** How long a raster (and its preflight) waits for webfonts before the fallback stack. */
+export const MOOD_BOARD_FONT_WAIT_MS = 3000
 export const DEFAULT_MOOD_BOARD_COVER_SIZE = {
   width: 800,
   height: 600,
@@ -112,16 +115,19 @@ async function encodeCanvas(
   throw new Error('The raster environment cannot encode PNG output')
 }
 
+interface RasterOutput {
+  width: number
+  height: number
+  scale: number
+  offsetX: number
+  offsetY: number
+}
+
 async function paintToRaster(
   geometry: BoardGeometrySnapshot,
   environment: MoodBoardRasterEnvironment,
-  output: {
-    width: number
-    height: number
-    scale: number
-    offsetX: number
-    offsetY: number
-  },
+  /** Lays the raster out for a composition of this size. */
+  layout: (composition: BoardSize) => RasterOutput,
   onProgress?: (progress: number, itemKey?: string) => void,
 ): Promise<MoodBoardRasterResult> {
   try {
@@ -131,19 +137,32 @@ async function paintToRaster(
     // declaration carries a system-stack tail, so continuing here selects the
     // same deterministic fallback the DOM composition uses.
   }
+  let output = layout(geometry.canvas)
   const canvas = environment.createCanvas(output.width, output.height)
   canvas.width = output.width
   canvas.height = output.height
   const context = canvas.getContext('2d')
   if (!context)
     throw new Error('A 2D canvas context is required to paint a mood board')
+  // A caption prints whole past its saved box (R13b): the composition grows on
+  // every side to hold it, measured with the fonts just loaded, and its origin
+  // moves with a growth past the top or left. The saved coordinates never do.
+  const bounds = measureMoodBoardContentBounds(context, geometry)
+  if (
+    bounds.width !== geometry.canvas.width ||
+    bounds.height !== geometry.canvas.height
+  ) {
+    output = layout({ width: bounds.width, height: bounds.height })
+    canvas.width = output.width
+    canvas.height = output.height
+  }
   const painted = await paintMoodBoardGeometry({
     context,
     geometry,
     transform: {
       scale: output.scale,
-      offsetX: output.offsetX,
-      offsetY: output.offsetY,
+      offsetX: output.offsetX - bounds.x * output.scale,
+      offsetY: output.offsetY - bounds.y * output.scale,
       viewportWidth: output.width,
       viewportHeight: output.height,
     },
@@ -167,15 +186,14 @@ export async function renderMoodBoardPng(
   options: MoodBoardPngOptions = {},
 ): Promise<MoodBoardRasterResult> {
   const geometry = geometryFor(input)
-  const output = computeMoodBoardRasterScale(
-    geometry.canvas,
-    options.scale,
-    options.maxEdge,
-  )
   return paintToRaster(
     geometry,
     options.environment ?? createDefaultMoodBoardRasterEnvironment(),
-    { ...output, offsetX: 0, offsetY: 0 },
+    (composition) => ({
+      ...computeMoodBoardRasterScale(composition, options.scale, options.maxEdge),
+      offsetX: 0,
+      offsetY: 0,
+    }),
     options.onProgress,
   )
 }
@@ -188,19 +206,18 @@ export async function renderMoodBoardCover(
   const geometry = geometryFor(input)
   const width = options.width ?? DEFAULT_MOOD_BOARD_COVER_SIZE.width
   const height = options.height ?? DEFAULT_MOOD_BOARD_COVER_SIZE.height
-  const scale = Math.min(
-    width / geometry.canvas.width,
-    height / geometry.canvas.height,
-  )
   return paintToRaster(
     geometry,
     options.environment ?? createDefaultMoodBoardRasterEnvironment(),
-    {
-      width,
-      height,
-      scale,
-      offsetX: (width - geometry.canvas.width * scale) / 2,
-      offsetY: (height - geometry.canvas.height * scale) / 2,
+    (composition) => {
+      const scale = Math.min(width / composition.width, height / composition.height)
+      return {
+        width,
+        height,
+        scale,
+        offsetX: (width - composition.width * scale) / 2,
+        offsetY: (height - composition.height * scale) / 2,
+      }
     },
     options.onProgress,
   )
@@ -263,7 +280,16 @@ export function createDefaultMoodBoardRasterEnvironment(): MoodBoardRasterEnviro
     resolveImage: defaultResolveImage,
     async waitForFonts() {
       if (typeof document !== 'undefined' && document.fonts?.ready) {
-        await document.fonts.ready
+        // Bounded: a font load that never settles must not hold the raster or
+        // its preflight; both then measure on the same fallback stack.
+        let timer: ReturnType<typeof setTimeout> | undefined
+        await Promise.race([
+          document.fonts.ready,
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, MOOD_BOARD_FONT_WAIT_MS)
+          }),
+        ])
+        clearTimeout(timer)
       }
     },
   }

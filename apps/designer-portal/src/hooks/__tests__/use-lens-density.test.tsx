@@ -1,6 +1,6 @@
 /**
  * The density observer, at the only two geometries it owns: the lookahead that
- * promotes a region 240px below the frame, and the settle that decides WHEN the
+ * promotes a region 288px below the frame, and the settle that decides WHEN the
  * promotion is allowed to land.
  *
  * The global IntersectionObserver mock (`jest.setup.js:48-56`) accepts an
@@ -241,7 +241,7 @@ describe('useLensDensity', () => {
     jest.useRealTimers();
   });
 
-  it('watches every root at one threshold, 240px below the frame', async () => {
+  it('watches every root at one threshold, 288px below the frame', async () => {
     mountPaper();
     render(<Probe />);
     await flush();
@@ -249,7 +249,7 @@ describe('useLensDensity', () => {
     expect(CapturingIntersectionObserver.instances).toHaveLength(1);
     expect(observer().options).toMatchObject({
       root: null,
-      rootMargin: '0px 0px 240px 0px',
+      rootMargin: '0px 0px 288px 0px',
       threshold: 0,
     });
     expect(observer().observed.size).toBe(REGION_KEYS.length);
@@ -579,7 +579,7 @@ describe('useLensDensity', () => {
     setFetching(0);
     await flush();
 
-    // In frame, and inside the 240 lookahead: promoted.
+    // In frame, and inside the 288 lookahead: promoted.
     expect(regionRoot('approvals')).toHaveAttribute('data-density', 'full');
     expect(regionRoot('schedule')).toHaveAttribute('data-density', 'full');
     // 400px below the line: not.
@@ -773,7 +773,7 @@ describe('useLensDensity', () => {
 
     // At reserve every root stands inside the lookahead: a single-measurement
     // pass would open all six.
-    const line = window.innerHeight + 240;
+    const line = window.innerHeight + 288;
     for (const root of roots) {
       expect(root.getBoundingClientRect().top).toBeLessThanOrEqual(line);
     }

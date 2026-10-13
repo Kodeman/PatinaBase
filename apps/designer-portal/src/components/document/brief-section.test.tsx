@@ -41,6 +41,41 @@ const BASE_LEAD = {
   response_deadline: null,
 };
 
+describe("BriefSection — US-28 S9 her words on the note edge, budget and timeline as facts", () => {
+  it("prints the quote on --edge-note and Budget and Timeline as dt/dd facts, never tiles", () => {
+    mockLead = {
+      ...BASE_LEAD,
+      budget_range: "50k_100k",
+      timeline: "this_quarter",
+      project_description: "The living room is empty except for a piano.",
+    };
+    render(<BriefSection leadId="lead-1" />);
+
+    const quote = screen.getByText("“The living room is empty except for a piano.”");
+    expect(quote.tagName).toBe("BLOCKQUOTE");
+    expect(quote).toHaveClass("papers-note");
+    expect(quote.className).not.toMatch(/border-l-\[3px\]|bg-\[rgba/);
+
+    const facts = document.querySelector("dl.papers-facts");
+    expect(facts).not.toBeNull();
+    const terms = Array.from(facts!.querySelectorAll("dt"));
+    expect(terms.map((dt) => dt.textContent)).toEqual(["Budget", "Timeline"]);
+    for (const dt of terms) {
+      expect(dt.nextElementSibling?.tagName).toBe("DD");
+    }
+    // the quote reads before the facts
+    expect(
+      quote.compareDocumentPosition(facts!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("prints no facts list when the lead carries none", () => {
+    mockLead = { ...BASE_LEAD };
+    render(<BriefSection leadId="lead-1" />);
+    expect(document.querySelector("dl.papers-facts")).toBeNull();
+  });
+});
+
 describe("BriefSection — one head, not two (W5-R2 item 4)", () => {
   beforeEach(() => {
     mockLead = { ...BASE_LEAD };

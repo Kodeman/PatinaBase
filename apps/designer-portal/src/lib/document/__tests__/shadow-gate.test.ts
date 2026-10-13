@@ -1,16 +1,18 @@
 /**
- * R126 / Q04 — the elevation budget, gated at the CSS level.
+ * US-28 S1 — zero shadows, gated at the CSS level (V20 U-Q12; house sheet
+ * §G-2, §G-9).
  *
  * D4 ("no shadows, anywhere") is enforced by `no-restricted-syntax` rules in
  * eslint.config.mjs that read `.ts` and `.tsx` ONLY. No stylelint config exists
  * anywhere in this repo, so a shadow written straight into a stylesheet has
  * never been caught by anything — which is how R72's `.folio-face` exception
- * shipped, went unused, and sat in globals.css untripped until this lane
- * deleted it.
+ * shipped, went unused, and sat in globals.css untripped until a lane deleted
+ * it.
  *
- * D4 as amended: ONE token, `--elevation-sheet`, spent at exactly three sites
- * — the margin chips, the open ledger sheet, the studio drawer. This suite
- * holds the half the linter cannot see.
+ * R126 once allowed ONE token, `--elevation-sheet`, at three sites (the margin
+ * chips, the open ledger sheet, the studio drawer). U-Q12 retired it: depth is
+ * the order of the stocks, the weight of the edge, and the veil. This suite
+ * holds the half the linter cannot see — at zero.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -71,37 +73,19 @@ function shadowsIn(file: string): string[] {
 
 const ALL_STYLESHEETS = stylesheets(SRC_ROOT);
 
-/** The one shadow in this app that predates the amendment and sits outside
- *  The Document entirely — a portal-zone timeline card. It is frozen here by
- *  its exact value so it cannot grow, move, or be joined by a second. */
-const LEGACY_NON_DOCUMENT_SHADOW =
-  'src/components/timeline/MilestoneCard.module.css — 0 2px 8px rgba(0, 0, 0, 0.08)';
-
-describe('R126 · D4 as amended — one elevation token, one declaration', () => {
+describe('US-28 S1 · zero shadows', () => {
   it('finds stylesheets to measure, so a moved src/ fails loudly', () => {
     expect(ALL_STYLESHEETS).toContain(GLOBALS_CSS);
   });
 
-  it('declares exactly one shadow in globals.css, and it is .doc-elevated', () => {
-    expect(shadowsIn(GLOBALS_CSS)).toEqual([
-      'src/app/globals.css — var(--elevation-sheet)',
-    ]);
-    // The value alone is not the budget — the selector is. A second rule
-    // reaching for the token would pass the count above and fail here.
-    const source = readFileSync(GLOBALS_CSS, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-    const rules = source.match(/([^{}]+)\{[^}]*box-shadow\s*:\s*var\(--elevation-sheet\)/g) ?? [];
-    expect(rules).toHaveLength(1);
-    expect(rules[0]!.split('{')[0]!.trim()).toBe('.doc-elevated');
+  it('declares no shadow in globals.css', () => {
+    expect(shadowsIn(GLOBALS_CSS)).toEqual([]);
   });
 
-  it('adds no shadow to any other stylesheet under src/', () => {
-    // A frozen inventory rather than a count: any NEW shadow anywhere under
-    // src/ fails, and the one pre-existing non-Document declaration is named
-    // rather than hidden behind an ignore list.
-    const elsewhere = ALL_STYLESHEETS.filter((file) => file !== GLOBALS_CSS).flatMap(
-      shadowsIn,
-    );
-    expect(elsewhere).toEqual([LEGACY_NON_DOCUMENT_SHADOW]);
+  it('declares no shadow in any stylesheet under src/', () => {
+    // The last legacy declaration (MilestoneCard.module.css's timeline card)
+    // went with S1, so the inventory is empty rather than frozen.
+    expect(ALL_STYLESHEETS.flatMap(shadowsIn)).toEqual([]);
   });
 
   it('spends no drop-shadow and no shadow filter in any stylesheet', () => {
@@ -121,17 +105,31 @@ describe('R126 · D4 as amended — one elevation token, one declaration', () =>
     expect(offences).toEqual([]);
   });
 
-  it('declares --elevation-sheet exactly once', () => {
-    const source = readFileSync(GLOBALS_CSS, 'utf8');
-    expect(source.match(/--elevation-sheet\s*:/g)).toHaveLength(1);
+  it('retires the one depth token and its class (U-Q12)', () => {
+    const source = readFileSync(GLOBALS_CSS, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(source).not.toMatch(/--elevation-sheet\s*:/);
+    expect(source).not.toMatch(/var\(--elevation-sheet\)/);
+    expect(source).not.toMatch(/\.doc-elevated\b/);
   });
 
-  it('spends .doc-elevated at no more than the three ruled sites', () => {
-    // The margin chips, the open ledger sheet and the studio drawer. Lanes add
-    // them; zero here is the honest count before they land.
+  it('leaves no Document component wearing the retired class', () => {
+    // The three R126 sites — the margin chips, the open ledger sheet, the
+    // studio drawer — wore `doc-elevated`; none may wear it now.
     const wearers = tsxFiles(join(SRC_ROOT, 'components/document'))
       .filter((file) => /\bdoc-elevated\b/.test(readFileSync(file, 'utf8')))
       .map(relative);
-    expect(wearers.length).toBeLessThanOrEqual(3);
+    expect(wearers).toEqual([]);
+  });
+
+  it('pins the S1 depth ladder tokens that replace the shadow', () => {
+    // The sheet separates from the page by the veil and the edge (4.16:1),
+    // where the retired shadow reached 1.16:1 (uplift.md (b)).
+    const source = readFileSync(GLOBALS_CSS, 'utf8');
+    expect(source).toMatch(/--card-edge:\s*var\(--color-card-edge\);/);
+    expect(source).toMatch(/--paper-lift:\s*var\(--bg-surface\);/);
+    expect(source).toMatch(/--veil:\s*rgba\(20, 18, 16, 0\.55\);/);
+    expect(source).toMatch(/--edge-stage:\s*3px;/);
+    expect(source).toMatch(/--tick-stage:\s*2px;/);
+    expect(source).toMatch(/--edge-note:\s*2px solid var\(--oak\);/);
   });
 });

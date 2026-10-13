@@ -399,8 +399,10 @@ describe('compact-spine timer doorway', () => {
     );
     expect(drawer).toHaveClass('min-[1180px]:hidden');
     expect(drawer).not.toHaveClass('min-[1440px]:hidden');
-    expect(screen.getByRole('button', { name: /Orders/i })).toHaveClass(
-      'focus-visible:outline-[var(--color-clay)]',
+    // SQ-877 N1 — the Ledgers sheet is paper now, so its focus ring is the
+    // clay ink that reads on paper (the clay pigment read on the dark drawer).
+    expect(screen.getByRole('button', { name: /Purchase orders/i })).toHaveClass(
+      'focus-visible:outline-[var(--clay-ink)]',
     );
   });
 

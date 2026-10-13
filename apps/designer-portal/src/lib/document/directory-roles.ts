@@ -58,12 +58,15 @@ export const DIRECTORY_CHIPS: readonly DirectoryChip[] = [
   'firms',
 ] as const;
 
+/** US-28 (people specimen) — the filter WORDS: Everyone · Clients · Trades ·
+ *  Makers · Studio, and Companies, which the specimen does not print but the
+ *  studio must not lose. */
 export const DIRECTORY_CHIP_LABELS: Record<DirectoryChip, string> = {
-  everyone: 'All contacts',
+  everyone: 'Everyone',
   clients: 'Clients',
-  crew: 'Trades & contractors',
-  makers: 'Makers & suppliers',
-  studio: 'Studio team',
+  crew: 'Trades',
+  makers: 'Makers',
+  studio: 'Studio',
   firms: 'Companies',
 };
 

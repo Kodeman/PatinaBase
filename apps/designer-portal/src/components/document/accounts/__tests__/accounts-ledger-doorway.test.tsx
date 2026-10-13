@@ -17,6 +17,7 @@ jest.mock('../invoice-overlays', () => ({
 
 jest.mock('@patina/supabase', () => ({
   useEmailDelivery: () => ({ byRef: {}, isLoading: false, isError: false }),
+  invoiceDaysOverdue: () => 0,
   // P3 — the ledger head carries the billing-export act, which asks which
   // studio it would hand over. No membership here means no studio to export,
   // so the act is not offered and these rows are the whole page.
@@ -112,6 +113,22 @@ it('fires once per id, so closing the folio does not reopen it on the next rende
   );
 
   expect(openInvoiceFolio).toHaveBeenCalledTimes(1);
+});
+
+it('hands the named invoice to the hosting book, never to the stacked folio sheet (U-Q16)', () => {
+  const onOpenFolio = jest.fn();
+  render(
+    <AccountsLedgerPage
+      invoices={[houseInvoice, otherInvoice]}
+      highlightInvoiceId="invoice-2"
+      onOpenDocument={jest.fn()}
+      onOpenFolio={onOpenFolio}
+    />,
+  );
+
+  expect(onOpenFolio).toHaveBeenCalledTimes(1);
+  expect(onOpenFolio).toHaveBeenCalledWith('invoice-2');
+  expect(openInvoiceFolio).not.toHaveBeenCalled();
 });
 
 it('opens nothing when the doorway names no invoice', () => {

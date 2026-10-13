@@ -2186,3 +2186,198 @@ describe('resize anchor mapping (CI-07)', () => {
     expect(resizeAnchorPoint('e')).toEqual({ x: 0, y: 0.5 })
   })
 })
+
+describe('BoardRoomCanvas board-room uplift (US-28 S12)', () => {
+  function stubPointer(coarse: boolean) {
+    vi.stubGlobal(
+      'matchMedia',
+      (media: string) => ({
+        matches: media === '(pointer: coarse)' ? coarse : false,
+        media,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    )
+    window.matchMedia = globalThis.matchMedia
+  }
+
+  it('draws a zone as a dashed edge in its colour with an ink word: no fill, no pill', () => {
+    renderCanvas({ readOnly: true, showViewControls: false })
+    const zone = document.querySelector('[data-board-section="living"]') as HTMLElement
+    expect(zone.style.border).toBe('1px dashed rgb(166, 109, 79)')
+    expect(zone.style.backgroundColor).toBe('')
+    const word = document.querySelector('[data-board-section-label="living"]') as HTMLElement
+    expect(word).toHaveTextContent('Living')
+    expect(word.style.backgroundColor).toBe('')
+    expect(word.style.color).toBe('var(--text-primary)')
+    expect(word.style.textTransform).toBe('uppercase')
+    expect(word.className).not.toMatch(/rounded-full|whitespace-nowrap|text-white/)
+  })
+
+  it('answers in words while a dragged piece is over a zone, then commits membership on release as before', () => {
+    const onSectionMembership = vi.fn()
+    renderCanvas({
+      selectedItemIds: ['note'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onSectionMembership,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const note = document.querySelector('[data-board-item-id="note"]')!
+    fireEvent.pointerDown(note, { button: 0, pointerId: 21, clientX: 780, clientY: 215 })
+    expect(document.querySelector('[data-board-section-target]')).toBeNull()
+    // The note's centre (780, 215) travels to (380, 215): inside Living.
+    fireEvent.pointerMove(application, { pointerId: 21, clientX: 380, clientY: 215 })
+    const zone = document.querySelector('[data-board-section="living"]') as HTMLElement
+    expect(zone).toHaveAttribute('data-board-section-target', 'true')
+    expect(zone.style.border).toBe('2px dashed var(--text-primary)')
+    expect(zone).toHaveTextContent('let go to add it here')
+    expect(onSectionMembership).not.toHaveBeenCalled()
+    fireEvent.pointerUp(application, { pointerId: 21, clientX: 380, clientY: 215 })
+    expect(document.querySelector('[data-board-section-target]')).toBeNull()
+    expect(onSectionMembership).toHaveBeenCalledWith({ itemId: 'note', sectionId: 'living' })
+  })
+
+  it('does not offer a zone to a piece that is already in it', () => {
+    renderCanvas({
+      selectedItemIds: ['chair'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const chair = document.querySelector('[data-board-item-id="chair"]')!
+    fireEvent.pointerDown(chair, { button: 0, pointerId: 22, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(application, { pointerId: 22, clientX: 120, clientY: 110 })
+    expect(document.querySelector('[data-board-section-target]')).toBeNull()
+    fireEvent.pointerUp(application, { pointerId: 22, clientX: 120, clientY: 110 })
+  })
+
+  it('rings the selection in 2px clay ink at offset 2, never a border or a shadow', () => {
+    renderCanvas({
+      selectedItemIds: ['chair'],
+      view: { pan: { x: 0, y: 0 }, zoom: 2 },
+      showViewControls: false,
+    })
+    const ring = document.querySelector('[data-board-selection-ring="chair"]') as HTMLElement
+    expect(ring.style.outline).toBe('1px solid var(--clay-ink)')
+    expect(ring.style.outlineOffset).toBe('1px')
+    expect(ring.style.border).toBe('')
+    expect(ring.style.boxShadow).toBe('')
+  })
+
+  it('draws 10px square handles with a 24px hit area for a mouse, and a rotate circle on a stem', () => {
+    stubPointer(false)
+    renderCanvas({
+      selectedItemIds: ['chair'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      showViewControls: false,
+    })
+    const se = screen.getByRole('button', { name: 'Resize se' })
+    expect(se).toHaveStyle({ width: '24px', height: '24px' })
+    const square = se.querySelector('[data-board-handle-square]') as HTMLElement
+    expect(square.style.width).toBe('10px')
+    expect(square.style.border).toBe('2px solid var(--clay-ink)')
+    expect(square.style.background).toBe('var(--paper-doc)')
+    expect(square.className).not.toMatch(/rounded-full/)
+    const rotate = screen.getByRole('button', { name: 'Rotate item' })
+    // The grip keeps its place: centred 28px above the item, as before.
+    expect(rotate).toHaveStyle({ top: '-40px', width: '24px' })
+    const circle = rotate.querySelector('[data-board-rotate-circle]') as HTMLElement
+    expect(circle.className).toMatch(/rounded-full/)
+    expect(circle.style.border).toBe('2px solid var(--clay-ink)')
+    expect(document.querySelector('[data-board-rotate-stem="chair"]')).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('grows the handle hit area to 44px on a coarse pointer, keeping the rotate grip in place', () => {
+    stubPointer(true)
+    renderCanvas({
+      selectedItemIds: ['chair'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      showViewControls: false,
+    })
+    expect(screen.getByRole('button', { name: 'Resize se' })).toHaveStyle({
+      width: '44px',
+      height: '44px',
+    })
+    const square = screen
+      .getByRole('button', { name: 'Resize se' })
+      .querySelector('[data-board-handle-square]') as HTMLElement
+    expect(square.style.width).toBe('10px')
+    expect(screen.getByRole('button', { name: 'Rotate item' })).toHaveStyle({
+      top: '-50px',
+      width: '44px',
+    })
+    vi.unstubAllGlobals()
+  })
+
+  it('moves a populated zone from its ink grip, and leaves the rename and colour inputs their own pointerdown (R4)', () => {
+    const onSectionBandMoved = vi.fn()
+    renderCanvas({
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onSectionBandMoved,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const grip = document.querySelector('[data-board-section-grip="living"]') as HTMLElement
+    expect(grip).toHaveStyle({ width: '24px', height: '24px' })
+    expect(grip.style.color).toBe('var(--text-primary)')
+    expect(grip.className).not.toMatch(/shadow/)
+
+    for (const control of [
+      screen.getByRole('textbox', { name: 'Rename Living section' }),
+      screen.getByLabelText('Change Living section color'),
+    ]) {
+      fireEvent.pointerDown(control, { button: 0, pointerId: 30, clientX: 100, clientY: 100 })
+      fireEvent.pointerMove(application, { pointerId: 30, clientX: 160, clientY: 140 })
+      fireEvent.pointerUp(application, { pointerId: 30, clientX: 160, clientY: 140 })
+    }
+    expect(onSectionBandMoved).not.toHaveBeenCalled()
+
+    fireEvent.pointerDown(grip, { button: 0, pointerId: 31, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(application, { pointerId: 31, clientX: 160, clientY: 140 })
+    fireEvent.pointerUp(application, { pointerId: 31, clientX: 160, clientY: 140 })
+    expect(onSectionBandMoved).toHaveBeenCalledTimes(1)
+    expect(onSectionBandMoved).toHaveBeenCalledWith({
+      sectionId: 'living',
+      itemIds: ['chair', 'image'],
+      delta: { x: 60, y: 40 },
+    })
+  })
+
+  it('grows the zone grip to 44px on a coarse pointer, in screen px at any zoom (R4, T10)', () => {
+    stubPointer(true)
+    renderCanvas({ view: { pan: { x: 0, y: 0 }, zoom: 2 }, showViewControls: false })
+    const grip = document.querySelector('[data-board-section-grip="living"]') as HTMLElement
+    // 44 screen px inside a world scaled ×2.
+    expect(grip).toHaveStyle({ width: '22px', height: '22px' })
+    vi.unstubAllGlobals()
+  })
+
+  it('draws no grip on a read-only board', () => {
+    renderCanvas({ readOnly: true, showViewControls: false })
+    expect(document.querySelector('[data-board-section-grip]')).toBeNull()
+  })
+
+  it('says a locked pin is locked in a word, not a badge', () => {
+    renderCanvas({ selectedItemIds: ['locked'], showViewControls: false })
+    const lock = screen.getByTestId('board-item-lock-locked')
+    expect(lock).toHaveTextContent('Locked')
+    expect(lock.querySelector('svg')).toBeNull()
+    expect(lock.className).not.toMatch(/rounded-full|text-white/)
+  })
+
+  it('keeps every canvas toolbar free of shadows (D4)', () => {
+    renderCanvas({ selectedItemIds: ['chair', 'image'] })
+    const alignment = screen.getByRole('toolbar', { name: 'Board alignment' })
+    const view = screen.getByRole('toolbar', { name: 'Board view' })
+    for (const toolbar of [alignment, view]) {
+      expect(toolbar.className).not.toMatch(/shadow/)
+    }
+    expect(document.querySelector('[class*="shadow"]')).toBeNull()
+    expect(document.querySelector('[class*="ring-2"]')).toBeNull()
+  })
+})

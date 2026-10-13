@@ -23,10 +23,6 @@ interface PromoteToStudioModalProps {
   onClose: () => void;
   /** Fires after the RPC succeeds. Caller renders PromotionToast off this. */
   onSuccess?: (productId: string) => void;
-  /** D4: drop the box-shadow for any NON-sheet mount over a Document surface
-   *  (depth then reads from the scrim + the hairline border). The Library Room
-   *  now uses `asSheet` below; retained for other over-Document modal uses. */
-  shadowless?: boolean;
   /** R41 F4: render the flow as a paper RoomSheet over the Room (doc grammar —
    *  paper, flat edges, no shadow, slide-up) instead of the portal-modal card.
    *  The form, validation, and RPC are unchanged. Defaults off: every existing
@@ -73,7 +69,6 @@ export function PromoteToStudioModal({
   productId,
   onClose,
   onSuccess,
-  shadowless = false,
   asSheet = false,
 }: PromoteToStudioModalProps) {
   const enabled = open && Boolean(productId);
@@ -470,10 +465,7 @@ export function PromoteToStudioModal({
     >
       <div
         className="relative flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-lg bg-[var(--bg-surface)]"
-        style={{
-          ...(shadowless ? {} : { boxShadow: '0 32px 80px rgba(44, 41, 38, 0.3)' }),
-          border: '1px solid var(--border-default)',
-        }}
+        style={{ border: '1px solid var(--border-default)' }}
       >
         {body}
       </div>

@@ -46,7 +46,7 @@ export function AccountNameplate() {
       onClick={openAccount}
       aria-label="Account and settings"
       aria-haspopup="dialog"
-      className="ml-1 flex shrink-0 items-center gap-2 rounded-[5px] border border-transparent py-[0.3rem] pl-1 pr-2 transition-colors hover:border-[rgba(196,165,123,0.45)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      className="ml-1 flex min-h-11 shrink-0 items-center gap-2 rounded-[5px] border border-transparent py-[0.3rem] pl-1 pr-2 transition-colors hover:border-[rgba(196,165,123,0.45)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
       <span className="relative inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgba(196,165,123,0.16)] font-mono text-[11px] uppercase tracking-wider text-[var(--color-mocha)]">
         {profile?.avatar_url ? (

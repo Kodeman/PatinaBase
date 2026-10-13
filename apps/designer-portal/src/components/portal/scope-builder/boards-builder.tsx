@@ -18,6 +18,7 @@ import {
 } from '@patina/supabase';
 import type { BoardOwnerRef } from '@patina/types';
 import { Button } from '@/components/ui/controls';
+import { DocumentAction } from '@/components/document/document-action';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { BoardVerdictSummary } from '@/components/mood-board/board-verdict-summary';
@@ -168,9 +169,11 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
             </button>
           )}
         </div>
-        <Button variant="primary" size="sm" onClick={() => setPickerOpen(true)}>
+        {/* US-28 S7 — no filled act here: the sand fill goes, and New board
+            is a scored secondary act (uplift.md area 2, R139). */}
+        <DocumentAction actionKey="new-board" variant="secondary" onClick={() => setPickerOpen(true)}>
           New board
-        </Button>
+        </DocumentAction>
       </div>
 
       {boards.length > 0 ? (

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Input } from '@/components/ui/controls';
 import type { BoardRoomControllerApi } from '@/components/portal/scope-builder/board-room-controller';
 import { newSectionId } from '@/components/portal/scope-builder/board-arrange';
 
@@ -33,7 +32,8 @@ function SectionRow({
   };
   return (
     <li className="flex items-center gap-1">
-      <Input
+      <input
+        className="field-control br-field"
         value={draft}
         aria-label={`Rename ${section.name}`}
         onChange={(event) => setDraft(event.target.value)}
@@ -53,23 +53,23 @@ function SectionRow({
   );
 }
 
+/**
+ * The Tools Section's Arrange and Board groups (US-28 S12; SPEC §S12.4: the
+ * "Composition tools" popover becomes the Arrange group, and Export leaves
+ * the header for Tools › Board). Same controls and commands as before; only
+ * their place and dress change.
+ */
 export function BoardRoomSectionsMenu({
   api,
-  showGrid,
-  snapToGrid,
-  onToggleGrid,
-  onToggleSnap,
   tidyEnabled,
   onTidy,
+  onExport,
   onSaveTemplate,
 }: {
   api: BoardRoomControllerApi;
-  showGrid: boolean;
-  snapToGrid: boolean;
-  onToggleGrid: () => void;
-  onToggleSnap: () => void;
   tidyEnabled: boolean;
   onTidy: () => void;
+  onExport: () => void;
   onSaveTemplate: () => void;
 }) {
   const [newName, setNewName] = useState('');
@@ -84,20 +84,17 @@ export function BoardRoomSectionsMenu({
     setNewName('');
   };
   return (
-    <details className="relative">
-      <summary className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center px-2 font-mono text-[9px] uppercase tracking-[0.04em] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]">
-        Composition tools
-      </summary>
-      <div className="absolute right-0 top-full z-[80] mt-1 w-[320px] max-w-[85vw] rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
-        <div className="mb-3 grid grid-cols-3 gap-1 border-b border-[var(--border-default)] pb-3 xl:hidden">
-          <Button size="sm" className="min-h-11 min-w-11" variant={showGrid ? 'secondary' : 'ghost'} aria-pressed={showGrid} onClick={onToggleGrid}>Grid</Button>
-          <Button size="sm" className="min-h-11 min-w-11" variant={snapToGrid ? 'secondary' : 'ghost'} aria-pressed={snapToGrid} onClick={onToggleSnap}>Snap</Button>
-          <Button size="sm" className="min-h-11 min-w-11" variant="ghost" disabled={!tidyEnabled} onClick={onTidy}>Tidy</Button>
+    <>
+      <div className="br-tools-group" role="group" aria-labelledby="br-tools-arrange">
+        <p className="eb" id="br-tools-arrange">Arrange</p>
+        <div className="br-tool-acts">
+          <button type="button" className="br-tool" disabled={!tidyEnabled} onClick={onTidy}>Arrange composition</button>
+          <button type="button" className="br-tool" onClick={() => api.trimCanvas()}>Trim composition canvas</button>
         </div>
-        <p className="font-mono text-[9px] uppercase text-[var(--text-muted)]">Composition sections</p>
-        <div className="mt-2 flex gap-1">
-          <Input
-            className="h-11"
+        <p className="br-tools-sub">Composition sections</p>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            className="field-control br-field"
             value={newName}
             aria-label="New section name"
             placeholder="Section name"
@@ -106,7 +103,7 @@ export function BoardRoomSectionsMenu({
               if (event.key === 'Enter') add();
             }}
           />
-          <Button size="sm" className="min-h-11 min-w-11" variant="secondary" disabled={!newName.trim()} onClick={add}>Add section</Button>
+          <button type="button" className="br-tool br-tool--word shrink-0" disabled={!newName.trim()} onClick={add}>Add section</button>
         </div>
         {api.state.sections.length > 0 && (
           <ul className="mt-2 space-y-1">
@@ -115,11 +112,14 @@ export function BoardRoomSectionsMenu({
             ))}
           </ul>
         )}
-        <div className="mt-3 grid gap-1 border-t border-[var(--border-default)] pt-2">
-          <Button size="sm" className="min-h-11 min-w-11" variant="ghost" onClick={() => api.trimCanvas()}>Trim composition canvas</Button>
-          <Button size="sm" className="min-h-11 min-w-11" variant="ghost" onClick={onSaveTemplate}>Save studio template</Button>
+      </div>
+      <div className="br-tools-group" role="group" aria-labelledby="br-tools-board">
+        <p className="eb" id="br-tools-board">Board</p>
+        <div className="br-tool-acts">
+          <button type="button" className="br-tool" onClick={onExport} aria-label="Export design board">Export</button>
+          <button type="button" className="br-tool" onClick={onSaveTemplate}>Save studio template</button>
         </div>
       </div>
-    </details>
+    </>
   );
 }

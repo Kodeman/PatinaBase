@@ -4,7 +4,7 @@
  *
  * THE FALSIFIABLE SENTENCE: a real wheel fling from s0 to s3 — `mouse.wheel`
  * ticks totalling >=3000px in under 300ms wall-clock, never `scrollTo` (one
- * JS-driven jump is a single frame of layout and never exercises the 240px
+ * JS-driven jump is a single frame of layout and never exercises the 288px
  * lookahead the way a real fling's many frames do) — crosses whatever the
  * lens has not yet promoted with AT MOST ONE blank frame, and the frame the
  * fling lands on reads `full` for whatever stop is under its centre.
@@ -22,7 +22,11 @@
  * paper below the last root, from the one thing L-4 actually promises:
  * nothing between the first and last root is ever un-painted ahead of a
  * settled reading position. Under the corrected instrument the ORIGINAL run
- * read 0 blank frames of 104, and `LENS_LOOKAHEAD_PX = 240` stands — this
+ * read 0 blank frames of 104, and `LENS_LOOKAHEAD_PX = 240` stood. RE-MEASURED
+ * 2026-10-13 (SQ-879): US-28 S7a's region close (+54px above `ffe` on the
+ * seeded long paper) put `ffe` 37px past the 240 line at the fling's only
+ * mid-flight discovery pass, and the census read 2 blank frames; per the
+ * plan's rule the lookahead grew to 288 (24 × 12) and the census reads 0 — this
  * spec is what proves that on every future run, not just the one probe.
  *
  * `pre-region` and `post-region` counts are printed every run and never
@@ -86,13 +90,42 @@ test.describe('the fling census (D-B31) — pre-first-region paper is not blank 
       `blank frame(s) — paper the lens should have promoted stood un-painted under the reader:\n${lines}`,
     ).toBeLessThanOrEqual(MAX_BLANK_FRAMES);
 
+    // US-28 S7a (uplift.md (c) Document: each region is a Section that closes
+    // on --rule-mid) made the regions taller, and the fixed 3200px fling now
+    // can land its centre in the --doc-region-gap between two roots: paper the
+    // census already counts as content, not blank. Then the stop the gap
+    // closes (the root ending within one gap above the centre) is the landing.
+    const landing = census.landing.regionKey
+      ? census.landing
+      : await page.evaluate(() => {
+          const cy = window.innerHeight / 2;
+          const paper = document.querySelector('[data-document-paper]');
+          const gap =
+            parseFloat(
+              getComputedStyle(document.documentElement).getPropertyValue(
+                '--doc-region-gap',
+              ),
+            ) || 24;
+          const roots = Array.from(
+            paper?.querySelectorAll('[data-index-region]') ?? [],
+          );
+          const closing = roots.find((root) => {
+            const box = root.getBoundingClientRect();
+            return box.bottom <= cy && cy - box.bottom <= gap;
+          });
+          return {
+            regionKey: closing?.getAttribute('data-index-region') ?? null,
+            density: closing?.getAttribute('data-density') ?? null,
+          };
+        });
+
     expect(
-      census.landing.regionKey,
+      landing.regionKey,
       `the fling landed with no [data-index-region] under the frame centre:\n${lines}`,
     ).not.toBeNull();
     expect(
-      census.landing.density,
-      `the landing stop ("${census.landing.regionKey}") is not full:\n${lines}`,
+      landing.density,
+      `the landing stop ("${landing.regionKey}") is not full:\n${lines}`,
     ).toBe('full');
   });
 });

@@ -30,6 +30,18 @@ import type { ReactNode } from 'react';
 import { StrataMark } from './strata-mark';
 import { LetterheadTitle, LetterheadVitals } from './letterhead-vitals';
 import type { FillState } from '@/lib/document/fill-state';
+import type { SectionKey } from '@/lib/document/desk-derivation';
+
+/** US-28 S7 (V20 U-Q14) — the stage once, as the 3px title rule. Care has no
+ *  stage pigment (`--tab-*` stops at install), so its title takes no rule. */
+const TITLE_RULE_STAGE: Partial<Record<SectionKey, string>> = {
+  brief: 'st-brief',
+  discovery: 'st-discovery',
+  direction: 'st-direction',
+  proposal: 'st-proposal',
+  project: 'st-project',
+  install: 'st-install',
+};
 
 export function DocLetterhead({
   title,
@@ -40,8 +52,11 @@ export function DocLetterhead({
   projectId = null,
   instruments = null,
   stageWord,
+  stage,
 }: {
   title: string;
+  /** The paper's stage: its pigment draws the 3px rule beside the title. */
+  stage?: SectionKey;
   vitals: string;
   /** FR3 F3-12 (`one-voice`) — the project vitals print this stage word
    *  (`Install`) where they printed the workflow phase (`Installation`). */
@@ -78,7 +93,12 @@ export function DocLetterhead({
             rather than amputating it ("Aspen Lo"); the `<input>` appears only
             in edit mode, in the same box. Spanning the grid still hands it the
             whole measure. */}
-        <div className="min-w-0 min-[1180px]:col-span-2">
+        <div
+          data-title-rule={stage && TITLE_RULE_STAGE[stage] ? stage : undefined}
+          className={`min-w-0 min-[1180px]:col-span-2 ${
+            stage && TITLE_RULE_STAGE[stage] ? `title-rule ${TITLE_RULE_STAGE[stage]}` : ''
+          }`}
+        >
           {projectId ? (
             <LetterheadTitle projectId={projectId} serverTitle={title} />
           ) : (

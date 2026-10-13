@@ -2,11 +2,15 @@
 
 import {
   computeMoodBoardRasterScale,
+  createDefaultMoodBoardRasterEnvironment,
   DEFAULT_MOOD_BOARD_EXPORT_SCALE,
   MOOD_BOARD_EXPORT_MAX_EDGE,
+  measureMoodBoardContentBounds,
   renderMoodBoardPng,
   resolveMoodBoardGeometry,
+  type MoodBoardPainterContext,
   type MoodBoardPngOptions,
+  type MoodBoardRasterEnvironment,
   type MoodBoardRasterInput,
   type MoodBoardRasterResult,
 } from '@patina/design-system';
@@ -47,13 +51,33 @@ export interface MoodBoardPngExportPlan {
   capped: boolean;
 }
 
-/** Preflight dimensions shown by the dialog before invoking the painter. */
+/** A 2D context the dialog measures captions with, as the painter will. */
+function defaultMeasureContext(): MoodBoardPainterContext | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    return document.createElement('canvas').getContext('2d') as MoodBoardPainterContext | null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Preflight dimensions shown by the dialog before invoking the painter. They
+ * are the raster the painter will produce: the composition grown on every
+ * side to every printed caption (R13b), then the 2× scale under the 8192px
+ * edge cap. With no 2D context to measure text (a server render), the saved
+ * canvas stands in.
+ */
 export function getMoodBoardPngExportPlan(
   input: MoodBoardRasterInput,
+  measureContext: MoodBoardPainterContext | null = defaultMeasureContext(),
 ): MoodBoardPngExportPlan {
-  const canvas = 'canvas' in input ? input.canvas : resolveMoodBoardGeometry(input).canvas;
+  const geometry = 'canvas' in input ? input : resolveMoodBoardGeometry(input);
+  const composition = measureContext
+    ? measureMoodBoardContentBounds(measureContext, geometry)
+    : geometry.canvas;
   const output = computeMoodBoardRasterScale(
-    canvas,
+    { width: composition.width, height: composition.height },
     DEFAULT_MOOD_BOARD_EXPORT_SCALE,
     MOOD_BOARD_EXPORT_MAX_EDGE,
   );
@@ -64,6 +88,25 @@ export function getMoodBoardPngExportPlan(
     height: output.height,
     capped: output.scale < DEFAULT_MOOD_BOARD_EXPORT_SCALE,
   };
+}
+
+/**
+ * The preflight the dialog publishes: measured only once the fonts the
+ * painter waits for are ready (the same `waitForFonts`), so a caption wraps
+ * as it will in the raster and the promised dimensions are the downloaded
+ * ones, never a fallback font's (SQ-865).
+ */
+export async function measureMoodBoardPngExportPlan(
+  input: MoodBoardRasterInput,
+  environment: Pick<MoodBoardRasterEnvironment, 'waitForFonts'> =
+    createDefaultMoodBoardRasterEnvironment(),
+): Promise<MoodBoardPngExportPlan> {
+  try {
+    await environment.waitForFonts?.();
+  } catch {
+    // As the painter: a rejected webfont load continues on the system tail.
+  }
+  return getMoodBoardPngExportPlan(input);
 }
 
 export function formatMoodBoardExportScale(scale: number): string {

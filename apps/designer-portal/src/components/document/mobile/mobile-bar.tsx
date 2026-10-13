@@ -14,7 +14,12 @@ import {
   useUnreadInboxCount,
   useProcurementUnreadCount,
 } from '@patina/supabase';
-import { ALL_STUDIO_SURFACES, boardsRoutePath } from '@/lib/document/registry';
+import {
+  ALL_STUDIO_SURFACES,
+  PEOPLE_SUB_ROOM_HREF,
+  PEOPLE_SUB_ROOM_SURFACES,
+  boardsRoutePath,
+} from '@/lib/document/registry';
 import {
   DOCUMENT_INDEX_LABELS,
   type DocumentIndexKey,
@@ -27,6 +32,7 @@ import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
 import { DocumentAction } from '../document-action';
 import { openPost } from '../overlays/post-sheet';
 import { useMobileShell } from './mobile-shell';
+import { TesterSlot } from '@/components/tester/tester-slot';
 
 function findSurface(key: string) {
   const surface = ALL_STUDIO_SURFACES.find((s) => s.key === key);
@@ -62,6 +68,7 @@ const DOCK_PLACE_WORDS: Partial<Record<DocumentIndexKey, string>> = {
 };
 
 const MAIL_GROUP_LABEL_ID = 'mobile-more-mail-group';
+const PEOPLE_ROOMS_GROUP_LABEL_ID = 'mobile-more-people-rooms-group';
 const IN_DOCUMENT_GROUP_LABEL_ID = 'mobile-more-in-document-group';
 
 /** A shelf the spine offers at 1440, as a door the phone can reach: either a
@@ -86,7 +93,7 @@ function openRegister() {
 }
 
 const MENU_ITEM =
-  'flex min-h-11 w-full items-center gap-3 border-b border-[rgba(250,247,242,0.1)] px-3 py-2 text-left text-[var(--color-pearl)] last:border-b-0 hover:bg-[rgba(250,247,242,0.06)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-50';
+  'flex min-h-11 w-full items-center gap-3 border-b border-[var(--doc-ink-border)] px-3 py-2 text-left text-[var(--text-primary)] last:border-b-0 hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--clay-ink)] disabled:cursor-not-allowed disabled:opacity-50';
 
 /** OD-11's reserve, and the floor the published height can never go under —
  *  the inset contract the paper was written against. */
@@ -97,13 +104,17 @@ export function MobileBar() {
   const {
     activeDoc,
     sheet,
-    primaryAction,
+    primaryAction: electedAction,
     secondaryActions,
     openSpine,
     openTimer,
     openDrawer,
     openMargin,
   } = useMobileShell();
+  // US-28 walk-fix paper — the band's Next prints on line 2 at every width
+  // (U-Q19, US-25 fix-now 13), so the dock never prints it a second time. It
+  // stays registered for ⌘K, which reads the elected act with its sentence.
+  const primaryAction = electedAction?.regionKey === 'lens-band' ? null : electedAction;
   const { inHandToday, running, paused, elapsedSeconds, offer, offerOwnsEdge } =
     useDocumentTime();
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
@@ -325,7 +336,7 @@ export function MobileBar() {
         // The act is shortened at its source, never clipped here: the label
         // wraps inside the 44px control rather than losing its last word.
         className:
-          'min-h-11 w-full min-w-0 !text-[var(--color-off-white)] [&_.da-label]:whitespace-normal [&_.da-label]:text-center [&_.da-label]:leading-[15px]',
+          'min-h-11 w-full min-w-0 [&_.da-label]:whitespace-normal [&_.da-label]:text-center [&_.da-label]:leading-[15px]',
         children: primaryAction.label,
       }
     : null;
@@ -339,8 +350,10 @@ export function MobileBar() {
       data-testid="mobile-bar"
       data-mobile-edge-owner="document-bar"
       data-reading-index={readingIndex ?? ''}
-      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[72px] items-center gap-2 border-t border-[rgba(250,247,242,0.16)] bg-[var(--color-charcoal)] px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 min-[1180px]:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 flex min-h-[72px] items-center gap-2 border-t border-[var(--hairline-strong)] bg-[var(--paper-doc)] px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 min-[1180px]:hidden"
     >
+      {/* SQ-856 — the TESTER mark's place, empty for everyone else. */}
+      <TesterSlot kind="bar" />
       {inDocument ? (
         <button
           type="button"
@@ -354,18 +367,16 @@ export function MobileBar() {
           aria-label={
             stopLabel ? `Open project contents, at ${stopLabel}` : 'Open project contents'
           }
-          className="flex min-h-11 min-w-0 flex-[1_1_0] items-center gap-2 rounded-[4px] px-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="flex min-h-11 min-w-0 flex-[1_1_0] items-center gap-2 rounded-[4px] px-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
         >
           {STRATA}
           <span className="min-w-0">
-            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.58)]">
+            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)]">
               Project file sections
             </span>
             {household && (
               <span
-                className={`block font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)] ${
-                  oneVoice ? 'break-words' : 'truncate'
-                }`}
+                className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)]"
               >
                 {household}
               </span>
@@ -376,15 +387,14 @@ export function MobileBar() {
                 thumb and churns the door's subtree on every crossing. The
                 72px reserve above is already sized for three lines.
 
-                F56/contrast.test.ts: mobile-bar.tsx is a charcoal ground —
-                `--color-clay-ink` reads 2.41:1 there and fails AA; the base
-                `--color-clay` pigment (6.21:1) is this file's established
-                dark-ground accent (see the elapsed-time text below). */}
+                SQ-856 (chrome-p6): the bar is the dock's --paper-doc stock
+                now, not the dark ink band, so its accent text is
+                `--color-clay-ink` (AA on paper), not the base pigment. */}
             <span
               aria-hidden={stopLabel ? undefined : true}
-              className={`block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)] ${
-                oneVoice ? 'break-words' : 'truncate'
-              } ${stopLabel ? '' : 'invisible'}`}
+              className={`block break-words font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] ${
+                stopLabel ? '' : 'invisible'
+              }`}
             >
               Section: {placeWord ?? '\u00a0'}
             </span>
@@ -394,17 +404,20 @@ export function MobileBar() {
         <div className="flex min-w-0 flex-[1_1_0] items-center gap-2 px-1.5">
           {STRATA}
           <span className="min-w-0">
-            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.58)]">
-              Studio navigation
+            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)]">
+              Studio section
             </span>
-            <span className="block truncate font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
+            {/* F8 — the dock wraps, never truncates ("Studio overview"). */}
+            <span className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)]">
               {context}
             </span>
           </span>
         </div>
       )}
 
-      <div className="flex min-w-0 flex-[1.15_1_0] items-center justify-center">
+      {/* SQ-856 — with no act the slot collapses, so the section label keeps
+          the width the Tester mark and the worded More now take. */}
+      <div className="flex min-w-0 flex-[1.15_1_0] items-center justify-center empty:hidden">
         {primaryAction && primaryShared ? (
           primaryAction.target.kind === 'href' ? (
             <DocumentAction
@@ -431,11 +444,11 @@ export function MobileBar() {
         aria-expanded={moreOpen}
         aria-controls="mobile-studio-menu"
         onClick={() => setMoreOpen((open) => !open)}
-        className="flex min-h-11 min-w-11 shrink-0 flex-col items-center justify-center rounded-[4px] text-[rgba(250,247,242,0.76)] hover:text-[var(--color-pearl)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-[2px] px-1.5 text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
       >
         <Ellipsis className="h-5 w-5" strokeWidth={1.5} aria-hidden />
         <span className="font-mono text-[12px] uppercase tracking-[0.08em]">
-          More actions
+          More
         </span>
       </button>
 
@@ -450,7 +463,7 @@ export function MobileBar() {
           // viewport above the dock (less its 8px gap and an 8px top margin):
           // at 949px with `overflow: hidden` its first rows stood above the
           // screen and could not be reached.
-          className={`absolute bottom-[calc(100%+8px)] right-3 w-[min(19rem,calc(100vw-1.5rem))] rounded-[6px] border border-[rgba(250,247,242,0.2)] bg-[var(--color-charcoal)] ${
+          className={`absolute bottom-[calc(100%+8px)] right-3 w-[min(19rem,calc(100vw-1.5rem))] popover ledgers-pop ${
             oneVoice
               ? 'max-h-[calc(100dvh_-_var(--doc-mobile-bar-height,72px)_-_16px)] overflow-y-auto overscroll-contain'
               : 'overflow-hidden'
@@ -477,7 +490,7 @@ export function MobileBar() {
                   </button>
                   <p
                     id={reasonId}
-                    className="px-3 pb-1 text-[12px] text-[rgba(250,247,242,0.58)]"
+                    className="px-3 pb-1 text-[12px] text-[var(--text-subtle)]"
                   >
                     {action.held.reason}
                   </p>
@@ -490,7 +503,7 @@ export function MobileBar() {
                     >
                       <span
                         aria-hidden
-                        className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay)]"
+                        className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay-ink)]"
                       >
                         →
                       </span>
@@ -523,10 +536,10 @@ export function MobileBar() {
           })}
           {inThisDocument.length > 0 && (
             <div role="group" aria-labelledby={IN_DOCUMENT_GROUP_LABEL_ID}>
-              <div className="border-b border-[rgba(250,247,242,0.1)] px-3 pt-2">
+              <div className="border-b border-[var(--doc-ink-border)] px-3 pt-2">
                 <span
                   id={IN_DOCUMENT_GROUP_LABEL_ID}
-                  className="font-mono text-[11px] uppercase tracking-[0.1em] text-[rgba(250,247,242,0.5)]"
+                  className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-subtle)]"
                 >
                   In this document
                 </span>
@@ -536,7 +549,7 @@ export function MobileBar() {
                   <>
                     <span
                       aria-hidden
-                      className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay)]"
+                      className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay-ink)]"
                     >
                       →
                     </span>
@@ -587,12 +600,12 @@ export function MobileBar() {
             className={MENU_ITEM}
           >
             <Search
-              className="h-4 w-4 text-[var(--color-clay)]"
+              className="h-4 w-4 text-[var(--color-clay-ink)]"
               strokeWidth={1.5}
               aria-hidden
             />
             <span className="min-w-0 flex-1 text-[14px]">Find anything</span>
-            <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.58)]">
+            <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-subtle)]">
               ⌘K
             </span>
           </button>
@@ -609,7 +622,7 @@ export function MobileBar() {
             >
               <span
                 aria-hidden
-                className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay)]"
+                className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay-ink)]"
               >
                 ↗
               </span>
@@ -625,27 +638,56 @@ export function MobileBar() {
             className={MENU_ITEM}
           >
             <TimerReset
-              className="h-4 w-4 text-[var(--color-clay)]"
+              className="h-4 w-4 text-[var(--color-clay-ink)]"
               strokeWidth={1.5}
               aria-hidden
             />
             <span className="min-w-0 flex-1">
               <span className="block text-[14px]">Active session time</span>
-              <span className="block font-mono text-[12px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.58)]">
+              <span className="block font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-subtle)]">
                 {fmtElapsedQuiet(elapsedSeconds)} · review or adjust
               </span>
             </span>
           </button>
+          {/* US-28 (Kody, 2026-10-13) — the three rooms that left Studio
+              contacts' index, worded, each at its own `?view=` address. */}
+          <div role="group" aria-labelledby={PEOPLE_ROOMS_GROUP_LABEL_ID}>
+            <div className="border-b border-[var(--doc-ink-border)] px-3 pt-2">
+              <span
+                id={PEOPLE_ROOMS_GROUP_LABEL_ID}
+                className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-subtle)]"
+              >
+                From Studio contacts
+              </span>
+            </div>
+            {PEOPLE_SUB_ROOM_SURFACES.map((room) => (
+              <Link
+                key={room.key}
+                href={PEOPLE_SUB_ROOM_HREF[room.key]}
+                data-mobile-people-room={room.key}
+                onClick={() => setMoreOpen(false)}
+                className={MENU_ITEM}
+              >
+                <span
+                  aria-hidden
+                  className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay-ink)]"
+                >
+                  →
+                </span>
+                <span className="min-w-0 flex-1 text-[14px]">{room.label}</span>
+              </Link>
+            ))}
+          </div>
           {/* SP-11/F83 — a connecting group label so a first-time reader can
               infer The Post is kin to the letterhead's "Message {Family}" act,
               without merging the two doors or renaming The Post itself. The
               group closes around The Post alone: the rows below it (Ledgers,
               Leave a note) are not mail. */}
           <div role="group" aria-labelledby={MAIL_GROUP_LABEL_ID}>
-            <div className="border-b border-[rgba(250,247,242,0.1)] px-3 pt-2">
+            <div className="border-b border-[var(--doc-ink-border)] px-3 pt-2">
               <span
                 id={MAIL_GROUP_LABEL_ID}
-                className="font-mono text-[11px] uppercase tracking-[0.1em] text-[rgba(250,247,242,0.5)]"
+                className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-subtle)]"
               >
                 Mail &amp; messages
               </span>
@@ -656,7 +698,7 @@ export function MobileBar() {
               className={MENU_ITEM}
             >
               <THE_POST.icon
-                className="h-4 w-4 text-[var(--color-clay)]"
+                className="h-4 w-4 text-[var(--color-clay-ink)]"
                 strokeWidth={1.5}
                 aria-hidden
               />
@@ -666,7 +708,7 @@ export function MobileBar() {
               {/* SP-15/F47 — state-only, matching the drawer's unlabelled dot;
                   C4 forbids a badge/count here. */}
               {unread > 0 && (
-                <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay)]">
+                <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
                   New
                 </span>
               )}
