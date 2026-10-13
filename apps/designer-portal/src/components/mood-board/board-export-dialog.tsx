@@ -176,7 +176,9 @@ export function BoardExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent className="max-w-lg">
+      {/* The shared Dialog keeps `shadow-lg` for the other portals; the
+          designer portal carries no shadow (US-28 S1, R5). */}
+      <DialogContent className="max-w-lg shadow-none">
         <DialogHeader>
           <DialogTitle>Export {boardName}</DialogTitle>
           <DialogDescription>

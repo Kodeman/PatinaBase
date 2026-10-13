@@ -2606,6 +2606,7 @@ export const BoardRoomCanvas = React.forwardRef<
               section={section}
               readOnly={readOnly}
               dropTarget={dropTargetSectionId === section.id}
+              gripHitSize={handleSize}
               onPointerDown={(event) =>
                 handleSectionPointerDown(event, section.id)
               }
@@ -2940,19 +2941,22 @@ BoardRoomCanvas.displayName = 'BoardRoomCanvas'
  * colour that always prints its word, in ink, inside the edge — no fill and no
  * white-on-colour pill. While a dragged piece's centre is over it the edge
  * goes 2px dashed ink and the word says what letting go will do (frame p3).
- * The word is the band's drag grip; the rename and colour controls stay
- * beside it in edit.
+ * In edit an ink grip before the word is the band's drag target (24 px, 44 px
+ * on a coarse pointer); the rename and colour controls stay beside it.
  */
 function SectionBand({
   section,
   readOnly,
   dropTarget = false,
+  gripHitSize,
   onPointerDown,
   onUpdate,
 }: {
   section: MoodBoardSection & { bounds: BoardRect }
   readOnly: boolean
   dropTarget?: boolean
+  /** The move grip's hit square in board units (24 or 44 screen px over zoom). */
+  gripHitSize: number
   onPointerDown: React.PointerEventHandler<HTMLElement>
   onUpdate: (patch: Partial<Omit<MoodBoardSection, 'id'>>) => void
 }) {
@@ -3008,6 +3012,30 @@ function SectionBand({
           <span>{section.name}</span>
         ) : (
           <>
+            {/* The move grip (R4): the rename and colour inputs stop their own
+                pointerdown, so the zone needs a drag target of its own. Its
+                hit square overhangs the word's line rather than heightening it. */}
+            <span
+              data-board-section-grip={section.id}
+              title={`Move ${section.name} section`}
+              aria-hidden="true"
+              className="inline-flex shrink-0 cursor-move items-center justify-center"
+              style={{
+                width: gripHitSize,
+                height: gripHitSize,
+                marginBlock: Math.min(0, (16 - gripHitSize) / 2),
+                color: 'var(--text-primary)',
+              }}
+            >
+              <svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor" focusable="false">
+                <circle cx="2" cy="2" r="1" />
+                <circle cx="6" cy="2" r="1" />
+                <circle cx="2" cy="6" r="1" />
+                <circle cx="6" cy="6" r="1" />
+                <circle cx="2" cy="10" r="1" />
+                <circle cx="6" cy="10" r="1" />
+              </svg>
+            </span>
             <input
               aria-label={`Rename ${section.name} section`}
               value={draft}

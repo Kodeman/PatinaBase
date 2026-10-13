@@ -26,7 +26,9 @@ jest.mock('@/lib/scope/spec-pdf-client', () => ({
 jest.mock('@patina/design-system', () => ({
   Dialog: ({ open, children }: React.PropsWithChildren<{ open: boolean }>) =>
     open ? <div role="dialog">{children}</div> : null,
-  DialogContent: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DialogContent: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+    <div data-testid="export-dialog-content" className={className}>{children}</div>
+  ),
   DialogDescription: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
   DialogHeader: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   DialogTitle: ({ children }: React.PropsWithChildren) => <h2>{children}</h2>,
@@ -167,5 +169,22 @@ describe('BoardExportDialog', () => {
         'Install options-spec-sheet.pdf',
       ),
     );
+  });
+
+  it('asks the shared Dialog for no shadow (R5); the Dialog merge drops its shadow-lg', () => {
+    render(
+      <BoardExportDialog
+        boardId="board-1"
+        boardName="Living room"
+        owner={{ kind: 'proposal', id: 'proposal-1' }}
+        input={input}
+        open
+        onOpenChange={jest.fn()}
+        flush={jest.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    const content = screen.getByTestId('export-dialog-content');
+    expect(content.className.split(/\s+/)).toContain('shadow-none');
+    expect(content.className).not.toMatch(/\bshadow-(sm|md|lg|xl|2xl)\b/);
   });
 });

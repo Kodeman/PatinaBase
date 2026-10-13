@@ -8,7 +8,11 @@ import {
   paintMoodBoardGeometry,
   type MoodBoardPainterContext,
 } from './painter-core'
-import { MOOD_BOARD_MONO_FONT, MOOD_BOARD_VISUAL } from './visual-contract'
+import {
+  MOOD_BOARD_MONO_FONT,
+  MOOD_BOARD_VISUAL,
+  resolveMoodBoardPlate,
+} from './visual-contract'
 import {
   computeMoodBoardRasterScale,
   renderMoodBoardCover,
@@ -281,6 +285,64 @@ describe('worker-safe mood-board painter core', () => {
       .filter((call) => call.name === 'fillText')
       .map((call) => call.args[2] as number)
     expect(Math.min(...captionTops)).toBeGreaterThan(plateBottom)
+  })
+
+  it('keeps the plate at its minimum and grows the item for a long caption (R13)', () => {
+    const { plateMin, caption } = MOOD_BOARD_VISUAL
+    // A roomy tile: the plate gives up exactly the caption's height.
+    expect(resolveMoodBoardPlate(200, 200, 40)).toEqual({
+      plate: { x: 0, y: 0, width: 200, height: 160 },
+      captionTop: 160 + caption.gap,
+    })
+    // The canvas's smallest tile with a caption taller than it: the plate
+    // stays at plateMin and the caption starts under it, past the saved box.
+    expect(resolveMoodBoardPlate(40, 40, 264)).toEqual({
+      plate: { x: 0, y: 0, width: 40, height: plateMin },
+      captionTop: plateMin + caption.gap,
+    })
+  })
+
+  it('paints a long caption whole under a kept plate at the minimum tile size (R13)', async () => {
+    const context = new RecordingContext()
+    const name = 'Halyard lounge chair in a long walnut and boucle finish'
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: 400,
+      canvasHeight: 400,
+      backgroundColor: '#FCFAF6',
+      sections: [],
+      items: [
+        {
+          id: 'halyard',
+          type: 'product',
+          x: 0,
+          y: 0,
+          width: 40,
+          height: 40,
+          data: { name, image_url: 'halyard.jpg', vendor_name: 'West Elm' },
+        },
+      ],
+    })
+    await paintMoodBoardGeometry({
+      context,
+      geometry,
+      transform: { scale: 1, offsetX: 0, offsetY: 0, viewportWidth: 400, viewportHeight: 400 },
+      resolveImage: async () => ({ source: {}, width: 300, height: 200 }),
+    })
+    const texts = context.calls.filter((call) => call.name === 'fillText')
+    // At 40px the name breaks inside words (overflow-wrap: anywhere); every
+    // letter of the name, then the facts, still prints in order.
+    expect(texts.length).toBeGreaterThan(4)
+    expect(texts.map((call) => String(call.args[0])).join('').replace(/\s+/g, '')).toBe(
+      `${name}West Elm`.replace(/\s+/g, ''),
+    )
+    expect(texts.some((call) => String(call.args[0]).includes('…'))).toBe(false)
+    // The photo still paints, contained in a plate that kept its 40px.
+    const draw = context.calls.find((call) => call.name === 'drawImage')!
+    expect(draw.args[4] as number).toBeGreaterThan(20)
+    const captionTops = texts.map((call) => call.args[2] as number)
+    expect(Math.min(...captionTops)).toBeGreaterThan(MOOD_BOARD_VISUAL.plateMin)
+    // The caption runs past the 40px saved box rather than being cut.
+    expect(Math.max(...captionTops)).toBeGreaterThan(40)
   })
 
   it('paints zones as a dashed edge with an ink word: no fill, no pill (US-28 S12)', async () => {

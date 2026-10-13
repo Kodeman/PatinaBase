@@ -2313,6 +2313,55 @@ describe('BoardRoomCanvas board-room uplift (US-28 S12)', () => {
     vi.unstubAllGlobals()
   })
 
+  it('moves a populated zone from its ink grip, and leaves the rename and colour inputs their own pointerdown (R4)', () => {
+    const onSectionBandMoved = vi.fn()
+    renderCanvas({
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onSectionBandMoved,
+      showGuides: false,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const grip = document.querySelector('[data-board-section-grip="living"]') as HTMLElement
+    expect(grip).toHaveStyle({ width: '24px', height: '24px' })
+    expect(grip.style.color).toBe('var(--text-primary)')
+    expect(grip.className).not.toMatch(/shadow/)
+
+    for (const control of [
+      screen.getByRole('textbox', { name: 'Rename Living section' }),
+      screen.getByLabelText('Change Living section color'),
+    ]) {
+      fireEvent.pointerDown(control, { button: 0, pointerId: 30, clientX: 100, clientY: 100 })
+      fireEvent.pointerMove(application, { pointerId: 30, clientX: 160, clientY: 140 })
+      fireEvent.pointerUp(application, { pointerId: 30, clientX: 160, clientY: 140 })
+    }
+    expect(onSectionBandMoved).not.toHaveBeenCalled()
+
+    fireEvent.pointerDown(grip, { button: 0, pointerId: 31, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(application, { pointerId: 31, clientX: 160, clientY: 140 })
+    fireEvent.pointerUp(application, { pointerId: 31, clientX: 160, clientY: 140 })
+    expect(onSectionBandMoved).toHaveBeenCalledTimes(1)
+    expect(onSectionBandMoved).toHaveBeenCalledWith({
+      sectionId: 'living',
+      itemIds: ['chair', 'image'],
+      delta: { x: 60, y: 40 },
+    })
+  })
+
+  it('grows the zone grip to 44px on a coarse pointer, in screen px at any zoom (R4, T10)', () => {
+    stubPointer(true)
+    renderCanvas({ view: { pan: { x: 0, y: 0 }, zoom: 2 }, showViewControls: false })
+    const grip = document.querySelector('[data-board-section-grip="living"]') as HTMLElement
+    // 44 screen px inside a world scaled ×2.
+    expect(grip).toHaveStyle({ width: '22px', height: '22px' })
+    vi.unstubAllGlobals()
+  })
+
+  it('draws no grip on a read-only board', () => {
+    renderCanvas({ readOnly: true, showViewControls: false })
+    expect(document.querySelector('[data-board-section-grip]')).toBeNull()
+  })
+
   it('says a locked pin is locked in a word, not a badge', () => {
     renderCanvas({ selectedItemIds: ['locked'], showViewControls: false })
     const lock = screen.getByTestId('board-item-lock-locked')

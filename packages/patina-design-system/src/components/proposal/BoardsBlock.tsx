@@ -444,7 +444,9 @@ function Plate({
       className="relative flex items-center justify-center overflow-hidden"
       style={{
         flex: box || !aspectRatio ? '1 1 auto' : 'none',
-        minHeight: 0,
+        minHeight: box ? MOOD_BOARD_VISUAL.plateMin : 0,
+        // A boxed plate's row comes from the tile, never from a tall photo.
+        contain: box ? 'size' : undefined,
         aspectRatio: box ? undefined : aspectRatio,
         backgroundColor: MOOD_BOARD_VISUAL.colors.plate,
         border: `1px solid ${MOOD_BOARD_VISUAL.colors.cardEdge}`,
@@ -521,8 +523,32 @@ function Caption({ name, meta }: { name: React.ReactNode; meta: React.ReactNode[
   )
 }
 
-function PlateItem({ children }: { children: React.ReactNode }) {
-  return <div className="flex h-full w-full select-none flex-col">{children}</div>
+/**
+ * A boxed tile is at least its saved height; the plate row gives up height to
+ * the caption down to `plateMin`, then the tile grows past its box so the
+ * caption still prints whole (R13) — as resolveMoodBoardPlate paints it.
+ */
+function PlateItem({
+  children,
+  box,
+}: {
+  children: React.ReactNode
+  box?: { width: number; height: number }
+}) {
+  if (!box) return <div className="flex h-full w-full select-none flex-col">{children}</div>
+  return (
+    <div
+      data-board-plate-item="true"
+      className="grid w-full select-none"
+      style={{
+        minHeight: '100%',
+        gridTemplateRows: `minmax(${MOOD_BOARD_VISUAL.plateMin}px, 1fr)`,
+        gridAutoRows: 'auto',
+      }}
+    >
+      {children}
+    </div>
+  )
 }
 
 function ProductTile({
@@ -554,7 +580,7 @@ function ProductTile({
   ].filter((line): line is string => Boolean(line))
 
   return (
-    <PlateItem>
+    <PlateItem box={box}>
       <Plate box={box} aspectRatio="1 / 1">
         {imageUrl ? (
           <PlateImage src={imageUrl} alt={snap.name ?? ''} />
@@ -576,7 +602,7 @@ function ImageTile({
 }) {
   const snap = (item.data ?? {}) as ImageSnapshot
   return (
-    <PlateItem>
+    <PlateItem box={box}>
       <Plate box={box}>
         {item.image_url ? (
           <PlateImage src={item.image_url} alt="" />
@@ -597,7 +623,7 @@ function RoomScanTile({
 }) {
   const snap = (item.data ?? {}) as RoomScanSnapshot
   return (
-    <PlateItem>
+    <PlateItem box={box}>
       <Plate box={box}>
         {item.image_url ? (
           <PlateImage src={item.image_url} alt={snap.name ?? 'Your space'} />
@@ -621,7 +647,7 @@ function PaletteStrip({
   const swatches = snap.swatches ?? []
 
   return (
-    <PlateItem>
+    <PlateItem box={box}>
       <Plate box={box}>
         {swatches.length > 0 ? (
           <span className="absolute inset-0 flex">

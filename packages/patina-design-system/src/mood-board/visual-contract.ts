@@ -34,6 +34,11 @@ export const MOOD_BOARD_VISUAL = {
   /** The house state word: mono 12/16, .08em tracking, uppercase. */
   word: { size: 12, line: 16, letterSpacing: 0.96 },
   caption: { gap: 6, nameSize: 13, nameLine: 18, metaSize: 12, metaLine: 16 },
+  /**
+   * The least a plate gives up to its caption — the canvas's smallest item
+   * edge. Mirrored as 40px in globals.css `.br-item`/`.br-plate` (R13).
+   */
+  plateMin: 40,
   /** Padding around a word printed inside an empty plate. */
   plateWordPadding: 8,
   /** As board-item-renderer.tsx NoteCard: the 2px edge, then 16px of air. */
@@ -67,15 +72,17 @@ export function moodBoardCaptionHeight(
 }
 
 /**
- * The plate gives up height to the caption; it never goes below zero, and a
- * caption taller than its item prints past the item rather than truncating.
+ * The plate gives up height to the caption down to `plateMin`; past that the
+ * item grows below its saved box so the caption still prints whole, never
+ * truncated (R13). The DOM tile does the same with a grid row of
+ * `minmax(plateMin, 1fr)` over an item at least its saved height.
  */
 export function resolveMoodBoardPlate(
   width: number,
   height: number,
   captionHeight: number,
 ): { plate: BoardRect; captionTop: number } {
-  const plateHeight = Math.max(0, height - captionHeight)
+  const plateHeight = Math.max(MOOD_BOARD_VISUAL.plateMin, height - captionHeight)
   return {
     plate: { x: 0, y: 0, width, height: plateHeight },
     captionTop: plateHeight + (captionHeight > 0 ? MOOD_BOARD_VISUAL.caption.gap : 0),

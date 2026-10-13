@@ -6,6 +6,7 @@ import {
   type BoardCompositionBoard,
   type BoardsBlockBoard,
 } from './BoardsBlock'
+import { MOOD_BOARD_VISUAL } from '../../mood-board/visual-contract'
 
 // A product pin whose snapshot carries detail-only lead time and always-visible
 // captured-source provenance.
@@ -452,6 +453,27 @@ describe('Present tiles: plate and caption, zones with an ink word (US-28 S12)',
     expect(caption).toHaveTextContent('west-elm.com')
     expect(container.querySelector('.truncate, .line-clamp-2, [class*="shadow"]')).toBeNull()
     expect(container.innerHTML).not.toMatch(/ring-2|#fff\b|rgb\(255, 255, 255\)/)
+  })
+
+  it('keeps a long caption whole at the minimum tile size: the plate keeps 40px and the tile grows (R13)', () => {
+    const name = 'Halyard Lounge Chair in a very long walnut and boucle finish with a deep seat'
+    const board = productBoard()
+    board.items = [{ ...board.items[0]!, width: 40, height: 40, data: { ...board.items[0]!.data, name } }]
+    const { container } = render(<BoardComposition board={board} />)
+    const pin = container.querySelector('[data-board-item-id="i1"]') as HTMLElement
+    expect(pin.style.height).toBe('40px')
+    const tile = pin.querySelector('[data-board-plate-item]') as HTMLElement
+    // At least the saved box, never capped at it — the grid grows past it.
+    expect(tile.style.minHeight).toBe('100%')
+    expect(tile.style.height).toBe('')
+    expect(tile.style.gridTemplateRows).toBe(`minmax(${MOOD_BOARD_VISUAL.plateMin}px, 1fr)`)
+    const plate = pin.querySelector('[data-board-plate]') as HTMLElement
+    expect(plate.style.minHeight).toBe(`${MOOD_BOARD_VISUAL.plateMin}px`)
+    expect(plate.style.contain).toBe('size')
+    const caption = pin.querySelector('[data-board-caption]') as HTMLElement
+    expect(caption).toHaveTextContent(name)
+    expect(caption.innerHTML).not.toMatch(/truncate|line-clamp|text-overflow|…/)
+    expect(tile.contains(caption)).toBe(true)
   })
 
   it('gives every pin family the same plate stock and the note its oak edge', () => {

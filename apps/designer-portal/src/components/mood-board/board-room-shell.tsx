@@ -53,6 +53,10 @@ import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { lockBodyScroll, trapTabWithin } from '@/lib/full-screen-boundary';
 import {
+  topActiveModalDialog,
+  topDismissiblePopover,
+} from '@/components/document/overlays/active-dialog';
+import {
   consumeMaterializedTemplateFlag,
   moodBoardOpenSource,
   resolveMoodBoardReturnTarget,
@@ -290,6 +294,37 @@ function useWideRoom(): boolean {
   );
 }
 
+/**
+ * Below md the open Tools Section is a modal sheet over the veil (R3): it wears
+ * dialog semantics, the room's Tab trap narrows to it (useBoardRoomBoundary),
+ * and Escape from anywhere puts it back. At md and up it stays the side column.
+ */
+export function useToolsSheetModal(
+  sheetRef: MutableRefObject<HTMLElement | null>,
+  open: boolean,
+  onClose: () => void,
+) {
+  const wide = useWideRoom();
+  const modal = open && !wide;
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    if (!modal) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      // A sheet or popover opened over the Tools sheet takes its own Escape.
+      if (topActiveModalDialog() !== sheetRef.current || topDismissiblePopover()) return;
+      event.preventDefault();
+      onCloseRef.current();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [modal, sheetRef]);
+  return modal ? ({ role: 'dialog', 'aria-modal': true } as const) : {};
+}
+
 /** Route-level focus and scroll isolation; portalled nested dialogs keep their own trap. */
 export function useBoardRoomBoundary(
   ref: MutableRefObject<HTMLElement | null>,
@@ -302,7 +337,9 @@ export function useBoardRoomBoundary(
     const unlockBodyScroll = lockBodyScroll();
     const frame = requestAnimationFrame(() => root.focus({ preventScroll: true }));
     const handleKeyDown = (event: KeyboardEvent) => {
-      trapTabWithin(event, root);
+      // A modal inside the room (the narrow Tools sheet) narrows the trap to itself.
+      const scope = root.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]') ?? root;
+      trapTabWithin(event, scope);
     };
     document.addEventListener('keydown', handleKeyDown, true);
     // A drop that misses the canvas must never navigate the browser to the dragged
@@ -441,6 +478,7 @@ function BoardRoomSurface({
   const [toolsSheetOpen, setToolsSheetOpen] = useState(false);
   const toolsActRef = useRef<HTMLButtonElement | HTMLAnchorElement | null>(null);
   const toolsHeadRef = useRef<HTMLParagraphElement | null>(null);
+  const toolsSheetRef = useRef<HTMLElement | null>(null);
   const wideRoom = useWideRoom();
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -682,6 +720,11 @@ function BoardRoomSurface({
     setToolsSheetOpen(false);
     requestAnimationFrame(() => toolsActRef.current?.focus());
   };
+  const toolsSheetModalProps = useToolsSheetModal(
+    toolsSheetRef,
+    api.mode === 'edit' && toolsSheetOpen,
+    closeToolsSheet,
+  );
 
   const toggleGrid = () => {
     setShowGrid((current) => {
@@ -1516,17 +1559,13 @@ function BoardRoomSurface({
           // and up it is the side column; below md it is one sheet over the
           // veil, opened by the header's "Tools" act and put back by its own.
           <aside
+            ref={toolsSheetRef}
             id="board-room-tools"
             aria-labelledby="board-room-tools-head"
+            {...toolsSheetModalProps}
             data-open={toolsSheetOpen ? 'true' : 'false'}
             data-folded={railCollapsed ? 'true' : 'false'}
             className="section br-tools"
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && toolsSheetOpen) {
-                event.stopPropagation();
-                closeToolsSheet();
-              }
-            }}
           >
             <div className="sec-head">
               <p className="eb" id="board-room-tools-head" ref={toolsHeadRef} tabIndex={-1}>

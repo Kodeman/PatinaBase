@@ -1,3 +1,4 @@
+import * as React from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi } from 'vitest'
@@ -126,5 +127,28 @@ describe('Dialog', () => {
     await user.click(screen.getByText('Open Dialog'))
     expect(onOpenChange).toHaveBeenCalledWith(true)
     expect(screen.getByText('Controlled Dialog')).toBeInTheDocument()
+  })
+
+  it('keeps its default shadow, but a caller passing shadow-none renders without one', () => {
+    const { rerender } = render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Shadowed</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    )
+    expect(screen.getByRole('dialog').className.split(/\s+/)).toContain('shadow-lg')
+
+    // The designer portal's board Export dialog passes this (US-28 R5).
+    rerender(
+      <Dialog open>
+        <DialogContent className="max-w-lg shadow-none">
+          <DialogTitle>Flat</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    )
+    const classes = screen.getByRole('dialog').className.split(/\s+/)
+    expect(classes).toContain('shadow-none')
+    expect(classes).not.toContain('shadow-lg')
   })
 })

@@ -2802,7 +2802,12 @@ html:has([data-document-shell]) {
 .br-viewbar { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 12px; background: var(--paper-doc); border-top: 1px solid var(--card-edge); }
 
 /* ——— items: plate and caption (SPEC §S12.2.1) ——— */
-.br-plate { display: flex; flex: 1 1 auto; min-height: 0; align-items: center; justify-content: center; overflow: hidden; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 3px; }
+/* R13: the item is at least its saved box; the plate gives up height to the
+   caption down to 40px (MOOD_BOARD_VISUAL.plateMin), then the item grows so
+   the caption prints whole, as Present and the export painter do. The plate
+   is size-contained so a tall photo never sizes its row. */
+.br-item { display: grid; grid-template-rows: minmax(40px, 1fr); grid-auto-rows: auto; height: auto; min-height: 100%; }
+.br-plate { display: flex; flex: 1 1 auto; min-height: 40px; contain: size; align-items: center; justify-content: center; overflow: hidden; background: var(--paper-doc); border: 1px solid var(--card-edge); border-radius: 3px; }
 .br-plate--slot { border-style: dashed; }
 .br-plate-word { padding: 8px; text-align: center; font-family: var(--font-meta); font-size: 12px; line-height: 16px; color: var(--text-subtle); overflow-wrap: anywhere; }
 .br-cap { flex: none; margin-top: 6px; }
