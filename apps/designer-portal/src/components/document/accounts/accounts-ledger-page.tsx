@@ -7,43 +7,36 @@
  *
  * R74 made the book WRITE: rows are folio-first (the row opens the Invoice
  * folio, where issue/send/record/void/print live), with a quiet doorway to
- * the document kept on the tail; the page head carries "Draw an invoice"
+ * the document kept on the row; the page head carries "Draw an invoice"
  * (the R74b composer).
+ *
+ * US-28 S8: the register is one Section of Ledger rows closing on its rule.
+ * State is an ink word (U-Q13), invoices are never Cards, and nothing
+ * truncates — a long line wraps at 390.
  */
 
 import { useEffect, useRef } from 'react';
-import { useEmailDelivery, type EmailDelivery, type Invoice } from '@patina/supabase';
+import {
+  invoiceDaysOverdue,
+  useEmailDelivery,
+  type EmailDelivery,
+  type Invoice,
+} from '@patina/supabase';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DeliveryWord } from '../delivery-word';
-import { Stamp } from '../stamp';
+import { EmptyState } from '../empty-state';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
 import { AccountsExportAction } from './accounts-export';
 import { openInvoiceComposer, openInvoiceFolio } from './invoice-overlays';
-
-// Laid-paper palette (R96) — matches the Invoice folio's re-inked stamps
-// (accounts/invoice-folio.tsx FOLIO_STAMP), so the same invoice reads the
-// same ink whichever surface shows it.
-const INVOICE_STAMP: Record<
-  string,
-  { label: string; color: string; ink?: string }
-> = {
-  draft: { label: 'draft', color: '#C9C2B6', ink: 'var(--text-muted)' },
-  sent: { label: 'sent', color: 'var(--color-dusty-blue)', ink: '#7E8FA6' },
-  partially_paid: {
-    label: 'part paid',
-    color: 'var(--color-golden-hour)',
-    ink: 'var(--color-golden-hour-ink)',
-  },
-  paid: { label: 'paid', color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' },
-  void: { label: 'void', color: 'var(--color-terracotta)', ink: 'var(--color-terracotta-ink)' },
-};
+import { InvoiceStateWord } from './money-state-word';
 
 export function AccountsLedgerPage({
   invoices,
   highlightInvoiceId = null,
   canExport = false,
   onOpenDocument,
+  onOpenFolio = openInvoiceFolio,
 }: {
   invoices: Invoice[];
   /** Q10 (walk W-D5) — the studio-wide export is an owner's or admin's. */
@@ -52,6 +45,9 @@ export function AccountsLedgerPage({
    *  doorway (desk-doorway.tsx) — e.g. the print page's "Back to invoice". */
   highlightInvoiceId?: string | null;
   onOpenDocument: (projectId: string | null) => void;
+  /** U-Q16 — the Accounts book opens the folio in place, inside its own
+   *  sheet; without a host, the folio opens as its own sheet. */
+  onOpenFolio?: (invoiceId: string) => void;
 }) {
   // One read for the whole ledger — a per-row hook would open N queries.
   const emailDelivery = useEmailDelivery(
@@ -69,20 +65,18 @@ export function AccountsLedgerPage({
     if (!highlightInvoiceId || openedFolioFor.current === highlightInvoiceId) return;
     if (!invoices.some((inv) => inv.id === highlightInvoiceId)) return;
     openedFolioFor.current = highlightInvoiceId;
-    openInvoiceFolio(highlightInvoiceId);
-  }, [highlightInvoiceId, invoices]);
+    onOpenFolio(highlightInvoiceId);
+  }, [highlightInvoiceId, invoices, onOpenFolio]);
 
   return (
     <div>
-      {/* R74b — the book learns to write: draw an invoice from the page head. */}
-      <DocumentActionGroup
-        surfaceKey="accounts"
-        regionKey="ledger-head"
-        className="mb-2 justify-end"
-      >
+      {/* R74b — the book learns to write: draw an invoice from the page head.
+          A ledger holds no filled act (U-Q3), so it is the secondary ＋. */}
+      <DocumentActionGroup surfaceKey="accounts" regionKey="ledger-head" className="money-front-acts">
         <DocumentAction
           actionKey="draw-invoice"
-          variant="primary"
+          variant="secondary"
+          leading={<span className="money-plus">＋</span>}
           onClick={() => openInvoiceComposer()}
         >
           Draw an invoice
@@ -94,23 +88,18 @@ export function AccountsLedgerPage({
       {canExport && <AccountsExportAction />}
 
       {invoices.length === 0 ? (
-        /* The zero-invoice state (help-desk Wave 1, copy §E.3) — the old
-           one-liner grown a teaching line; still quiet, no chrome. */
-        <div className="py-5">
-          <p className="font-heading text-[15px] italic text-[var(--color-charcoal)]">
-            No invoices drawn yet
-          </p>
-          <p className="mt-1.5 max-w-[52ch] text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
-            Draw from a milestone, tracked time, FF&amp;E, or an ad-hoc line and
-            it appears here. Your client pays in their portal; paid and overdue
-            both show here.
-          </p>
-        </div>
+        /* The zero-invoice state (help-desk Wave 1, copy §E.3), as the one
+           empty state: the Section's eyebrow, one sentence, its close. */
+        <EmptyState eyebrow="Invoices">
+          No invoices drawn yet. Draw from a milestone, tracked time, FF&amp;E or
+          an ad-hoc line and it appears here; paid and overdue both show here.
+        </EmptyState>
       ) : (
         <InvoiceRows
           invoices={invoices}
           deliveryByRef={emailDelivery.byRef}
           onOpenDocument={onOpenDocument}
+          onOpenFolio={onOpenFolio}
         />
       )}
     </div>
@@ -121,94 +110,97 @@ function InvoiceRows({
   invoices,
   deliveryByRef,
   onOpenDocument,
+  onOpenFolio,
 }: {
   invoices: Invoice[];
   deliveryByRef: Record<string, EmailDelivery>;
   onOpenDocument: (projectId: string | null) => void;
+  onOpenFolio: (invoiceId: string) => void;
 }) {
   return (
-    <ul>
-      {invoices.map((inv) => {
-        const stamp = INVOICE_STAMP[inv.status] ?? INVOICE_STAMP.draft;
-        const balance = invoiceBalanceCents(inv);
-        // "Owed" only reads true for an issued receivable — a draft isn't owed
-        // yet (it's not been sent), so it shows nothing on the tail.
-        const owedNow =
-          inv.status === 'sent' || inv.status === 'partially_paid';
-        // R136 — a studio invoice has no house, so no doorway to walk through.
-        const studioInvoice = inv.project_id === null;
-        const tail =
-          inv.status === 'paid'
-            ? inv.paid_at
-              ? `paid ${fmtDay(inv.paid_at)}`
-              : 'paid'
-            : inv.status === 'void'
-              ? 'void'
+    <section className="section ledger money-register" aria-labelledby="accounts-ledger-rows">
+      <div className="sec-head">
+        <p className="eb" id="accounts-ledger-rows">
+          <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+            <path d="M0 2h34M0 6h28M0 10h20" />
+          </svg>
+          <span>Invoices · newest first</span>
+        </p>
+      </div>
+      <ul className="rows">
+        {invoices.map((inv) => {
+          const balance = invoiceBalanceCents(inv);
+          // "Owed" only reads true for an issued receivable — a draft isn't
+          // owed yet (it's not been sent), so it says nothing more.
+          const owedNow = inv.status === 'sent' || inv.status === 'partially_paid';
+          const overdueDays = owedNow && balance > 0 ? Math.max(invoiceDaysOverdue(inv), 0) : 0;
+          // R136 — a studio invoice has no house, so no doorway to walk through.
+          const studioInvoice = inv.project_id === null;
+          const clause =
+            inv.status === 'paid'
+              ? inv.paid_at
+                ? fmtDay(inv.paid_at)
+                : null
               : owedNow && balance > 0
-                ? `${fmtUsd(balance)} owed`
-                : '—';
-        return (
-          <li
-            key={inv.id}
-            className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2.5"
-          >
-            {/* Folio-first (R74): the row opens the Invoice folio — the acts
-                live there. The document doorway stays on the tail. */}
-            <button
-              type="button"
-              onClick={() => openInvoiceFolio(inv.id)}
-              className="min-w-0 rounded-[3px] text-left hover:bg-[rgba(196,165,123,0.06)]"
-            >
-              <p className="truncate text-[12.5px] font-medium text-[var(--color-charcoal)]">
-                {inv.invoice_number
-                  ? `Invoice ${inv.invoice_number}`
-                  : 'Draft invoice'}
-                <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
-                  folio →
-                </span>
-              </p>
-              <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
-                {inv.project?.name ?? inv.title ?? 'Studio'}
+                ? [
+                    balance !== inv.total_cents ? `${fmtUsd(balance)} owed` : null,
+                    inv.due_date && overdueDays === 0 ? `due ${fmtDay(inv.due_date)}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || null
+                : null;
+          return (
+            <li key={inv.id} className="lrow plain" data-invoice-row={inv.id}>
+              {/* Folio-first (R74): the row's name opens the Invoice folio —
+                  the acts live there. */}
+              <div className="lname">
+                <button
+                  type="button"
+                  onClick={() => onOpenFolio(inv.id)}
+                  className="name t-d4"
+                  data-invoice-folio-opener={inv.id}
+                >
+                  {inv.invoice_number ? `Invoice ${inv.invoice_number}` : 'Draft invoice'}
+                </button>
+              </div>
+              <span className="lsent t-body-sm">
+                <span className="money-job">{inv.project?.name ?? inv.title ?? 'Studio'}</span>
                 {studioInvoice && (
-                  <span className="ml-1.5 align-middle">
-                    <Stamp label="studio" color="var(--color-clay-ink)" />
+                  <>
+                    {' '}
+                    <span className="word word--quiet">studio</span>
+                  </>
+                )}
+                {inv.due_date && inv.status === 'draft' ? ` · due ${fmtDay(inv.due_date)}` : null}
+                <DeliveryWord
+                  delivery={deliveryByRef[inv.id] ?? null}
+                  recipient={inv.client?.email}
+                  mode="attention"
+                  className="block"
+                />
+                {!studioInvoice && (
+                  <span className="money-row-act">
+                    <DocumentAction
+                      actionKey="open-invoice-document"
+                      surfaceKey="accounts"
+                      regionKey="ledger-row"
+                      variant="tertiary"
+                      onClick={() => onOpenDocument(inv.project_id)}
+                    >
+                      document ↗
+                    </DocumentAction>
                   </span>
                 )}
-                {` · ${[
-                  fmtUsd(inv.total_cents),
-                  inv.due_date ? `due ${fmtDay(inv.due_date)}` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}`}
-              </p>
-            </button>
-            <span className="whitespace-nowrap font-mono text-[11px] text-[var(--color-mocha)]">
-              {tail}
-            </span>
-            {/* min-w-0 both ways: the word is the only variable-width thing
-                in an auto track, so at 390px it truncates instead of pushing
-                the row past the viewport. */}
-            <span className="flex min-w-0 items-center gap-2">
-              <DeliveryWord
-                delivery={deliveryByRef[inv.id] ?? null}
-                recipient={inv.client?.email}
-                mode="attention"
-                className="min-w-0 truncate"
-              />
-              <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
-            </span>
-            {!studioInvoice && (
-              <button
-                type="button"
-                onClick={() => onOpenDocument(inv.project_id)}
-                className="whitespace-nowrap text-[11px] text-[var(--color-clay-ink)] hover:underline"
-              >
-                document ↗
-              </button>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+              </span>
+              <span className="lwhen">
+                <InvoiceStateWord status={inv.status} overdueDays={overdueDays} />
+                {clause && <span className="t-body-sm money-clause">{clause}</span>}
+              </span>
+              <span className="lfig">{fmtUsd(inv.total_cents)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

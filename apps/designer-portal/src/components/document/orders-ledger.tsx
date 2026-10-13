@@ -35,7 +35,7 @@ import {
   derivePurchaseOrderLifecycle,
   procurementExpected,
 } from '@/lib/document/procurement-lifecycle';
-import { Stamp } from './stamp';
+import { PoStateWord } from './accounts/money-state-word';
 import { DateTextInput } from './date-text-input';
 import { LogAckInline, PoPreview } from './po-preview';
 import { AckDifferenceStamp, AckRecord } from './buying/ack-check';
@@ -83,7 +83,8 @@ interface POForThroughput {
 
 type AnyRecord = any;
 
-/** PRC-06: one lens option — quiet scored ink, held when worn (R28). */
+/** PRC-06: one lens option — an underline word in a `.filters` line, held
+ *  (underlined) when worn (R28; US-28 S8). */
 function LensLink({
   active,
   onClick,
@@ -94,30 +95,11 @@ function LensLink({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.06em] transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] ${
-        active
-          ? 'da-score-on text-[var(--color-charcoal)]'
-          : 'text-[var(--color-quiet-ink)] hover:text-[var(--color-charcoal)]'
-      }`}
-    >
+    <button type="button" onClick={onClick} aria-pressed={active}>
       {children}
     </button>
   );
 }
-
-const PO_STAMP: Record<string, { color: string; ink?: string }> = {
-  draft: { color: 'var(--color-aged-oak)', ink: 'var(--color-aged-oak)' },
-  held_for_release: { color: 'var(--color-clay)', ink: 'var(--color-clay-ink)' },
-  confirmed: { color: 'var(--color-dusty-blue)' },
-  in_production: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
-  shipped: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
-  delivered: { color: 'var(--color-sage)' },
-  cancelled: { color: 'var(--color-terracotta)', ink: 'var(--color-terracotta-ink)' },
-};
 
 /**
  * US-19 walk D3 — `Send the purchase order` where no Pieces line carries the
@@ -195,6 +177,10 @@ export function OrdersLedger({
   const [paymentLens, setPaymentLens] = useState<
     'due' | 'pending' | 'paid' | null
   >(null);
+  // US-28 S8 — at 390 the two lens lines fold behind "Filter" (CSS reads
+  // data-open; at wider widths they always show and Filter is not drawn).
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const lensCount = (projectLens ? 1 : 0) + (paymentLens ? 1 : 0);
 
   const vendorById = useMemo(() => {
     const map = new Map<string, AnyRecord>();
@@ -445,80 +431,117 @@ export function OrdersLedger({
               Opening the book…
             </p>
           )}
-          {/* PRC-06 (R84): the ledger's quiet lenses — project + payment
-              facets as DM-mono text, never FilterPills. The front matter
-              stays the whole book's opening; the lens narrows the rows. */}
-          {!isLoading && live.length > 0 && (
-            <div
-              data-orders-lenses
-              className="mb-4 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-[var(--color-pearl)] pb-1"
+          {/* US-28 S8 — the register is ONE Section: one head, then PRC-06's
+              lenses (R84 — never FilterPills) as two labelled lines of
+              underline words that fold behind "Filter" at 390, then the
+              orders; the Section closes on its own rule after the last row. */}
+          {!isLoading && (
+            <section
+              className="section money-register"
+              data-orders-register
+              aria-labelledby="orders-register-head"
             >
-              {projectOptions.length > 1 && (
-                <>
-                  <span className="doc-type-meta uppercase tracking-[0.08em]">
-                    project ·
-                  </span>
-                  <LensLink
-                    active={!projectLens}
-                    onClick={() => {
-                      clearBulkSelection();
-                      setProjectLens(null);
-                    }}
-                  >
-                    all
-                  </LensLink>
-                  {projectOptions.map((p) => (
-                    <LensLink
-                      key={p.id}
-                      active={projectLens === p.id}
-                      onClick={() => {
-                        clearBulkSelection();
-                        setProjectLens((cur) => (cur === p.id ? null : p.id));
-                      }}
+              <div className="sec-head">
+                <p className="eb" id="orders-register-head">
+                  <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+                    <path d="M0 2h34M0 6h28M0 10h20" />
+                  </svg>
+                  <span>Order register</span>
+                </p>
+                {live.length > 0 && (
+                  <span className="money-head-acts">
+                    <button
+                      type="button"
+                      className="money-filter-toggle"
+                      aria-expanded={filtersOpen}
+                      aria-controls="orders-lenses"
+                      onClick={() => setFiltersOpen((open) => !open)}
                     >
-                      {p.name}
-                    </LensLink>
-                  ))}
-                  <span className="mx-1.5" aria-hidden />
-                </>
-              )}
-              <span className="doc-type-meta uppercase tracking-[0.08em]">
-                payment ·
-              </span>
-              <LensLink
-                active={!paymentLens}
-                onClick={() => {
-                  clearBulkSelection();
-                  setPaymentLens(null);
-                }}
-              >
-                all
-              </LensLink>
-              {(['due', 'pending', 'paid'] as const).map((s) => (
-                <LensLink
-                  key={s}
-                  active={paymentLens === s}
-                  onClick={() => {
-                    clearBulkSelection();
-                    setPaymentLens((cur) => (cur === s ? null : s));
-                  }}
+                      {`Filter${lensCount ? ` · ${lensCount}` : ''}`}
+                    </button>
+                    <button
+                      type="button"
+                      data-orders-bulk-toggle
+                      aria-pressed={bulkMode}
+                      onClick={() => (bulkMode ? exitBulkMode() : setBulkMode(true))}
+                      className={`da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.06em] text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] ${bulkMode ? 'da-score-on text-[var(--color-charcoal)]' : ''}`}
+                    >
+                      {bulkMode
+                        ? `Done selecting${selected.length ? ` · ${selected.length}` : ''}`
+                        : 'Select multiple'}
+                    </button>
+                  </span>
+                )}
+              </div>
+              {live.length > 0 && (
+                <div
+                  id="orders-lenses"
+                  data-orders-lenses
+                  data-open={filtersOpen || undefined}
+                  className="money-flines"
                 >
-                  {s}
-                </LensLink>
-              ))}
-              <button
-                type="button"
-                data-orders-bulk-toggle
-                aria-pressed={bulkMode}
-                onClick={() => (bulkMode ? exitBulkMode() : setBulkMode(true))}
-                className={`da-score-hover doc-type-meta ml-auto inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.06em] text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] ${bulkMode ? 'da-score-on text-[var(--color-charcoal)]' : ''}`}
-              >
-                {bulkMode
-                  ? `Done selecting${selected.length ? ` · ${selected.length}` : ''}`
-                  : 'Select multiple'}
-              </button>
-            </div>
-          )}
+                  {projectOptions.length > 1 && (
+                    <div className="money-fline">
+                      <span className="t-meta money-fline-l" id="orders-lens-project">
+                        Project
+                      </span>
+                      <div className="filters" role="group" aria-labelledby="orders-lens-project">
+                        <LensLink
+                          key="all"
+                          active={!projectLens}
+                          onClick={() => {
+                            clearBulkSelection();
+                            setProjectLens(null);
+                          }}
+                        >
+                          all
+                        </LensLink>
+                        {projectOptions.map((p) => (
+                          <LensLink
+                          key={p.id}
+                          active={projectLens === p.id}
+                          onClick={() => {
+                            clearBulkSelection();
+                            setProjectLens((cur) => (cur === p.id ? null : p.id));
+                          }}
+                        >
+                          {p.name}
+                        </LensLink>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="money-fline">
+                    <span className="t-meta money-fline-l" id="orders-lens-payment">
+                      Payment
+                    </span>
+                    <div className="filters" role="group" aria-labelledby="orders-lens-payment">
+                      <LensLink
+                          key="all"
+                          active={!paymentLens}
+                          onClick={() => {
+                            clearBulkSelection();
+                            setPaymentLens(null);
+                          }}
+                        >
+                          all
+                        </LensLink>
+                      {(['due', 'pending', 'paid'] as const).map((s) => (
+                        <LensLink
+                          key={s}
+                          active={paymentLens === s}
+                          onClick={() => {
+                            clearBulkSelection();
+                            setPaymentLens((cur) => (cur === s ? null : s));
+                          }}
+                        >
+                          {s}
+                        </LensLink>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
           {/* The bill run (D1-11): under the `payment · due` lens, one total
               over exactly the rows beneath it (V11). */}
           {!isLoading && canSeeMargin && paymentLens === 'due' && (
@@ -617,8 +640,7 @@ export function OrdersLedger({
               </p>
               <ul>
                 {g.pos.map((po, index) => {
-                  const stamp = PO_STAMP[po.status] ?? PO_STAMP.draft;
-                  // R7: the same grammar at ledger density — the row's stamp
+                  // R7: the same grammar at ledger density — the row's word
                   // is the lifecycle POSITION, not the status word "Ordered"
                   // hid everything behind. The fifteen steps never enumerate
                   // here; the book shows where the order stands and what stops
@@ -683,21 +705,21 @@ export function OrdersLedger({
                             {ackDiffers ? (
                               <AckDifferenceStamp purchaseOrderId={po.id} />
                             ) : (
-                              <Stamp
+                              // U-Q13 — the position is an ink word, never a
+                              // tilted, pigment-graded stamp.
+                              <PoStateWord
+                                status={po.status}
                                 label={
                                   position
                                     ? procurementStepLabel(position.key)
                                     : po.status.replace(/_/g, ' ')
                                 }
-                                color={stamp.color}
-                                ink={stamp.ink}
-                                size="sm"
                               />
                             )}
                             {/* Next gate — name, and the term that holds it. */}
                             <span
                               data-orders-next-gate
-                              className="doc-type-meta hidden max-w-[16rem] truncate text-[var(--color-quiet-ink)] sm:inline"
+                              className="doc-type-meta hidden max-w-[16rem] text-[var(--color-quiet-ink)] sm:inline"
                             >
                               {gate
                                 ? [
@@ -717,11 +739,11 @@ export function OrdersLedger({
                                   ? ''
                                   : undefined
                               }
-                              className={`doc-type-meta whitespace-nowrap font-heading ${
+                              className={
                                 !expected && po.status === 'shipped'
-                                  ? 'font-mono uppercase tracking-[0.05em] text-[#D8BE56]'
-                                  : 'text-[var(--color-charcoal)]'
-                              }`}
+                                  ? 'word'
+                                  : 'doc-type-meta whitespace-nowrap font-heading text-[var(--color-charcoal)]'
+                              }
                             >
                               {expected
                                 ? `~${fmtDay(expected)}`
@@ -892,6 +914,8 @@ export function OrdersLedger({
               </ul>
             </section>
           ))}
+            </section>
+          )}
 
           {previewPo && (
             <PoPreview
