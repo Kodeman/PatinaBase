@@ -45,9 +45,9 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78400000-0000-4000-8000-000000000001',true);
 SELECT throws_ok($$SELECT public.claim_outbound_draft_for_send((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))$$,
-  '23514','claim_outbound_draft_for_send: draft was already attempted; finalize it','the studio cannot reclaim an attempted push from the sheet');
+  '42501',NULL,'the studio cannot reclaim an attempted push from the sheet');
 SELECT throws_ok($$SELECT public.release_outbound_draft_claim((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))$$,
-  '23514','release_outbound_draft_claim: draft was already attempted; finalize it','the stale-claim release cannot hand an attempted push back');
+  '42501',NULL,'the stale-claim release cannot hand an attempted push back');
 SELECT throws_ok($$SELECT public.record_outbound_draft_send_attempt((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-2'))$$,
   '42501',NULL,'only the service role records an attempt');
 SELECT throws_ok($$SELECT public.claim_outbound_draft_finalize((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-784-1'))$$,

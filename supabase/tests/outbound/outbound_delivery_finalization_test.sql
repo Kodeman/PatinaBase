@@ -44,9 +44,9 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','78200000-0000-4000-8000-000000000001',true);
 SELECT throws_ok($$SELECT public.claim_outbound_draft_for_send((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-782-1'))$$,
-  '23514','claim_outbound_draft_for_send: draft was already delivered; finalize it','the studio cannot claim a delivered draft from the sheet');
+  '42501',NULL,'the studio cannot claim a delivered draft from the sheet');
 SELECT throws_ok($$SELECT public.release_outbound_draft_claim((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-782-1'))$$,
-  '23514','release_outbound_draft_claim: draft was already delivered; finalize it','the stale-claim release cannot hand a delivered draft back');
+  '42501',NULL,'the stale-claim release cannot hand a delivered draft back');
 SELECT throws_ok($$SELECT public.record_outbound_draft_delivery((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-782-2'),'forged')$$,
   '42501',NULL,'only the service role records a delivery');
 RESET ROLE;

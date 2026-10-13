@@ -23,6 +23,7 @@ SET LOCAL ROLE authenticated;
 SELECT throws_ok(
   $$SELECT public.claim_outbound_draft_for_send('00000000-0000-0000-0000-000000000001'::uuid)$$,
   '42501',
+  NULL,
   'authenticated member claim attempt raises insufficient_privilege'
 );
 RESET ROLE;
