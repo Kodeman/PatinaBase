@@ -50,7 +50,10 @@ describe('US-28 S1 · the ink state word', () => {
   });
 
   it('names only classes the S1 block in globals.css declares, in the ink it says', () => {
-    const block = GLOBALS_CSS.slice(GLOBALS_CSS.indexOf('US-28 S1 system'));
+    const block = GLOBALS_CSS.slice(
+      GLOBALS_CSS.indexOf('US-28 S1 system'),
+      GLOBALS_CSS.indexOf('end US-28 S1 system'),
+    );
     expect(block).toMatch(/\.word \{[^}]*color: var\(--text-primary\);/);
     expect(block).toMatch(/\.word--quiet \{ color: var\(--text-subtle\); \}/);
     expect(block).toMatch(/\.word--od \{ color: var\(--terracotta-ink\); \}/);

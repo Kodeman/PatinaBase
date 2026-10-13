@@ -24,9 +24,13 @@ describe('R126 · the rail stock', () => {
     expect(source).not.toContain('rgba(229,226,221,0.28)');
   });
 
-  it('grounds the margin panel on the same stock, at every width', () => {
+  // US-28 S7a: the margin note is a Card off the paper, and `--card-edge` on
+  // rail measures 2.62:1 (uplift.md depth ladder), so the panel takes the
+  // ground stock; the rail stays the spine's alone.
+  it('grounds the margin panel on the ground stock, at every width', () => {
     const source = read('margin-rail.tsx');
-    expect(source).toContain('bg-[var(--doc-rail-stock)]');
+    expect(source).toContain('bg-[var(--paper)]');
+    expect(source).not.toContain('bg-[var(--doc-rail-stock)]');
     // The 1440 override was a second, lighter wash — one rail, one stock.
     expect(source).not.toContain('rgba(250,247,242,0.98)');
     expect(source).not.toContain('rgba(250,247,242,0.55)');
