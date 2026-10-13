@@ -34,8 +34,8 @@ describe('R28 — the book pages are text links, never tabs', () => {
   it('the page nav uses <button> links and a DM-mono font, not a Tabs primitive', () => {
     // No design-system Tabs / TabsList / role="tab" in the Orders book.
     expect(ledger).not.toMatch(/TabsList|TabsTrigger|role=["']tab["']/);
-    // The page links carry the mono face (DM-mono tracking).
-    expect(ledger).toMatch(/font-mono/);
+    // The page links carry the mono face: DM-mono tracking, or the house meta step (doc-type-meta) since US-28 S8.
+    expect(ledger).toMatch(/font-mono|doc-type-meta/);
     // The four pages exist as a typed list.
     for (const label of ['Order register', 'Weekly orders', 'Receiving', 'Vendor accounts']) {
       expect(ledger).toContain(`label: '${label}'`);
