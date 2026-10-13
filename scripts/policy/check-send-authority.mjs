@@ -14,7 +14,9 @@ const allowlisted = [
   // Staff and Patina-to-designer campaigns are exempt from the studio send gate.
   /^supabase\/functions\/campaign-dispatch\//,
   /^services\/orders\//,
-  // TEMPORARY until US-31 B2e routes this package through the shared chokepoint.
+  // Admin application sends (apps/admin-portal/src/lib/application-emails.ts and
+  // apps/admin-portal/src/app/api/campaigns/test-send/route.ts) still use
+  // @patina/email/send; Weekly Pulse now goes through pulse-send.
   /^packages\/email\//,
 ];
 const providerUse = /api\.resend\.com|resend\.emails\.send|Messages\.json|api\.push\.apple\.com/;

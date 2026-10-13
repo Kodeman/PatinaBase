@@ -12,9 +12,10 @@
  * Response: { ok: true, emailSent: boolean } | { error }
  */
 import { createElement } from 'react';
+import { render } from '@react-email/render';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
-import { WeeklyPulse, sendEmail } from '@patina/email';
+import { WeeklyPulse } from '@patina/email';
 
 export const runtime = 'nodejs';
 
@@ -75,27 +76,28 @@ export async function POST(req: Request) {
   }
 
   const portalBase = process.env.NEXT_PUBLIC_CLIENT_PORTAL_URL ?? 'https://client.patina.cloud';
-  const result = await sendEmail({
-    to: recipient,
-    subject: pulse.subject?.trim() || `This week on ${project.name}`,
-    // Cast bridges the React-19 ReactElement<unknown> vs <any> generic skew
-    // between the app's and @patina/email's @types/react (the same friction
-    // the whole email package carries; tolerated app-wide).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    react: createElement(WeeklyPulse, {
+  const subject = pulse.subject?.trim() || `This week on ${project.name}`;
+  // Render the existing React Email template here so its HTML stays identical;
+  // the edge function owns delivery and compliance policy.
+  const html = await render(
+    createElement(WeeklyPulse, {
       clientName: client?.full_name ?? 'there',
       designerName: designer?.full_name ?? 'Your designer',
       projectName: project.name,
       body: pulse.body,
       weekOf: pulse.week_of ?? undefined,
       portalUrl: `${portalBase}/projects/${project.id}`,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }) as any,
-  });
+    }),
+  );
 
-  if (!result.success) {
-    // Non-fatal: the send already happened. Surface for logging, 200 so the
-    // caller doesn't treat it as a send failure.
+  const { data: result, error: invokeError } = await supabase.functions.invoke('pulse-send', {
+    body: { pulseId, subject, html },
+  });
+  if (invokeError || !result) {
+    // Non-fatal: the portal mirror already reached the client.
+    return NextResponse.json({ ok: true, emailSent: false, error: invokeError?.message });
+  }
+  if (!result.emailSent) {
     return NextResponse.json({ ok: true, emailSent: false, error: result.error });
   }
   return NextResponse.json({ ok: true, emailSent: true, id: result.id });
