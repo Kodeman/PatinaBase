@@ -11919,6 +11919,7 @@ export type Database = {
       }
       outbound_drafts: {
         Row: {
+          after_send_done_at: string | null
           body: string
           channel: string
           claimed_at: string | null
@@ -11936,6 +11937,7 @@ export type Database = {
           finalizing_at: string | null
           id: string
           kind: string
+          last_send_outcome: string | null
           message_id: string | null
           organization_id: string
           payload: Json
@@ -11955,6 +11957,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          after_send_done_at?: string | null
           body: string
           channel: string
           claimed_at?: string | null
@@ -11972,6 +11975,7 @@ export type Database = {
           finalizing_at?: string | null
           id?: string
           kind: string
+          last_send_outcome?: string | null
           message_id?: string | null
           organization_id: string
           payload?: Json
@@ -11991,6 +11995,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          after_send_done_at?: string | null
           body?: string
           channel?: string
           claimed_at?: string | null
@@ -12008,6 +12013,7 @@ export type Database = {
           finalizing_at?: string | null
           id?: string
           kind?: string
+          last_send_outcome?: string | null
           message_id?: string | null
           organization_id?: string
           payload?: Json
@@ -39218,6 +39224,7 @@ export type Database = {
       claim_outbound_draft_finalize: {
         Args: { p_id: string }
         Returns: {
+          after_send_done_at: string | null
           body: string
           channel: string
           claimed_at: string | null
@@ -39235,6 +39242,7 @@ export type Database = {
           finalizing_at: string | null
           id: string
           kind: string
+          last_send_outcome: string | null
           message_id: string | null
           organization_id: string
           payload: Json
@@ -39263,6 +39271,7 @@ export type Database = {
       claim_outbound_draft_for_send: {
         Args: { p_id: string }
         Returns: {
+          after_send_done_at: string | null
           body: string
           channel: string
           claimed_at: string | null
@@ -39280,6 +39289,7 @@ export type Database = {
           finalizing_at: string | null
           id: string
           kind: string
+          last_send_outcome: string | null
           message_id: string | null
           organization_id: string
           payload: Json
@@ -40384,6 +40394,7 @@ export type Database = {
       discard_outbound_draft: {
         Args: { p_id: string }
         Returns: {
+          after_send_done_at: string | null
           body: string
           channel: string
           claimed_at: string | null
@@ -40401,6 +40412,7 @@ export type Database = {
           finalizing_at: string | null
           id: string
           kind: string
+          last_send_outcome: string | null
           message_id: string | null
           organization_id: string
           payload: Json
@@ -42479,6 +42491,7 @@ export type Database = {
       mark_outbound_draft_sent: {
         Args: { p_id: string; p_message_id: string; p_sent_by: string }
         Returns: {
+          after_send_done_at: string | null
           body: string
           channel: string
           claimed_at: string | null
@@ -42496,6 +42509,7 @@ export type Database = {
           finalizing_at: string | null
           id: string
           kind: string
+          last_send_outcome: string | null
           message_id: string | null
           organization_id: string
           payload: Json
@@ -43442,9 +43456,10 @@ export type Database = {
         }
         Returns: string
       }
-      record_outbound_draft_delivery: {
-        Args: { p_id: string; p_message_id: string }
+      record_outbound_draft_after_send: {
+        Args: { p_finalizing_at: string; p_id: string }
         Returns: {
+          after_send_done_at: string | null
           body: string
           channel: string
           claimed_at: string | null
@@ -43462,6 +43477,54 @@ export type Database = {
           finalizing_at: string | null
           id: string
           kind: string
+          last_send_outcome: string | null
+          message_id: string | null
+          organization_id: string
+          payload: Json
+          project_id: string | null
+          recipient_kind: string
+          ref_id: string
+          ref_type: string
+          send_attempted_at: string | null
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_address: string | null
+          to_client_id: string | null
+          to_contact_id: string | null
+          to_party_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "outbound_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_outbound_draft_delivery: {
+        Args: { p_id: string; p_message_id: string }
+        Returns: {
+          after_send_done_at: string | null
+          body: string
+          channel: string
+          claimed_at: string | null
+          composed_by: string
+          created_at: string
+          dedupe_key: string
+          delivered_at: string | null
+          delivery_message_id: string | null
+          discarded_at: string | null
+          discarded_by: string | null
+          due_at: string | null
+          edited_at: string | null
+          edited_by: string | null
+          expires_at: string | null
+          finalizing_at: string | null
+          id: string
+          kind: string
+          last_send_outcome: string | null
           message_id: string | null
           organization_id: string
           payload: Json
@@ -43490,6 +43553,7 @@ export type Database = {
       record_outbound_draft_send_attempt: {
         Args: { p_id: string }
         Returns: {
+          after_send_done_at: string | null
           body: string
           channel: string
           claimed_at: string | null
@@ -43507,6 +43571,54 @@ export type Database = {
           finalizing_at: string | null
           id: string
           kind: string
+          last_send_outcome: string | null
+          message_id: string | null
+          organization_id: string
+          payload: Json
+          project_id: string | null
+          recipient_kind: string
+          ref_id: string
+          ref_type: string
+          send_attempted_at: string | null
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_address: string | null
+          to_client_id: string | null
+          to_contact_id: string | null
+          to_party_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "outbound_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_outbound_draft_send_rejected: {
+        Args: { p_id: string }
+        Returns: {
+          after_send_done_at: string | null
+          body: string
+          channel: string
+          claimed_at: string | null
+          composed_by: string
+          created_at: string
+          dedupe_key: string
+          delivered_at: string | null
+          delivery_message_id: string | null
+          discarded_at: string | null
+          discarded_by: string | null
+          due_at: string | null
+          edited_at: string | null
+          edited_by: string | null
+          expires_at: string | null
+          finalizing_at: string | null
+          id: string
+          kind: string
+          last_send_outcome: string | null
           message_id: string | null
           organization_id: string
           payload: Json
@@ -44009,6 +44121,7 @@ export type Database = {
       release_outbound_draft_claim: {
         Args: { p_id: string }
         Returns: {
+          after_send_done_at: string | null
           body: string
           channel: string
           claimed_at: string | null
@@ -44026,6 +44139,7 @@ export type Database = {
           finalizing_at: string | null
           id: string
           kind: string
+          last_send_outcome: string | null
           message_id: string | null
           organization_id: string
           payload: Json
@@ -46948,6 +47062,7 @@ export type Database = {
       update_outbound_draft: {
         Args: { p_body: string; p_id: string; p_subject: string }
         Returns: {
+          after_send_done_at: string | null
           body: string
           channel: string
           claimed_at: string | null
@@ -46965,6 +47080,7 @@ export type Database = {
           finalizing_at: string | null
           id: string
           kind: string
+          last_send_outcome: string | null
           message_id: string | null
           organization_id: string
           payload: Json

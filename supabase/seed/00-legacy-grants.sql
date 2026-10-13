@@ -22122,6 +22122,90 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_outbound_draft_for_send(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_outbound_draft_for_send(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_outbound_draft_send_rejected(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_outbound_draft_send_rejected(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_outbound_draft_delivery(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_outbound_draft_delivery(uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_outbound_draft_finalize(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_outbound_draft_finalize(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_outbound_draft_after_send(uuid, timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_outbound_draft_after_send(uuid, timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.expire_outbound_drafts() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.expire_outbound_drafts() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.notify_client_attention(uuid, text, uuid, text, text, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00785_outbound_delivery_truth.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.notify_client_attention(uuid, text, uuid, text, text, jsonb, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00786_outbound_claim_service_only.sql
 DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.claim_outbound_draft_for_send(uuid) FROM authenticated, anon, PUBLIC;
