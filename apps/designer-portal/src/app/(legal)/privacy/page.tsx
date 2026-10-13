@@ -101,17 +101,50 @@ export default function PrivacyPage() {
           <li>Resend — email delivery</li>
           <li>Stripe — payments</li>
           <li>
-            Anthropic — when you ask us to process content (an uploaded FF&amp;E
-            document for extraction, a companion message, a design-profile
-            draft), we send it to Anthropic&rsquo;s Claude API to generate the
-            result. It is not used to train Anthropic&rsquo;s models.
+            Anthropic — we send content to Anthropic&rsquo;s Claude API to
+            prepare suggestions and drafts for you to review. That includes
+            documents you upload (an FF&amp;E schedule, a presentation deck),
+            the public details and images of products you capture, text
+            replies from your clients and trades on the field line, and
+            companion messages. Anthropic processes it under its commercial
+            terms and does not use it to train its models.
           </li>
           <li>
-            Twilio — SMS to phone numbers you give us for field coordination,
-            including the number and the message text.
+            Twilio — SMS to and from phone numbers you give us for field
+            coordination, including the number and the message text.
           </li>
         </ul>
         <p>We do not sell your data.</p>
+      </Section>
+
+      <Section heading="How Patina learns">
+        <p>
+          When your studio corrects a suggestion — a style, a material, a
+          dimension Patina read from a product — that correction helps improve
+          the suggestions Patina gives every studio. We use the correction
+          itself, not your clients&rsquo; names or contact details.
+        </p>
+        <p>
+          Your studio can opt out at any time by writing to{' '}
+          <a
+            href="mailto:hello@patina.cloud"
+            className="underline decoration-[var(--border-default)] hover:text-[var(--color-charcoal)]"
+          >
+            hello@patina.cloud
+          </a>
+          ; your corrections then stay with your studio only.
+        </p>
+      </Section>
+
+      <Section heading="Your clients’ information">
+        <p>
+          When you add a client or a trade to a project, their name, contact
+          details, and the messages you exchange through Patina are stored in
+          your workspace and used only to run that project. Messages to them
+          wait for you to send, unless your studio has chosen to send a kind
+          of reminder on schedule. Clients and trades can reply STOP to any
+          text to stop receiving them.
+        </p>
       </Section>
 
       <Section heading="Retention and deletion">
