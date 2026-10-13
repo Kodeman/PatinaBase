@@ -9,6 +9,10 @@ import {
 } from "npm:@anthropic-ai/sdk@0.133.0";
 import { resolveCaller } from "./caller.ts";
 import {
+  adjudicationErrorFromClaudeFailure,
+  isTransientAdjudicationError,
+} from "../board-deck-import-resolve/core.ts";
+import {
   callClaude,
   type ClaudeCaller,
   createLlmLedger,
@@ -369,6 +373,20 @@ Deno.test("callClaude returns typed model failures with SDK status, error type a
   const cases = [
     {
       error: APIError.generate(
+        409,
+        {
+          type: "error",
+          error: { type: "api_error", message: "Conflict" },
+        },
+        undefined,
+        new Headers(),
+      ),
+      status: 409,
+      errorType: "api_error",
+      transient: true,
+    },
+    {
+      error: APIError.generate(
         529,
         {
           type: "error",
@@ -419,6 +437,9 @@ Deno.test("callClaude returns typed model failures with SDK status, error type a
       transient: expected.transient,
     });
     assertEquals(settlements.map((entry) => entry.fields.status), ["error"]);
+    if (expected.status === 409 || expected.status === 529) {
+      assert(isTransientAdjudicationError(adjudicationErrorFromClaudeFailure(result)));
+    }
   }
 });
 

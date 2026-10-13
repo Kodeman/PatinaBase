@@ -688,6 +688,16 @@ Deno.test("F5: no API key → no adjudication slot is claimed or stored", async 
   assertEquals(f.recorded.length, 2);
 });
 
+Deno.test("shared-client 409 failures remain transient at the deck adapter", () => {
+  const error = adjudicationErrorFromClaudeFailure({
+    error: "conflict",
+    status: 409,
+    errorType: "api_error",
+    transient: true,
+  });
+  assert(isTransientAdjudicationError(error));
+});
+
 Deno.test("shared-client 529 failures remain transient at the deck adapter", () => {
   const error = adjudicationErrorFromClaudeFailure({
     error: "overloaded",
@@ -696,6 +706,28 @@ Deno.test("shared-client 529 failures remain transient at the deck adapter", () 
     transient: true,
   });
   assert(isTransientAdjudicationError(error));
+});
+
+Deno.test("F5: a transient 409 failure stores nothing; the slot stays reclaimable", async () => {
+  const failure = adjudicationErrorFromClaudeFailure({
+    error: "conflict",
+    status: 409,
+    errorType: "api_error",
+    transient: true,
+  });
+  const store = new Map<number, AdjudicationAssignment[] | null>();
+  const f = fake([item("pic-a", FLAGGED)], {
+    adjudicationStore: store,
+    adjudicate: async () => {
+      throw failure;
+    },
+  });
+  const summary = await runResolve(f.deps);
+  assertEquals(f.calls.claimAdjudication, 1);
+  assertEquals(f.calls.storeAdjudication ?? 0, 0);
+  assertEquals(summary.adjudications, 0);
+  assertEquals(recordFor(f, "pic-a").state, "not_found");
+  assert(isTransientAdjudicationError(failure));
 });
 
 Deno.test("F5: a transient failure (429, 529, timeout, network) stores nothing; the slot stays reclaimable", async () => {

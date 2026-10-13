@@ -168,6 +168,7 @@ export function adjudicationErrorFromClaudeFailure(failure: {
 
 const TRANSIENT_ADJUDICATION_STATUS = new Set([
   408,
+  409,
   429,
   500,
   502,
