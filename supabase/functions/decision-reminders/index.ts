@@ -167,7 +167,10 @@ Deno.serve(async (_req: Request) => {
     // Batched cadences belong to B3c's digest, never this per-decision composer.
     if (
       recipient?.userId &&
-      normalizeReminderCadence((preferences as { reminder_cadence?: string | null } | null)?.reminder_cadence) !== "right_away"
+      normalizeReminderCadence(
+        (preferences as { reminder_cadence?: string | null } | null)?.reminder_cadence ??
+          (preferences ? null : "immediate"),
+      ) !== "right_away"
     ) {
       skipped++;
       continue;
