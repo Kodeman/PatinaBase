@@ -4,6 +4,7 @@ import {
   type MoodBoardGeometryInput,
 } from './geometry'
 import {
+  measureMoodBoardContentHeight,
   paintMoodBoardGeometry,
   type MoodBoardImageRequest,
   type MoodBoardPaintResult,
@@ -112,16 +113,19 @@ async function encodeCanvas(
   throw new Error('The raster environment cannot encode PNG output')
 }
 
+interface RasterOutput {
+  width: number
+  height: number
+  scale: number
+  offsetX: number
+  offsetY: number
+}
+
 async function paintToRaster(
   geometry: BoardGeometrySnapshot,
   environment: MoodBoardRasterEnvironment,
-  output: {
-    width: number
-    height: number
-    scale: number
-    offsetX: number
-    offsetY: number
-  },
+  /** Lays the raster out for a composition of this size. */
+  layout: (composition: BoardSize) => RasterOutput,
   onProgress?: (progress: number, itemKey?: string) => void,
 ): Promise<MoodBoardRasterResult> {
   try {
@@ -131,12 +135,21 @@ async function paintToRaster(
     // declaration carries a system-stack tail, so continuing here selects the
     // same deterministic fallback the DOM composition uses.
   }
+  let output = layout(geometry.canvas)
   const canvas = environment.createCanvas(output.width, output.height)
   canvas.width = output.width
   canvas.height = output.height
   const context = canvas.getContext('2d')
   if (!context)
     throw new Error('A 2D canvas context is required to paint a mood board')
+  // A caption prints whole past its saved box (R13b): the composition grows to
+  // hold it, measured with the fonts just loaded, so nothing is clipped.
+  const contentHeight = measureMoodBoardContentHeight(context, geometry)
+  if (contentHeight > geometry.canvas.height) {
+    output = layout({ width: geometry.canvas.width, height: contentHeight })
+    canvas.width = output.width
+    canvas.height = output.height
+  }
   const painted = await paintMoodBoardGeometry({
     context,
     geometry,
@@ -167,15 +180,14 @@ export async function renderMoodBoardPng(
   options: MoodBoardPngOptions = {},
 ): Promise<MoodBoardRasterResult> {
   const geometry = geometryFor(input)
-  const output = computeMoodBoardRasterScale(
-    geometry.canvas,
-    options.scale,
-    options.maxEdge,
-  )
   return paintToRaster(
     geometry,
     options.environment ?? createDefaultMoodBoardRasterEnvironment(),
-    { ...output, offsetX: 0, offsetY: 0 },
+    (composition) => ({
+      ...computeMoodBoardRasterScale(composition, options.scale, options.maxEdge),
+      offsetX: 0,
+      offsetY: 0,
+    }),
     options.onProgress,
   )
 }
@@ -188,19 +200,18 @@ export async function renderMoodBoardCover(
   const geometry = geometryFor(input)
   const width = options.width ?? DEFAULT_MOOD_BOARD_COVER_SIZE.width
   const height = options.height ?? DEFAULT_MOOD_BOARD_COVER_SIZE.height
-  const scale = Math.min(
-    width / geometry.canvas.width,
-    height / geometry.canvas.height,
-  )
   return paintToRaster(
     geometry,
     options.environment ?? createDefaultMoodBoardRasterEnvironment(),
-    {
-      width,
-      height,
-      scale,
-      offsetX: (width - geometry.canvas.width * scale) / 2,
-      offsetY: (height - geometry.canvas.height * scale) / 2,
+    (composition) => {
+      const scale = Math.min(width / composition.width, height / composition.height)
+      return {
+        width,
+        height,
+        scale,
+        offsetX: (width - composition.width * scale) / 2,
+        offsetY: (height - composition.height * scale) / 2,
+      }
     },
     options.onProgress,
   )

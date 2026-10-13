@@ -495,3 +495,87 @@ describe('Present tiles: plate and caption, zones with an ink word (US-28 S12)',
     expect(container.querySelector('[data-pin-overlay], [data-pin-interaction]')).toBeNull()
   })
 })
+
+describe('BoardComposition never clips a caption at the canvas bottom (R13b)', () => {
+  const longName =
+    'Halyard lounge chair in a long walnut and boucle finish, with the matching ottoman'
+  function captionBoard(): BoardCompositionBoard {
+    const tile = (id: string, x: number, y: number) => ({
+      id,
+      type: 'product',
+      x,
+      y,
+      width: 40,
+      height: 40,
+      z_index: 0,
+      data: { name: longName, vendor_name: 'West Elm' },
+    })
+    return {
+      id: 'b-captions',
+      name: 'Captions',
+      canvas_width: 400,
+      canvas_height: 300,
+      background_color: '#FAF8F5',
+      // A bottom-edge tile, and two tiles stacked one above the other.
+      items: [tile('bottom', 300, 260), tile('upper', 40, 100), tile('lower', 40, 150)],
+    }
+  }
+
+  /** Layout px a browser reports: each 40px tile prints 40 + its caption. */
+  function stubLayout(printed: Record<string, number>) {
+    const scroll = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return printed[this.dataset.boardItemId ?? ''] ?? 0
+      })
+    const width = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.dataset.boardCompositionCanvas ? 400 : 0
+      })
+    return () => {
+      scroll.mockRestore()
+      width.mockRestore()
+    }
+  }
+
+  it('grows the composition to the bottom tile’s printed caption, at any tile', () => {
+    const restore = stubLayout({ bottom: 160, upper: 140, lower: 140 })
+    try {
+      const { container } = render(<BoardComposition board={captionBoard()} />)
+      const canvas = container.querySelector('[data-board-composition-canvas]') as HTMLElement
+      const world = canvas.firstElementChild as HTMLElement
+      // 260 + 160: the bottom tile's caption ends 120px past the 300px canvas.
+      expect(canvas).toHaveAttribute('data-canvas-height', '300')
+      expect(canvas).toHaveAttribute('data-content-height', '420')
+      expect(world.style.height).toBe('420px')
+      // At scale 1 the visible frame is the grown height, so nothing is cut.
+      expect(canvas.style.height).toBe('420px')
+      // Every tile's printed bottom sits inside the composition.
+      for (const [id, y, printed] of [
+        ['bottom', 260, 160],
+        ['upper', 100, 140],
+        ['lower', 150, 140],
+      ] as const) {
+        const tile = container.querySelector(`[data-board-item-id="${id}"]`) as HTMLElement
+        expect(tile.style.top).toBe(`${y}px`)
+        expect(y + printed).toBeLessThanOrEqual(420)
+        expect(within(tile).getByText(longName)).toBeInTheDocument()
+      }
+    } finally {
+      restore()
+    }
+  })
+
+  it('keeps the saved canvas when every caption fits its tile', () => {
+    const restore = stubLayout({ bottom: 40, upper: 40, lower: 40 })
+    try {
+      const { container } = render(<BoardComposition board={captionBoard()} />)
+      const canvas = container.querySelector('[data-board-composition-canvas]') as HTMLElement
+      expect(canvas).toHaveAttribute('data-content-height', '300')
+      expect(canvas.style.height).toBe('300px')
+    } finally {
+      restore()
+    }
+  })
+})

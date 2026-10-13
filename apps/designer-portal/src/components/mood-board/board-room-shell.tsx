@@ -295,11 +295,45 @@ function useWideRoom(): boolean {
 }
 
 /**
+ * Marks every region of the room outside the sheet `inert` (the veil stays live
+ * so a tap on it still puts the sheet back), including regions that mount while
+ * the sheet is open. Returns the undo, which clears only what it marked.
+ */
+function inertRoomOutside(root: HTMLElement, sheet: HTMLElement): () => void {
+  const path: HTMLElement[] = [];
+  for (let node: HTMLElement | null = sheet; node && node !== root; node = node.parentElement) {
+    path.push(node);
+  }
+  const marked = new Set<Element>();
+  const mark = () => {
+    for (const kept of path) {
+      for (const sibling of Array.from(kept.parentElement?.children ?? [])) {
+        if (path.includes(sibling as HTMLElement) || sibling.classList.contains('veil')) continue;
+        if (sibling.hasAttribute('inert')) continue;
+        sibling.setAttribute('inert', '');
+        marked.add(sibling);
+      }
+    }
+  };
+  mark();
+  const observer = new MutationObserver(mark);
+  for (const kept of path) {
+    if (kept.parentElement) observer.observe(kept.parentElement, { childList: true });
+  }
+  return () => {
+    observer.disconnect();
+    marked.forEach((element) => element.removeAttribute('inert'));
+  };
+}
+
+/**
  * Below md the open Tools Section is a modal sheet over the veil (R3): it wears
  * dialog semantics, the room's Tab trap narrows to it (useBoardRoomBoundary),
- * and Escape from anywhere puts it back. At md and up it stays the side column.
+ * the rest of the room goes inert, and Escape from anywhere puts it back. At md
+ * and up it stays the side column.
  */
 export function useToolsSheetModal(
+  rootRef: MutableRefObject<HTMLElement | null>,
   sheetRef: MutableRefObject<HTMLElement | null>,
   open: boolean,
   onClose: () => void,
@@ -310,6 +344,13 @@ export function useToolsSheetModal(
   useEffect(() => {
     onCloseRef.current = onClose;
   });
+  useEffect(() => {
+    if (!modal) return;
+    const root = rootRef.current;
+    const sheet = sheetRef.current;
+    if (!root || !sheet || !root.contains(sheet)) return;
+    return inertRoomOutside(root, sheet);
+  }, [modal, rootRef, sheetRef]);
   useEffect(() => {
     if (!modal) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -323,6 +364,45 @@ export function useToolsSheetModal(
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [modal, sheetRef]);
   return modal ? ({ role: 'dialog', 'aria-modal': true } as const) : {};
+}
+
+/**
+ * The room's Tidy keys: Shift+T tidies the selection, Escape ends an open
+ * spacing session. Window capture, so they run before the canvas — and so
+ * they stand down entirely while a modal (the narrow Tools sheet) holds the
+ * room: Escape then belongs to the modal and Shift+T acts on nothing behind it.
+ */
+export function useTidyShortcuts({
+  enabled,
+  sessionOpen,
+  suppressed,
+  onTidy,
+  onEndSession,
+}: {
+  enabled: boolean;
+  sessionOpen: boolean;
+  suppressed: boolean;
+  onTidy: () => void;
+  onEndSession: () => void;
+}) {
+  useEffect(() => {
+    if (!enabled || suppressed) return;
+    const handleTidyShortcut = (event: KeyboardEvent) => {
+      if (isTextEntryTarget(event.target)) return;
+      if (event.key === 'Escape' && sessionOpen) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onEndSession();
+        return;
+      }
+      if (!event.shiftKey || event.key.toLowerCase() !== 't') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onTidy();
+    };
+    window.addEventListener('keydown', handleTidyShortcut, true);
+    return () => window.removeEventListener('keydown', handleTidyShortcut, true);
+  }, [enabled, onEndSession, onTidy, sessionOpen, suppressed]);
 }
 
 /** Route-level focus and scroll isolation; portalled nested dialogs keep their own trap. */
@@ -494,6 +574,7 @@ function BoardRoomSurface({
    *  shortcuts stay out of the way mid-drag, exactly as the edit shortcuts
    *  already do (CI-17). */
   const gestureActiveRef = useRef(false);
+  const roomShortcutsSuppressedRef = useRef(false);
   const upsertBoard = useUpsertBoard();
   const applyBoardState = useApplyBoardRoomState();
   const boardQuery = useBoard(api.state?.boardId);
@@ -673,24 +754,6 @@ function BoardRoomSurface({
   }, [lastCommand]);
 
   useEffect(() => {
-    const handleTidyShortcut = (event: KeyboardEvent) => {
-      if (api.mode !== 'edit' || isTextEntryTarget(event.target)) return;
-      if (event.key === 'Escape' && tidySession) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        setTidySession(null);
-        return;
-      }
-      if (!event.shiftKey || event.key.toLowerCase() !== 't') return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      runTidy();
-    };
-    window.addEventListener('keydown', handleTidyShortcut, true);
-    return () => window.removeEventListener('keydown', handleTidyShortcut, true);
-  }, [api.mode, runTidy, tidySession]);
-
-  useEffect(() => {
     if (!railPreferenceKey || !gridPreferenceKey || !snapPreferenceKey) return;
     try {
       setRailCollapsed(window.localStorage.getItem(railPreferenceKey) === 'true');
@@ -721,10 +784,22 @@ function BoardRoomSurface({
     requestAnimationFrame(() => toolsActRef.current?.focus());
   };
   const toolsSheetModalProps = useToolsSheetModal(
+    rootRef,
     toolsSheetRef,
     api.mode === 'edit' && toolsSheetOpen,
     closeToolsSheet,
   );
+  /** While the narrow Tools sheet is a modal, the room's shortcuts stand down (R3b). */
+  const toolsSheetModal = 'aria-modal' in toolsSheetModalProps;
+  roomShortcutsSuppressedRef.current = toolsSheetModal;
+  const endTidySession = useCallback(() => setTidySession(null), []);
+  useTidyShortcuts({
+    enabled: api.mode === 'edit',
+    sessionOpen: tidySession !== null,
+    suppressed: toolsSheetModal,
+    onTidy: runTidy,
+    onEndSession: endTidySession,
+  });
 
   const toggleGrid = () => {
     setShowGrid((current) => {
@@ -998,7 +1073,7 @@ function BoardRoomSurface({
       // No view change while a pointer gesture is in flight — zoom or fit
       // re-anchors the frame the gesture was measured against. Bare '1'
       // needed this as much as the mod+ combos did (A3).
-      if (gestureActiveRef.current) return;
+      if (gestureActiveRef.current || roomShortcutsSuppressedRef.current) return;
       const mod = event.metaKey || event.ctrlKey;
       if (!mod && event.key === '1') {
         event.preventDefault();

@@ -5,6 +5,7 @@ import {
   MOOD_BOARD_GOLDEN_GEOMETRY,
 } from './__fixtures__/golden-board'
 import {
+  measureMoodBoardContentHeight,
   paintMoodBoardGeometry,
   type MoodBoardPainterContext,
 } from './painter-core'
@@ -343,6 +344,87 @@ describe('worker-safe mood-board painter core', () => {
     expect(Math.min(...captionTops)).toBeGreaterThan(MOOD_BOARD_VISUAL.plateMin)
     // The caption runs past the 40px saved box rather than being cut.
     expect(Math.max(...captionTops)).toBeGreaterThan(40)
+  })
+
+  describe('grows the raster so a caption past its box is never clipped (R13b)', () => {
+    const name = 'Halyard lounge chair in a long walnut and boucle finish'
+    const tile = (id: string, x: number, y: number) => ({
+      id,
+      type: 'product' as const,
+      x,
+      y,
+      width: 40,
+      height: 40,
+      data: { name, image_url: `${id}.jpg`, vendor_name: 'West Elm' },
+    })
+    // A bottom-edge tile, and two adjacent tiles stacked one above the other.
+    const tiles = [tile('bottom', 300, 260), tile('upper', 40, 100), tile('lower', 40, 150)]
+    const board = (items: ReturnType<typeof tile>[]) =>
+      resolveMoodBoardGeometry({
+        canvasWidth: 400,
+        canvasHeight: 300,
+        backgroundColor: '#FCFAF6',
+        sections: [],
+        items,
+      })
+
+    /** Where a lone tile's painted caption ends, in board px, from its fillText calls. */
+    async function paintedBottom(item: ReturnType<typeof tile>) {
+      const context = new RecordingContext()
+      await paintMoodBoardGeometry({
+        context,
+        geometry: board([item]),
+        transform: { scale: 1, offsetX: 0, offsetY: 0, viewportWidth: 400, viewportHeight: 300 },
+        resolveImage: async () => ({ source: {}, width: 300, height: 200 }),
+      })
+      const { nameLine, metaLine } = MOOD_BOARD_VISUAL.caption
+      const local = Math.max(
+        ...context.calls
+          .filter((call) => call.name === 'fillText')
+          .map((call) => {
+            const half = String(call.args[5]).includes(MOOD_BOARD_MONO_FONT) ? metaLine / 2 : nameLine / 2
+            return (call.args[2] as number) + half
+          }),
+      )
+      return item.y + local
+    }
+
+    it('measures the composition to the bottom tile’s whole caption, with the paint’s own metrics', async () => {
+      const bottoms = await Promise.all(tiles.map(paintedBottom))
+      const height = measureMoodBoardContentHeight(new RecordingContext(), board(tiles))
+      // The bottom tile's caption ends past the 300px canvas; the composition
+      // ends exactly where it does, and every adjacent tile's caption is inside.
+      expect(bottoms[0]).toBeGreaterThan(300)
+      expect(height).toBe(Math.ceil(bottoms[0]!))
+      for (const bottom of bottoms) expect(bottom).toBeLessThanOrEqual(height)
+      // Captions that fit their tiles leave the saved canvas as it is.
+      expect(
+        measureMoodBoardContentHeight(new RecordingContext(), board([{ ...tile('roomy', 0, 0), width: 300, height: 200 }])),
+      ).toBe(300)
+    })
+
+    it('sizes the PNG to the grown composition and fits the cover to it (contain)', async () => {
+      const geometry = board(tiles)
+      const height = measureMoodBoardContentHeight(new RecordingContext(), geometry)
+      const order: string[] = []
+      const png = await renderMoodBoardPng(geometry, {
+        scale: 1,
+        environment: rasterEnvironment(new RecordingContext(), order),
+      })
+      expect(png.width).toBe(400)
+      expect(png.height).toBe(height)
+      expect(order).toContain(`encode:400x${height}`)
+      // The saved geometry itself is untouched: only the raster grew.
+      expect(png.geometry.canvas.height).toBe(300)
+
+      const cover = await renderMoodBoardCover(geometry, {
+        width: 400,
+        height: 300,
+        environment: rasterEnvironment(new RecordingContext()),
+      })
+      expect(cover.effectiveScale).toBeCloseTo(300 / height)
+      expect(height * cover.effectiveScale).toBeLessThanOrEqual(300)
+    })
   })
 
   it('paints zones as a dashed edge with an ink word: no fill, no pill (US-28 S12)', async () => {

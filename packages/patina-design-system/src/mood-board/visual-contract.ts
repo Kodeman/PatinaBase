@@ -88,3 +88,25 @@ export function resolveMoodBoardPlate(
     captionTop: plateHeight + (captionHeight > 0 ? MOOD_BOARD_VISUAL.caption.gap : 0),
   }
 }
+
+/** The height a plate-and-caption item prints: its saved box, or more for a long caption. */
+export function moodBoardItemExtent(height: number, captionHeight: number): number {
+  return captionHeight > 0
+    ? Math.max(height, MOOD_BOARD_VISUAL.plateMin + captionHeight)
+    : height
+}
+
+/**
+ * The composition's height: the saved canvas, grown so every item's printed
+ * extent — a caption that ran past its saved box included — sits inside it.
+ * Never clip (R13b): the DOM composition, Present and the painter all size to
+ * this, the DOM from measured boxes and the painter from its text metrics.
+ */
+export function resolveMoodBoardContentHeight(
+  canvasHeight: number,
+  extents: ReadonlyArray<{ y: number; height: number }>,
+): number {
+  let bottom = canvasHeight
+  for (const extent of extents) bottom = Math.max(bottom, extent.y + extent.height)
+  return Math.ceil(bottom)
+}

@@ -295,23 +295,26 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
         {/* SQ-852 — the head's ＋ New board is this page's one act that starts
             a board, and it opens the create picker itself. Mounting the
             launcher here printed a second `New board` act (and a second strip
-            of the same boards) beside the head's. */}
-        <BoardCreatePickerDialog
-          owner={{ kind: 'project', id: projectId }}
-          boardsCount={liveBoards.length}
-          sortOrderSeed={(live.data ?? []).length}
-          open={starting}
-          onOpenChange={setStarting}
-          onCreated={(boardId, meta) =>
-            // DV3 — a template materialized onto a project board offers the
-            // room's one-shot "Promote all" on arrival.
-            router.push(
-              meta.materialized
-                ? `${boardHref(boardId)}&materialized=template`
-                : boardHref(boardId),
-            )
-          }
-        />
+            of the same boards) beside the head's. Mounted only while open, so
+            browsing the boards never fetches the studio's templates (R16). */}
+        {starting && (
+          <BoardCreatePickerDialog
+            owner={{ kind: 'project', id: projectId }}
+            boardsCount={liveBoards.length}
+            sortOrderSeed={(live.data ?? []).length}
+            open
+            onOpenChange={setStarting}
+            onCreated={(boardId, meta) =>
+              // DV3 — a template materialized onto a project board offers the
+              // room's one-shot "Promote all" on arrival.
+              router.push(
+                meta.materialized
+                  ? `${boardHref(boardId)}&materialized=template`
+                  : boardHref(boardId),
+              )
+            }
+          />
+        )}
 
         {empty ? (
           <EmptyState eyebrow="Design boards" className="s11-first">

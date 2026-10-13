@@ -9,6 +9,7 @@ import {
   MOOD_BOARD_MONO_FONT,
   MOOD_BOARD_VISUAL,
   moodBoardZoneColor,
+  resolveMoodBoardContentHeight,
 } from '../../mood-board/visual-contract'
 
 /** The one focus ring: 2px clay ink at offset 2, an outline — never a shadow. */
@@ -210,6 +211,41 @@ function ScaledBoardCanvas({
     [backgroundColor, canvasHeight, canvasWidth, items, sections],
   )
 
+  // Never clip (R13b): a caption prints whole past its saved box, so the
+  // composition grows to the measured extent of every item — the same height
+  // the painter measures with its text metrics (resolveMoodBoardContentHeight).
+  const worldRef = React.useRef<HTMLDivElement | null>(null)
+  const [contentHeight, setContentHeight] = React.useState(canvasHeight)
+  useIsomorphicLayoutEffect(() => {
+    const world = worldRef.current
+    if (!world) return
+    const topByKey = new Map(geometry.items.map((item) => [item.key, item.y]))
+    const tiles = () =>
+      Array.from(world.querySelectorAll<HTMLElement>('[data-board-snapshot-key]'))
+    const measure = () => {
+      const next = resolveMoodBoardContentHeight(
+        canvasHeight,
+        tiles().map((tile) => ({
+          y: topByKey.get(tile.dataset.boardSnapshotKey ?? '') ?? 0,
+          // Layout px, untouched by the scale transform; scrollHeight counts
+          // the caption that runs past the tile's saved height.
+          height: Math.max(tile.offsetHeight, tile.scrollHeight),
+        })),
+      )
+      setContentHeight((current) => (current === next ? current : next))
+    }
+
+    measure()
+
+    if (typeof ResizeObserver === 'undefined') return
+
+    const observer = new ResizeObserver(measure)
+    for (const tile of tiles()) {
+      for (const child of Array.from(tile.children)) observer.observe(child)
+    }
+    return () => observer.disconnect()
+  }, [canvasHeight, geometry])
+
   useIsomorphicLayoutEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -221,16 +257,16 @@ function ScaledBoardCanvas({
       const availableHeight = el.clientHeight
       const scale =
         fit === 'contain' && availableHeight > 0
-          ? Math.min(widthScale, availableHeight / canvasHeight)
+          ? Math.min(widthScale, availableHeight / contentHeight)
           : widthScale
       const height =
         fullBleed && fit === 'contain' && availableHeight > 0
           ? availableHeight
-          : canvasHeight * scale
+          : contentHeight * scale
       setFrame({
         scale,
         offsetX: fit === 'contain' ? (width - canvasWidth * scale) / 2 : 0,
-        offsetY: fit === 'contain' ? Math.max(0, (height - canvasHeight * scale) / 2) : 0,
+        offsetY: fit === 'contain' ? Math.max(0, (height - contentHeight * scale) / 2) : 0,
         height,
       })
     }
@@ -242,7 +278,7 @@ function ScaledBoardCanvas({
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [canvasHeight, canvasWidth, fit, fullBleed])
+  }, [canvasWidth, contentHeight, fit, fullBleed])
 
   return (
     <div
@@ -252,6 +288,7 @@ function ScaledBoardCanvas({
       data-full-bleed={fullBleed ? 'true' : 'false'}
       data-canvas-width={canvasWidth}
       data-canvas-height={canvasHeight}
+      data-content-height={contentHeight}
       className={cn(
         'relative w-full overflow-hidden',
         !fullBleed && 'rounded-md border border-[var(--border-subtle)]',
@@ -260,10 +297,11 @@ function ScaledBoardCanvas({
       style={{ height: frame.height }}
     >
       <div
+        ref={worldRef}
         className="absolute left-0 top-0"
         style={{
           width: canvasWidth,
-          height: canvasHeight,
+          height: contentHeight,
           backgroundColor,
           transform: `translate(${frame.offsetX}px, ${frame.offsetY}px) scale(${frame.scale})`,
           transformOrigin: 'top left',

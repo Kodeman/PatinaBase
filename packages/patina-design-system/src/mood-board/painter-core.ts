@@ -8,7 +8,9 @@ import {
   MOOD_BOARD_MONO_FONT,
   MOOD_BOARD_VISUAL,
   moodBoardCaptionHeight,
+  moodBoardItemExtent,
   moodBoardZoneColor,
+  resolveMoodBoardContentHeight,
   resolveMoodBoardPlate,
 } from './visual-contract'
 
@@ -402,6 +404,60 @@ function drawPlateAndCaption(
   drawCaption(context, lines, captionTop)
 }
 
+/**
+ * The caption a plate item prints under its plate, or null for an item with
+ * none (a bare image, a note). Product: the name, then one mono line of facts
+ * (maker · price), then the captured source — provenance prints on every
+ * presentation surface.
+ */
+function itemCaption(
+  item: BoardItemGeometrySnapshot,
+): { name: string | null; meta: string[] } | null {
+  if (item.type === 'product' || item.type === 'capture') {
+    const price = dataNumber(item, 'price_cents')
+    const facts = [
+      dataString(item, 'vendor_name'),
+      price !== null ? formatDollars(price) : null,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    const host = sourceHost(dataString(item, 'source_url'))
+    return {
+      name: dataString(item, 'name') ?? 'Selected piece',
+      meta: [facts, host].filter((line): line is string => Boolean(line)),
+    }
+  }
+  if (item.type === 'palette') return { name: dataString(item, 'name') ?? 'Palette', meta: [] }
+  if (item.type === 'room_scan') return { name: dataString(item, 'name') ?? 'Your space', meta: ['Scan'] }
+  return null
+}
+
+/**
+ * The composition height the painter prints at: the saved canvas, grown to
+ * hold every caption that ran past its saved box, wrapped with the same text
+ * metrics the paint uses (R13b). Rasters size to this so nothing is clipped.
+ */
+export function measureMoodBoardContentHeight(
+  context: MoodBoardPainterContext,
+  geometry: BoardGeometrySnapshot,
+): number {
+  return resolveMoodBoardContentHeight(
+    geometry.canvas.height,
+    geometry.items.map((item) => {
+      const caption = itemCaption(item)
+      if (!caption) return { y: item.y, height: item.height }
+      const lines = measureCaption(context, item.width, caption.name, caption.meta)
+      return {
+        y: item.y,
+        height: moodBoardItemExtent(
+          item.height,
+          moodBoardCaptionHeight(lines.name.length, lines.meta.length),
+        ),
+      }
+    }),
+  )
+}
+
 function formatDollars(cents: number): string {
   return `$${Math.round(cents / 100).toLocaleString('en-US')}`
 }
@@ -539,23 +595,10 @@ async function drawProduct(
   item: BoardItemGeometrySnapshot,
   image: MoodBoardResolvedImage | null,
 ) {
-  // Caption: the name, then one mono line of facts (maker · price), then the
-  // captured source — provenance prints on every presentation surface.
-  const price = dataNumber(item, 'price_cents')
-  const facts = [
-    dataString(item, 'vendor_name'),
-    price !== null ? formatDollars(price) : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-  const host = sourceHost(dataString(item, 'source_url'))
   drawPlateAndCaption(
     context,
     item,
-    {
-      name: dataString(item, 'name') ?? 'Selected piece',
-      meta: [facts, host].filter((line): line is string => Boolean(line)),
-    },
+    itemCaption(item)!,
     (media, plate) => {
       if (image) drawContainedImage(context, image, media)
       else drawPlateWord(context, plate, 'No image')
@@ -579,7 +622,7 @@ function drawPalette(
   drawPlateAndCaption(
     context,
     item,
-    { name: dataString(item, 'name') ?? 'Palette', meta: [] },
+    itemCaption(item)!,
     (media, plate) => {
       if (swatches.length === 0) {
         drawPlateWord(context, plate, 'Empty palette')
@@ -643,7 +686,7 @@ function drawRoomScan(
   drawPlateAndCaption(
     context,
     item,
-    { name: dataString(item, 'name') ?? 'Your space', meta: ['Scan'] },
+    itemCaption(item)!,
     (media, plate) => {
       if (image) drawContainedImage(context, image, media)
       else drawPlateWord(context, plate, 'No preview')

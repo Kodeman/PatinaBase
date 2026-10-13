@@ -58,4 +58,38 @@ describe('full-screen boundary', () => {
     expect(nested.defaultPrevented).toBe(false);
     expect(modalButton).toHaveFocus();
   });
+
+  it('wraps from a non-tabbable heading inside the boundary instead of leaving it', () => {
+    const outside = document.createElement('button');
+    outside.textContent = 'Behind';
+    const sheet = document.createElement('aside');
+    const head = document.createElement('p');
+    head.tabIndex = -1;
+    head.textContent = 'Tools';
+    const first = document.createElement('button');
+    const last = document.createElement('button');
+    sheet.append(head, first, last);
+    document.body.append(outside, sheet);
+
+    head.focus();
+    const back = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    expect(trapTabWithin(back, sheet)).toBe(true);
+    expect(back.defaultPrevented).toBe(true);
+    expect(last).toHaveFocus();
+
+    // Forward from the heading the browser already lands on the first tabbable.
+    head.focus();
+    const forward = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    expect(trapTabWithin(forward, sheet)).toBe(false);
+    expect(forward.defaultPrevented).toBe(false);
+
+    // A non-tabbable after the last tabbable wraps forward to the first.
+    const tail = document.createElement('p');
+    tail.tabIndex = -1;
+    sheet.append(tail);
+    tail.focus();
+    const past = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    expect(trapTabWithin(past, sheet)).toBe(true);
+    expect(first).toHaveFocus();
+  });
 });
