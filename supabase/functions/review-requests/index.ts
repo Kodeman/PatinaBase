@@ -21,6 +21,7 @@ import {
   studioSignatureCity,
 } from '../_shared/studio-identity.ts';
 import { clientProjectLink } from '../_shared/client-portal-links.ts';
+import { composeAndMaybeSendReviewDraft } from './drafts.ts';
 import {
   BLOCKING_REQUEST_STATUSES,
   isSuppressedRecipient,
@@ -191,46 +192,40 @@ Deno.serve(async (_req: Request) => {
       projectId: project.id,
       designerId: project.designer_id,
     });
+    if (!identity?.studioId) {
+      console.warn('review-requests: missing studio identity; skipping project', project.id);
+      skipped++;
+      continue;
+    }
+    const studioId = identity.studioId;
     const senderName = studioDisplayName(identity, designerName ?? 'Patina');
     const cobrand = studioCobrand(identity);
-
     const reviewId = crypto.randomUUID();
     const subject = `Share your experience with ${senderName}`;
-    const body = `Hi ${clientName ?? 'there'},\n\nYour ${project.name} project is complete and we'd love to hear what you thought. Sharing a few words helps ${senderName} understand what worked and helps future clients make informed decisions.\n\nShare your experience: ${clientProjectLink(CLIENT_PORTAL_URL, project.id, 'doorstep')}`;
-    const { data: draftId, error: draftError } = await supabase.rpc('compose_outbound_draft', {
-      p_kind: 'review_request', p_org: identity!.studioId!, p_project: project.id,
-      p_channel: 'email', p_recipient_kind: 'client',
-      p_to: { client_id: project.client_id, address: clientEmail },
-      p_subject: subject, p_body: body,
-      p_payload: { review_id: reviewId, designer_client_id: dc.id },
-      p_ref_type: 'project', p_ref_id: project.id,
-      p_dedupe_key: `review:${project.id}:${project.client_id}`,
-      p_due_at: null, p_expires_at: null, p_composed_by: 'system',
+    const body = `Hi ${clientName ?? 'there'},\n\nYour ${project.name} project is complete and we'd love to hear what you thought. Sharing a few words helps ${senderName} understand what worked and helps future clients make informed decisions.\n\nIt only takes a minute — click below to leave your feedback.`;
+    const result = await composeAndMaybeSendReviewDraft(supabase, {
+      studioId, projectId: project.id, clientId: project.client_id, clientEmail,
+      subject, body,
+      payload: {
+        review_id: reviewId, designer_client_id: dc.id,
+        doorstep_url: clientProjectLink(CLIENT_PORTAL_URL, project.id, 'doorstep'),
+        project_name: project.name,
+        designer_given_name: designerName?.trim().split(/\s+/)[0] ?? null,
+        studio_name: cobrand.studioName ?? null,
+        cobrand_studio_name: cobrand.studioName ?? null,
+        studio_logo_url: cobrand.studioLogoUrl ?? null,
+        signature_city: await studioSignatureCity(supabase, identity, designerProfile?.city) ?? null,
+        designer_email: designerProfile?.email ?? null,
+        client_user_id: clientProfile?.id ?? null,
+      },
+      dedupeKey: `review:${project.id}:${project.client_id}`,
     });
-    if (draftError || !draftId) {
-      console.error('review-requests: failed to compose draft for project', project.id, draftError);
+    if (!result.ok) {
+      console.error('review-requests: draft or scheduled send failed for project', project.id, result.error);
       failed++;
       continue;
     }
-    const { data: mode } = await supabase.rpc('studio_outbound_mode', {
-      p_studio: identity!.studioId!, p_kind: 'review_request',
-    });
-    const { data: rolloutActive } = await supabase.rpc('outbound_review_active', {
-      p_studio: identity!.studioId!,
-    });
-    const scheduled = mode === 'scheduled' || rolloutActive !== true;
-    const result = scheduled
-      ? await (await import('../_shared/outbound-send.ts')).sendOutboundDraft(supabase, draftId, {
-        kind: 'studio_schedule', studioId: identity!.studioId!, outboundKind: 'review_request',
-      })
-      : { ok: true };
-
-    if (result.ok) {
-      if (scheduled) sent++;
-    } else {
-      console.error('review-requests: scheduled send failed for project', project.id, 'error' in result ? result.error : undefined);
-      failed++;
-    }
+    if (result.scheduled) sent++;
   }
 
   return new Response(

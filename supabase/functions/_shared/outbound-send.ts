@@ -40,14 +40,26 @@ export async function sendOutboundDraft(
     let messageId: string | undefined;
     if (draft.channel === "email") {
       if (!draft.to_address || !draft.subject) return await fail("email recipient or subject missing");
-      const identity = await resolveStudioIdentity(admin, { projectId: draft.project_id, studioId: draft.organization_id });
-      const html = renderBrandedShell({
-        title: draft.subject, audience: draft.recipient_kind === "client" ? "client" : "designer",
-        ...studioCobrand(identity),
-        body: `<div style="white-space:pre-wrap;font:16px/1.6 Arial,sans-serif">${escapeHtml(draft.body)}</div>`,
-      });
+      const kind = outboundKinds[draft.kind];
+      const rendered = await kind?.renderEmail?.({ admin, draft });
+      let html: string;
+      let text: string | undefined;
+      let replyTo: string | undefined;
+      let from: string | undefined;
+      let userId: string | undefined;
+      if (rendered) {
+        ({ html, text, replyTo, from, userId } = rendered);
+      } else {
+        const identity = await resolveStudioIdentity(admin, { projectId: draft.project_id, studioId: draft.organization_id });
+        html = renderBrandedShell({
+          title: draft.subject, audience: draft.recipient_kind === "client" ? "client" : "designer",
+          ...studioCobrand(identity),
+          body: `<div style="white-space:pre-wrap;font:16px/1.6 Arial,sans-serif">${escapeHtml(draft.body)}</div>`,
+        });
+        text = draft.body;
+      }
       const sent = await sendCompliantEmail(admin, {
-        to: draft.to_address, subject: draft.subject, html, text: draft.body,
+        to: draft.to_address, subject: draft.subject, html, text, replyTo, from, userId,
         category: "operational", notificationType: "outbound_draft", templateId: `outbound-${draft.kind}`,
         metadata: { outbound_draft_id: draft.id, kind: draft.kind },
         ref: { type: "outbound_draft", id: draft.id }, organizationId: draft.organization_id,
