@@ -6,10 +6,12 @@ export function pulseEmailOptions(input: {
   recipient: string;
   subject: string;
   html: string;
+  organizationId: string | null;
 }) {
   const authority: SendAuthority = { kind: "designer", userId: input.userId };
   return {
     authority,
+    organizationId: input.organizationId,
     to: input.recipient,
     subject: input.subject,
     html: input.html,

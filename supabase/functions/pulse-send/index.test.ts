@@ -9,9 +9,11 @@ Deno.test("pulse email delivery preserves rendered content and designer authorit
     recipient: "client@example.com",
     subject: "This week on Cedar House",
     html,
+    organizationId: "studio-789",
   });
 
   assertEquals(options.authority, { kind: "designer", userId: "designer-123" });
+  assertEquals(options.organizationId, "studio-789");
   assertEquals(options.to, "client@example.com");
   assertEquals(options.subject, "This week on Cedar House");
   assertEquals(options.html, html);

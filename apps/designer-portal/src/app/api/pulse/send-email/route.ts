@@ -12,10 +12,9 @@
  * Response: { ok: true, emailSent: boolean } | { error }
  */
 import { createElement } from 'react';
-import { render } from '@react-email/render';
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
-import { WeeklyPulse } from '@patina/email';
+import { renderEmailHtml, WeeklyPulse } from '@patina/email';
 
 export const runtime = 'nodejs';
 
@@ -79,7 +78,7 @@ export async function POST(req: Request) {
   const subject = pulse.subject?.trim() || `This week on ${project.name}`;
   // Render the existing React Email template here so its HTML stays identical;
   // the edge function owns delivery and compliance policy.
-  const html = await render(
+  const html = await renderEmailHtml(
     createElement(WeeklyPulse, {
       clientName: client?.full_name ?? 'there',
       designerName: designer?.full_name ?? 'Your designer',

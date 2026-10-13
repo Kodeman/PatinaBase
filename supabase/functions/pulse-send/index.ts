@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     const { data: project } = await admin
       .from("projects")
-      .select("id, name, client_id, designer_id")
+      .select("id, name, client_id, designer_id, studio_id")
       .eq("id", pulse.project_id)
       .single();
     if (!project || project.designer_id !== user.id) return json({ error: "project_not_found" }, 404);
@@ -67,7 +67,14 @@ Deno.serve(async (req) => {
 
     const result = await sendCompliantEmail(
       admin,
-      pulseEmailOptions({ userId: user.id, pulseId, recipient, subject, html }),
+      pulseEmailOptions({
+        userId: user.id,
+        pulseId,
+        recipient,
+        subject,
+        html,
+        organizationId: project.studio_id,
+      }),
     );
     return json({ ok: true, emailSent: result.success, id: result.id, error: result.error });
   } catch (error) {

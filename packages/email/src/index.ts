@@ -91,6 +91,9 @@ export { MilestoneFirstPayment } from './templates/milestone-first-payment';
 export { renderTemplate, renderBlock, renderBlocks, interpolate } from './block-renderer';
 export type { RenderContext } from './block-renderer';
 
+// Render React Email templates to HTML for consumers that need to send through a separate transport.
+export { renderEmailHtml } from './render';
+
 // Send utilities
 export { sendEmail, sendHtmlEmail, sendBatchEmails, generateUnsubscribeHeaders, SENDERS } from './send';
 export type { SendEmailOptions, SendHtmlEmailOptions, SendEmailResult } from './send';
