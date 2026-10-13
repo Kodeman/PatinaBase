@@ -7,7 +7,7 @@ const downloadPdf = jest.fn();
 jest.mock('@/lib/mood-board-assets/export-board', () => ({
   exportMoodBoardPng: (...args: unknown[]) => exportPng(...args),
   formatMoodBoardExportScale: (scale: number) => scale.toFixed(2),
-  getMoodBoardPngExportPlan: (input: { canvasWidth: number; canvasHeight: number }) => {
+  measureMoodBoardPngExportPlan: async (input: { canvasWidth: number; canvasHeight: number }) => {
     const effectiveScale = Math.min(2, 8192 / Math.max(input.canvasWidth, input.canvasHeight));
     return {
       effectiveScale,
@@ -102,7 +102,7 @@ describe('BoardExportDialog', () => {
       />,
     );
 
-    expect(screen.getByText(/1\.64× effective scale/)).toBeInTheDocument();
+    expect(await screen.findByText(/1\.64× effective scale/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Board composition · PNG/ }));
     await waitFor(() =>
       expect(screen.getByText(/PNG downloaded at 1\.64× effective scale/)).toBeInTheDocument(),
@@ -171,7 +171,7 @@ describe('BoardExportDialog', () => {
     );
   });
 
-  it('asks the shared Dialog for no shadow (R5); the Dialog merge drops its shadow-lg', () => {
+  it('asks the shared Dialog for no shadow (R5); the Dialog merge drops its shadow-lg', async () => {
     render(
       <BoardExportDialog
         boardId="board-1"
@@ -183,6 +183,7 @@ describe('BoardExportDialog', () => {
         flush={jest.fn().mockResolvedValue(undefined)}
       />,
     );
+    await screen.findByText('2× raster · 2400 × 1600px.');
     const content = screen.getByTestId('export-dialog-content');
     expect(content.className.split(/\s+/)).toContain('shadow-none');
     expect(content.className).not.toMatch(/\bshadow-(sm|md|lg|xl|2xl)\b/);

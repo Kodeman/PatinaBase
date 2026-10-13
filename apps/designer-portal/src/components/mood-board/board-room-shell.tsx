@@ -115,6 +115,7 @@ import {
 } from '@/hooks/use-board-deck-import-review';
 import { DocumentAction } from '@/components/document/document-action';
 import { EmptyState } from '@/components/document/empty-state';
+import { TesterSlot } from '@/components/tester/tester-slot';
 import { BoardRoomInspector } from './board-room-inspector';
 import { BoardRoomSectionsMenu } from './board-room-sections-menu';
 import { BoardShareDialog } from './board-share-dialog';
@@ -1541,6 +1542,11 @@ function BoardRoomSurface({
             >
               Share
             </DocumentAction>
+            {/* The room sheds the docks and covers the page, so the TESTER
+                mark takes its place here, one more act in this wrapping row:
+                it covers no control, and the sheets and dialogs still stand
+                over it (SQ-865). */}
+            <TesterSlot kind="board" />
           </div>
         </div>
         <div className="rule-strong br-rule" role="presentation" />

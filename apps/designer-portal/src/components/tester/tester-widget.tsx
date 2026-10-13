@@ -206,7 +206,9 @@ function TesterInstrument({
     query.addEventListener('change', read);
     return () => query.removeEventListener('change', read);
   }, []);
-  const slot = testerSlot(wide ? 'drawer' : 'bar');
+  // The board room covers the whole page, docks included, so its own slot
+  // (in its Header line) wins whenever it is laid out.
+  const slot = testerSlot('board') ?? testerSlot(wide ? 'drawer' : 'bar');
 
   const pill = (
     <button
@@ -218,10 +220,10 @@ function TesterInstrument({
         openFeedbackSheet();
       }}
       /* SQ-856 (chrome-p6) — a quiet paper tag, not a filled pill. In a
-         dock it is one more act in the dock's own row, so it covers nothing.
-         With no dock (Preferences, Help, the board room) it is fixed, and
-         stands UNDER the chrome layer (z-40: the dock, its popovers, the
-         sheets, the board room) so it never takes a click meant for a live
+         dock, or the board room's Header line (SQ-865), it is one more act
+         in that row, so it covers nothing. With no slot (Preferences, Help)
+         it is fixed, and stands UNDER the chrome layer (z-40: the dock, its
+         popovers, the sheets) so it never takes a click meant for a live
          control there. Opened, the panel still floats at z-68: that is an
          instrument the tester asked for. */
       className={slot ? 'shrink-0' : 'fixed left-4 z-[39]'}

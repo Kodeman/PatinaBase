@@ -6,13 +6,15 @@
  * bottom-left: Export in the board room, More's rows, the spine's last links.
  * A dock (the Studio Drawer above 1180, the MobileBar below it) prints this
  * empty `display: contents` slot, and the widget portals its mark into it, so
- * the mark takes its place in the dock's own row and covers nothing. With no
- * slot laid out, the widget keeps its fixed fallback.
+ * the mark takes its place in the dock's own row and covers nothing. The board
+ * room, which sheds both docks and covers the page, prints its own `board`
+ * slot in its Header line (SQ-865). With no slot laid out, the widget keeps
+ * its fixed fallback.
  */
 
 import { useCallback } from 'react';
 
-export type TesterSlotKind = 'drawer' | 'bar';
+export type TesterSlotKind = 'drawer' | 'bar' | 'board';
 
 const slots = new Map<TesterSlotKind, HTMLElement>();
 const listeners = new Set<() => void>();

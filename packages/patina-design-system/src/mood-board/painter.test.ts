@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createElement } from 'react'
+import { render } from '@testing-library/react'
+import { BoardComposition } from '../components/proposal/BoardsBlock'
 import { resolveMoodBoardGeometry } from './geometry'
 import {
   MOOD_BOARD_GOLDEN_FIXTURE,
   MOOD_BOARD_GOLDEN_GEOMETRY,
 } from './__fixtures__/golden-board'
 import {
-  measureMoodBoardContentHeight,
+  measureMoodBoardContentBounds,
   paintMoodBoardGeometry,
   type MoodBoardPainterContext,
 } from './painter-core'
@@ -391,7 +394,7 @@ describe('worker-safe mood-board painter core', () => {
 
     it('measures the composition to the bottom tile’s whole caption, with the paint’s own metrics', async () => {
       const bottoms = await Promise.all(tiles.map(paintedBottom))
-      const height = measureMoodBoardContentHeight(new RecordingContext(), board(tiles))
+      const { height } = measureMoodBoardContentBounds(new RecordingContext(), board(tiles))
       // The bottom tile's caption ends past the 300px canvas; the composition
       // ends exactly where it does, and every adjacent tile's caption is inside.
       expect(bottoms[0]).toBeGreaterThan(300)
@@ -399,8 +402,8 @@ describe('worker-safe mood-board painter core', () => {
       for (const bottom of bottoms) expect(bottom).toBeLessThanOrEqual(height)
       // Captions that fit their tiles leave the saved canvas as it is.
       expect(
-        measureMoodBoardContentHeight(new RecordingContext(), board([{ ...tile('roomy', 0, 0), width: 300, height: 200 }])),
-      ).toBe(300)
+        measureMoodBoardContentBounds(new RecordingContext(), board([{ ...tile('roomy', 0, 0), width: 300, height: 200 }])),
+      ).toEqual({ x: 0, y: 0, width: 400, height: 300 })
     })
 
     it('measures a rotated caption by the turned box of plate and caption (SQ-855 repro)', async () => {
@@ -485,14 +488,14 @@ describe('worker-safe mood-board painter core', () => {
         geometry,
         transform: { scale: 1, offsetX: 0, offsetY: 0, viewportWidth: 400, viewportHeight: 300 },
       })
-      const height = measureMoodBoardContentHeight(new RecordingContext(), geometry)
+      const { height } = measureMoodBoardContentBounds(new RecordingContext(), geometry)
       // The turned caption is painted past the saved 300px canvas …
       expect(context.glyphBottom).toBeGreaterThan(300)
       // … and the composition grows to hold every painted glyph.
       expect(height).toBeGreaterThanOrEqual(Math.ceil(context.glyphBottom))
       // Unturned, the same piece's caption fits its box and the canvas stays.
       expect(
-        measureMoodBoardContentHeight(
+        measureMoodBoardContentBounds(
           new RecordingContext(),
           resolveMoodBoardGeometry({
             canvasWidth: 400,
@@ -502,12 +505,12 @@ describe('worker-safe mood-board painter core', () => {
             items: [{ ...turned, rotation: 0 }],
           }),
         ),
-      ).toBe(300)
+      ).toEqual({ x: 0, y: 0, width: 400, height: 300 })
     })
 
     it('sizes the PNG to the grown composition and fits the cover to it (contain)', async () => {
       const geometry = board(tiles)
-      const height = measureMoodBoardContentHeight(new RecordingContext(), geometry)
+      const { height } = measureMoodBoardContentBounds(new RecordingContext(), geometry)
       const order: string[] = []
       const png = await renderMoodBoardPng(geometry, {
         scale: 1,
@@ -784,5 +787,148 @@ describe('PNG and cover raster wrappers', () => {
           Math.abs((call.args[1] as number) - 33.333333) < 0.001,
       ),
     ).toBe(true)
+  })
+})
+
+describe('a turned caption past any edge prints whole: DOM, painter and preflight agree (SQ-865)', () => {
+  // Under this file's 6px-a-character metrics an 80px plate holds "Arden
+  // Arden" (66px) to a line: four lines of name and no facts, so the piece
+  // prints its 40px plate, the 6px gap and 4 × 18px of caption.
+  const name = 'Arden Arden Arden Arden Arden Arden Arden Arden'
+  const extent = 40 + 6 + 4 * 18
+  // [cos, sin] of each quarter turn, exact, so the oracle carries no trig.
+  const turns = { 0: [1, 0], 90: [0, 1], 180: [-1, 0], 270: [0, -1] } as const
+  // A saved 80×40 box on a 400×300 board, wholly on the canvas, near each edge.
+  const edges = {
+    top: { x: 160, y: 10 },
+    bottom: { x: 160, y: 250 },
+    left: { x: 10, y: 130 },
+    right: { x: 310, y: 130 },
+  } as const
+
+  /**
+   * The oracle is plane geometry: the four corners of the 80×118 printed box,
+   * turned about the SAVED box's centre (the DOM's transform-origin and the
+   * painter's rotate), unioned with the 400×300 canvas.
+   */
+  function expectedBounds(at: { x: number; y: number }, rotation: keyof typeof turns) {
+    const [cos, sin] = turns[rotation]
+    const centre = { x: at.x + 40, y: at.y + 20 }
+    const xs: number[] = []
+    const ys: number[] = []
+    for (const dx of [-40, 40]) {
+      for (const dy of [-20, extent - 20]) {
+        xs.push(centre.x + dx * cos - dy * sin)
+        ys.push(centre.y + dx * sin + dy * cos)
+      }
+    }
+    const left = Math.min(0, ...xs)
+    const top = Math.min(0, ...ys)
+    return {
+      x: left,
+      y: top,
+      width: Math.max(400, ...xs) - left,
+      height: Math.max(300, ...ys) - top,
+    }
+  }
+
+  const cases = (Object.keys(edges) as Array<keyof typeof edges>).flatMap((edge) =>
+    ([0, 90, 180, 270] as const).map((rotation) => ({ edge, rotation })),
+  )
+
+  it.each(cases)('$rotation° near the $edge edge', async ({ edge, rotation }) => {
+    const at = edges[edge]
+    const piece = {
+      id: 'piece',
+      type: 'product' as const,
+      x: at.x,
+      y: at.y,
+      width: 80,
+      height: 40,
+      rotation,
+      z_index: 0,
+      data: { name },
+    }
+    const expected = expectedBounds(at, rotation)
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: 400,
+      canvasHeight: 300,
+      backgroundColor: '#FCFAF6',
+      sections: [],
+      items: [piece],
+    })
+
+    // Preflight: the measure the PNG dialog sizes its promise from.
+    expect(measureMoodBoardContentBounds(new RecordingContext(), geometry)).toEqual(expected)
+
+    // Painter: the raster is that rectangle, and its origin moves by it.
+    const context = new RecordingContext()
+    const png = await renderMoodBoardPng(geometry, {
+      scale: 1,
+      environment: rasterEnvironment(context),
+    })
+    expect({ width: png.width, height: png.height }).toEqual({
+      width: expected.width,
+      height: expected.height,
+    })
+    const origin = context.calls.find((call) => call.name === 'translate')!
+    expect(origin.args[0]).toBeCloseTo(-expected.x)
+    expect(origin.args[1]).toBeCloseTo(-expected.y)
+    // The saved piece is never moved; only the composition is translated.
+    expect(png.geometry.items[0]).toMatchObject({ x: at.x, y: at.y })
+
+    // DOM: the browser lays the tile out at the same printed extent.
+    const scroll = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.dataset.boardItemId === 'piece' ? extent : 0
+      })
+    try {
+      const { container } = render(
+        createElement(BoardComposition, {
+          board: {
+            id: 'b-edges',
+            name: 'Edges',
+            canvas_width: 400,
+            canvas_height: 300,
+            background_color: '#FCFAF6',
+            items: [piece],
+          },
+        }),
+      )
+      const canvas = container.querySelector('[data-board-composition-canvas]') as HTMLElement
+      expect({
+        x: Number(canvas.dataset.contentX),
+        y: Number(canvas.dataset.contentY),
+        width: Number(canvas.dataset.contentWidth),
+        height: Number(canvas.dataset.contentHeight),
+      }).toEqual(expected)
+      const world = canvas.firstElementChild as HTMLElement
+      expect(world.style.width).toBe(`${expected.width}px`)
+      expect(world.style.height).toBe(`${expected.height}px`)
+      const tile = container.querySelector('[data-board-item-id="piece"]') as HTMLElement
+      expect(tile.style.left).toBe(`${at.x - expected.x}px`)
+      expect(tile.style.top).toBe(`${at.y - expected.y}px`)
+    } finally {
+      scroll.mockRestore()
+    }
+  })
+
+  it('reproduces the review case: 180° at y=20 grows the top, not just the bottom', () => {
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: 400,
+      canvasHeight: 300,
+      backgroundColor: '#FCFAF6',
+      sections: [],
+      items: [{ id: 'r', type: 'product', x: 20, y: 20, width: 80, height: 40, rotation: 180, data: { name } }],
+    })
+    // Centre y 40; the printed box runs 20 above and 98 below it before the
+    // half turn, so the caption ends 98 above the centre: y = -58.
+    expect(measureMoodBoardContentBounds(new RecordingContext(), geometry)).toEqual({
+      x: 0,
+      y: -58,
+      width: 400,
+      height: 358,
+    })
   })
 })

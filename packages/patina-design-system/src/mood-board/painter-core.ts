@@ -9,9 +9,9 @@ import {
   MOOD_BOARD_VISUAL,
   moodBoardCaptionHeight,
   moodBoardItemExtent,
-  moodBoardPrintedSpan,
+  moodBoardPrintedRect,
   moodBoardZoneColor,
-  resolveMoodBoardContentHeight,
+  resolveMoodBoardContentBounds,
   resolveMoodBoardPlate,
 } from './visual-contract'
 
@@ -434,23 +434,24 @@ function itemCaption(
 }
 
 /**
- * The composition height the painter prints at: the saved canvas, grown to
- * hold every caption that ran past its saved box, wrapped with the same text
- * metrics the paint uses (R13b). Rasters size to this so nothing is clipped.
+ * The composition the painter prints: the saved canvas, grown on every side
+ * to hold every caption that ran past its saved box, wrapped with the same
+ * text metrics the paint uses (R13b). Rasters size to this rectangle and move
+ * their origin by its `x`/`y`, so nothing is clipped at any edge.
  */
-export function measureMoodBoardContentHeight(
+export function measureMoodBoardContentBounds(
   context: MoodBoardPainterContext,
   geometry: BoardGeometrySnapshot,
-): number {
-  return resolveMoodBoardContentHeight(
-    geometry.canvas.height,
+): BoardRect {
+  return resolveMoodBoardContentBounds(
+    geometry.canvas,
     geometry.items.map((item) => {
       const caption = itemCaption(item)
-      if (!caption) return moodBoardPrintedSpan(item, item.height)
+      if (!caption) return moodBoardPrintedRect(item, item.height)
       const lines = measureCaption(context, item.width, caption.name, caption.meta)
       // The plate and caption, turned with the item (drawItem rotates about
-      // the saved box's centre): a rotated caption's corner sets the bottom.
-      return moodBoardPrintedSpan(
+      // the saved box's centre): a rotated caption's corners set the edges.
+      return moodBoardPrintedRect(
         item,
         moodBoardItemExtent(
           item.height,

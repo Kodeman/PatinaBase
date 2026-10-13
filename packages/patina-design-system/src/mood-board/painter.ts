@@ -4,7 +4,7 @@ import {
   type MoodBoardGeometryInput,
 } from './geometry'
 import {
-  measureMoodBoardContentHeight,
+  measureMoodBoardContentBounds,
   paintMoodBoardGeometry,
   type MoodBoardImageRequest,
   type MoodBoardPaintResult,
@@ -142,11 +142,15 @@ async function paintToRaster(
   const context = canvas.getContext('2d')
   if (!context)
     throw new Error('A 2D canvas context is required to paint a mood board')
-  // A caption prints whole past its saved box (R13b): the composition grows to
-  // hold it, measured with the fonts just loaded, so nothing is clipped.
-  const contentHeight = measureMoodBoardContentHeight(context, geometry)
-  if (contentHeight > geometry.canvas.height) {
-    output = layout({ width: geometry.canvas.width, height: contentHeight })
+  // A caption prints whole past its saved box (R13b): the composition grows on
+  // every side to hold it, measured with the fonts just loaded, and its origin
+  // moves with a growth past the top or left. The saved coordinates never do.
+  const bounds = measureMoodBoardContentBounds(context, geometry)
+  if (
+    bounds.width !== geometry.canvas.width ||
+    bounds.height !== geometry.canvas.height
+  ) {
+    output = layout({ width: bounds.width, height: bounds.height })
     canvas.width = output.width
     canvas.height = output.height
   }
@@ -155,8 +159,8 @@ async function paintToRaster(
     geometry,
     transform: {
       scale: output.scale,
-      offsetX: output.offsetX,
-      offsetY: output.offsetY,
+      offsetX: output.offsetX - bounds.x * output.scale,
+      offsetY: output.offsetY - bounds.y * output.scale,
       viewportWidth: output.width,
       viewportHeight: output.height,
     },

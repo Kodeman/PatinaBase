@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,8 +15,9 @@ import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
 import {
   exportMoodBoardPng,
   formatMoodBoardExportScale,
-  getMoodBoardPngExportPlan,
+  measureMoodBoardPngExportPlan,
   safeMoodBoardFilename,
+  type MoodBoardPngExportPlan,
 } from '@/lib/mood-board-assets/export-board';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 
@@ -94,7 +95,20 @@ export function BoardExportDialog({
   const [progress, setProgress] = useState(0);
   const [outcome, setOutcome] = useState<BoardExportOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const pngPlan = useMemo(() => getMoodBoardPngExportPlan(input), [input]);
+  // Measured on open, and only once the fonts the painter waits for are
+  // ready: a plan measured earlier wraps captions in a fallback font and
+  // promises dimensions the raster will not have (SQ-865).
+  const [pngPlan, setPngPlan] = useState<MoodBoardPngExportPlan | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let current = true;
+    void measureMoodBoardPngExportPlan(input).then((plan) => {
+      if (current) setPngPlan(plan);
+    });
+    return () => {
+      current = false;
+    };
+  }, [input, open]);
 
   const requestOwner = owner.kind === 'proposal'
     ? { proposalId: owner.id }
@@ -196,9 +210,11 @@ export function BoardExportDialog({
           >
             <span className="font-heading text-[14px] text-[var(--text-primary)]">Board composition · PNG</span>
             <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
-              {pngPlan.capped
-                ? `${formatMoodBoardExportScale(pngPlan.effectiveScale)}× effective scale · ${pngPlan.width} × ${pngPlan.height}px (8192px cap).`
-                : `2× raster · ${pngPlan.width} × ${pngPlan.height}px.`}
+              {!pngPlan
+                ? 'Measuring the raster…'
+                : pngPlan.capped
+                  ? `${formatMoodBoardExportScale(pngPlan.effectiveScale)}× effective scale · ${pngPlan.width} × ${pngPlan.height}px (8192px cap).`
+                  : `2× raster · ${pngPlan.width} × ${pngPlan.height}px.`}
             </span>
           </button>
           <button

@@ -97,46 +97,69 @@ export function moodBoardItemExtent(height: number, captionHeight: number): numb
 }
 
 /**
- * The vertical span an item prints, in board px: the box from its top edge
- * down to `extent` (its plate and caption), turned about the centre of its
- * SAVED box as the DOM tile (`transform-origin: center`) and the painter both
- * turn it. Unrotated, that is simply `{ y, height: extent }`; rotated, it is
- * the rotated bounding box, so a turned caption is never clipped (R13b).
+ * The rectangle an item prints, in board px: the box from its top edge down
+ * to `extent` (its plate and caption), turned about the centre of its SAVED
+ * box as the DOM tile (`transform-origin: center`) and the painter both turn
+ * it. Unrotated, that is simply `{ x, y, width, height: extent }`; rotated, it
+ * is the turned box's bounds on all four sides, so a turned caption is never
+ * clipped at any edge (R13b).
  */
-export function moodBoardPrintedSpan(
-  box: { y: number; width: number; height: number; rotation?: number | null },
+export function moodBoardPrintedRect(
+  box: { x: number; y: number; width: number; height: number; rotation?: number | null },
   extent: number,
-): { y: number; height: number } {
+): BoardRect {
   const radians = ((box.rotation ?? 0) * Math.PI) / 180
   if (!Number.isFinite(radians) || radians % (2 * Math.PI) === 0) {
-    return { y: box.y, height: extent }
+    return { x: box.x, y: box.y, width: box.width, height: extent }
   }
   const sin = Math.sin(radians)
   const cos = Math.cos(radians)
+  const centreX = box.x + box.width / 2
   const centreY = box.y + box.height / 2
+  let left = Infinity
   let top = Infinity
+  let right = -Infinity
   let bottom = -Infinity
   for (const dx of [-box.width / 2, box.width / 2]) {
     for (const dy of [-box.height / 2, extent - box.height / 2]) {
+      const x = centreX + dx * cos - dy * sin
       const y = centreY + dx * sin + dy * cos
+      left = Math.min(left, x)
+      right = Math.max(right, x)
       top = Math.min(top, y)
       bottom = Math.max(bottom, y)
     }
   }
-  return { y: top, height: bottom - top }
+  return { x: left, y: top, width: right - left, height: bottom - top }
 }
 
 /**
- * The composition's height: the saved canvas, grown so every item's printed
- * extent — a caption that ran past its saved box included — sits inside it.
- * Never clip (R13b): the DOM composition, Present and the painter all size to
- * this, the DOM from measured boxes and the painter from its text metrics.
+ * The composition's printed bounds: the saved canvas, grown on every side so
+ * each item's printed rectangle — a caption past its saved box, turned past
+ * the top or a side, included — sits inside it. `x`/`y` are 0 or negative:
+ * the composition's origin moves by them, the saved coordinates never do.
+ * Never clip (R13b): the DOM composition, Present, the painter and the PNG
+ * preflight all size and place to this one rectangle, the DOM from measured
+ * boxes and the painter and preflight from the paint's text metrics.
  */
-export function resolveMoodBoardContentHeight(
-  canvasHeight: number,
-  extents: ReadonlyArray<{ y: number; height: number }>,
-): number {
-  let bottom = canvasHeight
-  for (const extent of extents) bottom = Math.max(bottom, extent.y + extent.height)
-  return Math.ceil(bottom)
+export function resolveMoodBoardContentBounds(
+  canvas: { width: number; height: number },
+  printed: ReadonlyArray<BoardRect>,
+): BoardRect {
+  let left = 0
+  let top = 0
+  let right = canvas.width
+  let bottom = canvas.height
+  for (const rect of printed) {
+    left = Math.min(left, rect.x)
+    top = Math.min(top, rect.y)
+    right = Math.max(right, rect.x + rect.width)
+    bottom = Math.max(bottom, rect.y + rect.height)
+  }
+  // Whole board px, outward. A quarter turn leaves float dust (sin π is
+  // 1.2e-16, not 0) that must not cost a pixel, so edges read to a thousandth.
+  const edge = (value: number) => Math.round(value * 1000) / 1000
+  const x = Math.floor(edge(left))
+  const y = Math.floor(edge(top))
+  return { x, y, width: Math.ceil(edge(right)) - x, height: Math.ceil(edge(bottom)) - y }
 }

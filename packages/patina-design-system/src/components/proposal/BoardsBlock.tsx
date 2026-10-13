@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import type { MoodBoardItemType, MoodBoardSection } from '@patina/types'
+import type { BoardRect, MoodBoardItemType, MoodBoardSection } from '@patina/types'
 import { cn } from '../../utils/cn'
 import { resolveMoodBoardGeometry } from '../../mood-board/geometry'
 import {
@@ -9,8 +9,8 @@ import {
   MOOD_BOARD_MONO_FONT,
   MOOD_BOARD_VISUAL,
   moodBoardZoneColor,
-  moodBoardPrintedSpan,
-  resolveMoodBoardContentHeight,
+  moodBoardPrintedRect,
+  resolveMoodBoardContentBounds,
 } from '../../mood-board/visual-contract'
 
 /** The one focus ring: 2px clay ink at offset 2, an outline — never a shadow. */
@@ -213,10 +213,17 @@ function ScaledBoardCanvas({
   )
 
   // Never clip (R13b): a caption prints whole past its saved box, so the
-  // composition grows to the measured extent of every item — the same height
-  // the painter measures with its text metrics (resolveMoodBoardContentHeight).
+  // composition grows on every side to the measured extent of every item —
+  // the same rectangle the painter and the PNG preflight measure with the
+  // paint's text metrics (resolveMoodBoardContentBounds). A growth past the
+  // top or left moves the composition's origin; the saved coordinates stay.
   const worldRef = React.useRef<HTMLDivElement | null>(null)
-  const [contentHeight, setContentHeight] = React.useState(canvasHeight)
+  const [content, setContent] = React.useState<BoardRect>({
+    x: 0,
+    y: 0,
+    width: canvasWidth,
+    height: canvasHeight,
+  })
   useIsomorphicLayoutEffect(() => {
     const world = worldRef.current
     if (!world) return
@@ -224,21 +231,28 @@ function ScaledBoardCanvas({
     const tiles = () =>
       Array.from(world.querySelectorAll<HTMLElement>('[data-board-snapshot-key]'))
     const measure = () => {
-      const next = resolveMoodBoardContentHeight(
-        canvasHeight,
+      const next = resolveMoodBoardContentBounds(
+        { width: canvasWidth, height: canvasHeight },
         tiles().flatMap((tile) => {
           const item = itemByKey.get(tile.dataset.boardSnapshotKey ?? '')
           if (!item) return []
           // Layout px, untouched by the scale and rotate transforms;
           // scrollHeight counts the caption that runs past the saved height.
-          // The tile turns about its saved box's centre, so the printed span
-          // is that extent's rotated bounding box, as the painter measures it.
+          // The tile turns about its saved box's centre, so the printed rect
+          // is that extent's turned bounds, as the painter measures it.
           return [
-            moodBoardPrintedSpan(item, Math.max(tile.offsetHeight, tile.scrollHeight)),
+            moodBoardPrintedRect(item, Math.max(tile.offsetHeight, tile.scrollHeight)),
           ]
         }),
       )
-      setContentHeight((current) => (current === next ? current : next))
+      setContent((current) =>
+        current.x === next.x &&
+        current.y === next.y &&
+        current.width === next.width &&
+        current.height === next.height
+          ? current
+          : next,
+      )
     }
 
     measure()
@@ -250,7 +264,7 @@ function ScaledBoardCanvas({
       for (const child of Array.from(tile.children)) observer.observe(child)
     }
     return () => observer.disconnect()
-  }, [canvasHeight, geometry])
+  }, [canvasHeight, canvasWidth, geometry])
 
   useIsomorphicLayoutEffect(() => {
     const el = containerRef.current
@@ -259,20 +273,20 @@ function ScaledBoardCanvas({
     const measure = () => {
       const width = el.clientWidth
       if (width <= 0) return
-      const widthScale = width / canvasWidth
+      const widthScale = width / content.width
       const availableHeight = el.clientHeight
       const scale =
         fit === 'contain' && availableHeight > 0
-          ? Math.min(widthScale, availableHeight / contentHeight)
+          ? Math.min(widthScale, availableHeight / content.height)
           : widthScale
       const height =
         fullBleed && fit === 'contain' && availableHeight > 0
           ? availableHeight
-          : contentHeight * scale
+          : content.height * scale
       setFrame({
         scale,
-        offsetX: fit === 'contain' ? (width - canvasWidth * scale) / 2 : 0,
-        offsetY: fit === 'contain' ? Math.max(0, (height - contentHeight * scale) / 2) : 0,
+        offsetX: fit === 'contain' ? (width - content.width * scale) / 2 : 0,
+        offsetY: fit === 'contain' ? Math.max(0, (height - content.height * scale) / 2) : 0,
         height,
       })
     }
@@ -284,7 +298,7 @@ function ScaledBoardCanvas({
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [canvasWidth, contentHeight, fit, fullBleed])
+  }, [content.height, content.width, fit, fullBleed])
 
   return (
     <div
@@ -294,7 +308,10 @@ function ScaledBoardCanvas({
       data-full-bleed={fullBleed ? 'true' : 'false'}
       data-canvas-width={canvasWidth}
       data-canvas-height={canvasHeight}
-      data-content-height={contentHeight}
+      data-content-x={content.x}
+      data-content-y={content.y}
+      data-content-width={content.width}
+      data-content-height={content.height}
       className={cn(
         'relative w-full overflow-hidden',
         !fullBleed && 'rounded-md border border-[var(--border-subtle)]',
@@ -306,8 +323,8 @@ function ScaledBoardCanvas({
         ref={worldRef}
         className="absolute left-0 top-0"
         style={{
-          width: canvasWidth,
-          height: contentHeight,
+          width: content.width,
+          height: content.height,
           backgroundColor,
           transform: `translate(${frame.offsetX}px, ${frame.offsetY}px) scale(${frame.scale})`,
           transformOrigin: 'top left',
@@ -319,8 +336,8 @@ function ScaledBoardCanvas({
             data-composition-section={section.id}
             className="pointer-events-none absolute"
             style={{
-              left: section.bounds.x,
-              top: section.bounds.y,
+              left: section.bounds.x - content.x,
+              top: section.bounds.y - content.y,
               width: section.bounds.width,
               height: section.bounds.height,
               borderRadius: MOOD_BOARD_VISUAL.sectionRadius,
@@ -362,8 +379,8 @@ function ScaledBoardCanvas({
               data-board-snapshot-key={resolved.key}
               data-interactive={idInteractive ? 'true' : 'false'}
               style={{
-                left: resolved.x,
-                top: resolved.y,
+                left: resolved.x - content.x,
+                top: resolved.y - content.y,
                 width: resolved.width,
                 height: resolved.height,
                 zIndex: Math.max(0, resolved.zIndex),
