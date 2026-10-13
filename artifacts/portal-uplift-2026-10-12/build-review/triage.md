@@ -73,7 +73,7 @@ The re-review was GPT-6 Astra, read-only, pinned to 4c5ce7804, and its verdict w
 | # | Severity / confidence | Finding | Ruling |
 |---|---|---|---|
 | R3b | med / high (reproduced in Chromium) | Tools starts focus on a p[tabIndex=-1], so the first Shift+Tab escapes. The background isn't inert, and the Tidy capture listener eats Escape. Shift+T acts behind the sheet. | **FIX** in SQ-853 (shared trap helper, inert, modal-aware shortcuts). |
-| R13b | med / high (reproduced) | The caption overflows the saved box and is clipped at the canvas bottom; neighbours can overlap it. | **FIX** in SQ-853: the composition grows to contain captions, plus a caption-aware minimum height if contained; parity holds. |
+| R13b | med / high (reproduced) | The caption overflows the saved box and is clipped at the canvas bottom; neighbours can overlap it. | **FIXED** (bottom clip) in SQ-853. Orchestrator ruling on the neighbour-overlap residual: option **(c) KEEP**. The designer places tiles, and the edit room paints the overlap exactly as it will print (WYSIWYG). The (a)/(b) clamps touch the resize, rotation and multi-select paths too broadly for this release. OWED, low: Kody may want caption-aware tile heights later. |
 | R16 | low / high | The closed create picker fetches templates eagerly. | **FIX** in SQ-853. |
 | R6b | med / high | When Undo of her own deferral reveals the holder's settlement, there's no focus or announcement, and the pending flag stays armed. | **FIX** in SQ-854. |
 | R1b | med / med | For non-two-decimal currencies (JPY), the label rounds while the payload is cents. | **FIX** in SQ-854: the sheet always prints two fraction digits, matching the system's ×100 storage. |
