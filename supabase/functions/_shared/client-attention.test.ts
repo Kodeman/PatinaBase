@@ -35,6 +35,7 @@ Deno.test("maps the input onto notify_client_attention's p_* arguments", async (
     entityId: INVOICE,
     title: "An invoice is ready",
     body: "Olive Studio sent invoice INV-2026-0142 for the Walker Residence.",
+    authority: { kind: "designer", userId: USER },
     metadata: { project_id: "p1", amount_cents: 425000, due_date: "2026-09-01" },
   });
 
@@ -48,6 +49,7 @@ Deno.test("maps the input onto notify_client_attention's p_* arguments", async (
     p_title: "An invoice is ready",
     p_body: "Olive Studio sent invoice INV-2026-0142 for the Walker Residence.",
     p_metadata: { project_id: "p1", amount_cents: 425000, due_date: "2026-09-01" },
+    p_authority: { kind: "designer", userId: USER },
   });
 });
 
@@ -59,6 +61,7 @@ Deno.test("defaults body and metadata rather than sending undefined", async () =
     entityId: INVOICE,
     title: "A decision needs you",
     body: "",
+    authority: { kind: "designer", userId: USER },
   });
   assertEquals(calls[0][1].p_body, "");
   assertEquals(calls[0][1].p_metadata, {});
@@ -72,6 +75,7 @@ Deno.test("reports an rpc error without throwing", async () => {
     entityId: INVOICE,
     title: "A proposal is ready for you",
     body: "Olive Studio sent it for your review.",
+    authority: { kind: "designer", userId: USER },
   });
   assertEquals(out.ok, false);
   assertEquals(out.error, "permission denied");
@@ -85,6 +89,7 @@ Deno.test("a thrown rpc is swallowed — a notification never fails a send", asy
     entityId: INVOICE,
     title: "An invoice is ready",
     body: "…",
+    authority: { kind: "designer", userId: USER },
   });
   assertEquals(out.ok, false);
   assertEquals(out.error, "socket hang up");
@@ -99,6 +104,7 @@ Deno.test("refuses an entity type the router cannot route, and never calls the r
     entityId: INVOICE,
     title: "Nope",
     body: "",
+    authority: { kind: "designer", userId: USER },
   });
   assertEquals(out.ok, false);
   assert(out.error?.startsWith("unroutable_entity_type"));
@@ -113,6 +119,7 @@ Deno.test("refuses incomplete input, and never calls the rpc", async () => {
     entityId: INVOICE,
     title: "An invoice is ready",
     body: "",
+    authority: { kind: "designer", userId: USER },
   });
   assertEquals(out, { ok: false, error: "incomplete_attention_input" });
   assertEquals(calls.length, 0);

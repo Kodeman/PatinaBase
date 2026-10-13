@@ -10,6 +10,8 @@
 // failure here is swallowed into { ok: false, error } and nothing throws. The
 // caller logs and carries on.
 
+import type { SendAuthority } from "./send-authority.ts";
+
 export type AttentionEntityType = "proposal" | "invoice" | "decision";
 
 const ROUTABLE: readonly AttentionEntityType[] = ["proposal", "invoice", "decision"];
@@ -21,6 +23,8 @@ export interface AttentionInput {
   title: string;
   /** Rendered under the title in the bell. Patina's voice — never vendor text. */
   body: string;
+  /** Authority for this client-facing attention and push. */
+  authority: SendAuthority;
   /** Merged into metadata: project_id, amount_cents, due_date … */
   metadata?: Record<string, unknown>;
 }
@@ -58,6 +62,7 @@ export async function notifyClientAttention(
       p_title: input.title,
       p_body: input.body ?? "",
       p_metadata: input.metadata ?? {},
+      p_authority: input.authority,
     });
     if (error) {
       return { ok: false, error: error.message ?? "notify_client_attention_failed" };

@@ -33,6 +33,29 @@ export interface ApnsSendInput {
   /** Which app's tokens a user_id push reaches. Absent — every producer on
    *  main today — it is derived from `entity_type` (`audienceFor`). */
   audience?: PushAudience;
+  /** Send authority required for client attention pushes. */
+  authority?: unknown;
+}
+
+const CLIENT_ATTENTION_ENTITY_TYPES = new Set(["proposal", "invoice", "decision"]);
+
+/** True when a client-facing attention push has no usable sending authority. */
+export function refusesUnlabelledClientPush(input: {
+  entity_type?: string;
+  authority?: unknown;
+}): boolean {
+  if (!CLIENT_ATTENTION_ENTITY_TYPES.has(input.entity_type ?? "")) return false;
+  const authority = input.authority;
+  if (!authority || typeof authority !== "object" || Array.isArray(authority)) {
+    return true;
+  }
+  const value = authority as Record<string, unknown>;
+  if (value.kind === "designer") return typeof value.userId !== "string" || !value.userId;
+  if (value.kind === "studio_schedule") {
+    return typeof value.studioId !== "string" || !value.studioId ||
+      typeof value.outboundKind !== "string" || !value.outboundKind;
+  }
+  return true;
 }
 
 export interface ResolvedToken {

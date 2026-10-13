@@ -60,6 +60,7 @@ import {
   PUSH_APP,
   type PushApp,
   pushAudience,
+  refusesUnlabelledClientPush,
   tokensForAudience,
 } from "./core.ts";
 
@@ -237,6 +238,23 @@ Deno.serve(async (req) => {
     return json({ error: "audience must be 'app' or 'field'" }, 400);
   }
   console.log("[apns-send] send authority", input.authority ?? { kind: "unlabelled" });
+  if (refusesUnlabelledClientPush(input)) {
+    console.warn("[apns-send] refused_unlabelled", {
+      entity_type: input.entity_type ?? null,
+      log_id: input.notification_log_id ?? null,
+    });
+    if (input.notification_log_id) {
+      const { error } = await supabase
+        .from("notification_log")
+        .update({
+          status: "suppressed",
+          send_authority: input.authority ?? { kind: "unlabelled" },
+        })
+        .eq("id", input.notification_log_id);
+      if (error) console.warn("[apns-send] refusal log update failed", error);
+    }
+    return json({ error: "refused_unlabelled" }, 403);
+  }
 
   // ── Not configured yet → skip cleanly (never error the SQL caller) ────────
   const authKey = Deno.env.get("APNS_AUTH_KEY");

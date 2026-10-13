@@ -411,6 +411,7 @@ Deno.serve(async (req: Request) => {
       entityId: invoice.id,
       title: 'An invoice is ready',
       body: `${senderName} sent invoice ${invoiceNumber}${forClause}.${dueLine}`,
+      authority: { kind: 'designer', userId: caller.id },
       metadata: {
         project_id: invoice.project_id,
         amount_cents: invoice.total_cents,
