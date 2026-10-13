@@ -24,7 +24,10 @@ CREATE TABLE IF NOT EXISTS public.llm_usage (
   status text NOT NULL CHECK (status IN ('reserved','settled','error','denied')),
   stop_reason text,
   latency_ms integer CHECK (latency_ms IS NULL OR latency_ms >= 0),
-  request_id text
+  request_id text,
+  -- Product count carried from the retired aesthete_spend_ledger rows (§5);
+  -- NULL on every call recorded through llm_reserve.
+  products integer CHECK (products IS NULL OR products >= 0)
 );
 CREATE INDEX IF NOT EXISTS llm_usage_feature_at_idx ON public.llm_usage (feature, at);
 CREATE INDEX IF NOT EXISTS llm_usage_studio_at_idx ON public.llm_usage (studio_id, at);
@@ -89,7 +92,8 @@ GRANT USAGE, SELECT ON SEQUENCE public.llm_controls_audit_id_seq TO service_role
 
 -- ── 3. Reserve and settle ────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.llm_reserve(
-  p_feature text, p_studio_id uuid, p_user_id uuid, p_est_usd numeric
+  p_feature text, p_studio_id uuid, p_user_id uuid, p_est_usd numeric,
+  p_role text, p_prompt_version text
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -139,11 +143,14 @@ BEGIN
   ELSIF v_enabled IS DISTINCT FROM TRUE THEN
     v_reason := 'disabled';
   ELSE
+    -- Spend is usd on settled and error rows (a failed call can still be
+    -- billed) plus the live estimate on reserved rows; denied rows cost
+    -- nothing. llm_usage_summary reports the same total.
     SELECT COALESCE(sum(u.usd + CASE WHEN u.status = 'reserved' THEN u.reserved_usd ELSE 0 END), 0)
       INTO v_spent
       FROM public.llm_usage AS u
      WHERE u.at >= v_day_start AND u.at < v_day_end
-       AND u.status IN ('settled','reserved');
+       AND u.status IN ('settled','error','reserved');
     IF v_spent >= v_global_cap OR v_spent + p_est_usd > v_global_cap THEN
       v_reason := 'global_daily';
       v_resets_at := v_day_end;
@@ -152,7 +159,7 @@ BEGIN
         INTO v_spent
         FROM public.llm_usage AS u
        WHERE u.feature = p_feature AND u.at >= v_day_start AND u.at < v_day_end
-         AND u.status IN ('settled','reserved');
+         AND u.status IN ('settled','error','reserved');
       IF v_feature_daily_cap IS NOT NULL
          AND (v_spent >= v_feature_daily_cap OR v_spent + p_est_usd > v_feature_daily_cap) THEN
         v_reason := 'feature_daily';
@@ -172,7 +179,7 @@ BEGIN
             FROM public.llm_usage AS u
            WHERE u.feature = p_feature AND u.studio_id = p_studio_id
              AND u.at >= v_month_start AND u.at < v_month_end
-             AND u.status IN ('settled','reserved');
+             AND u.status IN ('settled','error','reserved');
           IF v_spent >= v_studio_cap OR v_spent + p_est_usd > v_studio_cap THEN
             v_reason := 'studio_monthly';
             v_resets_at := v_month_end;
@@ -182,8 +189,9 @@ BEGIN
     END IF;
   END IF;
 
-  INSERT INTO public.llm_usage (at, feature, studio_id, user_id, usd, reserved_usd, status, stop_reason)
-  VALUES (v_now, p_feature, p_studio_id, p_user_id, 0,
+  INSERT INTO public.llm_usage (at, feature, role, prompt_version, studio_id, user_id,
+                                usd, reserved_usd, status, stop_reason)
+  VALUES (v_now, p_feature, p_role, p_prompt_version, p_studio_id, p_user_id, 0,
           CASE WHEN v_reason IS NULL THEN p_est_usd ELSE 0 END,
           CASE WHEN v_reason IS NULL THEN 'reserved' ELSE 'denied' END, v_reason)
   RETURNING id INTO v_usage_id;
@@ -221,7 +229,13 @@ BEGIN
          cache_read_tokens = p_cache_read_tokens, cache_write_tokens = p_cache_write_tokens,
          usd = p_usd, reserved_usd = 0, stop_reason = p_stop_reason,
          latency_ms = p_latency_ms
-   WHERE id = p_usage_id AND status = 'reserved';
+   WHERE id = p_usage_id
+     -- A swept reservation still takes its late real usage once; that settle
+     -- replaces stop_reason, so any repeat is a no-op like on a settled row.
+     AND (status = 'reserved' OR (status = 'error' AND stop_reason = 'stale_reservation'));
+  IF NOT FOUND AND NOT EXISTS (SELECT 1 FROM public.llm_usage WHERE id = p_usage_id) THEN
+    RAISE EXCEPTION 'unknown llm usage id %', p_usage_id USING ERRCODE = 'no_data_found';
+  END IF;
 END;
 $$;
 
@@ -233,8 +247,10 @@ SET search_path TO 'public', 'pg_temp'
 AS $$
 DECLARE v_count integer;
 BEGIN
+  -- The estimate becomes the recorded cost, so a call whose settle never
+  -- arrived still counts toward the caps.
   UPDATE public.llm_usage
-     SET status = 'error', reserved_usd = 0, stop_reason = 'stale_reservation'
+     SET status = 'error', usd = reserved_usd, reserved_usd = 0, stop_reason = 'stale_reservation'
    WHERE status = 'reserved' AND at < clock_timestamp() - interval '10 minutes';
   GET DIAGNOSTICS v_count = ROW_COUNT;
   RETURN v_count;
@@ -249,29 +265,37 @@ STABLE
 SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $$
+  -- Same spend rule as llm_reserve: usd on settled and error rows plus the
+  -- live estimate on reserved rows; denied rows are neither spend nor calls.
   SELECT jsonb_build_object(
     'by_feature', COALESCE((
       SELECT jsonb_agg(jsonb_build_object('feature', q.feature, 'usd', q.usd,
         'input_tokens', q.input_tokens, 'output_tokens', q.output_tokens, 'calls', q.calls)
         ORDER BY q.feature)
-      FROM (SELECT u.feature, sum(u.usd)::numeric(12,6) AS usd,
+      FROM (SELECT u.feature,
+              sum(u.usd + CASE WHEN u.status = 'reserved' THEN u.reserved_usd ELSE 0 END)::numeric(12,6) AS usd,
               sum(u.input_tokens)::bigint AS input_tokens,
               sum(u.output_tokens)::bigint AS output_tokens, count(*)::bigint AS calls
-              FROM public.llm_usage u WHERE u.at >= p_from AND u.at < p_to AND u.status = 'settled'
+              FROM public.llm_usage u WHERE u.at >= p_from AND u.at < p_to
+               AND u.status IN ('settled','error','reserved')
               GROUP BY u.feature) q), '[]'::jsonb),
     'by_studio', COALESCE((
       SELECT jsonb_agg(jsonb_build_object('studio_id', q.studio_id, 'usd', q.usd,
         'input_tokens', q.input_tokens, 'output_tokens', q.output_tokens, 'calls', q.calls)
         ORDER BY q.studio_id)
-      FROM (SELECT u.studio_id, sum(u.usd)::numeric(12,6) AS usd,
+      FROM (SELECT u.studio_id,
+              sum(u.usd + CASE WHEN u.status = 'reserved' THEN u.reserved_usd ELSE 0 END)::numeric(12,6) AS usd,
               sum(u.input_tokens)::bigint AS input_tokens,
               sum(u.output_tokens)::bigint AS output_tokens, count(*)::bigint AS calls
-              FROM public.llm_usage u WHERE u.studio_id IS NOT NULL AND u.at >= p_from AND u.at < p_to AND u.status = 'settled'
+              FROM public.llm_usage u WHERE u.studio_id IS NOT NULL AND u.at >= p_from AND u.at < p_to
+               AND u.status IN ('settled','error','reserved')
               GROUP BY u.studio_id) q), '[]'::jsonb),
-    'totals', (SELECT jsonb_build_object('usd', COALESCE(sum(u.usd),0)::numeric(12,6),
+    'totals', (SELECT jsonb_build_object(
+        'usd', COALESCE(sum(u.usd + CASE WHEN u.status = 'reserved' THEN u.reserved_usd ELSE 0 END),0)::numeric(12,6),
         'input_tokens', COALESCE(sum(u.input_tokens),0)::bigint,
         'output_tokens', COALESCE(sum(u.output_tokens),0)::bigint, 'calls', count(*)::bigint)
-      FROM public.llm_usage u WHERE u.at >= p_from AND u.at < p_to AND u.status = 'settled')
+      FROM public.llm_usage u WHERE u.at >= p_from AND u.at < p_to
+       AND u.status IN ('settled','error','reserved'))
   );
 $$;
 
@@ -339,8 +363,8 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric) TO service_role;
+REVOKE ALL ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric, text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric, text, text) TO service_role;
 REVOKE ALL ON FUNCTION public.llm_settle(bigint, text, integer, integer, integer, integer, numeric, text, text, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.llm_settle(bigint, text, integer, integer, integer, integer, numeric, text, text, integer) TO service_role;
 REVOKE ALL ON FUNCTION public.llm_sweep_stale_reservations() FROM PUBLIC, anon, authenticated;
@@ -357,12 +381,12 @@ GRANT EXECUTE ON FUNCTION public.llm_set_studio_override(uuid, numeric, uuid) TO
 -- ── 5. Migrate the daily ledger and preserve its read shape ──────────────────
 INSERT INTO public.llm_usage (
   at, feature, role, model, prompt_version, input_tokens, output_tokens,
-  cache_read_tokens, usd, status
+  cache_read_tokens, usd, status, products
 )
 SELECT (ledger.day::timestamp AT TIME ZONE 'UTC'), 'aesthete-dna-draft', 'draft',
        'legacy', 'legacy', COALESCE(ledger.input_tokens, 0),
        COALESCE(ledger.output_tokens, 0), COALESCE(ledger.cache_read_tokens, 0),
-       COALESCE(ledger.usd, 0), 'settled'
+       COALESCE(ledger.usd, 0), 'settled', COALESCE(ledger.products, 0)
   FROM public.aesthete_spend_ledger AS ledger
 ON CONFLICT DO NOTHING;
 
@@ -373,7 +397,7 @@ SELECT (date_trunc('day', u.at AT TIME ZONE 'UTC'))::date AS day,
        sum(u.output_tokens)::bigint AS output_tokens,
        sum(u.cache_read_tokens)::bigint AS cache_read_tokens,
        sum(u.usd)::numeric(12,6) AS usd,
-       0::integer AS products
+       COALESCE(sum(u.products), 0)::integer AS products
   FROM public.llm_usage AS u
  WHERE u.feature = 'aesthete-dna-draft' AND u.status = 'settled'
  GROUP BY (date_trunc('day', u.at AT TIME ZONE 'UTC'))::date;
@@ -392,3 +416,9 @@ BEGIN
   );
 END;
 $$;
+
+-- ── 7. Studio resolver for the service-role caller ──────────────────────────
+-- 00484 revoked _primary_studio_for from every PostgREST role. The shared
+-- edge caller resolver (_shared/caller.ts) runs as service_role and needs it
+-- to attribute spend to a studio cap. anon and authenticated stay revoked.
+GRANT EXECUTE ON FUNCTION public._primary_studio_for(uuid) TO service_role;

@@ -13064,18 +13064,6 @@ END $g$;
 
 -- 00534_client_attention_notifications.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.notify_client_attention(uuid, text, uuid, text, text, jsonb) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00534_client_attention_notifications.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.notify_client_attention(uuid, text, uuid, text, text, jsonb) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00534_client_attention_notifications.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.sync_proposal_send_in_app_log(uuid) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -21686,13 +21674,13 @@ END $g$;
 
 -- 00770_llm_usage_controls.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric, text, text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00770_llm_usage_controls.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric) TO service_role;
+  GRANT EXECUTE ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric, text, text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -21777,6 +21765,12 @@ END $g$;
 -- 00770_llm_usage_controls.sql
 DO $g$ BEGIN
   GRANT SELECT ON public.aesthete_spend_ledger TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._primary_studio_for(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -21969,6 +21963,36 @@ END $g$;
 -- 00775_outbound_drafts.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.outbound_review_active(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00777_client_push_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.notify_client_attention(uuid, text, uuid, text, text, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00777_client_push_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.notify_client_attention(uuid, text, uuid, text, text, jsonb, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00777_client_push_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.release_due_client_pushes(integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00777_client_push_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.release_due_client_pushes(integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00777_client_push_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.notify_client_decision_raised() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

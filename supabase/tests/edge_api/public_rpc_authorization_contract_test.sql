@@ -998,6 +998,8 @@ BEGIN
     expected(signature, grantee, grantor, privilege_type, is_grantable) AS (
       VALUES
         ('public.create_studio_workspace(text)', 'authenticated', 'postgres', 'EXECUTE', false),
+        -- 00770 re-grants the resolver to service_role for the shared edge caller.
+        ('public._primary_studio_for(uuid)', 'service_role', 'postgres', 'EXECUTE', false),
         ('public.transfer_studio_ownership(uuid,uuid)', 'authenticated', 'postgres', 'EXECUTE', false),
         ('public.enqueue_agent_task(text,jsonb,text,integer,text,text,uuid,text,timestamp with time zone,integer,text,text,text,uuid,numeric,jsonb,text)', 'service_role', 'postgres', 'EXECUTE', false),
         ('public.enqueue_agent_task(text,jsonb,text,integer,text,text,uuid,text,timestamp with time zone,integer,text,text,text,uuid,numeric,jsonb,text)', 'agent_writer', 'postgres', 'EXECUTE', false)
