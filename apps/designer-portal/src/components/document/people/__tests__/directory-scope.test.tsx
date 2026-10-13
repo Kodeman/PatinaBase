@@ -43,7 +43,9 @@ jest.mock("@patina/supabase", () => ({
   useChannelConsentRecords: () => ({ data: [] }),
 }));
 
-jest.mock("@/hooks/use-projects", () => ({ useProjects: () => ({ data: [] }) }));
+jest.mock("@/hooks/use-projects", () => ({
+  useProjects: () => ({ data: [] }),
+}));
 
 jest.mock("../directory/makers-marketplace", () => ({
   MakersMarketplace: () => <div data-testid="marketplace" />,
@@ -192,15 +194,21 @@ describe("the six chips", () => {
       within(group)
         .getAllByRole("button")
         .map((b) => b.textContent),
-    ).toEqual(["All contacts", "Clients", "Trades & contractors", "Makers & suppliers", "Studio team", "Companies"]);
+    ).toEqual([
+      "All contacts",
+      "Clients",
+      "Trades & contractors",
+      "Makers & suppliers",
+      "Studio team",
+      "Companies",
+    ]);
   });
 
   it("Everyone is the pressed chip on open", () => {
     renderDirectory([]);
-    expect(screen.getByRole("button", { name: "All contacts" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      screen.getByRole("button", { name: "All contacts" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   it("shows the trade line only under Crew and Makers", () => {
@@ -410,5 +418,43 @@ describe("the duplicate band", () => {
       within(band).getByRole("button", { name: "Chidi Okonkwo" }),
     );
     expect(NAV.openPerson).toHaveBeenCalledWith("card-chidi", "contact");
+  });
+});
+
+describe("Inbound first (US-28 S10, uplift (c) area 4)", () => {
+  it("lifts a new own lead into the Inbound Section, ahead of and out of the Directory", () => {
+    renderDirectory([
+      row(),
+      row({
+        person_id: "card-ines",
+        role: "lead",
+        display_name: "Ines Varga",
+        scope: "mine",
+        status_raw: "new",
+        meta: { entity_kind: "person" },
+      }),
+    ]);
+    const inbound = document.querySelector(
+      "[data-people-inbound]",
+    ) as HTMLElement;
+    const directory = document.querySelector(
+      "[data-directory-list]",
+    ) as HTMLElement;
+    expect(
+      within(inbound).getByRole("button", { name: "Ines Varga" }),
+    ).toBeInTheDocument();
+    expect(within(directory).queryByText("Ines Varga")).toBeNull();
+    expect(
+      within(directory).getByRole("button", { name: "Dana Kowalski" }),
+    ).toBeInTheDocument();
+    expect(
+      inbound.compareDocumentPosition(directory) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("prints no Inbound Section when nothing is new", () => {
+    renderDirectory([row()]);
+    expect(document.querySelector("[data-people-inbound]")).toBeNull();
   });
 });

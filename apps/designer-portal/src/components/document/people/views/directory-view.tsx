@@ -58,6 +58,8 @@ import {
   directoryTradeAdmits,
   entryPaperWord,
   firmIdentityLine,
+  deriveRelationshipLine,
+  humanizeSince,
   seatIsDone,
   type DirectoryPerson,
 } from "@/lib/document/people-derivation";
@@ -70,7 +72,8 @@ import { consentSentenceForRecord } from "../consent-sentence";
 import { CompareMergeSheet } from "../compare-merge-sheet";
 import { useProjects } from "@/hooks/use-projects";
 import { peopleEvents } from "@/lib/analytics/people-events";
-import { EmptyTeach } from "../view-shell";
+import { EmptyState } from "../../empty-state";
+import { Avatar } from "../person-bits";
 import { PersonRow } from "../directory/person-row";
 import { CompanyRow } from "../directory/company-row";
 import { ScopeLens } from "../directory/scope-lens";
@@ -363,6 +366,23 @@ export function DirectoryView({
     });
   }, [rows, chip, search, trade, firmBands, seatTrades]);
 
+  /**
+   * US-28 S10 — INBOUND FIRST ("who just came in?"). A lead still owed its
+   * first reply (`new` / `viewed`, the same test `isNurtureDue` reads) leads
+   * the room as its own Section, and leaves the Directory below so it is
+   * listed once. A co-member's lead stays in the Directory: an unanswered
+   * inquiry is a work queue for its owner, not for every teammate who can read
+   * the shared book (Wave 4's scope rule).
+   */
+  const now = useMemo(() => new Date(), []);
+  const isInbound = (row: DirectoryPerson) =>
+    row.role === "lead" &&
+    row.scope !== "studio" &&
+    (row.status_raw === "new" || row.status_raw === "viewed");
+  const inbound = narrowed.filter(isInbound);
+  const listed =
+    inbound.length > 0 ? narrowed.filter((r) => !isInbound(r)) : narrowed;
+
   const duplicates = useMemo(() => directoryDuplicatePairs(rows), [rows]);
 
   /** The pair the Compare & merge sheet is open on, or null. */
@@ -382,19 +402,13 @@ export function DirectoryView({
       {/* CR11-10: paper, not a live region. The Room's one announcer
           (people-room.tsx) already says this line. */}
       {notice && (
-        <p
-          data-directory-notice
-          className="t-body-sm mb-4 border-l-2 border-[var(--sage)] bg-[var(--rail)] py-2 pl-3 text-[var(--ink)]"
-        >
+        <p data-directory-notice className="t-body-sm people-notice">
           {notice}
         </p>
       )}
 
-      <div
-        role="group"
-        aria-label="Filter directory"
-        className="mb-3 flex flex-wrap gap-2"
-      >
+      {/* US-28 S10 — the filters are underline words, never boxed tabs. */}
+      <div role="group" aria-label="Filter directory" className="filters">
         {DIRECTORY_CHIPS.map((key) => {
           const on = chip === key;
           return (
@@ -407,11 +421,6 @@ export function DirectoryView({
                 onChipChange(key);
                 peopleEvents.directoryChip({ chip: key, scope, trade });
               }}
-              className={`min-h-11 rounded-[3px] border px-3 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.06em] ${
-                on
-                  ? "border-[var(--ink-faint)] bg-[var(--rail)] text-[var(--ink)]"
-                  : "border-[var(--hairline-strong)] bg-[var(--paper)] text-[var(--ink-subtle)]"
-              }`}
             >
               {DIRECTORY_CHIP_LABELS[key]}
             </button>
@@ -423,7 +432,7 @@ export function DirectoryView({
         <div
           role="group"
           aria-label="Filter by trade"
-          className="mb-3 flex flex-wrap gap-x-3 gap-y-1"
+          className="filters people-trades"
         >
           {TRADE_LINE.filter((t) =>
             (ALL_FIELD_TRADES as readonly string[]).includes(t),
@@ -440,9 +449,6 @@ export function DirectoryView({
                   onTradeChange(next);
                   peopleEvents.directoryChip({ chip, scope, trade: next });
                 }}
-                className={`min-h-11 font-mono text-[11px] lowercase tracking-[0.06em] ${
-                  on ? "text-[var(--ink)]" : "text-[var(--ink-subtle)]"
-                }`}
               >
                 {getFieldTradeLabel(t).toLowerCase()}
               </button>
@@ -544,52 +550,126 @@ export function DirectoryView({
           Reading the roster…
         </p>
       ) : narrowed.length === 0 ? (
-        <EmptyTeach>{DIRECTORY_EMPTY_SENTENCE}</EmptyTeach>
+        <div className="people-sections">
+          <EmptyState eyebrow="Directory">
+            {DIRECTORY_EMPTY_SENTENCE}
+          </EmptyState>
+        </div>
       ) : (
-        <ul
-          data-directory-list
-          className="m-0 list-none border-t border-[var(--hairline-strong)] p-0"
-        >
-          {narrowed.map((row) =>
-            directoryEntryKind(row) === "firm" ? (
-              <CompanyRow
-                key={`firm:${row.person_id}`}
-                firmId={row.person_id}
-                name={row.display_name}
-                kind={String(row.meta?.["contact_kind"] ?? "company")}
-                line={firmIdentityLine(row, {
-                  crew: firmCounts.get(row.person_id)?.crew ?? 0,
-                  jobs: firmCounts.get(row.person_id)?.jobs.size ?? 0,
-                })}
-                paperState={entryPaperWord(row)}
-                payeeMarker={
-                  entryPaperWord(row) === null
-                    ? null
-                    : (payeeMarkers.get(row.person_id) ?? null)
-                }
-                onOpen={() => onOpenFirm(row.person_id)}
-              />
-            ) : (
-              <PersonRow
-                key={`person:${row.person_id}`}
-                person={row}
-                highlighted={row.person_id === highlightPersonId}
-                rule={ruleIndex.get(row.person_id) ?? null}
-                routeTo={contactRouteTarget(
-                  ruleIndex.get(row.person_id),
-                  peopleById,
-                  channelsByOwner,
-                )}
-                consentClause={consentClauses.get(row.person_id) ?? null}
-                routeTargets={routeTargets}
-                seatTrade={seatTrades.get(row.person_id) ?? null}
-                onOpenSeat={onOpenSeat}
-                onOpen={() => openPerson(row.person_id, row.role)}
-              />
-            ),
+        <div className="people-sections">
+          {inbound.length > 0 && (
+            <section
+              data-people-inbound
+              aria-labelledby="people-inbound-head"
+              className="section ledger"
+            >
+              <div className="sec-head">
+                <h3 className="eb" id="people-inbound-head">
+                  <SectionOrnament />
+                  <span>Inbound · {inbound.length} new</span>
+                </h3>
+              </div>
+              <ul className="rows m-0 list-none p-0">
+                {inbound.map((row) => (
+                  <li
+                    key={`inbound:${row.person_id}`}
+                    data-inbound-person={row.person_id}
+                    className="lrow plain"
+                  >
+                    <div className="lname">
+                      <span className="people-who">
+                        <Avatar name={row.display_name} role={row.role} />
+                        <button
+                          type="button"
+                          data-open-person={row.person_id}
+                          onClick={() => openPerson(row.person_id, row.role)}
+                          className="name t-d4 text-left"
+                        >
+                          {row.display_name}
+                        </button>
+                      </span>
+                    </div>
+                    <span className="lsent t-body-sm">
+                      {deriveRelationshipLine(row, now).text}
+                    </span>
+                    <span className="lwhen t-meta">
+                      {humanizeSince(row.last_touch_at, now)}
+                    </span>
+                    <span className="lact" />
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
-        </ul>
+          {listed.length > 0 && (
+            <section
+              aria-labelledby="people-directory-head"
+              className="section ledger"
+            >
+              <div className="sec-head">
+                <h3 className="eb" id="people-directory-head">
+                  <SectionOrnament />
+                  <span>Directory</span>
+                </h3>
+              </div>
+              <ul data-directory-list className="rows m-0 list-none p-0">
+                {listed.map((row) =>
+                  directoryEntryKind(row) === "firm" ? (
+                    <CompanyRow
+                      key={`firm:${row.person_id}`}
+                      firmId={row.person_id}
+                      name={row.display_name}
+                      kind={String(row.meta?.["contact_kind"] ?? "company")}
+                      line={firmIdentityLine(row, {
+                        crew: firmCounts.get(row.person_id)?.crew ?? 0,
+                        jobs: firmCounts.get(row.person_id)?.jobs.size ?? 0,
+                      })}
+                      paperState={entryPaperWord(row)}
+                      payeeMarker={
+                        entryPaperWord(row) === null
+                          ? null
+                          : (payeeMarkers.get(row.person_id) ?? null)
+                      }
+                      onOpen={() => onOpenFirm(row.person_id)}
+                    />
+                  ) : (
+                    <PersonRow
+                      key={`person:${row.person_id}`}
+                      person={row}
+                      highlighted={row.person_id === highlightPersonId}
+                      rule={ruleIndex.get(row.person_id) ?? null}
+                      routeTo={contactRouteTarget(
+                        ruleIndex.get(row.person_id),
+                        peopleById,
+                        channelsByOwner,
+                      )}
+                      consentClause={consentClauses.get(row.person_id) ?? null}
+                      routeTargets={routeTargets}
+                      seatTrade={seatTrades.get(row.person_id) ?? null}
+                      onOpenSeat={onOpenSeat}
+                      onOpen={() => openPerson(row.person_id, row.role)}
+                    />
+                  ),
+                )}
+              </ul>
+            </section>
+          )}
+        </div>
       )}
     </>
+  );
+}
+
+/** The Section eyebrow's clay ornament (S1's `.orn`). */
+function SectionOrnament() {
+  return (
+    <svg
+      className="orn"
+      viewBox="0 0 34 12"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M0 2h34M0 6h28M0 10h20" />
+    </svg>
   );
 }

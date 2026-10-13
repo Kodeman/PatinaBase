@@ -136,18 +136,22 @@ describe('StateWord · one bordered word for all four families', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('is a border and text on a transparent ground — never a fill (SPEC §8 #10)', () => {
-    render(<StateWord family="paper" value="lapsed" />);
-    const word = screen.getByText('Lapsed');
-    // jsdom discards a `var(--x)` declaration entirely, so the TOKEN pairing is
-    // asserted at its source below and the DOM is asserted for what jsdom does
-    // keep: the transparent ground, the border box, and no shadow (D4).
-    expect(word.getAttribute('style') ?? '').toMatch(/background:\s*transparent/);
-    expect(word.className).toMatch(/\bborder\b/);
-    expect(word.className).not.toMatch(/shadow/);
+  it('is an unboxed ink word — no border, no fill, no inline paint (US-28 S10, uplift (c) area 4)', () => {
+    render(<StateWord family="paper" value="current" />);
+    const word = screen.getByText('Current');
+    expect(word.className).toMatch(/\bword\b/);
+    expect(word.className).not.toMatch(/\bborder\b|shadow|word--od/);
+    expect(word).not.toHaveAttribute('style');
   });
 
-  it('binds each pigment to its house-sheet token pair, and never to a fill', () => {
+  it('inks a blocked word terracotta and nothing else (word--od)', () => {
+    render(<StateWord family="paper" value="lapsed" />);
+    const word = screen.getByText('Lapsed');
+    expect(word.className).toMatch(/\bword--od\b/);
+    expect(word).toHaveAttribute('data-state-ink', 'od');
+  });
+
+  it('keeps the deprecated pigment map stable for callers outside People', () => {
     // The four pairs are SPEC §2.2's `.word--*` rules, stated once in
     // @patina/types so the room and the specimens cannot drift.
     expect(STATE_WORD_PIGMENTS).toEqual({
@@ -174,11 +178,12 @@ describe('StateWord · one bordered word for all four families', () => {
     expect(resolveStateWord('stage', 'nonsense')).toBeNull();
   });
 
-  it('drops the box but keeps the word and its pigment at 390 (R-M)', () => {
+  it('prints the same unboxed word whether or not a caller still passes `plain`', () => {
     render(<StateWord family="consent" value="opted_out" plain />);
     const word = screen.getByText('Opted out');
     expect(word.className).not.toMatch(/\bborder\b/);
     expect(word).toHaveAttribute('data-state-pigment', 'blocked');
+    expect(word).toHaveAttribute('data-state-ink', 'od');
     expect(word).toHaveAttribute('data-state-word', 'opted_out');
   });
 

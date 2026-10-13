@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
 /**
- * Shared People-Room primitives: the role-tinted avatar and the role badge.
+ * Shared People-Room primitives: the ink-initial avatar (US-28 S10) and the role badge.
  * One source of truth so the directory, the profile, the nurture queue, and
  * the threads list all read identically. Zero shadows (D4); colours come from
  * the brand tokens (globals.css).
@@ -12,51 +12,14 @@
  * (`state-word.tsx`) is the one primitive that prints it.
  */
 
-import type { PartyRole } from '@patina/supabase';
-import { StateWord } from './state-word';
-import { roleLabel } from '@/lib/document/people-derivation';
+import type { PartyRole } from "@patina/supabase";
+import { StateWord } from "./state-word";
+import { roleLabel } from "@/lib/document/people-derivation";
 
 /** The avatar's shape (slide 9, "Circles + squares"): a person is a circle, a
  *  company is a rounded square — the ONE visual difference between them.
  *  Defaults to 'circle' so every pre-Wave-2 call site is unaffected. */
-export type AvatarShape = 'circle' | 'square';
-
-// Keyed loosely by string, not PartyRole: the studio rolodex's contact_kind
-// (00417) is free TEXT and widens past PartyRole — a person card can carry
-// architect/photographer/stager/vendor/client_rep/other (PartyKind, Wave 1),
-// and a company card carries its OWN kind vocabulary entirely (gc/vendor/
-// workroom/showroom/supplier — see company-row.tsx's companyKindLabel). A
-// strict Record<PartyRole,...> would reject every one of those at the call
-// site; AVATAR_FALLBACK_BG covers anything this map doesn't name.
-const AVATAR_FALLBACK_BG = 'var(--color-aged-oak)';
-
-const AVATAR_BG: Record<string, string> = {
-  client: 'var(--color-sage)',
-  maker: 'var(--color-aged-oak)',
-  gc: 'var(--color-dusty-blue)',
-  team: 'var(--color-clay)',
-  lead: 'var(--color-terracotta)',
-  // Field kinds (00281) — the site trades, distinct but in the warm palette.
-  sub: 'var(--color-mocha)',
-  installer: 'var(--color-golden-hour)',
-  receiver: 'var(--color-terracotta)',
-  // Call Sheet Wave 2 (00281's later PartyKind widening) — allied design-
-  // adjacent professions and the rolodex's own company kinds. Picked from the
-  // existing palette only (no new tokens): architect sits next to the GC's
-  // dusty-blue (an allied site professional); photographer/stager read quiet
-  // (quiet-ink) rather than warm, since neither is a trade or a firm.
-  architect: 'var(--color-dusty-blue)',
-  photographer: 'var(--color-quiet-ink)',
-  stager: 'var(--color-quiet-ink)',
-  // Company kinds (studio_contacts.contact_kind on an entity_kind='company'
-  // card — see company-row.tsx's COMPANY_KIND_LABELS for the matching label
-  // map). 'vendor' shares the maker tint deliberately: a vendor company IS a
-  // maker's firm.
-  vendor: 'var(--color-aged-oak)',
-  workroom: 'var(--color-mocha)',
-  showroom: 'var(--color-golden-hour)',
-  supplier: 'var(--color-aged-oak)',
-};
+export type AvatarShape = "circle" | "square";
 
 /**
  * IDENTITY HUES, HELD OFF THE FOUR STATE TOKENS (direction §4).
@@ -74,25 +37,31 @@ const AVATAR_BG: Record<string, string> = {
  * legible as a word.
  */
 const BADGE: Record<PartyRole, { color: string; border: string }> = {
-  client: { color: 'var(--color-charcoal)', border: 'var(--color-clay)' },
-  maker: { color: 'var(--color-aged-oak)', border: '#cbb48f' },
-  gc: { color: 'var(--color-dusty-blue-ink)', border: 'var(--color-dusty-blue)' },
-  team: { color: 'var(--color-clay-ink)', border: 'var(--color-clay)' },
-  lead: { color: 'var(--color-quiet-ink)', border: 'var(--color-pearl)' },
-  sub: { color: 'var(--color-mocha)', border: 'var(--color-mocha)' },
-  installer: { color: 'var(--color-mocha)', border: 'var(--color-clay)' },
-  receiver: { color: 'var(--color-aged-oak)', border: 'var(--color-pearl)' },
+  client: { color: "var(--color-charcoal)", border: "var(--color-clay)" },
+  maker: { color: "var(--color-aged-oak)", border: "#cbb48f" },
+  gc: {
+    color: "var(--color-dusty-blue-ink)",
+    border: "var(--color-dusty-blue)",
+  },
+  team: { color: "var(--color-clay-ink)", border: "var(--color-clay)" },
+  lead: { color: "var(--color-quiet-ink)", border: "var(--color-pearl)" },
+  sub: { color: "var(--color-mocha)", border: "var(--color-mocha)" },
+  installer: { color: "var(--color-mocha)", border: "var(--color-clay)" },
+  receiver: { color: "var(--color-aged-oak)", border: "var(--color-pearl)" },
   // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds — architect beside
   // the GC's dusty blue; photographer/stager quiet ink, neither trade nor firm.
   architect: {
-    color: 'var(--color-dusty-blue-ink)',
-    border: 'var(--color-dusty-blue)',
+    color: "var(--color-dusty-blue-ink)",
+    border: "var(--color-dusty-blue)",
   },
-  photographer: { color: 'var(--color-quiet-ink)', border: 'var(--color-quiet-ink)' },
-  stager: { color: 'var(--color-quiet-ink)', border: 'var(--color-quiet-ink)' },
+  photographer: {
+    color: "var(--color-quiet-ink)",
+    border: "var(--color-quiet-ink)",
+  },
+  stager: { color: "var(--color-quiet-ink)", border: "var(--color-quiet-ink)" },
   // The studio rolodex branch (people_directory role='contact', 00420) — and
   // since 00626's v4 rebuild, EVERY carded human. Shares the maker tint.
-  contact: { color: 'var(--color-aged-oak)', border: '#cbb48f' },
+  contact: { color: "var(--color-aged-oak)", border: "#cbb48f" },
 };
 
 // A company's OWN kind vocabulary (studio_contacts.contact_kind on an
@@ -113,48 +82,46 @@ const COMPANY_KIND_BADGE: Record<string, { color: string; border: string }> = {
 /** Badge tint for a company kind (see COMPANY_KIND_BADGE above) — used by
  *  company-row.tsx's kind pill so a GC firm and a maker/vendor-family firm
  *  read with the same per-role tints a person's RoleBadge already carries. */
-export function companyKindBadgeStyle(
-  kind: string | null | undefined,
-): { color: string; border: string } {
+export function companyKindBadgeStyle(kind: string | null | undefined): {
+  color: string;
+  border: string;
+} {
   return (kind ? COMPANY_KIND_BADGE[kind] : undefined) ?? BADGE.maker;
 }
 
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '·';
+  if (parts.length === 0) return "·";
   if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
+/**
+ * INK INITIALS (V20 U-Q15, US-28 S10). The avatar is the person's initials in
+ * ink inside one hairline ring — the shared `.avatar` class — never a disc
+ * filled in a role pigment: the role is already a word on the row, so a hue
+ * that repeats it is a second, colour-only telling of the same fact.
+ */
 export function Avatar({
   name,
-  role,
-  shape = 'circle',
-  size = 42,
+  shape = "circle",
+  size,
 }: {
   name: string;
-  /** PartyRole for a people_directory row, OR a studio_contacts contact_kind
-   *  (person or company) — loosely typed as string so the rolodex's free-text
-   *  kinds resolve through the same tint map without a cast at the call site.
-   *  An unrecognized kind falls back to AVATAR_FALLBACK_BG rather than
-   *  rendering `undefined` as a background. */
+  /** PartyRole or contact_kind. Kept for the call sites; since U-Q15 the
+   *  avatar no longer tints by it — the row prints the role as a word. */
   role: string;
-  /** 'square' (8px radius) is the company avatar — slide 9's one difference. */
+  /** 'square' is the company avatar — slide 9's one difference. */
   shape?: AvatarShape;
+  /** Overrides the shared 32px ring (a record's head prints larger). */
   size?: number;
 }) {
   return (
     <span
       aria-hidden
-      className={`inline-flex shrink-0 items-center justify-center font-mono font-semibold text-white ${
-        shape === 'square' ? 'rounded-[8px]' : 'rounded-full'
-      }`}
-      style={{
-        width: size,
-        height: size,
-        background: AVATAR_BG[role] ?? AVATAR_FALLBACK_BG,
-        fontSize: Math.round(size * 0.32),
-      }}
+      data-avatar-shape={shape}
+      className={shape === "square" ? "avatar people-avatar-firm" : "avatar"}
+      style={size ? { width: size, height: size } : undefined}
     >
       {initials(name)}
     </span>

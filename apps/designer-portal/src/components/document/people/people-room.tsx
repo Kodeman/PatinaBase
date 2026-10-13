@@ -609,9 +609,11 @@ export function PeopleRoom() {
           regionKey="room-head"
           aria-label="People actions"
         >
+          {/* US-28 S10 (uplift (c) area 4) — People has no filled act;
+              Add contact is a secondary. */}
           <DocumentAction
             actionKey="add-person"
-            variant="primary"
+            variant="secondary"
             leading="+"
             onClick={() => setAddOpen(true)}
           >

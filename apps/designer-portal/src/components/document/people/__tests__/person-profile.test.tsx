@@ -323,17 +323,31 @@ beforeEach(() => {
 });
 
 describe("the regions", () => {
-  it("prints every region head, in order", () => {
+  it("prints every region head, in order (US-28 S10: the record's Sections)", () => {
     renderCard();
-    for (const head of [
-      "Reach & access",
-      "Project assignments",
-      "Past assignments",
-      "Documents on file",
+    const heads = [
+      "Rules and how to reach them",
+      "Paperwork",
+      "On these jobs",
+      "Past jobs",
       "Relationship history",
-    ]) {
-      expect(screen.getByRole("heading", { name: head })).toBeInTheDocument();
+    ].map((name) => screen.getByRole("heading", { name }));
+    for (let i = 1; i < heads.length; i += 1) {
+      expect(
+        heads[i - 1].compareDocumentPosition(heads[i]) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
     }
+  });
+
+  it("is a laid-paper record with the way back to Studio contacts (US-28 S10)", () => {
+    renderCard();
+    expect(document.querySelector("[data-person-card]")?.className).toMatch(
+      /\bpaper\b/,
+    );
+    expect(
+      screen.getByRole("button", { name: "Back to Studio contacts" }),
+    ).toBeInTheDocument();
   });
 
   it("R-V — an absent record prints its own sentence, exactly", () => {

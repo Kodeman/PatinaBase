@@ -99,16 +99,15 @@ describe("the word columns", () => {
     expect(bordered.querySelector('[data-state-family="stage"]')).toBeNull();
   });
 
-  it("R-M — line 2 prints the same three words plain at 390, on every row", () => {
+  it("R-M — one word group at every width, never a 390 duplicate (US-28 S10)", () => {
     const { container } = render(
       <ul>
         <PersonRow person={person()} onOpen={jest.fn()} />
       </ul>,
     );
-    const plain = container.querySelector(
-      "[data-row-words-390]",
-    ) as HTMLElement;
-    expect(plain.querySelectorAll("[data-state-word]")).toHaveLength(3);
+    expect(container.querySelector("[data-row-words-390]")).toBeNull();
+    expect(container.querySelectorAll("[data-row-words]")).toHaveLength(1);
+    expect(container.querySelectorAll("[data-state-word]")).toHaveLength(3);
   });
 
   it("R-A — a lender prints no paper word in either place", () => {
