@@ -257,33 +257,6 @@ export type Database = {
           },
         ]
       }
-      aesthete_spend_ledger: {
-        Row: {
-          cache_read_tokens: number | null
-          day: string
-          input_tokens: number | null
-          output_tokens: number | null
-          products: number | null
-          usd: number | null
-        }
-        Insert: {
-          cache_read_tokens?: number | null
-          day: string
-          input_tokens?: number | null
-          output_tokens?: number | null
-          products?: number | null
-          usd?: number | null
-        }
-        Update: {
-          cache_read_tokens?: number | null
-          day?: string
-          input_tokens?: number | null
-          output_tokens?: number | null
-          products?: number | null
-          usd?: number | null
-        }
-        Relationships: []
-      }
       agent_task_audit: {
         Row: {
           actor: string
@@ -10524,6 +10497,159 @@ export type Database = {
           },
         ]
       }
+      llm_controls: {
+        Row: {
+          global_daily_cap_usd: number
+          id: boolean
+          kill_switch: boolean
+          updated_at: string
+        }
+        Insert: {
+          global_daily_cap_usd?: number
+          id?: boolean
+          kill_switch?: boolean
+          updated_at?: string
+        }
+        Update: {
+          global_daily_cap_usd?: number
+          id?: boolean
+          kill_switch?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      llm_controls_audit: {
+        Row: {
+          actor: string | null
+          after: Json
+          at: string
+          before: Json | null
+          id: number
+          target: string
+        }
+        Insert: {
+          actor?: string | null
+          after: Json
+          at?: string
+          before?: Json | null
+          id?: never
+          target: string
+        }
+        Update: {
+          actor?: string | null
+          after?: Json
+          at?: string
+          before?: Json | null
+          id?: never
+          target?: string
+        }
+        Relationships: []
+      }
+      llm_feature_controls: {
+        Row: {
+          daily_cap_usd: number | null
+          enabled: boolean
+          feature: string
+          studio_monthly_cap_usd: number | null
+          updated_at: string
+        }
+        Insert: {
+          daily_cap_usd?: number | null
+          enabled?: boolean
+          feature: string
+          studio_monthly_cap_usd?: number | null
+          updated_at?: string
+        }
+        Update: {
+          daily_cap_usd?: number | null
+          enabled?: boolean
+          feature?: string
+          studio_monthly_cap_usd?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      llm_studio_overrides: {
+        Row: {
+          monthly_cap_usd: number | null
+          studio_id: string
+          updated_at: string
+        }
+        Insert: {
+          monthly_cap_usd?: number | null
+          studio_id: string
+          updated_at?: string
+        }
+        Update: {
+          monthly_cap_usd?: number | null
+          studio_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      llm_usage: {
+        Row: {
+          at: string
+          cache_read_tokens: number
+          cache_write_tokens: number
+          feature: string
+          id: number
+          input_tokens: number
+          latency_ms: number | null
+          model: string | null
+          output_tokens: number
+          prompt_version: string | null
+          request_id: string | null
+          reserved_usd: number
+          role: string | null
+          status: string
+          stop_reason: string | null
+          studio_id: string | null
+          usd: number
+          user_id: string | null
+        }
+        Insert: {
+          at?: string
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          feature: string
+          id?: never
+          input_tokens?: number
+          latency_ms?: number | null
+          model?: string | null
+          output_tokens?: number
+          prompt_version?: string | null
+          request_id?: string | null
+          reserved_usd?: number
+          role?: string | null
+          status: string
+          stop_reason?: string | null
+          studio_id?: string | null
+          usd?: number
+          user_id?: string | null
+        }
+        Update: {
+          at?: string
+          cache_read_tokens?: number
+          cache_write_tokens?: number
+          feature?: string
+          id?: never
+          input_tokens?: number
+          latency_ms?: number | null
+          model?: string | null
+          output_tokens?: number
+          prompt_version?: string | null
+          request_id?: string | null
+          reserved_usd?: number
+          role?: string | null
+          status?: string
+          stop_reason?: string | null
+          studio_id?: string | null
+          usd?: number
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       maker_applications: {
         Row: {
           auth_user_id: string | null
@@ -11321,6 +11447,7 @@ export type Database = {
           ref_id: string | null
           ref_type: string | null
           retry_count: number
+          send_authority: Json | null
           sent_at: string | null
           status: Database["public"]["Enums"]["notification_status"]
           template_id: string | null
@@ -11348,6 +11475,7 @@ export type Database = {
           ref_id?: string | null
           ref_type?: string | null
           retry_count?: number
+          send_authority?: Json | null
           sent_at?: string | null
           status?: Database["public"]["Enums"]["notification_status"]
           template_id?: string | null
@@ -11375,6 +11503,7 @@ export type Database = {
           ref_id?: string | null
           ref_type?: string | null
           retry_count?: number
+          send_authority?: Json | null
           sent_at?: string | null
           status?: Database["public"]["Enums"]["notification_status"]
           template_id?: string | null
@@ -11769,6 +11898,159 @@ export type Database = {
           type?: Database["public"]["Enums"]["organization_type"]
           updated_at?: string
           website?: string | null
+        }
+        Relationships: []
+      }
+      outbound_drafts: {
+        Row: {
+          body: string
+          channel: string
+          claimed_at: string | null
+          composed_by: string
+          created_at: string
+          dedupe_key: string
+          discarded_at: string | null
+          discarded_by: string | null
+          due_at: string | null
+          edited_at: string | null
+          edited_by: string | null
+          expires_at: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string
+          payload: Json
+          project_id: string | null
+          recipient_kind: string
+          ref_id: string
+          ref_type: string
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_address: string | null
+          to_client_id: string | null
+          to_contact_id: string | null
+          to_party_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          channel: string
+          claimed_at?: string | null
+          composed_by?: string
+          created_at?: string
+          dedupe_key: string
+          discarded_at?: string | null
+          discarded_by?: string | null
+          due_at?: string | null
+          edited_at?: string | null
+          edited_by?: string | null
+          expires_at?: string | null
+          id?: string
+          kind: string
+          message_id?: string | null
+          organization_id: string
+          payload?: Json
+          project_id?: string | null
+          recipient_kind: string
+          ref_id: string
+          ref_type: string
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subject?: string | null
+          to_address?: string | null
+          to_client_id?: string | null
+          to_contact_id?: string | null
+          to_party_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          channel?: string
+          claimed_at?: string | null
+          composed_by?: string
+          created_at?: string
+          dedupe_key?: string
+          discarded_at?: string | null
+          discarded_by?: string | null
+          due_at?: string | null
+          edited_at?: string | null
+          edited_by?: string | null
+          expires_at?: string | null
+          id?: string
+          kind?: string
+          message_id?: string | null
+          organization_id?: string
+          payload?: Json
+          project_id?: string | null
+          recipient_kind?: string
+          ref_id?: string
+          ref_type?: string
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subject?: string | null
+          to_address?: string | null
+          to_client_id?: string | null
+          to_contact_id?: string | null
+          to_party_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outbound_drafts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_drafts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_drafts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_drafts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "outbound_drafts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outbound_review_rollout: {
+        Row: {
+          enabled_for_all: boolean
+          enabled_studios: string[]
+          id: boolean
+        }
+        Insert: {
+          enabled_for_all?: boolean
+          enabled_studios?: string[]
+          id?: boolean
+        }
+        Update: {
+          enabled_for_all?: boolean
+          enabled_studios?: string[]
+          id?: boolean
         }
         Relationships: []
       }
@@ -27082,6 +27364,7 @@ export type Database = {
           recipe: Json | null
           reviewed_at: string | null
           reviewed_by: string | null
+          send_authority: Json | null
           site_request_dispatch_outbox_id: string | null
           template_key: string | null
           twilio_sid: string | null
@@ -27110,6 +27393,7 @@ export type Database = {
           recipe?: Json | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          send_authority?: Json | null
           site_request_dispatch_outbox_id?: string | null
           template_key?: string | null
           twilio_sid?: string | null
@@ -27138,6 +27422,7 @@ export type Database = {
           recipe?: Json | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          send_authority?: Json | null
           site_request_dispatch_outbox_id?: string | null
           template_key?: string | null
           twilio_sid?: string | null
@@ -29468,6 +29753,52 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_outbound_modes: {
+        Row: {
+          kind: string
+          mode: string
+          set_at: string
+          set_by: string
+          studio_id: string
+        }
+        Insert: {
+          kind: string
+          mode?: string
+          set_at?: string
+          set_by: string
+          studio_id: string
+        }
+        Update: {
+          kind?: string
+          mode?: string
+          set_at?: string
+          set_by?: string
+          studio_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_outbound_modes_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_outbound_modes_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_outbound_modes_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
             referencedColumns: ["id"]
           },
         ]
@@ -33477,6 +33808,17 @@ export type Database = {
           },
         ]
       }
+      aesthete_spend_ledger: {
+        Row: {
+          cache_read_tokens: number | null
+          day: string | null
+          input_tokens: number | null
+          output_tokens: number | null
+          products: number | null
+          usd: number | null
+        }
+        Relationships: []
+      }
       client_designer_roster: {
         Row: {
           client_id: string | null
@@ -35855,6 +36197,12 @@ export type Database = {
         Args: { p_version_id: string }
         Returns: string
       }
+      _can_access_outbound_draft: {
+        Args: {
+          p_draft: Database["public"]["Tables"]["outbound_drafts"]["Row"]
+        }
+        Returns: boolean
+      }
       _can_access_product_configuration: {
         Args: { p_configuration_id: string }
         Returns: boolean
@@ -36897,6 +37245,7 @@ export type Database = {
           ref_id: string | null
           ref_type: string | null
           retry_count: number
+          send_authority: Json | null
           sent_at: string | null
           status: Database["public"]["Enums"]["notification_status"]
           template_id: string | null
@@ -38825,6 +39174,47 @@ export type Database = {
         }
         Returns: Json
       }
+      claim_outbound_draft_for_send: {
+        Args: { p_id: string }
+        Returns: {
+          body: string
+          channel: string
+          claimed_at: string | null
+          composed_by: string
+          created_at: string
+          dedupe_key: string
+          discarded_at: string | null
+          discarded_by: string | null
+          due_at: string | null
+          edited_at: string | null
+          edited_by: string | null
+          expires_at: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string
+          payload: Json
+          project_id: string | null
+          recipient_kind: string
+          ref_id: string
+          ref_type: string
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_address: string | null
+          to_client_id: string | null
+          to_contact_id: string | null
+          to_party_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "outbound_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       claim_procurement_draft_for_send: {
         Args: { p_draft_id: string }
         Returns: {
@@ -39118,6 +39508,26 @@ export type Database = {
       }
       compose_agreement_consent: {
         Args: { p_proposal_id: string }
+        Returns: string
+      }
+      compose_outbound_draft: {
+        Args: {
+          p_body: string
+          p_channel: string
+          p_composed_by: string
+          p_dedupe_key: string
+          p_due_at: string
+          p_expires_at: string
+          p_kind: string
+          p_org: string
+          p_payload: Json
+          p_project: string
+          p_recipient_kind: string
+          p_ref_id: string
+          p_ref_type: string
+          p_subject: string
+          p_to: Json
+        }
         Returns: string
       }
       compose_receiver_inbound_draft: {
@@ -39881,6 +40291,47 @@ export type Database = {
         Args: { p_proposal_id: string }
         Returns: Json
       }
+      discard_outbound_draft: {
+        Args: { p_id: string }
+        Returns: {
+          body: string
+          channel: string
+          claimed_at: string | null
+          composed_by: string
+          created_at: string
+          dedupe_key: string
+          discarded_at: string | null
+          discarded_by: string | null
+          due_at: string | null
+          edited_at: string | null
+          edited_by: string | null
+          expires_at: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string
+          payload: Json
+          project_id: string | null
+          recipient_kind: string
+          ref_id: string
+          ref_type: string
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_address: string | null
+          to_client_id: string | null
+          to_contact_id: string | null
+          to_party_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "outbound_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       discard_procurement_draft: {
         Args: { p_draft_id: string }
         Returns: {
@@ -40269,6 +40720,7 @@ export type Database = {
           id: string
         }[]
       }
+      expire_outbound_drafts: { Args: never; Returns: number }
       expire_proposals: { Args: never; Returns: number }
       expire_room_scan_associations: { Args: never; Returns: number }
       expire_stale_invoice_checkout_attempts: {
@@ -41586,6 +42038,57 @@ export type Database = {
           id: string
         }[]
       }
+      llm_reserve: {
+        Args: {
+          p_est_usd: number
+          p_feature: string
+          p_studio_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      llm_set_controls: {
+        Args: {
+          p_actor: string
+          p_global_daily_cap: number
+          p_kill_switch: boolean
+        }
+        Returns: undefined
+      }
+      llm_set_feature_control: {
+        Args: {
+          p_actor: string
+          p_daily_cap: number
+          p_enabled: boolean
+          p_feature: string
+          p_studio_monthly_cap: number
+        }
+        Returns: undefined
+      }
+      llm_set_studio_override: {
+        Args: { p_actor: string; p_cap: number; p_studio: string }
+        Returns: undefined
+      }
+      llm_settle: {
+        Args: {
+          p_cache_read_tokens: number
+          p_cache_write_tokens: number
+          p_input_tokens: number
+          p_latency_ms: number
+          p_model: string
+          p_output_tokens: number
+          p_status: string
+          p_stop_reason: string
+          p_usage_id: number
+          p_usd: number
+        }
+        Returns: undefined
+      }
+      llm_sweep_stale_reservations: { Args: never; Returns: number }
+      llm_usage_summary: {
+        Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
       lock_client_decision_option_parent: {
         Args: { p_decision_id: string; p_path: string }
         Returns: boolean
@@ -41877,6 +42380,47 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_outbound_draft_sent: {
+        Args: { p_id: string; p_message_id: string; p_sent_by: string }
+        Returns: {
+          body: string
+          channel: string
+          claimed_at: string | null
+          composed_by: string
+          created_at: string
+          dedupe_key: string
+          discarded_at: string | null
+          discarded_by: string | null
+          due_at: string | null
+          edited_at: string | null
+          edited_by: string | null
+          expires_at: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string
+          payload: Json
+          project_id: string | null
+          recipient_kind: string
+          ref_id: string
+          ref_type: string
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_address: string | null
+          to_client_id: string | null
+          to_contact_id: string | null
+          to_party_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "outbound_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_procurement_draft_sent: {
         Args: { p_draft_id: string; p_message_id?: string; p_sent_by: string }
         Returns: {
@@ -42165,6 +42709,7 @@ export type Database = {
         }
         Returns: string
       }
+      outbound_review_active: { Args: { p_studio: string }; Returns: boolean }
       override_budget_checkpoint: {
         Args: { p_checkpoint_id: string; p_reason: string }
         Returns: Json
@@ -43270,6 +43815,47 @@ export type Database = {
         }
         Returns: string
       }
+      release_outbound_draft_claim: {
+        Args: { p_id: string }
+        Returns: {
+          body: string
+          channel: string
+          claimed_at: string | null
+          composed_by: string
+          created_at: string
+          dedupe_key: string
+          discarded_at: string | null
+          discarded_by: string | null
+          due_at: string | null
+          edited_at: string | null
+          edited_by: string | null
+          expires_at: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string
+          payload: Json
+          project_id: string | null
+          recipient_kind: string
+          ref_id: string
+          ref_type: string
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_address: string | null
+          to_client_id: string | null
+          to_contact_id: string | null
+          to_party_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "outbound_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       release_procurement_draft_claim: {
         Args: { p_draft_id: string }
         Returns: {
@@ -43840,6 +44426,10 @@ export type Database = {
       resolve_or_create_vendor: {
         Args: { p_name: string; p_website: string }
         Returns: string
+      }
+      resolve_outbound_drafts: {
+        Args: { p_ref_id: string; p_ref_type: string }
+        Returns: number
       }
       resolve_paperwork_link: {
         Args: { p_record_use?: boolean; p_token: string }
@@ -45138,6 +45728,22 @@ export type Database = {
         Args: { p_org: string; p_visibility: string }
         Returns: string
       }
+      set_studio_outbound_mode: {
+        Args: { p_kind: string; p_mode: string; p_studio: string }
+        Returns: {
+          kind: string
+          mode: string
+          set_at: string
+          set_by: string
+          studio_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studio_outbound_modes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_studio_release_gate: {
         Args: {
           p_org: string
@@ -45537,6 +46143,7 @@ export type Database = {
           recipe: Json | null
           reviewed_at: string | null
           reviewed_by: string | null
+          send_authority: Json | null
           site_request_dispatch_outbox_id: string | null
           template_key: string | null
           twilio_sid: string | null
@@ -45808,6 +46415,10 @@ export type Database = {
           member_name: string
           total_minutes: number
         }[]
+      }
+      studio_outbound_mode: {
+        Args: { p_kind: string; p_studio: string }
+        Returns: string
       }
       studio_vendor_claim_windows: {
         Args: { p_org: string; p_vendor_id: string }
@@ -46135,6 +46746,47 @@ export type Database = {
         }
       }
       update_my_biases: { Args: { p_overrides: Json }; Returns: Json }
+      update_outbound_draft: {
+        Args: { p_body: string; p_id: string; p_subject: string }
+        Returns: {
+          body: string
+          channel: string
+          claimed_at: string | null
+          composed_by: string
+          created_at: string
+          dedupe_key: string
+          discarded_at: string | null
+          discarded_by: string | null
+          due_at: string | null
+          edited_at: string | null
+          edited_by: string | null
+          expires_at: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string
+          payload: Json
+          project_id: string | null
+          recipient_kind: string
+          ref_id: string
+          ref_type: string
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_address: string | null
+          to_client_id: string | null
+          to_contact_id: string | null
+          to_party_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "outbound_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_po_payment_schedule: {
         Args: { p_po_id: string; p_request: Json }
         Returns: {
