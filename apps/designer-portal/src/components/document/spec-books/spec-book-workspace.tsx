@@ -1378,10 +1378,12 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   }
 
   const projectName = project.data?.name ?? project.data?.title ?? "Project";
-  const derivedBookTitle = project.data
+  // The workspace is named by its job (SPEC §S7b p1); the preview prints the
+  // stored title, the one issuance freezes into the PDF.
+  const bookTitle = project.data
     ? `${projectName} · specification book`
     : "Specification book";
-  const bookTitle = data?.book.title.trim() || derivedBookTitle;
+  const printedTitle = data?.book.title.trim() || bookTitle;
   const issueBusy =
     prepareIssue.isPending ||
     renderArtifact.isPending;
@@ -1735,7 +1737,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
               <AudiencePreview
                 item={selectedItem}
                 audience={previewAudience}
-                footLine={`${bookTitle} · ${editionWord}`}
+                footLine={`${printedTitle} · ${editionWord}`}
               />
             </section>
           </div>

@@ -211,29 +211,6 @@ beforeEach(() => {
   };
 });
 
-describe("Spec Book workspace title", () => {
-  it("uses the stored book title for the working preview heading", () => {
-    render(<SpecBookWorkspace projectId="project-1" />);
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Oak project specification" }),
-    ).toBeInTheDocument();
-  });
-
-  it("falls back to the project-derived title when the stored title is empty", () => {
-    mockWorkbenchHookResult = {
-      ...(mockWorkbenchHookResult as object),
-      data: {
-        ...((mockWorkbenchHookResult as { data: object }).data),
-        book: { id: "book-1", title: "  " },
-      },
-    };
-    render(<SpecBookWorkspace projectId="project-1" />);
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Oak project · specification book" }),
-    ).toBeInTheDocument();
-  });
-});
-
 describe("Spec Book artifact recovery actions", () => {
   it("offers finalize-only recovery for a durable artifact on an unissued revision", () => {
     expect(specBookArtifactRetryLabel("ready", "pending")).toBe("Finalize");
@@ -745,6 +722,35 @@ describe("US-28 S7b — the spec book by trade", () => {
       "/doc/project-1/pieces",
     );
     expect(screen.queryByRole("button", { name: "Run issue checks" })).not.toBeInTheDocument();
+  });
+
+  describe("Spec Book workspace title (SQ-864 F5)", () => {
+    async function openPreview() {
+      withTradeBook();
+      const user = userEvent.setup();
+      render(<SpecBookWorkspace projectId="project-1" />);
+      await user.click(screen.getByRole("button", { name: "Built-in bench" }));
+      await user.click(screen.getByRole("button", { name: "Preview the client sheet" }));
+      return screen.getByRole("region", { name: "client edition preview" });
+    }
+
+    it("names the workspace by its job, but the preview prints the stored title issuance freezes", async () => {
+      const preview = await openPreview();
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+        /^Oak project · specification book$/,
+      );
+      expect(within(preview).getByText(/^Oak project specification · /)).toBeInTheDocument();
+    });
+
+    it("falls back to the job name in the preview when the stored title is empty", async () => {
+      const base = mockWorkbenchHookResult as { data: { book: object } };
+      mockWorkbenchHookResult = {
+        ...(mockWorkbenchHookResult as object),
+        data: { ...base.data, book: { ...base.data.book, title: "  " } },
+      };
+      const preview = await openPreview();
+      expect(within(preview).getByText(/^Oak project · specification book · /)).toBeInTheDocument();
+    });
   });
 
   it("previews the client sheet as paper, without trade price", async () => {
