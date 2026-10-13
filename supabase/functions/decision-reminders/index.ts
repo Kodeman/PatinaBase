@@ -35,6 +35,7 @@ import {
   resolveFrozenLeadRecipient,
 } from "../_shared/project-approval-notification.ts";
 import { resolveDecisionSignature } from "../_shared/decision-notify.ts";
+import { resolveStudioIdentity } from "../_shared/studio-identity.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -141,6 +142,10 @@ Deno.serve(async (_req: Request) => {
 
     // Who signs the letter (R7): the studio's brand for the byline, the
     // designer's given name and city for the sign-off.
+    const identity = await resolveStudioIdentity(supabase, {
+      projectId: d.project_id,
+      designerId: d.designer_id,
+    });
     const signature = await resolveDecisionSignature(supabase, {
       projectId: d.project_id,
       designerId: d.designer_id,
@@ -164,6 +169,11 @@ Deno.serve(async (_req: Request) => {
         notice: "reminder",
       },
       recipient!,
+      {
+        kind: "studio_schedule",
+        studioId: identity!.studioId!,
+        outboundKind: "decision_reminder",
+      },
       signature,
     );
 

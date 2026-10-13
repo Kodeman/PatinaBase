@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "../_shared/send-email.ts";
-import { deliveryIdempotencyKey, markDeliveryArgs, parseMarkedDelivery, parsePreparedDelivery, parseSendRequest, prepareDeliveryArgs, reviewUrl } from "./lib.ts";
+import { deliveryIdempotencyKey, markDeliveryArgs, parseMarkedDelivery, parsePreparedDelivery, parseSendRequest, prepareDeliveryArgs, reviewUrl, selectionReviewAuthority } from "./lib.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -29,6 +29,7 @@ Deno.serve(async (req) => {
   let providerMessageId: string | null = null;
   try {
     const sent = await sendCompliantEmail(admin, {
+      authority: selectionReviewAuthority(caller.data.user.id),
       to: delivery.email,
       subject: delivery.title,
       html: `<p>Your studio has shared a selection review.</p><p><a href="${url}">Open review</a></p>`,

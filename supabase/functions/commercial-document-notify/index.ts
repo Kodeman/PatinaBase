@@ -137,12 +137,14 @@ Deno.serve(async (req: Request) => {
 
   const role = jwtRole(authorization);
   let actorRole: CommercialActorRole = role === 'service_role' ? 'service' : 'unknown';
+  let authenticatedCallerId: string | null = null;
   if (actorRole !== 'service') {
     const callerClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       global: { headers: { Authorization: authorization } },
     });
     const { data: authData } = await callerClient.auth.getUser();
     const callerId = authData.user?.id;
+    authenticatedCallerId = callerId ?? null;
     if (callerId === proposal.client_id) actorRole = 'client';
     if (callerId === proposal.designer_id) actorRole = 'studio';
     if (callerId && actorRole === 'unknown') {
@@ -451,6 +453,9 @@ Deno.serve(async (req: Request) => {
       signature: audience === 'client' ? signature : undefined,
     });
     const sendResult = await sendCompliantEmail(admin, {
+      authority: audience === 'client'
+        ? { kind: 'exempt', reason: 'recipient_receipt' }
+        : { kind: 'designer', userId: authenticatedCallerId! },
       to: recipient.email,
       subject: rendered.subject,
       html: rendered.html,

@@ -125,6 +125,7 @@ export function checkIntentDepsFor(admin: SupabaseClient): CheckIntentDeps {
     },
     async sendDesignerEmail(send) {
       return await sendCompliantEmail(admin, {
+        authority: { kind: 'exempt', reason: 'recipient_receipt' },
         to: send.to,
         subject: send.subject,
         html: send.html,

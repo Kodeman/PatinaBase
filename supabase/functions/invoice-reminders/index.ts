@@ -48,6 +48,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { invoiceReminderAuthority } from './authority.ts';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
 import { notifyClientAttention } from '../_shared/client-attention.ts';
 import {
@@ -229,6 +230,7 @@ async function escalateToDesigner(
     });
     try {
       const result = await sendCompliantEmail(admin, {
+        authority: { kind: 'exempt', reason: 'internal' },
         to: designerEmail,
         subject: rendered.subject,
         html: rendered.html,
@@ -421,6 +423,9 @@ Deno.serve(async (_req: Request) => {
     let sendResult;
     try {
       sendResult = await sendCompliantEmail(admin, {
+        authority: invoiceReminderAuthority(
+          (identity?.studioId ?? invoice.studio_id)!,
+        ),
         to: recipientEmail,
         subject: rendered.subject,
         html: rendered.html,

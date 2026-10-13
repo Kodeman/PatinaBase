@@ -351,6 +351,7 @@ Deno.serve(async (req: Request) => {
   let sendResult;
   try {
     sendResult = await sendCompliantEmail(admin, {
+      authority: { kind: 'designer', userId: caller.id },
       to: recipientEmail,
       subject: rendered.subject,
       html: rendered.html,

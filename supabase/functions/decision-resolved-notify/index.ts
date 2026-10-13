@@ -135,6 +135,7 @@ Deno.serve(async (req: Request) => {
       artifact,
     },
     { userId: recipientUserId, email: recipientEmail, name: recipientName },
+    { kind: "exempt", reason: "internal" },
   );
 
   if (
@@ -197,6 +198,7 @@ Deno.serve(async (req: Request) => {
       },
       frozenRecipient,
       clientSignature,
+      { kind: "exempt", reason: "recipient_receipt" },
     );
     receipt = {
       sent: receiptResult.emailSent,

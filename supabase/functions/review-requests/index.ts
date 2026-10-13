@@ -18,6 +18,7 @@ import {
   type ComplianceSendResult,
   sendCompliantEmail,
 } from '../_shared/send-email.ts';
+import type { SendAuthority } from '../_shared/send-authority.ts';
 import {
   renderBrandedShell,
   paragraph,
@@ -92,6 +93,7 @@ async function sendReviewEmail(supabase: SupabaseClient, opts: {
   studioLogoUrl?: string;
   /** Who signs the letter (R7) — the studio, never Patina. */
   signature: StudioSignOff;
+  authority: SendAuthority;
 }): Promise<ComplianceSendResult> {
   const senderDisplay = opts.senderName;
   const greeting = opts.clientName ? `Hi ${escapeHtml(opts.clientName)},` : 'Hi there,';
@@ -122,6 +124,7 @@ async function sendReviewEmail(supabase: SupabaseClient, opts: {
   });
 
   const result = await sendCompliantEmail(supabase, {
+    authority: opts.authority,
     to: opts.clientEmail,
     subject,
     html,
@@ -313,6 +316,11 @@ Deno.serve(async (_req: Request) => {
       senderName,
       studioName: cobrand.studioName,
       studioLogoUrl: cobrand.studioLogoUrl,
+      authority: {
+        kind: 'studio_schedule',
+        studioId: identity!.studioId!,
+        outboundKind: 'review_request',
+      },
       // R3-04: `profiles.city` first, then the studio org's address — the
       // same precedence the approval letter signs with, so one studio's mail
       // does not sign from two different places in one inbox.

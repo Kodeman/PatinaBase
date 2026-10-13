@@ -511,6 +511,7 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
         studioInvoice: !invoice.project_id,
       });
       const sendResult = await sendCompliantEmail(admin, {
+        authority: { kind: 'exempt', reason: 'recipient_receipt' },
         to: recipient.email,
         subject: rendered.subject,
         html: rendered.html,
@@ -611,6 +612,7 @@ async function sendFailureSideEffects(admin: SupabaseClient, row: PaymentRow): P
         studioInvoice: !invoice.project_id,
       });
       const sendResult = await sendCompliantEmail(admin, {
+        authority: { kind: 'exempt', reason: 'recipient_receipt' },
         to: recipient.email,
         subject: rendered.subject,
         html: rendered.html,
@@ -1409,6 +1411,7 @@ async function sendDirectOrderPaidEmails(admin: SupabaseClient, orderId: string)
         }),
       });
       const sendResult = await sendCompliantEmail(admin, {
+        authority: { kind: 'exempt', reason: 'recipient_receipt' },
         to: clientEmail,
         subject: rendered.subject,
         html: rendered.html,
@@ -1454,6 +1457,7 @@ async function sendDirectOrderPaidEmails(admin: SupabaseClient, orderId: string)
           )}</p>
         </div>`;
       const opsResult = await sendCompliantEmail(admin, {
+        authority: { kind: 'exempt', reason: 'internal' },
         to: opsEmail,
         subject: `New direct order paid — ${order.product_name} (${amountLabel})`,
         html: opsHtml,
@@ -1524,6 +1528,7 @@ async function sendDirectOrderFailureSideEffects(
         portalUrl,
       });
       const sendResult = await sendCompliantEmail(admin, {
+        authority: { kind: 'exempt', reason: 'recipient_receipt' },
         to: clientEmail,
         subject: rendered.subject,
         html: rendered.html,
@@ -1789,6 +1794,7 @@ async function sendInvoiceRefundSideEffects(
         currency: invoice.currency,
       });
       const sendResult = await sendCompliantEmail(admin, {
+        authority: { kind: 'exempt', reason: 'internal' },
         to: designerEmail,
         subject: rendered.subject,
         html: rendered.html,
@@ -2018,6 +2024,7 @@ async function sendDirectOrderRefundOpsEmail(
         <p style="margin:0 0 8px"><strong>Status:</strong> ${escapeHtmlSafe(order.status)}</p>
       </div>`;
     const opsResult = await sendCompliantEmail(admin, {
+      authority: { kind: 'exempt', reason: 'internal' },
       to: opsEmail,
       subject: `${kind} — direct order ${order.product_name} (${refundLabel})`,
       html: opsHtml,

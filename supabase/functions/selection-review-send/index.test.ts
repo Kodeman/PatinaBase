@@ -1,11 +1,15 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { deliveryIdempotencyKey, markDeliveryArgs, parseMarkedDelivery, parsePreparedDelivery, parseSendRequest, prepareDeliveryArgs, reviewUrl } from "./lib.ts";
+import { deliveryIdempotencyKey, markDeliveryArgs, parseMarkedDelivery, parsePreparedDelivery, parseSendRequest, prepareDeliveryArgs, reviewUrl, selectionReviewAuthority } from "./lib.ts";
 
 const editionId = "123e4567-e89b-42d3-a456-426614174000";
 const attemptId = "123e4567-e89b-42d3-a456-426614174001";
 const projectId = "123e4567-e89b-42d3-a456-426614174002";
 const actorId = "123e4567-e89b-42d3-a456-426614174003";
 const clientId = "123e4567-e89b-42d3-a456-426614174004";
+
+Deno.test("designer-click email authority belongs to the authenticated sender", () => {
+  assertEquals(selectionReviewAuthority(actorId), { kind: "designer", userId: actorId });
+});
 
 Deno.test("send request needs a UUID edition id and has a stable provider key", () => {
   assertEquals(parseSendRequest({ editionId }), { editionId });

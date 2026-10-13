@@ -146,6 +146,7 @@ Deno.serve(async (req: Request) => {
       ].join(''),
     });
     const { success, error: sendError } = await sendCompliantEmail(supabase, {
+      authority: { kind: 'exempt', reason: 'recipient_receipt' },
       to: proposal.client.email,
       subject: `Signed: "${proposal.title}"`,
       html,
@@ -181,6 +182,7 @@ Deno.serve(async (req: Request) => {
       ].join(''),
     });
     const { success, error: sendError } = await sendCompliantEmail(supabase, {
+      authority: { kind: 'exempt', reason: 'recipient_receipt' },
       to: proposal.designer.email,
       subject: `Signed: "${proposal.title}"`,
       html,

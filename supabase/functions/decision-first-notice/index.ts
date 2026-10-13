@@ -250,6 +250,9 @@ Deno.serve(async (req: Request) => {
       supersedes,
     },
     recipient,
+    // The trigger publishes the decision; this legacy row has no separate
+    // publisher field, so the project designer is the publisher authority.
+    { kind: "designer", userId: decision.designer_id! },
     signature,
   );
 

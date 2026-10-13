@@ -28,6 +28,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "./send-email.ts";
+import type { SendAuthority } from "./send-authority.ts";
 import {
   ctaButton,
   escapeHtml,
@@ -1245,7 +1246,8 @@ export async function deliverDecisionReceipt(
   supabase: SupabaseClient,
   decision: DecisionReceiptContext,
   recipient: DecisionRecipient,
-  cobrand: DecisionCobrand = {},
+  cobrand: DecisionCobrand,
+  authority: SendAuthority,
 ): Promise<DeliverDecisionNotificationResult> {
   if (!recipient.email) {
     return {
@@ -1307,6 +1309,7 @@ export async function deliverDecisionReceipt(
     cobrand,
   );
   const result = await sendCompliantEmail(supabase, {
+    authority,
     to: recipient.email,
     subject: rendered.subject,
     html: rendered.html,
@@ -1461,6 +1464,7 @@ export async function deliverDecisionNotification(
   kind: DecisionNotificationKind,
   decision: DecisionContext,
   recipient: DecisionRecipient,
+  authority: SendAuthority,
   cobrand: DecisionCobrand = {},
 ): Promise<DeliverDecisionNotificationResult> {
   // 1. The gate comes FIRST (r1 M5). Every reason a letter might not go out on
@@ -1594,6 +1598,7 @@ export async function deliverDecisionNotification(
     { timeZone },
   );
   const result = await sendCompliantEmail(supabase, {
+    authority,
     to: recipient.email,
     subject: rendered.subject,
     html: rendered.html,
