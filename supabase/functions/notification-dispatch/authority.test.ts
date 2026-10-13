@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import { resolveNotificationAuthority, TEMPLATE_SEND_AUTHORITIES } from "./authority.ts";
 
 const seededAndTriggeredTemplateIds = [
@@ -22,9 +22,7 @@ const seededAndTriggeredTemplateIds = [
 
 Deno.test("every seeded and trigger-supplied email template has an authority", () => {
   for (const templateId of seededAndTriggeredTemplateIds) {
-    if (!TEMPLATE_SEND_AUTHORITIES[templateId]) {
-      throw new Error(`missing send authority for template: ${templateId}`);
-    }
+    assert(TEMPLATE_SEND_AUTHORITIES[templateId], `missing send authority for template: ${templateId}`);
   }
 });
 
