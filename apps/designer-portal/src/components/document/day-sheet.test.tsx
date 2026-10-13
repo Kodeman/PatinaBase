@@ -514,6 +514,40 @@ describe('DaySheet — a line settles in place (U-Q2, U-Q11)', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/^Job 1: Undone\.$/);
   });
 
+  it('after Undo lands on her “Not today” that masked the holder’s act today, focus moves to the line that act settles (R6b)', async () => {
+    const needs = [entry(1)];
+    const jordanActed = new Map([['task_due:t1', [{ userId: 'u-jordan', actedAt: at(9, 30) }]]]);
+    const over = {
+      leads: new Map([['p1', { leadUserId: 'u-jordan', leadName: 'Jordan Reyes' }]]) as never,
+      teammateActs: jordanActed,
+    };
+    const options = {
+      scope: 'studio' as const,
+      holderOf: () => JORDAN,
+      teammateActed: jordanActed,
+      names: new Map([['u-jordan', 'Jordan Reyes']]),
+    };
+    const deferred = new Map([state('task_due:t1', { deferredUntil: '2026-10-12', updatedAt: at(9, 45) })]);
+    const { container, rerender } = render(sheetElement(needs, { ...over, states: deferred }, options));
+    expect(lineOf(container, 'task_due:t1')).toHaveTextContent(/^Not today · 9:45 · back Monday 12 October/);
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Undo — Job 1' }));
+    });
+    // The clear lands: her row is gone, and Jordan's act today settles the line.
+    rerender(sheetElement(needs, { ...over, states: new Map() }, options));
+    const line = lineOf(container, 'task_due:t1');
+    expect(line).toHaveClass('settled');
+    expect(line).toHaveTextContent(/^Done by Jordan · waiting on Job 1 since 9:30$/);
+    expect(within(line).queryByRole('button', { name: /Undo/ })).toBeNull();
+    expect(line.querySelector('p.line')).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent(/^Job 1: Undone\.$/);
+    // The Undo is spent: a later deferral that lifts without one moves nothing.
+    rerender(sheetElement(needs, { ...over, states: deferred }, options));
+    (document.activeElement as HTMLElement).blur();
+    rerender(sheetElement(needs, { ...over, states: new Map() }, options));
+    expect(document.body).toHaveFocus();
+  });
+
   it('an Undo that did not save keeps the line settled and focus where it was, and says so (R6)', async () => {
     mockMutate.mockImplementation((_vars, options) => options?.onError?.(new Error('refused')));
     const needs = [entry(1)];

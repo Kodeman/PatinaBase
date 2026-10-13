@@ -305,6 +305,24 @@ describe('R10 — an invoice’s figures print in its own currency', () => {
     expect(mockRecordInvoice).toHaveBeenCalledWith(expect.objectContaining({ amountCents: 340050 }));
     expect(mockRecordInvoice.mock.calls[0][0].amountCents).toBe(labelCents(label));
   });
+
+  it('prints a JPY invoice to two decimals, so the act names exactly the cents it sends (R1b)', async () => {
+    mockInvoiceRead = readOf(invoice({ currency: 'JPY', total_cents: 340050, amount_paid_cents: 0 }));
+    openSheet(INVOICE_NEED, 'record-payment');
+    expect(screen.getByRole('dialog')).toHaveTextContent('Invoice INV-2026-0721 · ¥3,400.50 open');
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('¥3,401');
+    const amount = screen.getByLabelText('Amount');
+    fireEvent.change(amount, { target: { value: '3400.51' } });
+    expect(screen.getByText('No more than ¥3,400.50 is open.')).toBeInTheDocument();
+    fireEvent.change(amount, { target: { value: '3400.50' } });
+    const label = 'Record ¥3,400.50';
+    await userEvent.setup().click(screen.getByRole('button', { name: label }));
+    const sent: number = mockRecordInvoice.mock.calls[0][0].amountCents;
+    expect(sent).toBe(340050);
+    // The payload at /100, two decimals, grouped: the label, character for character.
+    const twoDecimals = (sent / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    expect(label).toBe(`Record ¥${twoDecimals}`);
+  });
 });
 
 describe('R9 — a read on its way, a read that failed, a record that is gone', () => {

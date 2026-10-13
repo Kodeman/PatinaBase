@@ -11,8 +11,8 @@
  *                    (record_invoice_payment), as the invoice folio does
  *
  * The sheet's one filled act carries the amount ("Record $3,400.50"). Every
- * figure prints to the cent, in the record's own currency, through the
- * invoice folio's formatter: the label states exactly what the writer sends.
+ * figure prints to the cent, in the record's own currency (`money`): the
+ * label states exactly what the writer sends.
  * Recording sends nothing to anyone; the need clears at its source once the
  * record covers it.
  */
@@ -29,7 +29,7 @@ import {
   type InvoicePaymentMethod,
   type VendorPaymentMethodKind,
 } from '@patina/supabase';
-import { INVOICE_PAYMENT_METHOD_LABELS, formatCurrency } from '@patina/shared';
+import { INVOICE_PAYMENT_METHOD_LABELS } from '@patina/shared';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
 import { fmtDay, todayYmd } from '@/lib/document/format';
@@ -58,6 +58,18 @@ const INVOICE_METHODS: readonly Exclude<InvoicePaymentMethod, 'stripe'>[] = [
   'cash',
   'other',
 ];
+
+/** R1b — cents → "¥3,400.50". Every currency is stored as amount × 100 and
+ *  the amount field takes two decimals, so every figure prints two fraction
+ *  digits, whatever the currency's own (ISO's JPY default would round
+ *  340050 to "¥3,401"). The shared invoice formatter keeps its ISO digits. */
+const money = (cents: number, currency: string) =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(cents / 100);
 
 const capitalised = (words: string) => words.charAt(0).toUpperCase() + words.slice(1);
 const errText = (e: unknown) => (e instanceof Error && e.message ? ` ${e.message}` : '');
@@ -141,7 +153,7 @@ function PaymentForm<M extends string>({
   const amountCents = parseUsdToCents(amount);
   const over = amountCents != null && amountCents > balanceCents;
   const complete = amountCents != null && !over && !!day;
-  const label = amountCents != null ? `Record ${formatCurrency(amountCents, currency)}` : 'Record the payment';
+  const label = amountCents != null ? `Record ${money(amountCents, currency)}` : 'Record the payment';
 
   const submit = async () => {
     if (!complete || pending) return;
@@ -178,7 +190,7 @@ function PaymentForm<M extends string>({
         </span>
         {(amountCents == null || over) && (
           <span id={`${regionKey}-amount-reason`} className="reason t-body-sm">
-            {over ? `No more than ${formatCurrency(balanceCents, currency)} is open.` : 'Enter the amount received.'}
+            {over ? `No more than ${money(balanceCents, currency)} is open.` : 'Enter the amount received.'}
           </span>
         )}
       </div>
@@ -257,7 +269,7 @@ function MakerPayment({ need, onDone }: SheetProps) {
   return (
     <PaymentForm<VendorPaymentMethodKind>
       regionKey="act-record-payment"
-      record={`${word} to ${maker}, ${formatCurrency(remainder, currency)}${due}${order.label ? ` · ${order.label}` : ''}.`}
+      record={`${word} to ${maker}, ${money(remainder, currency)}${due}${order.label ? ` · ${order.label}` : ''}.`}
       balanceCents={remainder}
       currency={currency}
       dayLabel="Paid on"
@@ -293,7 +305,7 @@ function InvoicePayment({ need, onDone }: SheetProps) {
   return (
     <PaymentForm<Exclude<InvoicePaymentMethod, 'stripe'>>
       regionKey="act-record-invoice-payment"
-      record={`${label} · ${formatCurrency(balance, invoice.currency)} open${due}.`}
+      record={`${label} · ${money(balance, invoice.currency)} open${due}.`}
       balanceCents={balance}
       currency={invoice.currency}
       dayLabel="Date received"

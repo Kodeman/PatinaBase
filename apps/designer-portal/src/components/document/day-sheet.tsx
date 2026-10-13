@@ -163,14 +163,16 @@ function SheetLine({
     onSettle(`${card.name}: ${words}`);
   }, [settled, words, card.name, onSettle]);
 
-  // R6 — once Undo lands the line opens again, and its Undo is gone: focus
-  // moves to the restored act (to the line, where she has none).
+  // R6 — once Undo lands her deferral is gone, and its Undo with it, whatever
+  // the line reads now: open again, or settled by the holder's act today that
+  // her deferral had masked (R6b). Focus moves to the act left on the line,
+  // else to the line itself.
   useEffect(() => {
-    if (settled || !undoing.current) return;
+    if (ownDeferral || !undoing.current) return;
     undoing.current = false;
     (actRef.current ?? lineRef.current)?.focus();
     onSettle(`${card.name}: Undone.`);
-  }, [settled, card.name, onSettle]);
+  }, [ownDeferral, card.name, onSettle]);
 
   if (settled && words) {
     return (

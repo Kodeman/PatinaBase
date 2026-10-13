@@ -287,6 +287,34 @@ describe('DeskLedgerRow — standing (US-28 S3 change 2)', () => {
       expect(screen.getByRole('status')).toHaveTextContent(/^Reinhardt lake house: Undone\.$/);
     });
 
+    it('moves focus to the row’s name when the cleared “Not today” reveals the holder’s act today (R6b)', async () => {
+      const row = line({ ...need, projectId: 'p-reinhardt', act: { label: 'Chase the maker', href: '/doc/reinhardt' } });
+      const jordan = { userId: 'u-jordan', name: 'Jordan', mine: false };
+      const ledgerWith = (settled: DeskLedgerLine['settled']) => (
+        <DeskRoster
+          ledger={ledgerOf({ line: row, standing: 'settled', settled, waiting: null, back: null })}
+          holderOf={() => jordan}
+        />
+      );
+      const { container, rerender } = render(ledgerWith(settledToday));
+      await undo();
+      // The clear lands: her row is gone, and Jordan's act today, which her
+      // "Not today" masked, settles the row in its place.
+      const jordanActed = { kind: 'acted' as const, at: new Date(2026, 9, 12, 9, 30).toISOString(), who: 'Mae Halloran', by: 'u-jordan' };
+      rerender(ledgerWith(jordanActed));
+      expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+        /^Fabric samples, not yet opened · waiting on Mae Halloran since 9:30$/,
+      );
+      expect(screen.queryByRole('button', { name: /^Undo — / })).toBeNull();
+      expect(screen.getByRole('link', { name: 'Reinhardt lake house' })).toHaveFocus();
+      expect(screen.getByRole('status')).toHaveTextContent(/^Reinhardt lake house: Undone\.$/);
+      // The Undo is spent: a later deferral that lifts without one moves nothing.
+      rerender(ledgerWith(settledToday));
+      (document.activeElement as HTMLElement).blur();
+      rerender(ledgerWith(jordanActed));
+      expect(document.body).toHaveFocus();
+    });
+
     it('a refused Undo keeps the row settled, says so, and announces nothing', async () => {
       mockMutate.mockImplementation((_vars, options) => options?.onError?.(new Error('refused')));
       const ledger = ledgerOf({ line: line(need), standing: 'settled', settled: settledToday, waiting: null, back: null });

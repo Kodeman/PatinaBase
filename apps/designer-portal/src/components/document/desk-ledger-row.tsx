@@ -114,14 +114,17 @@ export function DeskLedgerRow({
   const undoing = useRef(false);
   const actRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
   const nameRef = useRef<HTMLAnchorElement>(null);
-  // R6 — once Undo lands the row opens again: focus moves to its act, or to
-  // its name where it prints none.
+  const ownDeferral = !!settled && !settled.by && (settled.kind === 'not_today' || settled.kind === 'set_aside');
+  // R6 — once Undo lands her deferral is gone, and its Undo with it, whatever
+  // the row reads now: open again, or settled by the holder's act today that
+  // her deferral had masked (R6b). Focus moves to its act, or to its name
+  // where it prints none.
   useEffect(() => {
-    if (settled || !undoing.current) return;
+    if (ownDeferral || !undoing.current) return;
     undoing.current = false;
     (actRef.current ?? nameRef.current)?.focus();
     onUndone?.(`${line.name}: Undone.`);
-  }, [settled, line.name, onUndone]);
+  }, [ownDeferral, line.name, onUndone]);
   const actionKey = `roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`;
   const ariaLabel = `${line.act.label} — ${line.name}`;
   const landing = line.needKind ? actLanding(line) : null;
@@ -145,7 +148,6 @@ export function DeskLedgerRow({
     sentence = `${sentence} The move is ${holder?.name ? holderWord(holder.name) : 'the lead’s'}.`;
   }
   const quietRow = !!waiting || !!back || theirs || !!settled;
-  const ownDeferral = !!settled && !settled.by && (settled.kind === 'not_today' || settled.kind === 'set_aside');
 
   return (
     <li
