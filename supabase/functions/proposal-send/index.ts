@@ -374,7 +374,7 @@ function createGateway(authorization: string): ProposalSendGateway {
       // notification must never fail a send.
       const { data: dispatch } = await admin
         .from("proposal_send_dispatches")
-        .select("client_id, proposal_id, project_id, proposal_title, sender_name")
+        .select("client_id, proposal_id, project_id, proposal_title, sender_name, designer_id")
         .eq("id", dispatchId)
         .maybeSingle();
       if (dispatch?.client_id && dispatch?.proposal_id) {
@@ -386,6 +386,7 @@ function createGateway(authorization: string): ProposalSendGateway {
           title: "A proposal is ready for you",
           body: `${sender} sent \u201c${dispatch.proposal_title ?? "a proposal"}\u201d for your review.`,
           metadata: { project_id: dispatch.project_id },
+          authority: { kind: "designer", userId: dispatch.designer_id },
         });
         if (!attention.ok) {
           console.warn("proposal-send: client attention not delivered", attention.error);
