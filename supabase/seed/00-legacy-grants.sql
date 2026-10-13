@@ -22122,6 +22122,30 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00786_outbound_claim_service_only.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.claim_outbound_draft_for_send(uuid) FROM authenticated, anon, PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00786_outbound_claim_service_only.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_outbound_draft_for_send(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00786_outbound_claim_service_only.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.release_outbound_draft_claim(uuid) FROM authenticated, anon, PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00786_outbound_claim_service_only.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.release_outbound_draft_claim(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
