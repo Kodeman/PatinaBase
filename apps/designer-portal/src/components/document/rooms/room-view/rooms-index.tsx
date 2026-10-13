@@ -22,13 +22,18 @@ import { buildRoomRosterEntry } from '@/lib/room-view/roster-from-rows';
 import { StrataSweep } from '@/components/ui/strata-sweep';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { openHelp } from '@/lib/help-system/open-help';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { DocumentAction } from '../../document-action';
 import { RoomCard, RoomRow } from './room-card';
 import { groupRoomsByJob, type RoomJobGroup } from './rooms-by-job';
 
 export function RoomsIndex() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.rooms);
   const { data, isLoading, isError } = useRoomRoster();
+  // A drawn room's card opens its room file when the room file is on.
+  const { value: roomFileOn } = useFeatureFlag('room-file');
 
   const entries = useMemo(() => (data ?? []).map(buildRoomRosterEntry), [data]);
   const groups = useMemo(() => groupRoomsByJob(entries), [entries]);
@@ -37,9 +42,28 @@ export function RoomsIndex() {
   return (
     <RoomShell
       title="Measured rooms"
+      topLevel
       count={ready ? `${entries.length} scanned room${entries.length === 1 ? '' : 's'}` : undefined}
+      // rooms-p1: ＋ Scan a room, secondary, at every width. A room is scanned
+      // on the phone with Patina Field; the act opens this room's help, which
+      // says how.
+      actionAtEveryWidth
+      action={
+        <DocumentAction
+          actionKey="scan-a-room"
+          surfaceKey="rooms"
+          regionKey="room-head"
+          variant="secondary"
+          leading="＋"
+          onClick={() =>
+            openHelp({ source: 'front-matter', surfaceKey: DOCUMENT_SURFACE_KEYS.rooms })
+          }
+        >
+          Scan a room
+        </DocumentAction>
+      }
     >
-      <div className="rooms-index mx-auto max-w-[976px] px-4 pb-16 pt-12 sm:px-6">
+      <div className="rooms-index mx-auto max-w-[976px] px-4 pb-16 sm:px-6">
         {isLoading && (
           <div className="flex items-center justify-center gap-2 py-16">
             <StrataSweep size="sm" label="Loading measured rooms" />
@@ -57,13 +81,21 @@ export function RoomsIndex() {
           <EmptyState eyebrow="Measured rooms">No rooms have been scanned yet.</EmptyState>
         )}
 
-        {ready && groups.map((group) => <RoomsJobSection key={group.key} group={group} />)}
+        {ready && groups.map((group) => (
+            <RoomsJobSection key={group.key} group={group} roomFileOn={roomFileOn} />
+          ))}
       </div>
     </RoomShell>
   );
 }
 
-function RoomsJobSection({ group }: { group: RoomJobGroup }) {
+function RoomsJobSection({
+  group,
+  roomFileOn,
+}: {
+  group: RoomJobGroup;
+  roomFileOn: boolean;
+}) {
   // The job's name, from the same resolver the Document itself uses. Disabled
   // (never loading) for the unfiled group; the title falls back to "The
   // Document" until the name resolves.
@@ -103,7 +135,7 @@ function RoomsJobSection({ group }: { group: RoomJobGroup }) {
       <div className="cards-wrap">
         <div className="cards">
           {group.cards.map((entry) => (
-            <RoomCard key={entry.roomId} entry={entry} />
+            <RoomCard key={entry.roomId} entry={entry} roomFileOn={roomFileOn} />
           ))}
         </div>
       </div>

@@ -19,6 +19,7 @@
 
 import { useState } from "react";
 import { RoomHeaderLine } from "@/components/document/rooms/room-view/room-header-line";
+import { EmptyState } from "@/components/document/empty-state";
 import {
   useRoomScan,
   useRoomFiles,
@@ -158,7 +159,7 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
 
       {/* Body */}
       {!current ? (
-        <EmptyState />
+        <NoDrawingSet />
       ) : current.status !== "generated" ? (
         <>
           <NotGeneratedState />
@@ -185,16 +186,13 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
   );
 }
 
-function EmptyState() {
+/** No drawing set yet: the one empty state (US-28 S1), never a centred
+ *  italic message on an empty page. */
+function NoDrawingSet() {
   return (
-    <div className="mt-16 text-center">
-      <p className="font-heading text-[1.2rem] italic text-[var(--color-charcoal)]">
-        {C.notGeneratedYet}
-      </p>
-      <p className="mt-2 font-heading text-[13px] italic text-[var(--color-mocha)]">
-        {C.notGeneratedBody}
-      </p>
-    </div>
+    <EmptyState eyebrow={C.drawingsTitle} className="mt-10">
+      {C.notGeneratedYet} <span className="empty-s">{C.notGeneratedBody}</span>
+    </EmptyState>
   );
 }
 

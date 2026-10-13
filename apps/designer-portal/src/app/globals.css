@@ -2989,3 +2989,10 @@ html:has([data-document-shell]) {
     scroll-padding-bottom: max(72px, var(--doc-drawer-height, 0px));
   }
 }
+
+/* US-28 walk-fix header line ═══════════════════════════════════════════════
+   RoomShell's head is the house Header line (the S1 `.hline`); these rules
+   are only what the walk-fix adds around it (SQ-861). */
+@media (max-width: 1179px) { .hline-r.room-acts-wide { display: none; } }
+.room-card-foot { margin-top: auto; }
+/* end US-28 walk-fix header line */

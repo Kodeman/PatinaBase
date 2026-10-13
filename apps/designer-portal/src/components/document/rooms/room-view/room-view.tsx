@@ -2,9 +2,9 @@
 
 /**
  * RoomView — the Room View shell (Room View program, W2-T3; R107, package
- * accept line 2.2). Mounts inside `RoomShell` at `/room/[id]`. Owns the
- * Header line it shares with the room file (US-28 S10a: RoomHeaderLine, then
- * the job's tick, Document link, client and stage word), the viewer as a
+ * accept line 2.2). Mounts inside `RoomShell` at `/room/[id]`, whose Header
+ * line carries the room's name (US-28 walk-fix). Owns the job's tick,
+ * Document link, client and stage word, the viewer as a
  * Section, the wall facts as ledger rows (RoomWalls), the Plan · Orbit ·
  * Walk mode row (a Strata rule per the prototype's R§3 note — NOT tabs, D1),
  * and the facts-rail + Plan stage body. Orbit and Walk are inert in v1
@@ -54,9 +54,8 @@ import { buildPhotoMarkers, planBounds, PhotoMarkers } from './photo-markers';
 import { PhotoStrip } from './photo-strip';
 import { PhotoViewer } from './photo-viewer';
 import { planViewBox, PlanStage } from './plan-stage';
-import { RoomHeaderLine } from './room-header-line';
 import { RoomWalls } from './room-walls';
-import { humanizeRoomType, scanDay, stageClassFor } from './rooms-by-job';
+import { scanDay, stageClassFor } from './rooms-by-job';
 import { useDevSplatUrl } from './splat/dev-splat-url';
 import { SplatStage } from './splat/splat-stage';
 import { useMeasure } from './use-measure';
@@ -291,7 +290,6 @@ export function RoomView({
   }
 
   const clientName = doc.documentClientName ?? doc.ownerClientName;
-  const roomName = humanizeRoomType(doc.roomType) ?? clientName ?? 'Unnamed room';
   const scannedDay = scanDay(doc.scannedAt);
 
   // "armed" broadly = the tool is capturing clicks (armed or first-point
@@ -302,9 +300,6 @@ export function RoomView({
 
   return (
     <div className="mx-auto max-w-[1180px] px-4 pb-20 sm:px-6">
-      {/* The Header line the room shares with its room file (US-28 S10a). */}
-      <RoomHeaderLine title={roomName} />
-
       {/* The job this room belongs to: its tick, its Document, the client
           and the stage word in ink. */}
       {(docLink || clientName) && (

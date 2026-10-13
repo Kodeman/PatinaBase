@@ -345,13 +345,13 @@ test("the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
 
   // ── 1. The Rooms roster — card count + Elena's mini-plan ───────────────
   await page.goto("/rooms", { waitUntil: "domcontentloaded" });
-  // RoomShell's title is a plain <span> in its `<header>` — scoped via the
-  // implicit "banner" landmark role, which also keeps this off any other
-  // chrome that happens to print the roster's name. F17 renamed this door
-  // everywhere it is spoken — the registry, the StudioDrawer, ⌘K, the mobile
-  // bar's context chip AND the page's own banner (C20: one name).
+  // US-28 walk-fix: RoomShell's head is the house Header line, whose `.t-d2`
+  // title is the page's one h1 — scoped by role + level, which keeps this off
+  // any other chrome that happens to print the roster's name. F17 renamed
+  // this door everywhere it is spoken — the registry, the StudioDrawer, ⌘K,
+  // the mobile bar's context chip AND the page's own head (C20: one name).
   await expect(
-    page.getByRole("banner").getByText("Measured rooms", { exact: true }),
+    page.getByRole("heading", { level: 1, name: "Measured rooms", exact: true }),
   ).toBeVisible({
     timeout: 20_000,
   });
@@ -539,8 +539,8 @@ test("the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
 
   // ── 10. Leave → "← the Scans" (fix A: room-card.tsx stashed /rooms as the
   //      origin on click) → actually returns to /rooms ────────────────────
-  // exact + case-sensitive: RoomShell's leave affordance is the lowercase
-  // originLabel(), distinct from the roster banner's capital-T "The Scans".
+  // exact: the Header line's back act is a tertiary word naming the origin
+  // (originLabel(); its "←" is aria-hidden), distinct from the roster's h1.
   const leaveButton = page.getByRole("button", {
     name: "Measured rooms",
     exact: true,
@@ -548,13 +548,9 @@ test("the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
   await expect(leaveButton).toBeVisible();
   await leaveButton.click();
   await page.waitForURL(/\/rooms$/, { timeout: 5_000 });
-  // RoomShell's title is a plain <span> in its `<header>` — scoped via the
-  // implicit "banner" landmark role, which also keeps this off any other
-  // chrome that happens to print the roster's name. F17 renamed this door
-  // everywhere it is spoken — the registry, the StudioDrawer, ⌘K, the mobile
-  // bar's context chip AND the page's own banner (C20: one name).
+  // Back on the roster: its Header line h1 (a top-level Room, no back act).
   await expect(
-    page.getByRole("banner").getByText("Measured rooms", { exact: true }),
+    page.getByRole("heading", { level: 1, name: "Measured rooms", exact: true }),
   ).toBeVisible({
     timeout: 20_000,
   });

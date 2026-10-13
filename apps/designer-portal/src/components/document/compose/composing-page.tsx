@@ -216,6 +216,7 @@ export function ComposingPage() {
   return (
     <RoomShell
       title="Compose a piece"
+      measure="mx-auto max-w-[760px] px-4 sm:px-8"
       backTo="/library"
       backLabel="Resource library"
       action={

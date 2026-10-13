@@ -6,7 +6,8 @@
  * (V20 U-Q20), and the Section closes on its own rule. Past one screen the
  * shelf folds behind one act. Reads its own layer from the real catalog
  * (useLayerProducts); no mock data. My Library = raw captures, Studio =
- * proven, Patina Catalog = the marketplace.
+ * proven, Patina Catalog = the marketplace. "All shelves" (library-p1's
+ * default) reads the three and lays them out newest first.
  */
 
 import { useMemo, useState } from "react";
@@ -14,6 +15,7 @@ import {
   useLayerProducts,
   useCaptureVenueLabels,
   type LayerProductLayer,
+  type LayerProductRow,
 } from "@patina/supabase";
 import { StrataSweep } from "@/components/ui/strata-sweep";
 import { DocumentAction } from "../../document-action";
@@ -25,9 +27,26 @@ import {
   type LibraryConfigurationProduct,
 } from "./library-configuration-summary";
 import { usePieceUsage } from "./use-piece-usage";
+import type { LibraryShelfLens } from "./library-toolbar";
 
 /** About one screen of plates: two rows at 1440, four 2-up rows at 390. */
 export const SHELF_FOLD_AT = 8;
+
+const SHELVES: LayerProductLayer[] = ["personal", "studio", "catalog"];
+
+function shows(lens: LibraryShelfLens, shelf: LayerProductLayer): boolean {
+  return lens === "all" || lens === shelf;
+}
+
+/** The shown shelves' pieces, newest first (each read is already newest first). */
+function mergeShelves(
+  reads: Array<LayerProductRow[] | undefined>,
+): LayerProductRow[] | undefined {
+  if (reads.every((rows) => rows === undefined)) return undefined;
+  const rows = reads.flatMap((r) => r ?? []);
+  if (reads.length === 1) return rows;
+  return rows.sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
+}
 
 export function LibraryShelf({
   layer,
@@ -42,7 +61,7 @@ export function LibraryShelf({
   onNominate,
   capability = "all",
 }: {
-  layer: LayerProductLayer;
+  layer: LibraryShelfLens;
   name: string;
   meta?: string;
   id: string;
@@ -55,7 +74,20 @@ export function LibraryShelf({
   onNominate?: (productId: string) => void;
   capability?: LibraryCapabilityFilter;
 }) {
-  const { data, isLoading, isError } = useLayerProducts({ layer });
+  // One read per shelf, each enabled only when this lens shows it.
+  const reads = {
+    personal: useLayerProducts({ layer: "personal", enabled: shows(layer, "personal") }),
+    studio: useLayerProducts({ layer: "studio", enabled: shows(layer, "studio") }),
+    catalog: useLayerProducts({ layer: "catalog", enabled: shows(layer, "catalog") }),
+  };
+  const shown = SHELVES.filter((shelf) => shows(layer, shelf)).map((shelf) => reads[shelf]);
+  const isLoading = shown.some((read) => read.isLoading);
+  const isError = shown.some((read) => read.isError);
+  const data = useMemo(
+    () => mergeShelves(shown.map((read) => read.data)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layer, reads.personal.data, reads.studio.data, reads.catalog.data],
+  );
   // Wave 1P (spec §6 Flow 6) — the place name behind the Field chip.
   const captureIds = useMemo(
     () => (data ?? []).map((p) => p.field_capture_id),
@@ -114,7 +146,7 @@ export function LibraryShelf({
         <p className="empty-t">
           {items.length > 0
             ? "No pieces on this shelf match that configuration capability."
-            : layer === "personal"
+            : layer === "personal" || layer === "all"
               ? "Nothing captured yet. Bring a piece in from a vendor's page with Capture, or drop a photo here — it lands raw, and you tidy it later."
               : "This shelf is empty."}
         </p>
@@ -149,8 +181,11 @@ export function LibraryShelf({
                     needsTeaching={teachingIds.has(it.id)}
                     needsValidation={validationIds?.has(it.id) ?? false}
                     onDeep={onDeep}
-                    onPromote={onPromote}
-                    onNominate={onNominate}
+                    // Promote moves a personal piece to the studio; Nominate
+                    // recommends a studio piece's maker. On All shelves each
+                    // piece offers only its own shelf's move.
+                    onPromote={it.layer === "personal" ? onPromote : undefined}
+                    onNominate={it.layer === "studio" ? onNominate : undefined}
                   />
                 </li>
               );

@@ -6,9 +6,8 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import type { LayerProductLayer } from "@patina/supabase";
 import { LibrarianBar } from "../librarian-bar";
-import { LibraryToolbar } from "../library-toolbar";
+import { LibraryToolbar, type LibraryShelfLens } from "../library-toolbar";
 import type { LibraryCapabilityFilter } from "../library-configuration-summary";
 
 const mockUseCrossLayerSearch = jest.fn();
@@ -107,7 +106,7 @@ function ToolbarHarness({
   onImport: () => void;
   personalCount?: number;
 }) {
-  const [active, setActive] = useState<LayerProductLayer>("personal");
+  const [active, setActive] = useState<LibraryShelfLens>("personal");
   const [capability, setCapability] = useState<LibraryCapabilityFilter>("all");
   return (
     <>

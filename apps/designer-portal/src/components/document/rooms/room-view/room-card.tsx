@@ -25,18 +25,29 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { RoomRosterEntry } from '@/lib/room-view/geometry';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
+import { DocumentAction } from '../../document-action';
 import { RoomPlanThumb } from './room-plan-thumb';
 import { qualityWord, roomName, roomSize, scanDay } from './rooms-by-job';
 
 const AWAITING_DRAWING = 'Awaiting drawing';
 
-export function RoomCard({ entry }: { entry: RoomRosterEntry }) {
+export function RoomCard({
+  entry,
+  roomFileOn = false,
+}: {
+  entry: RoomRosterEntry;
+  /** The `room-file` flag: a drawn room's act opens its room file. */
+  roomFileOn?: boolean;
+}) {
   const pathname = usePathname();
   const name = roomName(entry);
   const day = scanDay(entry.scanDate);
   const size = roomSize(entry);
   const quality = qualityWord(entry.quality.grade);
   const drawn = entry.geometry != null;
+  // rooms-p1: the card's one act. A drawn room opens its room file; an undrawn
+  // one (or any room while the room file is off) opens the scan.
+  const opensFile = drawn && roomFileOn;
 
   return (
     <article className="card" data-room-card>
@@ -85,6 +96,20 @@ export function RoomCard({ entry }: { entry: RoomRosterEntry }) {
           </>
         )}
       </dl>
+
+      <div className="foot room-card-foot">
+        <DocumentAction
+          href={opensFile ? `/room/${entry.roomId}/file` : `/room/${entry.roomId}`}
+          actionKey={opensFile ? 'open-room-file' : 'open-room-scan'}
+          surfaceKey="rooms"
+          regionKey="room-card"
+          variant="tertiary"
+          aria-label={opensFile ? `Open the room file for the ${name.toLowerCase()}` : `Open the scan of the ${name.toLowerCase()}`}
+          onClick={() => rememberRoomOrigin(pathname)}
+        >
+          {opensFile ? 'Open the room file' : 'Open the scan'}
+        </DocumentAction>
+      </div>
     </article>
   );
 }

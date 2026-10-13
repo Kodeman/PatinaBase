@@ -89,16 +89,20 @@ jest.mock('../room-shell', () => ({
   RoomShell: ({
     action,
     backLabel,
+    heading,
     children,
   }: {
     action?: React.ReactNode;
     backLabel?: string;
+    heading?: React.ReactNode;
     children: React.ReactNode;
   }) => (
     <>
       {backLabel && (
         <span data-testid="room-shell-back-label">{backLabel}</span>
       )}
+      {/* US-28 walk-fix: the Room's title block rides in the shell's Header line. */}
+      {heading}
       {action}
       {children}
     </>

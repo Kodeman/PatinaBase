@@ -614,6 +614,10 @@ export function PieceRoom({ productId }: { productId: string }) {
   return (
     <RoomShell
       title={p.name || "Product record"}
+      // library-p2: the Header line carries only the way back; the piece's
+      // name heads its letterhead below, as the page's one h1.
+      heading={null}
+      measure="mx-auto max-w-[1080px] px-6 sm:px-9"
       count={`${LAYER_LABEL[layer]} · ${state}`}
       backTo="/library"
       backLabel="Resource library"
@@ -633,9 +637,9 @@ export function PieceRoom({ productId }: { productId: string }) {
               )}
             </p>
 
-            <h2 className="mt-3 font-heading text-[2rem] leading-tight text-[var(--color-charcoal)]">
+            <h1 className="mt-3 font-heading text-[2rem] leading-tight text-[var(--color-charcoal)]">
               {p.name}
-            </h2>
+            </h1>
             {p.brand && (
               <p className="mt-0.5 font-heading text-[1.05rem] italic text-[var(--color-aged-oak)]">
                 {p.brand}

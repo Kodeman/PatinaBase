@@ -22,6 +22,15 @@ jest.mock('@/lib/help-system/use-document-surface', () => ({
   useDocumentSurface: () => undefined,
 }));
 
+const mockRoomFileFlag = jest.fn(() => ({ value: false, isLoading: false }));
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => mockRoomFileFlag(),
+}));
+
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
+}));
+
 jest.mock('../../room-shell', () => ({
   RoomShell: ({ title, count, children }: { title: string; count?: string; children: React.ReactNode }) => (
     <div>
@@ -168,6 +177,35 @@ describe('RoomsIndex', () => {
     mockUseRoomRoster.mockReturnValue({ data: [MARSH_ROOM], isLoading: false, isError: false });
     render(<RoomsIndex />);
     expect(screen.getByRole('link', { name: 'The Document' })).toHaveAttribute('href', `/doc/${MARSH}`);
+  });
+
+  it('gives each room Card its act: an undrawn room opens the scan (rooms-p1)', () => {
+    mockUseRoomRoster.mockReturnValue({ data: [MARSH_ROOM], isLoading: false, isError: false });
+    const { container } = render(<RoomsIndex />);
+    const card = container.querySelector('[data-room-card]') as HTMLElement;
+    const act = within(card).getByRole('link', { name: 'Open the scan of the kitchen' });
+    expect(act).toHaveTextContent('Open the scan');
+    expect(act).toHaveAttribute('href', '/room/marsh-0');
+    expect(act.closest('.foot')).not.toBeNull();
+  });
+
+  it('a drawn room opens its room file while the room file is on', () => {
+    mockRoomFileFlag.mockReturnValue({ value: true, isLoading: false });
+    const drawn = scan({
+      scan_id: 'marsh-0',
+      engagement_id: MARSH,
+      document_client_name: 'Owen and Cait Brannigan',
+      room_type: 'kitchen',
+      parse_status: 'parsed',
+    });
+    expect(buildRoomRosterEntry(drawn).geometry).not.toBeNull();
+    mockUseRoomRoster.mockReturnValue({ data: [drawn], isLoading: false, isError: false });
+    const { container } = render(<RoomsIndex />);
+    const card = container.querySelector('[data-room-card]') as HTMLElement;
+    expect(
+      within(card).getByRole('link', { name: 'Open the room file for the kitchen' }),
+    ).toHaveAttribute('href', '/room/marsh-0/file');
+    mockRoomFileFlag.mockReturnValue({ value: false, isLoading: false });
   });
 
   it('an empty roster is the one empty state, not a dashed box', () => {

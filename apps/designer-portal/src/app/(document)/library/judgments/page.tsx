@@ -109,6 +109,7 @@ export default function JudgmentsPage() {
   return (
     <RoomShell
       title="Style preferences"
+      measure="mx-auto max-w-[900px] px-5 sm:px-8"
       backTo="/library"
       backLabel="Resource library"
     >

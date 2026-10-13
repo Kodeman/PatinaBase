@@ -592,6 +592,8 @@ export function PeopleRoom() {
   return (
     <RoomShell
       title="Studio contacts"
+      topLevel
+      measure="mx-auto max-w-[1296px] px-4 sm:px-6 min-[1180px]:px-8"
       count={
         all
           ? // QA-R2-9: the head counts identities, and a company-only

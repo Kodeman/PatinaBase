@@ -38,7 +38,7 @@ import { DocumentAction, DocumentActionRow } from '../document-action';
 import { SectionEyebrow } from '../section-eyebrow';
 import { StatusChip } from '../status-chip';
 import { PlanLinkOnce } from './plan-link-once';
-import { GuidedEmptyState } from '../guided-empty-state';
+import { EmptyState } from '../empty-state';
 
 const STATE_WORD: Record<string, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'var(--color-aged-oak)' },
@@ -145,12 +145,23 @@ export function PlanRoomSet({
   if (set.length === 0) {
     return (
       <section aria-label="The light table" className="mx-auto max-w-[42rem] px-4 py-12 md:px-8">
-        <GuidedEmptyState
-          title="Start the current drawing set"
-          description="Choose a PDF set; the light table splits it and proposes where each page belongs before anything becomes current."
-          inputs={['PDF drawing set', 'Sheet titles and numbers', 'Current revision']}
-          action={{ key: 'choose-plan-pdf-empty', label: 'Choose a PDF', onClick: onChooseFile }}
-        />
+        {/* The one empty state (US-28 S1; chrome-p5), never a dashed box. */}
+        <EmptyState
+          eyebrow="Plans"
+          act={
+            <DocumentAction
+              actionKey="choose-plan-pdf-empty"
+              surfaceKey="plan-room"
+              regionKey="plans-empty"
+              variant="secondary"
+              onClick={onChooseFile}
+            >
+              Bring in a drawing set
+            </DocumentAction>
+          }
+        >
+          No plans yet. Bring in a drawing set to begin.
+        </EmptyState>
       </section>
     );
   }

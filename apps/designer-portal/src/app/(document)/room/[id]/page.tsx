@@ -62,6 +62,7 @@ import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useRoomGeometry, useRoomScanPhotos } from '@patina/supabase';
 import { RoomShell } from '@/components/document/rooms/room-shell';
 import { RoomView } from '@/components/document/rooms/room-view/room-view';
+import { humanizeRoomType } from '@/components/document/rooms/room-view/rooms-by-job';
 import { roomGeometryFromRows } from '@/lib/room-view/from-rows';
 import { roomEvents } from '@/lib/analytics';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
@@ -182,8 +183,20 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
     data?.document,
   ]);
 
+  // The room's name heads its Header line (US-28 walk-fix): RoomShell's
+  // one Header line, the same name RoomView once printed in a second one.
+  const doc = data?.document ?? null;
+  const roomTitle = doc
+    ? (humanizeRoomType(doc.roomType) ?? doc.documentClientName ?? doc.ownerClientName ?? 'Unnamed room')
+    : 'A room';
+
   return (
-    <RoomShell title="A room" backTo={back?.to} backLabel={back?.label}>
+    <RoomShell
+      title={roomTitle}
+      measure="mx-auto max-w-[1180px] px-4 sm:px-6"
+      backTo={back?.to}
+      backLabel={back?.label}
+    >
       <RoomView
         roomId={id}
         doc={data?.document ?? null}

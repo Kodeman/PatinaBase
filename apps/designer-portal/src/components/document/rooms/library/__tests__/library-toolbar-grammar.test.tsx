@@ -73,7 +73,18 @@ describe('LibraryToolbar — one filter grammar', () => {
       ...screen.getAllByRole('tab'),
       ...type.querySelectorAll('button'),
     ];
-    expect(words).toHaveLength(3 + 6);
+    // library-p1's shelf words: All shelves, Personal, Studio, Patina catalog.
+    expect(screen.getAllByRole('tab').map((tab) => tab.firstChild?.textContent)).toEqual([
+      'All shelves',
+      'Personal',
+      'Studio',
+      'Patina catalog',
+    ]);
+    expect(screen.getByRole('tab', { name: 'All shelves, 29 products' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    expect(words).toHaveLength(4 + 6);
     words.forEach((word) => {
       expect(word.className).not.toMatch(/rounded|pill|border/);
       expect(word.closest('.filters')).toBe(row);

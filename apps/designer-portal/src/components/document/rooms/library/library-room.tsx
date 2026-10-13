@@ -17,12 +17,11 @@ import {
   useValidationQueue,
   useOrganizations,
   createBrowserClient,
-  type LayerProductLayer,
 } from "@patina/supabase";
 import { RoomShell } from "../room-shell";
 import { LibrarianBar } from "./librarian-bar";
 import { LibraryShelf } from "./library-shelf";
-import { LibraryToolbar } from "./library-toolbar";
+import { LibraryToolbar, type LibraryShelfLens } from "./library-toolbar";
 import { LibraryFoot } from "./library-foot";
 import { CaptureExtensionPrompt } from "./capture-extension-prompt";
 import { CaptureSheet } from "./capture-sheet";
@@ -37,7 +36,11 @@ import { useMobilePrimaryAction } from "../../mobile/mobile-shell";
 import type { LibraryCapabilityFilter } from "./library-configuration-summary";
 import { subscribeToLibraryCapture } from "./library-capture-events";
 
-const SHELF_COPY: Record<LayerProductLayer, { name: string; meta: string }> = {
+const SHELF_COPY: Record<LibraryShelfLens, { name: string; meta: string }> = {
+  all: {
+    name: "All shelves",
+    meta: "Your captures, the studio's products and the Patina catalog",
+  },
   personal: {
     name: "Personal library",
     meta: "Unreviewed products · websites, photos, and links",
@@ -104,7 +107,8 @@ export function LibraryRoom() {
     return subscribeToLibraryCapture(openCapture);
   }, []);
   const [importOpen, setImportOpen] = useState(false);
-  const [activeLayer, setActiveLayer] = useState<LayerProductLayer>("personal");
+  // library-p1: the Library opens on every shelf, not the personal one.
+  const [activeLayer, setActiveLayer] = useState<LibraryShelfLens>("all");
   const [activeCapability, setActiveCapability] =
     useState<LibraryCapabilityFilter>("all");
   const [deep, setDeep] = useState<{ id: string; name: string } | null>(null);
@@ -153,6 +157,8 @@ export function LibraryRoom() {
   return (
     <RoomShell
       title="Resource library"
+      topLevel
+      measure="mx-auto max-w-[1240px] px-4 sm:px-9"
       count={total != null ? `${total} pieces` : undefined}
       action={
         <DocumentActionGroup
@@ -203,14 +209,8 @@ export function LibraryRoom() {
             validationIds={validationIds}
             capability={activeCapability}
             onDeep={(id, name) => setDeep({ id, name })}
-            onPromote={
-              activeLayer === "personal" ? (id) => setPromoteId(id) : undefined
-            }
-            onNominate={
-              activeLayer === "studio"
-                ? (id) => void handleNominate(id)
-                : undefined
-            }
+            onPromote={(id) => setPromoteId(id)}
+            onNominate={(id) => void handleNominate(id)}
           />
 
         <LibraryFoot />

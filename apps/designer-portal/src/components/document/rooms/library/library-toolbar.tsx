@@ -17,15 +17,23 @@ interface LayerCounts {
   catalog: number;
 }
 
+/** A shelf lens: one layer, or every shelf at once (library-p1's default). */
+export type LibraryShelfLens = LayerProductLayer | "all";
+
 const LENSES: Array<{
-  layer: LayerProductLayer;
+  layer: LibraryShelfLens;
   label: string;
-  countKey: keyof LayerCounts;
 }> = [
-  { layer: "personal", label: "Personal", countKey: "personal" },
-  { layer: "studio", label: "Studio", countKey: "studio" },
-  { layer: "catalog", label: "Patina catalog", countKey: "catalog" },
+  { layer: "all", label: "All shelves" },
+  { layer: "personal", label: "Personal" },
+  { layer: "studio", label: "Studio" },
+  { layer: "catalog", label: "Patina catalog" },
 ];
+
+function lensCount(counts: LayerCounts | null | undefined, lens: LibraryShelfLens) {
+  if (!counts) return null;
+  return lens === "all" ? counts.personal + counts.studio + counts.catalog : counts[lens];
+}
 
 const CAPABILITY_FILTERS: Array<{
   value: LibraryCapabilityFilter;
@@ -48,9 +56,9 @@ export function LibraryToolbar({
   activeCapability = "all",
   onCapabilityChange,
 }: {
-  activeLayer: LayerProductLayer;
+  activeLayer: LibraryShelfLens;
   counts?: LayerCounts | null;
-  onLayerChange: (layer: LayerProductLayer) => void;
+  onLayerChange: (layer: LibraryShelfLens) => void;
   onCompose: () => void;
   onImport: () => void;
   activeCapability?: LibraryCapabilityFilter;
@@ -124,7 +132,7 @@ export function LibraryToolbar({
           </span>
           {LENSES.map((lens, index) => {
             const selected = activeLayer === lens.layer;
-            const count = counts?.[lens.countKey] ?? null;
+            const count = lensCount(counts, lens.layer);
             return (
               <button
                 key={lens.layer}

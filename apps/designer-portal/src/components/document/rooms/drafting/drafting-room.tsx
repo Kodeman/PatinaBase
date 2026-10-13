@@ -416,6 +416,16 @@ function DraftingRoomEditor({
     <RoomShell
       title="Proposal drafting"
       backLabel={exitLabel}
+      // US-28 walk-fix: one Header line. The proposal's title block (the
+      // stage once, a 3 px rule) heads RoomShell's own line beside the back
+      // act and Sharing; the old band no longer stacks above a second line.
+      heading={
+        <div className="title-rule st-proposal papers-tblock">
+          <PaperEyebrow>Proposal · draft</PaperEyebrow>
+          <h1 className="t-d2">{title}</h1>
+        </div>
+      }
+      measure="mx-auto max-w-[1240px] px-4 sm:px-8"
       // C2 — the share instrument is the Room's sole head action: a quiet
       // mono doorway into the tokenized share-link sheet (view-only client
       // copy), seeded from the proposal's client-visibility tier.
@@ -437,16 +447,6 @@ function DraftingRoomEditor({
     >
       <div className="papers-ground">
       <div className="mx-auto max-w-[1240px] px-4 sm:px-8">
-        {/* ── The proposal's title block: the stage once, a 3 px rule ── */}
-        <div className="hline">
-          <div className="hline-l">
-            <div className="title-rule st-proposal papers-tblock">
-              <PaperEyebrow>Proposal · draft</PaperEyebrow>
-              <h2 className="t-d2">{title}</h2>
-            </div>
-          </div>
-        </div>
-        <div className="rule-strong" role="presentation" />
         <div className="papers-drafted">
           <p className="t-body-sm papers-drafted-words" data-testid="drafted-words">
             {draftedWords(facets)}
