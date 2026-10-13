@@ -14,6 +14,7 @@ export interface OutboundDraft {
   subject: string | null; body: string; payload: Record<string, unknown>; ref_type: string;
   ref_id: string; status: string; sent_by: string | null; edited_at?: string | null;
   message_id?: string | null; delivered_at?: string | null; delivery_message_id?: string | null;
+  send_attempted_at?: string | null; finalizing_at?: string | null;
 }
 export type OutboundSendResult = { id: string; ok: boolean; messageId?: string; error?: string };
 
@@ -36,8 +37,9 @@ export async function sendOutboundDraft(
     const { data, error: claimError } = await admin.rpc("claim_outbound_draft_for_send", { p_id: draftId });
     if (claimError || !data) {
       const message = claimError?.message ?? "claim returned no draft";
-      // A retry of a delivered draft finishes it and never reaches the provider.
-      if (/already delivered/i.test(message)) return await finalizeOutboundDraft(admin, draftId, authority);
+      // A retry of a delivered draft, or of a stale attempted push (00784), finishes
+      // it and never reaches the provider.
+      if (/already (?:delivered|attempted)/i.test(message)) return await finalizeOutboundDraft(admin, draftId, authority);
       return { id: draftId, ok: false, error: /not_sendable|not awaiting|expired|superseded|discarded/i.test(message) ? "not_sendable" : message };
     }
     draft = data as OutboundDraft;
@@ -104,7 +106,12 @@ export async function sendOutboundDraft(
       if (sent.status === "deferred" && smsInput.deferToCaller) {
         return await fail("not_sendable_until_send_window");
       }
-      // duplicate_send_claim: this draft's text already holds a live send row.
+      // duplicate_send_claim: this draft's text already holds a live send row. It is
+      // a delivery only once the provider accepted that row; until then the send is
+      // in flight, so nothing is recorded and the draft is not released to review.
+      if (sent.reason === "duplicate_send_claim" && !(await smsSendAccepted(admin, smsInput.dedupeKey))) {
+        return { id: draftId, ok: false, error: "send_in_progress" };
+      }
       if (sent.status !== "deferred" && !sent.sent && sent.reason !== "duplicate_send_claim") {
         return await fail(sent.reason ?? "sms_send_failed");
       }
@@ -112,6 +119,11 @@ export async function sendOutboundDraft(
     } else {
       const userId = typeof draft.payload.user_id === "string" ? draft.payload.user_id : draft.to_client_id;
       if (!userId) return await fail("push recipient missing");
+      // Push has no provider idempotency key. The attempt is durable before APNs is
+      // called; from here 00784 refuses to release or reclaim the draft, so a failure
+      // below leaves it 'sending' and a retry finalizes it as delivered-unknown.
+      const { error: attemptError } = await admin.rpc("record_outbound_draft_send_attempt", { p_id: draft.id });
+      if (attemptError) return await fail(attemptError.message);
       const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/apns-send`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
         body: JSON.stringify({ user_id: userId, title: draft.subject ?? "", body: draft.body, entity_type: draft.ref_type, entity_id: draft.ref_id, audience: "app", authority }),
@@ -133,33 +145,41 @@ export async function sendOutboundDraft(
   } catch (error) {
     return { id: draftId, ok: false, error: error instanceof Error ? error.message : "delivery_record_failed" };
   }
-  return await finishDelivered(admin, draft, messageId ?? null, authority);
+  return await finalizeOutboundDraft(admin, draft.id, authority);
 }
 
 /**
- * Finishes a draft the provider already accepted: runs its kind's afterSend, then
- * marks it sent. Never calls a provider. Used by a retry of a delivered draft
- * (sendOutboundDraft routes there) and by outbound-draft-send's {finalize:true}.
+ * Finishes a draft the provider already accepted, or a stale attempted push
+ * (delivered-unknown, 00784): runs its kind's afterSend, then marks it sent. Never
+ * calls a provider. Only the caller that wins the per-draft finalize claim runs
+ * the hook. Used after a send records its delivery, by a retry of a delivered or
+ * attempted draft (sendOutboundDraft routes there) and by {finalize:true}.
  */
 export async function finalizeOutboundDraft(
   admin: SupabaseClient,
   draftId: string,
   authority: SendAuthority,
 ): Promise<OutboundSendResult> {
-  const { data, error } = await admin.from("outbound_drafts").select("*").eq("id", draftId).maybeSingle();
-  if (error) return { id: draftId, ok: false, error: error.message };
-  const draft = data as OutboundDraft | null;
-  if (draft?.status === "sent") return { id: draftId, ok: true, messageId: draft.message_id ?? undefined };
-  if (!draft || draft.status !== "sending" || !draft.delivered_at) return { id: draftId, ok: false, error: "not_delivered" };
-  return await finishDelivered(admin, draft, draft.delivery_message_id ?? null, authority);
-}
-
-async function finishDelivered(
-  admin: SupabaseClient,
-  draft: OutboundDraft,
-  messageId: string | null,
-  authority: SendAuthority,
-): Promise<OutboundSendResult> {
+  const { data, error } = await admin.rpc("claim_outbound_draft_finalize", { p_id: draftId });
+  if (error || !data) {
+    const message = error?.message ?? "finalize claim returned no draft";
+    if (/not delivered/i.test(message)) return { id: draftId, ok: false, error: "not_delivered" };
+    if (/already being finalized/i.test(message)) return { id: draftId, ok: false, error: "finalize_in_progress" };
+    return { id: draftId, ok: false, error: message };
+  }
+  const draft = data as OutboundDraft;
+  if (draft.status === "sent") return { id: draftId, ok: true, messageId: draft.message_id ?? undefined };
+  const messageId = draft.delivery_message_id ?? null;
+  const release = async (message: string): Promise<OutboundSendResult> => {
+    // A failed finalizer hands its claim back so Retry can run now; a lost
+    // release goes stale after 10 minutes.
+    try {
+      await admin.rpc("release_outbound_draft_finalize", { p_id: draft.id, p_finalizing_at: draft.finalizing_at });
+    } catch (releaseError) {
+      console.error("outbound draft finalize release failed", releaseError);
+    }
+    return { id: draft.id, ok: false, error: message };
+  };
   try {
     const afterSendContext: OutboundKindContext & { authority: SendAuthority } = { admin, draft, messageId, authority };
     await outboundKinds[draft.kind]?.afterSend?.(afterSendContext);
@@ -167,11 +187,30 @@ async function finishDelivered(
       p_id: draft.id, p_sent_by: authority.kind === "designer" ? authority.userId : null,
       p_message_id: messageId,
     });
-    if (markError) return { id: draft.id, ok: false, error: markError.message };
+    if (markError) return await release(markError.message);
     return { id: draft.id, ok: true, messageId: messageId ?? undefined };
   } catch (error) {
-    return { id: draft.id, ok: false, error: error instanceof Error ? error.message : "finalize_failed" };
+    return await release(error instanceof Error ? error.message : "finalize_failed");
   }
+}
+
+/** The statuses that free a send claim in sms_messages_send_claim_uniq (00640). */
+const SMS_RELEASED_STATUSES = ["failed", "undelivered", "canceled", "expired", "suppressed"];
+
+/**
+ * Whether the live sms_messages row behind a duplicate_send_claim was accepted
+ * by the provider. sms.ts reports the duplicate for any live row under this
+ * dedupe key (00640 sms_messages_send_claim_uniq), including a claimed or
+ * queued row the provider never took.
+ */
+async function smsSendAccepted(admin: SupabaseClient, dedupeKey: string): Promise<boolean> {
+  const { data, error } = await admin.from("sms_messages").select("twilio_sid, twilio_status")
+    .eq("direction", "outbound").eq("dedupe_key", dedupeKey);
+  if (error) return false;
+  return ((data ?? []) as Array<{ twilio_sid: string | null; twilio_status: string | null }>).some((row) =>
+    !SMS_RELEASED_STATUSES.includes(row.twilio_status ?? "claimed") &&
+    (!!row.twilio_sid || row.twilio_status === "sent" || row.twilio_status === "delivered")
+  );
 }
 
 function escapeHtml(value: string): string {
