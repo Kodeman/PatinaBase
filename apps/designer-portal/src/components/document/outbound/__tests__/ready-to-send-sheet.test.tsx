@@ -1,0 +1,179 @@
+/**
+ * US-31 B5a — the ready-to-send sheet. Staged messages group by who they
+ * reach (Clients · Vendors · Trades, a trade's texts as one "Today's texts"
+ * group, procurement letters under Vendors); checked rows go together through
+ * useSendOutboundDrafts, opened or not, and each row says how its send went.
+ * A seat that may not send (Q11) sees and edits, never sends.
+ */
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { ReadyToSendSheet } from '../ready-to-send-sheet';
+
+jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
+}));
+
+const mockSend = jest.fn();
+const mockUpdate = jest.fn();
+const mockDiscard = jest.fn();
+const mockRecheck = jest.fn();
+let mockCanSend = true;
+
+const row = (over: Record<string, unknown>) => ({
+  id: 'x',
+  kind: 'invoice_reminder',
+  channel: 'email',
+  recipient_kind: 'client',
+  status: 'awaiting_review',
+  to_address: 'greta@whitfield.test',
+  subject: 'Invoice 1001',
+  body: 'A reminder about invoice 1001.',
+  created_at: '2026-10-13T08:00:00Z',
+  updated_at: '2026-10-13T08:00:00Z',
+  claimed_at: null,
+  ...over,
+});
+
+const OUTBOUND = [
+  row({ id: 'out-client' }),
+  row({ id: 'out-vendor', kind: 'delivery_confirm', recipient_kind: 'vendor', to_address: 'ship@hale.test', created_at: '2026-10-13T08:01:00Z' }),
+  row({ id: 'out-text-1', kind: 'trade_day_of', channel: 'sms', recipient_kind: 'trade', to_address: '+15550101', subject: null, body: 'Tomorrow 8am at Whitfield.', created_at: '2026-10-13T08:02:00Z' }),
+  row({ id: 'out-text-2', kind: 'trade_day_of', channel: 'sms', recipient_kind: 'trade', to_address: '+15550102', subject: null, body: 'Tomorrow 9am at Whitfield.', created_at: '2026-10-13T08:03:00Z' }),
+  row({ id: 'out-sent', status: 'sent', created_at: '2026-10-13T07:00:00Z' }),
+];
+
+jest.mock('@patina/supabase', () => ({
+  OPEN_PROCUREMENT_DRAFT_STATUSES: ['awaiting_review', 'sending'],
+  useOutboundDrafts: () => ({ data: OUTBOUND, isLoading: false, isError: false }),
+  useProcurementDrafts: () => ({
+    data: [{ id: 'letter-1', kind: 'ack_chase', status: 'awaiting_review', to_email: 'orders@hale.test', subject: 'PO 1042', body: 'Hello' }],
+  }),
+  useSendOutboundDrafts: () => ({ mutateAsync: mockSend, isPending: false }),
+  useUpdateOutboundDraft: () => ({ mutateAsync: mockUpdate, isPending: false }),
+  useDiscardOutboundDraft: () => ({ mutateAsync: mockDiscard, isPending: false }),
+}));
+
+jest.mock('../../buying/draft-review', () => ({
+  DraftReview: ({ draft }: { draft: { id: string } }) => (
+    <div data-testid="procurement-draft-review">{draft.id}</div>
+  ),
+}));
+
+jest.mock('../../acts/act-viewer', () => ({
+  useActViewer: () => ({
+    ready: true,
+    canSend: mockCanSend,
+    leadFirstName: mockCanSend ? null : 'Leah',
+    handoff: null,
+    recheck: mockRecheck,
+  }),
+}));
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockCanSend = true;
+  mockRecheck.mockResolvedValue(true);
+  mockSend.mockResolvedValue({ results: [] });
+  mockUpdate.mockResolvedValue({});
+});
+
+const group = (key: string) =>
+  document.querySelector(`[data-outbound-group="${key}"]`) as HTMLElement;
+const batchButton = () => screen.getByRole('button', { name: /^Send the \d+ checked$/ });
+
+describe('ReadyToSendSheet', () => {
+  it('groups staged messages as Clients · Vendors · Trades, texts together', () => {
+    render(<ReadyToSendSheet projectId="p1" />);
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(headings).toEqual(['Clients', 'Vendors', 'Trades']);
+
+    expect(within(group('client')).getByText('Invoice reminder')).toBeInTheDocument();
+    expect(within(group('vendor')).getByText('Delivery confirmation')).toBeInTheDocument();
+    // Procurement letters ride under Vendors with their own review.
+    expect(within(group('vendor')).getByTestId('procurement-draft-review')).toHaveTextContent('letter-1');
+    // A trade's texts read as one group.
+    expect(within(group('trade')).getByText("Today's texts (2)")).toBeInTheDocument();
+    expect(within(group('trade')).getAllByText('Day-of text to the trade')).toHaveLength(2);
+    // A sent message this sheet did not send is not on it.
+    expect(document.querySelector('[data-outbound-row="out-sent"]')).toBeNull();
+    expect(batchButton()).toHaveTextContent('Send the 0 checked');
+  });
+
+  it('sends the checked rows, opened or not, and says how each went', async () => {
+    mockSend.mockResolvedValue({
+      results: [
+        { id: 'out-client', ok: true },
+        { id: 'out-text-1', ok: false, error: 'The number has opted out' },
+      ],
+    });
+    render(<ReadyToSendSheet projectId="p1" />);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Check Invoice reminder to greta/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Check Day-of text to the trade to \+15550101/ }));
+    expect(batchButton()).toHaveTextContent('Send the 2 checked');
+
+    fireEvent.click(batchButton());
+    await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
+    expect(mockRecheck).toHaveBeenCalled();
+    expect(mockSend).toHaveBeenCalledWith(['out-client', 'out-text-1']);
+
+    const sent = document.querySelector('[data-outbound-row="out-client"]') as HTMLElement;
+    await waitFor(() => expect(within(sent).getByText('Sent')).toBeInTheDocument());
+    const refused = document.querySelector('[data-outbound-row="out-text-1"]') as HTMLElement;
+    expect(within(refused).getByText("Couldn't send")).toBeInTheDocument();
+    expect(within(refused).getByRole('alert')).toHaveTextContent(
+      "Couldn't send: The number has opted out.",
+    );
+    // The sent row leaves the count; the refused one stays checked.
+    expect(batchButton()).toHaveTextContent('Send the 1 checked');
+  });
+
+  it('checks every text with the group control', () => {
+    render(<ReadyToSendSheet projectId="p1" />);
+    fireEvent.click(screen.getByRole('checkbox', { name: "Check all of today's texts" }));
+    expect(batchButton()).toHaveTextContent('Send the 2 checked');
+  });
+
+  it('saves an opened edit before it sends', async () => {
+    mockSend.mockResolvedValue({ results: [{ id: 'out-client', ok: true }] });
+    render(<ReadyToSendSheet projectId="p1" />);
+    fireEvent.click(within(group('client')).getByRole('button', { name: /Invoice reminder/ }));
+    fireEvent.change(screen.getByLabelText('Correspondence'), { target: { value: 'Edited reminder.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(mockSend).toHaveBeenCalledWith(['out-client']));
+    expect(mockUpdate).toHaveBeenCalledWith({ id: 'out-client', subject: 'Invoice 1001', body: 'Edited reminder.' });
+    expect(mockUpdate.mock.invocationCallOrder[0]).toBeLessThan(mockSend.mock.invocationCallOrder[0]!);
+  });
+
+  it('sends nothing when the lead changed since the sheet opened', async () => {
+    mockRecheck.mockResolvedValue(false);
+    render(<ReadyToSendSheet projectId="p1" />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Check Invoice reminder to greta/ }));
+    fireEvent.click(batchButton());
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Who leads this project changed'),
+    );
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('holds Send and the batch for a seat that is not the lead (Q11)', async () => {
+    mockCanSend = false;
+    render(<ReadyToSendSheet projectId="p1" />);
+    for (const box of screen.getAllByRole('checkbox')) expect(box).toBeDisabled();
+    expect(batchButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Leah sees this first.')).toBeInTheDocument();
+    fireEvent.click(batchButton());
+
+    // She can open, read and edit, and saves her edit for the lead.
+    fireEvent.click(within(group('client')).getByRole('button', { name: /Invoice reminder/ }));
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect(send).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(send);
+    fireEvent.change(screen.getByLabelText('Correspondence'), { target: { value: 'Softer wording.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save the draft for Leah' }));
+    await waitFor(() =>
+      expect(mockUpdate).toHaveBeenCalledWith({ id: 'out-client', subject: 'Invoice 1001', body: 'Softer wording.' }),
+    );
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+});

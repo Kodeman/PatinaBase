@@ -7,12 +7,16 @@
  * and returns true, or returns false for a need it has no sheet for; the
  * caller then keeps its own landing (the deepLink, the ledger, the paper).
  * Nothing sends on open.
+ *
+ * US-31 B5a — a need carrying staged outbound messages (`need.outbound`, only
+ * behind `outbound-review`) opens the job's ready-to-send sheet.
  */
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { MessageSquare, PackageCheck, Receipt, Send, type LucideIcon } from 'lucide-react';
+import { Inbox, MessageSquare, PackageCheck, Receipt, Send, type LucideIcon } from 'lucide-react';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
 import { DocSheet } from '../overlays/doc-sheet';
+import { ReadyToSendSheet } from '../outbound/ready-to-send-sheet';
 import { actSheetKindOf, type ActSheetKind } from './act-sheet-kind';
 import {
   InvoiceReminderSheet,
@@ -33,23 +37,35 @@ export function useNeedActSheet(): NeedActSheetApi {
   return useContext(NeedActSheetContext);
 }
 
+type SheetKind = ActSheetKind | 'ready-to-send';
+
 const SHEETS: Record<
-  ActSheetKind,
+  SheetKind,
   { title: string; icon: LucideIcon; Body: (props: { need: DeskNeed; onDone: () => void }) => ReactNode }
 > = {
   'po-chase': { title: 'Follow up on this purchase order', icon: Send, Body: PoChaseSheet },
   'invoice-reminder': { title: 'Send an invoice reminder', icon: Receipt, Body: InvoiceReminderSheet },
   'proposal-follow-up': { title: 'Follow up on this proposal', icon: MessageSquare, Body: ProposalFollowUpSheet },
   'release-order': { title: "Approve this order's release", icon: PackageCheck, Body: ReleaseOrderSheet },
+  'ready-to-send': {
+    title: 'Ready to send',
+    icon: Inbox,
+    Body: ({ need }) => <ReadyToSendSheet projectId={need.projectId} />,
+  },
 };
 
+function sheetKindOf(need: DeskNeed): SheetKind | null {
+  if (need.need.outbound) return 'ready-to-send';
+  return actSheetKindOf(need);
+}
+
 export function NeedActSheetProvider({ children }: { children: ReactNode }) {
-  const [current, setCurrent] = useState<{ need: DeskNeed; kind: ActSheetKind; seq: number } | null>(
+  const [current, setCurrent] = useState<{ need: DeskNeed; kind: SheetKind; seq: number } | null>(
     null,
   );
   const [isOpen, setOpen] = useState(false);
   const open = useCallback((need: DeskNeed) => {
-    const kind = actSheetKindOf(need);
+    const kind = sheetKindOf(need);
     if (!kind) return false;
     setCurrent((was) => ({ need, kind, seq: (was?.seq ?? 0) + 1 }));
     setOpen(true);

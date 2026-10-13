@@ -212,6 +212,8 @@ export function deskActionLabel(
   // is never in its held form here. SQ-764 F22: release_purchase_order (00710)
   // only returns the held order to draft; nothing is sent.
   if (need.releaseHeld) return 'Approve release';
+  // US-31 B5a — the ready-to-send sheet reviews every held draft on the job.
+  if (need.outbound) return need.actionLabel;
   if (need.draft) return OPEN_THE_HELD_DRAFT;
   if (need.namedAct) return need.actionLabel;
   return needActLabel(need.kind, clientFirstName);
@@ -410,6 +412,10 @@ export interface DeskDraftSignal {
   /** US-19 FR8 F8-2 — the PO a PO-level draft (`ack_discrepancy_reply`)
    *  answers, so `Answer the maker` lands on that PO's first line. */
   purchaseOrderId?: string;
+  /** US-31 B5a (`outbound-review`) — set on an `outbound_drafts` row: a
+   *  message to a client, vendor or trade staged for review. Absent on a
+   *  procurement draft. */
+  outbound?: { channel: string; recipientKind: string };
 }
 
 /** Which Desk need a draft rides: the act it answers. */
@@ -691,6 +697,10 @@ export interface NeedLine {
    *  mounts the draft review on it: recipient, editable subject and body,
    *  Send and Discard. */
   draft?: DeskDraftSignal;
+  /** US-31 B5a — the job's staged outbound messages awaiting review. Their
+   *  act opens the ready-to-send sheet, which reviews every held draft on the
+   *  job, the procurement letters included. */
+  outbound?: { count: number };
   /** C-32: the need is an order held for this seat's release; its act lands
    *  on the release control (FR2 499-9). */
   releaseHeld?: true;
@@ -1643,29 +1653,54 @@ const needHeldForRelease: NeedRule = ({ row, heldReleases }) => {
 // The need carries the oldest draft, and the folder face mounts its review;
 // it clears when the draft is sent or discarded (the read is awaiting_review
 // only). Nothing here sends: the member's Send is the only way out.
+//
+// US-31 B5a (`outbound-review`): staged `outbound_drafts` to the job's
+// clients, vendors and trades join the same one line, counted with the
+// procurement letters ("4 ready to send — review and send"). Their act opens
+// the ready-to-send sheet; the line itself carries no further count (D8).
+const byCreated = (a: DeskDraftSignal, b: DeskDraftSignal) =>
+  a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0;
+
+export function readyToSendText(count: number): string {
+  return `${count === 1 ? 'One' : count} ready to send — review and send`;
+}
+
 const needDraftReview: NeedRule = ({ drafts, purchaseOrders }) => {
   // N3: a chase for a PO the maker has since acknowledged asks for nothing.
   const acked = new Set(
     (purchaseOrders ?? []).filter((po) => po.acknowledgedAt).map((po) => po.purchaseOrderId),
   );
   const open = (drafts ?? [])
-    .filter((d) => d.status === 'awaiting_review' && DRAFT_NEED[d.kind])
+    .filter((d) => !d.outbound && d.status === 'awaiting_review' && DRAFT_NEED[d.kind])
     .filter((d) => !(d.kind === 'ack_chase' && d.purchaseOrderId && acked.has(d.purchaseOrderId)))
-    .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+    .sort(byCreated);
+  const ready = (drafts ?? [])
+    .filter((d) => d.outbound && d.status === 'awaiting_review')
+    .sort(byCreated);
   const first = open[0];
-  if (!first) return null;
-  const shape = DRAFT_NEED[first.kind]!;
+  const oldest = [first, ready[0]].filter((d): d is DeskDraftSignal => !!d).sort(byCreated)[0];
+  if (!oldest) return null;
+  const shape = first ? DRAFT_NEED[first.kind]! : null;
   return {
-    kind: shape.kind,
-    recordId: first.id,
-    at: first.created_at,
-    text: open.length > 1 ? `${open.length} letters drafted — review and send` : shape.text,
+    // An outbound-only line rides the drafted-unsent kind: no act sheet of
+    // its own, so the ready-to-send sheet is the one that opens.
+    kind: shape?.kind ?? 'po_unsent',
+    // The procurement letter keeps the line's key while one is held.
+    recordId: (first ?? oldest).id,
+    at: oldest.created_at,
+    text:
+      ready.length > 0
+        ? readyToSendText(open.length + ready.length)
+        : open.length > 1
+          ? `${open.length} letters drafted — review and send`
+          : shape!.text,
     actionLabel: 'Review and send',
     stamp: { label: 'DRAFTED', ...STAMP.dustyBlue },
     urgent: false,
     owner: 'designer',
+    ...(ready.length > 0 ? { outbound: { count: ready.length }, namedAct: true as const } : {}),
     // FR7 F7-1: `poNumber` rides the signal from the read (`linePoNumber`).
-    draft: first.makerLine ? { ...first, ffeItemId: first.makerLine.id } : first,
+    ...(first ? { draft: first.makerLine ? { ...first, ffeItemId: first.makerLine.id } : first } : {}),
   };
 };
 

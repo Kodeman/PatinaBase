@@ -29,6 +29,8 @@ import { openLedger } from './command-bar';
 import { TriageBar } from './triage-bar';
 import { DraftReview, landOnMakerAddress } from './buying/draft-review';
 import { DocumentAction, DocumentActionGroup } from './document-action';
+import { useNeedActSheet } from './acts/need-act-sheet';
+import { needKeyOf } from '@/lib/document/need-key';
 
 export const DESK_FOLIO_PREVIEW_LIMIT = 4;
 
@@ -188,6 +190,22 @@ export function FolderCard({
       }
     : undefined;
 
+  // US-31 B5a: staged outbound messages open the ready-to-send sheet; with no
+  // sheet mounted, the act lands on the job's document.
+  const acts = useNeedActSheet();
+  const openSheet =
+    need.outbound && row.project_id
+      ? () => {
+          const opened = acts.open({
+            key: needKeyOf(need, row.project_id!),
+            projectId: row.project_id!,
+            projectName: row.title,
+            need,
+          });
+          if (!opened) router.push(`/doc/${row.engagement_id}`);
+        }
+      : undefined;
+
   useEffect(() => {
     if (!visible || !need.actionLabel || shown.current) return;
     shown.current = true;
@@ -256,6 +274,7 @@ export function FolderCard({
         needText={needText}
         draftAddressee={oneVoice ? (need.draft?.maker ?? null) : undefined}
         onAddAddress={addAddress}
+        onOpenSheet={openSheet}
       />
     </div>
   );
@@ -269,6 +288,7 @@ function FolderFace({
   needText,
   draftAddressee,
   onAddAddress,
+  onOpenSheet,
 }: {
   folder: DeskFolder;
   stageLine: string;
@@ -279,6 +299,8 @@ function FolderFace({
   draftAddressee?: string | null;
   /** F3-22 517-5: the held draft's repair (517-1's landing). */
   onAddAddress?: () => void;
+  /** US-31 B5a: opens the ready-to-send sheet for this job. */
+  onOpenSheet?: () => void;
 }) {
   const { row, need } = folder;
   return (
@@ -338,7 +360,9 @@ function FolderFace({
           {/* C-28: a need that carries a composed letter reviews it in place —
               recipient, subject, body, Send and Discard. pointer-events-auto
               opts the form back in over the pointer-events-none face. */}
-          {need.draft && (
+          {/* US-31 B5a: with staged outbound messages, every held draft on the
+              job is reviewed in the ready-to-send sheet instead. */}
+          {need.draft && !need.outbound && (
             <div className="pointer-events-auto relative">
               <DraftReview
                 key={need.draft.id}
@@ -368,7 +392,37 @@ function FolderFace({
               </div>
             )}
           {need.actionLabel &&
-            (need.ledger ? (
+            (need.outbound && onOpenSheet ? (
+              // US-31 B5a: the act opens the ready-to-send sheet — an inner
+              // control, a sibling of the pick-up Link (as the ledger act is).
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  documentEvents.actionSelected({
+                    surface_key: 'desk',
+                    region_key: 'needs-your-hand',
+                    action_key: need.kind,
+                    variant: 'primary',
+                    presentation: 'inline',
+                  });
+                  onOpenSheet();
+                }}
+                aria-label={`${actionLabel} — ${row.title}`}
+                className="pointer-events-auto relative mt-4 flex min-h-11 w-full items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              >
+                <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
+                  {actionLabel}
+                </span>
+                <span
+                  aria-hidden
+                  className="text-[14px] text-[var(--color-clay-ink)]"
+                >
+                  →
+                </span>
+              </button>
+            ) : need.ledger ? (
               // R36: the one NeedKind (overdue_invoice) whose act isn't the
               // card's own pick-up — an explicit inner control, not the whole
               // card, so the card surface can route to the doc (A1). A

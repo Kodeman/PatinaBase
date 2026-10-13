@@ -73,6 +73,7 @@ import {
   type CeremonyRow,
 } from '@/lib/document/desk-ceremonies';
 import { documentEvents } from '@/lib/analytics/document-events';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
@@ -242,9 +243,27 @@ const DESK_DRAFT_LIMIT = 200;
  * draft (no project) has no engagement to rise on, so it is dropped here.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildDeskDrafts(rows: any): Map<string, DeskDraftSignal[]> | undefined {
+export function buildDeskDrafts(rows: any, outboundRows?: any): Map<string, DeskDraftSignal[]> | undefined {
   if (!Array.isArray(rows)) return undefined;
   const map = new Map<string, DeskDraftSignal[]>();
+  // US-31 B5a: staged outbound drafts ride the same map, marked by `outbound`.
+  for (const row of Array.isArray(outboundRows) ? outboundRows : []) {
+    if (!row?.id || !row.project_id) continue;
+    map.set(row.project_id, [
+      ...(map.get(row.project_id) ?? []),
+      {
+        id: row.id,
+        kind: row.kind,
+        status: row.status,
+        to_email: row.to_address ?? null,
+        subject: row.subject ?? '',
+        body: row.body,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        outbound: { channel: row.channel, recipientKind: row.recipient_kind },
+      },
+    ]);
+  }
   for (const row of rows) {
     if (!row?.id || !row.project_id) continue;
     map.set(row.project_id, [
@@ -643,6 +662,8 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
   // never breadcrumbs on first load. Lives outside TanStack's own cache
   // because the queryFn needs it read-and-write on every call, synchronously.
   const previousResultRef = useRef<DeskData | null>(null);
+  // US-31 B5a — staged outbound drafts join the draft need only behind the flag.
+  const outboundReview = useFeatureFlag('outbound-review').value === true;
 
   return useQuery<DeskData>({
     queryKey: ['document-state', 'desk'],
@@ -658,6 +679,21 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       const horizon = new Date(Date.now() + CONFLICT_WINDOW_DAYS * 86_400_000)
         .toISOString()
         .slice(0, 10);
+      // US-31 B5a (`outbound-review`, fail-closed): messages to the job's
+      // clients, vendors and trades staged for review, read beside the batch
+      // below. Flag off, nothing is read.
+      const outboundRead: Promise<{ data: unknown; error: unknown }> = outboundReview
+        ? Promise.resolve(
+            supabase
+              .from('outbound_drafts')
+              .select(
+                'id, project_id, kind, channel, recipient_kind, status, to_address, subject, body, created_at, updated_at',
+              )
+              .in('status', ['awaiting_review', 'sending'])
+              .order('created_at')
+              .limit(DESK_DRAFT_LIMIT),
+          ).catch((outboundError) => ({ data: null, error: outboundError }))
+        : Promise.resolve({ data: [], error: null });
       const [
         { data, error },
         { data: events, error: eventsError },
@@ -904,6 +940,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           .order('created_at')
           .limit(DESK_LEAD_LIMIT),
       ]);
+      const { data: outboundRows, error: outboundRowsError } = await outboundRead;
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
 
@@ -1009,7 +1046,10 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         : await loadDeskClaimWindows(supabase, claimNotices);
       const payments = paymentNoticesError ? undefined : buildDeskPayments(paymentNotices);
       const returns = returnRowsError ? undefined : buildDeskReturns(returnRows);
-      const drafts = draftRowsError ? undefined : buildDeskDrafts(draftRows);
+      const drafts =
+        draftRowsError && outboundRowsError
+          ? undefined
+          : buildDeskDrafts(draftRowsError ? [] : draftRows, outboundRowsError ? [] : outboundRows);
       const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
       const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
       const heldReleases = heldRowsError ? undefined : buildDeskHeldReleases(heldRows);
@@ -1049,7 +1089,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         ...(claimNoticesError || !claimWindows ? ['claim windows'] : []),
         ...(paymentNoticesError || paidPoPaymentsError ? ['maker payments'] : []),
         ...(returnRowsError ? ['returns'] : []),
-        ...(draftRowsError ? ['letters'] : []),
+        ...(draftRowsError || outboundRowsError ? ['letters'] : []),
         ...(quoteRowsError ? ['quotes'] : []),
         ...(exceptionRowsError ? ['exceptions'] : []),
         ...(heldRowsError ? ['held orders'] : []),
