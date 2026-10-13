@@ -10,7 +10,7 @@ export default function PrivacyPage() {
           Privacy Policy
         </h1>
         <p className="text-sm text-[var(--text-muted)]">
-          Effective August 29, 2026
+          Effective October 13, 2026
         </p>
       </header>
 
