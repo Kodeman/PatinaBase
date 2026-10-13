@@ -13,6 +13,7 @@ export interface OutboundDraft {
   to_client_id: string | null; to_party_id: string | null; to_address: string | null;
   subject: string | null; body: string; payload: Record<string, unknown>; ref_type: string;
   ref_id: string; status: string; sent_by: string | null; edited_at?: string | null;
+  message_id?: string | null; delivered_at?: string | null; delivery_message_id?: string | null;
 }
 export type OutboundSendResult = { id: string; ok: boolean; messageId?: string; error?: string };
 
@@ -30,15 +31,17 @@ export async function sendOutboundDraft(
     return { id: draftId, ok: false, error: message };
   };
   let draft: OutboundDraft;
+  let messageId: string | undefined;
   try {
     const { data, error: claimError } = await admin.rpc("claim_outbound_draft_for_send", { p_id: draftId });
     if (claimError || !data) {
       const message = claimError?.message ?? "claim returned no draft";
+      // A retry of a delivered draft finishes it and never reaches the provider.
+      if (/already delivered/i.test(message)) return await finalizeOutboundDraft(admin, draftId, authority);
       return { id: draftId, ok: false, error: /not_sendable|not awaiting|expired|superseded|discarded/i.test(message) ? "not_sendable" : message };
     }
     draft = data as OutboundDraft;
     if (draft.status !== "sending") return { id: draftId, ok: false, error: "not_sendable" };
-    let messageId: string | undefined;
     if (draft.channel === "email") {
       if (!draft.to_address || !draft.subject) return await fail("email recipient or subject missing");
       const kind = outboundKinds[draft.kind];
@@ -101,7 +104,10 @@ export async function sendOutboundDraft(
       if (sent.status === "deferred" && smsInput.deferToCaller) {
         return await fail("not_sendable_until_send_window");
       }
-      if (sent.status !== "deferred" && !sent.sent) return await fail(sent.reason ?? "sms_send_failed");
+      // duplicate_send_claim: this draft's text already holds a live send row.
+      if (sent.status !== "deferred" && !sent.sent && sent.reason !== "duplicate_send_claim") {
+        return await fail(sent.reason ?? "sms_send_failed");
+      }
       messageId = sent.messageId;
     } else {
       const userId = typeof draft.payload.user_id === "string" ? draft.payload.user_id : draft.to_client_id;
@@ -114,18 +120,57 @@ export async function sendOutboundDraft(
       if (!response.ok || result?.failed > 0 || result?.error) return await fail(result?.error ?? `apns_http_${response.status}`);
       messageId = typeof result?.message_id === "string" ? result.message_id : undefined;
     }
-    const afterSendContext: OutboundKindContext & { authority: SendAuthority } = {
-      admin, draft, messageId: messageId ?? null, authority,
-    };
+  } catch (error) {
+    return await fail(error instanceof Error ? error.message : "send_failed");
+  }
+  // The provider has the message. From here the draft is never released to review:
+  // it stays 'sending' with delivered_at set until finalizing succeeds.
+  try {
+    const { error: recordError } = await admin.rpc("record_outbound_draft_delivery", {
+      p_id: draft.id, p_message_id: messageId ?? null,
+    });
+    if (recordError) return { id: draftId, ok: false, error: recordError.message };
+  } catch (error) {
+    return { id: draftId, ok: false, error: error instanceof Error ? error.message : "delivery_record_failed" };
+  }
+  return await finishDelivered(admin, draft, messageId ?? null, authority);
+}
+
+/**
+ * Finishes a draft the provider already accepted: runs its kind's afterSend, then
+ * marks it sent. Never calls a provider. Used by a retry of a delivered draft
+ * (sendOutboundDraft routes there) and by outbound-draft-send's {finalize:true}.
+ */
+export async function finalizeOutboundDraft(
+  admin: SupabaseClient,
+  draftId: string,
+  authority: SendAuthority,
+): Promise<OutboundSendResult> {
+  const { data, error } = await admin.from("outbound_drafts").select("*").eq("id", draftId).maybeSingle();
+  if (error) return { id: draftId, ok: false, error: error.message };
+  const draft = data as OutboundDraft | null;
+  if (draft?.status === "sent") return { id: draftId, ok: true, messageId: draft.message_id ?? undefined };
+  if (!draft || draft.status !== "sending" || !draft.delivered_at) return { id: draftId, ok: false, error: "not_delivered" };
+  return await finishDelivered(admin, draft, draft.delivery_message_id ?? null, authority);
+}
+
+async function finishDelivered(
+  admin: SupabaseClient,
+  draft: OutboundDraft,
+  messageId: string | null,
+  authority: SendAuthority,
+): Promise<OutboundSendResult> {
+  try {
+    const afterSendContext: OutboundKindContext & { authority: SendAuthority } = { admin, draft, messageId, authority };
     await outboundKinds[draft.kind]?.afterSend?.(afterSendContext);
     const { error: markError } = await admin.rpc("mark_outbound_draft_sent", {
       p_id: draft.id, p_sent_by: authority.kind === "designer" ? authority.userId : null,
-      p_message_id: messageId ?? null,
+      p_message_id: messageId,
     });
-    if (markError) return await fail(markError.message);
-    return { id: draftId, ok: true, messageId };
+    if (markError) return { id: draft.id, ok: false, error: markError.message };
+    return { id: draft.id, ok: true, messageId: messageId ?? undefined };
   } catch (error) {
-    return await fail(error instanceof Error ? error.message : "send_failed");
+    return { id: draft.id, ok: false, error: error instanceof Error ? error.message : "finalize_failed" };
   }
 }
 

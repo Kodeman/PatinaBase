@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCaller } from "../_shared/caller.ts";
 import { canSendOutbound } from "../_shared/outbound-can-send.ts";
-import { sendOutboundDraft } from "../_shared/outbound-send.ts";
+import { finalizeOutboundDraft, sendOutboundDraft } from "../_shared/outbound-send.ts";
 import { sendDraftBatch } from "./batch.ts";
 
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
@@ -19,6 +19,8 @@ Deno.serve(async (req) => {
   let body: unknown;
   try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
   const draftIds = (body as { draftIds?: unknown })?.draftIds;
+  // {finalize:true} finishes drafts the provider already has; it never sends.
+  const finalize = (body as { finalize?: unknown })?.finalize === true;
   if (!Array.isArray(draftIds) || draftIds.length < 1 || draftIds.length > 50 || draftIds.some((id) => typeof id !== "string" || !id)) {
     return json({ error: "draftIds_must_contain_1_to_50_ids" }, 400);
   }
@@ -28,7 +30,7 @@ Deno.serve(async (req) => {
       return error ? null : data;
     },
     canSend: (draft, userId) => canSendOutbound(admin, draft, userId),
-    send: (id, userId) => sendOutboundDraft(admin, id, { kind: "designer", userId, draftId: id }),
+    send: (id, userId) => (finalize ? finalizeOutboundDraft : sendOutboundDraft)(admin, id, { kind: "designer", userId, draftId: id }),
   });
   return json({ results });
 });
