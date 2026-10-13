@@ -70,7 +70,6 @@ import {
 import {
   DOCUMENT_SCOPED_SURFACES,
   FOCUS_FFE_LINE_EVENT,
-  PEOPLE_SUB_ROOM_HREF,
   PEOPLE_SUB_ROOM_SURFACES,
   STUDIO_ROOMS,
   STUDIO_LEDGERS,
@@ -80,6 +79,7 @@ import {
   landRecordPayment,
   matchPaperSynonyms,
   matchSurfaces,
+  peopleSubRoomHref,
   type StudioSurface,
 } from '@/lib/document/registry';
 import { NAMED_ACTS, NEED_ACT_LABELS, STAGE_WORD, ownAct } from '@/lib/document/act-names';
@@ -656,8 +656,8 @@ export function CommandBar() {
     // it falls to the draft-a-proposal picker, the doorway when none is held).
     const runForSurface = (s: StudioSurface): (() => void) => {
       // US-28 — the three rooms that left Studio contacts' index keep their
-      // address; the row walks there.
-      const subRoomHref = PEOPLE_SUB_ROOM_HREF[s.key];
+      // address; the row walks there, onto the view a typed alias names.
+      const subRoomHref = peopleSubRoomHref(s.key, query);
       if (subRoomHref) return () => router.push(subRoomHref);
       switch (s.key) {
         case 'capture-lead':

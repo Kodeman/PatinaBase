@@ -827,6 +827,28 @@ describe('F37 / F13 / F17 — the order, the titles, and the renamed room', () =
     expect(mockPush).toHaveBeenCalledWith('/people?view=threads');
   });
 
+  // SQ-872 F2 — an alias that names one of a room's own views opens that view;
+  // the room's label (and its room-level words) still open its default.
+  it.each([
+    ['Client reviews', 'Client relations', '/people?view=reviews'],
+    ['reviews', 'Client relations', '/people?view=reviews'],
+    ['Email campaigns', 'Studio marketing', '/people?view=outreach'],
+    ['outreach', 'Studio marketing', '/people?view=outreach'],
+    ['Design profile', 'Studio marketing', '/people?view=your-eye'],
+    ['your eye', 'Studio marketing', '/people?view=your-eye'],
+    ['Client relations', 'Client relations', '/people?view=threads'],
+    ['correspondence', 'Client relations', '/people?view=threads'],
+    ['Studio marketing', 'Studio marketing', '/people?view=portfolio'],
+    ['marketing', 'Studio marketing', '/people?view=portfolio'],
+  ])('typing "%s" walks %s to %s', (typed, room, href) => {
+    openPalette();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio search' }), {
+      target: { value: typed },
+    });
+    fireEvent.click(screen.getByText(room).closest('button')!);
+    expect(mockPush).toHaveBeenCalledWith(href);
+  });
+
   it('names the scans, and the words "The Rooms" appear nowhere', () => {
     const dialog = openPalette();
 

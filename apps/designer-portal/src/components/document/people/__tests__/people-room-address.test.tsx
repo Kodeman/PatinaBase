@@ -289,6 +289,36 @@ describe("the address", () => {
     expect(screen.queryByTestId("person-card")).toBeNull();
     expect(screen.getByTestId("directory-view")).toBeInTheDocument();
   });
+
+  /**
+   * SQ-872 F1 — ⌘K's person row pushes `/people?person=<id>` while the Room
+   * already stands at a sub-room's address. The first read has run, so the
+   * Room has to follow the card the new address names, and never strip it.
+   */
+  it("follows ⌘K's ?person= into the record while the Room stands at a sub-room", () => {
+    goTo("?view=threads");
+    const { rerender } = render(<PeopleRoom />);
+    expect(screen.queryByTestId("person-card")).toBeNull();
+
+    mockReplace.mockClear();
+    goTo("?person=card-dana");
+    rerender(<PeopleRoom />);
+
+    expect(screen.getByTestId("person-card")).toHaveAttribute(
+      "data-person",
+      "card-dana",
+    );
+    // The address sync never writes the named card back out of the address.
+    for (const [href] of mockReplace.mock.calls) {
+      expect(href).toContain("person=card-dana");
+    }
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Back to Studio contacts" }),
+    );
+    expect(screen.queryByTestId("person-card")).toBeNull();
+    expect(screen.getByTestId("directory-view")).toBeInTheDocument();
+  });
 });
 
 /**

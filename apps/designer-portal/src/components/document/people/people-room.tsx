@@ -76,7 +76,10 @@ export function PeopleRoom() {
   // US-28 — the Room opens on the view its address names (a sub-room walked
   // to from More or ⌘K), so the address writer below never sees a stale
   // "directory" on the first commit and strips `?view=` before it is read.
-  const viewParam = useSearchParams()?.get("view") ?? null;
+  const searchParams = useSearchParams();
+  const viewParam = searchParams?.get("view") ?? null;
+  const personParam = searchParams?.get("person") ?? null;
+  const firmParam = searchParams?.get("firm") ?? null;
   const [view, setView] = useState<PeopleView>(
     () => peopleViewFromParam(viewParam) ?? "directory",
   );
@@ -205,6 +208,11 @@ export function PeopleRoom() {
   // stay: they name what is on screen, so they keep their share/refresh
   // semantics exactly as they were.
   const deepLinkHandledRef = useRef(false);
+  /** The `?person=` / `?firm=` ids the Room has already answered, so the
+   *  address-following effect below never re-opens a card for the same id. */
+  const answeredCardRef = useRef<{ person: string | null; firm: string | null }>(
+    { person: null, firm: null },
+  );
 
   /** One opening, whichever id the address named — the link's own, or the
    *  survivor it resolves to. */
@@ -275,11 +283,13 @@ export function PeopleRoom() {
         // resolve_merged_contact() before giving up.
         if (all) {
           deepLinkHandledRef.current = true;
+          answeredCardRef.current.person = person;
           setDeepLinkUnresolved({ kind: "person", id: person, role: urlRole });
         }
         return;
       }
       deepLinkHandledRef.current = true;
+      answeredCardRef.current.person = person;
       openDirectoryPerson(person, resolved);
     } else if (firm) {
       // `?firm=` names a company card by its own rolodex id — the same shape
@@ -287,6 +297,7 @@ export function PeopleRoom() {
       // Same wait, and the same forward resolution (PR-o).
       if (!all) return;
       deepLinkHandledRef.current = true;
+      answeredCardRef.current.firm = firm;
       setView("directory");
       if (all.some((p) => p.person_id === firm)) setOpenFirm(firm);
       else setDeepLinkUnresolved({ kind: "firm", id: firm, role: null });
@@ -357,6 +368,20 @@ export function PeopleRoom() {
   useEffect(() => {
     if (!deepLinkHandledRef.current) return;
     const params = new URLSearchParams(window.location.search);
+    // SQ-872 F1 — a card the address names that the Room has not answered yet
+    // is left for the address-following effect below to open; writing now
+    // would delete the id before it is read.
+    const namedPerson = params.get("person");
+    const namedFirm = params.get("firm");
+    const answered = answeredCardRef.current;
+    if (
+      (namedPerson &&
+        namedPerson !== openPerson?.id &&
+        namedPerson !== answered.person) ||
+      (namedFirm && namedFirm !== openFirm && namedFirm !== answered.firm)
+    ) {
+      return;
+    }
     const setOrDelete = (key: string, value: string | null) => {
       if (value) params.set(key, value);
       else params.delete(key);
@@ -380,8 +405,55 @@ export function PeopleRoom() {
    */
   const viewRef = useRef(view);
   viewRef.current = view;
+  const openPersonIdRef = useRef<string | null>(null);
+  openPersonIdRef.current = openPerson?.id ?? null;
+  const openFirmRef = useRef(openFirm);
+  openFirmRef.current = openFirm;
+
+  /**
+   * SQ-872 F1 — ⌘K's person row pushes `/people?person=<id>` while the Room
+   * may already be standing (Client relations, Studio marketing and The Engine
+   * are all `/people?view=…`), so the Room follows a card the address names
+   * after its first read too. An id the Room wrote itself names the card that
+   * is open, and is answered; only a new id opens anything, once.
+   */
   useEffect(() => {
     if (!deepLinkHandledRef.current) return;
+    const answered = answeredCardRef.current;
+    if (personParam === openPersonIdRef.current) answered.person = personParam;
+    if (firmParam === openFirmRef.current) answered.firm = firmParam;
+    if (!personParam) answered.person = null;
+    if (!firmParam) answered.firm = null;
+    const person = personParam !== answered.person ? personParam : null;
+    const firm = !person && firmParam !== answered.firm ? firmParam : null;
+    // Wait for the roster, as the first read does, to resolve the id's role.
+    if ((!person && !firm) || !all) return;
+    setPendingThreadId(null);
+    setNotice(null);
+    if (person) {
+      answered.person = person;
+      setOpenFirm(null);
+      const row = all.find((p) => p.person_id === person);
+      if (row) {
+        openDirectoryPerson(person, row.role);
+      } else {
+        setView("directory");
+        setDeepLinkUnresolved({ kind: "person", id: person, role: null });
+      }
+    } else if (firm) {
+      answered.firm = firm;
+      setOpenPerson(null);
+      setView("directory");
+      if (all.some((p) => p.person_id === firm)) setOpenFirm(firm);
+      else setDeepLinkUnresolved({ kind: "firm", id: firm, role: null });
+    }
+  }, [personParam, firmParam, all, openDirectoryPerson]);
+
+  useEffect(() => {
+    if (!deepLinkHandledRef.current) return;
+    // An address that names a card is followed by the effect above; the view
+    // follows that card rather than putting it down.
+    if (personParam || firmParam) return;
     const wanted = peopleViewFromParam(viewParam) ?? "directory";
     if (wanted === viewRef.current) return;
     setOpenPerson(null);
@@ -389,7 +461,7 @@ export function PeopleRoom() {
     setPendingThreadId(null);
     setNotice(null);
     setView(wanted);
-  }, [viewParam]);
+  }, [viewParam, personParam, firmParam]);
 
   // The live Engine nudge: the strongest dormant tie from the nurture queue.
   // Reads `mine` (scope:'mine'), NOT `all` — see the note above `mine`.
