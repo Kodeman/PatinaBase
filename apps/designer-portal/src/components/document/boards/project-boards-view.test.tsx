@@ -258,6 +258,11 @@ describe('the boards page', () => {
 
     expect(screen.getAllByText('No boards yet · start one').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'New board' })).toBeInTheDocument();
+    // SQ-877 N7 — said once, by the EmptyState; the head adds no second line.
+    expect(
+      screen.queryByText('No design boards yet. Create one to begin.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/working · .* signed/)).not.toBeInTheDocument();
   });
 
   it('carries a moved identity to the boards page, not to the document', async () => {

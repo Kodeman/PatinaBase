@@ -2591,9 +2591,22 @@ html:has([data-document-shell]) {
 .people-avatar-firm {
   border-radius: 2px;
 }
+/* SQ-877 N2 — the record's words stand on the Header line's x, as people-p2
+   lays them: the paper face reaches out past the measure by exactly its own
+   inset (the measure's gutter below 1424px, the specimen's 64px above it). */
 .people-record {
-  padding: 48px 64px;
-  margin-top: 12px;
+  --people-record-inset: 32px;
+  padding: 48px var(--people-record-inset);
+  margin: 12px calc(-1 * var(--people-record-inset)) 0;
+}
+@media (min-width: 1424px) {
+  .people-record { --people-record-inset: 64px; }
+}
+@media (max-width: 1179px) {
+  .people-record { --people-record-inset: 24px; }
+}
+@media (max-width: 639px) {
+  .people-record { --people-record-inset: 16px; }
 }
 .people-record-head {
   display: flex;
@@ -2608,7 +2621,7 @@ html:has([data-document-shell]) {
 }
 @media (max-width: 599px) {
   .people-record {
-    padding: 24px 16px;
+    padding-block: 24px;
   }
   .people-seats {
     padding-left: 0;
@@ -2889,6 +2902,9 @@ html:has([data-document-shell]) {
 .br-export-option:hover:not(:disabled) { background: var(--bg-hover); }
 .br-export-option:disabled { cursor: wait; opacity: .6; }
 .br-export-option:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+/* SQ-877 N10 — inside the 2px square sheet, every row and act is square at the
+   house 2px too (the option rows, Done, and the sheet's close). */
+.br-export-sheet button, .br-export-option { border-radius: 2px; }
 /* ═══ end US-28 walk-fix board room ═════════════════════════════════════════ */
 
 /* US-28 S7b spec book ═══════════════════════════════════════════════════════

@@ -196,7 +196,7 @@ export function BoardExportDialog({
       {/* The shared Dialog keeps `shadow-lg` for the other portals; the
           designer portal carries no shadow (US-28 S1, R5), and the sheet is
           the one house stock: 2px corner on --card-edge (U-Q12). */}
-      <DialogContent className="br-sheet rounded-[2px] border-[var(--card-edge)] bg-[var(--paper-doc)] shadow-none sm:rounded-[2px] max-w-lg">
+      <DialogContent className="br-sheet br-export-sheet rounded-[2px] border-[var(--card-edge)] bg-[var(--paper-doc)] shadow-none sm:rounded-[2px] max-w-lg">
         <DialogHeader>
           <DialogTitle>Export {boardName}</DialogTitle>
           <DialogDescription>

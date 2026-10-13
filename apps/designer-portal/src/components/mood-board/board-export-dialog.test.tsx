@@ -192,4 +192,33 @@ describe('BoardExportDialog', () => {
     expect(content.className.split(/\s+/)).toContain('shadow-none');
     expect(content.className).not.toMatch(/\bshadow-(sm|md|lg|xl|2xl)\b/);
   });
+
+  it('SQ-877 N10 — the option rows and acts inside the square sheet are square at 2px', async () => {
+    render(
+      <BoardExportDialog
+        boardId="board-1"
+        boardName="Living room"
+        owner={{ kind: 'proposal', id: 'proposal-1' }}
+        input={input}
+        open
+        onOpenChange={jest.fn()}
+        flush={jest.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    await screen.findByText('2× raster · 2400 × 1600px.');
+    expect(screen.getByTestId('export-dialog-content')).toHaveClass('br-export-sheet');
+    expect(screen.getByRole('button', { name: /Board composition · PDF/ })).toHaveClass(
+      'br-export-option',
+    );
+    // The radius itself lives in globals.css; jsdom does not apply it.
+    const css = jest
+      .requireActual<typeof import('fs')>('fs')
+      .readFileSync(
+        jest.requireActual<typeof import('path')>('path').join(__dirname, '../../app/globals.css'),
+        'utf8',
+      );
+    expect(css).toMatch(
+      /\.br-export-sheet button, \.br-export-option \{ border-radius: 2px; \}/,
+    );
+  });
 });

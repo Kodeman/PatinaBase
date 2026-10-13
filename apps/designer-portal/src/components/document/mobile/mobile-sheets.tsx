@@ -2,10 +2,10 @@
 
 /**
  * The D13 bottom sheets. Paper sheets are document parts (spine, margin item,
- * timer); the drawer is the desk's book list (its six books open the
- * existing charcoal DocSheet ledgers via the open-ledger event — Library,
- * People, and Rooms are Rooms, so the same event walks them in instead). One
- * scrim, scrim-tap dismiss; no shadows (D4). Document/drawer sheets stop at
+ * timer); the drawer is More → Ledgers, the 390 twin of the dock's Ledgers
+ * popover (each ledger opens its own sheet via the open-ledger event). One
+ * scrim (the Ledgers sheet's is clear), scrim-tap dismiss; no shadows (D4).
+ * Document/drawer sheets stop at
  * 1180px; the timer alone remains the compact spine's sheet through 1439px.
  */
 
@@ -63,7 +63,7 @@ import {
 } from '../overlays/active-dialog';
 import { useMobileShell } from './mobile-shell';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { boardsRoutePath } from '@/lib/document/registry';
+import { boardsRoutePath, STUDIO_LEDGERS } from '@/lib/document/registry';
 import {
   paperRegionsForSection,
   DOCUMENT_INDEX_LABELS,
@@ -96,59 +96,14 @@ function focusableSheetControls(panel: HTMLElement) {
   });
 }
 
-const LEDGERS: {
-  key: string;
-  name: string;
-  spine: string;
-  count: string;
-  weight: 'room' | 'sheet';
-}[] = [
-  // D14: Library, People, and Rooms are Rooms (walk in); the rest are Sheets
-  // (pulled over). `name` must lowercase to the registry key — openLedger()
-  // dispatches `name.toLowerCase()` and the drawer matches on `key`.
-  {
-    key: 'library',
-    name: 'Library',
-    spine: 'var(--color-clay)',
-    count: 'a room · walk in',
-    weight: 'room',
-  },
-  {
-    key: 'orders',
-    name: 'Orders',
-    spine: 'var(--color-dusty-blue)',
-    count: 'cross-engagement POs',
-    weight: 'sheet',
-  },
-  {
-    key: 'accounts',
-    name: 'Accounts',
-    spine: 'var(--color-sage)',
-    count: 'revenue · A/R',
-    weight: 'sheet',
-  },
-  {
-    key: 'people',
-    name: 'People',
-    spine: 'var(--color-terracotta)',
-    count: 'a room · walk in',
-    weight: 'room',
-  },
-  {
-    key: 'rooms',
-    name: 'Rooms',
-    spine: 'var(--color-aged-oak)',
-    count: 'a room · walk in',
-    weight: 'room',
-  },
-  {
-    key: 'hours',
-    name: 'Hours',
-    spine: 'var(--color-mocha)',
-    count: 'this week',
-    weight: 'sheet',
-  },
-];
+// SQ-877 N1 — the Ledgers, as the dock's Ledgers popover lists them at 1440:
+// the sheet-weight books only (the rooms already stand in the 390 dock), each
+// named and drawn by the registry. `openLedger(key)` opens each one's sheet.
+const LEDGERS = (['orders', 'accounts', 'hours'] as const).map((key) => {
+  const surface = STUDIO_LEDGERS.find((s) => s.key === key);
+  if (!surface) throw new Error(`Ledgers sheet: the registry is missing "${key}"`);
+  return { key, label: surface.label, icon: surface.icon };
+});
 
 const MOBILE_MORE_DOORWAY =
   '[data-mobile-edge-owner="document-bar"] [aria-label="More studio actions"]';
@@ -216,7 +171,7 @@ const SHEET_ARIA_LABEL: Record<
   'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin' | 'note',
   string
 > = {
-  drawer: 'Studio actions',
+  drawer: 'Ledgers',
   timer: 'Time in hand',
   spine: 'Sections of this document',
   'margin-item': 'Margin item',
@@ -225,17 +180,18 @@ const SHEET_ARIA_LABEL: Record<
 };
 
 function Sheet({
-  tone,
   kind,
   onClose,
   children,
 }: {
-  tone: 'paper' | 'dark';
   kind: 'drawer' | 'timer' | 'spine' | 'margin-item' | 'margin' | 'note';
   onClose: () => void;
   children: React.ReactNode;
 }) {
   const compactTimer = kind === 'timer';
+  // SQ-877 N1 — the Ledgers sheet is the 390 twin of the dock's Ledgers
+  // popover (L4′): square sheet stock, no veil, no grabber.
+  const ledgers = kind === 'drawer';
   const dialogRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -320,30 +276,30 @@ function Sheet({
         aria-label="Dismiss"
         tabIndex={-1}
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-[rgba(44,41,38,0.5)]"
+        className={`absolute inset-0 cursor-default ${
+          ledgers ? 'bg-transparent' : 'bg-[rgba(44,41,38,0.5)]'
+        }`}
       />
       <div
         ref={panelRef}
         tabIndex={-1}
         data-mobile-sheet-panel
-        className={`absolute inset-x-0 bottom-0 max-h-[80%] overflow-y-auto rounded-t-[14px] pb-[max(0.9rem,env(safe-area-inset-bottom))] motion-safe:animate-[doc-sheet-up_250ms_var(--ease-editorial)] ${
-          tone === 'paper'
-            ? 'border-t border-[var(--doc-ink-border)] bg-[var(--doc-paper)]'
-            : 'border-t border-[rgba(250,247,242,0.18)] bg-[var(--color-charcoal)]'
+        className={`absolute inset-x-0 bottom-0 max-h-[80%] overflow-y-auto pb-[max(0.9rem,env(safe-area-inset-bottom))] motion-safe:animate-[doc-sheet-up_250ms_var(--ease-editorial)] ${
+          ledgers
+            ? 'rounded-[2px] border border-[var(--card-edge)] bg-[var(--paper-doc)]'
+            : 'rounded-t-[14px] border-t border-[var(--doc-ink-border)] bg-[var(--doc-paper)]'
         } ${
           compactTimer
             ? 'min-[1180px]:left-14 min-[1180px]:right-auto min-[1180px]:w-[28rem] min-[1180px]:rounded-tr-[14px]'
             : ''
         }`}
       >
-        <div
-          className={`mx-auto mb-1 mt-[9px] h-[4px] w-[36px] rounded-full ${
-            tone === 'paper'
-              ? 'bg-[var(--color-pearl)]'
-              : 'bg-[rgba(250,247,242,0.2)]'
-          }`}
-        />
-        <div className="px-[1.1rem] pb-2 pt-1">{children}</div>
+        {!ledgers && (
+          <div className="mx-auto mb-1 mt-[9px] h-[4px] w-[36px] rounded-full bg-[var(--color-pearl)]" />
+        )}
+        <div className={ledgers ? 'px-[1.1rem] pb-2 pt-3' : 'px-[1.1rem] pb-2 pt-1'}>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -504,10 +460,10 @@ export function MobileSheets({
 
   if (!sheet) return null;
 
-  // ── Drawer: the six books ──
+  // ── Drawer: the Ledgers (paper, square, no veil) ──
   if (sheet.kind === 'drawer') {
     return (
-      <Sheet tone="dark" kind="drawer" onClose={closeSheet}>
+      <Sheet kind="drawer" onClose={closeSheet}>
         {/* The maker's nameplate — tap to open the Account sheet (identity,
             status, settings, sign out). Distinct from the money "Accounts" book
             in the list below. */}
@@ -518,60 +474,38 @@ export function MobileSheets({
             openAccount();
           }}
         />
-        <h2 className="mt-3 font-heading text-[1.05rem] text-[var(--color-pearl)]">
-          The drawer{' '}
-          <em className="italic text-[var(--color-clay)]">· six books</em>
-        </h2>
-        <p className="mt-0.5 text-[14px] text-[rgba(250,247,242,0.58)]">
-          Pulled over whatever you&apos;re holding. Put back when done.
-        </p>
-        <ul className="mt-2">
-          {LEDGERS.map((l) => (
-            <li key={l.key}>
-              <button
-                type="button"
-                onClick={() => {
-                  focusMobileMoreDoorway();
-                  closeSheet();
-                  openLedger(l.name);
-                }}
-                className="flex w-full items-center gap-3 border-b border-[rgba(250,247,242,0.08)] py-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)]"
-              >
-                {l.weight === 'room' ? (
-                  <span
+        <div className="mt-3 border-b border-[var(--doc-ink-border)] py-2">
+          <span className="font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--text-subtle)]">
+            Ledgers · sheets
+          </span>
+        </div>
+        <ul>
+          {LEDGERS.map((l) => {
+            const Icon = l.icon;
+            return (
+              <li key={l.key}>
+                <button
+                  type="button"
+                  data-mobile-ledger={l.key}
+                  onClick={() => {
+                    focusMobileMoreDoorway();
+                    closeSheet();
+                    openLedger(l.key);
+                  }}
+                  className="flex min-h-11 w-full items-center gap-3 border-b border-[var(--doc-ink-border)] py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--clay-ink)]"
+                >
+                  <Icon
+                    className="h-4 w-4 shrink-0 text-[var(--color-aged-oak)]"
+                    strokeWidth={1.5}
                     aria-hidden
-                    className="flex shrink-0 flex-col gap-[2px]"
-                  >
-                    <i className="block h-[2px] w-[15px] rounded-[1px] bg-[var(--color-clay)]" />
-                    <i className="block h-[2px] w-[11px] rounded-[1px] bg-[var(--color-clay)] opacity-60" />
-                    <i className="block h-[2px] w-[7px] rounded-[1px] bg-[var(--color-clay)] opacity-30" />
-                  </span>
-                ) : (
-                  <span
-                    aria-hidden
-                    className="h-[18px] w-[3px] shrink-0 rounded-[1px]"
-                    style={{ background: l.spine }}
                   />
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block font-heading text-[14px] font-medium text-[rgba(250,247,242,0.9)]">
-                    {l.name}
-                    {l.weight === 'room' && (
-                      <span
-                        aria-hidden
-                        className="ml-1.5 font-mono text-[12px] text-[var(--color-clay)] opacity-70"
-                      >
-                        ↗
-                      </span>
-                    )}
+                  <span className="min-w-0 flex-1 text-[14px] text-[var(--text-primary)]">
+                    {l.label}
                   </span>
-                  <span className="block font-mono text-[12px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.58)]">
-                    {l.count}
-                  </span>
-                </span>
-              </button>
-            </li>
-          ))}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </Sheet>
     );
@@ -580,7 +514,7 @@ export function MobileSheets({
   // ── Timer (paper) ──
   if (sheet.kind === 'timer') {
     return (
-      <Sheet tone="paper" kind="timer" onClose={closeSheet}>
+      <Sheet kind="timer" onClose={closeSheet}>
         <MobileTimerSheet />
       </Sheet>
     );
@@ -598,7 +532,7 @@ export function MobileSheets({
       ? paperRegionsForSection(activeSectionKey)
       : [];
     return (
-      <Sheet tone="paper" kind="spine" onClose={closeSheet}>
+      <Sheet kind="spine" onClose={closeSheet}>
         <button
           type="button"
           onClick={() => {
@@ -835,7 +769,7 @@ export function MobileSheets({
       openRow(row);
     };
     return (
-      <Sheet tone="paper" kind="margin" onClose={closeSheet}>
+      <Sheet kind="margin" onClose={closeSheet}>
         {/* W5-R4(a)/D-B44 — the head row: the count, the lead act, and CLOSE.
             `CAPTURE A NOTE` is the mockup's own lead act, shipped TEXT ONLY;
             `NOTE · PHOTO · VOICE` and the prose line stay unshipped because
@@ -1040,7 +974,7 @@ export function MobileSheets({
       );
     };
     return (
-      <Sheet tone="paper" kind="note" onClose={backToMargin}>
+      <Sheet kind="note" onClose={backToMargin}>
         <h2 className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
           Note to the margin
         </h2>
@@ -1108,7 +1042,7 @@ export function MobileSheets({
       return null;
     }
     return (
-      <Sheet tone="paper" kind="margin-item" onClose={closeSheet}>
+      <Sheet kind="margin-item" onClose={closeSheet}>
         <span
           className="mb-1 block font-mono text-[12px] font-semibold uppercase tracking-[0.08em]"
           style={{ color: marginAccent(row.kind).label }}

@@ -1339,6 +1339,20 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
     }
   };
 
+  // SQ-877 N8 — the browser tab carries the book's name, as the head does
+  // ("<project> · specification book"), not the route group's default.
+  const tabProjectName = project.data?.name ?? project.data?.title ?? null;
+  useEffect(() => {
+    if (!tabProjectName) return;
+    const previous = document.title;
+    const title = `${tabProjectName} · specification book · Patina`;
+    document.title = title;
+    return () => {
+      // Hand the tab back only if the next route has not already named it.
+      if (document.title === title) document.title = previous;
+    };
+  }, [tabProjectName]);
+
   if (!hydrated || workbench.isLoading) {
     return (
       <main className="sb-ground" aria-busy>

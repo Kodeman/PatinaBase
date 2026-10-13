@@ -257,11 +257,13 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
               ← {projectName}
             </Link>
             <h1 className="t-d2">Design boards</h1>
-            <p className="t-meta uppercase text-[var(--text-subtle)]">
-              {empty
-                ? 'No design boards yet. Create one to begin.'
-                : `${liveBoards.length} working · ${frozenBoards.length} signed`}
-            </p>
+            {/* SQ-877 N7 — the EmptyState below says it once; the head counts
+                only when there is something to count. */}
+            {!empty && (
+              <p className="t-meta uppercase text-[var(--text-subtle)]">
+                {`${liveBoards.length} working · ${frozenBoards.length} signed`}
+              </p>
+            )}
           </div>
           <div className="hline-r">
             {/* The ticket mounts on project, install and care alike, so its

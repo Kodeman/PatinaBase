@@ -160,6 +160,17 @@ describe("the head", () => {
       "1 person · 1 firm",
     );
   });
+
+  it("SQ-877 N11 — the 390 dock act and the head's act share one name", () => {
+    const { useMobilePrimaryAction } = jest.requireMock(
+      "../../mobile/mobile-shell",
+    ) as { useMobilePrimaryAction: jest.Mock };
+    useMobilePrimaryAction.mockClear();
+    render(<PeopleRoom />);
+    expect(useMobilePrimaryAction).toHaveBeenCalledWith(
+      expect.objectContaining({ actionKey: "add-person", label: "Add contact" }),
+    );
+  });
 });
 
 describe("the address", () => {

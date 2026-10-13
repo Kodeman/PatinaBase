@@ -530,6 +530,17 @@ describe("SP-19/F57 — the spec book lands on the addressed FF&E line", () => {
       screen.getByRole("link", { name: "← Oak project" }),
     ).toBeInTheDocument();
   });
+
+  it("SQ-877 N8 — the browser tab carries the book's name, and hands it back", () => {
+    withItems();
+    document.title = "Studio overview · Patina";
+
+    const { unmount } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    expect(document.title).toBe("Oak project · specification book · Patina");
+    unmount();
+    expect(document.title).toBe("Studio overview · Patina");
+  });
 });
 
 /**

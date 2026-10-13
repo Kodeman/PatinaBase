@@ -22,7 +22,7 @@ const DOT: Record<AvailabilityStatus, string> = {
   online: 'var(--color-sage)',
   away: 'var(--color-golden-hour)',
   busy: 'var(--color-terracotta)',
-  offline: 'rgba(250,247,242,0.4)',
+  offline: 'var(--text-muted)',
 };
 
 export function MobileAccountHeader({ onOpen }: { onOpen: () => void }) {
@@ -47,9 +47,9 @@ export function MobileAccountHeader({ onOpen }: { onOpen: () => void }) {
       onClick={onOpen}
       aria-label="Account and settings"
       aria-haspopup="dialog"
-      className="flex w-full items-center gap-3 rounded-[6px] border border-[rgba(250,247,242,0.12)] bg-[rgba(250,247,242,0.04)] px-3 py-2.5 text-left active:border-[rgba(196,165,123,0.45)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      className="flex min-h-11 w-full items-center gap-3 rounded-[2px] border border-[var(--doc-ink-border)] px-3 py-2.5 text-left hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
     >
-      <span className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgba(250,247,242,0.08)] font-mono text-[11px] uppercase tracking-wider text-[var(--color-pearl)]">
+      <span className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-hover)] font-mono text-[11px] uppercase tracking-wider text-[var(--text-primary)]">
         {profile?.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -62,15 +62,15 @@ export function MobileAccountHeader({ onOpen }: { onOpen: () => void }) {
         )}
         <span
           aria-hidden
-          className="absolute bottom-[-1px] right-[-1px] h-[9px] w-[9px] rounded-full border-2 border-[var(--color-charcoal)]"
+          className="absolute bottom-[-1px] right-[-1px] h-[9px] w-[9px] rounded-full border-2 border-[var(--paper-doc)]"
           style={{ background: DOT[current] }}
         />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-heading text-[14px] font-medium text-[rgba(250,247,242,0.92)]">
+        <span className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)]">
           {name ?? email ?? 'Account'}
         </span>
-        <span className="block truncate font-mono text-[11px] uppercase tracking-[0.07em] text-[rgba(250,247,242,0.45)]">
+        <span className="block break-words font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-subtle)]">
           {studio ? studio.name : email}
         </span>
       </span>

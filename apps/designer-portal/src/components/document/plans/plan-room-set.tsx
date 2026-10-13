@@ -144,7 +144,7 @@ export function PlanRoomSet({
 
   if (set.length === 0) {
     return (
-      <section aria-label="The light table" className="mx-auto max-w-[42rem] px-4 py-12 md:px-8">
+      <section aria-label="The light table" className="max-w-[42rem] px-4 py-12 md:px-8">
         {/* The one empty state (US-28 S1; chrome-p5), never a dashed box. */}
         <EmptyState
           eyebrow="Plans"

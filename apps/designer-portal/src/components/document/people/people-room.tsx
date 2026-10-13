@@ -146,7 +146,7 @@ export function PeopleRoom() {
     actionKey: "add-person",
     surfaceKey: "people",
     regionKey: "room-head",
-    label: "Add person",
+    label: "Add contact",
     target: { kind: "press", onPress: () => setAddOpen(true) },
   });
 

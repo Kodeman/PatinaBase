@@ -622,3 +622,49 @@ describe('the Sections sheet no longer carries the margin (D-B30)', () => {
   });
 
 });
+
+describe('More → Ledgers (SQ-877 N1): the paper twin of the dock popover', () => {
+  function openLedgersSheet() {
+    mountBarAndSheets();
+    fireEvent.click(openMore().getByRole('button', { name: 'Ledgers' }));
+    const dialog = screen.getByRole('dialog', { name: 'Ledgers' });
+    return {
+      dialog,
+      panel: dialog.querySelector('[data-mobile-sheet-panel]') as HTMLElement,
+    };
+  }
+
+  it('is the square paper sheet with a clear scrim, not the dark drawer', () => {
+    const { dialog, panel } = openLedgersSheet();
+    expect(panel).toHaveClass(
+      'rounded-[2px]',
+      'border-[var(--card-edge)]',
+      'bg-[var(--paper-doc)]',
+    );
+    expect(panel.className).not.toMatch(/charcoal|rounded-t-/);
+    expect(
+      within(dialog).getByRole('button', { name: 'Dismiss', hidden: true }),
+    ).toHaveClass('bg-transparent');
+    expect(within(dialog).queryByText(/six books/)).not.toBeInTheDocument();
+  });
+
+  it('lists the Ledgers the 1440 popover lists, and no rooms', () => {
+    const { panel } = openLedgersSheet();
+    const rows = Array.from(panel.querySelectorAll('[data-mobile-ledger]')).map(
+      (el) => el.textContent,
+    );
+    expect(rows).toEqual(['Purchase orders', 'Studio accounts', 'Timesheets']);
+    expect(within(panel).queryByText('Library')).not.toBeInTheDocument();
+  });
+
+  it('each ledger opens its own sheet', () => {
+    const { openLedger } = jest.requireMock('../command-bar') as {
+      openLedger: jest.Mock;
+    };
+    openLedger.mockClear();
+    const { panel } = openLedgersSheet();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Timesheets' }));
+    expect(openLedger).toHaveBeenCalledWith('hours');
+    expect(screen.queryByRole('dialog', { name: 'Ledgers' })).not.toBeInTheDocument();
+  });
+});
