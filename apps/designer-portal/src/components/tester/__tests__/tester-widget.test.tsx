@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { TesterWidget } from '../tester-widget';
+import { TesterSlot } from '../tester-slot';
 
 let mockFlag = { value: true, isLoading: false };
 let mockUser: { id: string } | undefined = { id: 'me' };
@@ -320,5 +321,53 @@ describe('TesterWidget', () => {
     mockUnseen = [{ id: 'f1' }];
     render(<TesterWidget />);
     expect(screen.getByLabelText('shipped notes to see')).toBeInTheDocument();
+  });
+
+  describe('SQ-856 — the mark never floats over a live control', () => {
+    it('with no dock laid out it is a fixed paper tag UNDER the chrome layer', () => {
+      render(<TesterWidget />);
+      const mark = pill()!;
+      expect(mark).toHaveAttribute('data-tester-mark', 'fixed');
+      // z-40 is the dock, its popovers, the sheets and the board room: all
+      // of them cover the mark, so a click meant for them reaches them.
+      expect(mark).toHaveClass('fixed', 'z-[39]');
+      expect(mark).not.toHaveClass('z-[68]');
+      // Not the black-and-yellow pill. (jsdom's CSSOM drops the var() paper
+      // colours themselves, so the stock is asserted by what is gone.)
+      const style = mark.getAttribute('style') ?? '';
+      expect(style).not.toContain('rgb(0, 0, 0)');
+      expect(style).not.toContain('rgb(255, 214, 10)');
+      expect(mark.style.borderRadius).toBe('2px');
+      expect(mark.style.minHeight).toBe('44px');
+    });
+
+    it('takes its place in the dock row when a dock prints its slot', () => {
+      render(
+        <>
+          <nav aria-label='Document bar'>
+            <TesterSlot kind='bar' />
+          </nav>
+          <TesterWidget />
+        </>,
+      );
+      const mark = pill()!;
+      expect(mark).toHaveAttribute('data-tester-mark', 'dock');
+      expect(mark.closest('nav')).toHaveAttribute('aria-label', 'Document bar');
+      expect(mark).not.toHaveClass('fixed');
+      expect(mark.style.bottom).toBe('');
+    });
+
+    it('still opens the capture form from the docked mark', async () => {
+      render(
+        <>
+          <nav aria-label='Document bar'>
+            <TesterSlot kind='bar' />
+          </nav>
+          <TesterWidget />
+        </>,
+      );
+      await openPanel(() => fireEvent.click(pill()!));
+      expect(panel()).toBeInTheDocument();
+    });
   });
 });

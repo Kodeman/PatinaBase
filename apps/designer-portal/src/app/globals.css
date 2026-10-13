@@ -2929,3 +2929,20 @@ html:has([data-document-shell]) {
 .desk-loading-frame { height: 120px; border: 1px solid var(--border-subtle); border-radius: 2px; }
 .day-sheet + .desk-ledger { margin-top: 72px; }
 @media (max-width: 599px) { .day-sheet + .desk-ledger { margin-top: 48px; } }
+
+/* US-28 walk-fix chrome ════════════════════════════════════════════════════
+   SQ-856. Above 1180 the Studio Drawer wraps (its doors take a second line
+   when the crumb and the right zone need the room), so the persistent edge is
+   the drawer's own published box, not a constant 60px. The drawer publishes
+   `--doc-drawer-height` on `html` only while it is laid out; 60px is its
+   one-line floor and the contract this edge always carried. */
+@media (min-width: 1180px) {
+  .document-route-shell {
+    --doc-shell-bottom-inset: var(--doc-drawer-height, 60px);
+  }
+  html:has([data-document-shell]) {
+    /* The base rule resolves to 72px here (no bar is published above 1180);
+       it only grows when the drawer wraps taller than that. */
+    scroll-padding-bottom: max(72px, var(--doc-drawer-height, 0px));
+  }
+}

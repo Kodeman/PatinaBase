@@ -144,6 +144,54 @@ describe('StudioDrawer', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('SQ-856 — the crumb holds one line on a track sized to it, and the doors wrap instead', () => {
+    mockPathname = '/rooms';
+    render(<StudioDrawer />);
+
+    const drawer = screen.getByRole('navigation', { name: 'Studio drawer' });
+    // Neither side zone can be squeezed below its content: at 1280–1440 the
+    // left track used to get ~54–79px and the crumb 0px.
+    expect(drawer).toHaveClass(
+      'grid-cols-[minmax(max-content,1fr)_auto_minmax(max-content,1fr)]',
+    );
+    // It grows upward from the edge when the doors wrap, never past it.
+    expect(drawer).toHaveClass('min-h-[60px]');
+    expect(drawer).not.toHaveClass('h-[60px]');
+
+    const crumb = drawer.querySelector('[data-drawer-crumb]')!;
+    expect(crumb).toHaveTextContent('Measured rooms');
+    expect(crumb).toHaveClass('whitespace-nowrap');
+    // A 0px span that may break anywhere stood one letter per line.
+    expect(crumb).not.toHaveClass('break-words');
+    expect(crumb).not.toHaveClass('min-w-0');
+    expect(crumb).not.toHaveClass('truncate');
+
+    expect(drawer.querySelector('[data-drawer-doors]')).toHaveClass('flex-wrap');
+  });
+
+  it('SQ-856 — publishes its own height for the paper inset, and takes it back off', () => {
+    const rect = jest
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ height: 111, width: 1440 } as DOMRect);
+    const { unmount } = render(<StudioDrawer />);
+    expect(
+      document.documentElement.style.getPropertyValue('--doc-drawer-height'),
+    ).toBe('111px');
+    unmount();
+    expect(
+      document.documentElement.style.getPropertyValue('--doc-drawer-height'),
+    ).toBe('');
+    rect.mockRestore();
+  });
+
+  it('SQ-856 — prints the TESTER mark its place in the dock row', () => {
+    render(<StudioDrawer />);
+    const drawer = screen.getByRole('navigation', { name: 'Studio drawer' });
+    expect(drawer.querySelector('[data-tester-slot="drawer"]')).toHaveClass(
+      'contents',
+    );
+  });
+
   it('F11 — closing a books-menu sheet returns focus to Ledgers once the opening row has unmounted', async () => {
     render(<StudioDrawer />);
 

@@ -46,6 +46,7 @@ import { AccountNameplate } from './account/account-nameplate';
 import { openCommandBar, type OpenLedgerContext } from './command-bar';
 import { openKeys } from './overlays/keys-sheet';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { TesterSlot } from '@/components/tester/tester-slot';
 
 /** R93/R107 — the six doors, sourced from the Studio Surface Registry: label,
  *  icon, and weight all come from one place now, so a rename or re-icon
@@ -142,6 +143,7 @@ export function StudioDrawer() {
   // books toggle; one opened by ⌘K, the margin rail, the mobile dock or the
   // /desk?book= doorway must not drag focus down into the drawer.
   const [openedFromBooksMenu, setOpenedFromBooksMenu] = useState(false);
+  const drawerRef = useRef<HTMLElement>(null);
   const booksButtonRef = useRef<HTMLButtonElement>(null);
   const booksMenuRef = useRef<HTMLDivElement>(null);
   const firstBookRef = useRef<HTMLButtonElement>(null);
@@ -217,6 +219,30 @@ export function StudioDrawer() {
     };
   }, [booksOpen]);
 
+  // SQ-856 — the dock wraps above 1180, so its height is its own box, not a
+  // constant 60px: published on `html` (as the MobileBar publishes its own)
+  // for the paper's bottom inset and the TESTER mark that sits above it.
+  // Zero is the drawer not laid out (below 1180), and the property comes off.
+  useEffect(() => {
+    const root = document.documentElement;
+    const clear = () => root.style.removeProperty('--doc-drawer-height');
+    const drawer = drawerRef.current;
+    if (!drawer) return clear;
+    const publish = () => {
+      const height = Math.round(drawer.getBoundingClientRect().height);
+      if (height <= 0) clear();
+      else root.style.setProperty('--doc-drawer-height', `${height}px`);
+    };
+    publish();
+    if (typeof ResizeObserver === 'undefined') return clear;
+    const observer = new ResizeObserver(publish);
+    observer.observe(drawer);
+    return () => {
+      observer.disconnect();
+      clear();
+    };
+  }, []);
+
   const rememberBook = (key: SheetKey) => {
     setRecentBook(key);
     try {
@@ -281,20 +307,26 @@ export function StudioDrawer() {
     <>
       {/* The unified mobile bar owns the edge until the full drawer can breathe. */}
       <nav
+        ref={drawerRef}
         aria-label="Studio drawer"
         data-tour-anchor="studio-drawer"
-        /* SQ-715 — with Find and Keys on one row, the right zone (clock,
-           THE POST, identity) is wider than its even share at 1180–1440, so
-           its track never shrinks below its own content; the centre gives
-           way leftward instead of printing over it. */
-        className={`fixed inset-x-0 bottom-0 z-40 hidden h-[60px] items-center gap-4 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-[22px] min-[1180px]:grid ${
-          askThePaperOn
-            ? 'grid-cols-[1fr_auto_minmax(max-content,1fr)]'
-            : 'grid-cols-[1fr_auto_1fr]'
-        }`}
+        /* SQ-715 — the right zone (clock, THE POST, identity) never shrinks
+           below its own content. SQ-856 — nor does the left (wordmark and
+           crumb): at 1280–1440 the centre and right left it ~54–79px, the
+           crumb got 0px and, wrapping one letter per line, stood the row
+           ~200–300px tall and pushed every act below the screen. The centre
+           gives way instead: its doors wrap onto a second line and the dock
+           grows upward from the edge (F8 — the dock wraps). */
+        className="fixed inset-x-0 bottom-0 z-40 hidden min-h-[60px] grid-cols-[minmax(max-content,1fr)_auto_minmax(max-content,1fr)] content-center items-center gap-x-4 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-[22px] py-1 min-[1180px]:grid"
       >
-        {/* Left — the studio wordmark (home) + a quiet breadcrumb. */}
-        <div className="flex min-w-0 items-center gap-2.5">
+        {/* Left — the studio wordmark (home) + a quiet breadcrumb. The -mr-4
+            hands its track the column gap it always printed into (at 1280 the
+            wordmark alone ran 16px past its old track), so the Desk and
+            /boards keep the one-line dock they had and only a crumb that
+            truly needs the room wraps the doors. */}
+        <div className="-mr-4 flex min-w-0 items-center gap-2.5">
+          {/* SQ-856 — the TESTER mark's place, empty for everyone else. */}
+          <TesterSlot kind="drawer" />
           <Link
             href="/desk"
             className="inline-flex min-h-11 shrink-0 items-center rounded-[3px] font-heading text-[15px] font-medium uppercase tracking-[0.2em] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
@@ -306,10 +338,11 @@ export function StudioDrawer() {
               <span aria-hidden className="text-[var(--border-default)]">
                 /
               </span>
-              {/* F8 — wraps, never truncates. */}
+              {/* F8 — never truncates. SQ-856 — one line: its track is sized
+                  to it, so it is never squeezed into a letter column. */}
               <span
                 data-drawer-crumb
-                className="min-w-0 break-words font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
+                className="whitespace-nowrap font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
               >
                 {breadcrumb}
               </span>
@@ -317,8 +350,12 @@ export function StudioDrawer() {
           )}
         </div>
 
-        {/* Center — Rooms stay named; sheets gather behind one doorway. */}
-        <div className="flex items-center gap-0.5">
+        {/* Center — Rooms stay named; sheets gather behind one doorway. When
+            the zones beside it need the room, its doors wrap (SQ-856). */}
+        <div
+          data-drawer-doors
+          className="flex flex-wrap items-center justify-center gap-0.5 [&_button]:whitespace-nowrap"
+        >
           {ROOM_DOORS.map((ledger) => {
             const Icon = ledger.icon;
             const here =

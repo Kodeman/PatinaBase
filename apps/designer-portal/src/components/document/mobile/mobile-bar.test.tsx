@@ -1104,3 +1104,49 @@ describe('the studio surface label on the phone bar (SQ-752)', () => {
     expect(screen.getByText(label)).toBeInTheDocument();
   });
 });
+
+describe('the phone dock on the paper stock (SQ-856, chrome-p6)', () => {
+  beforeEach(() => {
+    mockCallSheetOn = true;
+    mockPathname = '/rooms';
+  });
+
+  it('is the --paper-doc bar on a --hairline-strong rule, not the dark ink band', () => {
+    mountBar({ doc: null });
+    const bar = screen.getByTestId('mobile-bar');
+    expect(bar).toHaveClass('bg-[var(--paper-doc)]', 'border-[var(--hairline-strong)]');
+    expect(bar.className).not.toContain('charcoal');
+    expect(bar.className).not.toContain('rgba(250,247,242');
+  });
+
+  it('reads "Studio section" over the place, and "More" on its act', () => {
+    mountBar({ doc: null });
+    expect(screen.getByText('Studio section')).toBeInTheDocument();
+    expect(screen.queryByText('Studio navigation')).not.toBeInTheDocument();
+    const more = screen.getByRole('button', { name: 'More studio actions' });
+    expect(more).toHaveTextContent(/^More$/);
+  });
+
+  it('opens More as the square popover on --paper-doc with the card edge', () => {
+    mountBar({ doc: null });
+    openMore();
+    const menu = screen.getByRole('group', { name: 'More studio actions' });
+    expect(menu).toHaveClass('popover', 'ledgers-pop');
+    expect(menu.className).not.toContain('charcoal');
+    expect(menu.className).not.toContain('rounded-[6px]');
+  });
+
+  it('prints the TESTER mark its place in the bar row', () => {
+    mountBar({ doc: null });
+    expect(
+      screen.getByTestId('mobile-bar').querySelector('[data-tester-slot="bar"]'),
+    ).toHaveClass('contents');
+  });
+
+  it('collapses the empty act slot, so the place keeps the room the mark and More take', () => {
+    mountBar({ doc: null });
+    const slot = screen.getByTestId('mobile-bar').querySelector('[class~="empty:hidden"]');
+    expect(slot).not.toBeNull();
+    expect(slot).toBeEmptyDOMElement();
+  });
+});
