@@ -74,6 +74,9 @@ export function DeskJobCard({
             className="name"
             data-part={first ? "job" : undefined}
             data-day-sheet-job
+            // arrival-mount.tsx TOKEN_LINKS: opening the job from its card is
+            // a soft entry into the Document, as the claim card's name was.
+            data-roster-name
           >
             {card.name}
           </Link>

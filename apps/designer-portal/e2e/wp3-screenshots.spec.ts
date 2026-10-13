@@ -209,7 +209,7 @@ test('margin handoff — folded, unfolded, and overdue', async ({
   });
 });
 
-test('Desk — cards for the claims, lines for the rest', async ({
+test('Desk — Today’s cards over the ledger of the rest', async ({
   authenticatedPage: page,
 }) => {
   for (const [name, viewport] of [
@@ -220,49 +220,29 @@ test('Desk — cards for the claims, lines for the rest', async ({
     await page.setViewportSize(viewport);
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
 
-    // R143 — the roster is two halves now. The first CLAIM CARD carries the
-    // `desk-folio` tour anchor (or, on a Desk with no claims, the at-rest
-    // head), so the walkthrough's fourth stop lands where it always did.
-    const folios = page.locator('[data-tour-anchor="desk-folio"]');
-    await expect(folios.first()).toBeVisible({ timeout: 30_000 });
-    await folios.first().scrollIntoViewIfNeeded();
-    await folios.first().screenshot({
-      path: `${SHOT_DIR}/desk-folio-${name}.png`,
-    });
-
+    // US-28 S3 — Today is one card per job that needs her, each an <article>
+    // on its stage edge; under it, the ledger of every job Today does not
+    // hold. Its first group carries the walkthrough's `desk-folio` stop.
+    const sheet = page.getByTestId('day-sheet');
+    await expect(sheet).toBeVisible({ timeout: 30_000 });
     const roster = page.getByTestId('desk-roster');
     await expect(roster).toHaveCount(1, { timeout: 30_000 });
+    const folios = page.locator('[data-tour-anchor="desk-folio"]');
+    await expect(folios.first()).toBeVisible({ timeout: 30_000 });
 
-    // R143's amended density rule: one line per job in the at-rest ledger, a
-    // card for a job with a claim on the studio's hand — and nothing folded on
-    // first paint in either half.
-    await expect(roster.locator('[data-claim-card]').first()).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(roster.locator('[aria-expanded]')).toHaveCount(0);
-    await expect(roster.locator('[hidden]')).toHaveCount(0);
+    // Ruling VI holds without an aggregate: no count, no workload head.
+    await expect(roster).not.toContainText(/Studio workload|\d+ live|\(\d+\)/);
 
-    // Stage headings head the LEDGER half, and a Desk whose jobs all claim her
-    // hand has no ledger and therefore no <h3> — so this asserts the plates
-    // only where a ledger exists, rather than requiring one to.
-    if ((await roster.locator('[data-ledger-row]').count()) > 0) {
-      await expect(roster.locator('h3').first()).toBeVisible();
-      await expect(roster.locator('[data-desk-rest-head]')).toBeVisible();
+    await sheet.scrollIntoViewIfNeeded();
+    await sheet.screenshot({ path: `${SHOT_DIR}/desk-today-${name}.png` });
+
+    // The quiet jobs fold behind one Show; open it so the ledger prints whole.
+    for (const show of await roster.getByRole('button', { name: /^Show / }).all()) {
+      if ((await show.getAttribute('aria-expanded')) === 'false') await show.click();
     }
-
-    // Ruling VI: exactly one aggregate sentence, and it states gates only —
-    // The studio today's two live facts, absorbed into the roster's own header
-    // (`Every job · n live · m overdue`) and the Inter line under it.
-    await expect(roster.locator('#every-job')).toHaveCount(1);
-    await expect(roster.locator('#every-job')).toContainText(/live/i);
     await roster.scrollIntoViewIfNeeded();
     await roster.screenshot({
-      path: `${SHOT_DIR}/desk-roster-${name}.png`,
-    });
-
-    await page.locator('#desk-claims').scrollIntoViewIfNeeded();
-    await page.locator('#desk-claims').screenshot({
-      path: `${SHOT_DIR}/desk-claims-${name}.png`,
+      path: `${SHOT_DIR}/desk-ledger-${name}.png`,
     });
   }
 });

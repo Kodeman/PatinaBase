@@ -72,13 +72,11 @@ test.describe("Desk — whole-desk error state", () => {
 
     // No half-desk: none of the healthy/quiet-desk surfaces coexist with the
     // error banner — this is exactly the bug the whole-desk error state fixes.
-    await expect(page.getByText("Nothing more needs you today.")).toHaveCount(0);
-    // B2 — `Needs your hand` is `Studio workload · n live · m overdue` now: one
-    // roster of every live job, grouped by stage.
+    await expect(page.getByText(/Nothing (more )?needs you today\./)).toHaveCount(0);
+    // US-28 S3 — the Desk is Today's cards over the ledger of the rest of the
+    // jobs; neither half prints beside the error banner.
+    await expect(page.getByTestId("day-sheet")).toHaveCount(0);
     await expect(page.getByTestId("desk-roster")).toHaveCount(0);
-    await expect(
-      page.getByRole("heading", { name: /Studio workload/ }),
-    ).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "In motion" })).toHaveCount(
       0,
     );
@@ -91,9 +89,7 @@ test.describe("Desk — whole-desk error state", () => {
     await retry.click();
 
     await expect(errorState).toHaveCount(0, { timeout: 20_000 });
-    await expect(
-      page.getByRole("heading", { name: /Studio workload/ }),
-    ).toBeVisible({
+    await expect(page.getByTestId("day-sheet")).toBeVisible({
       timeout: 20_000,
     });
 
@@ -107,20 +103,17 @@ test.describe("Desk — whole-desk error state", () => {
     for (let i = 1; i <= RUNS; i++) {
       await page.goto("/desk", { waitUntil: "domcontentloaded" });
 
-      // Every load resolves to exactly one of: the roster's job lines, or the
-      // empty-state line — never neither, never both, and never the error
+      // Every load resolves to exactly one of: the studio's jobs, or the
+      // empty-studio sentence — never neither, never both, and never the error
       // surface (this loop runs against the real local stack, no interception).
-      const everyJob = page.getByRole("heading", { name: /Studio workload/ });
-      await expect(everyJob).toBeVisible({ timeout: 20_000 });
-
-      // The roster's own empty line (desk-roster.tsx); the Day Sheet's quiet
-      // sentence is a separate line above it (US-28 S0 F4).
-      const emptyLine = page
-        .getByTestId("desk-roster")
-        .getByText("The work is in motion.");
-      // R143 — the Desk's jobs are cards and ledger rows now; this assertion
-      // is about "did any job render at all", so it counts both halves.
-      const jobLines = page.locator("[data-claim-card], [data-ledger-row]");
+      const emptyLine = page.getByText(
+        "No project files yet. Record an inquiry or create a project file to begin.",
+      );
+      // US-28 S3 — a job prints as a Today card or a ledger row; a quiet job
+      // sits folded under its ledger group, so the group counts as rendered.
+      const jobLines = page.locator(
+        "[data-desk-card], [data-ledger-row], [data-roster-group]",
+      );
 
       // Poll past the transient loading-skeleton window rather than snapshot
       // immediately after domcontentloaded — the read is async.

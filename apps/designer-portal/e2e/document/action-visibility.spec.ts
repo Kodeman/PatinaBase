@@ -180,18 +180,38 @@ test.describe("Inked Instruments action visibility", () => {
       ),
     ).toHaveCount(0);
 
-    // R143 — a card for a claim, a line for the rest. Both halves carry the
-    // same one act per job at a real 44px target, and the region still elects
-    // no leader.
-    const firstCard = roster.locator("[data-claim-card]").first();
+    // US-28 S3 — Today's cards over the ledger of the rest. A Today line's act
+    // sits in the Day Sheet's own region at a real 44px target, and that
+    // region elects no leader either.
+    const todayActs = page.locator(
+      '[role="group"][data-action-region="day-sheet"]',
+    );
+    await expect(todayActs).toHaveCount(1, { timeout: COLD });
+    await expect(
+      todayActs.locator(
+        '[data-action-variant="primary"], [data-action-variant="inked"]',
+      ),
+    ).toHaveCount(0);
+    const firstCard = todayActs.locator("[data-desk-card]").first();
     await expect(firstCard).toBeVisible({ timeout: COLD });
-    const rosterAction = firstCard.locator('[data-action-key^="roster-"]');
-    await expect(rosterAction).toHaveCount(1, { timeout: COLD });
-    await expect(rosterAction).toContainText(ROSTER_ACTION, { timeout: COLD });
-    await expectMinTarget(rosterAction);
+    const todayAction = firstCard
+      .locator(
+        '[data-action-key^="day-sheet-"]:not([data-action-key="day-sheet-not-today"]):not([data-action-key="day-sheet-undo"])',
+      )
+      .first();
+    // A Today act is named for its line's need and its job ("Record payment —
+    // Chen Residence"); the roster's act vocabulary is the ledger's, below.
+    await expect(todayAction).toHaveAttribute("aria-label", / — .+$/, {
+      timeout: COLD,
+    });
+    await expect(todayAction).toContainText(/\S/);
+    await expectMinTarget(todayAction);
 
-    // The at-rest half's act is the same instrument at the same floor.
-    const firstRow = roster.locator("[data-ledger-row]").first();
+    // The ledger's act is the same instrument at the same floor, on a row she
+    // carries (a row with others or coming back prints none).
+    const firstRow = roster
+      .locator('[data-ledger-row]:has([data-action-key^="roster-"])')
+      .first();
     await expect(firstRow).toBeVisible({ timeout: COLD });
     const ledgerAction = firstRow.locator('[data-action-key^="roster-"]');
     await expect(ledgerAction).toHaveCount(1, { timeout: COLD });
@@ -264,13 +284,10 @@ test.describe("Inked Instruments action visibility", () => {
 
     // The head act is the FIRST thing on this route, so under `next dev` a
     // press can land on server markup whose handler has not attached yet and
-    // be silently lost. The roster's jobs only exist once React has run and
+    // be silently lost. The Desk's jobs only exist once React has run and
     // its query resolved, so waiting on one is the hydration barrier.
     await expect(
-      page
-        .getByTestId("desk-roster")
-        .locator("[data-claim-card], [data-ledger-row]")
-        .first(),
+      page.locator("[data-desk-card], [data-ledger-row]").first(),
     ).toBeVisible({ timeout: COLD });
 
     // Regression: the first client-journey form must remain usable without
@@ -328,10 +345,7 @@ test.describe("Inked Instruments action visibility", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/desk", { waitUntil: "domcontentloaded" });
     await expect(
-      page
-        .getByTestId("desk-roster")
-        .locator("[data-claim-card], [data-ledger-row]")
-        .first(),
+      page.locator("[data-desk-card], [data-ledger-row]").first(),
     ).toBeVisible({ timeout: COLD });
     await expect
       .poll(() =>

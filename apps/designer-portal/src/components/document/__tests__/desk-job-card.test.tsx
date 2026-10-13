@@ -110,6 +110,8 @@ describe("DeskJobCard", () => {
     const link = screen.getByRole("link", { name: "Holloway Den" });
     expect(link).toHaveAttribute("href", "/doc/p-holloway");
     expect(link).toHaveAttribute("data-part", "job");
+    // The arrival's token link (arrival-mount.tsx TOKEN_LINKS).
+    expect(link).toHaveAttribute("data-roster-name");
     expect(link.closest("h3")).toHaveClass("t-d3");
     first.unmount();
     renderCard();

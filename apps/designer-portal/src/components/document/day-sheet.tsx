@@ -391,7 +391,8 @@ export function DaySheet({
 
       {!quiet && (
         <DocumentActionGroup surfaceKey="desk" regionKey="day-sheet" aria-label="Today’s actions">
-          <div className="cards-wrap">
+          {/* `w-full`: an inline-size container sized by its flex row measures 0. */}
+          <div className="cards-wrap w-full">
             <div className="cards">
               {cards.map((card, position) => (
                 <DeskJobCard key={card.jobId} card={card} scope={scope} now={now} first={position === 0}>
