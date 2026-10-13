@@ -139,3 +139,31 @@ Deno.test("invoice reminder afterSend stamps cadence and sends first-step attent
   assertEquals(calls.some((call) => call.kind === "invoices.update" && (call.args as Record<string, unknown>).reminder_count === 1), true);
   assertEquals(calls.some((call) => call.kind === "notify_client_attention" && (call.args as Record<string, unknown>).p_authority === authority), true);
 });
+
+Deno.test("overdue designer notice uses studio voice, not automated wording", async () => {
+  const inserts: Array<Record<string, unknown>> = [];
+  const admin = {
+    from(table: string) {
+      return {
+        update() { return { eq: () => Promise.resolve({ error: null }) }; },
+        insert(values: Record<string, unknown>) {
+          inserts.push(values);
+          return Promise.resolve({ error: null });
+        },
+      };
+    },
+  };
+  const draft = {
+    id: "draft-1", organization_id: "studio-1", project_id: null, kind: "invoice_reminder",
+    channel: "email", recipient_kind: "client", to_contact_id: null, to_client_id: null,
+    to_party_id: null, to_address: "client@example.com", subject: "Invoice overdue", body: "Reminder",
+    payload: { step: 1, invoice_number: "INV-1", studio_name: "North Studio" },
+    ref_type: "invoice", ref_id: "invoice-1", status: "sending", sent_by: null,
+  };
+
+  await afterSend({ admin, draft, messageId: "mail-1", authority } as never);
+
+  const metadata = inserts[0].metadata as Record<string, unknown>;
+  assertEquals(/automat/i.test(String(metadata.message)), false);
+  assertEquals(String(metadata.message).includes("North Studio"), true);
+});
