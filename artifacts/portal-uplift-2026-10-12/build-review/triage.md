@@ -144,3 +144,26 @@ Gate at 482b32403:
 - design-system vitest (scoped): 175/175.
 
 Noted, not a defect: `ffe-section-act-landing` failed once under full-suite load at f00b9b97e and passed 3/3 in isolation. It's a timing flake; watch for it in the final gate.
+
+## Final gate SQ-878 (candidate 522354d77): NO-GO, then SQ-879
+
+The production e2e comparison against main fc7fa72d1 found two failures that happen on the candidate only. They are product regressions (c):
+
+| Finding | Ruling | Landed |
+|---|---|---|
+| D-B38: lens band line 1 wraps at 390, so line 2 moves 15px when the band pins | ACCEPT, product fix | SQ-879, d4ae1dc70 |
+| D-B31: wheel fling shows 2 blank frames (limit 1). Not slower paint: S7a's region close (globals.css, 24px padding-bottom plus rule) adds 54px, which puts the ffe top at 1777, 37px past the 240px lookahead line that the mid-fling discover() pass checks | ACCEPT. Option (a): `LENS_LOOKAHEAD_PX` 240 → 288 (24 × 12). D-B31's own instrument says "blank paper >1 frame → lookahead grows". S7a's padding (b), the hook's commit model (c) and the test (d) are unchanged | SQ-879, 353fe4736 |
+
+Everything else falls into two classes:
+
+**(a) Pre-existing on main**, failing identically on both builds:
+- 350ms arrival / cold Desk;
+- buying constraint;
+- pieces S7 duplicate hash;
+- 390 letterhead ledger on two rows;
+- A9 `/In hand|Today/`;
+- lens-band-height: the same 8 fail on both builds.
+
+**(b) Stale assertion on the baseline only:** "Add contact" vs "Add person". The candidate passes.
+
+**SQL:** `first_flight_catalog` (7-day publish window) and `she_sets_the_pace` (the sweep counts the whole shared DB) are data-state failures, not US-28.
