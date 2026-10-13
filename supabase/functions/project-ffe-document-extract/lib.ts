@@ -2,6 +2,7 @@ export const MAX_PDF_BYTES = 25 * 1024 * 1024;
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_ROWS = 5_000;
 export const MAX_UNIT_PRICE_MINOR = 100_000_000;
+export const FILES_API_THRESHOLD_BYTES = 20 * 1024 * 1024;
 export const EXTRACTION_TOOL_NAME = "stage_project_ffe_rows";
 export const SOURCE_BUCKET = "project-ffe-working";
 export const SOURCE_REGISTRATION_VERSION = 1;
@@ -152,6 +153,74 @@ export function sourceContentBlock(contentType: SourceContentType, bytes: Uint8A
   return contentType === "application/pdf" ? { type: "document", source } : { type: "image", source };
 }
 
+export async function callExtractionWithFiles(
+  client: {
+    files: {
+      upload(args: { file: File }): Promise<{ id: string }>;
+      delete(id: string): Promise<unknown>;
+    };
+    messages: { create(params: Record<string, unknown>): Promise<{
+      stop_reason: string | null;
+      content: { type: string; text?: string }[];
+      usage: {
+        input_tokens: number;
+        output_tokens: number;
+        cache_creation_input_tokens?: number;
+        cache_read_input_tokens?: number;
+      };
+    }> };
+  },
+  params: Record<string, unknown>,
+  contentType: SourceContentType,
+  bytes: Uint8Array,
+) {
+  if (contentType !== "application/pdf" || bytes.byteLength <= FILES_API_THRESHOLD_BYTES) {
+    return await client.messages.create(params);
+  }
+  const fileBytes = new Uint8Array(bytes.byteLength);
+  fileBytes.set(bytes);
+  const uploaded = await client.files.upload({
+    file: new File([fileBytes.buffer], "source.pdf", { type: "application/pdf" }),
+  });
+  try {
+    const messages = params.messages as Array<{ content: unknown[] }>;
+    const document = messages[0].content.find((block) =>
+      (block as { type?: string }).type === "document"
+    ) as { type: string; source: unknown };
+    document.source = { type: "file", file_id: uploaded.id };
+    return await client.messages.create(params);
+  } finally {
+    await client.files.delete(uploaded.id);
+  }
+}
+
+export function parseClaudeExtraction(
+  content: { type: string; text?: string }[],
+  schemaVersion: SchemaVersion,
+  sourceKind: SourceKind,
+) {
+  const text = content.find((block) => block.type === "text")?.text;
+  if (!text) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  return schemaVersion === 1
+    ? validateExtraction(parsed, sourceKind)
+    : validateExtractionV2(parsed, sourceKind);
+}
+
+export function claudeFailureResponse(
+  result: { denied: "kill" | "disabled" | "budget" },
+  resetsAt: string,
+) {
+  return result.denied === "budget"
+    ? { body: { error: "monthly_allowance_used", resets_at: resetsAt }, status: 429 }
+    : { body: { error: "extractor_unavailable" }, status: 503 };
+}
+
 // Contract B §B.5: the type is read from the bytes, never from the request or
 // the upload's client-asserted Content-Type.
 export function sniffSourceContentType(bytes: ArrayBuffer): SourceContentType | null {
@@ -167,11 +236,11 @@ export function sniffSourceContentType(bytes: ArrayBuffer): SourceContentType | 
 
 export function extractionPrompt(schemaVersion: SchemaVersion = 1): string {
   if (schemaVersion === 1) {
-    return "Extract only explicit FF&E facts from the PDF. Never infer approval, authority, pricing, trade cost, markup, or a client verdict. Preserve the PDF page number in both pageNumber and provenance.page, use an integer quantity (default 1), and give provenance.confidence from 0–1. Submit all rows with the provided tool.";
+    return "Extract only explicit FF&E facts from the PDF. Never infer approval, authority, pricing, trade cost, markup, or a client verdict. Preserve the PDF page number in both pageNumber and provenance.page, use an integer quantity (default 1), and give provenance.confidence from 0–1. Submit all rows in the requested JSON shape.";
   }
   // Ruling D7: maker, SKU, unit price and currency only — never markup, never a
   // client-vs-trade classification, and every reading is unconfirmed.
-  return "Extract only explicit FF&E facts that are printed in the source. Read the commercial block — maker, SKU, unit price and currency — only when it is printed verbatim; never compute, convert or infer it, and never decide whether a printed price is a client price or a trade cost. Never infer approval, authority, markup, or a client verdict. Every commercial value you return is an unconfirmed reading a designer must confirm: set `state` to `\"unconfirmed\"` on each, and leave a commercial field null rather than guessing. Return the source page in both `pageNumber` and `provenance.page` — for a photograph, use 1 — set `provenance.sourceKind` to `\"pdf\"` or `\"photo\"`, use an integer quantity (default 1), and give `provenance.confidence` and each commercial value's own confidence from 0–1. Submit all rows with the provided tool.";
+  return "Extract only explicit FF&E facts that are printed in the source. Read the commercial block — maker, SKU, unit price and currency — only when it is printed verbatim; never compute, convert or infer it, and never decide whether a printed price is a client price or a trade cost. Never infer approval, authority, markup, or a client verdict. Every commercial value you return is an unconfirmed reading a designer must confirm: set `state` to `\"unconfirmed\"` on each, and leave a commercial field null rather than guessing. Return the source page in both `pageNumber` and `provenance.page` — for a photograph, use 1 — set `provenance.sourceKind` to `\"pdf\"` or `\"photo\"`, use an integer quantity (default 1), and give `provenance.confidence` and each commercial value's own confidence from 0–1. Submit all rows in the requested JSON shape.";
 }
 
 const nullableStringSchema = (maxLength: number) => ({ type: ["string", "null"], maxLength });

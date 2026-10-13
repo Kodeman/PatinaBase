@@ -1,9 +1,13 @@
 import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   EXTRACTION_TOOL_NAME,
+  FILES_API_THRESHOLD_BYTES,
   MAX_IMAGE_BYTES,
   MAX_PDF_BYTES,
   base64Chunks,
+  callExtractionWithFiles,
+  claudeFailureResponse,
+  parseClaudeExtraction,
   extractionStageArgs,
   extractionPrompt,
   extractionTool,
@@ -79,7 +83,61 @@ Deno.test("extract source must be the exact actor-authorized project PDF record"
   assertEquals(parseExtractSource({ ...source, sizeBytes: MAX_PDF_BYTES + 1 }, { projectId, assetId }, actorId)?.sizeBytes, MAX_PDF_BYTES + 1);
 });
 
-Deno.test("Anthropic request uses one forced schema-constrained staging tool", () => {
+Deno.test("structured extraction parses JSON text and maps Claude denials", () => {
+  assertEquals(parseClaudeExtraction([{ type: "text", text: JSON.stringify({ rows: [row] }) }], 1, "pdf")?.rows, [row]);
+  assertEquals(parseClaudeExtraction([{ type: "text", text: "not json" }], 1, "pdf"), null);
+  const resetsAt = "2026-11-01T00:00:00.000Z";
+  assertEquals(claudeFailureResponse({ denied: "budget" }, resetsAt), {
+    body: { error: "monthly_allowance_used", resets_at: resetsAt },
+    status: 429,
+  });
+  for (const denied of ["kill", "disabled"] as const) {
+    assertEquals(claudeFailureResponse({ denied }, resetsAt), {
+      body: { error: "extractor_unavailable" },
+      status: 503,
+    });
+  }
+});
+
+Deno.test("PDFs above the inline threshold use Files API and delete the uploaded file", async () => {
+  let uploadedSize = 0;
+  let uploadCount = 0;
+  let deletedId: string | null = null;
+  let request: Record<string, unknown> | null = null;
+  const client = {
+    files: {
+      upload: async ({ file }: { file: File }) => {
+        uploadCount++;
+        uploadedSize = file.size;
+        return { id: "file_test_123" };
+      },
+      delete: async (id: string) => { deletedId = id; },
+    },
+    messages: {
+      create: async (params: Record<string, unknown>) => {
+        request = params;
+        return { stop_reason: "end_turn", content: [], usage: { input_tokens: 1, output_tokens: 1 } };
+      },
+    },
+  };
+  const bytes = new Uint8Array(FILES_API_THRESHOLD_BYTES + 1);
+  const params = {
+    messages: [{ role: "user", content: [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: "eA==" } }] }],
+  };
+  await callExtractionWithFiles(client, params, "application/pdf", bytes);
+  assertEquals(uploadedSize, bytes.byteLength);
+  assertEquals(deletedId, "file_test_123");
+  const content = (request!.messages as Array<{ content: Array<{ source: { type: string; file_id?: string } }> }>)[0].content;
+  assertEquals(content[0].source, { type: "file", file_id: "file_test_123" });
+  const smallParams = {
+    messages: [{ role: "user", content: [sourceContentBlock("application/pdf", new Uint8Array([37, 80, 68, 70]))] }],
+  };
+  await callExtractionWithFiles(client, smallParams, "application/pdf", new Uint8Array([37, 80, 68, 70]));
+  assertEquals(uploadCount, 1, "small PDFs remain inline");
+  assertEquals(((request!.messages as Array<{ content: Array<{ source: { type: string } }> }>)[0].content[0]).source.type, "base64");
+});
+
+Deno.test("Anthropic request uses one schema-constrained staging shape", () => {
   const tool = extractionTool();
   assertEquals(tool.name, EXTRACTION_TOOL_NAME);
   assertEquals(tool.input_schema.additionalProperties, false);
