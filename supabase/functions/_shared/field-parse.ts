@@ -6,6 +6,9 @@
 // The Anthropic client is injectable (fetchImpl + getEnv) so the confidence-gate
 // logic in sms-inbound tests with a stubbed parser and no network.
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callClaude, createLlmLedger, type ClaudeCaller, type LlmLedgerPort } from "./claude.ts";
+
 export type FieldIntent =
   | "mark_done"
   | "report_delay"
@@ -52,17 +55,14 @@ export interface FieldParseInput {
 }
 
 export interface FieldParseDeps {
-  fetchImpl?: typeof fetch;
   getEnv?: (key: string) => string | undefined;
-  model?: string;
+  caller?: ClaudeCaller;
+  ledger?: LlmLedgerPort;
+  studioId?: string | null;
+  userId?: string | null;
 }
 
-const DEFAULT_MODEL = "claude-haiku-4-5";
-
-const TOOL_NAME = "record_field_update";
-
 const TOOL = {
-  name: TOOL_NAME,
   description:
     "Record the contractor's text as a structured field update against one of " +
     "their open items. Choose the single best intent and, when the text clearly " +
@@ -96,6 +96,7 @@ const TOOL = {
           id: { type: "string" },
         },
         required: ["kind", "id"],
+        additionalProperties: false,
       },
       new_date: {
         type: ["string", "null"],
@@ -111,6 +112,7 @@ const TOOL = {
       },
     },
     required: ["intent", "note", "confidence"],
+    additionalProperties: false,
   },
 } as const;
 
@@ -478,15 +480,8 @@ export async function parseFieldMessage(
   input: FieldParseInput,
   deps: FieldParseDeps = {},
 ): Promise<FieldParseResult> {
-  // The delivery answers are decided here, not by a model — and with no
-  // network call at all. Everything the deterministic layer is unsure about
-  // returns null and takes the model path below, unchanged.
   const certain = parseFieldMessageDeterministic(input);
   if (certain) return certain;
-
-  const getEnv = deps.getEnv ?? ((k: string) => Deno.env.get(k));
-  const fetchImpl = deps.fetchImpl ?? fetch;
-  const apiKey = getEnv("CLAUDE_API_KEY");
 
   const fallback: FieldParseResult = {
     intent: "unclear",
@@ -495,39 +490,39 @@ export async function parseFieldMessage(
     note: input.body?.slice(0, 200) ?? "",
     confidence: 0,
   };
-  if (!apiKey) return fallback;
-
   try {
-    const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: deps.model ?? DEFAULT_MODEL,
+    const adminUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const ledger = deps.ledger ?? (adminUrl && serviceKey
+      ? createLlmLedger(createClient(adminUrl, serviceKey))
+      : undefined);
+    const result = await callClaude({
+      feature: "field-parse",
+      role: "triage",
+      studioId: deps.studioId ?? null,
+      userId: deps.userId ?? null,
+      promptVersion: "field-parse-v1",
+      params: {
         max_tokens: 512,
         system: buildSystemPrompt(input),
-        tools: [TOOL],
-        tool_choice: { type: "tool", name: TOOL_NAME },
         messages: [{ role: "user", content: input.body || "(no text)" }],
-      }),
+        output_config: {
+          format: { type: "json_schema", schema: TOOL.input_schema },
+        },
+      },
+      timeoutMs: 15_000,
+      caller: deps.caller,
+      ledger,
+      clientOptions: { getEnv: deps.getEnv },
     });
-
-    if (!res.ok) {
-      console.error("field-parse: Claude API error", res.status, await res.text());
-      return fallback;
-    }
-    const data = await res.json();
-    const toolUse = (data.content ?? []).find(
-      (b: { type?: string; name?: string }) => b.type === "tool_use" && b.name === TOOL_NAME,
-    );
-    if (!toolUse?.input) return fallback;
-
-    return normalizeParse(toolUse.input, input);
-  } catch (err) {
-    console.error("field-parse: call failed", err);
+    if (!result.ok || result.response.stop_reason === "refusal") return fallback;
+    const text = result.response.content.find((block) => block.type === "text")?.text;
+    if (!text) return fallback;
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fallback;
+    return normalizeParse(parsed as Record<string, unknown>, input);
+  } catch (error) {
+    console.error("field-parse: call failed", error);
     return fallback;
   }
 }

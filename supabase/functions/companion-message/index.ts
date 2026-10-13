@@ -3,7 +3,10 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveModel } from "./model.ts";
+import {
+  callClaude,
+  createLlmLedger,
+} from "../_shared/claude.ts";
 
 // CORS headers
 const corsHeaders = {
@@ -155,6 +158,7 @@ serve(async (req) => {
       }));
 
     // Generate AI response
+    const { data: studioId } = await supabase.rpc("_primary_studio_for", { p_user: user.id });
     const aiResponse = await generateAIResponse({
       message: body.message,
       conversationHistory,
@@ -162,7 +166,7 @@ serve(async (req) => {
       productData: productData.data,
       styleProfile: styleProfile.data,
       screen: body.context.screen,
-    });
+    }, { admin: supabase, userId: user.id, studioId: studioId ?? null });
 
     // Save companion response
     const { data: companionMsg, error: companionMsgError } = await supabase
@@ -223,54 +227,36 @@ async function generateAIResponse(context: {
   productData: Record<string, unknown> | null;
   styleProfile: Record<string, unknown> | null;
   screen: string;
-}): Promise<{
+}, deps: { admin: ReturnType<typeof createClient>; userId: string; studioId: string | null }): Promise<{
   response: string;
   quickActions: QuickAction[] | null;
   suggestedProducts: ProductSuggestion[] | null;
   confidence: number;
   sources: string[];
 }> {
-  const claudeApiKey = Deno.env.get("CLAUDE_API_KEY");
-
-  // If no API key, use fallback responses
-  if (!claudeApiKey) {
-    return generateFallbackResponse(context);
-  }
-
+  const fallback = () => generateFallbackResponse(context);
   try {
-    // Build system prompt
-    const systemPrompt = buildSystemPrompt(context);
-
-    // Call Claude API
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": claudeApiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: resolveModel(Deno.env),
+    const result = await callClaude({
+      feature: "companion",
+      role: "answer",
+      studioId: deps.studioId,
+      userId: deps.userId,
+      promptVersion: "companion-v1",
+      timeoutMs: 30_000,
+      ledger: createLlmLedger(deps.admin),
+      params: {
         max_tokens: 1024,
-        system: systemPrompt,
+        system: buildSystemPrompt(context),
         messages: [
           ...context.conversationHistory,
           { role: "user", content: context.message },
         ],
-      }),
+      },
     });
-
-    if (!response.ok) {
-      console.error("Claude API error:", await response.text());
-      return generateFallbackResponse(context);
-    }
-
-    const data = await response.json();
-    const aiMessage = data.content[0]?.text || "";
-
-    // Parse response for actions and suggestions
+    if (!result.ok || result.response.stop_reason === "refusal") return fallback();
+    const aiMessage = result.response.content.find((block) => block.type === "text")?.text;
+    if (!aiMessage) return fallback();
     const { text, quickActions, suggestedProducts } = parseAIResponse(aiMessage, context);
-
     return {
       response: text,
       quickActions,
@@ -280,7 +266,7 @@ async function generateAIResponse(context: {
     };
   } catch (error) {
     console.error("Claude API call failed:", error);
-    return generateFallbackResponse(context);
+    return fallback();
   }
 }
 

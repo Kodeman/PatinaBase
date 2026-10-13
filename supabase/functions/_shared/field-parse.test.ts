@@ -288,20 +288,59 @@ Deno.test("legacy normalizeParse behavior preserved for all old intents and trus
 
 // ── The wiring: no model, no network ────────────────────────────────────────
 
-Deno.test("parseFieldMessage answers a delivery text without calling the API", async () => {
+Deno.test("parseFieldMessage answers a delivery text without calling the model", async () => {
   let calls = 0;
-  const fetchImpl = ((..._args: unknown[]) => {
-    calls++;
-    return Promise.reject(new Error("the deterministic layer must not call out"));
-  }) as unknown as typeof fetch;
-
   const got = await parseFieldMessage(
     { body: "here", openItems: [], recentMessages: [], today: TODAY },
-    { fetchImpl, getEnv: () => "an-api-key-that-must-not-be-used" },
+    { caller: async () => { calls++; throw new Error("must not call"); } },
   );
   assertEquals(got.intent, "report_arrival");
   assertEquals(calls, 0, "no request should have been made");
 });
+
+Deno.test("parseFieldMessage honors disabled feature without calling the model", async () => {
+  let calls = 0;
+  const got = await parseFieldMessage(
+    { body: "the cabinet door is loose", openItems: [], recentMessages: [], today: TODAY },
+    {
+      getEnv: () => "test-key",
+      ledger: {
+        async reserve() { return { granted: false, reason: "disabled", usageId: null }; },
+        async settle() { throw new Error("denied call must not settle"); },
+      },
+      caller: async () => { calls++; throw new Error("disabled feature must not call model"); },
+    },
+  );
+  assertEquals(got.intent, "unclear");
+  assertEquals(got.confidence, 0);
+  assertEquals(calls, 0);
+});
+
+Deno.test("parseFieldMessage returns normalized parsed result when enabled", async () => {
+  let calls = 0;
+  const got = await parseFieldMessage(
+    { body: "the cabinet door is loose", openItems: [], recentMessages: [], today: TODAY },
+    {
+      getEnv: () => "test-key",
+      ledger: {
+        async reserve() { return { granted: true, reason: null, usageId: 1 }; },
+        async settle() {},
+      },
+      caller: async () => {
+        calls++;
+        return {
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: JSON.stringify({ intent: "flag_blocker", note: "Loose cabinet door", confidence: 0.9 }) }],
+          usage: { input_tokens: 10, output_tokens: 8 },
+        };
+      },
+    },
+  );
+  assertEquals(calls, 1);
+  assertEquals(got.intent, "flag_blocker");
+  assertEquals(got.note, "Loose cabinet door");
+});
+
 
 
 // ── SQ-40/SQ-41 delta probes ───────────────────────────────────────────────

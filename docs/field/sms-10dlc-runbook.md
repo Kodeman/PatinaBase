@@ -105,7 +105,7 @@ All five are pure GSM-7 basic set (no em dash, no curly quotes, no en dash) and 
 | `SMS_CONVERSATION_NUMBER` | The physical E.164 number used to key `sms_conversations`. **REQUIRED** when `TWILIO_FROM_NUMBER` is a Messaging Service `MG…` SID — outbound and inbound conversations both key on this number |
 | `SMS_INBOUND_PUBLIC_URL` | Exact public URL registered in step 3.4 |
 | `SMS_DEV_MODE` | unset in prod; `dry_run` local/e2e; `redirect` + `SMS_DEV_REDIRECT_NUMBER` for staging rehearsal |
-| `CLAUDE_API_KEY` | **NOT provisioned on Strata** (verified by name 2026-09-19; it is not in the 46 edge-function secret names). `_shared/field-parse.ts:489` reads it for the model fallback, so its absence is fail-safe, not broken: with no key `parseFieldMessage` returns `intent:"unclear"`, `confidence:0` and the reply routes to designer review. The deterministic phrase layer (`parseFieldMessageDeterministic`) needs no key and is unaffected. Provision it only when model parsing is wanted. |
+| `ANTHROPIC_API_KEY` | The shared Claude client reads this key. Model parsing is gated by `llm_feature_controls('field-parse')`, seeded disabled; without the key or while disabled, `parseFieldMessage` returns `intent:"unclear"`, `confidence:0` and the reply routes to designer review. The deterministic phrase layer (`parseFieldMessageDeterministic`) needs no key and is unaffected. |
 
 ## 5. Go-live smoke (SMS_DEV_MODE=redirect → your phone)
 
@@ -157,7 +157,7 @@ Expected **absent**, each confirmed absent and each left alone:
 - `SMS_DEV_MODE` — absent, correct for production (`devMode()` falls through to `off`, i.e. real sends only, no dev redirect).
 - `SMS_DEV_REDIRECT_NUMBER` — absent, correct for production.
 
-Also absent, each with a safe in-code default and none of them introduced by this activation: `FIELD_LOGIN_TOKEN_TTL_SECONDS` (defaults to 3600), `CLAUDE_API_KEY` (see §4), `POSTHOG_KEY` (`_shared/aesthete-events.ts` degrades to a structured log line), `EMAIL_BUSINESS_ADDRESS` (`_shared/render-template.ts:53` has a literal default).
+Also absent, each with a safe in-code default and none of them introduced by this activation: `FIELD_LOGIN_TOKEN_TTL_SECONDS` (defaults to 3600), `ANTHROPIC_API_KEY` (see §4; field-parse remains disabled by `llm_feature_controls`), `POSTHOG_KEY` (`_shared/aesthete-events.ts` degrades to a structured log line), `EMAIL_BUSINESS_ADDRESS` (`_shared/render-template.ts:53` has a literal default).
 
 **No smoke was sent.** The §5 redirect rehearsal above was deliberately **not** run on Strata: no allowlisted recipient was provided and `SMS_DEV_MODE` is unset there, so a "rehearsal" send would have gone to a real handset. The refusal-without-an-allowlisted-recipient behavior is already proven synthetically (P0-11 step 5). No production SQL was run and no Twilio or PostHog API was called.
 
@@ -215,7 +215,7 @@ Secret NAMES the Phase 1 / Phase 2 rail reads that are absent and were **left al
 
 - `CLIENT_LETTER_FROM_EMAIL` — new at Phase 2, `client-invite/index.ts:76`, defaults to `hello@patina.cloud` (the canonical envelope address, which R1 keeps whatever the display name is). Absence is correct, not broken.
 - `FIELD_LINE_TRIAGE_USER` — `sms-inbound/pipeline.ts:956`, the **last** resort for a review owner after the `field_project_lead_user` RPC and `projects.designer_id`. Absent, `reviewOwner` returns null and `ownedReview` returns false, so an inbound with no project gets no owned review card. Fail-safe, but it is a silent gap: provision it if projectless inbound traffic is ever expected.
-- Not new to this activation, each already safe: `CLAUDE_API_KEY` (see §4), `POSTHOG_KEY` (`_shared/aesthete-events.ts:40` degrades to a structured log line), `FIELD_LOGIN_TOKEN_TTL_SECONDS` (3600), `EMAIL_BUSINESS_ADDRESS`, `EMAIL_ASSET_HOST`, `COMMS_PUBLIC_BASE`, `EMAIL_DEV_MODE`, `EMAIL_DEV_REDIRECT_TO`, `EMAIL_USER_CAP_PER_HOUR`, `RESEND_FROM_MARKETING`, `RESEND_FROM_TRANSACTIONAL`.
+- Not new to this activation, each already safe: `ANTHROPIC_API_KEY` (see §4; feature gated), `POSTHOG_KEY` (`_shared/aesthete-events.ts:40` degrades to a structured log line), `FIELD_LOGIN_TOKEN_TTL_SECONDS` (3600), `EMAIL_BUSINESS_ADDRESS`, `EMAIL_ASSET_HOST`, `COMMS_PUBLIC_BASE`, `EMAIL_DEV_MODE`, `EMAIL_DEV_REDIRECT_TO`, `EMAIL_USER_CAP_PER_HOUR`, `RESEND_FROM_MARKETING`, `RESEND_FROM_TRANSACTIONAL`.
 
 **Cron: both jobs stay scheduled.** The owner's decision, recorded by the orchestrator on SQ-106. `00648` re-declares both `field-daily` (`0 14 * * *`) and `field-daily-evening` (`5 23 * * *`) — it unschedules each by name first (`00648:75`, `:83`) and re-schedules both (`:91`, `:98`), which is why replaying that one file restores the whole registry. Nothing was unscheduled here, and the live `cron.job` table was **not** read back: that needs production SQL, which this activation did not run. §5.7 above is the schedule's description; the migration file is its authority.
 
