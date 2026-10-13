@@ -21780,6 +21780,198 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.outbound_drafts FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.outbound_drafts TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.outbound_drafts TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_outbound_modes FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.studio_outbound_modes TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.studio_outbound_modes TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._can_access_outbound_draft(public.outbound_drafts) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._can_access_outbound_draft(public.outbound_drafts) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.compose_outbound_draft(text, uuid, uuid, text, text, jsonb, text, text, jsonb, text, uuid, text, timestamptz, timestamptz, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.compose_outbound_draft(text, uuid, uuid, text, text, jsonb, text, text, jsonb, text, uuid, text, timestamptz, timestamptz, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.update_outbound_draft(uuid, text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.update_outbound_draft(uuid, text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.discard_outbound_draft(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.discard_outbound_draft(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_outbound_drafts(text, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_outbound_drafts(text, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_outbound_draft_for_send(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_outbound_draft_for_send(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.release_outbound_draft_claim(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.release_outbound_draft_claim(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_outbound_draft_sent(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_outbound_draft_sent(uuid, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.expire_outbound_drafts() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.expire_outbound_drafts() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_studio_outbound_mode(uuid, text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_studio_outbound_mode(uuid, text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.studio_outbound_mode(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.studio_outbound_mode(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.outbound_review_rollout FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.outbound_review_rollout TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.outbound_review_active(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00775_outbound_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.outbound_review_active(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
