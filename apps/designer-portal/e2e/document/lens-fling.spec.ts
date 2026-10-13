@@ -4,7 +4,7 @@
  *
  * THE FALSIFIABLE SENTENCE: a real wheel fling from s0 to s3 — `mouse.wheel`
  * ticks totalling >=3000px in under 300ms wall-clock, never `scrollTo` (one
- * JS-driven jump is a single frame of layout and never exercises the 240px
+ * JS-driven jump is a single frame of layout and never exercises the 288px
  * lookahead the way a real fling's many frames do) — crosses whatever the
  * lens has not yet promoted with AT MOST ONE blank frame, and the frame the
  * fling lands on reads `full` for whatever stop is under its centre.
@@ -22,7 +22,11 @@
  * paper below the last root, from the one thing L-4 actually promises:
  * nothing between the first and last root is ever un-painted ahead of a
  * settled reading position. Under the corrected instrument the ORIGINAL run
- * read 0 blank frames of 104, and `LENS_LOOKAHEAD_PX = 240` stands — this
+ * read 0 blank frames of 104, and `LENS_LOOKAHEAD_PX = 240` stood. RE-MEASURED
+ * 2026-10-13 (SQ-879): US-28 S7a's region close (+54px above `ffe` on the
+ * seeded long paper) put `ffe` 37px past the 240 line at the fling's only
+ * mid-flight discovery pass, and the census read 2 blank frames; per the
+ * plan's rule the lookahead grew to 288 (24 × 12) and the census reads 0 — this
  * spec is what proves that on every future run, not just the one probe.
  *
  * `pre-region` and `post-region` counts are printed every run and never

@@ -462,7 +462,7 @@ export function useLensDensity(
       pending.clear();
     };
 
-    /** The L-4 line: the root's top is at or above 240px below the frame. */
+    /** The L-4 line: the root's top is at or above `LENS_LOOKAHEAD_PX` (288px) below the frame. */
     const withinLookahead = (root: HTMLElement): boolean =>
       root.getBoundingClientRect().top <=
       window.innerHeight + LENS_LOOKAHEAD_PX;

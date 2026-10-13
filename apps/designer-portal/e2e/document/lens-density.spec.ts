@@ -4,7 +4,7 @@
  *
  * THE FALSIFIABLE SENTENCES (deviations.md D-B16; technical-design.md §6
  * sentence (b)): at scrollY 0, 400 and 1200, and on a deep-landed load —
- *   (i)   no `[data-density="quiet"]` root has `rect.top <= innerHeight + 240`
+ *   (i)   no `[data-density="quiet"]` root has `rect.top <= innerHeight + 288`
  *         (`LENS_LOOKAHEAD_PX`, restated here — e2e cannot import the app's
  *         TS constants module);
  *   (ii)  every `[data-passed]` root is `full` (passing never demotes, and a
@@ -39,7 +39,7 @@ test.skip(
 );
 
 /** OD-3 `LENS_LOOKAHEAD_PX` — restated (CSS/e2e cannot import `lens-constants.ts`). */
-const LOOKAHEAD_PX = 240;
+const LOOKAHEAD_PX = 288;
 
 const OFFSETS = [0, 400, 1200] as const;
 
