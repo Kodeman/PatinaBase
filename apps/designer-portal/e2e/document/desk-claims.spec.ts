@@ -1,7 +1,7 @@
 /**
  * US-25 slice 4 — the Day Sheet over the line roster (R143 retired its two
  * halves); US-28 S3 — Today's cards over the ledger of every job Today does
- * not hold, its quiet jobs folded behind one Show.
+ * not hold, its quiet leads and drafts folded behind one Show (R166).
  *
  * LOCAL STACK ONLY. Seeds the shared workflow-gate fixture, whose `overdue`
  * gate is the past-due decision that gives the seeded studio a job with a
@@ -104,10 +104,12 @@ test("the ledger stands in its groups, one line per job and one act on a row she
     timeout: COLD,
   });
 
-  // The quiet jobs fold behind one Show, its label never changing (IX18).
-  const quiet = roster.locator('[data-roster-group="rest"]');
-  if ((await quiet.count()) > 0) {
-    const show = quiet.first().getByRole("button", { name: /^Show / });
+  // The quiet leads and drafts fold behind one Show, its label never changing
+  // (IX18); a quiet job on a project always prints, so a group of only those
+  // has no Show (R166).
+  const quietShow = roster.locator('[data-roster-group="rest"]').getByRole("button", { name: /^Show / });
+  if ((await quietShow.count()) > 0) {
+    const show = quietShow.first();
     await expect(show).toHaveAttribute("aria-expanded", "false");
     await expect(show).toHaveText("Show");
   }

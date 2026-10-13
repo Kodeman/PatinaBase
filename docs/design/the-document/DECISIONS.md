@@ -11395,3 +11395,13 @@ Four findings from the T-60 QA wave that Kody has not yet ruled on. Recorded her
 **Finding (T-60, QA wave).** The invoice picker lists a line that is Specced but was left out of the release. This may be intended for studio-direct buys, where no release is expected before billing — not yet ruled.
 
 *Entries add: O10 · O11 · O12 · O13 · last id = O13 (this section)*
+
+---
+
+### R166 · A job on a project never folds on the Desk — Kody 2026-10-13
+
+**Finding (US-28 prod, Middle West Studio).** US-28 S3 folded the ledger's "No current alert" group behind one Show. For Middle West, that put both active projects (Kuehn Whole Home Renovation and Hartjes Bedroom and Bathroom) behind the fold, while four untouched draft proposals printed openly. The studio read this as a job gone missing: "We are actively building out these jobs, they shouldn't be hidden like this. It's very confusing and scary."
+
+**Ruling (Kody, multiple choice).** A live job that stands on a project always prints as a ledger row, even with no current alert. Only leads and drafts (no project) fold behind Show, and with none of those there is no Show. This changes uplift.md (e) "the Show fold" for projects only.
+
+*Entries add: R166 · last id = R166*

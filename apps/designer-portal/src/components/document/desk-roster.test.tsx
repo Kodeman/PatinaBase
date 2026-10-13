@@ -86,7 +86,10 @@ const MINE: DeskLedger = {
           ),
         ]),
         group('back', 'Coming back', []),
-        group('rest', 'No current alert', [ledgerLine('reinhardt', { standing: 'rest' })]),
+        group('rest', 'No current alert', [
+          ledgerLine('kuehn', { standing: 'rest' }),
+          ledgerLine('reinhardt', { standing: 'rest' }, { projectId: null }),
+        ]),
       ],
     },
   ],
@@ -107,7 +110,7 @@ describe('DeskRoster — the ledger (US-28 S3)', () => {
     );
     expect(labels).toEqual(['Also yours', 'With others', 'No current alert']);
     expect(container.querySelector('[data-roster-group="back"]')).toBeNull();
-    expect(rows(container)).toEqual(['thornfield', 'halloran']);
+    expect(rows(container)).toEqual(['thornfield', 'halloran', 'kuehn']);
   });
 
   it('retires the workload head, the person facet and the motion sentence, and counts nothing', () => {
@@ -116,10 +119,11 @@ describe('DeskRoster — the ledger (US-28 S3)', () => {
     expect(screen.queryByRole('button', { name: /By person|By team member/ })).toBeNull();
   });
 
-  it('folds the quiet jobs behind one Show; their rows print only once it opens', async () => {
+  it('a quiet job on a project always prints; only leads and drafts fold behind one Show (Kody 2026-10-13)', async () => {
     const { container } = render(<DeskRoster ledger={MINE} />);
     const show = screen.getByRole('button', { name: 'Show jobs with no current alert' });
     expect(show).toHaveAttribute('aria-expanded', 'false');
+    expect(container.querySelector('[data-ledger-row="kuehn"]')).not.toBeNull();
     expect(container.querySelector('[data-ledger-row="reinhardt"]')).toBeNull();
     await act(async () => {
       await userEvent.setup().click(show);
@@ -128,6 +132,16 @@ describe('DeskRoster — the ledger (US-28 S3)', () => {
     // The label never changes with state (IX18).
     expect(show).toHaveTextContent(/^Show$/);
     expect(container.querySelector('[data-ledger-row="reinhardt"]')).not.toBeNull();
+  });
+
+  it('prints no Show where every quiet job stands on a project', () => {
+    const projectsOnly: DeskLedger = {
+      notChecked: null,
+      sections: [{ key: 'mine', label: null, groups: [group('rest', 'No current alert', [ledgerLine('kuehn', { standing: 'rest' })])] }],
+    };
+    const { container } = render(<DeskRoster ledger={projectsOnly} />);
+    expect(screen.queryByRole('button', { name: /Show/ })).toBeNull();
+    expect(rows(container)).toEqual(['kuehn']);
   });
 
   it('a row with others and a row coming back print no act; a row of hers keeps its one', () => {
@@ -197,7 +211,13 @@ describe('DeskRoster — the ledger (US-28 S3)', () => {
   it('labels a quiet group Not checked while a feed is unread, and still folds it', () => {
     const ledger: DeskLedger = {
       notChecked: 'Not checked: purchase orders.',
-      sections: [{ key: 'mine', label: null, groups: [group('rest', 'Not checked', [ledgerLine('reinhardt', { standing: 'rest' })])] }],
+      sections: [
+        {
+          key: 'mine',
+          label: null,
+          groups: [group('rest', 'Not checked', [ledgerLine('reinhardt', { standing: 'rest' }, { projectId: null })])],
+        },
+      ],
     };
     const { container } = render(<DeskRoster ledger={ledger} />);
     expect(container.querySelector('[data-roster-group="rest"]')).toHaveTextContent(/^Not checkedShow$/);

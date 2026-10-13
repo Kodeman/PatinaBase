@@ -4,8 +4,9 @@
  * The ledger under Today (US-25 slice 4; US-28 S3 change 2): every live job
  * not on Today's cards, one S1 ledger row each, in four groups — Also yours ·
  * With others · Coming back · No current alert. In the studio's scope each
- * person is a section ("Leah’s"). The quiet group folds behind one Show; its
- * rows are not rendered until it opens. Never a count.
+ * person is a section ("Leah’s"). In the quiet group a job on a project
+ * always prints; its leads and drafts fold behind one Show and are not
+ * rendered until it opens. Never a count.
  */
 
 import { useState, type ReactNode } from 'react';
@@ -32,9 +33,13 @@ function LedgerGroup({
   first: boolean;
   onUndone: (words: string) => void;
 }) {
-  const folds = group.key === 'rest';
+  // A job that stands on a project never folds: a studio building it out
+  // must see it at rest (Kody 2026-10-13). Only leads and drafts fold.
+  const standing = group.key === 'rest' ? group.lines.filter((l) => l.line.projectId) : group.lines;
+  const folded = group.key === 'rest' ? group.lines.filter((l) => !l.line.projectId) : [];
+  const folds = folded.length > 0;
   const [open, setOpen] = useState(false);
-  const shown = !folds || open;
+  const lines = open ? group.lines : standing;
   return (
     <div
       data-roster-group={group.key}
@@ -56,9 +61,9 @@ function LedgerGroup({
           </DocumentAction>
         )}
       </p>
-      {shown && (
+      {lines.length > 0 && (
         <ul className="rows">
-          {group.lines.map((ledgerLine) => (
+          {lines.map((ledgerLine) => (
             <DeskLedgerRow
               key={ledgerLine.line.engagementId}
               {...ledgerLine}
