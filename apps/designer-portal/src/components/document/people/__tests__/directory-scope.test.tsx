@@ -17,6 +17,7 @@ const mockUseStudioContacts = jest.fn(() => ({ data: [], isLoading: false }));
 // QA-R2-2: a firm's open jobs come off the SEATS view now — v4 nulls
 // `project_id` on every carded human's directory row.
 const mockUsePeopleSeats = jest.fn(() => ({ data: [] as unknown[] }));
+const mockUseContactRules = jest.fn(() => ({ data: [] as unknown[] }));
 
 jest.mock("@patina/supabase", () => ({
   // W3/P2 — the Compare & merge sheet the duplicate band now opens.
@@ -38,7 +39,7 @@ jest.mock("@patina/supabase", () => ({
   usePeopleSeats: (...args: unknown[]) => mockUsePeopleSeats(...(args as [])),
   // W2 r1 fixes: the Directory now reads the rule ROWS, the routed people's
   // channels and the consent records behind the word (CR-5/6/13/14/22).
-  useContactRules: () => ({ data: [] }),
+  useContactRules: () => mockUseContactRules(),
   useStudioContactChannelsFor: () => ({ data: [] }),
   useChannelConsentRecords: () => ({ data: [] }),
 }));
@@ -184,6 +185,7 @@ beforeEach(() => {
   mockUseStudioContacts.mockReturnValue({ data: [], isLoading: false });
   mockUsePeopleSeats.mockReset();
   mockUsePeopleSeats.mockReturnValue({ data: [] });
+  mockUseContactRules.mockReturnValue({ data: [] });
 });
 
 describe("the six chips", () => {
@@ -456,5 +458,93 @@ describe("Inbound first (US-28 S10, uplift (c) area 4)", () => {
   it("prints no Inbound Section when nothing is new", () => {
     renderDirectory([row()]);
     expect(document.querySelector("[data-people-inbound]")).toBeNull();
+  });
+
+  /** A rule ROW, the ground truth the Directory's faces read (CR-5 / CR-22). */
+  function contactRule(over: Record<string, unknown>) {
+    return {
+      id: "rule-ines",
+      subject_type: "person",
+      subject_id: "card-ines",
+      channels_allowed: [],
+      channels_forbidden: [],
+      route_to_person_id: null,
+      contact_hours: null,
+      escalation_by_class: {},
+      reason: null,
+      set_by: null,
+      set_at: "2026-01-01T00:00:00Z",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+      ...over,
+    };
+  }
+
+  const INES = row({
+    person_id: "card-ines",
+    role: "lead",
+    display_name: "Ines Varga",
+    phone: "(612) 555-0177",
+    scope: "mine",
+    status_raw: "new",
+    meta: { entity_kind: "person" },
+    reach_state: "phone_only",
+    consent_status: "opted_out",
+    paper_state: null,
+  });
+
+  it("R8 — a do-not-contact, opted-out inbound lead prints its restriction", () => {
+    mockUseContactRules.mockReturnValue({
+      data: [
+        contactRule({
+          channels_forbidden: ["sms", "email", "mobile", "office"],
+        }),
+      ],
+    });
+    renderDirectory([INES]);
+    const inboundRow = document.querySelector(
+      '[data-inbound-person="card-ines"]',
+    ) as HTMLElement;
+    expect(within(inboundRow).getByText("Opted out")).toBeInTheDocument();
+    const clause = inboundRow.querySelector("[data-contact-rule]");
+    expect(clause).toHaveAttribute("data-contact-rule-blocked", "true");
+    expect(clause).toHaveTextContent(/Never text\./);
+  });
+
+  it("R8 — a routed inbound lead prints its contact rule and the routed person", () => {
+    mockUseContactRules.mockReturnValue({
+      data: [
+        contactRule({
+          channels_forbidden: ["sms"],
+          route_to_person_id: "card-rosa",
+          reason: "Her assistant handles scheduling.",
+        }),
+      ],
+    });
+    mockUseStudioContacts.mockReturnValue({
+      data: [
+        {
+          id: "card-rosa",
+          entity_kind: "person",
+          full_name: "Rosa Delgado",
+          email: "rosa@twincitiesdrywall.com",
+          phone: null,
+          phone_e164: null,
+        },
+      ] as never,
+      isLoading: false,
+    });
+    renderDirectory([{ ...INES, consent_status: "granted" } as never]);
+    const inboundRow = document.querySelector(
+      '[data-inbound-person="card-ines"]',
+    ) as HTMLElement;
+    const clause = inboundRow.querySelector(
+      "[data-contact-rule]",
+    ) as HTMLElement;
+    expect(clause).toHaveTextContent("Her assistant handles scheduling.");
+    expect(clause).toHaveTextContent("Write Rosa Delgado instead.");
+    expect(
+      within(clause).getByRole("link", { name: "rosa@twincitiesdrywall.com" }),
+    ).toHaveAttribute("href", "mailto:rosa@twincitiesdrywall.com");
   });
 });

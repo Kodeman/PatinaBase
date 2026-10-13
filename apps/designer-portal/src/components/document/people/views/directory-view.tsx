@@ -74,7 +74,7 @@ import { useProjects } from "@/hooks/use-projects";
 import { peopleEvents } from "@/lib/analytics/people-events";
 import { EmptyState } from "../../empty-state";
 import { Avatar } from "../person-bits";
-import { PersonRow } from "../directory/person-row";
+import { PersonRow, PersonSafetyFacts } from "../directory/person-row";
 import { CompanyRow } from "../directory/company-row";
 import { ScopeLens } from "../directory/scope-lens";
 import { MakersMarketplace } from "../directory/makers-marketplace";
@@ -589,9 +589,25 @@ export function DirectoryView({
                         </button>
                       </span>
                     </div>
-                    <span className="lsent t-body-sm">
-                      {deriveRelationshipLine(row, now).text}
-                    </span>
+                    {/* US-28 R8 — an inbound lead keeps the Directory's
+                        contact-safety facts: an opted-out or do-not-contact
+                        lead says so here, not one Section down. */}
+                    <div className="lsent t-body-sm min-w-0">
+                      <p>{deriveRelationshipLine(row, now).text}</p>
+                      <PersonSafetyFacts
+                        person={row}
+                        rule={ruleIndex.get(row.person_id) ?? null}
+                        routeTo={contactRouteTarget(
+                          ruleIndex.get(row.person_id),
+                          peopleById,
+                          channelsByOwner,
+                        )}
+                        consentClause={
+                          consentClauses.get(row.person_id) ?? null
+                        }
+                        routeTargets={routeTargets}
+                      />
+                    </div>
                     <span className="lwhen t-meta">
                       {humanizeSince(row.last_touch_at, now)}
                     </span>

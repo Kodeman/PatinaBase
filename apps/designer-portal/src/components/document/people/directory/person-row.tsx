@@ -116,32 +116,9 @@ export function PersonRow({
   });
   const seatsLoaded = seats !== undefined && !seatsFetching;
 
-  const { routedName } = splitRoutedClause(person.contact_rule_summary);
-  // CR3-2: THE SUMMARY IS NOT A FACE. `contact_rule_summary()` renders
-  // `channels_forbidden`/`channels_allowed` as raw `channel_kind` tokens —
-  // "Do not use: after_hours, ap_email, dispatch, …" — which SPEC §8 #3
-  // forbids on a face, and it drops the studio's own typed reason besides.
-  // `useContactRules()` is a separate query from `usePeopleDirectory()`, so
-  // that fallback painted on every cold load and permanently whenever the
-  // rules read failed. No clause until the rule row is in hand. The routed
-  // NAME below is a person, not a schema word, so it still stands in.
-  const clause = contactRuleClause(rule);
-  const routeTo =
-    routeTarget ??
-    (routedName
-      ? (routeTargets?.get(routedName.toLowerCase()) ?? { name: routedName })
-      : null);
-  // CR-4 / CR-16: ONE pair of predicates, read off `channels_forbidden` in
-  // lib/document/contact-rule.ts, so this row, the roster row, the person card,
-  // the company card's crew line and the picker all answer alike. The leading
-  // rule and the silenced phone are DIFFERENT facts: Ray Thao forbids text and
-  // still wants his office line printed; Frank Bauer has no direct channel left
-  // open, so his own number comes off the row (SPEC §5.1 #10, §5.4). A row
-  // whose rule has not loaded prints the clause without either rather than
-  // guessing.
-  const blocked = contactRuleIsHardBlock(rule);
+  // The silenced phone (below) and the leading rule (PersonSafetyFacts) are
+  // DIFFERENT facts off the same rule row (CR-4 / CR-16).
   const unreachable = contactRuleIsDoNotContact(rule);
-  const paper = entryPaperWord(person);
   const seatCount = person.seat_count ?? 0;
 
   return (
@@ -168,29 +145,13 @@ export function PersonRow({
         <p className="t-meta text-[var(--ink-subtle)]">
           {personIdentityLine(person, seatTrade)}
         </p>
-        {/* US-28 S10 (U-Q13) — reach, consent and paper as INK WORDS in one
-            column, at every width: unboxed, so the 390 row no longer needs a
-            second, plain copy of the same three words. Terracotta-ink only
-            where a word itself is blocked or do-not-contact. */}
-        <p data-row-words className="people-words">
-          <StateWord family="reach" value={person.reach_state} />
-          <StateWord family="consent" value={person.consent_status} />
-          {paper ? <StateWord family="paper" value={paper} /> : null}
-        </p>
-        <ContactRuleLine summary={clause} blocked={blocked} routeTo={routeTo} />
-
-        {/* SPEC §5.1 #9 — the consent WORD prints in its own column; the
-            clause behind it ("Opted out by text, 3 December 2025, on the
-            Lindqvist kitchen.") belongs here, under the identity, where a
-            studio reading the ledger can see WHY the word says what it says. */}
-        {consentClause ? (
-          <p
-            data-consent-clause
-            className="t-body-sm mt-1 text-[var(--ink-subtle)]"
-          >
-            {consentClause}
-          </p>
-        ) : null}
+        <PersonSafetyFacts
+          person={person}
+          rule={rule}
+          routeTo={routeTarget}
+          consentClause={consentClause}
+          routeTargets={routeTargets}
+        />
       </div>
 
       {/* Its own control, 8px clear of the row's own (SPEC §5.1 #15).
@@ -243,5 +204,79 @@ export function PersonRow({
         )}
       </ul>
     </li>
+  );
+}
+
+/**
+ * US-28 R8 — THE CONTACT-SAFETY FACTS, ONCE: reach, consent and paper as ink
+ * words, the rule clause, and the consent clause behind the word. PersonRow and
+ * the Directory's Inbound row both print these, so a do-not-contact lead that
+ * lands in Inbound reads its restriction exactly as it would in the Directory.
+ */
+export function PersonSafetyFacts({
+  person,
+  rule,
+  routeTo: routeTarget,
+  consentClause,
+  routeTargets,
+}: {
+  person: DirectoryPerson;
+  rule?: StudioContactRule | null;
+  routeTo?: ContactRouteTarget | null;
+  consentClause?: string | null;
+  routeTargets?: ReadonlyMap<string, ContactRouteTarget>;
+}) {
+  const { routedName } = splitRoutedClause(person.contact_rule_summary);
+  // CR3-2: THE SUMMARY IS NOT A FACE. `contact_rule_summary()` renders
+  // `channels_forbidden`/`channels_allowed` as raw `channel_kind` tokens —
+  // "Do not use: after_hours, ap_email, dispatch, …" — which SPEC §8 #3
+  // forbids on a face, and it drops the studio's own typed reason besides.
+  // `useContactRules()` is a separate query from `usePeopleDirectory()`, so
+  // that fallback painted on every cold load and permanently whenever the
+  // rules read failed. No clause until the rule row is in hand. The routed
+  // NAME below is a person, not a schema word, so it still stands in.
+  const clause = contactRuleClause(rule);
+  const routeTo =
+    routeTarget ??
+    (routedName
+      ? (routeTargets?.get(routedName.toLowerCase()) ?? { name: routedName })
+      : null);
+  // CR-4 / CR-16: ONE pair of predicates, read off `channels_forbidden` in
+  // lib/document/contact-rule.ts, so this row, the roster row, the person card,
+  // the company card's crew line and the picker all answer alike. The leading
+  // rule and the silenced phone are DIFFERENT facts: Ray Thao forbids text and
+  // still wants his office line printed; Frank Bauer has no direct channel left
+  // open, so his own number comes off the row (SPEC §5.1 #10, §5.4). A row
+  // whose rule has not loaded prints the clause without either rather than
+  // guessing.
+  const blocked = contactRuleIsHardBlock(rule);
+  const paper = entryPaperWord(person);
+
+  return (
+    <>
+      {/* US-28 S10 (U-Q13) — reach, consent and paper as INK WORDS in one
+          column, at every width: unboxed, so the 390 row no longer needs a
+          second, plain copy of the same three words. Terracotta-ink only
+          where a word itself is blocked or do-not-contact. */}
+      <p data-row-words className="people-words">
+        <StateWord family="reach" value={person.reach_state} />
+        <StateWord family="consent" value={person.consent_status} />
+        {paper ? <StateWord family="paper" value={paper} /> : null}
+      </p>
+      <ContactRuleLine summary={clause} blocked={blocked} routeTo={routeTo} />
+
+      {/* SPEC §5.1 #9 — the consent WORD prints in its own column; the
+          clause behind it ("Opted out by text, 3 December 2025, on the
+          Lindqvist kitchen.") belongs here, under the identity, where a
+          studio reading the ledger can see WHY the word says what it says. */}
+      {consentClause ? (
+        <p
+          data-consent-clause
+          className="t-body-sm mt-1 text-[var(--ink-subtle)]"
+        >
+          {consentClause}
+        </p>
+      ) : null}
+    </>
   );
 }
