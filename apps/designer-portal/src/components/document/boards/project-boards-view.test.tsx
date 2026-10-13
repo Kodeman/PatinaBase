@@ -20,12 +20,13 @@ jest.mock('@/hooks/use-document-state', () => ({
 
 const mockLive = jest.fn();
 const mockFrozen = jest.fn();
+const mockStatuses = jest.fn((): Map<string, string> => new Map());
 jest.mock('@patina/supabase', () => ({
   useProjectOwnedBoards: () => mockLive(),
   useProjectBoards: () => mockFrozen(),
   // Board-level reaction status chip (board-paths W2b #1) — no active shares
   // in this suite's fixtures, so every row renders no chip.
-  useBoardReactionStatuses: () => new Map(),
+  useBoardReactionStatuses: () => mockStatuses(),
 }));
 
 jest.mock('@/components/portal/scope-builder/boards-builder', () => ({
@@ -62,6 +63,7 @@ function engagement(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   startBoardPending.projectId = null;
   mockReplace.mockClear();
+  mockStatuses.mockImplementation(() => new Map());
   mockEngagement.mockReturnValue(engagement());
   mockLive.mockReturnValue({
     isLoading: false,
@@ -84,11 +86,49 @@ describe('the boards page', () => {
     expect(
       screen.getByRole('link', { name: /Living room, warm/ }),
     ).toHaveAttribute('href', expect.stringContaining('/board/b1'));
-    expect(screen.getByText('7 pieces · open room')).toBeInTheDocument();
+    expect(screen.getByText('7 pieces')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Signed design direction' })).toBeInTheDocument();
     expect(screen.getByText(/Signed snapshot · 3 items/)).toBeInTheDocument();
     // An archived board is not a board this project is composing from.
     expect(screen.queryByText('Retired')).toBeNull();
+  });
+
+  // US-28 S11 — a job's open boards are a bounded, ranked set: each a Card
+  // with a plate slot (U-Q20); the stage prints as a word beside its tick; the
+  // act is the scored ＋ New board, never filled; state is an ink word.
+  it('lays the open boards as Cards with a plate slot, under the job and its stage word', () => {
+    mockEngagement.mockReturnValue(engagement({ client_name: 'Hal and Dana Whitfield' }));
+    const { container } = render(<ProjectBoardsView routeId="eng-1" />);
+
+    const card = container.querySelector('article.card[data-board-card="b1"]');
+    expect(card).not.toBeNull();
+    expect(card!.querySelector('.plate')).not.toBeNull();
+    expect(card!.querySelector('.card-up .name')).toHaveTextContent('Living room, warm');
+    expect(container.querySelectorAll('article.card')).toHaveLength(1);
+
+    const tick = container.querySelector('.s11-tab-job .tick');
+    expect(tick).toHaveClass('st-project');
+    expect(tick).toHaveTextContent('Vandersteen residence');
+    expect(screen.getByText('Project · Hal and Dana Whitfield')).toBeInTheDocument();
+
+    const act = screen.getByRole('button', { name: 'New board' });
+    expect(act.closest('[data-variant="primary"]')).toBeNull();
+  });
+
+  it('prints the board’s reaction state as an ink word, never a pigment dot', () => {
+    mockStatuses.mockImplementation(() => new Map([['b1', 'reactions_in']]));
+    const { container } = render(<ProjectBoardsView routeId="eng-1" />);
+    const word = screen.getByText('Feedback received');
+    expect(word).toHaveClass('word');
+    expect(container.querySelector('.rounded-full')).toBeNull();
+  });
+
+  it('says plainly that nothing is signed yet when only working boards exist', () => {
+    mockFrozen.mockReturnValue({ isLoading: false, data: [] });
+    render(<ProjectBoardsView routeId="eng-1" />);
+    expect(
+      screen.getByText('Nothing is signed yet. When the client signs a board, it lands here.'),
+    ).toBeInTheDocument();
   });
 
   it('returns by the document’s full name (SP-14)', () => {
@@ -103,7 +143,7 @@ describe('the boards page', () => {
     render(<ProjectBoardsView routeId="eng-1" />);
 
     expect(screen.queryByTestId('boards-builder')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Start a board' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New board' }));
     expect(screen.getByTestId('boards-builder')).toHaveTextContent('proj-1');
   });
 
@@ -154,7 +194,7 @@ describe('the boards page', () => {
     render(<ProjectBoardsView routeId="eng-1" />);
 
     expect(screen.getAllByText('No boards yet · start one').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Start a board' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New board' })).toBeInTheDocument();
   });
 
   it('carries a moved identity to the boards page, not to the document', async () => {
@@ -174,7 +214,7 @@ describe('the boards page', () => {
     mockEngagement.mockReturnValue(engagement({ active_section: 'install' }));
     render(<ProjectBoardsView routeId="eng-1" />);
     expect(
-      screen.getByRole('button', { name: 'Start a board' }),
+      screen.getByRole('button', { name: 'New board' }),
     ).toBeInTheDocument();
   });
 

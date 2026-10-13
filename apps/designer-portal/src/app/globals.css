@@ -2407,3 +2407,27 @@ html:has([data-document-shell]) {
   .title-rule:is([class^="st-"], [class*=" st-"]) { border-left-color: CanvasText; }
 }
 /* ═══ end US-28 S1 system ══════════════════════════════════════════════════ */
+
+/* US-28 S11 boards ═════════════════════════════════════════════════════════
+   The boards index (`/boards`) and a job's boards tab (`/doc/[id]/boards`),
+   after specimens/boards-1440 frames p1 and p2. Places the S1 components;
+   restyles none. The status filters are links (the filter lives in
+   `?status=`), so the S1 `.filters button` grammar is spelled for `a`:
+   underline words, the current one in ink and underlined, never dotted. */
+.s11-filters { margin-bottom: 48px; }
+.s11-filters a { font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); text-decoration: none; }
+.s11-filters a:hover { color: var(--text-primary); }
+.s11-filters a[aria-current="page"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.s11-filters a:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+@media (max-width: 599px) { .s11-filters { margin-bottom: 24px; } }
+.s11-eb-job { color: var(--text-primary); }
+.s11-hit { display: inline-flex; align-items: center; min-height: 44px; }
+.s11-cap-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.s11-cap-sentence { margin-top: 4px; color: var(--text-muted); }
+.s11-tab-job { margin-bottom: 4px; }
+.s11-first { margin-top: 24px; }
+[data-board-card] .plate { margin-top: 12px; }
+.s11-card-state { margin-top: 4px; }
+.s11-after-cards { margin-top: 24px; }
+.s11-lname-text { display: inline-flex; align-items: center; min-height: 44px; }
+/* ═══ end US-28 S11 boards ═════════════════════════════════════════════════ */

@@ -48,6 +48,53 @@ beforeEach(() => {
 });
 
 describe('StudioBoardsView', () => {
+  // US-28 S11 — Sections by job (one per owner, its name beside a stage tick
+  // and the owner kind in ink); each board a plate and caption, never a Card
+  // (U-Q20); status filters as underline words, not dotted links.
+  it('groups the boards into one Section per job, each board a plate and caption', () => {
+    useStudioBoardsOverview.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        boards: [
+          board({ id: 'b1', name: 'Palette A' }),
+          board({ id: 'b2', name: 'Fabric samples', ownerKind: 'proposal', ownerId: 'prop-1', ownerName: 'Halloran Library' }),
+          board({ id: 'b3', name: 'Palette B' }),
+        ],
+        capped: false,
+      },
+    });
+    const { container } = render(<StudioBoardsView />);
+
+    const sections = container.querySelectorAll('section.section');
+    expect(sections).toHaveLength(2);
+    expect(screen.getByRole('heading', { level: 2, name: /Lake House/ })).toHaveTextContent('Project');
+    expect(screen.getByRole('heading', { level: 2, name: /Halloran Library/ })).toHaveTextContent('Proposal');
+    expect(sections[0].querySelector('.tick')).toHaveClass('st-project');
+    expect(sections[1].querySelector('.tick')).toHaveClass('st-proposal');
+    expect(sections[0].querySelectorAll('.plates > li')).toHaveLength(2);
+    expect(sections[0].querySelectorAll('.plates > li .plate')).toHaveLength(2);
+    expect(container.querySelector('.card')).toBeNull();
+    // a never-shared board says so in a quiet ink word, not with a chip
+    expect(screen.getAllByText('Not shared')[0]).toHaveClass('word');
+    expect(container.querySelector('.rounded-full')).toBeNull();
+  });
+
+  it('marks the live status filter as the current underline word, never a dotted link', () => {
+    searchParams = new URLSearchParams('status=reactions_in');
+    useStudioBoardsOverview.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { boards: [board({ reactionStatus: 'reactions_in' })], capped: false },
+    });
+    const { container } = render(<StudioBoardsView />);
+    const nav = screen.getByRole('navigation', { name: 'Board status' });
+    expect(nav).toHaveClass('s11-filters');
+    expect(screen.getByRole('link', { name: 'Feedback received' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'All design boards' })).not.toHaveAttribute('aria-current');
+    expect(container.querySelector('.decoration-dotted')).toBeNull();
+  });
+
   it('shows a loading state before the overview resolves', () => {
     useStudioBoardsOverview.mockReturnValue({ isLoading: true, isError: false, data: undefined });
     render(<StudioBoardsView />);
@@ -92,7 +139,7 @@ describe('StudioBoardsView', () => {
       },
     });
     render(<StudioBoardsView />);
-    expect(screen.getAllByText('Reactions in').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Feedback received').some((el) => el.classList.contains('word'))).toBe(true);
     expect(screen.getByText(/2 approved/)).toBeInTheDocument();
     expect(screen.getByText(/1 client · 1 guest/)).toBeInTheDocument();
     expect(screen.getByLabelText('3 unresolved direction notes')).toBeInTheDocument();
