@@ -5,6 +5,7 @@ import { renderBrandedShell } from "./branded-email.ts";
 import { resolveStudioIdentity, studioCobrand } from "./studio-identity.ts";
 import { outboundKinds } from "./outbound-kinds/index.ts";
 import type { SendAuthority, OutboundKind } from "./send-authority.ts";
+import type { OutboundKindContext } from "./outbound-kinds/types.ts";
 
 export interface OutboundDraft {
   id: string; organization_id: string; project_id: string | null; kind: OutboundKind;
@@ -88,7 +89,10 @@ export async function sendOutboundDraft(
       if (!response.ok || result?.failed > 0 || result?.error) return await fail(result?.error ?? `apns_http_${response.status}`);
       messageId = typeof result?.message_id === "string" ? result.message_id : undefined;
     }
-    await outboundKinds[draft.kind]?.afterSend?.({ admin, draft, messageId: messageId ?? null });
+    const afterSendContext: OutboundKindContext & { authority: SendAuthority } = {
+      admin, draft, messageId: messageId ?? null, authority,
+    };
+    await outboundKinds[draft.kind]?.afterSend?.(afterSendContext);
     const { error: markError } = await admin.rpc("mark_outbound_draft_sent", {
       p_id: draft.id, p_sent_by: authority.kind === "designer" ? authority.userId : null,
       p_message_id: messageId ?? null,

@@ -1,22 +1,10 @@
 // Supabase Edge Function: invoice-reminders
 //
-// DELIBERATELY EXEMPT FROM reminder_cadence. Unlike proposal-nudge and the
-// decision-reminders spine — both gated by decision-notify.ts's
-// CADENCE_ELIGIBLE_KINDS check against the client's reminder_cadence
-// preference, with deferred sends picked up by notification-digest/index.ts
-// — the A/R reminders sent below always go out immediately, on every run,
-// with no digest-deferral path at all.
+// V22: invoice reminders are composed as outbound drafts. They are sent only
+// by designer action or the studio's explicit per-kind schedule setting.
 //
-// Ruling: payment prompts are financially consequential. Deferring an
-// overdue-invoice or final-notice email by up to a day to satisfy a client's
-// "daily summary" reminder_cadence preference would directly hurt
-// collections. This is a deliberate product decision, not a gap — do not
-// wire this function into reminder_cadence (or otherwise make A/R reminders
-// digest-eligible) without a new product ruling superseding this one.
-//
-// Runs daily (scheduled by pg_cron in migration 00181, 15:00 UTC). Direct
-// mirror of decision-reminders: service-role client, scan, send, stamp, JSON
-// summary.
+// Runs daily (scheduled by pg_cron in migration 00181, 15:00 UTC). It keeps the
+// existing selection and escalation cadence while staging client reminders.
 //
 // A/R reminder cadence (offsets vs invoices.due_date, indexed by
 // invoices.reminder_count):
@@ -48,15 +36,15 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { invoiceReminderAuthority } from './authority.ts';
+import { sendOutboundDraft } from '../_shared/outbound-send.ts';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
-import { notifyClientAttention } from '../_shared/client-attention.ts';
 import {
   buildInvoiceArEscalationEmail,
   buildInvoiceFinalNoticeEmail,
   buildInvoiceOverdueNoticeEmail,
   buildInvoiceSecondNoticeEmail,
   buildInvoiceUpcomingReminderEmail,
+  formatInvoiceEmailDate,
   type InvoiceReminderEmailParams,
   type RenderedInvoiceEmail,
 } from '../_shared/invoice-emails.ts';
@@ -81,13 +69,6 @@ const STAGE_BUILDERS: Array<(p: InvoiceReminderEmailParams) => RenderedInvoiceEm
   buildInvoiceOverdueNoticeEmail,
   buildInvoiceSecondNoticeEmail,
   buildInvoiceFinalNoticeEmail,
-];
-
-const STAGE_TEMPLATE_IDS = [
-  'invoice-reminder-upcoming',
-  'invoice-reminder-overdue',
-  'invoice-reminder-second-notice',
-  'invoice-reminder-final-notice',
 ];
 
 interface InvoiceRow {
@@ -121,6 +102,37 @@ function daysPastDue(dueDate: string, now: Date): number {
   const due = Date.parse(`${dueDate.slice(0, 10)}T00:00:00Z`);
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   return Math.floor((today - due) / 86_400_000);
+}
+
+async function isClientSuppressed(admin: any, clientUserId: string | null): Promise<boolean> {
+  if (!clientUserId) return false;
+  const { data, error } = await admin
+    .from('profiles')
+    .select('email_suppressed')
+    .eq('id', clientUserId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.email_suppressed === true;
+}
+
+function reminderBody(stage: number, params: InvoiceReminderEmailParams): string {
+  const greeting = `Hi ${params.clientName?.trim() || 'there'},`;
+  const invoice = params.invoiceNumber;
+  const designer = params.designerName;
+  const project = params.projectName ? ` for ${params.projectName}` : '';
+  const due = formatInvoiceEmailDate(params.dueDate) ?? '';
+  const facts = [
+    `Invoice: ${params.invoiceNumber}`,
+    `Balance due: ${new Intl.NumberFormat('en-US', { style: 'currency', currency: params.currency ?? 'USD' }).format(params.balanceCents / 100)}`,
+    due ? `Due date: ${due}` : '',
+  ].filter(Boolean).join('\n');
+  const messages = [
+    `Just a friendly reminder that ${designer}’s invoice${project} is coming due.\n\n${facts}\n\nIf you’ve already arranged payment, you can disregard this note.`,
+    `Invoice ${invoice} from ${designer}${project} is still open.\n\n${facts}\n\nWhen you have a moment, please settle the balance so the work can carry on without interruption.\n\nIf payment is already on its way, thank you — no further action is needed.`,
+    `This is a second notice that invoice ${invoice} from ${designer}${project} is still open, a week on from its due date.\n\n${facts}\n\nPlease arrange payment promptly. If something about this invoice looks off, reply to this email or reach out to ${designer} directly so it can be sorted out.`,
+    `This is the final automated notice for invoice ${invoice} from ${designer}${project}, now two weeks on from its due date.\n\n${facts}\n\nImmediate payment is required. The outstanding balance has been flagged for direct follow-up by ${designer}, and continued non-payment may pause work already under way.`,
+  ];
+  return `${greeting}\n\n${messages[stage]}`;
 }
 
 /**
@@ -329,7 +341,8 @@ Deno.serve(async (_req: Request) => {
     );
   }
 
-  let sent = 0;
+  let sentCount = 0;
+  let drafted = 0;
   let escalated = 0;
   let notDue = 0;
   let skipped = 0;
@@ -371,6 +384,16 @@ Deno.serve(async (_req: Request) => {
       // retry once the client record gains an email.
       skipped++;
       console.warn('invoice-reminders: no recipient email for invoice', invoice.id);
+      continue;
+    }
+    try {
+      if (await isClientSuppressed(admin, clientUserId)) {
+        skipped++;
+        continue;
+      }
+    } catch (err) {
+      skipped++;
+      console.warn('invoice-reminders: client suppression lookup failed', invoice.id, err);
       continue;
     }
 
@@ -420,119 +443,94 @@ Deno.serve(async (_req: Request) => {
       studioInvoice: !invoice.project_id,
     });
 
-    let sendResult;
-    try {
-      sendResult = await sendCompliantEmail(admin, {
-        authority: invoiceReminderAuthority(
-          (identity?.studioId ?? invoice.studio_id)!,
-        ),
-        to: recipientEmail,
-        subject: rendered.subject,
-        html: rendered.html,
-        userId: clientUserId ?? undefined,
-        notificationType: 'invoice_reminder',
-        category: 'operational',
-        templateId: STAGE_TEMPLATE_IDS[stage],
-        ref: { type: 'invoice', id: invoice.id },
-        // R1 — a homeowner replying to a reminder reaches her designer.
-        replyTo: invoice.designer?.email ?? undefined,
-        metadata: {
-          invoice_id: invoice.id,
-          project_id: invoice.project_id,
-          reminder_stage: stage,
-          subject: rendered.subject,
-          message: `Reminder ${stage + 1} of ${REMINDER_OFFSET_DAYS.length}: invoice ${invoiceNumber}${forClause}.`,
-          deep_link: `/invoices/${invoice.id}`,
-        },
-      });
-    } catch (err) {
-      console.error('invoice-reminders: send threw', invoice.id, err);
+    const outboundKind = stage < 2 ? 'invoice_reminder' : 'invoice_overdue';
+    const draftBody = reminderBody(stage, {
+      invoiceNumber, projectName, studioInvoice: !invoice.project_id, designerName,
+      clientName: recipientName, balanceCents, dueDate: invoice.due_date,
+      portalUrl, currency: invoice.currency, studioName: cobrand.studioName,
+      studioLogoUrl: cobrand.studioLogoUrl,
+    });
+    const payload = {
+      invoice_id: invoice.id, step: stage, project_id: invoice.project_id,
+      invoice_number: invoiceNumber, balance_cents: balanceCents,
+      due_date: invoice.due_date, currency: invoice.currency, pay_url: portalUrl,
+      client_name: recipientName, client_user_id: clientUserId,
+      designer_name: designerName, designer_id: invoice.designer_id,
+      designer_email: invoice.designer?.email ?? null,
+      project_name: projectName, for_clause: forClause,
+      studio_name: cobrand.studioName ?? null, studio_logo_url: cobrand.studioLogoUrl ?? null,
+      studio_invoice: !invoice.project_id,
+    };
+    const { data: draftId, error: composeError } = await admin.rpc('compose_outbound_draft', {
+      p_kind: outboundKind,
+      p_org: identity?.studioId ?? invoice.studio_id,
+      p_project: invoice.project_id,
+      p_channel: 'email',
+      p_recipient_kind: 'client',
+      p_to: { client_id: clientUserId, address: recipientEmail },
+      p_subject: rendered.subject,
+      p_body: draftBody,
+      p_payload: payload,
+      p_ref_type: 'invoice',
+      p_ref_id: invoice.id,
+      p_dedupe_key: 'invoice:' + invoice.id + ':reminder:' + stage,
+      p_due_at: null,
+      p_expires_at: null,
+      p_composed_by: 'system',
+    });
+    if (composeError || !draftId) {
       skipped++;
+      console.error('invoice-reminders: draft composition failed', invoice.id, composeError);
       continue;
     }
 
-    if (!sendResult.success) {
-      // Suppressed / rate-capped / provider failure — leave the row unstamped
-      // so the next run retries this stage (decision-reminders semantics).
+    // The RPC supersedes drafts of the same kind; cadence moves across kinds
+    // at +7, so retire the prior invoice reminder explicitly as well.
+    const { error: supersedeError } = await admin.from('outbound_drafts')
+      .update({ status: 'superseded' })
+      .eq('ref_type', 'invoice')
+      .eq('ref_id', invoice.id)
+      .in('kind', ['invoice_reminder', 'invoice_overdue'])
+      .eq('status', 'awaiting_review')
+      .neq('id', draftId);
+    if (supersedeError) {
       skipped++;
-      if (sendResult.error && sendResult.error !== 'email_suppressed') {
-        console.warn('invoice-reminders: send failed', invoice.id, sendResult.error);
-      }
+      console.error('invoice-reminders: older draft supersession failed', invoice.id, supersedeError);
       continue;
     }
 
-    sent++;
-
-    // Stamp progress: this stage is done; the next run evaluates stage+1.
-    const { error: stampErr } = await admin
-      .from('invoices')
-      .update({
-        reminder_count: stage + 1,
-        last_reminder_at: new Date().toISOString(),
-      })
-      .eq('id', invoice.id);
-    if (stampErr) {
-      console.error('invoice-reminders: failed to stamp reminder', invoice.id, stampErr);
-      // Don't escalate off an unstamped row — without the stamp the invoice
-      // would re-send this stage next run, so flagging now could double-fire.
+    const { data: mode, error: modeError } = await admin.rpc('studio_outbound_mode', {
+      p_studio: identity?.studioId ?? invoice.studio_id,
+      p_kind: outboundKind,
+    });
+    const { data: reviewActive, error: rolloutError } = await admin.rpc('outbound_review_active', {
+      p_studio: identity?.studioId ?? invoice.studio_id,
+    });
+    if (modeError || rolloutError) {
+      skipped++;
+      console.error('invoice-reminders: outbound mode lookup failed', invoice.id, modeError ?? rolloutError);
       continue;
     }
-
-    // The client's bell, FIRST STAGE ONLY (SP-08). Stage 0 is the due-3
-    // upcoming-due nudge; the later three stages are a dunning cadence and do
-    // not earn a push each. The in-app row de-duplicates on the invoice id
-    // anyway, so a later stage could only refresh a line the client has already
-    // been shown. Best-effort — the email has already gone.
-    if (stage === 0 && clientUserId) {
-      const attention = await notifyClientAttention(admin, {
-        userId: clientUserId,
-        entityType: 'invoice',
-        entityId: invoice.id,
-        title: 'An invoice is coming due',
-        body: `Invoice ${invoiceNumber}${forClause} is due soon.`,
-        metadata: {
-          project_id: invoice.project_id,
-          amount_cents: invoice.total_cents,
-          due_date: invoice.due_date,
-          reminder_stage: stage,
-        },
+    if (mode === 'scheduled' || !reviewActive) {
+      const sent = await sendOutboundDraft(admin, draftId, {
+        kind: 'studio_schedule',
+        studioId: (identity?.studioId ?? invoice.studio_id)!,
+        outboundKind,
       });
-      if (!attention.ok) {
-        console.warn('invoice-reminders: client attention not delivered', invoice.id, attention.error);
+      if (!sent.ok) {
+        skipped++;
+        console.warn('invoice-reminders: scheduled draft send failed', invoice.id, sent.error);
+        continue;
       }
+      sentCount++;
+    } else {
+      drafted++;
     }
 
-    // At the +1 overdue notice, give the DESIGNER in-app visibility that a
-    // receivable has gone past due (email cadence stays client-only here).
-    if (stage === 1) {
-      const { error: logErr } = await admin.from('notification_log').insert({
-        user_id: invoice.designer_id,
-        type: 'invoice_overdue',
-        channel: 'in_app',
-        status: 'delivered',
-        template_id: 'invoice-overdue-designer',
-        metadata: {
-          invoice_id: invoice.id,
-          project_id: invoice.project_id,
-          subject: `Invoice ${invoiceNumber} is past due`,
-          message: `Invoice ${invoiceNumber}${forClause} is past due. An automated overdue notice was sent to the client.`,
-          deep_link: '/desk?book=accounts&page=receivables',
-        },
-      });
-      if (logErr) {
-        console.error('invoice-reminders: failed to write overdue in-app row', invoice.id, logErr);
-      }
-    }
-
-    // Final notice just went out → exhausted: flag for A/R + tell the designer.
-    if (stage === REMINDER_OFFSET_DAYS.length - 1) {
-      const { flagged } = await escalateToDesigner(admin, invoice, recipientName, overdueDays);
-      if (flagged) escalated++;
-    }
   }
 
   return new Response(
-    JSON.stringify({ scanned: invoices.length, sent, escalated, notDue, skipped, heldMidPayment }),
+    JSON.stringify({ scanned: invoices.length, sent: sentCount, drafted, escalated, notDue, skipped, heldMidPayment }),
     { headers: { 'Content-Type': 'application/json' } },
   );
 });
