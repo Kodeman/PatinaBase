@@ -1797,7 +1797,7 @@ async function processInboundCore(
     recentMessages: recent,
     today: nowIso.slice(0, 10),
     hasMedia: numMedia > 0 || media.length > 0,
-  }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
+  }, { getEnv: deps.getEnv });
 
   const targetItem = parsed.target_ref
     ? candidateItems.find((c) => c.id === parsed.target_ref!.id && c.kind === parsed.target_ref!.kind)
@@ -3342,7 +3342,7 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
     ...(tradePrompt?.condition ? { condition: tradePrompt.condition } : {}),
   } : await (deps.parseFn ?? parseFieldMessage)({ body: explicit?.[1] ?? body,
     openItems: [{ ...subject, project_name: "", due: null }], recentMessages: [],
-    today: now.toISOString().slice(0, 10), hasMedia: media.length > 0 }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
+    today: now.toISOString().slice(0, 10), hasMedia: media.length > 0 }, { getEnv: deps.getEnv });
   if (prompt.proposed_effect) {
     const original = prompt.proposed_effect;
     parsed = { ...parsed, intent: original.type as FieldParseResult["intent"],
