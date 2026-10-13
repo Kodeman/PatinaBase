@@ -3,8 +3,13 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { LayerProductLayer } from "@patina/supabase";
 import { DocumentAction } from "../../document-action";
-import { FilterPill } from "@/components/ui/controls";
 import type { LibraryCapabilityFilter } from "./library-configuration-summary";
+
+/**
+ * The Library's one filter grammar (US-28 S10c): shelf and type as one row of
+ * underline words, never pills. The shelf words stay a tablist over the one
+ * shelf panel; the type words are pressed toggles.
+ */
 
 interface LayerCounts {
   personal: number;
@@ -33,19 +38,6 @@ const CAPABILITY_FILTERS: Array<{
   { value: "modular", label: "Modular" },
   { value: "custom", label: "Custom commissions" },
 ];
-
-function ActiveStrata() {
-  return (
-    <span
-      aria-hidden
-      className="inline-flex w-3 flex-col gap-[2px] text-[var(--color-clay-ink)]"
-    >
-      <i className="h-px w-3 bg-current" />
-      <i className="h-px w-2 bg-current opacity-65" />
-      <i className="h-px w-1 bg-current opacity-35" />
-    </span>
-  );
-}
 
 export function LibraryToolbar({
   activeLayer,
@@ -120,123 +112,113 @@ export function LibraryToolbar({
   };
 
   return (
-    <div
-      data-library-toolbar
-      className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-[var(--doc-ink-border)] px-6 py-3 sm:px-9"
-    >
-      <div
-        role="tablist"
-        aria-label="Library shelf lens"
-        className="flex min-w-0 flex-wrap items-center gap-1"
-      >
-        {LENSES.map((lens, index) => {
-          const selected = activeLayer === lens.layer;
-          const count = counts?.[lens.countKey] ?? null;
-          return (
-            <DocumentAction
-              key={lens.layer}
-              id={`library-lens-${lens.layer}`}
-              actionKey={`open-${lens.layer}-library`}
-              surfaceKey="library"
-              regionKey="shelf-lenses"
-              variant="tertiary"
-              role="tab"
-              aria-selected={selected}
-              aria-controls="library-shelf-panel"
-              aria-label={`${lens.label}${count == null ? "" : `, ${count} ${count === 1 ? "product" : "products"}`}`}
-              tabIndex={selected ? 0 : -1}
-              leading={selected ? <ActiveStrata /> : undefined}
-              data-library-lens={lens.layer}
-              className={
-                selected
-                  ? "font-medium text-[var(--color-charcoal)]"
-                  : "text-[var(--text-body)]"
-              }
-              onClick={() => onLayerChange(lens.layer)}
-              onKeyDown={(event) => moveLens(event, index)}
-            >
-              {lens.label}
-              {count != null && (
-                <span className="ml-1 font-normal text-[var(--text-body)]">
-                  · {count}
-                </span>
-              )}
-            </DocumentAction>
-          );
-        })}
-      </div>
-
-      <div ref={addRootRef} className="relative ml-auto">
-        <DocumentAction
-          ref={addTriggerRef}
-          actionKey="toggle-library-add"
-          surfaceKey="library"
-          regionKey="library-toolbar"
-          variant="secondary"
-          aria-expanded={addOpen}
-          aria-controls="library-add-options"
-          trailing={addOpen ? "↑" : "↓"}
-          data-library-add-trigger
-          onClick={() => setAddOpen((value) => !value)}
+    <div data-library-toolbar className="library-filters-wrap">
+      <div className="filters library-filters">
+        <div
+          role="tablist"
+          aria-label="Library shelf lens"
+          className="library-filter-run"
         >
-          Add to library
-        </DocumentAction>
+          <span aria-hidden className="library-flabel">
+            Shelf
+          </span>
+          {LENSES.map((lens, index) => {
+            const selected = activeLayer === lens.layer;
+            const count = counts?.[lens.countKey] ?? null;
+            return (
+              <button
+                key={lens.layer}
+                type="button"
+                id={`library-lens-${lens.layer}`}
+                role="tab"
+                aria-selected={selected}
+                aria-controls="library-shelf-panel"
+                aria-label={`${lens.label}${count == null ? "" : `, ${count} ${count === 1 ? "product" : "products"}`}`}
+                tabIndex={selected ? 0 : -1}
+                data-library-lens={lens.layer}
+                onClick={() => onLayerChange(lens.layer)}
+                onKeyDown={(event) => moveLens(event, index)}
+              >
+                {lens.label}
+                {count != null && <span className="library-count"> · {count}</span>}
+              </button>
+            );
+          })}
+        </div>
 
-        {addOpen && (
-          <div
-            id="library-add-options"
-            role="region"
-            aria-label="Add to Library options"
-            data-library-add-options
-            className="absolute right-0 top-[calc(100%+4px)] z-30 w-[min(260px,calc(100vw-3rem))] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-4 py-3 motion-safe:animate-[doc-fade_200ms_ease-out] motion-reduce:animate-none"
+        <div
+          role="group"
+          aria-label="Filter by configuration capability"
+          className="library-filter-run"
+        >
+          <span aria-hidden className="library-flabel">
+            Type
+          </span>
+          {CAPABILITY_FILTERS.map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              aria-pressed={activeCapability === filter.value}
+              onClick={() => onCapabilityChange?.(filter.value)}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+
+        <div ref={addRootRef} className="library-add">
+          <DocumentAction
+            ref={addTriggerRef}
+            actionKey="toggle-library-add"
+            surfaceKey="library"
+            regionKey="library-toolbar"
+            variant="tertiary"
+            aria-expanded={addOpen}
+            aria-controls="library-add-options"
+            trailing={addOpen ? "↑" : "↓"}
+            data-library-add-trigger
+            onClick={() => setAddOpen((value) => !value)}
           >
-            <p className="mb-1 text-[14px] leading-relaxed text-[var(--color-charcoal)]">
-              Add a product record or import a product list.
-            </p>
-            <div className="flex flex-col items-start">
-              <DocumentAction
-                ref={firstAddActionRef}
-                actionKey="compose-piece"
-                surfaceKey="library"
-                regionKey="library-add"
-                variant="secondary"
-                trailing="→"
-                onClick={() => chooseAddAction(onCompose)}
-              >
-                Create a product record
-              </DocumentAction>
-              <DocumentAction
-                actionKey="import-pieces"
-                surfaceKey="library"
-                regionKey="library-add"
-                variant="secondary"
-                trailing="→"
-                onClick={() => chooseAddAction(onImport)}
-              >
-                Import product list
-              </DocumentAction>
+            Add to library
+          </DocumentAction>
+
+          {addOpen && (
+            <div
+              id="library-add-options"
+              role="region"
+              aria-label="Add to Library options"
+              data-library-add-options
+              className="popover library-add-options motion-safe:animate-[doc-fade_200ms_ease-out] motion-reduce:animate-none"
+            >
+              <p className="t-body-sm mb-1">
+                Add a product record or import a product list.
+              </p>
+              <div className="flex flex-col items-start">
+                <DocumentAction
+                  ref={firstAddActionRef}
+                  actionKey="compose-piece"
+                  surfaceKey="library"
+                  regionKey="library-add"
+                  variant="secondary"
+                  trailing="→"
+                  onClick={() => chooseAddAction(onCompose)}
+                >
+                  Create a product record
+                </DocumentAction>
+                <DocumentAction
+                  actionKey="import-pieces"
+                  surfaceKey="library"
+                  regionKey="library-add"
+                  variant="secondary"
+                  trailing="→"
+                  onClick={() => chooseAddAction(onImport)}
+                >
+                  Import product list
+                </DocumentAction>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-
-      <div
-        role="group"
-        aria-label="Filter by configuration capability"
-        className="order-last flex w-full flex-wrap items-center gap-1.5 border-t border-[var(--doc-ink-border)] pt-2"
-      >
-        <span className="mr-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
-          Specification type
-        </span>
-        {CAPABILITY_FILTERS.map((filter) => (
-          <FilterPill
-            key={filter.value}
-            active={activeCapability === filter.value}
-            onClick={() => onCapabilityChange?.(filter.value)}
-          >
-            {filter.label}
-          </FilterPill>
-        ))}
+          )}
+        </div>
       </div>
     </div>
   );

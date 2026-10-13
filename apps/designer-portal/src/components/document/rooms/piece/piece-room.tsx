@@ -3,15 +3,23 @@
 /**
  * The Piece (R40 grammar, view + edit of one library item). You pull a piece off
  * the shelf and lay it on your worktable: a full-bleed paper Room reached at
- * /library/[id]. A letterhead hero (folio + the piece named in the hand + the
- * Strata Mark completeness) sits over three Movements — the record / the catalog
+ * /library/[id]. A letterhead hero (folio + the piece named in the hand, its
+ * tags as ink words, its facts as one list and readiness as a sentence — US-28
+ * S10c) and the jobs it is used on sit over three Movements — the record / the catalog
  * / the eye — and a quiet colophon of provenance. Every facet self-saves where
  * you may edit (personal you own, studio you're in, catalog if super-admin);
  * elsewhere it reads as an immutable specimen sheet with Save / Add / Nominate.
- * Zero shadows (D4); the Strata Mark is the only progress device.
+ * Zero shadows (D4); no progress device on the hero.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import {
   useProduct,
@@ -33,7 +41,6 @@ import { usePieceField } from "@/hooks/use-piece-field";
 import { DocumentAction, DocumentActionGroup } from "../../document-action";
 import { useMobilePrimaryAction } from "../../mobile/mobile-shell";
 import { RoomShell } from "../room-shell";
-import { StrataMark } from "@/components/document/strata-mark";
 import { StrataSweep } from "@/components/ui/strata-sweep";
 import { PieceFacet } from "./piece-facet";
 import {
@@ -71,6 +78,7 @@ import type {
   PieceConfigurationSelectionView,
 } from "./piece-configuration-model";
 import { DeepAnalysisSheet } from "../library/deep-analysis-sheet";
+import { PieceUsedOn } from "../library/piece-used-on";
 import { DuplicateDetectionPanel } from "@/components/catalog/duplicate-detection-panel";
 import { PromoteToStudioModal } from "@/components/products/promotion/promote-to-studio-modal";
 import { NominateToCatalogModal } from "@/components/products/nomination/nominate-to-catalog-modal";
@@ -79,6 +87,7 @@ import {
   pieceFill,
   piecePct,
   pieceStateLabel,
+  pieceGaps,
   type PieceRow,
 } from "@/lib/document/piece-progress";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -566,6 +575,13 @@ export function PieceRoom({ productId }: { productId: string }) {
         })
       : null;
 
+  const facts = pieceFacts(p, retail, trade);
+  const gaps = pieceGaps(sections);
+  const readiness =
+    gaps.length === 0
+      ? "Ready to specify: the name, maker, dimensions, materials, a price, an image and its style are on file."
+      : `Still to fill in: ${listInWords(gaps)}.`;
+
   const taughtStyles = (p.product_styles ?? [])
     .map((s) => s.style?.name)
     .filter(Boolean) as string[];
@@ -598,7 +614,7 @@ export function PieceRoom({ productId }: { productId: string }) {
   return (
     <RoomShell
       title={p.name || "Product record"}
-      count={`${LAYER_LABEL[layer]} · ${pct}%`}
+      count={`${LAYER_LABEL[layer]} · ${state}`}
       backTo="/library"
       backLabel="Resource library"
     >
@@ -608,15 +624,14 @@ export function PieceRoom({ productId }: { productId: string }) {
           <PieceFolio productId={p.id} images={p.images} readOnly={readOnly} />
 
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Chip>{LAYER_LABEL[layer]}</Chip>
-              <Chip tone={p.status === "published" ? "sage" : "oak"}>
-                {labelStatus(p.status)}
-              </Chip>
+            {/* US-28 S10c: tags are ink words, never chips. */}
+            <p className="piece-tags">
+              <span className="word">{LAYER_LABEL[layer]}</span>
+              <span className="word">{labelStatus(p.status)}</span>
               {readOnly && layer === "catalog" && (
-                <Chip tone="oak">read only</Chip>
+                <span className="word word--quiet">Read only</span>
               )}
-            </div>
+            </p>
 
             <h2 className="mt-3 font-heading text-[2rem] leading-tight text-[var(--color-charcoal)]">
               {p.name}
@@ -626,41 +641,24 @@ export function PieceRoom({ productId }: { productId: string }) {
                 {p.brand}
               </p>
             )}
-            {(p.category || p.subcategory) && (
-              <p className="doc-type-meta mt-1 uppercase tracking-[0.12em]">
-                {[p.category, p.subcategory].filter(Boolean).join(" · ")}
-              </p>
+            {/* US-28 S10c: the facts as one list, then readiness as a
+                sentence naming what is on file — no progress bar. */}
+            {facts.length > 0 && (
+              <dl className="piece-facts">
+                {facts.map(([term, value]) => (
+                  <Fragment key={term}>
+                    <dt>{term}</dt>
+                    <dd>{value}</dd>
+                  </Fragment>
+                ))}
+              </dl>
             )}
+            <p className="piece-ready" data-piece-ready>
+              {readiness}
+            </p>
 
-            {(retail || trade) && (
-              <p className="mt-3 text-[0.92rem] text-[var(--color-charcoal)]">
-                {retail && <span className="font-medium">{retail}</span>}
-                {retail && (
-                  <span className="doc-type-meta text-[var(--color-quiet-ink)]">
-                    {" "}
-                    retail
-                  </span>
-                )}
-                {trade && (
-                  <span className="text-[var(--color-aged-oak)]">
-                    {retail ? "  ·  " : ""}
-                    {trade} <span className="doc-type-meta">trade</span>
-                  </span>
-                )}
-              </p>
-            )}
-
-            <div className="mt-4 flex items-center gap-3">
-              <StrataMark size="lg" fill={fill} label={`${pct}% complete`} />
-              <span className="doc-type-meta tracking-[0.04em]">
-                <b className="font-heading text-[0.95rem] text-[var(--color-charcoal)]">
-                  {pct}
-                </b>
-                % · {state}
-              </span>
-            </div>
-
-            {/* Action rail */}
+            {/* Action rail: "Add to a project" is a scored secondary; nothing
+                on the page is filled. */}
             <DocumentActionGroup
               surfaceKey="piece"
               regionKey="piece-head"
@@ -668,7 +666,7 @@ export function PieceRoom({ productId }: { productId: string }) {
             >
               <DocumentAction
                 actionKey="add-piece-to-project"
-                variant="primary"
+                variant="secondary"
                 onClick={openPrimaryPlacement}
               >
                 {configurationView.mode === "standard"
@@ -678,7 +676,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               {layer !== "personal" && (
                 <DocumentAction
                   actionKey="save-to-my-library"
-                  variant="secondary"
+                  variant="tertiary"
                   loading={capture.isPending}
                   loadingLabel="Saving…"
                   onClick={() => void saveToMyLibrary()}
@@ -689,7 +687,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               {layer === "personal" && canEdit && (
                 <DocumentAction
                   actionKey="promote-to-studio"
-                  variant="secondary"
+                  variant="tertiary"
                   onClick={() => setPromoteOpen(true)}
                 >
                   Add to studio library
@@ -698,7 +696,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               {layer === "studio" && canEdit && (
                 <DocumentAction
                   actionKey="nominate-maker"
-                  variant="secondary"
+                  variant="tertiary"
                   onClick={() => {
                     if (!p.vendor_id) {
                       setToast("This piece has no maker on file to nominate.");
@@ -723,6 +721,8 @@ export function PieceRoom({ productId }: { productId: string }) {
             )}
           </div>
         </section>
+
+        <PieceUsedOn productId={p.id} />
 
         {/* D11: a studio piece's duplicates merge into it, here. The panel
             renders nothing when it finds none. */}
@@ -1135,16 +1135,13 @@ export function PieceRoom({ productId }: { productId: string }) {
             readOnly={readOnly}
           >
             {taughtStyles.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-1.5">
+              <p className="piece-taught">
                 {taughtStyles.map((s) => (
-                  <span
-                    key={s}
-                    className="doc-type-meta rounded-[14px] border border-[var(--color-clay)] bg-[rgba(196,165,123,0.1)] px-2.5 py-1 text-[var(--color-quiet-ink)]"
-                  >
+                  <span key={s} className="word">
                     {s}
                   </span>
                 ))}
-              </div>
+              </p>
             ) : (
               <p className="mt-3 text-[0.8rem] italic text-[var(--color-aged-oak)]">
                 Add style attribution to support future sourcing recommendations.
@@ -1256,32 +1253,47 @@ function labelStatus(s: string): string {
   return STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s;
 }
 
-function Chip({
-  children,
-  tone = "oak",
-}: {
-  children: React.ReactNode;
-  tone?: "oak" | "sage";
-}) {
-  return (
-    <span
-      className="doc-type-meta rounded-[3px] border px-2 py-0.5 uppercase tracking-[0.1em]"
-      style={
-        tone === "sage"
-          ? {
-              color: "var(--color-sage)",
-              borderColor: "var(--color-sage)",
-              background: "rgba(168,181,160,0.12)",
-            }
-          : {
-              color: "var(--color-aged-oak)",
-              borderColor: "var(--color-pearl)",
-            }
-      }
-    >
-      {children}
-    </span>
+/** The piece page's facts list (US-28 S10c): only what the row carries. */
+function pieceFacts(
+  p: PieceProduct,
+  retail: string | null,
+  trade: string | null,
+): Array<[string, string]> {
+  const facts: Array<[string, string]> = [];
+  const category = [p.category, p.subcategory].filter(Boolean).join(" · ");
+  if (category) facts.push(["Category", category]);
+  const dimensions = formatDimensions(p.dimensions);
+  if (dimensions) facts.push(["Dimensions", dimensions]);
+  if (p.materials?.length) facts.push(["Materials", p.materials.join(", ")]);
+  if (p.lead_time_weeks != null) {
+    facts.push([
+      "Lead time",
+      `${p.lead_time_weeks} ${p.lead_time_weeks === 1 ? "week" : "weeks"}`,
+    ]);
+  }
+  if (retail) facts.push(["Retail price", retail]);
+  if (trade) facts.push(["Trade price", trade]);
+  return facts;
+}
+
+function formatDimensions(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const dim = value as Record<string, unknown>;
+  const part = (key: string, mark: string) => {
+    const v = dim[key];
+    return v != null && String(v).trim() !== "" ? `${String(v).trim()} ${mark}` : null;
+  };
+  const parts = [part("width", "W"), part("depth", "D"), part("height", "H")].filter(
+    Boolean,
   );
+  if (parts.length === 0) return null;
+  const unit = typeof dim.unit === "string" && dim.unit.trim() ? dim.unit.trim() : "in";
+  return `${parts.join(" × ")} (${unit})`;
+}
+
+function listInWords(items: string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
 /** Render a diff value for the per-field accept list (before → after). */

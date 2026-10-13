@@ -2668,3 +2668,75 @@ html:has([data-document-shell]) {
   }
 }
 /* end US-28 S7 document */
+
+/* ═══ US-28 S10 library ════════════════════════════════════════════════════
+   Area 5 (uplift.md (c); specimens/library-{1440,390}.html). Places the S1
+   components for the Library, its piece page and the style comparisons;
+   restyles none of them. */
+
+/* the search: a full field that never yields its width to the act beside it
+   (the 390 walk clipped it to "P"); the act wraps beneath instead */
+.library-search { padding-top: 24px; }
+.library-search-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+.library-search-field { display: block; flex: 1 1 320px; min-width: 240px; max-width: 640px; min-height: 44px; padding: 10px 12px; background: var(--paper-lift); color: var(--text-primary); border: 1px solid var(--card-edge); border-radius: 2px; font: inherit; font-size: 16px; }
+.library-search-field::placeholder { color: var(--text-subtle); }
+.library-search-field:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.library-search-note { margin-top: 8px; max-width: 640px; color: var(--text-subtle); }
+.library-engine-results { margin-top: 24px; max-width: 640px; padding-top: 16px; border-top: var(--rule-hair); }
+.library-engine-results .eb { margin-bottom: 8px; color: var(--text-primary); }
+@media (max-width: 599px) { .library-search-field { flex-basis: 100%; max-width: none; } }
+
+/* one filter grammar: shelf and type as one row of underline words */
+.library-filters-wrap { margin: 24px 0 48px; padding-top: 4px; border-top: var(--rule-hair); }
+.library-filters { gap: 0 32px; }
+.library-filter-run { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; }
+.library-flabel { font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.library-filters [role="tab"][aria-selected="true"] { color: var(--text-primary); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.library-filters [role="tab"]:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.library-count { color: var(--text-subtle); }
+.library-add { position: relative; margin-left: auto; }
+.library-add-options { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; width: min(260px, calc(100vw - 32px)); }
+@media (max-width: 599px) {
+  .library-filters-wrap { margin: 16px 0 32px; }
+  .library-flabel { flex: 1 1 100%; }
+  .library-add { margin-left: 0; }
+}
+
+/* the shelf: a Section of plates that closes on its own rule */
+.library-shelf:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 4px; }
+.library-shelf-meta { color: var(--text-subtle); }
+.library-shelf-fold { margin: 16px 0 0 -6px; }
+/* SPEC §2.2: plates stay 2-up at 390, where the column is under 360px */
+@container (max-width: 359px) { .library-plates { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; } }
+
+/* plate and caption: the plate is the mat, the caption names piece, maker and job */
+.library-plate { display: flex; flex-direction: column; min-width: 0; }
+.library-plate-mat { display: flex; align-items: center; justify-content: center; }
+.library-plate-mat:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.library-plate-word, .judgment-plate-word { padding: 8px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); text-align: center; }
+.library-hit { display: inline-flex; align-items: center; min-height: 44px; }
+.library-cap-maker, .judgment-cap-maker { display: block; color: var(--text-muted); }
+.library-cap-used { margin-top: 6px; color: var(--text-muted); }
+.library-cap-words { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 6px; }
+.library-cap-words .library-cap-words { margin-top: 0; }
+.library-cap-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin: 4px 0 0 -6px; }
+.library-cap-fold { margin-top: 12px; padding-top: 12px; border-top: var(--rule-hair); }
+
+/* the style comparison: each side is one button, plate and caption */
+.judgment-plate { display: flex; flex-direction: column; min-width: 0; text-align: left; border-radius: 3px; }
+.judgment-plate:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.judgment-plate-mat { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 3; }
+.judgment-plate .cap { display: flex; flex-direction: column; }
+.judgment-plate .name { align-self: flex-start; }
+.judgment-plate:hover .name { text-decoration-color: var(--clay); }
+
+/* the piece page: tags as ink words, facts as a list, "Used on" as ticked rows */
+.piece-tags { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.piece-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: baseline; margin-top: 24px; }
+.piece-facts dt { font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.piece-facts dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+.piece-ready { margin-top: 20px; color: var(--text-muted); }
+.piece-used { margin-top: 48px; }
+.piece-used .tick { display: inline-block; }
+.piece-taught { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 12px; }
+/* ═══ end US-28 S10 library ════════════════════════════════════════════════ */

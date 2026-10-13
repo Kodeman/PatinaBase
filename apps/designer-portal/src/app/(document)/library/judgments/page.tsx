@@ -36,8 +36,8 @@ import {
   buildJudgmentDeck,
   type JudgmentChoice,
   type JudgmentPair,
-  type JudgmentProduct,
 } from '@patina/supabase';
+import { JudgmentCard } from '@/components/document/judgments/judgment-card';
 import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -140,23 +140,15 @@ export default function JudgmentsPage() {
 
             {pair ? (
               <div className="max-w-[860px]">
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-6">
                   <JudgmentCard product={pair.a} onPick={() => choose('a')} />
                   <JudgmentCard product={pair.b} onPick={() => choose('b')} />
                 </div>
-                <div className="mt-5 flex items-center justify-center gap-6">
-                  <button
-                    type="button"
-                    onClick={() => choose('neither')}
-                    className="font-body text-[0.8rem] text-[var(--text-muted)] underline decoration-[var(--color-pearl)] underline-offset-2 hover:text-[var(--text-primary)]"
-                  >
+                <div className="filters mt-5 justify-center">
+                  <button type="button" onClick={() => choose('neither')}>
                     Neither
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => choose('both')}
-                    className="font-body text-[0.8rem] text-[var(--text-muted)] underline decoration-[var(--color-pearl)] underline-offset-2 hover:text-[var(--text-primary)]"
-                  >
+                  <button type="button" onClick={() => choose('both')}>
                     Both
                   </button>
                 </div>
@@ -193,43 +185,5 @@ export default function JudgmentsPage() {
         )}
       </div>
     </RoomShell>
-  );
-}
-
-function JudgmentCard({
-  product,
-  onPick,
-}: {
-  product: JudgmentProduct;
-  onPick: () => void;
-}) {
-  const image = product.images?.[0];
-  return (
-    <button
-      type="button"
-      onClick={onPick}
-      className="group rounded-[4px] border border-[var(--color-pearl)] bg-[var(--bg-surface)] p-3 text-left transition-colors hover:border-[var(--accent-primary)]"
-    >
-      <div className="aspect-[4/3] w-full overflow-hidden rounded-[3px] bg-[rgba(196,165,123,0.08)]">
-        {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={image}
-            alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center font-heading text-[0.95rem] italic text-[var(--text-muted)]">
-            {product.name}
-          </div>
-        )}
-      </div>
-      <div className="mt-2.5">
-        <span className="type-item-name block">{product.name}</span>
-        {product.brand && (
-          <span className="type-label-secondary">{product.brand}</span>
-        )}
-      </div>
-    </button>
   );
 }

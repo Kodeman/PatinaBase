@@ -171,7 +171,7 @@ export function LibraryRoom() {
         </DocumentActionGroup>
       }
     >
-      <div className="mx-auto max-w-[1240px]">
+      <div className="mx-auto max-w-[1240px] px-4 sm:px-9">
         <LibrarianBar
           onPlaced={(pieceName, whereName) =>
             setToast(
@@ -192,8 +192,7 @@ export function LibraryRoom() {
           onCapabilityChange={setActiveCapability}
         />
 
-        <div className="px-6 sm:px-9">
-          <LibraryShelf
+        <LibraryShelf
             key={activeLayer}
             id="library-shelf-panel"
             labelledBy={`library-lens-${activeLayer}`}
@@ -213,7 +212,6 @@ export function LibraryRoom() {
                 : undefined
             }
           />
-        </div>
 
         <LibraryFoot />
       </div>

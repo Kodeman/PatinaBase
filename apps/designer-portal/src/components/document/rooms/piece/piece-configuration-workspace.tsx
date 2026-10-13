@@ -437,9 +437,7 @@ export function PieceConfigurationWorkspace({
             <span className="doc-type-meta uppercase tracking-[0.1em]">
               Product specification
             </span>
-            <span className="rounded-[3px] border border-[var(--color-clay)] bg-[rgba(196,165,123,0.08)] px-2 py-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
-              {modeCopy.label}
-            </span>
+            <span className="word word--quiet">{modeCopy.label}</span>
             <span className="doc-type-meta">
               r{draftDefinition.revision} · maker definition
             </span>
@@ -1255,27 +1253,17 @@ function ResolutionStatus({
         : unresolvedCount > 0
           ? `${unresolvedCount} choice${unresolvedCount === 1 ? "" : "s"} left`
           : "Needs attention";
-  const tone =
+  // US-28 S10c: the state is one ink word, never a filled box or a dot.
+  const ink =
     resolution.valid && resolution.complete
-      ? "var(--color-sage)"
+      ? "word"
       : resolution.errors.length > unresolvedCount
-        ? "var(--color-terracotta)"
-        : "var(--color-aged-oak)";
+        ? "word word--od"
+        : "word word--quiet";
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="inline-flex items-center gap-2 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-3 py-2"
-    >
-      <i
-        aria-hidden
-        className="h-2 w-2 rounded-full"
-        style={{ background: tone }}
-      />
-      <span className="text-[0.72rem] font-medium text-[var(--color-charcoal)]">
-        {label}
-      </span>
-    </div>
+    <p role="status" aria-live="polite" className={`${ink} py-2`}>
+      {label}
+    </p>
   );
 }
 

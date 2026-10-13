@@ -64,7 +64,7 @@ export function FieldSearch({ query }: { query: string }) {
       aria-busy={isLoading}
       aria-live="polite"
       data-library-exact-results
-      className="mx-auto mt-5 max-w-[680px] text-left"
+      className="mt-5 max-w-[640px] text-left"
     >
       <h2
         id="library-exact-results"
@@ -106,9 +106,9 @@ export function FieldSearch({ query }: { query: string }) {
                 <li key={row.id}>
                   <Link
                     href={`/library/${row.id}`}
-                    className="group flex min-h-11 items-center gap-3 rounded-[5px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-2.5 py-2 transition-colors hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+                    className="group flex min-h-11 items-center gap-3 border-b border-[var(--doc-ink-border)] py-2 hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[3px] bg-[var(--doc-sheet-2)]">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[3px] border border-[var(--card-edge)] bg-[var(--paper-doc)]">
                       {row.images?.[0] ? (
                         <img
                           src={row.images[0]}
@@ -123,10 +123,10 @@ export function FieldSearch({ query }: { query: string }) {
                       )}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14px] font-medium text-[var(--color-charcoal)]">
+                      <span className="name block text-[14px] font-medium">
                         {row.name}
                       </span>
-                      <span className="block truncate font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-body)]">
+                      <span className="block font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-body)]">
                         {[row.brand, row.category].filter(Boolean).join(' · ') ||
                           'Unknown maker'}
                       </span>

@@ -149,6 +149,7 @@ jest.mock("./piece-folio", () => ({ PieceFolio: () => <div /> }));
 jest.mock("./add-to-project-sheet", () => ({ AddToProjectSheet: () => <div /> }));
 jest.mock("./custom-commission-sheet", () => ({ CustomCommissionSheet: () => <div /> }));
 jest.mock("../library/deep-analysis-sheet", () => ({ DeepAnalysisSheet: () => <div /> }));
+jest.mock("../library/piece-used-on", () => ({ PieceUsedOn: () => null }));
 jest.mock("@/components/products/promotion/promote-to-studio-modal", () => ({
   PromoteToStudioModal: () => <div />,
 }));
