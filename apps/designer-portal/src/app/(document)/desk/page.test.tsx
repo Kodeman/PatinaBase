@@ -242,9 +242,9 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
     };
     render(<DeskPage />);
     const sheet = screen.getByTestId('day-sheet');
-    expect(sheet.querySelector('[data-day-sheet-line="po_unsent:studio:studio-draft"]')).toHaveTextContent(
-      'One ready to send, review and send',
-    );
+    const studioNeed = sheet.querySelector('[data-day-sheet-line="po_unsent:studio:studio-draft"]');
+    expect(studioNeed).not.toBeNull();
+    expect(studioNeed?.textContent).toContain('One ready to send, review and send');
     expect(within(sheet).getByText('Studio')).toBeInTheDocument();
   });
 
