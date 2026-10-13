@@ -69,7 +69,7 @@ export async function stampInvoiceReminderCadence(
   const { error } = await admin.from("invoices").update({
     reminder_count: stage + 1,
     last_reminder_at: sentAt,
-  }).eq("id", invoiceId);
+  }).eq("id", invoiceId).lt("reminder_count", stage + 1);
   if (error) console.error("invoice reminder send stamp failed", invoiceId, error);
 }
 
@@ -88,7 +88,9 @@ export async function afterSendInvoiceReminder(ctx: OutboundKindContext): Promis
   const { admin, draft } = ctx;
   const payload = draft.payload;
   const stage = numberValue(payload, "step");
-  await stampInvoiceReminderCadence(admin, draft.ref_id, stage, new Date().toISOString());
+  if (draft.delivered_at) {
+    await stampInvoiceReminderCadence(admin, draft.ref_id, stage, draft.delivered_at);
+  }
 
   if (stage === 0) {
     const clientId = value(payload, "client_user_id");

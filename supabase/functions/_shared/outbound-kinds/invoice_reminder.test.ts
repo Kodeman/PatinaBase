@@ -3,7 +3,10 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { OutboundDraft } from "../outbound-send.ts";
 import { afterSend, repairSentInvoiceReminder, renderEmail, renderInvoiceReminderEmail, stampInvoiceReminderCadence } from "./invoice_reminder.ts";
 
-function invoiceAdmin(updates: Array<{ id: string; values: Record<string, unknown> }>): SupabaseClient {
+function invoiceAdmin(
+  updates: Array<{ id: string; values: Record<string, unknown> }>,
+  state = { reminder_count: 0, last_reminder_at: null as string | null },
+): SupabaseClient {
   return {
     from(table: string) {
       if (table !== "invoices") throw new Error(`Unexpected table ${table}`);
@@ -12,8 +15,17 @@ function invoiceAdmin(updates: Array<{ id: string; values: Record<string, unknow
           return {
             eq(column: string, id: string) {
               if (column !== "id") throw new Error(`Unexpected filter ${column}`);
-              updates.push({ id, values });
-              return Promise.resolve({ error: null });
+              return {
+                lt(column: string, value: number) {
+                  if (column !== "reminder_count") throw new Error(`Unexpected filter ${column}`);
+                  if (state.reminder_count < value) {
+                    updates.push({ id, values });
+                    state.reminder_count = values.reminder_count as number;
+                    state.last_reminder_at = values.last_reminder_at as string;
+                  }
+                  return Promise.resolve({ error: null });
+                },
+              };
             },
           };
         },
@@ -45,16 +57,29 @@ Deno.test("a sent reminder repairs a missed stamp and advances the next cron sta
 
 Deno.test("stamping the same stage twice is idempotent", async () => {
   const updates: Array<{ id: string; values: Record<string, unknown> }> = [];
-  const admin = invoiceAdmin(updates);
+  const state = { reminder_count: 0, last_reminder_at: null as string | null };
+  const admin = invoiceAdmin(updates, state);
   const sentAt = "2026-10-12T15:00:00.000Z";
 
   await stampInvoiceReminderCadence(admin, "invoice-1", 1, sentAt);
-  await stampInvoiceReminderCadence(admin, "invoice-1", 1, sentAt);
+  await stampInvoiceReminderCadence(admin, "invoice-1", 1, "2026-10-13T15:00:00.000Z");
 
   assertEquals(updates.map(({ values }) => values), [
     { reminder_count: 2, last_reminder_at: sentAt },
-    { reminder_count: 2, last_reminder_at: sentAt },
   ]);
+  assertEquals(state, { reminder_count: 2, last_reminder_at: sentAt });
+});
+
+Deno.test("a late stage-0 finalize cannot rewind a later reminder cadence", async () => {
+  const updates: Array<{ id: string; values: Record<string, unknown> }> = [];
+  const sentAt = "2026-10-12T15:00:00.000Z";
+  const state = { reminder_count: 2, last_reminder_at: sentAt };
+  const admin = invoiceAdmin(updates, state);
+
+  await stampInvoiceReminderCadence(admin, "invoice-1", 0, "2026-10-13T15:00:00.000Z");
+
+  assertEquals(updates, []);
+  assertEquals(state, { reminder_count: 2, last_reminder_at: sentAt });
 });
 
 Deno.test("rendered invoice reminder email contains no automated wording", async () => {
@@ -113,7 +138,7 @@ Deno.test("invoice reminder afterSend stamps cadence and sends first-step attent
       return {
         update(values: unknown) {
           calls.push({ kind: `${table}.update`, args: values });
-          return { eq: () => Promise.resolve({ error: null }) };
+          return { eq: () => ({ lt: () => Promise.resolve({ error: null }) }) };
         },
         insert(values: unknown) {
           calls.push({ kind: `${table}.insert`, args: values });
@@ -134,9 +159,11 @@ Deno.test("invoice reminder afterSend stamps cadence and sends first-step attent
       invoice_id: "invoice-1", step: 0, invoice_number: "INV-1", balance_cents: 12500,
       due_date: "2026-11-01", project_id: "project-1", client_user_id: "client-1", for_clause: " for Lake House",
     }, ref_type: "invoice", ref_id: "invoice-1", status: "sending", sent_by: null,
+    delivered_at: "2026-10-12T15:00:00.000Z",
   };
   await afterSend({ admin, draft, messageId: "mail-1", authority } as never);
   assertEquals(calls.some((call) => call.kind === "invoices.update" && (call.args as Record<string, unknown>).reminder_count === 1), true);
+  assertEquals(calls.some((call) => call.kind === "invoices.update" && (call.args as Record<string, unknown>).last_reminder_at === draft.delivered_at), true);
   assertEquals(calls.some((call) => call.kind === "notify_client_attention" && (call.args as Record<string, unknown>).p_authority === authority), true);
 });
 
