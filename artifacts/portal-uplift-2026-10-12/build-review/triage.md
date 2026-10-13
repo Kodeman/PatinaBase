@@ -120,3 +120,27 @@ This walk ran at 39e74f1e1, against `build-walk/WALK.md`, and the walk commit wa
 | W20 | LOW: the Paper's teaching hint, its extra head acts (Set dates, Sharing, Directory) and the edged margin box | **KEEP**: existing features (US-13 Workshop Notes); the margin note is a Card off the paper |
 | W21 | LOW: US date order, the Rooms brief's blue stage edge, the Ceremony rail, the compose boxes, the Desk "Until…" row and the Studio resources footer, the Undo highlight flash, dashed placeholders on screen versus solid in the PNG | **KEEP**; OWED to Kody as polish |
 | W22 | Known: the lens band jump and the duplicate "New board" (SQ-852); the Build room unchanged (V15) | Already handled |
+
+## Delta re-review round 4 (SQ-864 · SQ-872 · SQ-876), 2026-10-13
+
+These reviews read the walk-fix wave (b42fa9825...0b61a8314), People (SQ-862) and the board-room fix (SQ-865).
+
+| Finding | Severity | Ruling | Landed |
+|---|---|---|---|
+| SQ-864 F1: TESTER fallback hidden under the opaque board room | MEDIUM | ACCEPT | SQ-865, f00b9b97e (reserved slot on the board Header line) |
+| SQ-864 F2: turned captions clip at the top and overrun the width | MEDIUM | ACCEPT | SQ-865, f00b9b97e (one full printed bounding rectangle with origin translation, shared by the DOM, painter and preflight) |
+| SQ-864 F3: RoomShell header shrink-wraps | MEDIUM | ACCEPT | SQ-866, a863ccdff (`w-full`) |
+| SQ-864 F4: preflight measured before the fonts load | LOW | ACCEPT | SQ-865, f00b9b97e |
+| SQ-864 F5: preview title is not the stored title | LOW | ACCEPT, narrowed | a863ccdff + f373f7479. The workspace H1 keeps the job name (SQ-857 specimen); only the preview footLine prints the stored title that issuance freezes. |
+| SQ-864 F6: "All shelves" fetches metadata for 180 rows | LOW | ACCEPT | SQ-866, a863ccdff (fetch for the shown slice only) |
+| SQ-872 F1: ⌘K person link ignored while People is mounted | HIGH | ACCEPT | SQ-874, 4d0ff69cb |
+| SQ-872 F2: sub-view aliases land on the default view | MEDIUM | ACCEPT | SQ-874, 4d0ff69cb |
+| SQ-876 (a): unbounded `document.fonts.ready` wait | MEDIUM | ACCEPT | 482b32403 (3 s bound shared by the raster and the preflight) |
+| SQ-876 (b): stale PNG plan after the input changes | MEDIUM | ACCEPT | 482b32403 (plan cleared on input change; PNG disabled until measured) |
+
+Gate at 482b32403:
+- designer, client and design-system tsc: 0 errors;
+- designer jest: 825/825 suites, 11,627 tests;
+- design-system vitest (scoped): 175/175.
+
+Noted, not a defect: `ffe-section-act-landing` failed once under full-suite load at f00b9b97e and passed 3/3 in isolation. It's a timing flake; watch for it in the final gate.
