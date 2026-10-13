@@ -11,92 +11,73 @@ export const MOOD_BOARD_DISPLAY_FONT =
 export const MOOD_BOARD_MONO_FONT =
   'ui-monospace, SFMono-Regular, Menlo, monospace'
 
+/**
+ * Plate and caption (US-28 S12; SPEC §S12.2): a picture item is a plate — the
+ * photo or drawing on a 1px card edge — then a sans name and mono lines of
+ * facts. No shadow, no pill, no clamp, no truncation: the plate gives up
+ * height so the caption always prints whole. A zone is a 1px dashed edge in
+ * the designer's colour with its word printed in ink inside it; a note is
+ * text on the note edge.
+ *
+ * The colours are kept as hex, not CSS vars, because the export painter can't
+ * resolve custom properties. Each is the hex VALUE of the designer-portal
+ * token named beside it (apps/designer-portal/src/app/globals.css); keep them
+ * in step or Present/guest/export stop matching the board room.
+ */
 export const MOOD_BOARD_VISUAL = {
-  pinRadius: 2,
+  plateRadius: 3,
   sectionRadius: 2,
-  sectionFillAlpha: 0.0625,
   sectionDash: [4, 3] as const,
-  sectionLabelHeight: 20,
-  sectionLabelPaddingX: 8,
-  mediaLabelHeight: 28,
+  /** The zone word sits inside the dashed edge, top-left. */
+  zoneWordInsetX: 12,
+  zoneWordInsetY: 8,
+  /** The house state word: mono 12/16, .08em tracking, uppercase. */
+  word: { size: 12, line: 16, letterSpacing: 0.96 },
+  caption: { gap: 6, nameSize: 13, nameLine: 18, metaSize: 12, metaLine: 16 },
+  /** Padding around a word printed inside an empty plate. */
+  plateWordPadding: 8,
+  /** As board-item-renderer.tsx NoteCard: the 2px edge, then 16px of air. */
+  note: { edge: 2, padTop: 4, padLeft: 16, size: 14, line: 21 },
   colors: {
-    surface: '#ffffff',
-    pearl: '#f5f3ee',
-    border: '#ded7cd',
-    text: '#362f29',
-    muted: '#776e64',
-    // Kept as hex, not a CSS var: the deterministic export painter can't
-    // resolve custom properties. These are the hex VALUES of the
-    // --bg-warm/--border-warm/--color-bark tokens board-room-shell.tsx's
-    // InlineNoteEditor and board-item-renderer.tsx's NoteCard standardized
-    // on (VD1/VD18) — keep all three in step or edit mode diverges from
-    // every presentation surface (Present/guest/client/mirror + export PDF).
-    note: '#eee6db',
-    noteBorder: '#ddd4c8',
-    noteText: '#4a453f',
-    placeholder: '#eee9e1',
-    placeholderBorder: '#cfc5b8',
-    placeholderText: '#756b60',
+    plate: '#FCFAF6', // --paper-doc
+    cardEdge: '#8F8C88', // --card-edge
+    text: '#2C2926', // --text-primary
+    subtle: '#5A4E43', // --text-subtle
+    muted: '#4E4339', // --text-muted
+    noteEdge: '#8B7355', // --oak (--edge-note)
+    zoneDefault: '#8c8175', // a zone with no designer colour
   },
 } as const
 
-export interface MoodBoardProductLayout {
-  frame: BoardRect
-  image: BoardRect
-  captionTop: number
-  nameTop: number
-  metaBaseline: number
-  sourceBaseline: number
+/** A zone's dashed edge: the designer's colour, or the quiet default. */
+export function moodBoardZoneColor(value: string | null | undefined): string {
+  return value && /^#[0-9a-f]{6}$/i.test(value)
+    ? value
+    : MOOD_BOARD_VISUAL.colors.zoneDefault
 }
 
-export function resolveMoodBoardProductLayout(
+/** Height a caption takes under its plate, from its wrapped line counts. */
+export function moodBoardCaptionHeight(
+  nameLines: number,
+  metaLines: number,
+): number {
+  const { gap, nameLine, metaLine } = MOOD_BOARD_VISUAL.caption
+  if (nameLines + metaLines === 0) return 0
+  return gap + nameLines * nameLine + metaLines * metaLine
+}
+
+/**
+ * The plate gives up height to the caption; it never goes below zero, and a
+ * caption taller than its item prints past the item rather than truncating.
+ */
+export function resolveMoodBoardPlate(
   width: number,
   height: number,
-): MoodBoardProductLayout {
-  const captionHeight = Math.min(70, Math.max(42, height * 0.25))
-  const captionTop = Math.max(1, height - captionHeight)
+  captionHeight: number,
+): { plate: BoardRect; captionTop: number } {
+  const plateHeight = Math.max(0, height - captionHeight)
   return {
-    frame: { x: 0, y: 0, width, height },
-    image: {
-      x: 1,
-      y: 1,
-      width: Math.max(1, width - 2),
-      height: Math.max(1, captionTop - 1),
-    },
-    captionTop,
-    nameTop: captionTop + 7,
-    metaBaseline: height - 20,
-    sourceBaseline: height - 6,
+    plate: { x: 0, y: 0, width, height: plateHeight },
+    captionTop: plateHeight + (captionHeight > 0 ? MOOD_BOARD_VISUAL.caption.gap : 0),
   }
-}
-
-export function resolveMoodBoardMediaLayout(
-  width: number,
-  height: number,
-): { frame: BoardRect; media: BoardRect; labelTop: number } {
-  const labelHeight = Math.min(
-    MOOD_BOARD_VISUAL.mediaLabelHeight,
-    Math.max(18, height * 0.3),
-  )
-  const labelTop = Math.max(1, height - labelHeight)
-  return {
-    frame: { x: 0, y: 0, width, height },
-    media: {
-      x: 1,
-      y: 1,
-      width: Math.max(1, width - 2),
-      height: Math.max(1, labelTop - 1),
-    },
-    labelTop,
-  }
-}
-
-export function moodBoardColorWithAlpha(color: string, alpha: number): string {
-  const match = color.trim().match(/^#([0-9a-f]{6})$/i)
-  if (!match) return `color-mix(in srgb, ${color} ${alpha * 100}%, transparent)`
-  const hex = match[1]!
-  return `rgba(${Number.parseInt(hex.slice(0, 2), 16)}, ${Number.parseInt(
-    hex.slice(2, 4),
-    16,
-  )}, ${Number.parseInt(hex.slice(4, 6), 16)}, ${alpha})`
 }

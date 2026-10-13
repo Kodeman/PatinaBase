@@ -411,3 +411,65 @@ describe('BoardComposition unified renderer props', () => {
     expect(a.container.innerHTML).toBe(b.container.innerHTML)
   })
 })
+
+describe('Present tiles: plate and caption, zones with an ink word (US-28 S12)', () => {
+  function zonedBoard(): BoardCompositionBoard {
+    const board = allPinTypesBoard()
+    return {
+      ...board,
+      sections: [{ id: 'pieces', name: 'Pieces and the long name of this zone', color: '#718573' }],
+      items: board.items.map((item) => ({
+        ...item,
+        data: { ...(item.data as Record<string, unknown>), section_id: 'pieces' },
+      })),
+    }
+  }
+
+  it('prints the zone word in ink inside a dashed edge: no fill, no white-on-colour pill, and it wraps', () => {
+    const { container } = render(<BoardComposition board={zonedBoard()} />)
+    const zone = container.querySelector('[data-composition-section="pieces"]') as HTMLElement
+    expect(zone.style.border).toBe('1px dashed rgb(113, 133, 115)')
+    expect(zone.style.backgroundColor).toBe('')
+    const word = container.querySelector('[data-composition-section-word="pieces"]') as HTMLElement
+    expect(word).toHaveTextContent('Pieces and the long name of this zone')
+    expect(word.style.backgroundColor).toBe('')
+    expect(word.style.color).toBe('rgb(44, 41, 38)')
+    expect(word.style.textTransform).toBe('uppercase')
+    expect(word.style.overflowWrap).toBe('anywhere')
+    expect(word.className).not.toMatch(/whitespace-nowrap|rounded/)
+  })
+
+  it('draws every picture pin as a plate on a 1px card edge and its caption whole, never clamped or truncated', () => {
+    const { container } = render(<BoardComposition board={productBoard()} />)
+    const canvas = container.querySelector('[data-board-composition-canvas="true"]')!
+    const pin = canvas.querySelector('[data-board-item-id="i1"]') as HTMLElement
+    const plate = pin.querySelector('[data-board-plate]') as HTMLElement
+    expect(plate.style.border).toBe('1px solid rgb(143, 140, 136)')
+    expect(plate.style.backgroundColor).toBe('rgb(252, 250, 246)')
+    const caption = pin.querySelector('[data-board-caption]') as HTMLElement
+    expect(caption).toHaveTextContent('Halyard Lounge Chair')
+    expect(caption).toHaveTextContent('West Elm · $1,200')
+    expect(caption).toHaveTextContent('west-elm.com')
+    expect(container.querySelector('.truncate, .line-clamp-2, [class*="shadow"]')).toBeNull()
+    expect(container.innerHTML).not.toMatch(/ring-2|#fff\b|rgb\(255, 255, 255\)/)
+  })
+
+  it('gives every pin family the same plate stock and the note its oak edge', () => {
+    const { container } = render(<BoardComposition board={allPinTypesBoard()} />)
+    const canvas = container.querySelector('[data-board-composition-canvas="true"]')!
+    for (const type of ['product', 'capture', 'image', 'palette', 'room_scan']) {
+      expect(
+        canvas.querySelector(`[data-board-item-id="pin-${type}"] [data-board-plate]`),
+      ).toBeInTheDocument()
+    }
+    const note = canvas.querySelector('[data-board-item-id="pin-note"] > div') as HTMLElement
+    expect(note.style.borderLeft).toBe('2px solid rgb(139, 115, 85)')
+    expect(note.style.backgroundColor).toBe('')
+  })
+
+  it('keeps the guest view token-only: with no host acts it offers no buttons or focusable pins', () => {
+    const { container } = render(<BoardsBlock boards={[zonedBoard() as BoardsBlockBoard]} />)
+    expect(container.querySelector('button, [role="button"], [tabindex]')).toBeNull()
+    expect(container.querySelector('[data-pin-overlay], [data-pin-interaction]')).toBeNull()
+  })
+})

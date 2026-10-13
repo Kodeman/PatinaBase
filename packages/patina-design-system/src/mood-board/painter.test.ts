@@ -8,6 +8,7 @@ import {
   paintMoodBoardGeometry,
   type MoodBoardPainterContext,
 } from './painter-core'
+import { MOOD_BOARD_MONO_FONT, MOOD_BOARD_VISUAL } from './visual-contract'
 import {
   computeMoodBoardRasterScale,
   renderMoodBoardCover,
@@ -213,7 +214,189 @@ describe('worker-safe mood-board painter core', () => {
       resolveImage: async () => ({ source: {}, width: 400, height: 100 }),
     })
     const draw = context.calls.find((call) => call.name === 'drawImage')!
-    expect(draw.args.slice(1)).toEqual([0, 37.5, 100, 25])
+    // Contained inside the plate's 1px card edge (US-28 S12): 98 x 98 media.
+    expect(draw.args.slice(1)).toEqual([1, 37.75, 98, 24.5])
+  })
+
+  it('paints a product as a plate and a whole caption, never clamped (US-28 S12)', async () => {
+    const context = new RecordingContext()
+    const name =
+      'Arden lounge chair in a long bouclé with walnut legs and a deep seat'
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: 400,
+      canvasHeight: 400,
+      backgroundColor: '#FCFAF6',
+      sections: [],
+      items: [
+        {
+          id: 'arden',
+          type: 'product',
+          x: 0,
+          y: 0,
+          width: 180,
+          height: 260,
+          data: {
+            name,
+            image_url: 'arden.jpg',
+            vendor_name: 'Calloway & Brandt Upholstery',
+            price_cents: 418000,
+            source_url: 'https://www.maker.example/arden',
+          },
+        },
+      ],
+    })
+    await paintMoodBoardGeometry({
+      context,
+      geometry,
+      transform: { scale: 1, offsetX: 0, offsetY: 0, viewportWidth: 400, viewportHeight: 400 },
+      resolveImage: async () => ({ source: {}, width: 300, height: 200 }),
+    })
+    const texts = context.calls
+      .filter((call) => call.name === 'fillText')
+      .map((call) => String(call.args[0]))
+    // Every word of the name prints, across as many lines as it needs.
+    const nameLines = texts.filter((text) => name.includes(text))
+    expect(nameLines.length).toBeGreaterThan(2)
+    expect(nameLines.join(' ')).toBe(name)
+    expect(texts.some((text) => text.includes('…'))).toBe(false)
+    expect(texts.join(' ')).toContain('Calloway & Brandt Upholstery · $4,180')
+    expect(texts).toContain('maker.example')
+    // The plate's 1px card edge, then nothing white, nothing filled as a card.
+    expect(
+      context.calls.some(
+        (call) => call.name === 'stroke' && call.args[0] === MOOD_BOARD_VISUAL.colors.cardEdge,
+      ),
+    ).toBe(true)
+    expect(
+      context.calls.some(
+        (call) =>
+          (call.name === 'fill' || call.name === 'fillRect') &&
+          String(call.args.at(-1)).toLowerCase() === '#ffffff',
+      ),
+    ).toBe(false)
+    // The caption sits under the plate, which gave up height to it.
+    const draw = context.calls.find((call) => call.name === 'drawImage')!
+    const plateBottom = (draw.args[2] as number) + (draw.args[4] as number)
+    const captionTops = context.calls
+      .filter((call) => call.name === 'fillText')
+      .map((call) => call.args[2] as number)
+    expect(Math.min(...captionTops)).toBeGreaterThan(plateBottom)
+  })
+
+  it('paints zones as a dashed edge with an ink word: no fill, no pill (US-28 S12)', async () => {
+    const context = new RecordingContext()
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: 800,
+      canvasHeight: 600,
+      backgroundColor: '#FCFAF6',
+      sections: [{ id: 'pieces', name: 'Pieces', color: '#718573' }],
+      items: [
+        {
+          id: 'lamp',
+          type: 'image',
+          x: 40,
+          y: 40,
+          width: 120,
+          height: 120,
+          imageUrl: 'x',
+          data: { section_id: 'pieces' },
+        },
+      ],
+    })
+    await paintMoodBoardGeometry({
+      context,
+      geometry,
+      transform: { scale: 1, offsetX: 0, offsetY: 0, viewportWidth: 800, viewportHeight: 600 },
+      resolveImage: async () => ({ source: {}, width: 100, height: 100 }),
+    })
+    const section = geometry.sections[0]!
+    expect(
+      context.calls.some((call) => call.name === 'stroke' && call.args[0] === '#718573'),
+    ).toBe(true)
+    expect(
+      context.calls.some(
+        (call) => (call.name === 'fill' || call.name === 'fillRect') && call.args.at(-1) === '#718573',
+      ),
+    ).toBe(false)
+    const word = context.calls.find(
+      (call) => call.name === 'fillText' && call.args[0] === 'PIECES',
+    )!
+    expect(word).toBeDefined()
+    expect(word.args[1]).toBe(section.bounds.x + MOOD_BOARD_VISUAL.zoneWordInsetX)
+    expect(word.args[4]).toBe(MOOD_BOARD_VISUAL.colors.text)
+    expect(String(word.args[5])).toContain(MOOD_BOARD_MONO_FONT)
+  })
+
+  it('never paints selection, handles, drop targets or any canvas chrome into an export (US-28 S12)', async () => {
+    const context = new RecordingContext()
+    const geometry = resolveMoodBoardGeometry(MOOD_BOARD_GOLDEN_FIXTURE)
+    await paintMoodBoardGeometry({
+      context,
+      geometry,
+      transform: { scale: 1, offsetX: 0, offsetY: 0, viewportWidth: 1200, viewportHeight: 800 },
+      resolveImage: async (request) => ({ source: { key: request.itemKey }, width: 400, height: 300 }),
+    })
+    const swatches = MOOD_BOARD_GOLDEN_FIXTURE.items.flatMap((item) =>
+      Array.isArray(item.data?.swatches)
+        ? (item.data.swatches as Array<{ hex: string }>).map((swatch) => swatch.hex)
+        : [],
+    )
+    const allowed = new Set(
+      [
+        MOOD_BOARD_GOLDEN_FIXTURE.backgroundColor,
+        ...Object.values(MOOD_BOARD_VISUAL.colors),
+        ...MOOD_BOARD_GOLDEN_FIXTURE.sections.map((section) => section.color),
+        ...swatches,
+      ].map((color) => String(color).toLowerCase()),
+    )
+    const painted = context.calls
+      .filter((call) => ['fill', 'stroke', 'fillRect', 'strokeRect', 'fillText'].includes(call.name))
+      .map((call) =>
+        String(call.name === 'fillText' ? call.args[4] : call.args.at(-1)).toLowerCase(),
+      )
+    // Only the board, its zones' edges, its items and their words: never the
+    // clay-ink selection ring, a handle, a drop-target edge or a guide.
+    expect(painted.filter((color) => !allowed.has(color))).toEqual([])
+    expect(painted).not.toContain('#7c5e30')
+  })
+
+  it('prints a note as text on the oak note edge, with no fill (US-28 S12)', async () => {
+    const context = new RecordingContext()
+    const geometry = resolveMoodBoardGeometry({
+      canvasWidth: 400,
+      canvasHeight: 300,
+      backgroundColor: '#FCFAF6',
+      sections: [],
+      items: [
+        {
+          id: 'note',
+          type: 'note',
+          x: 0,
+          y: 0,
+          width: 240,
+          height: 120,
+          content: 'What repeats? What contrasts?',
+          data: {},
+        },
+      ],
+    })
+    await paintMoodBoardGeometry({
+      context,
+      geometry,
+      transform: { scale: 1, offsetX: 0, offsetY: 0, viewportWidth: 400, viewportHeight: 300 },
+    })
+    const fills = context.calls.filter(
+      (call) => (call.name === 'fill' || call.name === 'fillRect') && call.args.at(-1) !== '#FCFAF6',
+    )
+    expect(fills).toEqual([
+      expect.objectContaining({
+        name: 'fillRect',
+        args: [0, 0, MOOD_BOARD_VISUAL.note.edge, 120, MOOD_BOARD_VISUAL.colors.noteEdge],
+      }),
+    ])
+    const text = context.calls.find((call) => call.name === 'fillText')!
+    expect(text.args[1]).toBe(MOOD_BOARD_VISUAL.note.edge + MOOD_BOARD_VISUAL.note.padLeft)
+    expect(text.args[4]).toBe(MOOD_BOARD_VISUAL.colors.muted)
   })
 
   it('exports 100 image pins with bounded parallel loading, monotonic progress and cooperative yields', async () => {

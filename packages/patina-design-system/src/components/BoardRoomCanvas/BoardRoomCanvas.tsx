@@ -10,6 +10,10 @@ import type {
 } from '@patina/types'
 import { cn } from '../../utils/cn'
 import {
+  MOOD_BOARD_VISUAL,
+  moodBoardZoneColor,
+} from '../../mood-board/visual-contract'
+import {
   alignBoardItems,
   boardRectsIntersect,
   clampBoardZoom,
@@ -686,18 +690,36 @@ function scaleResizeGroup(
   }
 }
 
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = React.useState(false)
+function useMediaQuery(media: string): boolean {
+  const [matches, setMatches] = React.useState(false)
   React.useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const update = () => setReduced(query.matches)
+    const query = window.matchMedia(media)
+    const update = () => setMatches(query.matches)
     update()
     query.addEventListener?.('change', update)
     return () => query.removeEventListener?.('change', update)
-  }, [])
-  return reduced
+  }, [media])
+  return matches
 }
+
+function useReducedMotion(): boolean {
+  return useMediaQuery('(prefers-reduced-motion: reduce)')
+}
+
+/** The canvas's one focus ring: 2px clay ink at offset 2 — an outline, never a shadow (D4). */
+const FOCUS_RING =
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--clay-ink)]'
+
+/**
+ * Handle hit areas in screen px: 24 for a mouse (WCAG 2.2 §2.5.8), 44 for a
+ * finger (SPEC §S12.2.3). The drawn square stays 10 either way.
+ */
+const HANDLE_HIT_FINE_PX = 24
+const HANDLE_HIT_COARSE_PX = 44
+const HANDLE_DRAWN_PX = 10
+/** Where the rotate circle's centre sits above the item, in screen px. */
+const ROTATE_HANDLE_CENTER_PX = 28
 
 /**
  * Controlled, presentational editing surface for the dedicated board room.
@@ -852,6 +874,7 @@ export const BoardRoomCanvas = React.forwardRef<
     const suppressClickUntilRef = React.useRef(0)
     const suppressContextMenuUntilRef = React.useRef(0)
     const reducedMotion = useReducedMotion()
+    const coarsePointer = useMediaQuery('(pointer: coarse)')
     const selectedSet = React.useMemo(
       () => new Set(selectedItemIds),
       [selectedItemIds],
@@ -2269,9 +2292,44 @@ export const BoardRoomCanvas = React.forwardRef<
         )
         .map((item) => item.aabb),
     )
-    // 24px hit area (WCAG 2.2 ยง2.5.8); the painted dot stays small (CI-10).
-    const handleSize = 24 / activeView.zoom
-    const handleDot = 10 / activeView.zoom
+    // 24px hit area (WCAG 2.2 §2.5.8), 44px on a coarse pointer (SPEC
+    // §S12.2.3); the drawn square stays 10px (CI-10).
+    const handleSize =
+      (coarsePointer ? HANDLE_HIT_COARSE_PX : HANDLE_HIT_FINE_PX) /
+      activeView.zoom
+    const handleDot = HANDLE_DRAWN_PX / activeView.zoom
+    // The selection ring: 2px clay ink at offset 2, never a shadow or a fill.
+    const selectionRing: React.CSSProperties = {
+      outline: `${2 / activeView.zoom}px solid var(--clay-ink)`,
+      outlineOffset: 2 / activeView.zoom,
+    }
+    // The zone under the dragged piece's centre answers while the gesture is
+    // live (SPEC §S12.4 p3). Render-only: membership still commits on release
+    // from the same centre-point test.
+    const dropTargetSectionId = (() => {
+      const gesture = gestureRef.current
+      if (gesture?.kind !== 'move' || !gesture.didMove) return null
+      const lead = gesture.latest.find((item) => item.id === gesture.leadId)
+      const resolved = geometry.items.find((item) => item.id === gesture.leadId)
+      if (!lead || !resolved) return null
+      const center = {
+        x: lead.x + resolved.width / 2,
+        y: lead.y + resolved.height / 2,
+        width: 0,
+        height: 0,
+      }
+      const target =
+        gesture.sectionBounds.find((section) =>
+          boardRectsIntersect(section.bounds, center),
+        )?.id ?? null
+      const leadItem = items.find((item) => item.id === gesture.leadId)
+      const current =
+        typeof leadItem?.data?.section_id === 'string'
+          ? leadItem.data.section_id
+          : null
+      // Already in that zone: there is nothing to add it to.
+      return target !== current || gesture.duplicate ? target : null
+    })()
     // CSS-only: the actively dragged item(s) render above their siblings for
     // the duration of the gesture without committing any z-order change
     // (CI-03) — settles back to its real stacking position on release.
@@ -2326,7 +2384,8 @@ export const BoardRoomCanvas = React.forwardRef<
         aria-describedby="board-room-instructions"
         tabIndex={rovingItemId ? -1 : 0}
         className={cn(
-          'relative h-full min-h-[320px] w-full overflow-hidden bg-[var(--bg-muted,#eeeae3)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]',
+          'relative h-full min-h-[320px] w-full overflow-hidden bg-[var(--bg-muted,#eeeae3)] outline-none',
+          FOCUS_RING,
           spaceHeld ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
           className,
         )}
@@ -2431,7 +2490,7 @@ export const BoardRoomCanvas = React.forwardRef<
           <div
             role="toolbar"
             aria-label="Board view"
-            className="absolute right-3 top-3 z-40 flex items-center gap-1 rounded-full border border-black/10 bg-white/95 p-1 shadow-sm"
+            className="absolute right-3 top-3 z-40 flex items-center gap-1 rounded-full border border-[color:var(--card-edge)] bg-[var(--paper-doc)] p-1"
             onPointerDown={(event) => event.stopPropagation()}
           >
             <CanvasControl
@@ -2479,7 +2538,7 @@ export const BoardRoomCanvas = React.forwardRef<
           <div
             role="toolbar"
             aria-label="Board alignment"
-            className="absolute bottom-3 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-black/10 bg-white/95 p-1 shadow-sm"
+            className="absolute bottom-3 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-[color:var(--card-edge)] bg-[var(--paper-doc)] p-1"
             onPointerDown={(event) => event.stopPropagation()}
           >
             {(
@@ -2546,6 +2605,7 @@ export const BoardRoomCanvas = React.forwardRef<
               key={section.id}
               section={section}
               readOnly={readOnly}
+              dropTarget={dropTargetSectionId === section.id}
               onPointerDown={(event) =>
                 handleSectionPointerDown(event, section.id)
               }
@@ -2573,7 +2633,8 @@ export const BoardRoomCanvas = React.forwardRef<
                 tabIndex={rovingItemId === item.id ? 0 : -1}
                 data-board-item-id={item.id}
                 className={cn(
-                  'absolute outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]',
+                  'absolute outline-none',
+                  FOCUS_RING,
                   !readOnly && !item.locked && 'cursor-grab active:cursor-grabbing',
                   item.locked && 'cursor-default',
                 )}
@@ -2606,10 +2667,9 @@ export const BoardRoomCanvas = React.forwardRef<
                 <div className="h-full w-full">{renderItem(item)}</div>
                 {selected && (
                   <div
+                    data-board-selection-ring={item.id}
                     className="pointer-events-none absolute inset-0"
-                    style={{
-                      border: `${2 / activeView.zoom}px solid var(--color-clay,#a66d4f)`,
-                    }}
+                    style={selectionRing}
                     aria-hidden="true"
                   />
                 )}
@@ -2620,34 +2680,29 @@ export const BoardRoomCanvas = React.forwardRef<
                 {item.locked &&
                   (selected || hoveredItemId === item.id) && (
                     <>
+                      {/* The lock as a word (SPEC §S12.2.4), on a paper
+                          ground with a 1px edge so it reads over a photo —
+                          never a badge, an icon or a shadow. */}
                       <span
                         data-testid={`board-item-lock-${item.id}`}
                         aria-hidden="true"
-                        title="Locked"
-                        className="pointer-events-none absolute z-30 flex items-center justify-center rounded-full bg-[color:rgba(87,76,63,.82)] text-white"
+                        className="pointer-events-none absolute z-30 whitespace-nowrap"
                         style={{
                           left: 4 / activeView.zoom,
                           top: 4 / activeView.zoom,
-                          width: 18 / activeView.zoom,
-                          height: 18 / activeView.zoom,
-                          fontSize: 11 / activeView.zoom,
-                          lineHeight: 1,
+                          padding: `${2 / activeView.zoom}px ${6 / activeView.zoom}px`,
+                          border: `${1 / activeView.zoom}px solid var(--card-edge)`,
+                          borderRadius: 2 / activeView.zoom,
+                          background: 'var(--paper-doc)',
+                          color: 'var(--text-primary)',
+                          fontFamily: 'var(--font-meta)',
+                          fontSize: 12 / activeView.zoom,
+                          lineHeight: `${16 / activeView.zoom}px`,
+                          letterSpacing: '.08em',
+                          textTransform: 'uppercase',
                         }}
                       >
-                        <svg
-                          viewBox="0 0 16 16"
-                          width="100%"
-                          height="100%"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth={1.6}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          style={{ padding: '22%' }}
-                        >
-                          <rect x="3.2" y="7" width="9.6" height="6.4" rx="1.2" />
-                          <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7" />
-                        </svg>
+                        Locked
                       </span>
                       {RESIZE_HANDLES.filter(
                         (handle) => handle.length > 1,
@@ -2683,25 +2738,46 @@ export const BoardRoomCanvas = React.forwardRef<
                 {selectedSingle?.id === item.id &&
                   !item.locked &&
                   !readOnly && (
-                    <button
-                      type="button"
-                      aria-label="Rotate item"
-                      className="absolute left-1/2 z-30 flex -translate-x-1/2 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]"
-                      style={{
-                        width: handleSize,
-                        height: handleSize,
-                        top: -40 / activeView.zoom,
-                        cursor: ROTATE_HANDLE_CURSOR,
-                      }}
-                      onPointerDown={(event) =>
-                        handleRotatePointerDown(event, item.id)
-                      }
-                    >
+                    <>
                       <span
-                        className="block rounded-full border border-white bg-[var(--color-clay,#a66d4f)]"
-                        style={{ width: handleDot, height: handleDot }}
+                        aria-hidden="true"
+                        data-board-rotate-stem={item.id}
+                        className="pointer-events-none absolute left-1/2 z-30"
+                        style={{
+                          top: -(ROTATE_HANDLE_CENTER_PX - HANDLE_DRAWN_PX / 2) / activeView.zoom,
+                          height: (ROTATE_HANDLE_CENTER_PX - HANDLE_DRAWN_PX / 2 - 4) / activeView.zoom,
+                          borderLeft: `${1 / activeView.zoom}px solid var(--clay-ink)`,
+                        }}
                       />
-                    </button>
+                      <button
+                        type="button"
+                        aria-label="Rotate item"
+                        className={cn(
+                          'absolute left-1/2 z-30 flex -translate-x-1/2 items-center justify-center rounded-full outline-none',
+                          FOCUS_RING,
+                        )}
+                        style={{
+                          width: handleSize,
+                          height: handleSize,
+                          top: -ROTATE_HANDLE_CENTER_PX / activeView.zoom - handleSize / 2,
+                          cursor: ROTATE_HANDLE_CURSOR,
+                        }}
+                        onPointerDown={(event) =>
+                          handleRotatePointerDown(event, item.id)
+                        }
+                      >
+                        <span
+                          data-board-rotate-circle="true"
+                          className="block rounded-full"
+                          style={{
+                            width: handleDot,
+                            height: handleDot,
+                            background: 'var(--paper-doc)',
+                            border: `${2 / activeView.zoom}px solid var(--clay-ink)`,
+                          }}
+                        />
+                      </button>
+                    </>
                   )}
               </div>
             )
@@ -2734,12 +2810,7 @@ export const BoardRoomCanvas = React.forwardRef<
                 }}
               >
                 <div className="h-full w-full">{renderItem(item)}</div>
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    border: `${2 / activeView.zoom}px solid var(--color-clay,#a66d4f)`,
-                  }}
-                />
+                <div className="absolute inset-0" style={selectionRing} />
               </div>
             )
           })}
@@ -2753,7 +2824,7 @@ export const BoardRoomCanvas = React.forwardRef<
                 top: activeSelectionBounds.y,
                 width: activeSelectionBounds.width,
                 height: activeSelectionBounds.height,
-                border: `${2 / activeView.zoom}px solid var(--color-clay,#a66d4f)`,
+                ...selectionRing,
               }}
             />
           )}
@@ -2805,7 +2876,7 @@ export const BoardRoomCanvas = React.forwardRef<
               data-board-guide={guide.axis}
               data-board-guide-kind={guide.kind}
               className={cn(
-                'pointer-events-none absolute bg-[var(--color-clay,#a66d4f)]',
+                'pointer-events-none absolute bg-[var(--clay-ink)]',
                 guide.kind === 'spacing' && 'opacity-80',
               )}
               style={
@@ -2815,7 +2886,7 @@ export const BoardRoomCanvas = React.forwardRef<
                       top: guide.position,
                       width: guide.end - guide.start,
                       height: 1 / activeView.zoom,
-                      borderTop: `${1 / activeView.zoom}px dashed var(--color-clay,#a66d4f)`,
+                      borderTop: `${1 / activeView.zoom}px dashed var(--clay-ink)`,
                       background: 'transparent',
                     }
                   : guide.kind === 'spacing'
@@ -2824,7 +2895,7 @@ export const BoardRoomCanvas = React.forwardRef<
                         top: guide.start,
                         width: 1 / activeView.zoom,
                         height: guide.end - guide.start,
-                        borderLeft: `${1 / activeView.zoom}px dashed var(--color-clay,#a66d4f)`,
+                        borderLeft: `${1 / activeView.zoom}px dashed var(--clay-ink)`,
                         background: 'transparent',
                       }
                     : guide.axis === 'x'
@@ -2847,7 +2918,7 @@ export const BoardRoomCanvas = React.forwardRef<
           {marquee && (
             <div
               data-testid="board-marquee"
-              className="pointer-events-none absolute border border-[var(--color-clay,#a66d4f)] bg-[color:rgba(166,109,79,.12)]"
+              className="pointer-events-none absolute border border-[color:var(--clay-ink)]"
               style={{
                 left: marquee.x,
                 top: marquee.y,
@@ -2864,53 +2935,75 @@ export const BoardRoomCanvas = React.forwardRef<
 
 BoardRoomCanvas.displayName = 'BoardRoomCanvas'
 
-function sectionColor(value: string | undefined): string {
-  return value && /^#[0-9a-f]{6}$/i.test(value) ? value : '#8c8175'
-}
-
+/**
+ * A zone (US-28 S12; SPEC §S12.2.2): a 1px dashed edge in the designer's
+ * colour that always prints its word, in ink, inside the edge — no fill and no
+ * white-on-colour pill. While a dragged piece's centre is over it the edge
+ * goes 2px dashed ink and the word says what letting go will do (frame p3).
+ * The word is the band's drag grip; the rename and colour controls stay
+ * beside it in edit.
+ */
 function SectionBand({
   section,
   readOnly,
+  dropTarget = false,
   onPointerDown,
   onUpdate,
 }: {
   section: MoodBoardSection & { bounds: BoardRect }
   readOnly: boolean
+  dropTarget?: boolean
   onPointerDown: React.PointerEventHandler<HTMLElement>
   onUpdate: (patch: Partial<Omit<MoodBoardSection, 'id'>>) => void
 }) {
   const [draft, setDraft] = React.useState(section.name)
   React.useEffect(() => setDraft(section.name), [section.id, section.name])
-  const color = sectionColor(section.color)
+  const color = moodBoardZoneColor(section.color)
   const commitName = () => {
     const name = draft.trim()
     if (name && name !== section.name) onUpdate({ name })
     else setDraft(section.name)
   }
+  const wordStyle: React.CSSProperties = {
+    fontFamily: 'var(--font-meta)',
+    fontSize: 12,
+    lineHeight: '16px',
+    letterSpacing: '.08em',
+    textTransform: 'uppercase',
+    color: 'var(--text-primary)',
+  }
 
   return (
     <div
       data-board-section={section.id}
-      className="pointer-events-none absolute rounded-sm border border-dashed"
+      data-board-section-target={dropTarget ? 'true' : undefined}
+      className="pointer-events-none absolute"
       style={{
         left: section.bounds.x,
         top: section.bounds.y,
         width: section.bounds.width,
         height: section.bounds.height,
-        borderColor: color,
-        backgroundColor: `${color}12`,
+        borderRadius: MOOD_BOARD_VISUAL.sectionRadius,
+        border: dropTarget
+          ? '2px dashed var(--text-primary)'
+          : `1px dashed ${color}`,
       }}
     >
       <div
         data-board-section-label={section.id}
         className={cn(
-          'pointer-events-auto absolute left-2 top-0 z-20 flex -translate-y-1/2 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white',
+          'pointer-events-auto absolute z-20 flex flex-wrap items-center gap-x-2',
           !readOnly && 'cursor-move',
         )}
-        style={{ backgroundColor: color }}
+        style={{
+          ...wordStyle,
+          left: MOOD_BOARD_VISUAL.zoneWordInsetX - (dropTarget ? 2 : 1),
+          top: MOOD_BOARD_VISUAL.zoneWordInsetY - (dropTarget ? 2 : 1),
+          maxWidth: Math.max(0, section.bounds.width - MOOD_BOARD_VISUAL.zoneWordInsetX * 2),
+          overflowWrap: 'anywhere',
+        }}
         onPointerDown={onPointerDown}
       >
-        {!readOnly && <span aria-hidden="true">⋮⋮</span>}
         {readOnly ? (
           <span>{section.name}</span>
         ) : (
@@ -2918,6 +3011,7 @@ function SectionBand({
             <input
               aria-label={`Rename ${section.name} section`}
               value={draft}
+              size={Math.max(4, draft.length + 1)}
               onChange={(event) => setDraft(event.currentTarget.value)}
               onBlur={commitName}
               onPointerDown={(event) => event.stopPropagation()}
@@ -2928,7 +3022,11 @@ function SectionBand({
                   event.currentTarget.blur()
                 }
               }}
-              className="min-w-0 max-w-36 border-0 bg-transparent p-0 text-[11px] font-medium text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay)] focus-visible:ring-offset-2"
+              className={cn(
+                'min-w-0 max-w-full border-0 bg-transparent p-0 outline-none',
+                FOCUS_RING,
+              )}
+              style={{ ...wordStyle, cursor: 'text' }}
             />
             <input
               type="color"
@@ -2936,9 +3034,15 @@ function SectionBand({
               value={color}
               onChange={(event) => onUpdate({ color: event.currentTarget.value })}
               onPointerDown={(event) => event.stopPropagation()}
-              className="h-4 w-4 cursor-pointer rounded-full border border-white/70 bg-transparent p-0"
+              className={cn(
+                'h-4 w-4 cursor-pointer rounded-full border-0 bg-transparent p-0 outline-none',
+                FOCUS_RING,
+              )}
             />
           </>
+        )}
+        {dropTarget && (
+          <span data-board-section-drop-word="true">· let go to add it here</span>
         )}
       </div>
     </div>
@@ -2961,7 +3065,8 @@ function CanvasControl({
       type="button"
       aria-label={label}
       className={cn(
-        'flex h-8 items-center justify-center rounded-full text-xs outline-none hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]',
+        'flex h-8 items-center justify-center rounded-full text-xs outline-none hover:bg-black/5',
+        FOCUS_RING,
         wide ? 'min-w-11 px-2' : 'w-8',
       )}
       onClick={onClick}
@@ -2982,8 +3087,21 @@ const RESIZE_HANDLE_POSITIONS: Record<BoardResizeHandle, React.CSSProperties> = 
   w: { left: 0, top: '50%', transform: 'translate(-50%, -50%)' },
 }
 
-/** A grey, inert twin of a corner handle: shows where the grips would be if
- *  the pin weren't locked (CI-15). */
+/** The drawn handle: a 10px square on the board stock, ringed in clay ink. */
+function handleSquareStyle(dot: number, live: boolean): React.CSSProperties {
+  return {
+    width: dot,
+    height: dot,
+    borderRadius: dot / 10,
+    background: 'var(--paper-doc)',
+    border: live
+      ? `${dot / 5}px solid var(--clay-ink)`
+      : `${dot / 10}px solid var(--card-edge)`,
+  }
+}
+
+/** An inert twin of a corner handle, in the card edge rather than clay ink:
+ *  shows where the grips would be if the pin weren't locked (CI-15). */
 function LockedHandleStub({
   handle,
   dot,
@@ -2995,8 +3113,8 @@ function LockedHandleStub({
     <span
       aria-hidden="true"
       data-board-locked-handle={handle}
-      className="pointer-events-none absolute z-30 block rounded-sm border border-white/70 bg-[color:rgba(87,76,63,.38)]"
-      style={{ ...RESIZE_HANDLE_POSITIONS[handle], width: dot, height: dot }}
+      className="pointer-events-none absolute z-30 block"
+      style={{ ...RESIZE_HANDLE_POSITIONS[handle], ...handleSquareStyle(dot, false) }}
     />
   )
 }
@@ -3019,7 +3137,10 @@ function ResizeHandle({
     <button
       type="button"
       aria-label={label ?? `Resize ${handle}`}
-      className="pointer-events-auto absolute z-30 flex items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]"
+      className={cn(
+        'pointer-events-auto absolute z-30 flex items-center justify-center rounded-full outline-none',
+        FOCUS_RING,
+      )}
       style={{
         ...positions[handle],
         width: size,
@@ -3029,8 +3150,9 @@ function ResizeHandle({
       onPointerDown={onPointerDown}
     >
       <span
-        className="block rounded-sm border border-white bg-[var(--color-clay,#a66d4f)]"
-        style={{ width: dot, height: dot }}
+        data-board-handle-square="true"
+        className="block"
+        style={handleSquareStyle(dot, true)}
       />
     </button>
   )

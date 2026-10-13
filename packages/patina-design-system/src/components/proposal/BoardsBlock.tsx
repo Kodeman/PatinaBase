@@ -6,13 +6,14 @@ import { cn } from '../../utils/cn'
 import { resolveMoodBoardGeometry } from '../../mood-board/geometry'
 import {
   MOOD_BOARD_BODY_FONT,
-  MOOD_BOARD_DISPLAY_FONT,
   MOOD_BOARD_MONO_FONT,
   MOOD_BOARD_VISUAL,
-  moodBoardColorWithAlpha,
-  resolveMoodBoardMediaLayout,
-  resolveMoodBoardProductLayout,
+  moodBoardZoneColor,
 } from '../../mood-board/visual-contract'
+
+/** The one focus ring: 2px clay ink at offset 2, an outline — never a shadow. */
+const FOCUS_RING =
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--clay-ink)]'
 
 // ============================================================================
 // Shared mood-board rendering (client proposal · designer preview · drafting
@@ -279,27 +280,19 @@ function ScaledBoardCanvas({
               width: section.bounds.width,
               height: section.bounds.height,
               borderRadius: MOOD_BOARD_VISUAL.sectionRadius,
-              borderStyle: 'dashed',
-              borderWidth: 1,
-              borderColor: section.color ?? '#8c8175',
-              backgroundColor: moodBoardColorWithAlpha(
-                section.color ?? '#8c8175',
-                MOOD_BOARD_VISUAL.sectionFillAlpha,
-              ),
+              border: `1px dashed ${moodBoardZoneColor(section.color)}`,
             }}
           >
+            {/* The zone's word, in ink on the board stock (SPEC §S12.2.2):
+                no pill, no white-on-colour label, and it wraps. */}
             <span
-              className="absolute left-2 top-0 flex -translate-y-1/2 items-center whitespace-nowrap"
+              data-composition-section-word={section.id}
+              className="absolute"
               style={{
-                height: MOOD_BOARD_VISUAL.sectionLabelHeight,
-                paddingInline: MOOD_BOARD_VISUAL.sectionLabelPaddingX,
-                borderRadius: MOOD_BOARD_VISUAL.sectionLabelHeight / 2,
-                backgroundColor: section.color ?? '#8c8175',
-                color: '#fff',
-                fontFamily: MOOD_BOARD_BODY_FONT,
-                fontSize: 11,
-                fontWeight: 500,
-                lineHeight: `${MOOD_BOARD_VISUAL.sectionLabelHeight}px`,
+                ...MOOD_BOARD_WORD_STYLE,
+                left: MOOD_BOARD_VISUAL.zoneWordInsetX - 1,
+                right: MOOD_BOARD_VISUAL.zoneWordInsetX - 1,
+                top: MOOD_BOARD_VISUAL.zoneWordInsetY - 1,
               }}
             >
               {section.name}
@@ -316,8 +309,7 @@ function ScaledBoardCanvas({
               key={resolved.key}
               className={cn(
                 'absolute outline-none',
-                idInteractive &&
-                  'focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]',
+                idInteractive && FOCUS_RING,
               )}
               role={idInteractive ? 'button' : undefined}
               tabIndex={idInteractive ? 0 : undefined}
@@ -418,6 +410,121 @@ function renderBoardItem(
   )
 }
 
+// Plate and caption (US-28 S12; SPEC §S12.2.1). The same reading the board room
+// prints (apps/designer-portal board-item-renderer.tsx) and the export painter
+// paints (mood-board/painter-core.ts): the photo or drawing on a 1px card edge,
+// then a sans name and mono facts. No shadow, no clamp, no truncation — the
+// plate gives up height so the caption prints whole. Colours and type come
+// from MOOD_BOARD_VISUAL so the guest page needs no portal tokens and Export
+// matches what the client sees.
+
+const MOOD_BOARD_WORD_STYLE: React.CSSProperties = {
+  fontFamily: MOOD_BOARD_MONO_FONT,
+  fontSize: MOOD_BOARD_VISUAL.word.size,
+  lineHeight: `${MOOD_BOARD_VISUAL.word.line}px`,
+  letterSpacing: MOOD_BOARD_VISUAL.word.letterSpacing,
+  textTransform: 'uppercase',
+  color: MOOD_BOARD_VISUAL.colors.text,
+  overflowWrap: 'anywhere',
+}
+
+function Plate({
+  children,
+  box,
+  aspectRatio,
+}: {
+  children: React.ReactNode
+  box?: { width: number; height: number }
+  /** Stacked (unboxed) tiles keep a fixed plate shape instead of filling. */
+  aspectRatio?: string
+}) {
+  return (
+    <div
+      data-board-plate="true"
+      className="relative flex items-center justify-center overflow-hidden"
+      style={{
+        flex: box || !aspectRatio ? '1 1 auto' : 'none',
+        minHeight: 0,
+        aspectRatio: box ? undefined : aspectRatio,
+        backgroundColor: MOOD_BOARD_VISUAL.colors.plate,
+        border: `1px solid ${MOOD_BOARD_VISUAL.colors.cardEdge}`,
+        borderRadius: MOOD_BOARD_VISUAL.plateRadius,
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+function PlateWord({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className="text-center"
+      style={{
+        padding: MOOD_BOARD_VISUAL.plateWordPadding,
+        fontFamily: MOOD_BOARD_MONO_FONT,
+        fontSize: MOOD_BOARD_VISUAL.word.size,
+        lineHeight: `${MOOD_BOARD_VISUAL.word.line}px`,
+        color: MOOD_BOARD_VISUAL.colors.subtle,
+        overflowWrap: 'anywhere',
+      }}
+    >
+      {children}
+    </span>
+  )
+}
+
+function PlateImage({ src, alt }: { src: string; alt: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      draggable={false}
+      className="pointer-events-none h-full w-full object-contain"
+    />
+  )
+}
+
+function Caption({ name, meta }: { name: React.ReactNode; meta: React.ReactNode[] }) {
+  const { gap, nameSize, nameLine, metaSize, metaLine } = MOOD_BOARD_VISUAL.caption
+  return (
+    <div data-board-caption="true" style={{ flex: 'none', marginTop: gap }}>
+      <span
+        className="block"
+        style={{
+          fontFamily: MOOD_BOARD_BODY_FONT,
+          fontSize: nameSize,
+          lineHeight: `${nameLine}px`,
+          color: MOOD_BOARD_VISUAL.colors.text,
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {name}
+      </span>
+      {meta.map((line, index) => (
+        <span
+          key={index}
+          className="block"
+          style={{
+            fontFamily: MOOD_BOARD_MONO_FONT,
+            fontSize: metaSize,
+            lineHeight: `${metaLine}px`,
+            color: MOOD_BOARD_VISUAL.colors.subtle,
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {line}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function PlateItem({ children }: { children: React.ReactNode }) {
+  return <div className="flex h-full w-full select-none flex-col">{children}</div>
+}
+
 function ProductTile({
   item,
   mode = 'presentation',
@@ -434,203 +541,29 @@ function ProductTile({
   const host = sourceHost(snap.source_url)
   const leadWeeks =
     mode === 'detail' && typeof snap.lead_time_weeks === 'number' ? snap.lead_time_weeks : null
-
-  if (box) {
-    const layout = resolveMoodBoardProductLayout(box.width, box.height)
-    return (
-      <div
-        className="relative h-full w-full select-none overflow-hidden"
-        style={{
-          borderRadius: MOOD_BOARD_VISUAL.pinRadius,
-          border: `1px solid ${MOOD_BOARD_VISUAL.colors.border}`,
-          backgroundColor: MOOD_BOARD_VISUAL.colors.surface,
-        }}
-      >
-        <div
-          className="absolute overflow-hidden"
-          style={{
-            left: layout.image.x - 1,
-            top: layout.image.y - 1,
-            width: layout.image.width,
-            height: layout.image.height,
-            backgroundColor: imageUrl
-              ? MOOD_BOARD_VISUAL.colors.surface
-              : MOOD_BOARD_VISUAL.colors.placeholder,
-            border: imageUrl
-              ? undefined
-              : `1px solid ${MOOD_BOARD_VISUAL.colors.placeholderBorder}`,
-          }}
-        >
-          {imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imageUrl}
-              alt={snap.name ?? ''}
-              draggable={false}
-              className="pointer-events-none h-full w-full object-contain"
-            />
-          ) : (
-            <span
-              className="flex h-full w-full items-center justify-center px-2 text-center"
-              style={{
-                color: MOOD_BOARD_VISUAL.colors.placeholderText,
-                fontFamily: MOOD_BOARD_BODY_FONT,
-                fontSize: 12,
-              }}
-            >
-              {snap.name ?? 'Selected piece'}
-            </span>
-          )}
-        </div>
-        <div
-          className="absolute line-clamp-2"
-          style={{
-            left: 7,
-            top: layout.nameTop - 1,
-            width: box.width - 16,
-            color: MOOD_BOARD_VISUAL.colors.text,
-            fontFamily: MOOD_BOARD_BODY_FONT,
-            fontSize: 12,
-            lineHeight: '14px',
-          }}
-        >
-          {snap.name ?? 'Selected piece'}
-        </div>
-        {snap.vendor_name && (
-          <div
-            className="absolute truncate"
-            style={{
-              left: 7,
-              top: layout.metaBaseline - 11,
-              maxWidth: box.width - 70,
-              color: MOOD_BOARD_VISUAL.colors.muted,
-              fontFamily: MOOD_BOARD_BODY_FONT,
-              fontSize: 10,
-              fontStyle: 'italic',
-              lineHeight: '11px',
-            }}
-          >
-            {snap.vendor_name}
-          </div>
-        )}
-        {typeof snap.price_cents === 'number' && (
-          <div
-            className="absolute"
-            style={{
-              right: 7,
-              top: layout.metaBaseline - 12,
-              color: MOOD_BOARD_VISUAL.colors.text,
-              fontFamily: MOOD_BOARD_DISPLAY_FONT,
-              fontSize: 11,
-              fontWeight: 600,
-              lineHeight: '12px',
-            }}
-          >
-            {formatDollars(snap.price_cents)}
-          </div>
-        )}
-        {host && (
-          <div
-            className="absolute truncate"
-            style={{
-              left: 7,
-              top: layout.sourceBaseline - 10,
-              width: box.width - 16,
-              color: MOOD_BOARD_VISUAL.colors.muted,
-              fontFamily: MOOD_BOARD_MONO_FONT,
-              fontSize: 9,
-              lineHeight: '10px',
-            }}
-          >
-            {host}
-          </div>
-        )}
-      </div>
-    )
-  }
+  const facts = [
+    snap.vendor_name,
+    typeof snap.price_cents === 'number' ? formatDollars(snap.price_cents) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const meta = [
+    facts || null,
+    leadWeeks !== null ? `${leadWeeks} wk lead time` : null,
+    host,
+  ].filter((line): line is string => Boolean(line))
 
   return (
-    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white">
-      <div
-        className="relative w-full overflow-hidden"
-        style={{
-          aspectRatio: '1 / 1',
-          background: 'var(--color-pearl, #f5f3ee)',
-        }}
-      >
-        {imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={snap.name ?? ''}
-            draggable={false}
-            className="pointer-events-none h-full w-full object-contain"
-          />
+    <PlateItem>
+      <Plate box={box} aspectRatio="1 / 1">
+        {imageUrl ? (
+          <PlateImage src={imageUrl} alt={snap.name ?? ''} />
+        ) : (
+          <PlateWord>No image</PlateWord>
         )}
-      </div>
-      <div className="flex flex-col gap-0.5 p-2">
-        <div
-          className="line-clamp-2"
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.74rem',
-            color: 'var(--text-primary)',
-          }}
-        >
-          {snap.name ?? 'Selected piece'}
-        </div>
-        {snap.vendor_name && (
-          <div
-            className="truncate"
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: '0.64rem',
-              fontStyle: 'italic',
-              color: 'var(--text-muted)',
-            }}
-          >
-            {snap.vendor_name}
-          </div>
-        )}
-        {typeof snap.price_cents === 'number' && (
-          <div
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 500,
-              fontSize: '0.74rem',
-              color: 'var(--text-primary)',
-            }}
-          >
-            {formatDollars(snap.price_cents)}
-          </div>
-        )}
-        {/* Lead time is detail-only; provenance is always visible. */}
-        {leadWeeks !== null && (
-          <div
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: '0.62rem',
-              color: 'var(--text-muted)',
-            }}
-          >
-            {leadWeeks} wk lead time
-          </div>
-        )}
-        {host && (
-          <div
-            className="truncate"
-            style={{
-              fontFamily: 'var(--font-mono, monospace)',
-              fontSize: '0.58rem',
-              letterSpacing: '0.02em',
-              color: 'var(--text-muted)',
-            }}
-          >
-            {host}
-          </div>
-        )}
-      </div>
-    </div>
+      </Plate>
+      <Caption name={snap.name ?? 'Selected piece'} meta={meta} />
+    </PlateItem>
   )
 }
 
@@ -641,37 +574,17 @@ function ImageTile({
   item: BoardCompositionItem
   box?: { width: number; height: number }
 }) {
-  if (!item.image_url) {
-    const snap = (item.data ?? {}) as ImageSnapshot
-    return (
-      <div
-        className="flex h-full w-full items-center justify-center px-2 text-center"
-        style={{
-          borderRadius: MOOD_BOARD_VISUAL.pinRadius,
-          border: box
-            ? `1px solid ${MOOD_BOARD_VISUAL.colors.placeholderBorder}`
-            : undefined,
-          background: box
-            ? MOOD_BOARD_VISUAL.colors.placeholder
-            : 'var(--color-pearl, #f5f3ee)',
-          color: MOOD_BOARD_VISUAL.colors.placeholderText,
-          fontFamily: MOOD_BOARD_BODY_FONT,
-          fontSize: 12,
-        }}
-      >
-        {box ? (snap.name?.trim() || 'Image reference') : null}
-      </div>
-    )
-  }
+  const snap = (item.data ?? {}) as ImageSnapshot
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={item.image_url}
-      alt=""
-      draggable={false}
-      className="pointer-events-none h-full w-full select-none object-contain"
-      style={{ borderRadius: box ? MOOD_BOARD_VISUAL.pinRadius : undefined }}
-    />
+    <PlateItem>
+      <Plate box={box}>
+        {item.image_url ? (
+          <PlateImage src={item.image_url} alt="" />
+        ) : (
+          <PlateWord>{snap.name?.trim() || 'Image reference'}</PlateWord>
+        )}
+      </Plate>
+    </PlateItem>
   )
 }
 
@@ -683,101 +596,17 @@ function RoomScanTile({
   box?: { width: number; height: number }
 }) {
   const snap = (item.data ?? {}) as RoomScanSnapshot
-  if (box) {
-    const layout = resolveMoodBoardMediaLayout(box.width, box.height)
-    return (
-      <div
-        className="relative h-full w-full select-none overflow-hidden"
-        style={{
-          borderRadius: MOOD_BOARD_VISUAL.pinRadius,
-          border: `1px solid ${MOOD_BOARD_VISUAL.colors.border}`,
-          backgroundColor: MOOD_BOARD_VISUAL.colors.surface,
-        }}
-      >
-        <div
-          className="absolute overflow-hidden"
-          style={{
-            left: layout.media.x - 1,
-            top: layout.media.y - 1,
-            width: layout.media.width,
-            height: layout.media.height,
-            backgroundColor: item.image_url
-              ? MOOD_BOARD_VISUAL.colors.surface
-              : MOOD_BOARD_VISUAL.colors.placeholder,
-            border: item.image_url
-              ? undefined
-              : `1px solid ${MOOD_BOARD_VISUAL.colors.placeholderBorder}`,
-          }}
-        >
-          {item.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={item.image_url}
-              alt={snap.name ?? 'Your space'}
-              draggable={false}
-              className="pointer-events-none h-full w-full object-contain"
-            />
-          ) : (
-            <span
-              className="flex h-full w-full items-center justify-center px-2 text-center"
-              style={{
-                color: MOOD_BOARD_VISUAL.colors.placeholderText,
-                fontFamily: MOOD_BOARD_BODY_FONT,
-                fontSize: 12,
-              }}
-            >
-              {snap.name ?? 'Your space'}
-            </span>
-          )}
-        </div>
-        <div
-          className="absolute truncate"
-          style={{
-            left: 7,
-            top: layout.labelTop,
-            width: box.width - 16,
-            height: box.height - layout.labelTop,
-            color: MOOD_BOARD_VISUAL.colors.muted,
-            fontFamily: MOOD_BOARD_DISPLAY_FONT,
-            fontSize: 9,
-            fontWeight: 500,
-            lineHeight: `${box.height - layout.labelTop}px`,
-          }}
-        >
-          {(snap.name ?? 'Your space').toUpperCase()}
-        </div>
-      </div>
-    )
-  }
   return (
-    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white">
-      <div
-        className="relative min-h-0 flex-1"
-        style={{ background: 'var(--color-pearl, #f5f3ee)' }}
-      >
-        {item.image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.image_url}
-            alt={snap.name ?? 'Your space'}
-            draggable={false}
-            className="pointer-events-none h-full w-full object-contain"
-          />
+    <PlateItem>
+      <Plate box={box}>
+        {item.image_url ? (
+          <PlateImage src={item.image_url} alt={snap.name ?? 'Your space'} />
+        ) : (
+          <PlateWord>No preview</PlateWord>
         )}
-      </div>
-      <div
-        className="truncate px-2 py-1"
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '0.56rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          color: 'var(--text-muted)',
-        }}
-      >
-        {snap.name ?? 'Your space'}
-      </div>
-    </div>
+      </Plate>
+      <Caption name={snap.name ?? 'Your space'} meta={['Scan']} />
+    </PlateItem>
   )
 }
 
@@ -791,93 +620,33 @@ function PaletteStrip({
   const snap = (item.data ?? {}) as PaletteSnapshot
   const swatches = snap.swatches ?? []
 
-  if (box) {
-    const layout = resolveMoodBoardMediaLayout(box.width, box.height)
-    return (
-      <div
-        className="relative h-full w-full select-none overflow-hidden"
-        style={{
-          borderRadius: MOOD_BOARD_VISUAL.pinRadius,
-          border: `1px solid ${MOOD_BOARD_VISUAL.colors.border}`,
-          backgroundColor: MOOD_BOARD_VISUAL.colors.surface,
-        }}
-      >
-        <div
-          className="absolute flex overflow-hidden"
-          style={{
-            left: layout.media.x - 1,
-            top: layout.media.y - 1,
-            width: layout.media.width,
-            height: layout.media.height,
-          }}
-        >
-          {swatches.length > 0 ? (
-            swatches.map((swatch, index) => (
-              <div
+  return (
+    <PlateItem>
+      <Plate box={box}>
+        {swatches.length > 0 ? (
+          <span className="absolute inset-0 flex">
+            {swatches.map((swatch, index) => (
+              <span
                 key={`${swatch.hex}-${index}`}
                 className="h-full flex-1"
                 style={{ backgroundColor: swatch.hex }}
+                title={swatch.name ?? swatch.hex}
               />
-            ))
-          ) : (
-            <div
-              className="h-full w-full"
-              style={{ backgroundColor: MOOD_BOARD_VISUAL.colors.placeholder }}
-            />
-          )}
-        </div>
-        <div
-          className="absolute truncate"
-          style={{
-            left: 7,
-            top: layout.labelTop,
-            width: box.width - 16,
-            height: box.height - layout.labelTop,
-            color: MOOD_BOARD_VISUAL.colors.muted,
-            fontFamily: MOOD_BOARD_DISPLAY_FONT,
-            fontSize: 9,
-            fontWeight: 500,
-            lineHeight: `${box.height - layout.labelTop}px`,
-          }}
-        >
-          {(snap.name ?? 'Palette').toUpperCase()}
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white">
-      <div className="flex min-h-0 flex-1">
-        {swatches.length > 0 ? (
-          swatches.map((s, i) => (
-            <div
-              key={`${s.hex}-${i}`}
-              className="h-full flex-1"
-              style={{ backgroundColor: s.hex }}
-              title={s.name ?? s.hex}
-            />
-          ))
+            ))}
+          </span>
         ) : (
-          <div className="h-full w-full" style={{ background: 'var(--color-pearl, #f5f3ee)' }} />
+          <PlateWord>Empty palette</PlateWord>
         )}
-      </div>
-      <div
-        className="truncate px-2 py-1"
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '0.56rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          color: 'var(--text-muted)',
-        }}
-      >
-        {snap.name ?? 'Palette'}
-      </div>
-    </div>
+      </Plate>
+      <Caption name={snap.name ?? 'Palette'} meta={[]} />
+    </PlateItem>
   )
 }
 
+/**
+ * A note is text on the note edge (`--edge-note`, frame p1): a 2px oak rule on
+ * the board's own stock, no fill, no box, no shadow — as the board room shows it.
+ */
 function NoteCard({
   item,
   box,
@@ -886,20 +655,22 @@ function NoteCard({
   box?: { width: number; height: number }
 }) {
   if (!item.content?.trim()) return null
+  const { edge, padTop, padLeft, size, line } = MOOD_BOARD_VISUAL.note
   return (
     <div
-      className="h-full w-full select-none overflow-hidden p-3"
+      className="h-full w-full select-none overflow-hidden"
       style={{
-        borderRadius: box ? MOOD_BOARD_VISUAL.pinRadius : undefined,
-        backgroundColor: MOOD_BOARD_VISUAL.colors.note,
-        border: `1px solid ${MOOD_BOARD_VISUAL.colors.noteBorder}`,
+        borderLeft: `${edge}px solid ${MOOD_BOARD_VISUAL.colors.noteEdge}`,
+        padding: `${padTop}px 0 ${padTop}px ${padLeft}px`,
         fontFamily: box ? MOOD_BOARD_BODY_FONT : 'var(--font-body)',
-        fontSize: box ? 13 : '0.78rem',
-        lineHeight: box ? '18px' : 1.5,
-        color: MOOD_BOARD_VISUAL.colors.noteText,
+        fontSize: size,
+        lineHeight: `${line}px`,
+        color: MOOD_BOARD_VISUAL.colors.muted,
       }}
     >
-      <p className="whitespace-pre-wrap break-words">{item.content}</p>
+      <p className="whitespace-pre-wrap" style={{ overflowWrap: 'anywhere' }}>
+        {item.content}
+      </p>
     </div>
   )
 }
@@ -973,8 +744,7 @@ function StackedBoardItems({
               const frameClassName = cn(
                 baseClassName,
                 (overlay || interaction) && 'relative',
-                idInteractive &&
-                  'outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay,#a66d4f)]',
+                idInteractive && cn('outline-none', FOCUS_RING),
               )
 
               return (
@@ -1071,10 +841,12 @@ function StackedBoardItems({
                 return frame(
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={displayUrl} alt="" className="h-full w-full object-contain" />,
-                  'overflow-hidden rounded-sm',
+                  'overflow-hidden',
                   {
                     aspectRatio: '4 / 3',
-                    background: 'var(--color-pearl, #f5f3ee)',
+                    backgroundColor: MOOD_BOARD_VISUAL.colors.plate,
+                    border: `1px solid ${MOOD_BOARD_VISUAL.colors.cardEdge}`,
+                    borderRadius: MOOD_BOARD_VISUAL.plateRadius,
                   },
                 )
               }
