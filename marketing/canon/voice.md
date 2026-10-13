@@ -24,6 +24,12 @@ already spoken for twice. The one thing she cannot afford is a new system to lea
   copy may speak to the homeowner directly about her own home, and the Founding Circle is the main
   door; the studio door is the quieter second one. Every other rule on this page still holds there,
   and everywhere else the studio comes first.
+- **Founding Circle campaigns (Kody, 2026-10-12, VISION-DECISIONS V21).** A campaign whose brief
+  names the Founding Circle as its ask may speak to Madison-area homeowners directly about their
+  own home, and its ask is joining at patina.cloud/founding [C38]. Membership is an invitation into
+  the building of Patina, not a purchase: no "shop now", no products, no prices, no urgency beyond
+  the published cap [C33]. Be honest that the app and marketplace are pre-launch [C24]. Every other
+  rule on this page holds, and every other campaign stays studio-first.
 
 ## 2. The promise
 

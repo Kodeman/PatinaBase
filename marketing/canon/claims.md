@@ -62,6 +62,12 @@ source. Keep `|` out of cells.
 | C31 | On Patina, everyone who acts on a job (the client's household, the contractor, the trades and the studio's own team) holds a seat on that job, and a seat's access ends when the job does. | docs/design/the-document/DECISIONS.md R151 (PR-c household + seat; PR-d grant ends with the engagement window; built and deployed in the People room program) | verified |
 | C32 | A trade sends its insurance certificate, W-9 and licence to the studio through a link, and the studio confirms them. | docs/design/the-document/DECISIONS.md R151 PR-a (tokened field-link page a trade writes to, unverified until a studio member confirms) | verified |
 | C33 | The Founding Circle is limited to 200 founding members. | Kody, chat 2026-10-11 (homepage review: keep the line, add this row). A founders' policy: nothing in the site code caps signups yet, so close the circle by hand at 200. | verified |
+| C34 | Founding Circle members are first through the door when the Patina app launches, and first to test it as it is built. | https://patina.cloud/founding (membership list, "First access"; read 2026-10-12) | verified |
+| C35 | Founding Circle members get monthly questions on which makers to bring in and which styles to explore. | https://patina.cloud/founding (membership list, "Real influence"; read 2026-10-12) | verified |
+| C36 | Founding Circle members get updates from Kody and Leah as Patina takes shape. | https://patina.cloud/founding (membership list, "Behind the curtain"; read 2026-10-12) | verified |
+| C37 | Founding members are credited by name at launch, and founding-member status never expires. | https://patina.cloud/founding (membership list, "Your name at launch" and "Always a founder"; read 2026-10-12) | verified |
+| C38 | A Founding Circle membership begins with a first letter from Kody. Joining is at patina.cloud/founding. | https://patina.cloud/founding (page copy "A first letter from Kody to welcome you"; read 2026-10-12) | verified |
+| C39 | The Founding Circle is open wherever you call home; Patina is rooted in Madison, Wisconsin, and its first outreach is Chicago, Madison and Minneapolis. | https://patina.cloud/founding (cap line and questions; read 2026-10-12) | verified |
 
 ## Never claim (not ledger rows; lint cannot catch all of these)
 

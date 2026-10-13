@@ -524,3 +524,17 @@ These are side journeys from the studio buying review (`artifacts/procurement-bu
 ---
 
 *Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · V14 · V15 · V16 (V3, V5 ruled) · V17 (V3 amended, homepage) · last id = V17*
+
+## Ruled — 2026-10-12 (Founding Circle campaign)
+
+### V21 · Founding Circle campaigns may speak to Madison-area homeowners — amends V17 beyond the homepage — 2026-10-12
+
+*(V18–V20 are taken on main and feat/portal-uplift; this branch skips to V21.)*
+
+**Decision (Kody, 2026-10-12):** asked for a Press campaign "targeting home owners for the Founding Circle in the Madison area". Shown that V17 kept campaigns studio-first, Kody chose a new ruling over the Moll Drive framing (homeowners as Middle West's prospective clients) or a homepage-only link.
+
+- **Scope:** a campaign whose brief names the Founding Circle as its ask may address Madison-area homeowners directly about their own home. Its ask is joining at patina.cloud/founding.
+- **Unchanged:** every other campaign, /designers, /makers and studio email stay studio-first under voice.md §1 and V16. The studio remains the customer (S2); the Founding Circle is an invitation into the building of Patina, not a sale.
+- **Still binding:** no shop or product push, no prices (V2 interim), no Pledge language, names not titles (V4 interim), the tagline at most once (V5), pre-launch honesty [C24], claims, art direction, Midwest only.
+
+**Recorded in:** `marketing/canon/voice.md` §1; the content test in `.claude/workflows/marketing-draft.js`; claims C34–C39.
