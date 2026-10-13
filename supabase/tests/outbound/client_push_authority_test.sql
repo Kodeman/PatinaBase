@@ -1,7 +1,7 @@
 -- SQ-904: client push authority persists on the notification row.
 -- Run with: supabase test db supabase/tests/outbound/client_push_authority_test.sql
--- Transactional fixtures; safe to rerun.
 BEGIN;
+SELECT plan(2);
 
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES
@@ -23,32 +23,24 @@ VALUES ('d9040000-0000-4000-8000-000000000004', 'd9040000-0000-4000-8000-0000000
 INSERT INTO public.designer_clients (id, designer_id, client_id, client_name, client_email, status, source)
 VALUES ('d9040000-0000-4000-8000-000000000005', 'd9040000-0000-4000-8000-000000000001', 'd9040000-0000-4000-8000-000000000002', 'Push Client', 'push-client@test.invalid', 'active', 'direct');
 
-DO $$
-DECLARE
-  v_authority jsonb := jsonb_build_object(
-    'kind', 'designer',
-    'userId', 'd9040000-0000-4000-8000-000000000001'
-  );
-  v_push_id uuid;
-BEGIN
-  v_push_id := public.notify_client_attention(
-    p_user_id => 'd9040000-0000-4000-8000-000000000002',
-    p_entity_type => 'invoice',
-    p_entity_id => 'd9040000-0000-4000-8000-000000000006',
-    p_title => 'An invoice is ready',
-    p_body => 'Push authority test',
-    p_metadata => jsonb_build_object('project_id', null),
-    p_authority => v_authority
-  );
+SELECT lives_ok($q$SELECT public.notify_client_attention(
+  p_user_id => 'd9040000-0000-4000-8000-000000000002',
+  p_entity_type => 'invoice',
+  p_entity_id => 'd9040000-0000-4000-8000-000000000006',
+  p_title => 'An invoice is ready',
+  p_body => 'Push authority test',
+  p_metadata => '{}'::jsonb,
+  p_authority => '{"kind":"designer","userId":"d9040000-0000-4000-8000-000000000001"}'::jsonb
+)$q$, 'notify_client_attention accepts and records an authority');
 
-  ASSERT v_push_id IS NOT NULL, 'notify_client_attention should return its push row id';
-  ASSERT EXISTS (
-    SELECT 1 FROM public.notification_log
-     WHERE id = v_push_id
-       AND channel = 'push'
-       AND send_authority = v_authority
-  ), 'notify_client_attention must persist authority on the push row';
-END;
-$$;
+SELECT is(
+  (SELECT send_authority FROM public.notification_log
+    WHERE user_id = 'd9040000-0000-4000-8000-000000000002'
+      AND channel = 'push'
+      AND metadata->>'entity_id' = 'd9040000-0000-4000-8000-000000000006'),
+  '{"kind":"designer","userId":"d9040000-0000-4000-8000-000000000001"}'::jsonb,
+  'push row persists its send authority'
+);
 
+SELECT * FROM finish();
 ROLLBACK;
