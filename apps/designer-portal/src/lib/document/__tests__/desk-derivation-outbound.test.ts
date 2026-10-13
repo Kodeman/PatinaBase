@@ -191,6 +191,7 @@ describe('US-31 B5a ready-to-send need', () => {
     const studioDrafts = buildDeskStudioDrafts([
       {
         id: 'studio-invoice',
+        organization_id: 'studio-1',
         project_id: null,
         kind: 'invoice_reminder',
         channel: 'email',
@@ -201,9 +202,23 @@ describe('US-31 B5a ready-to-send need', () => {
         body: 'Please review.',
         created_at: '2026-10-13T08:00:00Z',
       },
+      {
+        id: 'other-studio-invoice',
+        organization_id: 'studio-2',
+        project_id: null,
+        kind: 'invoice_reminder',
+        channel: 'email',
+        recipient_kind: 'client',
+        status: 'awaiting_review',
+        to_address: 'other@example.test',
+        subject: 'Other invoice',
+        body: 'Not this studio.',
+        created_at: '2026-10-13T08:01:00Z',
+      },
       { id: 'project-draft', project_id: 'p1', status: 'awaiting_review' },
-    ]);
+    ], 'studio-1');
     expect(studioDrafts.map((draft) => draft.id)).toEqual(['studio-invoice']);
+    expect(studioDrafts[0].organization_id).toBe('studio-1');
     expect(studioOutboundNeed(studioDrafts, NOW)).toMatchObject({
       recordId: 'studio-invoice',
       kind: 'po_unsent',

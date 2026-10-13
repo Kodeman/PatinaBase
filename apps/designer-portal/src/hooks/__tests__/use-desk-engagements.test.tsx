@@ -333,6 +333,7 @@ describe('useDeskEngagements', () => {
   it('keeps existing outbound drafts visible when the UI feature flag is off', async () => {
     const studioDraft = {
       id: 'studio-draft',
+      organization_id: 'studio-1',
       project_id: null,
       kind: 'invoice_reminder',
       channel: 'email',
@@ -344,23 +345,24 @@ describe('useDeskEngagements', () => {
       created_at: '2026-10-13T08:00:00Z',
       claimed_at: null,
     };
+    const otherStudioDraft = { ...studioDraft, id: 'other-studio-draft', organization_id: 'studio-2' };
     mockFrom.mockImplementation((table: string) =>
       chainResult({
         data:
           table === 'document_state'
             ? [NEW_LEAD_ROW]
             : table === 'outbound_drafts'
-              ? [studioDraft]
+              ? [studioDraft, otherStudioDraft]
               : [],
         error: null,
       }),
     );
-    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    const { result } = renderHook(() => useDeskEngagements({ organizationId: 'studio-1' }), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockFrom).toHaveBeenCalledWith('outbound_drafts');
     expect(result.current.data?.studioDrafts?.map((draft) => draft.id)).toEqual(['studio-draft']);
-    expect(buildDeskStudioDrafts([studioDraft])).toHaveLength(1);
+    expect(buildDeskStudioDrafts([studioDraft], 'studio-1')).toHaveLength(1);
   });
 });
 

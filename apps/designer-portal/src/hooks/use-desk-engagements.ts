@@ -300,12 +300,13 @@ export function buildDeskDrafts(rows: any, outboundRows?: any): Map<string, Desk
 
 // Studio-level drafts have no project map key; keep them as a separate Desk population.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildDeskStudioDrafts(rows: any): DeskDraftSignal[] {
+export function buildDeskStudioDrafts(rows: any, organizationId?: string | null): DeskDraftSignal[] {
   if (!Array.isArray(rows)) return [];
   return rows
-    .filter((row) => row?.id && !row.project_id)
+    .filter((row) => row?.id && !row.project_id && organizationId && row.organization_id === organizationId)
     .map((row) => ({
       id: row.id,
+      organization_id: row.organization_id,
       kind: row.kind,
       status: row.status,
       to_email: row.to_address ?? null,
@@ -677,7 +678,7 @@ function flattenBoardFlaggedRows(rows: any): FlaggedLineRow[] {
     .filter((r) => !!r.proposalId);
 }
 
-export function useDeskEngagements(options: { enabled?: boolean } = {}) {
+export function useDeskEngagements(options: { enabled?: boolean; organizationId?: string | null } = {}) {
   // Arrival Arc Phase 0 (I64): tracks the last successfully computed Desk so
   // the zero-row breadcrumb can tell "went quiet after real work" apart from
   // "was already quiet" — a fresh mount has nothing to compare against, so it
@@ -686,7 +687,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
   const previousResultRef = useRef<DeskData | null>(null);
 
   return useQuery<DeskData>({
-    queryKey: ['document-state', 'desk'],
+    queryKey: ['document-state', 'desk', ...(options.organizationId ? [options.organizationId] : [])],
     enabled: options.enabled ?? true,
     refetchInterval: 60_000,
     // A background refetch (the 60s tick) never flashes an empty desk over
@@ -705,7 +706,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         supabase
           .from('outbound_drafts')
           .select(
-            'id, project_id, kind, channel, recipient_kind, status, to_address, subject, body, created_at, updated_at, claimed_at',
+            'id, organization_id, project_id, kind, channel, recipient_kind, status, to_address, subject, body, created_at, updated_at, claimed_at',
           )
           .in('status', ['awaiting_review', 'sending'])
           .order('created_at')
@@ -1067,7 +1068,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         draftRowsError && outboundRowsError
           ? undefined
           : buildDeskDrafts(draftRowsError ? [] : draftRows, outboundRowsError ? [] : outboundRows);
-      const studioDrafts = outboundRowsError ? [] : buildDeskStudioDrafts(outboundRows);
+      const studioDrafts = outboundRowsError ? [] : buildDeskStudioDrafts(outboundRows, options.organizationId);
       const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
       const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
       const heldReleases = heldRowsError ? undefined : buildDeskHeldReleases(heldRows);

@@ -413,6 +413,8 @@ export interface DeskDraftSignal {
   /** US-19 FR8 F8-2 — the PO a PO-level draft (`ack_discrepancy_reply`)
    *  answers, so `Answer the maker` lands on that PO's first line. */
   purchaseOrderId?: string;
+  /** US-31 F18: preserve the studio that owns a studio-level outbound draft. */
+  organization_id?: string | null;
   /** US-31 B5a (`outbound-review`) — set on an `outbound_drafts` row: a
    *  message to a client, vendor or trade staged for review. Absent on a
    *  procurement draft. */

@@ -7,20 +7,22 @@ type OutboundDraft = Database['public']['Tables']['outbound_drafts']['Row'];
 type OutboundMode = Database['public']['Tables']['studio_outbound_modes']['Row'];
 export const outboundDraftKeys = {
   all: ['outbound-drafts'] as const,
-  list: (projectId?: string) => ['outbound-drafts', projectId ?? 'all'] as const,
+  list: (projectId?: string, organizationId?: string) => ['outbound-drafts', projectId ?? 'all', organizationId ?? 'all'] as const,
   modes: (studioId?: string) => ['outbound-drafts', 'modes', studioId ?? 'all'] as const,
 };
 const invalidate = (client: ReturnType<typeof useQueryClient>) => {
   client.invalidateQueries({ queryKey: outboundDraftKeys.all });
 };
 
-export function useOutboundDrafts(options: { projectId?: string | null } = {}) {
+export function useOutboundDrafts(options: { projectId?: string | null; organizationId?: string | null } = {}) {
   const projectId = options.projectId ?? undefined;
+  const organizationId = options.organizationId ?? undefined;
   return useQuery({
-    queryKey: outboundDraftKeys.list(projectId),
+    queryKey: outboundDraftKeys.list(projectId, organizationId),
     queryFn: async (): Promise<OutboundDraft[]> => {
       let query = createBrowserClient().from('outbound_drafts').select('*');
       if (projectId) query = query.eq('project_id', projectId);
+      if (organizationId) query = query.eq('organization_id', organizationId);
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as OutboundDraft[];

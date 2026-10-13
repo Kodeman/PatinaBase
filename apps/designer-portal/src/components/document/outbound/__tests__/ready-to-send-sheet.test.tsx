@@ -24,6 +24,7 @@ const mockRefetchMembers = jest.fn();
 const row = (over: Record<string, unknown>) => ({
   id: 'x',
   project_id: 'p1',
+  organization_id: 'studio-1',
   kind: 'invoice_reminder',
   channel: 'email',
   recipient_kind: 'client',
@@ -112,18 +113,22 @@ describe('ReadyToSendSheet', () => {
   it('lists only studio-level drafts and holds sending for owner/admin roles', () => {
     mockOutbound = [
       row({ id: 'studio-outbound', project_id: null }),
+      row({ id: 'other-studio-outbound', project_id: null, organization_id: 'studio-2' }),
       row({ id: 'project-outbound', project_id: 'p1' }),
     ];
     render(<ReadyToSendSheet studioId="studio-1" />);
-    expect(screen.getByText('Invoice reminder')).toBeInTheDocument();
     expect(document.querySelector('[data-outbound-row="studio-outbound"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-outbound-row="other-studio-outbound"]')).toBeNull();
     expect(document.querySelector('[data-outbound-row="project-outbound"]')).toBeNull();
     expect(screen.getByText('Only an owner or admin can send studio-level messages.')).toBeInTheDocument();
     expect(batchButton()).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('allows a studio owner to send a studio-level draft after rechecking the seat', async () => {
-    mockOutbound = [row({ id: 'studio-outbound', project_id: null })];
+    mockOutbound = [
+      row({ id: 'studio-outbound', project_id: null }),
+      row({ id: 'other-studio-outbound', project_id: null, organization_id: 'studio-2' }),
+    ];
     mockStudioMembers = [{ user_id: 'user-1', role: 'owner' }];
     mockRefetchMembers.mockResolvedValue({
       data: [{ user_id: 'user-1', role: 'owner' }],
@@ -131,8 +136,10 @@ describe('ReadyToSendSheet', () => {
     });
     mockSend.mockResolvedValue({ results: [{ id: 'studio-outbound', ok: true }] });
     render(<ReadyToSendSheet studioId="studio-1" />);
-    fireEvent.click(within(group('client')).getByRole('button', { name: /Invoice reminder/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(document.querySelector('[data-outbound-row="other-studio-outbound"]')).toBeNull();
+    const currentDraftRow = document.querySelector('[data-outbound-row="studio-outbound"]')!;
+    fireEvent.click(within(currentDraftRow).getByRole('checkbox'));
+    fireEvent.click(batchButton());
     await waitFor(() => expect(mockSend).toHaveBeenCalledWith(['studio-outbound']));
     expect(mockRefetchMembers).toHaveBeenCalled();
   });

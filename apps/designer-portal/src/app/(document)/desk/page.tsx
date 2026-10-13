@@ -81,8 +81,11 @@ const FIRST_HOUR_MS = 60 * 60 * 1000;
 
 export default function DeskPage() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.desk); // R89 — scope help to the Desk
+  const { data: orgs, isLoading: orgsLoading } = useOrganizations();
+  const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
+  const studioId = studio?.id ?? '';
   const { data, isLoading, isError, isSuccess, isPlaceholderData, refetch } =
-    useDeskEngagements();
+    useDeskEngagements({ organizationId: studioId || null });
   const { user } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const hydrated = useHydrated();
@@ -91,16 +94,12 @@ export default function DeskPage() {
   const [captureOpen, setCaptureOpen] = useState(false);
   const [openProjectOpen, setOpenProjectOpen] = useState(false);
 
-  // US-19 FR2 F2-2 — the roster prints each act by its one name.
   const oneVoice = useFeatureFlag('one-voice').value === true;
-  const { data: orgs, isLoading: orgsLoading } = useOrganizations();
-  const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
   const {
     data: studioMembers,
     isLoading: studioMembersLoading,
     isPending: studioMembersPending,
   } = useOrganizationMembers(studio?.id ?? '');
-  const studioId = studio?.id ?? '';
   const { data: projectLeads, isSuccess: projectLeadsRead } = useProjectLeads(studioId);
   const { data: needStates } = useNeedStates(studio?.id ?? '');
   // N4 — Mine by default, held per person in this browser.

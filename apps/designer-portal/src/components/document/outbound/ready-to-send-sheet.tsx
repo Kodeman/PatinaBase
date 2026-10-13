@@ -54,7 +54,7 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
   const viewer = useActViewer(projectId ?? null);
   const { user } = useAuth();
   const studioMembers = useOrganizationMembers(studioId ?? '');
-  const outbound = useOutboundDrafts({ projectId });
+  const outbound = useOutboundDrafts({ projectId, organizationId: projectId ? undefined : studioId });
   const procurement = useProcurementDrafts(projectId ?? '', OPEN_PROCUREMENT_DRAFT_STATUSES);
   const sendDrafts = useSendOutboundDrafts();
   const update = useUpdateOutboundDraft();
@@ -79,10 +79,14 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
   const rows = useMemo(
     () =>
       (outbound.data ?? [])
-        .filter((d) => (projectId ? d.project_id === projectId : d.project_id === null))
+        .filter((d) =>
+          projectId
+            ? d.project_id === projectId
+            : d.project_id === null && Boolean(studioId) && d.organization_id === studioId,
+        )
         .filter((d) => OPEN_STATUSES.has(d.status) || results.has(d.id))
         .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0)),
-    [outbound.data, results],
+    [outbound.data, results, studioId],
   );
   const letters = procurement.data ?? [];
 
