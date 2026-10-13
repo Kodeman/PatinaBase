@@ -76,7 +76,7 @@ describe('FoldSeam', () => {
     expect(source).not.toMatch(/useState|useEffect|requestAnimationFrame/);
   });
 
-  it('prints CLOSED BY YOU when the fold was a choice — on the summary\u2019s own line', () => {
+  it('prints CLOSED BY YOU when the fold was a choice — on the summary’s own line', () => {
     // L-7: the seam gains the printed words. It is a second stamp beside the
     // summary, not a second row: the seam is a one-line 44px control and the
     // cause must not cost it a line.
