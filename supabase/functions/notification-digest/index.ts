@@ -33,6 +33,7 @@ import {
   digestCategoryForDecision,
   type DigestPeriod,
   digestWindowStart,
+  groupDigestItemsByStudio,
   type DirectDecisionMailRow,
   directlyMailedDecisionIds,
   directMailWindowStart,
@@ -185,6 +186,7 @@ async function collectItems(
       title: (meta.message as string) || (meta.subject as string) ||
         "A proposal is waiting for your review",
       link: deepLink ? `${CLIENT_PORTAL_URL}${deepLink}` : null,
+      projectId: typeof meta.project_id === "string" ? meta.project_id : null,
     });
   }
 
@@ -256,6 +258,7 @@ async function collectItems(
       // the ask's anchor. One approval, one address across the whole inbox.
       link: decisionDigestLink(CLIENT_PORTAL_URL, dec?.id),
       decisionId: dec?.id,
+      projectId: dec?.project_id ?? null,
       artifact,
     });
   }
@@ -354,38 +357,88 @@ async function dispatchReminderDigests(
           continue;
         }
 
-        const { subject, html } = buildReminderDigestEmail(
-          items,
-          CLIENT_PORTAL_URL,
-          pref.timezone,
-          period,
+        const projectIds = [...new Set(items.flatMap((item) =>
+          item.projectId ? [item.projectId] : []
+        ))];
+        const { data: projects, error: projectsError } = projectIds.length
+          ? await supabase.from("projects").select("id, organization_id").in(
+            "id",
+            projectIds,
+          )
+          : { data: [], error: null };
+        if (projectsError) {
+          console.error(
+            "[notification-digest] project-to-studio lookup failed",
+            projectsError,
+          );
+        }
+        const studioByProject = new Map(
+          (projects ?? []).flatMap((project) =>
+            project.organization_id
+              ? [[project.id, project.organization_id] as const]
+              : []
+          ),
         );
-        const result = await sendCompliantEmail(supabase, {
-          to: profile.email as string,
-          subject,
-          html,
-          userId: pref.user_id,
-          notificationType: "reminder_digest",
-          category: "operational",
-          templateId: "reminder-digest",
-          metadata: {
-            item_count: items.length,
-            artifactCitations: artifactCitationsForDigest(items),
-          },
-          unsubscribeBaseUrl: CLIENT_PORTAL_URL,
-        });
+        const groupedItems = groupDigestItemsByStudio(items, studioByProject);
+        const attributableCount = [...groupedItems.values()].reduce(
+          (total, studioItems) => total + studioItems.length,
+          0,
+        );
+        if (attributableCount < items.length) {
+          console.error(
+            `[notification-digest] omitted ${items.length - attributableCount} orphan item(s) without a studio`,
+            pref.user_id,
+          );
+        }
+        if (groupedItems.size === 0) {
+          stats.skipped++;
+          continue;
+        }
 
-        if (result.success) {
+        let allSent = true;
+        for (const [studioId, studioItems] of groupedItems) {
+          const { subject, html } = buildReminderDigestEmail(
+            studioItems,
+            CLIENT_PORTAL_URL,
+            pref.timezone,
+            period,
+          );
+          const result = await sendCompliantEmail(supabase, {
+            authority: {
+              kind: "studio_schedule",
+              studioId,
+              outboundKind: "client_digest",
+            },
+            to: profile.email as string,
+            subject,
+            html,
+            userId: pref.user_id,
+            notificationType: "reminder_digest",
+            category: "operational",
+            templateId: "reminder-digest",
+            metadata: {
+              item_count: studioItems.length,
+              artifactCitations: artifactCitationsForDigest(studioItems),
+            },
+            unsubscribeBaseUrl: CLIENT_PORTAL_URL,
+          });
+
+          if (result.success) {
+            stats.sent++;
+          } else if (result.suppressed) {
+            allSent = false;
+            stats.skipped++;
+          } else {
+            allSent = false;
+            stats.errors++;
+          }
+        }
+
+        if (allSent) {
           await supabase
             .from("notification_preferences")
             .update({ last_reminder_digest_sent_at: now.toISOString() })
             .eq("user_id", pref.user_id);
-          stats.sent++;
-        } else if (result.suppressed) {
-          // Suppressed / rate-capped — don't stamp; self-heals on the next run.
-          stats.skipped++;
-        } else {
-          stats.errors++;
         }
       } catch (err) {
         console.error(

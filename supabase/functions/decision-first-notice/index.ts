@@ -237,6 +237,36 @@ Deno.serve(async (req: Request) => {
     )
     : null;
 
+  const { data: project } = decision.project_id
+    ? await supabase
+      .from("projects")
+      .select("designer_id, organization_id")
+      .eq("id", decision.project_id)
+      .maybeSingle()
+    : { data: null };
+  // The publishing trigger is the click. Legacy decisions do not retain a
+  // distinct publisher id, so prefer the recorded decision designer, then the
+  // project's designer; if neither exists, attribute to the studio schedule.
+  const sendAuthority = decision.designer_id
+    ? { kind: "designer" as const, userId: decision.designer_id }
+    : project?.designer_id
+    ? { kind: "designer" as const, userId: project.designer_id }
+    : project?.organization_id
+    ? {
+      // TODO(B7): decision/project designer can be absent on legacy records.
+      kind: "studio_schedule" as const,
+      studioId: project.organization_id,
+      outboundKind: "decision_reminder" as const,
+    }
+    : null;
+  if (!sendAuthority) {
+    console.error(
+      "decision-first-notice: cannot attribute publisher or studio",
+      decision.id,
+    );
+    return json({ error: "decision_authority_unresolved" }, 500);
+  }
+
   const result = await deliverDecisionNotification(
     supabase,
     "decision_required",
@@ -250,9 +280,9 @@ Deno.serve(async (req: Request) => {
       supersedes,
     },
     recipient,
-    // The trigger publishes the decision; this legacy row has no separate
-    // publisher field, so the project designer is the publisher authority.
-    { kind: "designer", userId: decision.designer_id! },
+    // The trigger publishes the decision; use its designer, falling back to
+    // the project designer, because legacy rows retain no separate publisher.
+    sendAuthority,
     signature,
   );
 

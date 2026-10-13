@@ -236,6 +236,7 @@ Deno.serve(async (req: Request) => {
   });
 
   const result = await sendCompliantEmail(supabase, {
+    // TODO(B7): no authenticated caller; proposal owner credited.
     authority: { kind: 'designer', userId: proposal.designer_id! },
     to: recipient,
     cc: proposal.cc_email ?? undefined,

@@ -27,7 +27,24 @@ export interface ReminderDigestItem {
   title: string;
   link: string | null;
   decisionId?: string;
+  projectId?: string | null;
   artifact?: ApprovalArtifactCitation | null;
+}
+
+/** Keep each scheduled digest attributable to exactly one studio. */
+export function groupDigestItemsByStudio(
+  items: ReminderDigestItem[],
+  studioByProject: ReadonlyMap<string, string>,
+): Map<string, ReminderDigestItem[]> {
+  const grouped = new Map<string, ReminderDigestItem[]>();
+  for (const item of items) {
+    const studioId = item.projectId ? studioByProject.get(item.projectId) : null;
+    if (!studioId) continue;
+    const studioItems = grouped.get(studioId) ?? [];
+    studioItems.push(item);
+    grouped.set(studioId, studioItems);
+  }
+  return grouped;
 }
 
 /**

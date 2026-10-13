@@ -13,6 +13,7 @@ import {
   decisionDigestTitle,
   digestCategoryForDecision,
   digestWindowStart,
+  groupDigestItemsByStudio,
   directlyMailedDecisionIds,
   directMailWindowStart,
   dropDecisionsPastOverdue,
@@ -26,6 +27,21 @@ import {
 import { clientDecisionLink } from "../_shared/client-portal-links.ts";
 
 const NOW = new Date("2026-07-07T15:00:00Z");
+
+Deno.test("digest items split into their owning studio, excluding orphans", () => {
+  const items: ReminderDigestItem[] = [
+    { category: "proposal", title: "A", link: null, projectId: "p1" },
+    { category: "choice", title: "B", link: null, projectId: "p2" },
+    { category: "approval", title: "C", link: null, projectId: "orphan" },
+  ];
+  const grouped = groupDigestItemsByStudio(
+    items,
+    new Map([["p1", "studio-a"], ["p2", "studio-b"]]),
+  );
+  assertEquals([...grouped.keys()], ["studio-a", "studio-b"]);
+  assertEquals(grouped.get("studio-a")?.map((item) => item.title), ["A"]);
+  assertEquals(grouped.get("studio-b")?.map((item) => item.title), ["B"]);
+});
 
 Deno.test("isReminderDigestDue: true when never sent", () => {
   assertEquals(isReminderDigestDue(null, NOW), true);
