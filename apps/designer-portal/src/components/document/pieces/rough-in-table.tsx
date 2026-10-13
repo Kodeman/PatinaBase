@@ -859,7 +859,8 @@ function LineCard({
             onChange={(e) => setName(e.target.value)}
             onBlur={commitName}
             onKeyDown={(e) => onKey(e, row, "name")}
-            className={cn(CELL_INPUT, "h-[28px] px-0 font-medium")}
+            // US-28 S7 — a 44px target at 390, like every act on the sheet.
+            className={cn(CELL_INPUT, "h-[44px] px-0 font-medium")}
           />
         </div>
         <p className="flex flex-wrap items-center gap-x-2 font-mono text-[12px] tabular-nums leading-[1.4] text-[var(--sheet-ink-muted)]">
@@ -985,7 +986,7 @@ function RowMenu({
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         onClick={() => (open ? close(true) : setOpen(true))}
-        className="inline-flex h-[40px] min-w-[44px] items-center justify-center font-mono text-[14px] text-[var(--sheet-ink-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]"
+        className="inline-flex h-[40px] min-w-[44px] items-center justify-center font-mono text-[14px] text-[var(--sheet-ink-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)] max-md:h-[44px]"
       >
         ⋯
       </button>

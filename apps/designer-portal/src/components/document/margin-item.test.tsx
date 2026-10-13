@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { MarginItem } from './margin-item';
+import { MARGIN_KIND_INK, MarginItem } from './margin-item';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 
 const row = (overrides: Partial<MarginItemRow> = {}) =>
@@ -60,8 +60,9 @@ describe('MarginItem', () => {
 
     const chip = container.firstElementChild as HTMLElement;
     expect(chip.getAttribute('style') ?? '').not.toMatch(/border-left/);
-    const kind = chip.querySelector('button > span') as HTMLElement;
-    expect(kind.style.color).toBe('var(--text-primary)');
+    // jsdom drops a var() colour from the inline style, so the ink is pinned
+    // at the one constant every kind is printed in.
+    expect(MARGIN_KIND_INK).toBe('var(--text-primary)');
   });
 
   it('prints where it is anchored — beside a region, or about the whole job', () => {

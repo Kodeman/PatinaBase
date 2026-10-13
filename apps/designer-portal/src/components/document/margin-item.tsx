@@ -23,7 +23,7 @@ import {
 import { MItemContent } from './m-item';
 
 /** The margin's kind word is ink, never a pigment (V20 U-Q13). */
-const MARGIN_KIND_INK = 'var(--text-primary)';
+export const MARGIN_KIND_INK = 'var(--text-primary)';
 
 /**
  * The paper region a margin item is anchored to, or null for the whole job.

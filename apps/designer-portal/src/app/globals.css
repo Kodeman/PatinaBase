@@ -2657,4 +2657,14 @@ html:has([data-document-shell]) {
 .card.doc-margin-card {
   flex-direction: row;
 }
+/* Below 600px the band no longer holds to its declared 56px: NEXT wraps and its
+   act takes a row of its own (U-Q19), so the band is as tall as its words and
+   publishes no length (D-1). The schedule's pinned glance stands under that
+   declared constant, so there it would slide beneath the band's second line.
+   At phone width the glance yields; the strip it repeats is in flow above. */
+@media (max-width: 599px) {
+  [data-document-shell] section[aria-label='Schedule rule'] {
+    visibility: hidden;
+  }
+}
 /* end US-28 S7 document */

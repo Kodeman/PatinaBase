@@ -467,9 +467,12 @@ export function LensBand({
                 // no room for (D3, R141).
                 variant="primary"
                 data-part="act"
-                // U-Q19 — at 390 the act takes its own 44px row under the
-                // wrapped sentence, so its box is not inset into the line.
-                className="my-[-12px] shrink-0 max-[599px]:my-0"
+                // U-Q19 — at 390 the last rung's act takes its own 44px row
+                // under the wrapped sentence, so its box is not inset into the
+                // line. A rung on trial keeps the inset: it shares the one row.
+                className={`my-[-12px] shrink-0 ${
+                  dropped < lastRung ? '' : 'max-[599px]:my-0'
+                }`}
                 disabled={spoken.next.act.disabled}
                 onClick={() => {
                   onActed?.();

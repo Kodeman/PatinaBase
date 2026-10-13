@@ -1199,6 +1199,11 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
         expect(line('2')).toHaveAttribute('data-lens-line2-form', 'long');
         // Nothing clips, so the long form stays — on one row, with no ellipsis.
         expect(sentence().className).not.toContain('text-ellipsis');
+        // Sharing that row, the act keeps its inset box; only the last rung's
+        // act takes a 44px row of its own at 390.
+        const act = screen.getByRole('button', { name: 'Record the payment' });
+        expect(act.className).toContain('my-[-12px]');
+        expect(act.className).not.toContain('max-[599px]:my-0');
       });
 
       it('Wren held: the phone form, with Open the held draft beside it (fix-now 13)', () => {
