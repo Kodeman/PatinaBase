@@ -23,12 +23,14 @@ function LedgerGroup({
   sectionLabel,
   holderOf,
   first,
+  onUndone,
 }: {
   group: DeskLedgerGroup;
   sectionKey: string;
   sectionLabel: string | null;
   holderOf?: (jobId: string) => DeskHolder;
   first: boolean;
+  onUndone: (words: string) => void;
 }) {
   const folds = group.key === 'rest';
   const [open, setOpen] = useState(false);
@@ -61,6 +63,7 @@ function LedgerGroup({
               key={ledgerLine.line.engagementId}
               {...ledgerLine}
               holder={holderOf?.(ledgerLine.line.projectId ?? ledgerLine.line.engagementId) ?? null}
+              onUndone={onUndone}
             />
           ))}
         </ul>
@@ -85,6 +88,7 @@ export function DeskRoster({
   othersHold?: string | null;
 }) {
   const sections = ledger.sections.filter((section) => section.groups.some((group) => group.lines.length > 0));
+  const [said, setSaid] = useState('');
   let firstGroup = true;
 
   return (
@@ -125,6 +129,7 @@ export function DeskRoster({
                       sectionLabel={section.label}
                       holderOf={holderOf}
                       first={first}
+                      onUndone={setSaid}
                     />
                   );
                 })}
@@ -138,6 +143,9 @@ export function DeskRoster({
           {ledger.notChecked}
         </p>
       )}
+      <p role="status" className="sr-only">
+        {said}
+      </p>
     </section>
   );
 }

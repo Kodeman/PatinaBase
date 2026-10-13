@@ -143,8 +143,10 @@ function SheetLine({
   const [failed, setFailed] = useState<string | null>(null);
   const [asideOpen, setAsideOpen] = useState(false);
   const armed = useRef(false);
+  const undoing = useRef(false);
   const lineRef = useRef<HTMLParagraphElement>(null);
   const undoRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
+  const actRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
   const { need, settled } = entry;
   const handoff = need.kind === 'handoff';
   const top = index === 0;
@@ -161,6 +163,15 @@ function SheetLine({
     onSettle(`${card.name}: ${words}`);
   }, [settled, words, card.name, onSettle]);
 
+  // R6 — once Undo lands the line opens again, and its Undo is gone: focus
+  // moves to the restored act (to the line, where she has none).
+  useEffect(() => {
+    if (settled || !undoing.current) return;
+    undoing.current = false;
+    (actRef.current ?? lineRef.current)?.focus();
+    onSettle(`${card.name}: Undone.`);
+  }, [settled, card.name, onSettle]);
+
   if (settled && words) {
     return (
       <li data-day-sheet-line={entry.key} data-part={index === 1 ? 'f1' : index === 2 ? 'f2' : undefined} className="ln-item settled">
@@ -175,12 +186,19 @@ function SheetLine({
               variant="tertiary"
               aria-label={`Undo — ${card.name}`}
               disabled={undo.isPending}
-              onClick={() =>
+              onClick={() => {
+                undoing.current = true;
+                setFailed(null);
                 undo.mutate(
                   { needKey: entry.key, engagementId: entry.projectId, action: 'clear' },
-                  { onError: () => setFailed('Undo did not save. Try again.') },
-                )
-              }
+                  {
+                    onError: () => {
+                      undoing.current = false;
+                      setFailed('Undo did not save. Try again.');
+                    },
+                  },
+                );
+              }}
             >
               Undo
             </DocumentAction>
@@ -269,6 +287,7 @@ function SheetLine({
       {!theirs && (
         <div className="foot" data-register="act">
           <DocumentAction
+            ref={actRef}
             actionKey={`day-sheet-${need.kind}`}
             variant="secondary"
             href={href}

@@ -9,7 +9,7 @@
  * line that settled today stays in place, muted. Every word stays selectable.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import Link from 'next/link';
 import { useSetNeedState } from '@patina/supabase';
 import type { Landing } from '@/lib/arrival/types';
@@ -60,7 +60,7 @@ function shortDay(value: string | null | undefined): string | null {
 /** Undo on her own "Not today" or set-aside, settled today: it clears the
  *  state row, and the line returns to its place. Its own component, so a
  *  plain row reads no query client. */
-function LedgerUndo({ line }: { line: RosterLine }) {
+function LedgerUndo({ line, undoing }: { line: RosterLine; undoing: MutableRefObject<boolean> }) {
   const undo = useSetNeedState({ errorSurface: 'inline' });
   const [failed, setFailed] = useState(false);
   return (
@@ -73,9 +73,16 @@ function LedgerUndo({ line }: { line: RosterLine }) {
         onClick={() => {
           if (!line.needKey) return;
           setFailed(false);
+          // The row holds the mark: a landed Undo unmounts this control.
+          undoing.current = true;
           undo.mutate(
             { needKey: line.needKey, engagementId: line.projectId ?? line.engagementId, action: 'clear' },
-            { onError: () => setFailed(true) },
+            {
+              onError: () => {
+                undoing.current = false;
+                setFailed(true);
+              },
+            },
           );
         }}
       >
@@ -97,10 +104,24 @@ export function DeskLedgerRow({
   waiting = null,
   back = null,
   holder = null,
+  onUndone,
 }: { line: RosterLine } & Partial<Omit<DeskLedgerLine, 'line'>> & {
   /** Who carries the job; a row she does not carry prints no act. */
   holder?: DeskHolder | null;
+  /** Says a landed Undo in the ledger's one status region. */
+  onUndone?: (words: string) => void;
 }) {
+  const undoing = useRef(false);
+  const actRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
+  const nameRef = useRef<HTMLAnchorElement>(null);
+  // R6 — once Undo lands the row opens again: focus moves to its act, or to
+  // its name where it prints none.
+  useEffect(() => {
+    if (settled || !undoing.current) return;
+    undoing.current = false;
+    (actRef.current ?? nameRef.current)?.focus();
+    onUndone?.(`${line.name}: Undone.`);
+  }, [settled, line.name, onUndone]);
   const actionKey = `roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`;
   const ariaLabel = `${line.act.label} — ${line.name}`;
   const landing = line.needKind ? actLanding(line) : null;
@@ -133,7 +154,7 @@ export function DeskLedgerRow({
       className={settled ? 'lrow settled' : 'lrow'}
     >
       <p data-ledger-cell="name" className={`lname tick ${stageClass(line.stage)}`}>
-        <Link href={line.jobHref} data-roster-name className="name t-d4 [overflow-wrap:anywhere]">
+        <Link ref={nameRef} href={line.jobHref} data-roster-name className="name t-d4 [overflow-wrap:anywhere]">
           {line.name}
         </Link>
       </p>
@@ -152,9 +173,10 @@ export function DeskLedgerRow({
           R-DM21 A): an act opens the record straight, with its landing. */}
       <span data-ledger-cell="act" data-register="act" className="lact">
         {ownDeferral ? (
-          <LedgerUndo line={line} />
+          <LedgerUndo line={line} undoing={undoing} />
         ) : quietRow ? null : line.act.ledger ? (
           <DocumentAction
+            ref={actRef}
             actionKey={actionKey}
             aria-label={ariaLabel}
             variant="secondary"
@@ -165,6 +187,7 @@ export function DeskLedgerRow({
           </DocumentAction>
         ) : (
           <DocumentAction
+            ref={actRef}
             actionKey={actionKey}
             aria-label={ariaLabel}
             variant="secondary"

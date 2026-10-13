@@ -148,7 +148,7 @@ export default function DeskPage() {
   const { data: projectLeads, isSuccess: projectLeadsRead } = useProjectLeads(studioId);
   const { data: needStates } = useNeedStates(studio?.id ?? '');
   // U-Q4 — teammates' acts, as facts; never merged into her own states.
-  const { data: teammateActed } = useTeammateActed(studio?.id ?? '');
+  const { data: teammateActed, isSuccess: teammateActedRead } = useTeammateActed(studio?.id ?? '');
   // N4 — Mine by default, held per person in this browser.
   const [deskScope, setDeskScopeState] = useState<DeskScope>('mine');
   const scopeStoreKey = user?.id ? `patina.desk.scope.${user.id}` : null;
@@ -333,10 +333,24 @@ export default function DeskPage() {
       unreadFeeds: [
         ...(data?.unreadFeeds ?? []),
         ...(studioId && !projectLeadsRead ? ['project leads'] : []),
+        // R14 — the studio's scope settles a line on its holder's act (U-Q4):
+        // until those facts answer, an open line there may already be done.
+        ...(studioId && deskScope === 'studio' && !teammateActedRead ? ['teammates’ acts'] : []),
       ],
       now: at,
     });
-  }, [data, projectLeads, projectLeadsRead, studioId, user?.id, needStates, teammateActed, mySeat, deskScope]);
+  }, [
+    data,
+    projectLeads,
+    projectLeadsRead,
+    studioId,
+    user?.id,
+    needStates,
+    teammateActed,
+    teammateActedRead,
+    mySeat,
+    deskScope,
+  ]);
 
   // US-28 change 1/2 — Today as cards, one per job; the ledger takes every
   // job Today does not, read on the same ranked list.

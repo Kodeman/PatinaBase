@@ -5,7 +5,8 @@
  *
  * Everything the Desk mounts besides those is stubbed.
  */
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 
 const mockOrgs = jest.fn();
 const mockMembers = jest.fn();
@@ -27,6 +28,9 @@ let mockPendingRead:
 let mockMemberLineFlags = true;
 let mockViewerStudioId: string | null = null;
 let mockLeadsRead = true;
+/** R14 — the teammates' facts read; a case swaps in a real, rejecting query. */
+const answeredFacts = () => ({ data: new Map(), isSuccess: true });
+let mockTeammateActed: (organizationId: string) => unknown = answeredFacts;
 
 jest.mock('@patina/supabase', () => ({
   useProfile: () => ({ data: { display_name: 'Leah Warner' } }),
@@ -41,7 +45,7 @@ jest.mock('@patina/supabase', () => ({
         : { data: mockMembers(), isLoading: false, isPending: false },
   useProjectLeads: () => ({ data: new Map(), isSuccess: mockLeadsRead }),
   useNeedStates: () => ({ data: new Map() }),
-  useTeammateActed: () => ({ data: new Map() }),
+  useTeammateActed: (organizationId: string) => mockTeammateActed(organizationId),
   useSetNeedState: () => ({ mutate: jest.fn(), isPending: false }),
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
@@ -199,6 +203,7 @@ beforeEach(() => {
   mockPendingRead = null;
   mockViewerStudioId = null;
   mockLeadsRead = true;
+  mockTeammateActed = answeredFacts;
   mockMemberLineFlags = true;
   mockOrgs.mockReturnValue([studio()]);
   // Own title set; nobody else on the crew (one open step).
@@ -260,6 +265,60 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
     mockViewerStudioId = 'studio-1';
     render(<DeskPage />);
     expect(screen.getAllByText('Nothing needs you today.')).toHaveLength(1);
+  });
+
+  describe('teammates’ acts unread (R14)', () => {
+    // The hook's own shape (useTeammateActed): the RPC's error throws out of
+    // the query, which TanStack holds as `error` with no data.
+    const useRejectedFactsRpc = (organizationId: string) =>
+      useQuery({
+        queryKey: ['need-state-facts', organizationId],
+        queryFn: async (): Promise<Map<string, unknown>> => {
+          throw { code: '42501', message: 'permission denied for function studio_need_state_facts' };
+        },
+        retry: false,
+      });
+    const renderDesk = (client: QueryClient) =>
+      render(
+        <QueryClientProvider client={client}>
+          <DeskPage />
+        </QueryClientProvider>,
+      );
+    const toStudio = () => act(() => screen.getByRole('button', { name: 'The studio’s' }).click());
+    afterEach(() => window.localStorage.removeItem('patina.desk.scope.me'));
+
+    it('the studio’s scope says they were not checked when studio_need_state_facts is rejected', async () => {
+      mockTeammateActed = useRejectedFactsRpc;
+      const client = new QueryClient();
+      renderDesk(client);
+      toStudio();
+      await waitFor(() => expect(client.getQueryState(['need-state-facts', 'org-1'])?.status).toBe('error'));
+      expect(within(screen.getByTestId('day-sheet')).getByText('Not checked: teammates’ acts.')).toBeInTheDocument();
+      expect(screen.queryByText(/Nothing (more )?needs you today\./)).not.toBeInTheDocument();
+      client.clear();
+    });
+
+    it('says so while the facts are still pending, and drops it once they answer', () => {
+      mockTeammateActed = () => ({ data: undefined, isSuccess: false, isPending: true });
+      const { rerender } = render(<DeskPage />);
+      toStudio();
+      expect(within(screen.getByTestId('day-sheet')).getByText('Not checked: teammates’ acts.')).toBeInTheDocument();
+      mockTeammateActed = answeredFacts;
+      rerender(<DeskPage />);
+      expect(screen.queryByText('Not checked: teammates’ acts.')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Nothing needs you today.')).toHaveLength(1);
+    });
+
+    it('Mine reads no teammate’s act, so a rejected read leaves it unqualified', async () => {
+      mockTeammateActed = useRejectedFactsRpc;
+      const client = new QueryClient();
+      renderDesk(client);
+      await waitFor(() => expect(client.getQueryState(['need-state-facts', 'org-1'])?.status).toBe('error'));
+      expect(screen.getByRole('button', { name: 'Mine' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.queryByText('Not checked: teammates’ acts.')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Nothing needs you today.')).toHaveLength(1);
+      client.clear();
+    });
   });
 
   it('opens on Mine and holds the scope per person', () => {

@@ -1,7 +1,8 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { RosterLine } from '@/lib/document/desk-roster-derivation';
+import type { DeskLedger, DeskLedgerLine, RosterLine } from '@/lib/document/desk-roster-derivation';
 import { DeskLedgerRow, actLanding } from './desk-ledger-row';
+import { DeskRoster } from './desk-roster';
 
 const mockMutate = jest.fn();
 jest.mock('@patina/supabase', () => ({
@@ -239,6 +240,63 @@ describe('DeskLedgerRow — standing (US-28 S3 change 2)', () => {
       await userEvent.setup().click(screen.getByRole('button', { name: /^Undo — / }));
     });
     expect(screen.getByRole('alert')).toHaveTextContent('Undo did not save. Try again.');
+  });
+
+  describe('after Undo lands (R6)', () => {
+    const ledgerOf = (ledgerLine: DeskLedgerLine): DeskLedger => ({
+      sections: [{ key: 'mine', label: null, groups: [{ key: 'yours', label: 'Also yours', lines: [ledgerLine] }] }],
+      notChecked: null,
+    });
+    const settledToday = { kind: 'not_today' as const, at: new Date(2026, 9, 12, 16, 15).toISOString(), until: '2026-10-13' };
+    const undo = async () => {
+      await act(async () => {
+        await userEvent.setup().click(screen.getByRole('button', { name: 'Undo — Reinhardt lake house' }));
+      });
+    };
+
+    it('moves focus to the restored row’s act, and the ledger’s status says “Undone.”', async () => {
+      const row = line({ ...need, projectId: 'p-reinhardt', act: { label: 'Chase the maker', href: '/doc/reinhardt' } });
+      const { rerender } = render(
+        <DeskRoster ledger={ledgerOf({ line: row, standing: 'settled', settled: settledToday, waiting: null, back: null })} />,
+      );
+      await undo();
+      // The clear lands: the row reads open again, in its place.
+      rerender(<DeskRoster ledger={ledgerOf({ line: row, standing: 'yours', settled: null, waiting: null, back: null })} />);
+      expect(screen.queryByRole('button', { name: /^Undo — / })).toBeNull();
+      expect(screen.getByRole('link', { name: 'Chase the maker — Reinhardt lake house' })).toHaveFocus();
+      expect(screen.getByRole('status')).toHaveTextContent(/^Reinhardt lake house: Undone\.$/);
+    });
+
+    it('moves focus to the row’s name where the restored row prints no act', async () => {
+      const row = line({ ...need, projectId: 'p-reinhardt' });
+      const jordan = { userId: 'u-jordan', name: 'Jordan', mine: false };
+      const { rerender } = render(
+        <DeskRoster
+          ledger={ledgerOf({ line: row, standing: 'settled', settled: settledToday, waiting: null, back: null })}
+          holderOf={() => jordan}
+        />,
+      );
+      await undo();
+      rerender(
+        <DeskRoster
+          ledger={ledgerOf({ line: row, standing: 'yours', settled: null, waiting: null, back: null })}
+          holderOf={() => jordan}
+        />,
+      );
+      expect(screen.getByRole('link', { name: 'Reinhardt lake house' })).toHaveFocus();
+      expect(screen.getByRole('status')).toHaveTextContent(/^Reinhardt lake house: Undone\.$/);
+    });
+
+    it('a refused Undo keeps the row settled, says so, and announces nothing', async () => {
+      mockMutate.mockImplementation((_vars, options) => options?.onError?.(new Error('refused')));
+      const ledger = ledgerOf({ line: line(need), standing: 'settled', settled: settledToday, waiting: null, back: null });
+      const { rerender } = render(<DeskRoster ledger={ledger} />);
+      await undo();
+      rerender(<DeskRoster ledger={ledger} />);
+      expect(screen.getByRole('button', { name: 'Undo — Reinhardt lake house' })).toHaveFocus();
+      expect(screen.getByRole('alert')).toHaveTextContent('Undo did not save. Try again.');
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    });
   });
 
   it('a teammate’s settled deferral offers her no Undo', () => {

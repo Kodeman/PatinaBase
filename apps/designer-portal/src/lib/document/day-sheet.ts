@@ -181,17 +181,22 @@ function waitingWho(entry: DeskNeed, state: Pick<NeedState, 'waitingOn'> | null 
 
 /**
  * SQ-751 F7 — an aggregate ("2 POs sent") is acted on one record at a time,
- * each under its own key. The line stands for the first record not yet acted
- * on, re-keyed to it, so chasing the first PO never quiets the second; once
- * every record is acted on, it reads as the first.
+ * each under its own key. The line stands for the first record not acted on
+ * before today, re-keyed to it, so chasing the first PO never quiets the
+ * second; once every record is acted on, it reads as the first.
+ *
+ * U-Q2 — a record acted on today holds the line: it settles in place under
+ * that record's key and rank, and the records after it wait in the job until
+ * tomorrow, so a chase never refills Today.
  */
-function nextUnacted(entry: DeskNeed, states: ReadonlyMap<string, NeedState>): DeskNeed {
+function nextUnacted(entry: DeskNeed, states: ReadonlyMap<string, NeedState>, today: string): DeskNeed {
   const records = entry.need.records;
-  if (!records || !states.get(entry.key)?.actedAt) return entry;
-  const next = records.find(
-    (record) => !states.get(`${entry.need.kind}:${record.recordId}`)?.actedAt,
-  );
-  if (!next) return entry;
+  if (!records) return entry;
+  const next = records.find((record) => {
+    const actedAt = states.get(`${entry.need.kind}:${record.recordId}`)?.actedAt;
+    return !actedAt || onDay(actedAt, today);
+  });
+  if (!next || next === records[0]) return entry;
   const key = `${entry.need.kind}:${next.recordId}`;
   return {
     ...entry,
@@ -250,15 +255,13 @@ function settledToday(
       ? { kind: 'drafted', at: state.actedAt, who: lead }
       : { kind: 'acted', at: state.actedAt, who: waitingWho(entry, state) };
   }
-  if (state) {
-    if (!onDay(state.updatedAt, today)) return null;
+  if (state && onDay(state.updatedAt, today)) {
     if (state.setAsideUntil) {
       return { kind: 'set_aside', at: state.updatedAt!, until: state.setAsideUntil, reason: state.setAsideReason };
     }
     if (state.deferredUntil) {
       return { kind: 'not_today', at: state.updatedAt!, until: state.deferredUntil };
     }
-    return null;
   }
   if (holderAct && onDay(holderAct.actedAt, today)) {
     return { kind: 'acted', at: holderAct.actedAt, who: waitingWho(entry, null), by: holderAct.userId };
@@ -287,9 +290,15 @@ export function deriveDaySheet(input: DaySheetInput): DaySheet {
   for (const aggregate of scoped) {
     // A setup chore never leads (FR4 ruling 521 (b), the band's selectNext).
     if (classOfNeed(aggregate.need.kind) === 3) continue;
-    const entry = nextUnacted(aggregate, input.states);
+    const entry = nextUnacted(aggregate, input.states, today);
     const state = input.states.get(entry.key);
-    const holderAct = state ? null : holderActOf(entry, input);
+    // Her own row keeps precedence only while it still holds the line — an
+    // act, or a set-aside or "Not today" still ahead. A spent deferral or a
+    // cleared row never shadows the holder's act.
+    const ownHolds =
+      !!state &&
+      (!!state.actedAt || stillAhead(state.setAsideUntil, today) || stillAhead(state.deferredUntil, today));
+    const holderAct = ownHolds ? null : holderActOf(entry, input);
     // U-Q2 — a line settled today keeps its place in the one list.
     const settled = settledToday(entry, state, holderAct, input, today);
     if (settled) {

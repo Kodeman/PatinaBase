@@ -323,11 +323,26 @@ describe('deriveDaySheet — an aggregate acts one record at a time (SQ-751 F7)'
     return { ...base, key: base.need.key };
   };
 
-  it('chasing the first PO leaves the line standing for the second, under its own key', () => {
+  it('a PO chased today holds the line, settled in place under its own key; the second waits in the job (U-Q2)', () => {
+    const chased = new Date(2026, 9, 9, 8, 0).toISOString();
+    const result = sheet({
+      needs: [twoPos()],
+      states: new Map([['po_unacknowledged:po-1', state('po_unacknowledged:po-1', { actedAt: chased })]]),
+    });
+    expect(result.lines.map((l) => [l.key, l.need.recordId, l.need.at, l.settled?.kind, l.settled?.at])).toEqual([
+      ['po_unacknowledged:po-1', 'po-1', '2026-10-01T09:00:00.000Z', 'acted', chased],
+    ]);
+    // The second PO is not promoted anywhere on the sheet: it stays in the job.
+    expect(result.alsoYours).toEqual([]);
+    expect(result.waitingOn).toEqual([]);
+    expect(JSON.stringify(result.lines)).not.toContain('"key":"po_unacknowledged:po-2"');
+  });
+
+  it('a PO chased on an earlier day leaves the line standing for the second, under its own key', () => {
     const result = sheet({
       needs: [twoPos()],
       states: new Map([
-        ['po_unacknowledged:po-1', state('po_unacknowledged:po-1', { actedAt: '2026-10-09T08:00:00.000Z' })],
+        ['po_unacknowledged:po-1', state('po_unacknowledged:po-1', { actedAt: new Date(2026, 9, 8, 8, 0).toISOString() })],
       ]),
     });
     expect(result.lines).toHaveLength(1);
@@ -335,7 +350,92 @@ describe('deriveDaySheet — an aggregate acts one record at a time (SQ-751 F7)'
       key: 'po_unacknowledged:po-2',
       need: { key: 'po_unacknowledged:po-2', recordId: 'po-2', at: '2026-10-03T09:00:00.000Z' },
     });
+    expect(result.lines[0].settled).toBeUndefined();
     expect(result.waitingOn).toEqual([]);
+  });
+
+  it('the second PO, chased today after the first was chased earlier, settles in place under its key', () => {
+    const chased = new Date(2026, 9, 9, 9, 0).toISOString();
+    const result = sheet({
+      needs: [twoPos()],
+      states: new Map([
+        ['po_unacknowledged:po-1', state('po_unacknowledged:po-1', { actedAt: new Date(2026, 9, 8, 8, 0).toISOString() })],
+        ['po_unacknowledged:po-2', state('po_unacknowledged:po-2', { actedAt: chased })],
+      ]),
+    });
+    expect(result.lines.map((l) => [l.key, l.settled?.kind, l.settled?.at])).toEqual([
+      ['po_unacknowledged:po-2', 'acted', chased],
+    ]);
+  });
+
+  describe('six jobs, the chased aggregate on the fifth line (R2 — no refill)', () => {
+    const po = (i: number, day: number, over: Partial<NeedLine> = {}): DeskNeed => {
+      const at = new Date(2026, 8, day, 9, 0).toISOString();
+      const base = entry(i, {
+        kind: 'po_unacknowledged' as NeedKind,
+        recordId: `r${i}`,
+        text: 'PO sent — no acknowledgment',
+        at,
+        dueOn: at,
+        ...over,
+      });
+      return { ...base, key: base.need.key };
+    };
+    // Sep 25's PO leads job 5's aggregate; its second PO, Oct 2, is newer than job 6's.
+    const aggregate = po(5, 25, {
+      text: '2 POs sent — no acknowledgment',
+      records: [
+        { recordId: 'r5', at: new Date(2026, 8, 25, 9).toISOString(), dueOn: new Date(2026, 8, 25, 9).toISOString() },
+        { recordId: 'r5b', at: new Date(2026, 9, 2, 9).toISOString(), dueOn: new Date(2026, 9, 2, 9).toISOString() },
+      ],
+    });
+    const needs = rankDeskNeeds([po(1, 21), po(2, 22), po(3, 23), po(4, 24), aggregate, po(6, 28)], FRIDAY);
+    const jobs = (lines: readonly SheetEntry[]) => lines.map((l) => l.projectId);
+    const chasedToday = new Date(2026, 9, 9, 9, 30).toISOString();
+
+    it('crosses the cutoff: keyed to its second PO, job 5 would rank under job 6', () => {
+      const second = aggregate.need.records![1];
+      const rekeyed = {
+        ...aggregate,
+        key: 'po_unacknowledged:r5b',
+        need: { ...aggregate.need, key: 'po_unacknowledged:r5b', recordId: 'r5b', at: second.at, dueOn: second.dueOn },
+      };
+      expect(jobs(rankDeskNeeds([...needs.filter((n) => n !== aggregate), rekeyed], FRIDAY))).toEqual(
+        ['p1', 'p2', 'p3', 'p4', 'p6', 'p5'],
+      );
+    });
+
+    it('her chase today keeps Today’s five lines the same jobs, in the same order', () => {
+      const before = sheet({ needs });
+      expect(jobs(before.lines)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5']);
+
+      const after = sheet({
+        needs,
+        states: new Map([['po_unacknowledged:r5', state('po_unacknowledged:r5', { actedAt: chasedToday })]]),
+      });
+      expect(jobs(after.lines)).toEqual(jobs(before.lines));
+      expect(after.lines.map((l) => l.key)).toEqual(before.lines.map((l) => l.key));
+      expect(after.lines[4].settled).toEqual(expect.objectContaining({ kind: 'acted', at: chasedToday }));
+      expect(jobs(after.alsoYours)).toEqual(['p6']);
+      expect(after.standing.get('p5')).toBe('settled');
+    });
+
+    it('the holder’s chase today holds the line the same way, in the studio’s scope', () => {
+      const leads: DeskLeads = new Map([
+        ['p5', { leadUserId: 'u-jordan', leadName: 'Jordan Reyes', assignedAt: '2026-09-01T00:00:00Z' }],
+      ]);
+      const after = sheet({
+        needs,
+        leads,
+        teammateActs: new Map([['po_unacknowledged:r5', [{ userId: 'u-jordan', actedAt: chasedToday }]]]),
+      });
+      expect(jobs(after.lines)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5']);
+      expect(after.lines[4]).toMatchObject({
+        key: 'po_unacknowledged:r5',
+        settled: { kind: 'acted', at: chasedToday, by: 'u-jordan' },
+      });
+      expect(jobs(after.alsoYours)).toEqual(['p6']);
+    });
   });
 
   it('settles in place once every record is acted on today (U-Q2)', () => {
@@ -789,6 +889,53 @@ describe('deriveDaySheet — drafted, read and a teammate’s act settle in plac
       { need: line, who: line.projectName, since: at(16, 0, 11), by: 'jordan' },
     ]);
     expect(yesterday.standing.get('p-j')).toBe('others');
+  });
+
+  describe('R7 — her spent own row never shadows the holder’s act', () => {
+    const line = entry(1, {}, 'p-j');
+    const leads: DeskLeads = new Map([
+      ['p-j', { leadUserId: 'jordan', leadName: 'Jordan Pell', assignedAt: '2026-10-01T00:00:00Z' }],
+    ]);
+    const read = (own: SheetNeedState, actedAt = at(9, 30)) =>
+      sheet({
+        needs: [line],
+        leads,
+        meUserId: 'leah',
+        states: new Map([[line.key, own]]),
+        teammateActs: new Map([[line.key, [{ userId: 'jordan', actedAt }]]]),
+        now: monday,
+      });
+
+    it('an expired own “Not today” plus the holder’s act today reads as settled', () => {
+      // Put off on Friday until Monday: spent this morning.
+      const result = read({ ...state(line.key, { deferredUntil: '2026-10-12' }), updatedAt: at(15, 0, 9) });
+      expect(result.lines.map((l) => [l.key, l.settled])).toEqual([
+        [line.key, { kind: 'acted', at: at(9, 30), who: line.projectName, by: 'jordan' }],
+      ]);
+      expect(result.standing.get('p-j')).toBe('settled');
+      expect(result.setAside).toEqual([]);
+    });
+
+    it('a spent set-aside, or a row Undo cleared today, gives way to the holder too', () => {
+      const spentAside = read({ ...state(line.key, { setAsideUntil: '2026-10-09', setAsideReason: 'client away' }), updatedAt: at(9, 0, 5) });
+      expect(spentAside.lines[0].settled).toMatchObject({ kind: 'acted', by: 'jordan' });
+      const cleared = read({ ...state(line.key), updatedAt: at(8, 0) });
+      expect(cleared.lines[0].settled).toMatchObject({ kind: 'acted', by: 'jordan' });
+    });
+
+    it('an expired own row plus the holder’s act yesterday waits on others, not open', () => {
+      const result = read({ ...state(line.key, { deferredUntil: '2026-10-09' }), updatedAt: at(15, 0, 8) }, at(16, 0, 11));
+      expect(result.lines).toEqual([]);
+      expect(result.waitingOn).toEqual([{ need: line, who: line.projectName, since: at(16, 0, 11), by: 'jordan' }]);
+    });
+
+    it('her own state still in force keeps precedence over the holder’s act', () => {
+      const ahead = read({ ...state(line.key, { setAsideUntil: '2026-10-20', setAsideReason: 'client away' }), updatedAt: at(9, 0, 9) });
+      expect(ahead.lines).toEqual([]);
+      expect(ahead.setAside).toEqual([{ need: line, until: '2026-10-20', reason: 'client away' }]);
+      const notToday = read({ ...state(line.key, { deferredUntil: '2026-10-13' }), updatedAt: at(8, 0) });
+      expect(notToday.lines[0].settled).toEqual({ kind: 'not_today', at: at(8, 0), until: '2026-10-13' });
+    });
   });
 });
 

@@ -481,6 +481,55 @@ describe('DaySheet — a line settles in place (U-Q2, U-Q11)', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Job 1: Not today · 10:00 · back Monday 12 October');
   });
 
+  it('after Undo lands, focus moves to the restored line’s act and the status says “Undone.” (R6)', async () => {
+    const needs = [entry(1), entry(2)];
+    const deferred = new Map([state('task_due:t1', { deferredUntil: '2026-10-12', updatedAt: at(9, 15) })]);
+    const { container, rerender } = render(sheetElement(needs, { states: deferred }));
+    await act(async () => {
+      await userEvent.setup().click(within(lineOf(container, 'task_due:t1')).getByRole('button', { name: 'Undo — Job 1' }));
+    });
+    // The clear lands: the read returns no row, and the line is open again.
+    rerender(sheetElement(needs, { states: new Map() }));
+    const line = lineOf(container, 'task_due:t1');
+    expect(line).not.toHaveClass('settled');
+    expect(within(line).getByRole('link', { name: 'Open the task — Job 1' })).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent(/^Job 1: Undone\.$/);
+    // Same place, nothing refilled.
+    expect(Array.from(lines(container), (el) => el.getAttribute('data-day-sheet-line'))).toEqual([
+      'task_due:t1',
+      'task_due:t2',
+    ]);
+  });
+
+  it('after Undo lands on a line she does not carry, focus moves to the line itself (R6)', async () => {
+    const needs = [entry(1)];
+    const options = { holderOf: () => JORDAN };
+    const deferred = new Map([state('task_due:t1', { deferredUntil: '2026-10-12', updatedAt: at(9, 15) })]);
+    const { container, rerender } = render(sheetElement(needs, { states: deferred }, options));
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Undo — Job 1' }));
+    });
+    rerender(sheetElement(needs, { states: new Map() }, options));
+    expect(lineOf(container, 'task_due:t1').querySelector('p.line')).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent(/^Job 1: Undone\.$/);
+  });
+
+  it('an Undo that did not save keeps the line settled and focus where it was, and says so (R6)', async () => {
+    mockMutate.mockImplementation((_vars, options) => options?.onError?.(new Error('refused')));
+    const needs = [entry(1)];
+    const deferred = new Map([state('task_due:t1', { deferredUntil: '2026-10-12', updatedAt: at(9, 15) })]);
+    const { container, rerender } = render(sheetElement(needs, { states: deferred }));
+    const undo = screen.getByRole('button', { name: 'Undo — Job 1' });
+    await act(async () => {
+      await userEvent.setup().click(undo);
+    });
+    rerender(sheetElement(needs, { states: deferred }));
+    expect(lineOf(container, 'task_due:t1')).toHaveClass('settled');
+    expect(undo).toHaveFocus();
+    expect(screen.getByRole('alert')).toHaveTextContent('Undo did not save. Try again.');
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
   it('a settled line read before today is not on Today: it is past, not settled', () => {
     const waiting = entry(1, { owner: 'maker' });
     const { container } = renderSheet([waiting], {
