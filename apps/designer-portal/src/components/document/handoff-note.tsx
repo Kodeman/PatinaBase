@@ -40,7 +40,9 @@ export function HandoffNote({
       tabIndex={-1}
       aria-labelledby="hand-off-label"
       data-handoff-note={read ? 'read' : 'unread'}
-      className="mt-[var(--doc-region-gap)] border-l-2 border-[var(--color-dusty-blue)] px-3 py-2.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--text-primary)]"
+      // US-28 S7 — the one non-stage note edge (--edge-note), not a lone
+      // dusty-blue rule: the hand-off is a note on the paper, never a Card.
+      className="mt-[var(--doc-region-gap)] [border-left:var(--edge-note)] px-3 py-2.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--text-primary)]"
     >
       <p id="hand-off-label" className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         Hand-off

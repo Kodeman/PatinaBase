@@ -39,21 +39,29 @@ describe('MarginItem', () => {
     expect(screen.getByText('Pulse body')).toBeInTheDocument();
   });
 
-  it('is a piece of the sheet on the rail’s deeper stock, and casts no shadow', () => {
-    // R126 laid the chip as paper on the rail; US-28 S1 (V20 U-Q12) retired
-    // the one --elevation-sheet token it wore. Depth is the stock step and the
-    // ink border, never a shadow.
+  it('is a Card off the paper — one stock, the card edge, no shadow', () => {
+    // US-28 S1 (V20 U-Q12) retired the one --elevation-sheet token it wore;
+    // US-28 S7 makes it a Card (L2): --paper-doc, 1px --card-edge, 2px radius.
     const { container } = render(<MarginItem row={row()} open={false} />);
 
     const chip = container.firstElementChild as HTMLElement;
     expect(chip).toHaveClass(
-      'bg-[var(--doc-paper)]',
-      'border-[var(--doc-ink-border)]',
-      'rounded-[4px]',
+      'bg-[var(--paper-doc)]',
+      'border-[var(--card-edge)]',
+      'rounded-[2px]',
     );
     expect(chip).not.toHaveClass('doc-elevated');
     expect(chip.className).not.toMatch(/shadow/);
     expect(chip.getAttribute('style') ?? '').not.toMatch(/shadow/);
+  });
+
+  it('prints its kind as an ink word, with no pigment edge (V20 U-Q13)', () => {
+    const { container } = render(<MarginItem row={row({ kind: 'money' } as Partial<MarginItemRow>)} open={false} />);
+
+    const chip = container.firstElementChild as HTMLElement;
+    expect(chip.getAttribute('style') ?? '').not.toMatch(/border-left/);
+    const kind = chip.querySelector('button > span') as HTMLElement;
+    expect(kind.style.color).toBe('var(--text-primary)');
   });
 
   it('prints where it is anchored — beside a region, or about the whole job', () => {

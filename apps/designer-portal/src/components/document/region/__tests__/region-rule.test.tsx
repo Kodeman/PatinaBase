@@ -23,7 +23,7 @@ function resolveVars(css: string, value: string): string {
  *  var-resolved, so the two recipes are compared on what they paint. */
 function ruleBody(css: string, selector: string): string {
   const match = new RegExp(
-    `^\\${selector}\\s*\\{([^}]*)\\}`,
+    `^${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`,
     'm',
   ).exec(css);
   if (!match) throw new Error(`${selector} is not declared in globals.css`);
@@ -45,22 +45,47 @@ describe('RegionRule', () => {
     expect(rule.textContent).toBe('');
   });
 
-  it('opens a movement on the double rule by default', () => {
-    // S1: the mockup draws NONE of the eleven other call sites (mood boards,
-    // care, schedule, money, the approval document), so the default has to be
-    // the rank they already had. `mid` is opt-in, at a site someone looked at.
+  it('is a Section by default: draws nothing at the head, and marks its region to close on --rule-mid', () => {
+    // US-28 S7 (uplift.md area 2): each region is a Section that CLOSES on its
+    // own --rule-mid; the next region opens on that close, so the head draws
+    // nothing. The default moves from `strong` to `mid` with intent: the
+    // specimens now draw every region (approvals, schedule, money, mood boards,
+    // care, prework) and none opens on a double rule.
     const { container } = render(<RegionRule />);
     const rule = container.firstElementChild!;
-    expect(rule).toHaveClass('doc-rule-strong');
+    expect(rule).toHaveAttribute('data-rule-weight', 'mid');
+    expect(rule).toHaveAttribute('data-region-rule');
+    expect(rule).not.toHaveClass('doc-rule-strong');
+    // The head is not the close: the old mid line at the head is gone.
     expect(rule).not.toHaveClass('doc-rule-mid');
-    expect(rule).toHaveAttribute('data-rule-weight', 'strong');
+    expect(rule.getAttribute('class')).toBeNull();
   });
 
-  it('draws the default at the pre-R126 .doc-region-rule recipe, exactly', () => {
+  it('closes every region on the paper on --rule-mid, at full measure', () => {
+    // The close is drawn on the region the mark sits in, scoped to the paper,
+    // so the Desk's own double rule (outside [data-document-paper]) is not a
+    // region and closes nothing.
+    const css = readFileSync(GLOBALS_CSS, 'utf8');
+    const block = css.slice(css.indexOf('/* US-28 S7 document */'));
+    expect(block).not.toBe(css);
+    expect(ruleBody(block, '[data-document-paper] :has(> [data-region-rule])')).toBe(
+      // Read inside the S7 block alone, so the close is pinned to the token
+      // it spends rather than to a literal.
+      ['border-bottom: var(--rule-mid)', 'padding-bottom: 24px'].join('; '),
+    );
+  });
+
+  it('opens a movement on the double rule where a caller asks for it, and still closes', () => {
+    const { container } = render(<RegionRule weight="strong" />);
+    const rule = container.firstElementChild!;
+    expect(rule).toHaveClass('doc-rule-strong');
+    expect(rule).toHaveAttribute('data-rule-weight', 'strong');
+    expect(rule).toHaveAttribute('data-region-rule');
+  });
+
+  it('draws the movement rule at the pre-R126 .doc-region-rule recipe, exactly', () => {
     // The geometry, not just the class name: a 6px box, a 2px charcoal top and
-    // a 1px rgba(44,41,38,.18) bottom. If the default is ever retuned, the
-    // eleven unreviewed surfaces shift with it — so the recipe is pinned to the
-    // one they were drawing before this direction touched them.
+    // a 1px rgba(44,41,38,.18) bottom — the rule a movement opens on.
     const css = readFileSync(GLOBALS_CSS, 'utf8');
     expect(ruleBody(css, '.doc-rule-strong')).toBe(
       ruleBody(css, '.doc-region-rule'),
@@ -74,16 +99,10 @@ describe('RegionRule', () => {
     );
   });
 
-  it('takes the 1.5px charcoal rule where a caller asks for it', () => {
-    const { container } = render(<RegionRule weight="mid" />);
-    const rule = container.firstElementChild!;
-    expect(rule).toHaveClass('doc-rule-mid');
-    expect(rule).not.toHaveClass('doc-rule-strong');
-    expect(rule).toHaveAttribute('data-rule-weight', 'mid');
-  });
-
   it('takes a caller class alongside its own', () => {
-    const { container } = render(<RegionRule className="mt-6" />);
+    const { container } = render(<RegionRule weight="strong" className="mt-6" />);
     expect(container.firstElementChild).toHaveClass('doc-rule-strong', 'mt-6');
+    const { container: plain } = render(<RegionRule className="mt-0" />);
+    expect(plain.firstElementChild).toHaveClass('mt-0');
   });
 });

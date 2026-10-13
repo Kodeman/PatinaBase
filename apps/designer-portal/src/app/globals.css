@@ -2639,3 +2639,22 @@ html:has([data-document-shell]) {
 /* the Ledgers popover: square, on --paper-doc with the edge (L4′) */
 .popover.ledgers-pop { display: block; min-width: 0; padding: 0; }
 /* ═══ end US-28 S6 chrome ══════════════════════════════════════════════════ */
+
+/* US-28 S7 document */
+/* The Document paper (uplift.md area 2; specimens/document-{1440,390}.html).
+   Each region is a Section that closes on its own --rule-mid, at full
+   measure. The region is the element RegionRule marks (`data-region-rule`),
+   so the close needs no caller to restructure; it is scoped to the paper, so
+   the Desk's own double rule (outside it) is not a region and closes nothing.
+   The double rule stays only where a movement opens (RegionRule
+   weight="strong"). No Cards on the paper body. */
+[data-document-paper] :has(> [data-region-rule]) {
+  padding-bottom: 24px;
+  border-bottom: var(--rule-mid);
+}
+/* The margin's first-touch note is a Card off the paper (L2 on the ground),
+   unclamped: its words and its × stay on one row. */
+.card.doc-margin-card {
+  flex-direction: row;
+}
+/* end US-28 S7 document */
