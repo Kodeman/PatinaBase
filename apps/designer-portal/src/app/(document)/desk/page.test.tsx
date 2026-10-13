@@ -41,6 +41,7 @@ jest.mock('@patina/supabase', () => ({
         : { data: mockMembers(), isLoading: false, isPending: false },
   useProjectLeads: () => ({ data: new Map(), isSuccess: mockLeadsRead }),
   useNeedStates: () => ({ data: new Map() }),
+  useTeammateActed: () => ({ data: new Map() }),
   useSetNeedState: () => ({ mutate: jest.fn(), isPending: false }),
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
@@ -66,9 +67,12 @@ jest.mock('@patina/supabase', () => ({
         },
 }));
 
+/** One live job at rest: an empty studio prints its own sentence instead. */
+const LIVE = [{ engagement_id: 'eng-1', project_id: 'proj-1', title: 'Holloway Den', active_section: 'project' }];
+
 /** The Desk read's settled shape; US-14's route-root cases vary it. */
 const settledDeskRead = () => ({
-  data: { folders: [], chips: [], live: [] } as Record<string, unknown> | undefined,
+  data: { folders: [], chips: [], live: LIVE } as Record<string, unknown> | undefined,
   isLoading: false,
   isError: false,
   isSuccess: true,
@@ -216,16 +220,26 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
   it('says nothing needs her, once, when every feed answered and no job needs her', () => {
     render(<DeskPage />);
     expect(screen.getByTestId('day-sheet')).toBeInTheDocument();
-    expect(screen.getAllByText('Nothing more needs you today.')).toHaveLength(1);
+    expect(screen.getAllByText('Nothing needs you today.')).toHaveLength(1);
+  });
+
+  it('an empty studio says so under the eyebrow, with no cards or groups (D3 (c))', () => {
+    mockDeskRead = { ...settledDeskRead(), data: { folders: [], chips: [], live: [] } };
+    render(<DeskPage />);
+    expect(
+      screen.getByText('No project files yet. Record an inquiry or create a project file to begin.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('day-sheet')).toBeNull();
+    expect(screen.queryByTestId('desk-roster')).toBeNull();
   });
 
   it('never says nothing needs her while a feed is unread (fix-now 6)', () => {
     mockDeskRead = {
       ...settledDeskRead(),
-      data: { folders: [], chips: [], live: [], unreadFeeds: ['purchase orders'] },
+      data: { folders: [], chips: [], live: LIVE, unreadFeeds: ['purchase orders'] },
     };
     render(<DeskPage />);
-    expect(screen.queryByText('Nothing more needs you today.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nothing (more )?needs you today\./)).not.toBeInTheDocument();
     expect(within(screen.getByTestId('day-sheet')).getByText('Not checked: purchase orders.')).toBeInTheDocument();
   });
 
@@ -233,14 +247,14 @@ describe('Desk — the Day Sheet heads the Desk (US-25 slice 4)', () => {
     mockViewerStudioId = 'studio-1';
     mockLeadsRead = false;
     render(<DeskPage />);
-    expect(screen.queryByText('Nothing more needs you today.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nothing (more )?needs you today\./)).not.toBeInTheDocument();
     expect(within(screen.getByTestId('day-sheet')).getByText('Not checked: project leads.')).toBeInTheDocument();
   });
 
   it('says nothing needs her once her studio’s project leads answer (SQ-751 F5)', () => {
     mockViewerStudioId = 'studio-1';
     render(<DeskPage />);
-    expect(screen.getAllByText('Nothing more needs you today.')).toHaveLength(1);
+    expect(screen.getAllByText('Nothing needs you today.')).toHaveLength(1);
   });
 
   it('opens on Mine and holds the scope per person', () => {
@@ -296,6 +310,29 @@ describe('Desk — one header line (US-28 S0 F1)', () => {
     expect(header.textContent).not.toMatch(/Today|October|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/);
     // The double rule opens the day under the header (F2).
     expect(header.nextElementSibling).toHaveClass('doc-rule-strong');
+  });
+
+  it('at 390 sets two rows: the greeting with Find, then the creates, so focus follows the eye', () => {
+    const { container } = render(<DeskPage />);
+    const header = container.querySelector('header')!;
+    const order = Array.from(header.querySelectorAll<HTMLElement>('h1, [data-action-key]')).map(
+      (el) => el.getAttribute('data-action-key') ?? el.tagName,
+    );
+    expect(order).toEqual(['H1', 'find-anything', 'capture-lead', 'open-project', 'find-anything']);
+    // The first Find stands only below 600px; the second only above it.
+    const [narrowFind, , , wideFind] = Array.from(header.querySelectorAll<HTMLElement>('[data-action-key]'));
+    expect(narrowFind.closest('[role="group"][data-action-region]')).toHaveClass('min-[600px]:hidden');
+    expect(narrowFind).toHaveAccessibleName('Find anything');
+    expect(wideFind).toHaveClass('max-[599px]:hidden');
+    expect(wideFind).toHaveAttribute('data-tour-anchor', 'desk-find-anything');
+    // The creates take the second row; each name stays whole (2.5.3).
+    const creates = header.querySelector('[data-action-region="desk-head"]')!;
+    expect(creates).toHaveClass('max-[599px]:basis-full');
+    expect(screen.getByRole('button', { name: 'Record an inquiry' })).toHaveTextContent('Inquiry');
+    expect(screen.getByRole('button', { name: 'Create a project file' })).toHaveTextContent('Project');
+    for (const short of ['Inquiry', 'Project']) {
+      expect(within(creates as HTMLElement).getByText(short)).toHaveAttribute('aria-hidden', 'true');
+    }
   });
 });
 
@@ -407,10 +444,12 @@ describe('Desk — Back keeps the place (US-28 S0 F6)', () => {
 });
 
 describe('Desk — the roster is the Desk’s one population (B2-L2)', () => {
-  it('prints the line roster under the Day Sheet', () => {
+  it('prints the ledger under Today, and retires the workload head (US-28 S3)', () => {
     render(<DeskPage />);
-    expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
-    expect(screen.getByText('Studio workload')).toBeInTheDocument();
+    const sheet = screen.getByTestId('day-sheet');
+    const roster = screen.getByTestId('desk-roster');
+    expect(sheet.compareDocumentPosition(roster) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText(/Studio workload|By team member|The work is in motion/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\d+ live/)).not.toBeInTheDocument();
   });
 
@@ -531,7 +570,7 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
   // until ready: the route root first appears already ready.
   describe('while its arrival wait is armed', () => {
     const skeleton = (container: HTMLElement) =>
-      container.querySelector('[data-tour-anchor="desk-needs-your-hand"][aria-hidden]');
+      container.querySelector('[data-tour-anchor="desk-needs-your-hand"][aria-busy="true"]');
     const held = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-arrival-held]');
     const armWait = (path = '/desk') => act(() => setArrivalWaiting(jest.fn(), path));
     afterEach(() => act(() => setArrivalWaiting(null)));

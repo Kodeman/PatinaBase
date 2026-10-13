@@ -57,6 +57,39 @@ function shortDay(value: string | null | undefined): string | null {
   return SHORT_DAY.format(date).replace(',', '');
 }
 
+/** Undo on her own "Not today" or set-aside, settled today: it clears the
+ *  state row, and the line returns to its place. Its own component, so a
+ *  plain row reads no query client. */
+function LedgerUndo({ line }: { line: RosterLine }) {
+  const undo = useSetNeedState({ errorSurface: 'inline' });
+  const [failed, setFailed] = useState(false);
+  return (
+    <>
+      <DocumentAction
+        actionKey={`roster-undo-${line.engagementId}`}
+        aria-label={`Undo — ${line.name}`}
+        variant="tertiary"
+        disabled={undo.isPending || !line.needKey}
+        onClick={() => {
+          if (!line.needKey) return;
+          setFailed(false);
+          undo.mutate(
+            { needKey: line.needKey, engagementId: line.projectId ?? line.engagementId, action: 'clear' },
+            { onError: () => setFailed(true) },
+          );
+        }}
+      >
+        Undo
+      </DocumentAction>
+      {failed && (
+        <span role="alert" className="block t-body-sm">
+          Undo did not save. Try again.
+        </span>
+      )}
+    </>
+  );
+}
+
 export function DeskLedgerRow({
   line,
   standing,
@@ -68,8 +101,6 @@ export function DeskLedgerRow({
   /** Who carries the job; a row she does not carry prints no act. */
   holder?: DeskHolder | null;
 }) {
-  const undo = useSetNeedState({ errorSurface: 'inline' });
-  const [failed, setFailed] = useState(false);
   const actionKey = `roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`;
   const ariaLabel = `${line.act.label} — ${line.name}`;
   const landing = line.needKind ? actLanding(line) : null;
@@ -121,21 +152,7 @@ export function DeskLedgerRow({
           R-DM21 A): an act opens the record straight, with its landing. */}
       <span data-ledger-cell="act" data-register="act" className="lact">
         {ownDeferral ? (
-          <DocumentAction
-            actionKey={`roster-undo-${line.engagementId}`}
-            aria-label={`Undo — ${line.name}`}
-            variant="tertiary"
-            disabled={undo.isPending || !line.needKey}
-            onClick={() => {
-              if (!line.needKey) return;
-              undo.mutate(
-                { needKey: line.needKey, engagementId: line.projectId ?? line.engagementId, action: 'clear' },
-                { onError: () => setFailed(true) },
-              );
-            }}
-          >
-            Undo
-          </DocumentAction>
+          <LedgerUndo line={line} />
         ) : quietRow ? null : line.act.ledger ? (
           <DocumentAction
             actionKey={actionKey}
@@ -159,11 +176,6 @@ export function DeskLedgerRow({
           </DocumentAction>
         )}
       </span>
-      {failed && (
-        <p role="alert" className="t-body-sm">
-          Undo did not save. Try again.
-        </p>
-      )}
     </li>
   );
 }

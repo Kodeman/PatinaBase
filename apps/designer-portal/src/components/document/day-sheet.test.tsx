@@ -1,23 +1,23 @@
 /**
- * The Day Sheet component (US-25 slice 4): five sentences at most, a quiet
- * "Not today" beside each act, the honest empty sentence, and nothing that
- * counts — no badge, dot, overflow count, "cleared today" or streak (Q1).
+ * Today (US-25 slice 4; US-28 S3 change 1): five lines at most, on one card
+ * per job, each with its act and a quiet "Not today". A line settles in
+ * place, muted, with Undo on her own deferral; someone else's move prints
+ * no act. Nothing counts — no badge, overflow count, "cleared" or streak.
  */
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { NeedLine } from '@/lib/document/desk-derivation';
 import type { DeskNeed } from '@/lib/document/desk-need-list';
-import type { RosterLine } from '@/lib/document/desk-roster-derivation';
-import { deriveDaySheet, nextWorkingDay } from '@/lib/document/day-sheet';
-import { DaySheet, NOTHING_NEEDS_YOU_TONIGHT, THE_REST } from './day-sheet';
+import type { DeskHolder } from '@/lib/document/desk-scope';
+import { deriveDaySheet, groupSheetByJob, nextWorkingDay, type SheetNeedState } from '@/lib/document/day-sheet';
+import { DaySheet, NOTHING_NEEDS_YOU, NOTHING_NEEDS_YOU_TONIGHT } from './day-sheet';
 
 const mockMutate = jest.fn();
-let mockSaveFailed = false;
 const mockSetNeedStateOptions: unknown[] = [];
 jest.mock('@patina/supabase', () => ({
   useSetNeedState: (options?: unknown) => {
     mockSetNeedStateOptions.push(options);
-    return { mutate: mockMutate, isPending: false, isError: mockSaveFailed };
+    return { mutate: mockMutate, isPending: false };
   },
 }));
 const mockPush = jest.fn();
@@ -29,6 +29,7 @@ jest.mock('@/components/document/command-bar', () => ({ openLedger: jest.fn() })
 
 // Friday 9 October 2026, 10am local.
 const NOW = new Date(2026, 9, 9, 10, 0, 0);
+const at = (hours: number, minutes = 0) => new Date(2026, 9, 9, hours, minutes).toISOString();
 
 function entry(i: number, over: Partial<NeedLine> = {}): DeskNeed {
   const key = `task_due:t${i}`;
@@ -50,58 +51,100 @@ function entry(i: number, over: Partial<NeedLine> = {}): DeskNeed {
   };
 }
 
-function renderSheet(
+function state(key: string, over: Partial<SheetNeedState> = {}): [string, SheetNeedState] {
+  return [
+    key,
+    {
+      needKey: key,
+      projectId: null,
+      deferredUntil: null,
+      actedAt: null,
+      waitingOn: null,
+      setAsideUntil: null,
+      setAsideReason: null,
+      updatedAt: null,
+      ...over,
+    },
+  ];
+}
+
+const LEAH: DeskHolder = { userId: 'me', name: 'Leah', mine: true };
+const JORDAN: DeskHolder = { userId: 'u-jordan', name: 'Jordan', mine: false };
+
+interface SheetOptions {
+  jobs?: ReadonlyMap<string, { name: string; stage: 'proposal' | 'project' }>;
+  holderOf?: (jobId: string) => DeskHolder;
+  scope?: 'mine' | 'studio';
+  teammateActed?: ReadonlyMap<string, { userId: string; actedAt: string }[]>;
+  names?: ReadonlyMap<string, string>;
+}
+
+function sheetElement(
   needs: DeskNeed[],
   over: Partial<Parameters<typeof deriveDaySheet>[0]> = {},
-  jobs?: ReadonlyMap<string, RosterLine>,
+  options: SheetOptions = {},
+  onScope = jest.fn(),
 ) {
   const sheet = deriveDaySheet({
     needs,
     states: new Map(),
     leads: new Map(),
     meUserId: 'me',
-    scope: 'studio',
+    scope: options.scope ?? 'studio',
     unreadFeeds: [],
     now: NOW,
     ...over,
   });
-  const onScope = jest.fn();
-  const utils = render(
+  const cards = groupSheetByJob(sheet.lines, options.jobs ?? new Map(), options.holderOf);
+  return (
     <DaySheet
       sheet={sheet}
-      scope="studio"
+      cards={cards}
+      scope={options.scope ?? 'studio'}
       onScope={onScope}
       now={NOW}
-      jobs={jobs}
       dateLabel="Friday 9 October"
-    />,
+      teammateActed={options.teammateActed}
+      names={options.names}
+    />
   );
+}
+
+function renderSheet(
+  needs: DeskNeed[],
+  over: Partial<Parameters<typeof deriveDaySheet>[0]> = {},
+  options: SheetOptions = {},
+) {
+  const onScope = jest.fn();
+  const utils = render(sheetElement(needs, over, options, onScope));
   return { ...utils, onScope };
 }
 
 const lines = (container: HTMLElement) =>
   container.querySelectorAll<HTMLElement>('[data-day-sheet-line]');
+const lineOf = (container: HTMLElement, key: string) =>
+  container.querySelector<HTMLElement>(`[data-day-sheet-line="${key}"]`)!;
 
 beforeEach(() => {
   mockMutate.mockReset();
   mockPush.mockReset();
-  mockSaveFailed = false;
 });
 
-describe('DaySheet', () => {
-  it('renders five lines of eight, and says the rest are on their jobs — never a count', () => {
+describe('DaySheet — the cards', () => {
+  it('renders five lines of eight, one card per job, and never a count', () => {
     const { container } = renderSheet(Array.from({ length: 8 }, (_, i) => entry(i + 1)));
     expect(lines(container)).toHaveLength(5);
-    expect(screen.getByText(THE_REST)).toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/\d+ more|\(\d+\)|cleared|streak/i);
+    expect(container.querySelectorAll('article[data-desk-card]')).toHaveLength(5);
+    // The rest live in the ledger now: Today prints no caption for them.
+    expect(container.textContent).not.toMatch(/\d+ more|\(\d+\)|cleared|streak|on their jobs/i);
   });
 
-  it('writes each line as one sentence led by the job, the act beside it', () => {
+  it('heads each card with its job, which opens the job; the line is one sentence with its act', () => {
     const { container } = renderSheet([entry(1)]);
-    const [line] = lines(container);
-    expect(line.querySelector('p')).toHaveTextContent(/^Job 1 — Task 1 is due$/);
-    // F3 — the job name opens the job, on every line (the lone line included).
-    expect(within(line).getByRole('link', { name: 'Job 1' })).toHaveAttribute('href', '/doc/p1');
+    const card = container.querySelector<HTMLElement>('[data-desk-card="p1"]')!;
+    expect(within(card).getByRole('link', { name: 'Job 1' })).toHaveAttribute('href', '/doc/p1');
+    const line = lineOf(container, 'task_due:t1');
+    expect(line.querySelector('p')).toHaveTextContent(/^Task 1 is due$/);
     expect(within(line).getByRole('link', { name: 'Open the task — Job 1' })).toHaveAttribute(
       'href',
       '/doc/p1#task-1',
@@ -110,42 +153,130 @@ describe('DaySheet', () => {
 
   it('names the unscoped fallback Open project file without changing its project link', () => {
     const { container } = renderSheet([entry(1, { actionLabel: undefined })]);
-    expect(within(lines(container)[0]).getByRole('link', { name: 'Open project file — Job 1' }))
-      .toHaveAttribute('href', '/doc/p1#task-1');
+    expect(within(lines(container)[0]).getByRole('link', { name: 'Open project file — Job 1' })).toHaveAttribute(
+      'href',
+      '/doc/p1#task-1',
+    );
   });
 
-  it('prints the time word only inside a day (Q5), with no dot', () => {
-    const { container } = renderSheet([
-      entry(1, { at: new Date(2026, 9, 9, 8, 0).toISOString() }),
-      entry(2, { at: new Date(2026, 9, 1, 8, 0).toISOString() }),
-    ]);
-    // Found by key: the sheet ranks its lines (SQ-774 R5), oldest first.
-    const fresh = container.querySelector('[data-day-sheet-line="task_due:t1"]')!;
-    const old = container.querySelector('[data-day-sheet-line="task_due:t2"]')!;
-    expect(fresh).toHaveTextContent('2 hours ago');
-    expect(old.textContent).not.toMatch(/ago|yesterday/);
+  it('prints the time word in the card’s eyebrow only inside a day (Q5), with no dot', () => {
+    const { container } = renderSheet([entry(1, { at: at(8) }), entry(2, { at: new Date(2026, 9, 1, 8).toISOString() })]);
+    expect(container.querySelector('[data-desk-card="p1"] .eb')).toHaveTextContent('2 hours ago');
+    expect(container.querySelector('[data-desk-card="p2"]')!.textContent).not.toMatch(/ago|yesterday/);
     expect(container.textContent).not.toContain('•');
   });
 
+  it('joins a fact’s own dashes as commas (walk W-D8)', () => {
+    const { container } = renderSheet([entry(1, { text: '2 POs sent — no acknowledgment' })]);
+    expect(lines(container)[0].querySelector('p')).toHaveTextContent(/^2 POs sent, no acknowledgment$/);
+  });
+
+  it('inks only the overdue clause terracotta (U-Q10)', () => {
+    const { container } = renderSheet([
+      entry(1, {
+        kind: 'overdue_invoice',
+        text: 'Invoice INV-2026-0721 is $3,800 overdue, due Monday 28 September.',
+      }),
+      entry(2, { text: 'The overdue fabric sample is in' }),
+    ]);
+    const overdue = container.querySelectorAll('.od');
+    expect(overdue).toHaveLength(1);
+    expect(overdue[0]).toHaveTextContent(/^\$3,800 overdue$/);
+    expect(lineOf(container, 'task_due:t1').querySelector('p')).toHaveTextContent(
+      'Invoice INV-2026-0721 is $3,800 overdue, due Monday 28 September.',
+    );
+  });
+
+  it('carries no filled act, badge or mark, and no colour of its own (Q1)', () => {
+    const { container } = renderSheet(Array.from({ length: 6 }, (_, i) => entry(i + 1, { urgent: true })));
+    expect(container.querySelector('[data-action-variant="primary"], [data-action-variant="inked"]')).toBeNull();
+    expect(container.querySelector('[data-roster-mark], [data-mark-tone], [data-badge]')).toBeNull();
+    // The one status region is the polite voice an act speaks in, hidden.
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(container.querySelector('[role="status"]')).toHaveClass('sr-only');
+    for (const el of container.querySelectorAll('*')) {
+      if (el.closest('[aria-hidden]')) continue;
+      const cls = el.className.toString();
+      expect(cls).not.toMatch(/\brounded-full\b|\bbg-(?!transparent)|terracotta|clay|sage|dusty|shadow/);
+      expect(el.getAttribute('style') ?? '').not.toMatch(/color/);
+    }
+  });
+
+  it('lands an act that opens its job on the job’s stage (R-DM21 A)', () => {
+    const jobs = new Map([1, 2, 3, 4, 5].map((i) => [`p${i}`, { name: `Job ${i}`, stage: 'proposal' as const }]));
+    const { container } = renderSheet(
+      [
+        entry(1, { deepLink: undefined }),
+        entry(2, { deepLink: undefined }),
+        entry(3),
+        entry(4, { deepLink: undefined, ledger: { name: 'accounts', context: {} } } as Partial<NeedLine>),
+      ],
+      {},
+      { jobs },
+    );
+    const landingOf = (key: string, root: HTMLElement = container) =>
+      root.querySelector(`[data-day-sheet-line="${key}"] [data-register="act"] a`)!.getAttribute('data-landing');
+    const section = JSON.stringify({ kind: 'section', sectionKey: 'proposal' });
+    expect(container.querySelector('[data-part~="act"]')!.getAttribute('data-landing')).toBe(section);
+    expect(landingOf('task_due:t1')).toBe(section);
+    expect(landingOf('task_due:t2')).toBe(section);
+    // A deep link into the paper, a ledger and an act sheet carry none.
+    expect(landingOf('task_due:t3')).toBeNull();
+    expect(landingOf('task_due:t4')).toBeNull();
+    const sheetAct = renderSheet(
+      [entry(5, { deepLink: undefined, kind: 'overdue_invoice', recordId: 'inv-5' } as Partial<NeedLine>)],
+      {},
+      { jobs },
+    );
+    expect(landingOf('task_due:t5', sheetAct.container)).toBeNull();
+  });
+});
+
+describe('DaySheet — the eyebrow', () => {
+  it('heads Today with the day, the arrival head and settle (U-Q3)', () => {
+    const { container } = renderSheet([entry(1)]);
+    const heads = container.querySelectorAll<HTMLElement>('[data-part~="head"]');
+    expect(heads).toHaveLength(1);
+    expect(heads[0]).toHaveTextContent(/^Friday 9 October · Today$/);
+    expect(heads[0].getAttribute('data-part')).toBe('head settle');
+    expect(heads[0].tabIndex).toBe(-1);
+    expect(screen.getByRole('region', { name: 'Friday 9 October · Today' })).toBe(screen.getByTestId('day-sheet'));
+    // Card one carries the arrival's job mark; the top line its headline and act.
+    expect(container.querySelector('[data-desk-card="p1"] [data-part="job"]')).toHaveTextContent('Job 1');
+    expect(lineOf(container, 'task_due:t1').querySelector('[data-part="headline"]')).not.toBeNull();
+  });
+
+  it('offers the scope as Mine · The studio’s on the eyebrow’s line', async () => {
+    const { onScope } = renderSheet([entry(1)]);
+    const scope = screen.getByRole('group', { name: 'Whose lines' });
+    expect(scope.closest('.sec-head')).toContainElement(screen.getByText(/· Today$/));
+    expect(within(scope).getByRole('button', { name: 'The studio’s' })).toHaveAttribute('aria-pressed', 'true');
+    await act(async () => {
+      await userEvent.setup().click(within(scope).getByRole('button', { name: 'Mine' }));
+    });
+    expect(onScope).toHaveBeenCalledWith('mine');
+  });
+});
+
+describe('DaySheet — the acts', () => {
   it('“Not today” puts the need off until the next working day, through useSetNeedState', async () => {
     renderSheet([entry(1)]);
     await act(async () => {
       await userEvent.setup().click(screen.getByRole('button', { name: 'Not today — Job 1' }));
     });
-    expect(mockMutate).toHaveBeenCalledWith({
-      needKey: 'task_due:t1',
-      engagementId: 'p1',
-      action: 'not_today',
-      until: nextWorkingDay(NOW),
-    });
+    expect(mockMutate).toHaveBeenCalledWith(
+      { needKey: 'task_due:t1', engagementId: 'p1', action: 'not_today', until: nextWorkingDay(NOW) },
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
     expect(nextWorkingDay(NOW)).toBe('2026-10-12');
   });
 
   it('offers “Not today” on a pre-project line too, keyed by its engagement (SQ-778 N5)', async () => {
-    // Chen's unpaid invoice and Aspen Loft's unviewed proposal: needs of an
-    // engagement with no project yet. Each can be put off like any other.
     const chen = entry(1, { kind: 'overdue_invoice', text: '$3,400 due 12 May' });
-    const aspen = { ...entry(2, { kind: 'proposal_unviewed', text: 'Issued 2 October · not yet viewed' }), projectId: 'proposal-aspen' };
+    const aspen = {
+      ...entry(2, { kind: 'proposal_unviewed', text: 'Issued 2 October · not yet viewed' }),
+      projectId: 'proposal-aspen',
+    };
     const { container } = renderSheet([chen, aspen]);
     for (const line of Array.from(lines(container))) {
       expect(within(line).getByRole('button', { name: /^Not today — / })).toBeInTheDocument();
@@ -155,13 +286,19 @@ describe('DaySheet', () => {
     });
     expect(mockMutate).toHaveBeenCalledWith(
       expect.objectContaining({ needKey: 'task_due:t2', engagementId: 'proposal-aspen', action: 'not_today' }),
+      expect.anything(),
     );
   });
 
-  it('says so when “Not today” did not save (SQ-751 F6)', () => {
-    mockSaveFailed = true;
-    renderSheet([entry(1)]);
-    expect(screen.getByRole('alert')).toHaveTextContent('Not today did not save. Try again.');
+  it('says so on its line when “Not today” did not save (SQ-751 F6)', async () => {
+    mockMutate.mockImplementation((_vars, options) => options?.onError?.(new Error('refused')));
+    const { container } = renderSheet([entry(1)]);
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Not today — Job 1' }));
+    });
+    expect(within(lineOf(container, 'task_due:t1')).getByRole('alert')).toHaveTextContent(
+      'Not today did not save. Try again.',
+    );
   });
 
   it('opts every line’s mark into the inline error surface, never a toast (SQ-777 F2)', () => {
@@ -188,9 +325,7 @@ describe('DaySheet', () => {
   };
   const openHandoff = async () => {
     await act(async () => {
-      await userEvent
-        .setup()
-        .click(screen.getByRole('link', { name: 'Open project file — Ridge House' }));
+      await userEvent.setup().click(screen.getByRole('link', { name: 'Open project file — Ridge House' }));
     });
   };
 
@@ -207,198 +342,145 @@ describe('DaySheet', () => {
   });
 
   it('a hand-off read that did not save stays on the sheet and says so (SQ-774 R7)', async () => {
-    // The mark is refused: no onSuccess, and the mutation reports its error.
-    const refused = renderSheet([handoff]);
-    await openHandoff();
-    expect(mockMutate).toHaveBeenCalledTimes(1);
-    expect(mockPush).not.toHaveBeenCalled();
-    refused.unmount();
-    mockSaveFailed = true;
+    mockMutate.mockImplementation((_vars, options) => options?.onError?.(new Error('refused')));
     renderSheet([handoff]);
+    await openHandoff();
+    expect(mockPush).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('The hand-off was not marked read. Try again.');
   });
+});
 
-  it('joins the job and its fact with one dash; the fact’s own dashes read as commas (walk W-D8)', () => {
-    const { container } = renderSheet([
-      entry(1, { text: '2 POs sent — no acknowledgment' }),
-    ]);
-    expect(lines(container)[0].querySelector('p')).toHaveTextContent(
-      /^Job 1 — 2 POs sent, no acknowledgment$/,
+describe('DaySheet — a line settles in place (U-Q2, U-Q11)', () => {
+  it('prints what was done and who the studio waits on, muted, with no foot', () => {
+    const invoice = entry(1, { kind: 'overdue_invoice', text: 'Invoice 1042 is $3,800 overdue' });
+    const { container } = renderSheet([invoice, entry(2)], {
+      states: new Map([state(invoice.key, { actedAt: at(8, 42), updatedAt: at(8, 42), waitingOn: 'Nora and Sam Holloway' })]),
+    });
+    const line = lineOf(container, invoice.key);
+    expect(line).toHaveClass('settled');
+    expect(line).toHaveTextContent(/^Reminder sent · waiting on Nora and Sam Holloway since 8:42$/);
+    expect(line.querySelector('.foot')).toBeNull();
+    expect(within(line).queryAllByRole('link')).toHaveLength(0);
+    expect(within(line).queryAllByRole('button')).toHaveLength(0);
+    // No slot refills: both lines keep their places.
+    expect(lines(container)).toHaveLength(2);
+    expect(container.textContent).not.toMatch(/✓|cleared|\d+ done/i);
+  });
+
+  it('offers Undo on her own “Not today”, which clears the state row', async () => {
+    const { container } = renderSheet([entry(1)], {
+      states: new Map([state('task_due:t1', { deferredUntil: '2026-10-12', updatedAt: at(9, 15) })]),
+    });
+    const line = lineOf(container, 'task_due:t1');
+    expect(line).toHaveTextContent(/^Not today · 9:15 · back Monday 12 October/);
+    await act(async () => {
+      await userEvent.setup().click(within(line).getByRole('button', { name: 'Undo — Job 1' }));
+    });
+    expect(mockMutate).toHaveBeenCalledWith(
+      { needKey: 'task_due:t1', engagementId: 'p1', action: 'clear' },
+      expect.objectContaining({ onError: expect.any(Function) }),
     );
   });
 
-  it('says nothing needs her once when empty, then what waits on others with dates', () => {
+  it('moves focus to the settled line’s Undo after her act, and says so once, politely', async () => {
+    const needs = [entry(1)];
+    const { container, rerender } = render(sheetElement(needs));
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Not today — Job 1' }));
+    });
+    // The state write lands: the read returns the row, and the line settles.
+    rerender(
+      sheetElement(needs, {
+        states: new Map([state('task_due:t1', { deferredUntil: '2026-10-12', updatedAt: at(10) })]),
+      }),
+    );
+    expect(within(lineOf(container, 'task_due:t1')).getByRole('button', { name: 'Undo — Job 1' })).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent('Job 1: Not today · 10:00 · back Monday 12 October');
+  });
+
+  it('a settled line read before today is not on Today: it is past, not settled', () => {
     const waiting = entry(1, { owner: 'maker' });
     const { container } = renderSheet([waiting], {
-      states: new Map([
-        [
-          waiting.key,
-          {
-            needKey: waiting.key,
-            projectId: 'p1',
-            deferredUntil: null,
-            actedAt: new Date(2026, 9, 3, 12).toISOString(),
-            waitingOn: 'Fenmoor Joinery',
-            setAsideUntil: null,
-            setAsideReason: null,
-          },
-        ],
-      ]),
+      states: new Map([state(waiting.key, { actedAt: new Date(2026, 9, 3, 12).toISOString(), waitingOn: 'Fenmoor Joinery' })]),
+    });
+    expect(lines(container)).toHaveLength(0);
+    // "With others" lives in the ledger now.
+    expect(container.textContent).not.toMatch(/Awaiting|Fenmoor/);
+  });
+});
+
+describe('DaySheet — whose move it is (U-Q4)', () => {
+  it('prints “The move is Jordan’s.” on a line she does not carry, with no act', () => {
+    const { container } = renderSheet([entry(1)], {}, { holderOf: () => JORDAN });
+    const line = lineOf(container, 'task_due:t1');
+    expect(line.querySelector('p')).toHaveTextContent(/^Task 1 is due The move is Jordan’s\.$/);
+    expect(within(line).queryAllByRole('link')).toHaveLength(0);
+    expect(within(line).queryAllByRole('button')).toHaveLength(0);
+    expect(line.querySelector('[data-register="act"]')).toBeNull();
+  });
+
+  it('Mine: a teammate’s act on her job is a fact on her line, and the line stays hers to act on', () => {
+    const { container } = renderSheet(
+      [entry(1)],
+      {
+        scope: 'mine',
+        leads: new Map([['p1', { leadUserId: 'me', leadName: 'Leah Warner' }]]) as never,
+        teammateActs: new Map([['task_due:t1', [{ userId: 'u-jordan', actedAt: at(9, 30) }]]]),
+      },
+      {
+        scope: 'mine',
+        holderOf: () => LEAH,
+        teammateActed: new Map([['task_due:t1', [{ userId: 'u-jordan', actedAt: at(9, 30) }]]]),
+        names: new Map([['u-jordan', 'Jordan Reyes']]),
+      },
+    );
+    const line = lineOf(container, 'task_due:t1');
+    expect(line).not.toHaveClass('settled');
+    expect(line.querySelector('[data-day-sheet-fact]')).toHaveTextContent(/^Jordan drafted this for you · 9:30$/);
+    expect(within(line).getByRole('link', { name: 'Open the task — Job 1' })).toBeInTheDocument();
+  });
+
+  it('The studio’s: the holder’s own act settles her teammate’s line, named, with no Undo and no fact', () => {
+    const { container } = renderSheet(
+      [entry(1)],
+      {
+        leads: new Map([['p1', { leadUserId: 'u-jordan', leadName: 'Jordan Reyes' }]]) as never,
+        teammateActs: new Map([['task_due:t1', [{ userId: 'u-jordan', actedAt: at(9, 30) }]]]),
+      },
+      {
+        scope: 'studio',
+        holderOf: () => JORDAN,
+        teammateActed: new Map([['task_due:t1', [{ userId: 'u-jordan', actedAt: at(9, 30) }]]]),
+        names: new Map([['u-jordan', 'Jordan Reyes']]),
+      },
+    );
+    const line = lineOf(container, 'task_due:t1');
+    expect(line).toHaveClass('settled');
+    expect(line).toHaveTextContent(/^Done by Jordan · waiting on Job 1 since 9:30$/);
+    expect(within(line).queryByRole('button', { name: /Undo/ })).toBeNull();
+    expect(line.querySelector('[data-day-sheet-fact]')).toBeNull();
+  });
+});
+
+describe('DaySheet — quiet', () => {
+  it('says nothing needs her once on an empty morning: the sentence is the headline and settle', () => {
+    const { container } = renderSheet([]);
+    expect(screen.getAllByText(NOTHING_NEEDS_YOU)).toHaveLength(1);
+    expect(screen.getByText(NOTHING_NEEDS_YOU)).toHaveAttribute('data-part', 'headline settle');
+    expect(container.querySelector('[data-part~="head"]')!.getAttribute('data-part')).toBe('head');
+  });
+
+  it('says nothing more needs her once every line in scope settled', () => {
+    renderSheet([entry(1)], {
+      states: new Map([state('task_due:t1', { actedAt: at(8, 42), updatedAt: at(8, 42) })]),
     });
     expect(screen.getAllByText(NOTHING_NEEDS_YOU_TONIGHT)).toHaveLength(1);
-    expect(lines(container)).toHaveLength(0);
-    expect(screen.getByText('Awaiting Fenmoor Joinery since 3 October')).toBeInTheDocument();
-  });
-
-  it('heads Today with the day in its eyebrow, the arrival head and settle (U-Q3)', () => {
-    const { container } = renderSheet([entry(1)]);
-    const head = container.querySelector<HTMLElement>('[data-part~="head"]')!;
-    expect(head).toHaveTextContent(/^Friday 9 October · Today$/);
-    expect(head.getAttribute('data-part')).toBe('head settle');
-    expect(head.tabIndex).toBe(-1);
-    expect(head.closest('h2')).not.toBeNull();
-    expect(screen.getByRole('region', { name: 'Friday 9 October · Today' })).toBe(
-      screen.getByTestId('day-sheet'),
-    );
-    // No salutation at rest: the eyebrow says what the day is.
-    expect(container.textContent).not.toMatch(/these need you/);
-  });
-
-  it('prints what waits on others and what comes back beside open lines, not only when quiet (F4)', () => {
-    const waiting = entry(1, { owner: 'maker' });
-    const putOff = entry(2);
-    const open = entry(3);
-    const { container } = renderSheet([waiting, putOff, open], {
-      states: new Map([
-        [
-          waiting.key,
-          {
-            needKey: waiting.key,
-            projectId: 'p1',
-            deferredUntil: null,
-            actedAt: new Date(2026, 9, 3, 12).toISOString(),
-            waitingOn: 'Fenmoor Joinery',
-            setAsideUntil: null,
-            setAsideReason: null,
-          },
-        ],
-        [
-          putOff.key,
-          {
-            needKey: putOff.key,
-            projectId: 'p2',
-            deferredUntil: nextWorkingDay(NOW),
-            actedAt: null,
-            waitingOn: null,
-            setAsideUntil: null,
-            setAsideReason: null,
-          },
-        ],
-      ]),
-    });
-    expect(lines(container)).toHaveLength(1);
-    expect(screen.getByRole('heading', { level: 3, name: 'Awaiting' })).toBeInTheDocument();
-    expect(screen.getByText('Awaiting Fenmoor Joinery since 3 October')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: 'Coming back' })).toBeInTheDocument();
-    expect(container.querySelector('[data-day-sheet-back="task_due:t2"]')).toHaveTextContent(
-      'Back Monday 12 October',
-    );
-    // F4 — the caption closes Today, after its blocks.
-    const sheet = screen.getByTestId('day-sheet');
-    expect(sheet.lastElementChild).toHaveTextContent(THE_REST);
-  });
-
-  it('heads the waiting block "Awaiting" (SQ-752)', () => {
-    const waiting = entry(1, { owner: 'maker' });
-    renderSheet([waiting], {
-      states: new Map([
-        [
-          waiting.key,
-          {
-            needKey: waiting.key,
-            projectId: 'p1',
-            deferredUntil: null,
-            actedAt: new Date(2026, 9, 3, 12).toISOString(),
-            waitingOn: 'Fenmoor Joinery',
-            setAsideUntil: null,
-            setAsideReason: null,
-          },
-        ],
-      ]),
-    });
-    expect(screen.getByRole('heading', { level: 3, name: 'Awaiting' })).toBeInTheDocument();
   });
 
   it('never says nothing needs her while a feed went unread', () => {
     renderSheet([], { unreadFeeds: ['purchase orders'] });
+    expect(screen.queryByText(NOTHING_NEEDS_YOU)).toBeNull();
     expect(screen.queryByText(NOTHING_NEEDS_YOU_TONIGHT)).toBeNull();
     expect(screen.getByText('Not checked: purchase orders.')).toBeInTheDocument();
-  });
-
-  it('carries no badge, dot or mark, and no colour of its own (Q1, monochrome)', () => {
-    const { container } = renderSheet(Array.from({ length: 6 }, (_, i) => entry(i + 1, { urgent: true })));
-    expect(
-      container.querySelector('[data-roster-mark], [data-mark-tone], [data-badge], [role="status"]'),
-    ).toBeNull();
-    for (const el of container.querySelectorAll('*')) {
-      // The eyebrow's strata ornament is the house section device, not a mark.
-      if (el.closest('[aria-hidden]')) continue;
-      const cls = el.className.toString();
-      expect(cls).not.toMatch(/\brounded-full\b|\bbg-(?!transparent)|terracotta|clay|sage|dusty/);
-      expect(el.getAttribute('style') ?? '').not.toMatch(/color/);
-    }
-  });
-
-  it('offers the scope as Mine · The studio’s', async () => {
-    const { onScope } = renderSheet([entry(1)]);
-    expect(screen.getByRole('group', { name: 'Whose projects' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'The studio’s' })).toHaveAttribute('aria-pressed', 'true');
-    await act(async () => {
-      await userEvent.setup().click(screen.getByRole('button', { name: 'Mine' }));
-    });
-    expect(onScope).toHaveBeenCalledWith('mine');
-  });
-
-  it('lands an act that opens its job where the job’s roster line lands, as the claim card did (R-DM21 A)', () => {
-    const job = (id: string) =>
-      ({
-        engagementId: id,
-        projectId: id,
-        stage: 'proposal',
-        jobHref: `/doc/${id}`,
-        needKind: null,
-        act: { label: 'Open the job', href: `/doc/${id}` },
-      }) as unknown as RosterLine;
-    const jobs = new Map([1, 2, 3, 4, 5].map((i) => [`p${i}`, job(`p${i}`)]));
-    const { container } = renderSheet(
-      [
-        entry(1, { deepLink: undefined }),
-        entry(2, { deepLink: undefined }),
-        entry(3),
-        entry(4, { deepLink: undefined, ledger: { name: 'accounts', context: {} } } as Partial<NeedLine>),
-      ],
-      {},
-      jobs,
-    );
-    const landingOf = (key: string, root: HTMLElement = container) =>
-      root
-        .querySelector(`[data-day-sheet-line="${key}"] [data-register="act"] a`)!
-        .getAttribute('data-landing');
-    const section = JSON.stringify({ kind: 'section', sectionKey: 'proposal' });
-
-    // The arrival's act (the top line) carries its landing, and so does every
-    // act that opens its job's own Document — each claim card's did.
-    expect(container.querySelector('[data-part~="act"]')!.getAttribute('data-landing')).toBe(section);
-    expect(landingOf('task_due:t1')).toBe(section);
-    expect(landingOf('task_due:t2')).toBe(section);
-    // A deep link into the paper, a ledger and an act sheet carry none.
-    expect(landingOf('task_due:t3')).toBeNull();
-    expect(landingOf('task_due:t4')).toBeNull();
-    const sheetAct = renderSheet(
-      [entry(5, { deepLink: undefined, kind: 'overdue_invoice', recordId: 'inv-5' } as Partial<NeedLine>)],
-      {},
-      jobs,
-    );
-    expect(landingOf('task_due:t5', sheetAct.container)).toBeNull();
   });
 });

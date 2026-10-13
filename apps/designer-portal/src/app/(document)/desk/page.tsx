@@ -288,7 +288,7 @@ export default function DeskPage() {
   // A quiet Desk (no live jobs at all) lets the Studio index rise to fill the
   // space — larger, and earlier in the composition — rather than sitting as
   // bottom front matter. Only known once the read resolves.
-  const deskEmpty = !!data && roster.liveCount === 0;
+  const deskEmpty = !!data && data.live.length === 0;
   // SQ-778 N3 — her seat (the invite note and its writer); handoffNoteFor
   // decides per job whether the note is that job's.
   const mySeat = studioMembers?.find((m) => m.user_id === user?.id) ?? null;
@@ -578,7 +578,7 @@ export default function DeskPage() {
           </div>
         </div>
       </section>
-    ) : deskEmpty && !data?.unreadFeeds?.length ? (
+    ) : deskEmpty && sheet.unchecked.length === 0 ? (
       <div data-tour-anchor="desk-needs-your-hand">
         <EmptyState eyebrow={dateLabel ? `${dateLabel} · Today` : 'Today'}>
           No project files yet. Record an inquiry or create a project file to begin.
@@ -634,20 +634,45 @@ export default function DeskPage() {
             <>{greetingWord}.</>
           )}
         </h1>
-        {/* No filled act on the Desk: both creates are secondary (F1). */}
+        {/* At 390 the header is two rows: Find on the greeting's, then the
+            creates. This Find stands only there, so focus follows the eye
+            at both widths; the wide one closes the acts' row. */}
+        <DocumentActionGroup
+          surfaceKey="desk"
+          regionKey="desk-find"
+          aria-label="Find"
+          className="min-[600px]:hidden"
+        >
+          <DocumentAction
+            actionKey="find-anything"
+            variant="tertiary"
+            leading="⌕"
+            aria-label="Find anything"
+            onClick={() => openCommandBar()}
+          >
+            Find
+          </DocumentAction>
+        </DocumentActionGroup>
+        {/* No filled act on the Desk: both creates are secondary (F1). At
+            390 each prints its short word; its name stays whole (2.5.3). */}
         <DocumentActionGroup
           surfaceKey="desk"
           regionKey="desk-head"
           aria-label="Desk actions"
+          className="max-[599px]:basis-full"
         >
           <DocumentAction
             actionKey="capture-lead"
             variant="secondary"
             leading="＋"
+            aria-label="Record an inquiry"
             data-tour-anchor="desk-capture-lead"
             onClick={() => setCaptureOpen(true)}
           >
-            Record an inquiry
+            <span className="max-[599px]:hidden">Record an inquiry</span>
+            <span aria-hidden="true" className="min-[600px]:hidden">
+              Inquiry
+            </span>
           </DocumentAction>
           {/* R79 — the quiet act beside capture: a project that skips the
               proposal (a repeat client, handshake work). */}
@@ -655,14 +680,19 @@ export default function DeskPage() {
             actionKey="open-project"
             variant="secondary"
             leading="＋"
+            aria-label="Create a project file"
             onClick={() => setOpenProjectOpen(true)}
           >
-            Create a project file
+            <span className="max-[599px]:hidden">Create a project file</span>
+            <span aria-hidden="true" className="min-[600px]:hidden">
+              Project
+            </span>
           </DocumentAction>
           <DocumentAction
             actionKey="find-anything"
             variant="tertiary"
             data-tour-anchor="desk-find-anything"
+            className="max-[599px]:hidden"
             onClick={() => openCommandBar()}
             trailing={
               // The ⌘K hint is for a fine pointer only.

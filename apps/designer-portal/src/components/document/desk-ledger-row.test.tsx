@@ -1,6 +1,12 @@
-import { render } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { RosterLine } from '@/lib/document/desk-roster-derivation';
 import { DeskLedgerRow, actLanding } from './desk-ledger-row';
+
+const mockMutate = jest.fn();
+jest.mock('@patina/supabase', () => ({
+  useSetNeedState: () => ({ mutate: mockMutate, isPending: false }),
+}));
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
@@ -53,11 +59,15 @@ describe('DeskLedgerRow — the roster line (US-25 slice 4)', () => {
     expect(container.querySelector('[style]')).toBeNull();
   });
 
-  it('carries the custody word under the name', () => {
+  it('sets the name on its stage’s 2 px tick, and prints no custody word (US-28 S3)', () => {
     const { container } = render(<DeskLedgerRow line={line({ custody: 'With Anneke' })} />);
     const nameCell = container.querySelector('[data-ledger-cell="name"]')!;
-    expect(nameCell).toHaveTextContent('Reinhardt lake house');
-    expect(nameCell).toHaveTextContent('With Anneke');
+    expect(nameCell).toHaveClass('tick', 'st-discovery');
+    expect(nameCell).toHaveTextContent(/^Reinhardt lake house$/);
+    expect(within(nameCell as HTMLElement).getByRole('link', { name: 'Reinhardt lake house' })).toHaveAttribute(
+      'href',
+      '/doc/reinhardt',
+    );
   });
 
   it('prints the head need’s sentence, its overdue form first', () => {
@@ -143,6 +153,129 @@ describe('DeskLedgerRow — the roster line (US-25 slice 4)', () => {
   it('lands a return on the line’s own anchor', () => {
     const { container } = render(<DeskLedgerRow line={line()} />);
     expect(container.querySelector('#roster-line-reinhardt')).not.toBeNull();
+  });
+});
+
+describe('DeskLedgerRow — standing (US-28 S3 change 2)', () => {
+  const need = { needKind: 'po_unacknowledged', needKey: 'po_unacknowledged:po-1', needText: 'Fabric samples, not yet opened' } as const;
+  const actCell = (container: HTMLElement) => container.querySelector('[data-ledger-cell="act"]')!;
+
+  beforeEach(() => mockMutate.mockReset());
+
+  it('a row with others reads “waiting on {who} since {day}”, with no act', () => {
+    const { container } = render(
+      <DeskLedgerRow line={line(need)} standing="others" waiting={{ who: 'Mae Halloran', since: '2026-10-06' }} />,
+    );
+    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+      /^Fabric samples, not yet opened · waiting on Mae Halloran$/,
+    );
+    expect(container.querySelector('[data-ledger-cell="value"]')).toHaveTextContent(/^Since Tue 6 Oct$/);
+    expect(actCell(container).childElementCount).toBe(0);
+  });
+
+  it('a row coming back reads “Back {day}”, with no act', () => {
+    const { container } = render(
+      <DeskLedgerRow
+        line={line(need)}
+        standing="back"
+        back={{ until: '2026-10-16', reason: 'waiting on the Chens’ bench decision' }}
+      />,
+    );
+    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+      'Fabric samples, not yet opened · waiting on the Chens’ bench decision',
+    );
+    expect(container.querySelector('[data-ledger-cell="value"]')).toHaveTextContent(/^Back Fri 16 Oct$/);
+    expect(actCell(container).childElementCount).toBe(0);
+  });
+
+  it('a row settled today prints muted, in place, and carries no act', () => {
+    const at = new Date(2026, 9, 12, 14, 40).toISOString();
+    const { container } = render(
+      <DeskLedgerRow
+        line={line({ ...need, needKind: 'new_lead', needText: 'Replied' })}
+        standing="settled"
+        settled={{ kind: 'acted', at, who: 'Ainsley Moore' }}
+      />,
+    );
+    const row = container.querySelector('[data-ledger-row]')!;
+    expect(row).toHaveClass('lrow', 'settled');
+    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+      /^Replied · waiting on Ainsley Moore since 2:40$/,
+    );
+    expect(actCell(container).childElementCount).toBe(0);
+  });
+
+  it('her own “Not today”, settled today, offers Undo, which clears the state row', async () => {
+    const at = new Date(2026, 9, 12, 16, 15).toISOString();
+    const { container } = render(
+      <DeskLedgerRow
+        line={line({ ...need, projectId: 'p-reinhardt' })}
+        standing="settled"
+        settled={{ kind: 'not_today', at, until: '2026-10-13' }}
+      />,
+    );
+    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+      /^Not today · 4:15 · back Tue 13 Oct$/,
+    );
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Undo — Reinhardt lake house' }));
+    });
+    expect(mockMutate).toHaveBeenCalledWith(
+      { needKey: 'po_unacknowledged:po-1', engagementId: 'p-reinhardt', action: 'clear' },
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
+  });
+
+  it('says so in the row when Undo did not save', async () => {
+    mockMutate.mockImplementation((_vars, options) => options?.onError?.(new Error('refused')));
+    render(
+      <DeskLedgerRow
+        line={line(need)}
+        standing="settled"
+        settled={{ kind: 'set_aside', at: new Date().toISOString(), until: '2026-10-16' }}
+      />,
+    );
+    await act(async () => {
+      await userEvent.setup().click(screen.getByRole('button', { name: /^Undo — / }));
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Undo did not save. Try again.');
+  });
+
+  it('a teammate’s settled deferral offers her no Undo', () => {
+    const { container } = render(
+      <DeskLedgerRow
+        line={line(need)}
+        standing="settled"
+        settled={{ kind: 'not_today', at: new Date().toISOString(), until: '2026-10-13', by: 'u-jordan' }}
+      />,
+    );
+    expect(actCell(container).childElementCount).toBe(0);
+  });
+
+  it('a row she does not carry prints whose move it is, with no act', () => {
+    const { container } = render(
+      <DeskLedgerRow
+        line={line({ ...need, act: { label: 'Chase the maker', href: '/doc/reinhardt' } })}
+        standing="yours"
+        holder={{ userId: 'u-jordan', name: 'Jordan', mine: false }}
+      />,
+    );
+    expect(container.querySelector('[data-ledger-cell="sentence"]')).toHaveTextContent(
+      /^Fabric samples, not yet opened The move is Jordan’s.$/,
+    );
+    expect(actCell(container).childElementCount).toBe(0);
+  });
+
+  it('a row she carries keeps its one act', () => {
+    const { container } = render(
+      <DeskLedgerRow
+        line={line({ ...need, act: { label: 'Chase the maker', href: '/doc/reinhardt' } })}
+        standing="yours"
+        holder={{ userId: 'me', name: 'Leah', mine: true }}
+      />,
+    );
+    expect(within(actCell(container) as HTMLElement).getByRole('link', { name: 'Chase the maker — Reinhardt lake house' }))
+      .toBeInTheDocument();
   });
 });
 
