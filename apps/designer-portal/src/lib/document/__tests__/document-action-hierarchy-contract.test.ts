@@ -57,7 +57,6 @@ describe("I91 shared action grammar", () => {
 
   it("keeps one static primary in each stable page-head and form region", () => {
     [
-      actionRegion(desk, "desk-head"),
       actionRegion(desk, "desk-error"),
       actionRegion(letterhead, "letterhead-actions"),
       actionRegion(letterhead, "letterhead-message", "DocumentActionRow"),
@@ -67,6 +66,10 @@ describe("I91 shared action grammar", () => {
       actionRegion(captureLead, "capture-lead-sheet"),
       actionRegion(invoiceComposer, "invoice-draft-error"),
     ].forEach(expectOneStaticPrimary);
+  });
+
+  it("leaves the Desk head with no filled act (US-28 S0 F1, U-Q3: Record an inquiry is secondary)", () => {
+    expect(actionRegion(desk, "desk-head").match(/variant="primary"/g) ?? []).toHaveLength(0);
   });
 
   it("keeps proposal-watch leadership mutually exclusive", () => {
