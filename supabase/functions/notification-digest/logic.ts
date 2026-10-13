@@ -47,18 +47,21 @@ export function mergeDigestItems(
   return merged;
 }
 
-/** Keep each scheduled digest attributable to exactly one studio. */
-export function groupDigestItemsByStudio(
+export const PROJECT_LOOKUP_COLUMNS = "id, studio_id, designer_id";
+
+/** Keep each scheduled digest attributable to exactly one project and studio. */
+export function groupDigestItemsByProject(
   items: ReminderDigestItem[],
   studioByProject: ReadonlyMap<string, string>,
-): Map<string, ReminderDigestItem[]> {
-  const grouped = new Map<string, ReminderDigestItem[]>();
+): Map<string, { studioId: string; items: ReminderDigestItem[] }> {
+  const grouped = new Map<string, { studioId: string; items: ReminderDigestItem[] }>();
   for (const item of items) {
-    const studioId = item.projectId ? studioByProject.get(item.projectId) : null;
-    if (!studioId) continue;
-    const studioItems = grouped.get(studioId) ?? [];
-    studioItems.push(item);
-    grouped.set(studioId, studioItems);
+    const projectId = item.projectId;
+    const studioId = projectId ? studioByProject.get(projectId) : null;
+    if (!projectId || !studioId) continue;
+    const projectGroup = grouped.get(projectId) ?? { studioId, items: [] };
+    projectGroup.items.push(item);
+    grouped.set(projectId, projectGroup);
   }
   return grouped;
 }

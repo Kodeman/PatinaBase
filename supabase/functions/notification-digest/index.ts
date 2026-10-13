@@ -33,7 +33,8 @@ import {
   digestCategoryForDecision,
   type DigestPeriod,
   digestWindowStart,
-  groupDigestItemsByStudio,
+  PROJECT_LOOKUP_COLUMNS,
+  groupDigestItemsByProject,
   type DirectDecisionMailRow,
   directlyMailedDecisionIds,
   directMailWindowStart,
@@ -362,7 +363,7 @@ async function dispatchReminderDigests(
           item.projectId ? [item.projectId] : []
         ))];
         const { data: projects, error: projectsError } = projectIds.length
-          ? await supabase.from("projects").select("id, organization_id, designer_id").in(
+          ? await supabase.from("projects").select(PROJECT_LOOKUP_COLUMNS).in(
             "id",
             projectIds,
           )
@@ -375,14 +376,14 @@ async function dispatchReminderDigests(
         }
         const studioByProject = new Map(
           (projects ?? []).flatMap((project) =>
-            project.organization_id
-              ? [[project.id, project.organization_id] as const]
+            project.studio_id
+              ? [[project.id, project.studio_id] as const]
               : []
           ),
         );
-        const groupedItems = groupDigestItemsByStudio(items, studioByProject);
+        const groupedItems = groupDigestItemsByProject(items, studioByProject);
         const attributableCount = [...groupedItems.values()].reduce(
-          (total, studioItems) => total + studioItems.length,
+          (total, projectGroup) => total + projectGroup.items.length,
           0,
         );
         if (attributableCount < items.length) {
@@ -396,16 +397,17 @@ async function dispatchReminderDigests(
           continue;
         }
 
-        const designerByStudio = new Map(
+        const designerByProject = new Map(
           (projects ?? []).flatMap((project) =>
-            project.organization_id && project.designer_id
-              ? [[project.organization_id, project.designer_id] as const]
+            project.studio_id && project.designer_id
+              ? [[project.id, project.designer_id] as const]
               : []
           ),
         );
-        for (const [studioId, studioItems] of groupedItems) {
+        for (const [projectId, projectGroup] of groupedItems) {
+          const { studioId, items: projectItems } = projectGroup;
           const { subject } = buildReminderDigestEmail(
-            studioItems,
+            projectItems,
             CLIENT_PORTAL_URL,
             pref.timezone,
             period,
@@ -416,6 +418,7 @@ async function dispatchReminderDigests(
             .eq("organization_id", studioId)
             .eq("ref_type", "client")
             .eq("ref_id", pref.user_id)
+            .eq("project_id", projectId)
             .eq("kind", "client_digest")
             .eq("status", "awaiting_review");
           if (priorError) throw priorError;
@@ -425,10 +428,8 @@ async function dispatchReminderDigests(
               ? payload.digest_items as ReminderDigestItem[]
               : [];
           });
-          const carriedDigestItems = mergeDigestItems(carriedItems, studioItems);
-          const projectId = carriedDigestItems.find((item) => item.projectId)
-            ?.projectId ?? null;
-          const designerId = designerByStudio.get(studioId);
+          const carriedDigestItems = mergeDigestItems(carriedItems, projectItems);
+          const designerId = designerByProject.get(projectId);
           const { data: designer } = designerId
             ? await supabase.from("profiles").select("email").eq("id", designerId).maybeSingle()
             : { data: null };
@@ -457,7 +458,7 @@ async function dispatchReminderDigests(
               },
               p_ref_type: "client",
               p_ref_id: pref.user_id,
-              p_dedupe_key: `digest:${pref.user_id}:${studioId}:${sinceIso}`,
+              p_dedupe_key: `digest:${pref.user_id}:${studioId}:${projectId}:${sinceIso}`,
               p_due_at: null,
               p_expires_at: null,
               p_composed_by: "system",

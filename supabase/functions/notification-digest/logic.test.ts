@@ -13,7 +13,8 @@ import {
   decisionDigestTitle,
   digestCategoryForDecision,
   digestWindowStart,
-  groupDigestItemsByStudio,
+  groupDigestItemsByProject,
+  PROJECT_LOOKUP_COLUMNS,
   directlyMailedDecisionIds,
   directMailWindowStart,
   dropDecisionsPastOverdue,
@@ -29,19 +30,28 @@ import { clientDecisionLink } from "../_shared/client-portal-links.ts";
 
 const NOW = new Date("2026-07-07T15:00:00Z");
 
-Deno.test("digest items split into their owning studio, excluding orphans", () => {
+Deno.test("digest drafts partition by project and studio, excluding orphans", () => {
+  // The project mock contains only real columns; selecting organization_id
+  // would fail against this schema and the lookup would leave every item orphaned.
+  const projectMock = [
+    { id: "p1", studio_id: "studio-a", designer_id: "designer-a" },
+    { id: "p2", studio_id: "studio-a", designer_id: "designer-a" },
+    { id: "p3", studio_id: "studio-b", designer_id: "designer-b" },
+  ];
+  assertEquals(PROJECT_LOOKUP_COLUMNS, "id, studio_id, designer_id");
   const items: ReminderDigestItem[] = [
     { category: "proposal", title: "A", link: null, projectId: "p1" },
     { category: "choice", title: "B", link: null, projectId: "p2" },
-    { category: "approval", title: "C", link: null, projectId: "orphan" },
+    { category: "approval", title: "C", link: null, projectId: "p3" },
+    { category: "approval", title: "Orphan", link: null, projectId: "missing" },
+    { category: "approval", title: "No project", link: null },
   ];
-  const grouped = groupDigestItemsByStudio(
-    items,
-    new Map([["p1", "studio-a"], ["p2", "studio-b"]]),
-  );
-  assertEquals([...grouped.keys()], ["studio-a", "studio-b"]);
-  assertEquals(grouped.get("studio-a")?.map((item) => item.title), ["A"]);
-  assertEquals(grouped.get("studio-b")?.map((item) => item.title), ["B"]);
+  const studioByProject = new Map(projectMock.map(({ id, studio_id }) => [id, studio_id]));
+  const grouped = groupDigestItemsByProject(items, studioByProject);
+  assertEquals([...grouped.keys()], ["p1", "p2", "p3"]);
+  assertEquals(grouped.get("p1"), { studioId: "studio-a", items: [items[0]] });
+  assertEquals(grouped.get("p2"), { studioId: "studio-a", items: [items[1]] });
+  assertEquals(grouped.get("p3"), { studioId: "studio-b", items: [items[2]] });
 });
 
 Deno.test("new digest carries unsent items forward without duplicating current items", () => {
