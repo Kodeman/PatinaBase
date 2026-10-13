@@ -243,6 +243,7 @@ function createGateway(authorization: string): ProposalSendGateway {
       const result = await prepareCompliantEmail(admin, {
         to: input.dispatch.recipientEmail,
         cc: input.dispatch.ccEmail,
+        authority: { kind: "designer", userId: input.dispatch.designerId },
         subject: input.subject,
         html: input.html,
         userId: input.dispatch.clientId,
