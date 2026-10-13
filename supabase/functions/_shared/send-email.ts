@@ -6,6 +6,8 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
 import { htmlToText } from "./html-to-text.ts";
+import { authorityLabel } from "./send-authority.ts";
+import type { SendAuthority } from "./send-authority.ts";
 
 export type SendCategory =
   | "transactional"
@@ -19,6 +21,7 @@ export interface EmailAttachment {
 }
 
 export interface ComplianceSendOptions {
+  authority: SendAuthority;
   to: string;
   subject: string;
   html: string;
@@ -636,6 +639,7 @@ export async function sendCompliantEmail(
         to: options.to,
         subject: options.subject,
         category: options.category,
+        authority: authorityLabel(options.authority),
         userId: options.userId,
         templateId: options.templateId,
         attachments: options.attachments?.map((attachment) =>
@@ -676,6 +680,7 @@ export async function sendCompliantEmail(
         ref_id: ref?.id,
         recipient: effectiveRecipient(options.to),
         metadata: { reason: prepared.reason, ...options.metadata },
+        send_authority: options.authority,
       });
       if (error) {
         console.error("[send-email] notification_log insert failed", error);
@@ -698,6 +703,7 @@ export async function sendCompliantEmail(
         ref_id: ref?.id,
         recipient: prepared.request.to[0],
         metadata: options.metadata ?? {},
+        send_authority: options.authority,
       })
       .select("id")
       .single();

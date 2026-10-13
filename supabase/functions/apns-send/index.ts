@@ -40,6 +40,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { importPKCS8, SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
+import type { SendAuthority } from "../_shared/send-authority.ts";
 import {
   type AddressedToken,
   addressTokens,
@@ -218,7 +219,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  let input: ApnsSendInput;
+  let input: ApnsSendInput & { authority?: SendAuthority };
   try {
     input = await req.json();
   } catch {
@@ -235,6 +236,7 @@ Deno.serve(async (req) => {
   if (!audience) {
     return json({ error: "audience must be 'app' or 'field'" }, 400);
   }
+  console.log("[apns-send] send authority", input.authority ?? { kind: "unlabelled" });
 
   // ── Not configured yet → skip cleanly (never error the SQL caller) ────────
   const authKey = Deno.env.get("APNS_AUTH_KEY");
@@ -379,6 +381,7 @@ Deno.serve(async (req) => {
             status: "delivered",
             provider_id: providerId,
             sent_at: new Date().toISOString(),
+            send_authority: input.authority ?? { kind: "unlabelled" },
           })
           .eq("id", input.notification_log_id);
       } else {
@@ -386,6 +389,7 @@ Deno.serve(async (req) => {
           .from("notification_log")
           .update({
             status: "failed",
+            send_authority: input.authority ?? { kind: "unlabelled" },
             error: `apns: 0/${targets.length} accepted — ${
               failures.map((f) =>
                 `${f.status}${f.reason ? `:${f.reason}` : ""}`

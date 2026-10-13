@@ -73,6 +73,7 @@ function complianceClient(options: {
 }
 
 const emailOptions = {
+  authority: { kind: "exempt", reason: "internal" } as const,
   to: "client@test.invalid",
   subject: "Proposal ready",
   html: "<p>Ready</p>",
@@ -483,6 +484,7 @@ Deno.test("the notification_log insert stamps ref_type, ref_id and recipient", a
   assertEquals(captured.insert?.ref_type, "invoice");
   assertEquals(captured.insert?.ref_id, "20000000-0000-4000-8000-000000000002");
   assertEquals(captured.insert?.recipient, "client@test.invalid");
+  assertEquals(captured.insert?.send_authority, { kind: "exempt", reason: "internal" });
 });
 
 Deno.test("a ref-stamped send with no userId still logs, with a null user_id", async () => {

@@ -49,6 +49,7 @@
 // injectable so the module unit-tests without a live stack or wall clock.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SendAuthority } from "./send-authority.ts";
 import { interpolate } from "./render-template.ts";
 import { captureServerEvent } from "./aesthete-events.ts";
 import {
@@ -73,6 +74,7 @@ export interface SmsDeps {
 export type SendPartySmsInput = OrdinarySmsInput | SelectionSmsInput;
 
 export interface OrdinarySmsInput {
+  authority: SendAuthority;
   kind?: "party";
   selection?: never;
   /** Preferred: resolve phone + consent + project from the party row. */
@@ -1333,6 +1335,7 @@ export interface SendRecipe {
 }
 
 interface OutboundRow {
+  send_authority: SendAuthority;
   conversation_id: string | null;
   body: string;
   twilio_sid: string | null;
@@ -1619,7 +1622,7 @@ async function partyPromptGate(
 // ── The send path ───────────────────────────────────────────────────────────
 export async function sendPartySms(
   supabase: SupabaseClient,
-  input: SendPartySmsInput,
+  input: SendPartySmsInput & { authority: SendAuthority },
   deps: SmsDeps = {},
 ): Promise<SendPartySmsResult> {
   if (input.kind !== "selection") return await sendPartySmsCore(supabase, input, deps);
@@ -1632,6 +1635,7 @@ export async function sendPartySms(
   const checked = await validateSmsSelection(supabase, input.selection, input.phone, sender, deps.now ?? new Date());
   if (!checked.ok) return { sent: false, status: "failed", reason: checked.reason };
   const result = await sendPartySmsCore(supabase, {
+    authority: input.authority,
     phone: input.phone, templateKey: SELECTION_TEMPLATE,
     dedupeKey: selectionDedupeKey(input.selection.inboundMessageId, input.selection.kind),
     automationPhase: input.automationPhase,
@@ -2020,6 +2024,7 @@ async function sendPartySmsCore(
     }
 
     const claim = await insertOutbound(supabase, {
+      send_authority: input.authority,
       conversation_id: convId,
       body: previewBody,
       twilio_sid: null,
@@ -2090,6 +2095,7 @@ async function sendPartySmsCore(
 
   // ── Claim the logical send BEFORE the provider is called ──────────────────
   const claim = await insertOutbound(supabase, {
+    send_authority: input.authority,
     conversation_id: convId,
     body: auditBody,
     twilio_sid: null,
@@ -2348,6 +2354,7 @@ interface FlushRow {
  */
 export async function flushDeferredMessages(
   supabase: SupabaseClient,
+  authority: SendAuthority,
   deps: SmsDeps = {},
 ): Promise<
   { flushed: number; skipped: number; suppressed?: number; expired?: number }
@@ -2778,6 +2785,7 @@ export async function flushDeferredMessages(
         const rendered = await resolveBody(
           supabase,
           {
+            authority,
             partyId: recipe.party_id ?? row.party_id ?? undefined,
             projectId: recipe.project_id ?? deferredProjectId ?? undefined,
             templateKey: recipe.template_key,
@@ -2891,7 +2899,10 @@ export async function flushDeferredMessages(
       .from("sms_messages")
       .update({ body: redactFieldLinkTokens(sendBody) })
       .eq("id", row.id);
-    const settle: Record<string, unknown> = { twilio_status: twilioStatus };
+    const settle: Record<string, unknown> = {
+      twilio_status: twilioStatus,
+      send_authority: authority,
+    };
     if (providerCode) settle.error_code = providerCode;
     // Monotonic (contract S5), exactly as sendPartySms settles: a delivery
     // callback that landed while the provider call was in flight is newer than

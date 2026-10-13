@@ -32,6 +32,9 @@ jobs:
           if [[ "$BASE_SHA" =~ ^0+$ ]]; then BASE_SHA=HEAD^; fi
           node scripts/hooks/patina-hooks.mjs policy --base "$BASE_SHA" --head HEAD --strict
 
+      - name: Check outbound send authority chokepoints
+        run: node scripts/policy/check-send-authority.mjs
+
       - name: Test the policy engine
         run: node --test scripts/hooks/*.test.mjs
 
