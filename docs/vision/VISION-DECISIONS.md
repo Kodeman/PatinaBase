@@ -549,6 +549,7 @@ These are side journeys from the studio buying review (`artifacts/procurement-bu
 **Ruled beyond the recommendation (2):**
 - **U-Q17:** the board room takes the full uplift, **canvas included**: canvas items, zones and tools join the house system, not only the chrome.
 - **U-Q18:** the spec book takes the **full uplift now**, not only a token pass.
+  - **Grouping (Kody, 2026-10-12):** the spec book is organised in **real trade chapters**, seeded from each piece's FF&E category. The screen and the issued editions both read by trade. The room stays a fact on each row. This was chosen over keeping room chapters and over trade on screen only, and it needs a migration (00767).
 
 Both start with a design spike: specimens, then the build.
 
