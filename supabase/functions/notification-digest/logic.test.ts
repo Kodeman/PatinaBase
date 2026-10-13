@@ -22,6 +22,7 @@ import {
   isDigestDue,
   isReminderDigestDue,
   isSundayLocal,
+  mergeDigestItems,
   type ReminderDigestItem,
 } from "./logic.ts";
 import { clientDecisionLink } from "../_shared/client-portal-links.ts";
@@ -41,6 +42,22 @@ Deno.test("digest items split into their owning studio, excluding orphans", () =
   assertEquals([...grouped.keys()], ["studio-a", "studio-b"]);
   assertEquals(grouped.get("studio-a")?.map((item) => item.title), ["A"]);
   assertEquals(grouped.get("studio-b")?.map((item) => item.title), ["B"]);
+});
+
+Deno.test("new digest carries unsent items forward without duplicating current items", () => {
+  const older: ReminderDigestItem[] = [
+    { category: "proposal", title: "Earlier", link: "/earlier", projectId: "p1" },
+    { category: "choice", title: "Still open", link: "/choice", decisionId: "d1" },
+  ];
+  const newer: ReminderDigestItem[] = [
+    { category: "choice", title: "Still open", link: "/choice", decisionId: "d1" },
+    { category: "approval", title: "New", link: "/new", decisionId: "d2" },
+  ];
+  assertEquals(mergeDigestItems(older, newer), [
+    older[0],
+    older[1],
+    newer[1],
+  ]);
 });
 
 Deno.test("isReminderDigestDue: true when never sent", () => {

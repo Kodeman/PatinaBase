@@ -24,7 +24,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendCompliantEmail } from "../_shared/send-email.ts";
+import { sendOutboundDraft } from "../_shared/outbound-send.ts";
 import {
   artifactCitationsForDigest,
   buildReminderDigestEmail,
@@ -41,6 +41,7 @@ import {
   dropDirectlyMailedDecisions,
   dropSnoozedDecisions,
   isDigestDue,
+  mergeDigestItems,
   type ReminderDigestItem,
 } from "./logic.ts";
 import { isSnoozeActive } from "../_shared/decision-notify.ts";
@@ -361,7 +362,7 @@ async function dispatchReminderDigests(
           item.projectId ? [item.projectId] : []
         ))];
         const { data: projects, error: projectsError } = projectIds.length
-          ? await supabase.from("projects").select("id, organization_id").in(
+          ? await supabase.from("projects").select("id, organization_id, designer_id").in(
             "id",
             projectIds,
           )
@@ -395,50 +396,99 @@ async function dispatchReminderDigests(
           continue;
         }
 
-        let allSent = true;
+        const designerByStudio = new Map(
+          (projects ?? []).flatMap((project) =>
+            project.organization_id && project.designer_id
+              ? [[project.organization_id, project.designer_id] as const]
+              : []
+          ),
+        );
         for (const [studioId, studioItems] of groupedItems) {
-          const { subject, html } = buildReminderDigestEmail(
+          const { subject } = buildReminderDigestEmail(
             studioItems,
             CLIENT_PORTAL_URL,
             pref.timezone,
             period,
           );
-          const result = await sendCompliantEmail(supabase, {
-            authority: {
+          const { data: priorDrafts, error: priorError } = await supabase
+            .from("outbound_drafts")
+            .select("payload")
+            .eq("organization_id", studioId)
+            .eq("ref_type", "client")
+            .eq("ref_id", pref.user_id)
+            .eq("kind", "client_digest")
+            .eq("status", "awaiting_review");
+          if (priorError) throw priorError;
+          const carriedItems = (priorDrafts ?? []).flatMap((draft) => {
+            const payload = draft.payload as Record<string, unknown> | null;
+            return Array.isArray(payload?.digest_items)
+              ? payload.digest_items as ReminderDigestItem[]
+              : [];
+          });
+          const carriedDigestItems = mergeDigestItems(carriedItems, studioItems);
+          const projectId = carriedDigestItems.find((item) => item.projectId)
+            ?.projectId ?? null;
+          const designerId = designerByStudio.get(studioId);
+          const { data: designer } = designerId
+            ? await supabase.from("profiles").select("email").eq("id", designerId).maybeSingle()
+            : { data: null };
+          const { data: draftId, error: composeError } = await supabase.rpc(
+            "compose_outbound_draft",
+            {
+              p_kind: "client_digest",
+              p_org: studioId,
+              p_project: projectId,
+              p_channel: "email",
+              p_recipient_kind: "client",
+              p_to: { client_id: pref.user_id, address: profile.email },
+              p_subject: subject,
+              p_body: carriedDigestItems.map((item) => item.title).join("\n"),
+              p_payload: {
+                user_id: pref.user_id,
+                reply_to: designer?.email ?? null,
+                client_portal_url: CLIENT_PORTAL_URL,
+                digest_items: carriedDigestItems,
+                digest_period_start: sinceIso,
+                digest_period: period,
+                time_zone: pref.timezone,
+                watermark_at: now.toISOString(),
+                item_count: carriedDigestItems.length,
+                artifactCitations: artifactCitationsForDigest(carriedDigestItems),
+              },
+              p_ref_type: "client",
+              p_ref_id: pref.user_id,
+              p_dedupe_key: `digest:${pref.user_id}:${studioId}:${sinceIso}`,
+              p_due_at: null,
+              p_expires_at: null,
+              p_composed_by: "system",
+            },
+          );
+          if (composeError || !draftId) {
+            throw composeError ?? new Error("draft composition returned no id");
+          }
+
+          const { data: reviewActive, error: rolloutError } = await supabase.rpc(
+            "outbound_review_active",
+            { p_studio: studioId },
+          );
+          const { data: mode, error: modeError } = await supabase.rpc(
+            "studio_outbound_mode",
+            { p_studio: studioId, p_kind: "client_digest" },
+          );
+          if (rolloutError) throw rolloutError;
+          if (modeError) throw modeError;
+          if (!reviewActive || mode === "scheduled") {
+            const result = await sendOutboundDraft(supabase, draftId, {
               kind: "studio_schedule",
               studioId,
               outboundKind: "client_digest",
-            },
-            to: profile.email as string,
-            subject,
-            html,
-            userId: pref.user_id,
-            notificationType: "reminder_digest",
-            category: "operational",
-            templateId: "reminder-digest",
-            metadata: {
-              item_count: studioItems.length,
-              artifactCitations: artifactCitationsForDigest(studioItems),
-            },
-            unsubscribeBaseUrl: CLIENT_PORTAL_URL,
-          });
-
-          if (result.success) {
-            stats.sent++;
-          } else if (result.suppressed) {
-            allSent = false;
-            stats.skipped++;
-          } else {
-            allSent = false;
-            stats.errors++;
+            });
+            if (result.ok) stats.sent++;
+            else {
+              stats.errors++;
+              console.error("[notification-digest] draft send failed", result.error);
+            }
           }
-        }
-
-        if (allSent) {
-          await supabase
-            .from("notification_preferences")
-            .update({ last_reminder_digest_sent_at: now.toISOString() })
-            .eq("user_id", pref.user_id);
         }
       } catch (err) {
         console.error(

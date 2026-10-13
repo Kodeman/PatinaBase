@@ -136,7 +136,7 @@ BEGIN
   END IF;
   UPDATE public.outbound_drafts
      SET status = 'superseded'
-   WHERE id <> v_id AND ref_type = p_ref_type AND ref_id = p_ref_id AND kind = p_kind
+   WHERE id <> v_id AND organization_id = p_org AND ref_type = p_ref_type AND ref_id = p_ref_id AND kind = p_kind
      AND status = 'awaiting_review';
   RETURN v_id;
 END;

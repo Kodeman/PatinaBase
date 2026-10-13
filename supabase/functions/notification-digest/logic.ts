@@ -31,6 +31,22 @@ export interface ReminderDigestItem {
   artifact?: ApprovalArtifactCitation | null;
 }
 
+/** Carry every item from an unsent edition into its successor without repeats. */
+export function mergeDigestItems(
+  older: readonly ReminderDigestItem[],
+  newer: readonly ReminderDigestItem[],
+): ReminderDigestItem[] {
+  const merged: ReminderDigestItem[] = [];
+  const seen = new Set<string>();
+  for (const item of [...older, ...newer]) {
+    const key = JSON.stringify(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  return merged;
+}
+
 /** Keep each scheduled digest attributable to exactly one studio. */
 export function groupDigestItemsByStudio(
   items: ReminderDigestItem[],
@@ -409,6 +425,7 @@ export function buildReminderDigestEmail(
   timeZone?: string | null,
   /** Which cadence this summary is for; daily unless she asked for Sunday. */
   period: DigestPeriod = "daily",
+  bodyOverride?: string,
 ): RenderedDigest {
   const zone = timeZone?.trim() || DEFAULT_TIME_ZONE;
   const count = items.length;
@@ -452,7 +469,9 @@ export function buildReminderDigestEmail(
     paragraph(
       count === 1 ? "One thing is waiting for you." : "A few things are waiting for you.",
     ) +
-    (sections || paragraph("Nothing new right now.")) +
+    (bodyOverride === undefined
+      ? (sections || paragraph("Nothing new right now."))
+      : paragraph(escapeHtml(bodyOverride).replace(/\r?\n/g, "<br>"))) +
     spacer(6) +
     ctaButton(baseUrl, "Open Patina") +
     spacer(10) +
