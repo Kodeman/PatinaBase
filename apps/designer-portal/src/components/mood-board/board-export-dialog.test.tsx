@@ -75,6 +75,10 @@ describe('BoardExportDialog', () => {
       />,
     );
 
+    // PNG waits for its measured plan (SQ-876).
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Board composition · PNG/ })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole('button', { name: /Board composition · PNG/ }));
     await waitFor(() => expect(exportPng).toHaveBeenCalled());
     expect(calls).toEqual(['flush', 'png']);

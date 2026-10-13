@@ -100,6 +100,9 @@ export function BoardExportDialog({
   // promises dimensions the raster will not have (SQ-865).
   const [pngPlan, setPngPlan] = useState<MoodBoardPngExportPlan | null>(null);
   useEffect(() => {
+    // A plan belongs to one input: drop it the moment the board changes, so
+    // the dialog never promises (or exports under) the last board's size.
+    setPngPlan(null);
     if (!open) return;
     let current = true;
     void measureMoodBoardPngExportPlan(input).then((plan) => {
@@ -205,7 +208,7 @@ export function BoardExportDialog({
           <button
             type="button"
             onClick={exportPng}
-            disabled={busy !== null}
+            disabled={busy !== null || !pngPlan}
             className="br-export-option"
           >
             <span className="font-heading text-[14px] text-[var(--text-primary)]">Board composition · PNG</span>

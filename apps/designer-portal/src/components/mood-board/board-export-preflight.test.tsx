@@ -1,5 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { renderMoodBoardPng, type MoodBoardPainterContext } from '@patina/design-system';
+import {
+  MOOD_BOARD_FONT_WAIT_MS,
+  renderMoodBoardPng,
+  type MoodBoardPainterContext,
+} from '@patina/design-system';
 import { getMoodBoardPngExportPlan } from '@/lib/mood-board-assets/export-board';
 import { BoardExportDialog } from './board-export-dialog';
 
@@ -137,6 +141,73 @@ describe('the PNG preflight waits for the fonts the painter waits for (SQ-865 F4
     expect(raster.height).toBeGreaterThan(fallback.height);
     // … and the dialog promised exactly what downloaded.
     expect(promised).toHaveTextContent(`2× raster · ${raster.width} × ${raster.height}px.`);
+  });
+});
+
+describe('the preflight never hangs on fonts, nor outlives its board (SQ-876)', () => {
+  const dialog = (input: ReturnType<typeof board>) => (
+    <BoardExportDialog
+      boardId="board-1"
+      boardName="Living room"
+      owner={{ kind: 'project', id: 'project-1' }}
+      input={input}
+      open
+      onOpenChange={jest.fn()}
+      flush={jest.fn().mockResolvedValue(undefined)}
+    />
+  );
+
+  it('publishes the fallback raster once a never-settling font wait times out', async () => {
+    jest.useFakeTimers();
+    try {
+      Object.defineProperty(document, 'fonts', {
+        configurable: true,
+        value: { ready: new Promise<void>(() => {}) },
+      });
+      const input = board({ x: 160, y: 250 });
+      const fallback = getMoodBoardPngExportPlan(input);
+      render(dialog(input));
+      expect(screen.getByText('Measuring the raster…')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Board composition · PNG/ })).toBeDisabled();
+
+      await act(async () => {
+        jest.advanceTimersByTime(MOOD_BOARD_FONT_WAIT_MS);
+      });
+      expect(
+        screen.getByText(`2× raster · ${fallback.width} × ${fallback.height}px.`),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Board composition · PNG/ })).toBeEnabled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('drops the last board’s plan and holds PNG until the new board is measured', async () => {
+    let fontsReady!: () => void;
+    const pending = () =>
+      Object.defineProperty(document, 'fonts', {
+        configurable: true,
+        value: { ready: new Promise<void>((resolve) => { fontsReady = resolve; }) },
+      });
+    fontsLoaded = true;
+    pending();
+    const first = board({ x: 160, y: 250 });
+    const { rerender } = render(dialog(first));
+    await act(async () => fontsReady());
+    const firstPlan = getMoodBoardPngExportPlan(first);
+    await screen.findByText(`2× raster · ${firstPlan.width} × ${firstPlan.height}px.`);
+
+    pending();
+    const second = board({ x: 20, y: 20, rotation: 180 });
+    rerender(dialog(second));
+    expect(screen.queryByText(`2× raster · ${firstPlan.width} × ${firstPlan.height}px.`)).not.toBeInTheDocument();
+    expect(screen.getByText('Measuring the raster…')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Board composition · PNG/ }));
+    expect(mockRasters).toHaveLength(0);
+
+    await act(async () => fontsReady());
+    const secondPlan = getMoodBoardPngExportPlan(second);
+    await screen.findByText(`2× raster · ${secondPlan.width} × ${secondPlan.height}px.`);
   });
 });
 

@@ -14,6 +14,8 @@ import {
 
 export const DEFAULT_MOOD_BOARD_EXPORT_SCALE = 2
 export const MOOD_BOARD_EXPORT_MAX_EDGE = 8192
+/** How long a raster (and its preflight) waits for webfonts before the fallback stack. */
+export const MOOD_BOARD_FONT_WAIT_MS = 3000
 export const DEFAULT_MOOD_BOARD_COVER_SIZE = {
   width: 800,
   height: 600,
@@ -278,7 +280,16 @@ export function createDefaultMoodBoardRasterEnvironment(): MoodBoardRasterEnviro
     resolveImage: defaultResolveImage,
     async waitForFonts() {
       if (typeof document !== 'undefined' && document.fonts?.ready) {
-        await document.fonts.ready
+        // Bounded: a font load that never settles must not hold the raster or
+        // its preflight; both then measure on the same fallback stack.
+        let timer: ReturnType<typeof setTimeout> | undefined
+        await Promise.race([
+          document.fonts.ready,
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, MOOD_BOARD_FONT_WAIT_MS)
+          }),
+        ])
+        clearTimeout(timer)
       }
     },
   }
