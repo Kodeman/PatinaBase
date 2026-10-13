@@ -22,6 +22,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   channelConsentVerdict,
+  fieldLineCampaignApproved,
   fieldLinePhase,
   flushDeferredMessages,
   localDayInTimezone,
@@ -37,6 +38,9 @@ import {
 } from "../_shared/sms.ts";
 import { resolveStudioIdentity } from "../_shared/studio-identity.ts";
 import type { SendAuthority } from "../_shared/send-authority.ts";
+import type { OutboundKind } from "../_shared/send-authority.ts";
+import { sendOutboundDraft } from "../_shared/outbound-send.ts";
+import { interpolate } from "../_shared/render-template.ts";
 
 const FIELD_KINDS = ["gc", "sub", "installer", "receiver"];
 
@@ -460,7 +464,137 @@ export async function scheduledAuthority(
   return { kind: "studio_schedule", studioId: identity.studioId, outboundKind };
 }
 
+interface FieldDraftInput {
+  partyId: string;
+  projectId: string;
+  kind: OutboundKind;
+  templateKey: string;
+  vars: Record<string, unknown>;
+  recipientKind: "trade" | "client";
+  expiresAt: Date;
+  dueAt: Date;
+  automationPhase?: number;
+  cadenceClass?: "event" | "recurring";
+  clientInvitationId?: string;
+}
+
+async function composeFieldDraft(
+  supabase: SupabaseClient,
+  input: FieldDraftInput,
+  now: Date,
+  deps: SmsDeps,
+): Promise<SendPartySmsResult> {
+  const identity = await resolveStudioIdentity(supabase, { projectId: input.projectId });
+  if (!identity?.studioId) return { sent: false, status: "failed", reason: "studio_identity_missing" };
+  const { data: template } = await supabase.from("email_templates")
+    .select("html_content, subject_default, is_active").eq("slug", input.templateKey).maybeSingle();
+  const raw = String((template as { html_content?: string } | null)?.html_content ??
+    (template as { subject_default?: string } | null)?.subject_default ?? "");
+  if (!raw || (template as { is_active?: boolean } | null)?.is_active === false) {
+    return { sent: false, status: "failed", reason: "sms_template_missing" };
+  }
+  const { data: project } = await supabase.from("projects").select("name").eq("id", input.projectId).maybeSingle();
+  const { data: party } = await supabase.from("project_parties").select("display_name").eq("id", input.partyId).maybeSingle();
+  const vars = {
+    ...input.vars,
+    project_name: (project as { name?: string } | null)?.name ?? "your project",
+    party_first_name: (party as { display_name?: string } | null)?.display_name?.trim().split(/\s+/)[0] ?? "",
+    studio_name: await resolveStudioName(supabase, input.projectId) ?? "your studio",
+    link: raw.includes("{{link") ? "[link added when sent]" : undefined,
+  };
+  const body = interpolate(raw, vars);
+  const dedupeDay = localDayInTimezone(now, (deps.getEnv?.("FIELD_TZ") ?? Deno.env.get("FIELD_TZ")) || "America/Chicago");
+  const dedupeKey = `field:${input.kind}:${input.partyId}:${input.projectId}:${dedupeDay}`;
+  const { data: id, error: composeError } = await supabase.rpc("compose_outbound_draft", {
+    p_kind: input.kind, p_org: identity.studioId, p_project: input.projectId,
+    p_channel: "sms", p_recipient_kind: input.recipientKind,
+    p_to: { party_id: input.partyId }, p_subject: null, p_body: body,
+    p_payload: {
+      sms_template_key: input.templateKey, sms_vars: input.vars,
+      automation_phase: input.automationPhase, cadence_class: input.cadenceClass,
+      client_invitation_id: input.clientInvitationId,
+    },
+    p_ref_type: "project_party", p_ref_id: input.partyId, p_dedupe_key: dedupeKey,
+    p_due_at: input.dueAt.toISOString(), p_expires_at: input.expiresAt.toISOString(), p_composed_by: "system",
+  });
+  if (composeError || !id) return { sent: false, status: "failed", reason: composeError?.message ?? "draft_compose_failed" };
+
+  const [modeResult, rolloutResult] = await Promise.all([
+    supabase.rpc("studio_outbound_mode", { p_studio: identity.studioId, p_kind: input.kind }),
+    supabase.rpc("outbound_review_active", { p_studio: identity.studioId }),
+  ]);
+  const mode = modeResult.error ? "review" : modeResult.data;
+  const reviewActive = !rolloutResult.error && rolloutResult.data === true;
+  if (mode === "scheduled" || !reviewActive) {
+    const sent = await sendOutboundDraft(supabase, String(id), {
+      kind: "studio_schedule", studioId: identity.studioId, outboundKind: input.kind,
+    });
+    return {
+      sent: sent.ok, status: sent.ok ? "sent" : "failed",
+      messageId: sent.messageId, reason: sent.error,
+    };
+  }
+  return { sent: false, status: "deferred", reason: "awaiting_review" };
+}
+
+function fieldOutboundKind(templateKey: string): OutboundKind | null {
+  switch (templateKey) {
+    case "sms_daily_digest":
+    case "sms_site_card": return "trade_site_digest";
+    case "sms_delivery_confirm": return "delivery_confirm";
+    case "sms_day_of": return "trade_day_of";
+    case "sms_selection_ready":
+    case "sms_window_pick": return "homeowner_window_pick";
+    case "sms_hours_prompt": return "hours_prompt";
+    default: return null;
+  }
+}
+
+function nextLocalDay(day: string): string {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, date + 1)).toISOString().slice(0, 10);
+}
+
+function draftExpiryFor(templateKey: string, now: Date, tz: string, vars?: Record<string, unknown>): Date {
+  const explicit = vars?.__draft_expires_at;
+  if (typeof explicit === "string" && Number.isFinite(Date.parse(explicit))) return new Date(explicit);
+  const today = localDayInTimezone(now, tz);
+  const tomorrow = nextLocalDay(today);
+  if (templateKey === "sms_daily_digest") return localMomentOnDay(today, 12 * 60, tz) ?? now;
+  if (templateKey === "sms_site_card" || templateKey === "sms_hours_prompt") {
+    return localMomentOnDay(tomorrow, DAY_OF_LOCAL_MINUTES, tz) ?? now;
+  }
+  if (templateKey === "sms_delivery_confirm") return new Date(now.getTime() + 48 * 3600 * 1000);
+  if (templateKey === "sms_selection_ready" || templateKey === "sms_window_pick") {
+    return new Date(now.getTime() + CLIENT_ASK_TTL_MS);
+  }
+  return localMomentOnDay(tomorrow, 0, tz) ?? now;
+}
+
+async function composeSmsInput(
+  supabase: SupabaseClient,
+  input: OrdinarySmsInput,
+  now: Date,
+  deps: SmsDeps,
+  recipientKind: "trade" | "client",
+): Promise<SendPartySmsResult> {
+  const templateKey = input.templateKey;
+  const kind = templateKey ? fieldOutboundKind(templateKey) : null;
+  if (!kind || !input.partyId || !input.projectId || !templateKey) {
+    return { sent: false, status: "failed", reason: "invalid_field_draft_input" };
+  }
+  const tz = (deps.getEnv?.("FIELD_TZ") ?? Deno.env.get("FIELD_TZ")) || "America/Chicago";
+  return await composeFieldDraft(supabase, {
+    partyId: input.partyId, projectId: input.projectId, kind, templateKey,
+    vars: input.vars ?? {}, recipientKind,
+    expiresAt: draftExpiryFor(templateKey, now, tz, input.vars), dueAt: now,
+    automationPhase: input.automationPhase, cadenceClass: input.cadenceClass,
+    clientInvitationId: input.clientInvitationId,
+  }, now, deps);
+}
+
 export async function runFieldDaily(
+
   supabase: SupabaseClient,
   deps: FieldDailyDeps = {},
 ): Promise<RunSummary> {
@@ -473,8 +607,8 @@ export async function runFieldDaily(
   // Key digest/delivery-confirm conversations on the same physical number
   // sendPartySms uses — never an MG… Messaging Service SID (see _shared/sms.ts).
   const conversationNumber = smsConversationNumber(deps);
-  const send = deps.sendFn ?? sendPartySms;
-  const sendClient = deps.clientSendFn ?? sendClientSms;
+  const send = deps.sendFn ?? ((db, input, senderDeps) => composeSmsInput(db, input as OrdinarySmsInput, now, senderDeps, "trade"));
+  const sendClient = deps.clientSendFn ?? ((db, input, senderDeps) => composeSmsInput(db, input, now, senderDeps, "client"));
   const flush = deps.flushFn ?? flushDeferredMessages;
   // The zone the trade rail's hours are named in — the same one quiet hours and
   // the cadence day are read out of.
@@ -702,6 +836,7 @@ export async function runFieldDaily(
             ref: prompt.short_code,
             delivery_window: formatDue(ev.event_date),
             delivery_summary: ev.vendor_name ?? "a delivery",
+            __draft_expires_at: (localMomentOnDay(nextLocalDay(ev.event_date), 0, fieldTz) ?? now).toISOString(),
           },
         },
         deps,
@@ -876,7 +1011,7 @@ export async function runFieldDaily(
   // Asked behind the phase gate BEFORE any row is written, for 00639's reason:
   // a server at phase 0 or 1 that opened batches and burned short codes for
   // texts it will never send would spend the reservations on silence.
-  if (fieldLinePhase(deps) >= 2 && conversationNumber) {
+  if (fieldLinePhase(deps) >= 2 && fieldLineCampaignApproved(deps) && conversationNumber) {
     const localToday = localDayInTimezone(now, fieldTz);
     const { data: clientSeats } = await supabase
       .from("project_parties")
@@ -1337,6 +1472,7 @@ async function issueWindowPick(
         option_a: candidate.options[0],
         option_b: candidate.options[1],
         ref: prompt.short_code,
+        __draft_expires_at: windowAskExpiry(candidate.lastDay, now, fieldTz).toISOString(),
       },
     }, deps);
     if (res.sent || res.deferred) return true;

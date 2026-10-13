@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "./send-email.ts";
-import { sendPartySms } from "./sms.ts";
+import { sendPartySms, sendClientSms } from "./sms.ts";
 import { renderBrandedShell } from "./branded-email.ts";
 import { resolveStudioIdentity, studioCobrand } from "./studio-identity.ts";
 import { outboundKinds } from "./outbound-kinds/index.ts";
@@ -12,7 +12,7 @@ export interface OutboundDraft {
   channel: "email" | "sms" | "push"; recipient_kind: string; to_contact_id: string | null;
   to_client_id: string | null; to_party_id: string | null; to_address: string | null;
   subject: string | null; body: string; payload: Record<string, unknown>; ref_type: string;
-  ref_id: string; status: string; sent_by: string | null;
+  ref_id: string; status: string; sent_by: string | null; edited_at?: string | null;
 }
 export type OutboundSendResult = { id: string; ok: boolean; messageId?: string; error?: string };
 
@@ -69,11 +69,32 @@ export async function sendOutboundDraft(
       if (!sent.success) return await fail(sent.error ?? "email_send_failed");
       messageId = sent.id;
     } else if (draft.channel === "sms") {
-      const sent = await sendPartySms(admin, {
+      const templateKey = !draft.edited_at && typeof draft.payload.sms_template_key === "string"
+        ? draft.payload.sms_template_key
+        : undefined;
+      const templateVars = draft.payload.sms_vars && typeof draft.payload.sms_vars === "object"
+        ? draft.payload.sms_vars as Record<string, unknown>
+        : undefined;
+      const smsInput = {
         partyId: draft.to_party_id ?? undefined, phone: draft.to_address ?? undefined,
-        projectId: draft.project_id ?? undefined, body: draft.body,
+        projectId: draft.project_id ?? undefined,
+        body: templateKey ? undefined : draft.body,
+        templateKey,
+        vars: templateVars,
+        clientInvitationId: typeof draft.payload.client_invitation_id === "string"
+          ? draft.payload.client_invitation_id
+          : undefined,
+        automationPhase: typeof draft.payload.automation_phase === "number"
+          ? draft.payload.automation_phase
+          : undefined,
+        cadenceClass: draft.payload.cadence_class === "event" || draft.payload.cadence_class === "recurring"
+          ? draft.payload.cadence_class as "event" | "recurring"
+          : undefined,
         dedupeKey: `outbound-draft-${draft.id}`, authority,
-      });
+      };
+      const sent = draft.recipient_kind === "client" && templateKey
+        ? await sendClientSms(admin, smsInput)
+        : await sendPartySms(admin, smsInput);
       if (sent.status === "deferred") {
         messageId = sent.messageId;
       } else if (!sent.sent) return await fail(sent.reason ?? "sms_send_failed");
