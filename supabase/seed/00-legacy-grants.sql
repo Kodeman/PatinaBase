@@ -21596,13 +21596,187 @@ END $g$;
 
 -- 00765_studio_need_states.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.set_need_state(text, uuid, text, text, date, text) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.set_need_state(text, uuid, text, text, date, text, uuid) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00765_studio_need_states.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.set_need_state(text, uuid, text, text, date, text) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.set_need_state(text, uuid, text, text, date, text, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.llm_usage FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.llm_usage TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON TABLE public.llm_usage TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT USAGE, SELECT ON SEQUENCE public.llm_usage_id_seq TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.llm_controls FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.llm_feature_controls FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.llm_studio_overrides FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.llm_controls_audit FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.llm_controls TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.llm_feature_controls TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.llm_studio_overrides TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.llm_controls_audit TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT USAGE, SELECT ON SEQUENCE public.llm_controls_audit_id_seq TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.llm_settle(bigint, text, integer, integer, integer, integer, numeric, text, text, integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.llm_settle(bigint, text, integer, integer, integer, integer, numeric, text, text, integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.llm_sweep_stale_reservations() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.llm_sweep_stale_reservations() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.llm_usage_summary(timestamptz, timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.llm_usage_summary(timestamptz, timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.llm_set_controls(boolean, numeric, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.llm_set_controls(boolean, numeric, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.llm_set_feature_control(text, boolean, numeric, numeric, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.llm_set_feature_control(text, boolean, numeric, numeric, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.llm_set_studio_override(uuid, numeric, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.llm_set_studio_override(uuid, numeric, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.aesthete_spend_ledger FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00770_llm_usage_controls.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.aesthete_spend_ledger TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
