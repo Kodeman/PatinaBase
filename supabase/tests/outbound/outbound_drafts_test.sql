@@ -54,6 +54,7 @@ SELECT is((SELECT message_id FROM public.outbound_drafts WHERE dedupe_key='dedup
 SELECT lives_ok($$SELECT public.compose_outbound_draft('client_digest','77500000-0000-4000-8000-000000000011','77500000-0000-4000-8000-000000000031','email','client','{"client_id":"77500000-0000-4000-8000-000000000001","address":"client-a@test.invalid"}','Digest','Will expire','{}','digest','77500000-0000-4000-8000-000000000044','dedupe-775-5',now(),now()-interval '1 second','system')$$,'compose expiring draft');
 SELECT is(public.expire_outbound_drafts(),1,'expiry marks due open draft expired');
 SELECT is((SELECT status FROM public.outbound_drafts WHERE dedupe_key='dedupe-775-5'),'expired','expiry persisted');
+SELECT is((public.claim_outbound_draft_for_send((SELECT id FROM public.outbound_drafts WHERE dedupe_key='dedupe-775-5'))).status,'expired','an expired draft cannot be sent');
 SELECT lives_ok($$SELECT public.compose_outbound_draft('site_request_due','77500000-0000-4000-8000-000000000011','77500000-0000-4000-8000-000000000031','email','trade','{"address":"trade@test.invalid"}','Request','Resolved request','{}','site_request','77500000-0000-4000-8000-000000000045','dedupe-775-6',now(),null,'system')$$,'compose resolvable draft');
 SELECT is(public.resolve_outbound_drafts('site_request','77500000-0000-4000-8000-000000000045'),1,'resolution discards matching draft');
 SELECT is((SELECT status FROM public.outbound_drafts WHERE dedupe_key='dedupe-775-6'),'discarded','resolved draft is discarded');

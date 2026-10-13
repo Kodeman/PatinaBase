@@ -151,6 +151,8 @@ export type CadenceClass = "recurring" | "event";
 export type SendStatus = "sent" | "queued" | "deferred" | "failed";
 
 export interface SendPartySmsResult {
+  /** Draft id when this send was composed for outbound review. */
+  draftId?: string;
   /** Present only for a re-read, authorized durable selection question. */
   selection?: SelectionQuestion;
   sent: boolean;

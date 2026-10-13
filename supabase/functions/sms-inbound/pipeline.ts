@@ -2862,7 +2862,7 @@ async function hoursReply(
   // 00645's codeless door takes.
   const { data: open, error: openError } = await supabase.from("sms_prompts").select("*")
     .eq("sender_number", sender).eq("recipient_phone", recipient).is("answered_at", null)
-    .is("voided_at", null).gt("expires_at", now.toISOString());
+    .is("voided_at", null).eq("pending_send", false).gt("expires_at", now.toISOString());
   // A READ THAT FAILED IS NOT PROOF NOTHING WAS ASKED. Falling through would
   // hand the number to the digest menu, which would close somebody's task on the
   // strength of a failed query; Twilio redelivers instead.
@@ -3035,7 +3035,7 @@ async function hoursFreeTextConfirm(
   if (!open) {
     const { data, error } = await supabase.from("sms_prompts").select("*")
       .eq("sender_number", sender).eq("recipient_phone", recipient).is("answered_at", null)
-      .is("voided_at", null).gt("expires_at", now.toISOString());
+      .is("voided_at", null).eq("pending_send", false).gt("expires_at", now.toISOString());
     // A failed read is not this reader's to answer. Returning null leaves the
     // body on exactly the path it was on, and that path's own read decides.
     if (error) return null;
@@ -3183,7 +3183,7 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   // would ask which is meant, where sms_resolve_prompt sees exactly one (SQ-101).
   const { data: open, error: openError } = await supabase.from("sms_prompts").select("*")
     .eq("sender_number", sender).eq("recipient_phone", recipient).is("answered_at", null)
-    .is("voided_at", null).gt("expires_at", now.toISOString());
+    .is("voided_at", null).eq("pending_send", false).gt("expires_at", now.toISOString());
   if (openError) return { status: 503, twiml: twimlBody(), disposition: "ref_unreadable" };
   // A trade word binds to the open TRADE prompt even when yesterday's digest is
   // still open beside it: "ON MY WAY" is plainly an answer to the card that

@@ -153,6 +153,7 @@ export interface DigestItem {
   project_id: string;
   due: string | null; // YYYY-MM-DD or null
   ref?: string;
+  promptId?: string;
 }
 
 export interface MenuEntry {
@@ -440,7 +441,7 @@ async function promptRef(supabase: SupabaseClient, party: {id: string; project_i
   const { data: existing, error } = await supabase.from("sms_prompts").select("id, short_code")
     .eq("party_id", party.id).eq("project_id", party.project_id).eq("subject_id", subjectId).eq("kind", kind)
     .eq("version", version).eq("sender_number", sender).eq("recipient_phone", party.phone_e164)
-    .is("answered_at", null).gt("expires_at", now.toISOString()).order("created_at", {ascending: true}).limit(1);
+    .is("answered_at", null).eq("pending_send", false).gt("expires_at", now.toISOString()).order("created_at", {ascending: true}).limit(1);
   if (error) return null;
   if (existing?.length) return existing[0];
   if (ownsClaim && !await ownsClaim()) return null;
@@ -518,6 +519,32 @@ async function composeFieldDraft(
     p_due_at: input.dueAt.toISOString(), p_expires_at: input.expiresAt.toISOString(), p_composed_by: "system",
   });
   if (composeError || !id) return { sent: false, status: "failed", reason: composeError?.message ?? "draft_compose_failed" };
+  const draftId = String(id);
+  const promptId = input.vars.__prompt_id;
+  const promptIds = input.vars.__prompt_ids;
+  const batchId = input.vars.__batch_id;
+  if (typeof promptId === "string") {
+    const { error } = await supabase.from("sms_prompts").update({ pending_send: true, outbound_draft_id: draftId }).eq("id", promptId);
+    if (error) {
+      await supabase.rpc("discard_outbound_draft", { p_id: draftId });
+      return { sent: false, status: "failed", reason: error.message };
+    }
+  }
+  if (Array.isArray(promptIds)) {
+    const { error } = await supabase.from("sms_prompts").update({ pending_send: true, outbound_draft_id: draftId })
+      .in("id", promptIds.filter((value): value is string => typeof value === "string"));
+    if (error) {
+      await supabase.rpc("discard_outbound_draft", { p_id: draftId });
+      return { sent: false, status: "failed", reason: error.message };
+    }
+  }
+  if (typeof batchId === "string") {
+    const { error } = await supabase.from("client_decision_batches").update({ pending_send: true, outbound_draft_id: draftId }).eq("id", batchId);
+    if (error) {
+      await supabase.rpc("discard_outbound_draft", { p_id: draftId });
+      return { sent: false, status: "failed", reason: error.message };
+    }
+  }
 
   const [modeResult, rolloutResult] = await Promise.all([
     supabase.rpc("studio_outbound_mode", { p_studio: identity.studioId, p_kind: input.kind }),
@@ -526,15 +553,21 @@ async function composeFieldDraft(
   const mode = modeResult.error ? "review" : modeResult.data;
   const reviewActive = !rolloutResult.error && rolloutResult.data === true;
   if (mode === "scheduled" || !reviewActive) {
-    const sent = await sendOutboundDraft(supabase, String(id), {
+    const sent = await sendOutboundDraft(supabase, draftId, {
       kind: "studio_schedule", studioId: identity.studioId, outboundKind: input.kind,
     });
+    if (!sent.ok && sent.error !== "not_sendable_until_send_window") {
+      await Promise.all([
+        supabase.from("sms_prompts").delete().eq("outbound_draft_id", draftId).eq("pending_send", true),
+        supabase.from("client_decision_batches").delete().eq("outbound_draft_id", draftId).eq("pending_send", true),
+      ]);
+    }
     return {
-      sent: sent.ok, status: sent.ok ? "sent" : "failed",
+      sent: sent.ok, status: sent.ok ? "sent" : "failed", draftId,
       messageId: sent.messageId, reason: sent.error,
     };
   }
-  return { sent: false, status: "deferred", reason: "awaiting_review" };
+  return { sent: false, status: "deferred", reason: "awaiting_review", draftId };
 }
 
 function fieldOutboundKind(templateKey: string): OutboundKind | null {
@@ -555,7 +588,7 @@ function nextLocalDay(day: string): string {
   return new Date(Date.UTC(year, month - 1, date + 1)).toISOString().slice(0, 10);
 }
 
-function draftExpiryFor(templateKey: string, now: Date, tz: string, vars?: Record<string, unknown>): Date {
+export function draftExpiryFor(templateKey: string, now: Date, tz: string, vars?: Record<string, unknown>): Date {
   const explicit = vars?.__draft_expires_at;
   if (typeof explicit === "string" && Number.isFinite(Date.parse(explicit))) return new Date(explicit);
   const today = localDayInTimezone(now, tz);
@@ -593,12 +626,30 @@ async function composeSmsInput(
   }, now, deps);
 }
 
+async function cleanupPendingFieldRows(supabase: SupabaseClient): Promise<void> {
+  const { data: staleDrafts } = await supabase.from("outbound_drafts").select("id")
+    .eq("channel", "sms").in("kind", [
+      "trade_site_digest", "trade_day_of", "delivery_confirm", "homeowner_window_pick", "hours_prompt",
+    ]).in("status", ["discarded", "expired", "superseded"]);
+  const staleIds = (staleDrafts ?? []).map((row: { id: string }) => row.id);
+  await Promise.all([
+    supabase.from("sms_prompts").delete().eq("pending_send", true).is("outbound_draft_id", null),
+    supabase.from("client_decision_batches").delete().eq("pending_send", true).is("outbound_draft_id", null),
+  ]);
+  if (!staleIds.length) return;
+  await Promise.all([
+    supabase.from("sms_prompts").delete().eq("pending_send", true).in("outbound_draft_id", staleIds),
+    supabase.from("client_decision_batches").delete().eq("pending_send", true).in("outbound_draft_id", staleIds),
+  ]);
+}
+
 export async function runFieldDaily(
 
   supabase: SupabaseClient,
   deps: FieldDailyDeps = {},
 ): Promise<RunSummary> {
   const now = deps.now ?? new Date();
+  await cleanupPendingFieldRows(supabase);
   const startedAt = Date.now();
   const clock = () => new Date(now.getTime() + Date.now() - startedAt);
   const runId = crypto.randomUUID();
@@ -729,7 +780,7 @@ export async function runFieldDaily(
           if (!visible.some(v => v.id === item.id && v.kind === item.kind)) continue;
           const prompt = await promptRef(supabase, party, item.id, "mark_done", Number(today.replaceAll("-", "")), conversationNumber, now, ownsClaim);
           if (!prompt) break;
-          referenced.push({ ...item, ref: prompt.short_code });
+          referenced.push({ ...item, ref: prompt.short_code, promptId: prompt.id });
         }
         if (referenced.length !== visible.length || !referenced.length) { summary.parties_skipped++; continue; }
         // Keep omitted-item accounting while preserving the same conservative layout.
@@ -755,6 +806,10 @@ export async function runFieldDaily(
       }
     }
 
+    const menuEntries = (conv.state_context.menu as MenuEntry[] | undefined) ?? [];
+    const { data: menuPrompts } = menuEntries.length ? await supabase.from("sms_prompts")
+      .select("id").eq("party_id", party.id).eq("project_id", party.project_id)
+      .eq("pending_send", false).in("subject_id", menuEntries.map((entry) => entry.id)) : { data: [] };
     const res = await send(
       supabase,
       {
@@ -762,7 +817,7 @@ export async function runFieldDaily(
         projectId: party.project_id,
         authority: await scheduledAuthority(supabase, party.project_id, "trade_site_digest"),
         templateKey: "sms_daily_digest",
-        vars: { menu: menuText },
+        vars: { menu: menuText, __prompt_ids: (menuPrompts ?? []).map((item: { id: string }) => item.id) },
         dedupeKey: `field-daily:${party.id}:${today}`,
         // Existing digest automation is unconditional (phase zero).
         automationPhase: 0,
@@ -833,19 +888,18 @@ export async function runFieldDaily(
           dedupeKey: `field-delivery:${party.id}:${ev.event_id}:${ev.event_date}`,
           automationPhase: 0,
           vars: {
+            __prompt_id: prompt.id,
             ref: prompt.short_code,
             delivery_window: formatDue(ev.event_date),
             delivery_summary: ev.vendor_name ?? "a delivery",
+            __event_id: ev.event_id,
+            __conversation_party_id: party.id,
             __draft_expires_at: (localMomentOnDay(nextLocalDay(ev.event_date), 0, fieldTz) ?? now).toISOString(),
           },
         },
         deps,
       );
-      if (res.sent || res.deferred) {
-        summary.delivery_confirms_sent++;
-        const prior = Array.isArray(sentList) ? (sentList as string[]) : [];
-        await saveContext(supabase, conv, { ...conv.state_context, delivery_confirms_sent: [...prior, ev.event_id] });
-      }
+      if (res.sent || res.deferred) summary.delivery_confirms_sent++;
     }
   }
 
@@ -945,6 +999,7 @@ export async function runFieldDaily(
           : undefined;
 
         const vars: Record<string, unknown> = {
+          __draft_expires_at: (localMomentOnDay(dayAfter, 0, fieldTz) ?? now).toISOString(),
           site_address: cardParam(
             (project as { site_address?: string } | null)?.site_address, 36, "the job site",
           ),
@@ -964,6 +1019,8 @@ export async function runFieldDaily(
           );
         }
 
+        if (card.kind === "day_of") vars.__site_day = card.day;
+
         const res = await send(
           supabase,
           {
@@ -977,7 +1034,7 @@ export async function runFieldDaily(
             automationPhase: 1,
             // One of the three event texts a party gets in a day (contract P5).
             cadenceClass: "event",
-            vars,
+            vars: { ...vars, __prompt_id: prompt.id },
           },
           deps,
         );
@@ -991,9 +1048,7 @@ export async function runFieldDaily(
         // (FIELD_KINDS above), and the client's copy of this fact is this post.
         // The thread is never created here: comms_threads.created_by is a real
         // person and a cron is not one.
-        if (card.kind === "day_of" && await postCrewOnTheWay(
-          supabase, conv, party.project_id, card.day, now,
-        )) summary.crew_posts++;
+        if (res.sent && card.kind === "day_of") summary.crew_posts++;
       }
     }
   }
@@ -1060,6 +1115,7 @@ export async function runFieldDaily(
         .from("client_decision_batches")
         .select("id, project_id, party_id, version, presented_at, presented_local_day, reminder_sent_at, closed_at")
         .eq("party_id", seat.id)
+        .eq("pending_send", false)
         .is("closed_at", null)
         .order("presented_at", { ascending: false })
         .limit(1);
@@ -1097,7 +1153,15 @@ export async function runFieldDaily(
           continue;
         }
         if (Date.parse(openBatch.presented_at) + CLIENT_REMINDER_MS > now.getTime()) continue;
-        const ask = await openClientAsk(supabase, seat, openBatch.id, now);
+        let ask = await openClientAsk(supabase, seat, openBatch.id, now);
+        if (!ask) {
+          const retryPrompt = await promptRef(
+            supabase, seat, openBatch.id, "selection_batch", openBatch.version,
+            conversationNumber, now, undefined,
+            new Date(Date.parse(openBatch.presented_at) + CLIENT_ASK_TTL_MS),
+          );
+          if (retryPrompt) ask = { id: retryPrompt.id, short_code: retryPrompt.short_code, version: openBatch.version };
+        }
         // NO NEW REFERENCE FOR A NUDGE, and none for a list that moved. The
         // reference she already has is the one she was given (00639 binds the
         // version at issuance); if the batch has since been re-versioned, a text
@@ -1113,17 +1177,12 @@ export async function runFieldDaily(
           templateKey: "sms_selection_ready",
           clientInvitationId: letter.id,
           dedupeKey: `client-batch-reminder:${openBatch.id}`,
-          vars,
+          vars: { ...vars, __prompt_id: ask.id, __reminder_batch_id: openBatch.id },
         }, deps);
         if (!res.sent && !res.deferred) continue;
         // Stamped AFTER the wire claim, and guarded on still being NULL: the
         // dedupe key above is what makes a retry harmless, so the honest order
         // is "the text is claimed, therefore the nudge is spent".
-        await supabase
-          .from("client_decision_batches")
-          .update({ reminder_sent_at: now.toISOString() })
-          .eq("id", openBatch.id)
-          .is("reminder_sent_at", null);
         summary.client_reminders_sent++;
         continue;
       }
@@ -1136,6 +1195,7 @@ export async function runFieldDaily(
         .from("client_decision_batches")
         .select("id")
         .eq("party_id", seat.id)
+        .eq("pending_send", false)
         .eq("presented_local_day", localToday)
         .limit(1);
       if ((todays ?? []).length) continue;
@@ -1191,7 +1251,7 @@ export async function runFieldDaily(
           templateKey: "sms_selection_ready",
           clientInvitationId: letter.id,
           dedupeKey: `client-batch:${batchId}`,
-          vars,
+          vars: vars ? { ...vars, __prompt_id: ask.id, __batch_id: batchId } : undefined,
         }, deps)
         : null;
       if (!res || (!res.sent && !res.deferred)) {
@@ -1297,6 +1357,7 @@ export async function runFieldDaily(
           // One of the three event texts a party gets in a day (contract P5).
           cadenceClass: "event",
           vars: {
+            __prompt_id: prompt.id,
             studio: (await resolveStudioName(supabase, party.project_id)) ?? "your studio",
             address: cardParam(
               (project as { site_address?: string } | null)?.site_address, 36, "the job site",
@@ -1341,6 +1402,7 @@ async function openClientAsk(
     .eq("kind", "selection_batch")
     .is("answered_at", null)
     .is("voided_at", null)
+    .eq("pending_send", false)
     .gt("expires_at", now.toISOString())
     .order("version", { ascending: false })
     .limit(1);
@@ -1395,6 +1457,7 @@ async function issueWindowPick(
     .eq("kind", "window_pick")
     .is("answered_at", null)
     .is("voided_at", null)
+    .eq("pending_send", false)
     .gt("expires_at", now.toISOString())
     .limit(1);
   if ((open ?? []).length) return false;
@@ -1465,6 +1528,7 @@ async function issueWindowPick(
       // different logical send.
       dedupeKey: `client-window:${prompt.id}`,
       vars: {
+        __prompt_id: prompt.id,
         studio_name: cardParam(
           await resolveStudioName(supabase, seat.project_id) ?? undefined, 24, "Your studio",
         ),
@@ -1782,50 +1846,4 @@ async function selectionVars(
     room: cardParam(room, 24, "your project"),
     ref,
   };
-}
-
-/**
- * Record "crew on the way" on the project's own thread, once per visit day.
- * Portal-visible, written as a system message (no human author), and idempotent
- * through the same conversation-context CAS the delivery confirms dedupe with.
- */
-async function postCrewOnTheWay(
-  supabase: SupabaseClient,
-  conv: ProjectContext,
-  projectId: string,
-  day: string,
-  now: Date,
-): Promise<boolean> {
-  const priorRaw = (conv.state_context as { crew_posts_sent?: unknown }).crew_posts_sent;
-  const prior = Array.isArray(priorRaw) ? priorRaw.map(String) : [];
-  if (prior.includes(day)) return false;
-  const { data: thread, error: threadError } = await supabase
-    .from("comms_threads")
-    .select("id")
-    .eq("project_id", projectId)
-    .eq("kind", "project")
-    .order("created_at", { ascending: true })
-    .limit(1);
-  if (threadError) return false;
-  const threadId = (thread ?? [])[0]?.id as string | undefined;
-  if (!threadId) return false;
-  // Claim the day BEFORE writing the post: a post written twice is two
-  // notifications for one fact, and a claim taken for a post that then failed
-  // to write is one missing line in a thread a person is reading anyway.
-  if (!await saveContext(supabase, conv, {
-    ...conv.state_context,
-    crew_posts_sent: [...prior, day],
-  })) return false;
-  const { error } = await supabase.from("comms_messages").insert({
-    thread_id: threadId,
-    sender_id: null,
-    system: true,
-    body: `Crew on the way for ${formatDue(day)}.`,
-    created_at: now.toISOString(),
-  });
-  if (error) {
-    console.error("postCrewOnTheWay: the project thread post failed", error);
-    return false;
-  }
-  return true;
 }

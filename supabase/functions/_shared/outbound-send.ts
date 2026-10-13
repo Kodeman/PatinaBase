@@ -90,15 +90,15 @@ export async function sendOutboundDraft(
         cadenceClass: draft.payload.cadence_class === "event" || draft.payload.cadence_class === "recurring"
           ? draft.payload.cadence_class as "event" | "recurring"
           : undefined,
+        deferToCaller: ["trade_site_digest", "trade_day_of", "delivery_confirm", "homeowner_window_pick", "hours_prompt"].includes(draft.kind),
         dedupeKey: `outbound-draft-${draft.id}`, authority,
       };
       const sent = draft.recipient_kind === "client" && templateKey
         ? await sendClientSms(admin, smsInput)
         : await sendPartySms(admin, smsInput);
-      if (sent.status === "deferred") {
-        messageId = sent.messageId;
-      } else if (!sent.sent) return await fail(sent.reason ?? "sms_send_failed");
-      else messageId = sent.messageId;
+      if (sent.status === "deferred") return await fail("not_sendable_until_send_window");
+      if (!sent.sent) return await fail(sent.reason ?? "sms_send_failed");
+      messageId = sent.messageId;
     } else {
       const userId = typeof draft.payload.user_id === "string" ? draft.payload.user_id : draft.to_client_id;
       if (!userId) return await fail("push recipient missing");
