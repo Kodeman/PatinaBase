@@ -429,6 +429,8 @@ export function SelectionEditor({
     if (focusField) fieldRefs.current[focusField]?.focus();
   }, [focusField, item.id]);
   const updateSpec = useUpdateProjectFfeSpec();
+  // R1: the trade price shows only to a viewer who may see margin.
+  const canSeeMargin = useCanSeeMargin();
   const [draft, setDraft] = useState<Record<string, string>>(
     item.spec ? editableSpecSeed(item.spec) : {},
   );
@@ -671,6 +673,16 @@ export function SelectionEditor({
             <dd>{item.lead_time}</dd>
           </>
         )}
+        {canSeeMargin && item.trade_price_cents != null && (
+          <>
+            <dt>Trade price</dt>
+            <dd>
+              <span className="lfig">
+                ${(item.trade_price_cents / 100).toFixed(2)}
+              </span>
+            </dd>
+          </>
+        )}
       </dl>
 
       {configuration && (
@@ -830,7 +842,8 @@ export function SelectionEditor({
           loading={updateSpec.isPending}
           onClick={() => void save()}
         >
-          Save specification
+          {/* The one filled act names the change (SPEC §S7b p3). */}
+          {focusField === "finish" ? "Save the finish" : "Save the specification"}
         </DocumentAction>
         {putBack}
         {foot}
@@ -1085,11 +1098,10 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
     const requested = requestedItemId
       ? data.items.find((item) => item.id === requestedItemId)
       : undefined;
-    // The book opens on its first piece, or the addressed one, unfolded with
-    // its editor, as the workbench always has.
-    const chosen = (requested ?? data.items[0]).id;
-    setSelectedItemId(chosen);
-    setOpenItemId(chosen);
+    // The book opens at rest (SPEC §S7b p1). Only an addressed line arrives
+    // unfolded, since its `Edit spec details →` asked for that line.
+    setSelectedItemId((requested ?? data.items[0]).id);
+    if (requested) setOpenItemId(requested.id);
   }, [data?.items, requestedItemId, selectedItemId]);
 
   const scrolledToRef = useRef<string | null>(null);
@@ -1376,7 +1388,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         <nav aria-label="Spec book workspace" className="filters sb-tabs">
           {(
             [
-              ["workbench", "Specification editor"],
+              ["workbench", "Specification"],
               ["preview", "Audience editions"],
               ["preflight", "Issue readiness"],
               ["history", "Revision history"],

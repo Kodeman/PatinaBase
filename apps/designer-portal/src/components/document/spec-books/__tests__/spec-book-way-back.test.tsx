@@ -43,6 +43,9 @@ jest.mock("@/hooks/use-document-rooms", () => ({
 
 jest.mock("@/hooks/use-hydrated", () => ({ useHydrated: () => true }));
 
+// R1: the editor's trade price fact reads the viewer's margin seat.
+jest.mock("@/hooks/use-can-see-margin", () => ({ useCanSeeMargin: () => false }));
+
 let mockSearchParams = new URLSearchParams();
 jest.mock("next/navigation", () => ({
   useSearchParams: () => mockSearchParams,

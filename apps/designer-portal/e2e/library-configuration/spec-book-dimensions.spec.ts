@@ -68,12 +68,17 @@ test('the structured editor writes W/D/H/unit and preserves unknown captured key
 }) => {
   await page.goto(`/doc/${projectId}/spec-book`, { waitUntil: 'domcontentloaded' });
 
-  // The workbench auto-selects the first item, so the editor mounts unprompted.
   await expect(page.getByRole('navigation', { name: 'Spec book workspace' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Specification editor' })).toHaveAttribute(
-    'aria-current',
-    'page',
-  );
+  await expect(
+    page.getByRole('button', { name: 'Specification', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
+
+  // US-28 S7b: the book opens at rest, so the editor mounts only once the
+  // piece is opened from its name.
+  const pieceName = page.locator(`#spec-book-item-${ffeItemId}`);
+  await expect(pieceName).toHaveAttribute('aria-expanded', 'false');
+  await pieceName.click();
+  await expect(pieceName).toHaveAttribute('aria-expanded', 'true');
 
   // The unknown key is surfaced, not silently carried.
   await expect(page.getByText('+1 captured field preserved')).toBeVisible();
@@ -87,7 +92,7 @@ test('the structured editor writes W/D/H/unit and preserves unknown captured key
   // z-40) overlays the bottom of the editor aside, and a plain click — even
   // `{ force: true }`, which only skips the actionability CHECK and still clicks
   // at coordinates — lands on the drawer instead, silently doing nothing.
-  await page.getByRole('button', { name: 'Save specification' }).dispatchEvent('click');
+  await page.getByRole('button', { name: 'Save the specification' }).dispatchEvent('click');
 
   // Poll the row FIRST — it is the authoritative evidence, and the mutation
   // lands well after any network-idle signal on a cold dev server.
@@ -119,6 +124,7 @@ test('the raw JSON escape hatch stays available beside the structured control', 
 }) => {
   await page.goto(`/doc/${projectId}/spec-book`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('navigation', { name: 'Spec book workspace' })).toBeVisible();
+  await page.locator(`#spec-book-item-${ffeItemId}`).click();
 
   await page.getByRole('button', { name: 'Advanced: edit dimensions as JSON' }).click();
   // Toggling to raw swaps the affordance rather than losing the structured path.

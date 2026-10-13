@@ -171,6 +171,7 @@ beforeEach(() => {
   artifactRetry.mockClear();
   opened.mockClear();
   mockSearchParams = new URLSearchParams();
+  mockCanSeeMargin = false;
   mockWorkbenchHookResult = {
     data: {
       book: { id: "book-1", title: "Oak project specification" },
@@ -284,7 +285,7 @@ describe("SelectionEditor — structured dimensions", () => {
     fireEvent.change(screen.getByLabelText("width"), {
       target: { value: "84" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
     await screen.findByText("Line saved.");
 
     expect(mutateAsync).toHaveBeenCalledTimes(1);
@@ -310,9 +311,18 @@ describe("SelectionEditor — structured dimensions", () => {
       />,
     );
     fireEvent.change(screen.getByLabelText("width"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
     await screen.findByText("Line saved.");
     expect(mutateAsync.mock.calls[0][0].changes.selected_dimensions).toBeNull();
+  });
+
+  it("names the finish as the change when Add a finish opened it (SPEC §S7b p3)", () => {
+    render(<SelectionEditor item={buildItem({ finish: null })} focusField="finish" />);
+    expect(screen.getByLabelText("Finish")).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Save the finish" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save the specification" }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -337,7 +347,7 @@ describe("SelectionEditor — legacy non-object fallback", () => {
         item={buildItem({ selected_dimensions: "32x30x18" as never })}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
     await screen.findByText("Line saved.");
     expect(mutateAsync.mock.calls[0][0].changes.selected_dimensions).toBe(
       "32x30x18",
@@ -354,7 +364,7 @@ describe("SelectionEditor — legacy non-object fallback", () => {
       screen.getByPlaceholderText('{"width":"32 in","height":"30 in"}'),
       { target: { value: "{not json" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save specification" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
     expect(
       await screen.findByText(
         'Dimensions must be valid JSON, for example {"width":"32 in"}.',
@@ -477,18 +487,21 @@ describe("SP-19/F57 — the spec book lands on the addressed FF&E line", () => {
     );
   });
 
-  it("falls back to the first item when no line is addressed", () => {
+  it("opens at rest when no line is addressed (SPEC §S7b p1)", () => {
     withItems();
 
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
-    expect(container.querySelector("#spec-book-item-item-1")).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    for (const id of ["item-1", "item-2", "item-3"]) {
+      expect(container.querySelector(`#spec-book-item-${id}`)).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+    }
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(0);
   });
 
-  it("ignores an ffeItemId that is not in this book", () => {
+  it("ignores an ffeItemId that is not in this book, and rests", () => {
     withItems();
     mockSearchParams = new URLSearchParams("ffeItemId=not-in-this-project");
 
@@ -496,8 +509,9 @@ describe("SP-19/F57 — the spec book lands on the addressed FF&E line", () => {
 
     expect(container.querySelector("#spec-book-item-item-1")).toHaveAttribute(
       "aria-expanded",
-      "true",
+      "false",
     );
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(0);
   });
 
   it("SP-14/F100 — the leaf's return link names the full project", () => {
@@ -559,8 +573,12 @@ describe("F58 — the workbench names no lifecycle word", () => {
 });
 
 // R1's margin read needs the studio seat; the print preview below is a
-// client edition, which never shows trade price either way.
-jest.mock("@/hooks/use-can-see-margin", () => ({ useCanSeeMargin: () => false }));
+// client edition, which never shows trade price either way. The opened
+// piece shows it only when this is true (reset in beforeEach).
+let mockCanSeeMargin = false;
+jest.mock("@/hooks/use-can-see-margin", () => ({
+  useCanSeeMargin: () => mockCanSeeMargin,
+}));
 
 /**
  * US-28 S7b — the spec book, full uplift (V20 U-Q18; SPEC §S7b). Chapters are
@@ -637,9 +655,14 @@ describe("US-28 S7b — the spec book by trade", () => {
     const user = userEvent.setup();
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
-    // the book opens on its first piece, unfolded with its editor, as before
+    // the book opens at rest: no piece unfolded, no save act (SPEC §S7b p1)
+    expect(container.querySelector("#spec-book-item-bench")).toHaveAttribute("aria-expanded", "false");
+    expect(container.querySelectorAll(".sb-open")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /^Save/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Built-in bench" }));
     expect(container.querySelector("#spec-book-item-bench")).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("button", { name: "Save specification" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save the specification" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Halo floor lamp" }));
     expect(container.querySelector("#spec-book-item-lamp")).toHaveAttribute("aria-expanded", "true");
@@ -656,6 +679,7 @@ describe("US-28 S7b — the spec book by trade", () => {
     const user = userEvent.setup();
     const { container } = render(<SpecBookWorkspace projectId="project-1" />);
 
+    await user.click(screen.getByRole("button", { name: "Built-in bench" }));
     expect(container.querySelectorAll(".sb-open")).toHaveLength(1);
     await user.click(screen.getByLabelText("Finish"));
     await user.keyboard("{Escape}");
@@ -678,7 +702,7 @@ describe("US-28 S7b — the spec book by trade", () => {
       .getAllByRole("button")
       .map((button) => button.textContent);
     expect(tabs).toEqual([
-      "Specification editor",
+      "Specification",
       "Audience editions",
       "Issue readiness",
       "Revision history",
@@ -698,11 +722,32 @@ describe("US-28 S7b — the spec book by trade", () => {
     const user = userEvent.setup();
     render(<SpecBookWorkspace projectId="project-1" />);
 
+    await user.click(screen.getByRole("button", { name: "Built-in bench" }));
     await user.click(screen.getByRole("button", { name: "Preview the client sheet" }));
     const preview = screen.getByRole("region", { name: "client edition preview" });
     expect(within(preview).getByRole("article")).toHaveClass("sb-page");
     expect(within(preview).getByText("Built-in bench")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Client" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByText("Trade price", { exact: true })).not.toBeInTheDocument();
+  });
+
+  it("shows an opened piece's trade price only to a viewer who may see margin (R1)", async () => {
+    withTradeBook();
+    const items = (mockWorkbenchHookResult as { data: { items: SpecBookWorkItem[] } }).data.items;
+    items[1].trade_price_cents = 418_050;
+    const user = userEvent.setup();
+
+    const { container, unmount } = render(<SpecBookWorkspace projectId="project-1" />);
+    await user.click(screen.getByRole("button", { name: "Halo floor lamp" }));
+    const hidden = container.querySelector(".sb-open") as HTMLElement;
+    expect(within(hidden).queryByText("Trade price", { exact: true })).not.toBeInTheDocument();
+    unmount();
+
+    mockCanSeeMargin = true;
+    const seen = render(<SpecBookWorkspace projectId="project-1" />);
+    await user.click(screen.getByRole("button", { name: "Halo floor lamp" }));
+    const fold = seen.container.querySelector(".sb-open") as HTMLElement;
+    expect(within(fold).getByText("Trade price", { exact: true }).tagName).toBe("DT");
+    expect(within(fold).getByText("$4180.50")).toHaveClass("lfig");
   });
 });

@@ -9,6 +9,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import * as patinaTypes from '@patina/types';
 import {
   ALL_CONSENT_WORDS,
   ALL_PAPER_STATES,
@@ -19,7 +20,6 @@ import {
   SEAT_STAGE_WORD_PIGMENTS,
   STATE_WORD_INKS,
   STATE_WORD_INK_TOKENS,
-  STATE_WORD_PIGMENTS,
   resolveStateWord,
   type StateWordInk,
 } from '@patina/types';
@@ -93,12 +93,9 @@ describe('US-28 S1 · the ink state word', () => {
     expect(STATE_WORD_INK_TOKENS[ink].className).toBe('word');
   });
 
-  it('keeps the deprecated pigment map unchanged until its last caller migrates', () => {
-    // People's StateWord still reads `tokens`; S10 moves it onto `ink`.
-    expect(STATE_WORD_PIGMENTS.blocked).toEqual({
-      border: 'var(--terracotta)',
-      color: 'var(--terracotta-ink)',
-    });
-    expect(resolveStateWord('paper', 'lapsed')!.tokens).toBe(STATE_WORD_PIGMENTS.blocked);
+  it('no longer exports the grading pigment map, and a resolution carries no pigment pair', () => {
+    // V20 U-Q13: state is an ink word. The PR-v alias had no caller left.
+    expect(patinaTypes).not.toHaveProperty('STATE_WORD_PIGMENTS');
+    expect(resolveStateWord('paper', 'lapsed')).not.toHaveProperty('tokens');
   });
 });

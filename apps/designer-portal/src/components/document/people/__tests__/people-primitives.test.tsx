@@ -20,7 +20,8 @@ import { StateWord, PlainFact } from '../state-word';
 import { ContactRuleLine, routedSentence } from '../contact-rule-line';
 import { SeatLine, seatWindowText, formatSeatDate, seatLineParts } from '../seat-line';
 import { TelLink, telDisplay, telHref } from '../tel-link';
-import { STATE_WORD_PIGMENTS, resolveStateWord } from '@patina/types';
+import * as patinaTypes from '@patina/types';
+import { resolveStateWord } from '@patina/types';
 import type { PeopleDirectorySeat } from '@patina/supabase';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -151,19 +152,8 @@ describe('StateWord · one bordered word for all four families', () => {
     expect(word).toHaveAttribute('data-state-ink', 'od');
   });
 
-  it('keeps the deprecated pigment map stable for callers outside People', () => {
-    // The four pairs are SPEC §2.2's `.word--*` rules, stated once in
-    // @patina/types so the room and the specimens cannot drift.
-    expect(STATE_WORD_PIGMENTS).toEqual({
-      current: { border: 'var(--sage)', color: 'var(--sage-ink)' },
-      pending: { border: 'var(--golden)', color: 'var(--golden-ink)' },
-      blocked: { border: 'var(--terracotta)', color: 'var(--terracotta-ink)' },
-      dormant: { border: 'var(--hairline-strong)', color: 'var(--ink-faint)' },
-    });
-    // Every `color` is an ink; a material pigment is never asked to be read.
-    for (const pair of Object.values(STATE_WORD_PIGMENTS)) {
-      expect(pair.color).toMatch(/-ink\)$|--ink-faint\)$/);
-    }
+  it('no longer exports the deprecated pigment map (V20 U-Q13)', () => {
+    expect(patinaTypes).not.toHaveProperty('STATE_WORD_PIGMENTS');
   });
 
   it('resolves a value to its word AND its pigment in one reduction', () => {
@@ -172,7 +162,7 @@ describe('StateWord · one bordered word for all four families', () => {
       value: 'lapsed',
       label: 'Lapsed',
       pigment: 'blocked',
-      tokens: { border: 'var(--terracotta)', color: 'var(--terracotta-ink)' },
+      ink: 'od',
     });
     expect(resolveStateWord('consent', null)).toBeNull();
     expect(resolveStateWord('stage', 'nonsense')).toBeNull();

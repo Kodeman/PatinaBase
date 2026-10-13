@@ -201,30 +201,6 @@ export type StateWordPigment = 'current' | 'pending' | 'blocked' | 'dormant';
  *  re-deriving either. */
 export type StateWordFamily = 'reach' | 'consent' | 'stage' | 'paper';
 
-/** The house-sheet token names each pigment resolves to. The alias block in
- *  the designer portal's `globals.css` maps these onto the shipped
- *  `--color-*` values (PR-v); SPEC §2.2's `.word--*` rules are the same four
- *  pairs, stated in CSS. */
-export interface StateWordPigmentTokens {
-  /** `border-color` for the bordered word box. */
-  border: string;
-  /** `color` for the word itself — always a text-grade ink. */
-  color: string;
-}
-
-/**
- * @deprecated V20 U-Q13 (US-28 S1) reversed PR-v: state is an ink word
- * portal-wide, so a state is no longer graded by pigment. Use
- * `STATE_WORD_INKS` (and `StateWordResolution.ink`). Kept, unchanged, only
- * until the People room's `StateWord` (S10) moves onto the ink map.
- */
-export const STATE_WORD_PIGMENTS: Record<StateWordPigment, StateWordPigmentTokens> = {
-  current: { border: 'var(--sage)', color: 'var(--sage-ink)' },
-  pending: { border: 'var(--golden)', color: 'var(--golden-ink)' },
-  blocked: { border: 'var(--terracotta)', color: 'var(--terracotta-ink)' },
-  dormant: { border: 'var(--hairline-strong)', color: 'var(--ink-faint)' },
-};
-
 // ============================================================================
 // THE INK STATE WORD (US-28 S1 · V20 U-Q13 · house sheet §G)
 //
@@ -481,9 +457,6 @@ export interface StateWordResolution {
   /** The ink the word prints in (`STATE_WORD_INKS`); spend it through
    *  `STATE_WORD_INK_TOKENS[ink]`. */
   ink: StateWordInk;
-  /** @deprecated The grading pigment pair (`STATE_WORD_PIGMENTS`), reversed
-   *  by V20 U-Q13. Use `ink`. */
-  tokens: StateWordPigmentTokens;
 }
 
 /**
@@ -508,7 +481,6 @@ export function resolveStateWord(
         label: REACH_STATE_LABELS[reach],
         pigment,
         ink: STATE_WORD_INKS[pigment],
-        tokens: STATE_WORD_PIGMENTS[pigment],
       };
     }
     case 'consent': {
@@ -521,7 +493,6 @@ export function resolveStateWord(
         label: CONSENT_WORD_LABELS[word],
         pigment,
         ink: STATE_WORD_INKS[pigment],
-        tokens: STATE_WORD_PIGMENTS[pigment],
       };
     }
     case 'stage': {
@@ -534,7 +505,6 @@ export function resolveStateWord(
         label: SEAT_STAGE_WORD_LABELS[word],
         pigment,
         ink: STATE_WORD_INKS[pigment],
-        tokens: STATE_WORD_PIGMENTS[pigment],
       };
     }
     case 'paper': {
@@ -547,7 +517,6 @@ export function resolveStateWord(
         label: PAPER_STATE_LABELS[state],
         pigment,
         ink: STATE_WORD_INKS[pigment],
-        tokens: STATE_WORD_PIGMENTS[pigment],
       };
     }
     default:

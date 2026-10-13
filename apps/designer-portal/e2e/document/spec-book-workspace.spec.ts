@@ -76,18 +76,24 @@ test.describe("spec-book workspace", () => {
       page.getByRole("navigation", { name: "Spec book workspace" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Specification editor" }),
+      page.getByRole("button", { name: "Specification", exact: true }),
     ).toHaveAttribute("aria-current", "page");
 
-    // Force the workbench onto the exact item beforeAll pinned above — the
-    // three seeded items tie on (sort_order, created_at), so data.items[0]
-    // (the app's own default-selection fallback) is not guaranteed to be
-    // this item once any of the tied rows has been written to.
-    await page.locator(`#spec-book-item-${ffeItemId}`).click();
+    // US-28 S7b: the book opens at rest, with no piece unfolded.
+    const pinnedName = page.locator(`#spec-book-item-${ffeItemId}`);
+    await expect(pinnedName).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator(".sb-open")).toHaveCount(0);
+
+    // Open the exact item beforeAll pinned above. The three seeded items tie
+    // on (sort_order, created_at), so their order on the page is not
+    // guaranteed once any of the tied rows has been written to.
+    await pinnedName.click();
+    await expect(pinnedName).toHaveAttribute("aria-expanded", "true");
 
     const savedFinish = `E2E saved finish ${Date.now()}`;
     await page.getByLabel("Finish", { exact: true }).fill(savedFinish);
-    await page.getByRole("button", { name: "Save specification" }).press("Enter");
+    // Opened from its name, the fold saves every field it holds.
+    await page.getByRole("button", { name: "Save the specification" }).press("Enter");
 
     await expect
       .poll(() =>
@@ -112,7 +118,7 @@ test.describe("spec-book workspace", () => {
     await page
       .getByLabel("Finish", { exact: true })
       .fill(`Stale browser finish ${Date.now()}`);
-    await page.getByRole("button", { name: "Save specification" }).press("Enter");
+    await page.getByRole("button", { name: "Save the specification" }).press("Enter");
     // Scoped to `main`: the conflict also raises a global toast (a second,
     // assertive `role="status"` element with the same text) — this assertion
     // is about the workbench's own inline feedback, not the toast.
