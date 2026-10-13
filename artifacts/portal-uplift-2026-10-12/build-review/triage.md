@@ -78,6 +78,45 @@ The re-review was GPT-6 Astra, read-only, pinned to 4c5ce7804, and its verdict w
 | R6b | med / high | When Undo of her own deferral reveals the holder's settlement, there's no focus or announcement, and the pending flag stays armed. | **FIX** in SQ-854. |
 | R1b | med / med | For non-two-decimal currencies (JPY), the label rounds while the payload is cents. | **FIX** in SQ-854: the sheet always prints two fraction digits, matching the system's ×100 storage. |
 
+## Delta re-review (SQ-855), round 3
+
+The delta re-review was GPT-6 Astra, read-only, over 4c5ce7804...1c7a72f2f. Verdict: NOT CLEAN.
+- **Closed:** R3b (behaviour), R16, R6b and R1b.
+- **R13b:** closed for unrotated captions only.
+
+| # | Severity / confidence | Finding | Ruling |
+|---|---|---|---|
+| R13c | med / high (reproduced) | A rotated caption still clips below the composition, in the DOM and in the painter. | **FIXED** in SQ-859 (the turned box grows the composition). |
+| R17 | low / high | The PNG preflight promises saved-canvas dimensions while the export grows. | **FIXED** in SQ-859. |
+| R3c | low / high | The Shift+T test runs without an active Tidy session. | **FIXED** in SQ-859. |
+
 ## Local walk (SQ-834)
 
-Pending. It runs once the integration gate frees the shared local runtime.
+This walk ran at 39e74f1e1, against `build-walk/WALK.md`, and the walk commit was integrated as b42fa9825. Scope was judged against uplift.md §(c) and §(f). Two founder rulings came from Kody on 2026-10-13, multiple choice:
+- **People:** "Match specimen fully".
+- **Procurement:** "Ship as is, owe it".
+
+| # | Finding (WALK §) | Ruling |
+|---|---|---|
+| W1 | BLOCKER: the section dock collapses at 1180 px and up (§1) | **FIX** SQ-856 |
+| W2 | HIGH: the TESTER pill covers Export, Ledgers, invoice rows and Section name (§1) | **FIX** SQ-856. TESTER becomes a quiet tag in the dock row. |
+| W3 | MEDIUM: the 390 dock is a dark band and the popover is dark (§1, §9) | **FIX** SQ-856 |
+| W4 | LOW: Preferences has targets under 44 px (§9) | **FIX** SQ-856 |
+| W5 | HIGH: the spec book state column prints raw field keys (§2) | **FIX** SQ-857, together with "Add a finish", the title, the doubled "Not specified" and the row tint |
+| W6 | MEDIUM: the record-payment commit is a link, not the filled ink act (§2) | **FIX** SQ-858. Area 8's one filled act. |
+| W7 | LOW-MEDIUM: invoice labels touch their values at 390 (§8) | **FIX** SQ-858 |
+| W8 | MEDIUM: Accounts shows whole dollars, newest first (§8) | **FIX** SQ-858: cents, and what is owed first. The extra tabs and STUDIO EYES ONLY are **KEEP**. |
+| W9 | MEDIUM: the board room title is sans, the canvas is clipped at 1440, it opens at 100% at 390, Share has a lift, Export cards are rounded, the tools are boxed (§6) | **FIX** SQ-859 |
+| W10 | MEDIUM: client `/share` at 390 drops the Materials placeholders (§6) | **FIX** SQ-859 |
+| W11 | MEDIUM: "Send reminder" shows twice at 390 (§2) | **FIX** SQ-860 |
+| W12 | MEDIUM: "Message the client" and "Write to your client" (§2) | **Ruling (a):** these are two different writers, so both stay. The note's act is renamed to its own job and demoted (SQ-860). |
+| W13 | MEDIUM: Playfair region heads where the specimen has Section headers (§2) | **FIX** SQ-860, to the specimen |
+| W14 | MEDIUM: the old white head band on Rooms, room file, People, Library, Drafting and Compose (§3–§7) | **FIX** SQ-861 (Header line) |
+| W15 | MEDIUM-LOW: bespoke empty states on Plans and the room file (§2, §3) | **FIX** SQ-861 (EmptyState) |
+| W16 | MEDIUM: room cards lack the "Open the scan / room file" act; the Library has no "All shelves" (§3, §5) | **FIX** SQ-861 |
+| W17 | HIGH: People is largely unbuilt against the specimen (§4) | **FIX** SQ-862 under Kody's ruling. People becomes directory plus inbound; Client relations, Studio marketing and The Engine move to the dock's More and to ⌘K. |
+| W18 | HIGH: Procurement is largely unbuilt against money-p4 (§8) | **OWED** (Kody: ship as is). |
+| W19 | LOW: the Desk defaults to MINE where desk-p1 shows the studio | **KEEP**; OWED to Kody as a ruling |
+| W20 | LOW: the Paper's teaching hint, its extra head acts (Set dates, Sharing, Directory) and the edged margin box | **KEEP**: existing features (US-13 Workshop Notes); the margin note is a Card off the paper |
+| W21 | LOW: US date order, the Rooms brief's blue stage edge, the Ceremony rail, the compose boxes, the Desk "Until…" row and the Studio resources footer, the Undo highlight flash, dashed placeholders on screen versus solid in the PNG | **KEEP**; OWED to Kody as polish |
+| W22 | Known: the lens band jump and the duplicate "New board" (SQ-852); the Build room unchanged (V15) | Already handled |
