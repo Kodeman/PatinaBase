@@ -226,8 +226,11 @@ test.describe("Inked Instruments action visibility", () => {
     await page.goto("/library", { waitUntil: "domcontentloaded" });
     await expectInlinePrimary(page, "room-head", "Capture");
 
+    // US-28 S10b (SQ-825, uplift (c) area 4, U-Q13): People has no filled
+    // act; Add contact is a secondary (people-room.tsx), so the head claims
+    // no leader and the one act still holds the 44px floor.
     await page.goto("/people", { waitUntil: "domcontentloaded" });
-    await expectInlinePrimary(page, "room-head", "Add contact");
+    await expectInlineQuietAct(page, "room-head", "add-person", "Add contact");
 
     // The Drafting Room claims no primary, and has not since f74e20b88
     // ("legacy send retirement"): a project-bound furnishing draft now reaches
