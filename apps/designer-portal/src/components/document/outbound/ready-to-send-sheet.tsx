@@ -279,7 +279,7 @@ export function ReadyToSendSheet({ projectId }: { projectId: string }) {
       })}
 
       {waiting && (
-        <div className="sticky bottom-0 flex flex-col gap-1.5 border-t border-[var(--border-default)] bg-[var(--bg-surface)] py-3">
+        <div className="sticky bottom-0 z-10 -mx-6 flex flex-col gap-1.5 border-t border-[var(--color-pearl)] bg-[var(--doc-paper,#FAF7F2)] px-6 py-3 sm:-mx-9 sm:px-9">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <DocumentAction
               actionKey="send-checked-outbound"
