@@ -22050,6 +22050,78 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00783_outbound_supersede_by_project.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.compose_outbound_draft(text, uuid, uuid, text, text, jsonb, text, text, jsonb, text, uuid, text, timestamptz, timestamptz, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00783_outbound_supersede_by_project.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.compose_outbound_draft(text, uuid, uuid, text, text, jsonb, text, text, jsonb, text, uuid, text, timestamptz, timestamptz, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00784_outbound_send_attempt_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_outbound_draft_send_attempt(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00784_outbound_send_attempt_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_outbound_draft_send_attempt(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00784_outbound_send_attempt_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_outbound_draft_for_send(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00784_outbound_send_attempt_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_outbound_draft_for_send(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00784_outbound_send_attempt_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.release_outbound_draft_claim(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00784_outbound_send_attempt_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.release_outbound_draft_claim(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00784_outbound_send_attempt_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_outbound_draft_finalize(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00784_outbound_send_attempt_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_outbound_draft_finalize(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00784_outbound_send_attempt_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.release_outbound_draft_finalize(uuid, timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00784_outbound_send_attempt_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.release_outbound_draft_finalize(uuid, timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

@@ -11933,6 +11933,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           expires_at: string | null
+          finalizing_at: string | null
           id: string
           kind: string
           message_id: string | null
@@ -11942,6 +11943,7 @@ export type Database = {
           recipient_kind: string
           ref_id: string
           ref_type: string
+          send_attempted_at: string | null
           sent_at: string | null
           sent_by: string | null
           status: string
@@ -11967,6 +11969,7 @@ export type Database = {
           edited_at?: string | null
           edited_by?: string | null
           expires_at?: string | null
+          finalizing_at?: string | null
           id?: string
           kind: string
           message_id?: string | null
@@ -11976,6 +11979,7 @@ export type Database = {
           recipient_kind: string
           ref_id: string
           ref_type: string
+          send_attempted_at?: string | null
           sent_at?: string | null
           sent_by?: string | null
           status?: string
@@ -12001,6 +12005,7 @@ export type Database = {
           edited_at?: string | null
           edited_by?: string | null
           expires_at?: string | null
+          finalizing_at?: string | null
           id?: string
           kind?: string
           message_id?: string | null
@@ -12010,6 +12015,7 @@ export type Database = {
           recipient_kind?: string
           ref_id?: string
           ref_type?: string
+          send_attempted_at?: string | null
           sent_at?: string | null
           sent_by?: string | null
           status?: string
@@ -39209,6 +39215,51 @@ export type Database = {
         }
         Returns: Json
       }
+      claim_outbound_draft_finalize: {
+        Args: { p_id: string }
+        Returns: {
+          body: string
+          channel: string
+          claimed_at: string | null
+          composed_by: string
+          created_at: string
+          dedupe_key: string
+          delivered_at: string | null
+          delivery_message_id: string | null
+          discarded_at: string | null
+          discarded_by: string | null
+          due_at: string | null
+          edited_at: string | null
+          edited_by: string | null
+          expires_at: string | null
+          finalizing_at: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string
+          payload: Json
+          project_id: string | null
+          recipient_kind: string
+          ref_id: string
+          ref_type: string
+          send_attempted_at: string | null
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_address: string | null
+          to_client_id: string | null
+          to_contact_id: string | null
+          to_party_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "outbound_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       claim_outbound_draft_for_send: {
         Args: { p_id: string }
         Returns: {
@@ -39226,6 +39277,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           expires_at: string | null
+          finalizing_at: string | null
           id: string
           kind: string
           message_id: string | null
@@ -39235,6 +39287,7 @@ export type Database = {
           recipient_kind: string
           ref_id: string
           ref_type: string
+          send_attempted_at: string | null
           sent_at: string | null
           sent_by: string | null
           status: string
@@ -40345,6 +40398,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           expires_at: string | null
+          finalizing_at: string | null
           id: string
           kind: string
           message_id: string | null
@@ -40354,6 +40408,7 @@ export type Database = {
           recipient_kind: string
           ref_id: string
           ref_type: string
+          send_attempted_at: string | null
           sent_at: string | null
           sent_by: string | null
           status: string
@@ -42438,6 +42493,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           expires_at: string | null
+          finalizing_at: string | null
           id: string
           kind: string
           message_id: string | null
@@ -42447,6 +42503,7 @@ export type Database = {
           recipient_kind: string
           ref_id: string
           ref_type: string
+          send_attempted_at: string | null
           sent_at: string | null
           sent_by: string | null
           status: string
@@ -43402,6 +43459,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           expires_at: string | null
+          finalizing_at: string | null
           id: string
           kind: string
           message_id: string | null
@@ -43411,6 +43469,52 @@ export type Database = {
           recipient_kind: string
           ref_id: string
           ref_type: string
+          send_attempted_at: string | null
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string | null
+          to_address: string | null
+          to_client_id: string | null
+          to_contact_id: string | null
+          to_party_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "outbound_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_outbound_draft_send_attempt: {
+        Args: { p_id: string }
+        Returns: {
+          body: string
+          channel: string
+          claimed_at: string | null
+          composed_by: string
+          created_at: string
+          dedupe_key: string
+          delivered_at: string | null
+          delivery_message_id: string | null
+          discarded_at: string | null
+          discarded_by: string | null
+          due_at: string | null
+          edited_at: string | null
+          edited_by: string | null
+          expires_at: string | null
+          finalizing_at: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string
+          payload: Json
+          project_id: string | null
+          recipient_kind: string
+          ref_id: string
+          ref_type: string
+          send_attempted_at: string | null
           sent_at: string | null
           sent_by: string | null
           status: string
@@ -43919,6 +44023,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           expires_at: string | null
+          finalizing_at: string | null
           id: string
           kind: string
           message_id: string | null
@@ -43928,6 +44033,7 @@ export type Database = {
           recipient_kind: string
           ref_id: string
           ref_type: string
+          send_attempted_at: string | null
           sent_at: string | null
           sent_by: string | null
           status: string
@@ -43944,6 +44050,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      release_outbound_draft_finalize: {
+        Args: { p_finalizing_at: string; p_id: string }
+        Returns: boolean
       }
       release_procurement_draft_claim: {
         Args: { p_draft_id: string }
@@ -46852,6 +46962,7 @@ export type Database = {
           edited_at: string | null
           edited_by: string | null
           expires_at: string | null
+          finalizing_at: string | null
           id: string
           kind: string
           message_id: string | null
@@ -46861,6 +46972,7 @@ export type Database = {
           recipient_kind: string
           ref_id: string
           ref_type: string
+          send_attempted_at: string | null
           sent_at: string | null
           sent_by: string | null
           status: string
