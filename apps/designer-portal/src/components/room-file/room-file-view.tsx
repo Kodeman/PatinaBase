@@ -18,7 +18,7 @@
  */
 
 import { useState } from "react";
-import Link from "next/link";
+import { RoomHeaderLine } from "@/components/document/rooms/room-view/room-header-line";
 import {
   useRoomScan,
   useRoomFiles,
@@ -112,28 +112,19 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
           is the Room View of the same scan — an address that always resolves,
           project or no project (the old link needed a projectId the deliverable
           never actually depended on). */}
-      <Link
-        href={`/room/${scanId}`}
-        className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)]"
-      >
-        {C.backToRoom(roomLabel)}
-      </Link>
+      {/* US-28 S10a: the room file shares the room's Header line. */}
+      <RoomHeaderLine
+        as="h1"
+        title={roomLabel}
+        back={{ href: `/room/${scanId}`, label: roomLabel }}
+      />
 
-      {/* Header */}
-      <header className="mt-4">
-        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
-          {C.eyebrow}
-        </p>
-        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <h1 className="font-heading text-[30px] font-medium text-[var(--color-charcoal)] sm:text-[36px]">
-            {roomLabel}
-            {roomType && (
-              <span className="italic text-[var(--color-mocha)]">
-                {" "}
-                · {roomType}.
-              </span>
-            )}
-          </h1>
+      <header>
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <p className="eb">
+            {C.eyebrow}
+            {roomType && <span>{roomType}</span>}
+          </p>
           {current?.unverified && (
             <span className="rounded-[2px] border border-[var(--color-clay)] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
               {C.unverifiedBadge}

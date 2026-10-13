@@ -3,7 +3,9 @@
 /**
  * RoomView — the Room View shell (Room View program, W2-T3; R107, package
  * accept line 2.2). Mounts inside `RoomShell` at `/room/[id]`. Owns the
- * rv-head (client + room type, the Document doc-link), the Plan · Orbit ·
+ * Header line it shares with the room file (US-28 S10a: RoomHeaderLine, then
+ * the job's tick, Document link, client and stage word), the viewer as a
+ * Section, the wall facts as ledger rows (RoomWalls), the Plan · Orbit ·
  * Walk mode row (a Strata rule per the prototype's R§3 note — NOT tabs, D1),
  * and the facts-rail + Plan stage body. Orbit and Walk are inert in v1
  * (R107 §3: "V1 is Plan + Orbit, one toggle apart" — Orbit itself lands in
@@ -52,6 +54,9 @@ import { buildPhotoMarkers, planBounds, PhotoMarkers } from './photo-markers';
 import { PhotoStrip } from './photo-strip';
 import { PhotoViewer } from './photo-viewer';
 import { planViewBox, PlanStage } from './plan-stage';
+import { RoomHeaderLine } from './room-header-line';
+import { RoomWalls } from './room-walls';
+import { humanizeRoomType, scanDay, stageClassFor } from './rooms-by-job';
 import { useDevSplatUrl } from './splat/dev-splat-url';
 import { SplatStage } from './splat/splat-stage';
 import { useMeasure } from './use-measure';
@@ -74,10 +79,6 @@ const SECTION_LABEL: Record<string, string> = {
   install: 'Install',
   care: 'Care',
 };
-
-function prettyRoomType(roomType: string): string {
-  return roomType.replace(/_/g, ' ').trim();
-}
 
 /** Mode-row button styling. The mode row marks WHERE YOU STAND, not what you can
  *  do, so under I107 it keeps a device of its own and never borrows the button
@@ -126,7 +127,8 @@ export function RoomView({
     const label = SECTION_LABEL[doc.activeSection] ?? doc.activeSection;
     return {
       href: `/doc/${doc.engagementId}`,
-      label: `→ the Document · ${label}`,
+      stageWord: label,
+      stageClass: stageClassFor(doc.activeSection),
     };
   }, [doc?.engagementId, doc?.activeSection]);
 
@@ -289,7 +291,8 @@ export function RoomView({
   }
 
   const clientName = doc.documentClientName ?? doc.ownerClientName;
-  const roomType = doc.roomType ? prettyRoomType(doc.roomType) : null;
+  const roomName = humanizeRoomType(doc.roomType) ?? clientName ?? 'Unnamed room';
+  const scannedDay = scanDay(doc.scannedAt);
 
   // "armed" broadly = the tool is capturing clicks (armed or first-point
   // placed) — both the stagecap copy and the toolrow's button treatment key
@@ -298,33 +301,43 @@ export function RoomView({
     measure.state.phase === 'armed' || measure.state.phase === 'point';
 
   return (
-    <div className="mx-auto max-w-[1180px] px-6 pb-20 pt-8 sm:px-8">
-      {/* rv-head */}
-      <div className="mb-1.5 flex flex-wrap items-baseline gap-4">
-        <h2 className="font-heading text-[28px] font-medium text-[var(--color-charcoal)] sm:text-[34px]">
-          {clientName ?? 'Unnamed room'}
-          {roomType && (
-            <span className="italic text-[var(--color-mocha)]">
-              {' '}
-              · {roomType}.
+    <div className="mx-auto max-w-[1180px] px-4 pb-20 sm:px-6">
+      {/* The Header line the room shares with its room file (US-28 S10a). */}
+      <RoomHeaderLine title={roomName} />
+
+      {/* The job this room belongs to: its tick, its Document, the client
+          and the stage word in ink. */}
+      {(docLink || clientName) && (
+        <p className="room-ctx t-body-sm">
+          {docLink && (
+            <span className={docLink.stageClass ? `tick ${docLink.stageClass}` : 'tick'}>
+              <Link href={docLink.href} className="name t-d4">
+                The Document
+              </Link>
             </span>
           )}
-        </h2>
-        {docLink && (
-          <Link
-            href={docLink.href}
-            className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
-          >
-            {docLink.label}
-          </Link>
-        )}
+          {clientName && <span>{clientName}</span>}
+          {docLink && <span className="word">{docLink.stageWord}</span>}
+        </p>
+      )}
+
+      {/* The viewer is a Section (US-28 S10a): its eyebrow, the mode row, the
+          facts beside the stage, and its own closing rule. */}
+      <section className="section" aria-labelledby="room-viewer-eb">
+      <div className="sec-head">
+        <p className="eb" id="room-viewer-eb">
+          <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
+            <path d="M0 2h34M0 6h28M0 10h20" />
+          </svg>
+          <span>{scannedDay ? `Plan · drawn from the scan of ${scannedDay}` : 'Plan · drawn from the scan'}</span>
+        </p>
       </div>
 
       {/* mode row — Plan · Orbit · Walk. A text row under a hairline, not
           tabs (D1) — the prototype's R§3 note: "No tabs in the product; a
           Strata rule carries the toggle." Plan + Orbit are live (V1 is one
           toggle apart, R107 §3); Walk arrives after Place. */}
-      <div className="my-5 flex border-b border-[var(--doc-ink-border)]">
+      <div className="mb-5 flex flex-wrap border-b border-[var(--doc-ink-border)]">
         <button
           type="button"
           onClick={() => selectMode('plan')}
@@ -468,6 +481,11 @@ export function RoomView({
           />
         </div>
       </div>
+      </section>
+
+      {/* Wall facts are ledger rows: "this wall's dimensions, while the
+          maker is on the phone." */}
+      <RoomWalls geometry={geometry} />
 
       {/* Full-bleed photo viewer — mounted over the still-mounted Plan/facts
           rail (D1: the surface beneath never unmounts). */}

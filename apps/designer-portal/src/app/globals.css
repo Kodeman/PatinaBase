@@ -2541,3 +2541,23 @@ html:has([data-document-shell]) {
   .card.facet.is-open { outline-color: Highlight; }
 }
 /* ═══ end US-28 S9 papers ═══════════════════════════════════════════════════ */
+
+/* US-28 S10 rooms ═══════════════════════════════════════════════════════════
+   Measured rooms, the room page and the room file (uplift.md (c) area 3;
+   specimens/rooms-{1440,390}.html). Area-local only: the shared classes are
+   the S1 block's. */
+.room-fig { margin-top: 12px; }
+.room-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; align-items: baseline; margin: 12px 0 0; padding-bottom: 16px; }
+.room-facts dt { font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.room-facts dd { margin: 0; color: var(--text-primary); overflow-wrap: break-word; }
+.room-pl-wall { fill: none; stroke: var(--text-primary); stroke-width: 1.2; stroke-linejoin: round; }
+.room-pl-thin { fill: none; stroke: var(--text-primary); stroke-width: 1; }
+.room-pl-sil { fill: none; stroke: var(--ink-faint); stroke-width: 1; }
+.room-pl-hatch { fill: none; stroke: var(--ink-faint); stroke-width: 1; stroke-opacity: .5; }
+.rooms-job-name { display: inline-flex; align-items: center; min-height: 44px; }
+.rooms-rows { margin-top: 24px; }
+.room-ctx { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; margin: -24px 0 48px; color: var(--text-muted); }
+.room-ctx .name { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; }
+.room-note { max-width: 64ch; color: var(--text-muted); }
+@media (max-width: 599px) { .room-ctx { margin: -12px 0 24px; } }
+/* end US-28 S10 rooms */

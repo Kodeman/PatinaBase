@@ -7,10 +7,10 @@ jest.mock('next/navigation', () => ({
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { RoomRosterScanRow } from '@patina/supabase';
-import type { RoomRosterEntry } from '@/lib/room-view/geometry';
+import type { RoomGeometry, RoomRosterEntry } from '@/lib/room-view/geometry';
 import { resolveRosterClientName, resolveRosterDocRef } from '@/lib/room-view/roster-from-rows';
 import { readRoomOrigin, clearRoomOrigin } from '@/lib/document/room-origin';
-import { RoomCard } from '../room-card';
+import { RoomCard, RoomRow } from '../room-card';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Fixtures
@@ -100,46 +100,97 @@ describe('resolveRosterDocRef', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// RoomCard — pure-props rendering
+// RoomCard — the Card with a plate slot (US-28 S10a)
 // ═══════════════════════════════════════════════════════════════════════════
 
+const DRAWN_GEOMETRY: RoomGeometry = {
+  width: 12,
+  depth: 15,
+  wallH: 9,
+  thick: 0.45,
+  walls: [
+    { x1: 0, z1: 0, x2: 12, z2: 0, conf: 'high', name: 'North wall', len: 12 },
+    { x1: 12, z1: 0, x2: 12, z2: 15, conf: 'high', name: 'East wall', len: 15 },
+    { x1: 12, z1: 15, x2: 0, z2: 15, conf: 'high', name: 'South wall', len: 12 },
+    { x1: 0, z1: 15, x2: 0, z2: 0, conf: 'high', name: 'West wall', len: 15 },
+  ],
+  windows: [],
+  doors: [],
+  openings: [],
+  objects: [],
+  floor: [],
+};
+
 describe('RoomCard', () => {
-  it('renders the docref line as a link to the document when docRef is present', () => {
+  it('stands on the card edge: the S1 .card, never the old ink-border box', () => {
+    const { container } = render(<RoomCard entry={BASE_ENTRY} />);
+    const card = container.querySelector('[data-room-card]');
+    expect(card).toHaveClass('card');
+    expect(card?.className).not.toMatch(/doc-ink-border/);
+  });
+
+  it('prints quality as an ink word, never a graded dot', () => {
     render(<RoomCard entry={BASE_ENTRY} />);
-    // Exact match: the outer whole-card link's accessible name also CONTAINS
-    // this text (it concatenates every descendant), so a substring match
-    // would ambiguously hit both links.
-    const docLink = screen.getByRole('link', { name: '→ the document · Brief' });
-    expect(docLink).toHaveAttribute('href', '/doc/a7e20e55-5416-400f-8d46-fb6dc38ca82c');
+    expect(screen.getByText('Quality excellent')).toHaveClass('word');
+    expect(screen.queryByText('●')).not.toBeInTheDocument();
   });
 
-  it('omits the docref line entirely for an orphan scan (docRef null)', () => {
-    render(<RoomCard entry={{ ...BASE_ENTRY, docRef: null }} />);
-    expect(screen.queryByText(/the document/i)).not.toBeInTheDocument();
+  it('omits the quality fact when the scan carries no grade', () => {
+    render(<RoomCard entry={{ ...BASE_ENTRY, quality: { grade: null, coverage: null } }} />);
+    expect(screen.queryByText(/^Quality/)).not.toBeInTheDocument();
   });
 
-  it('falls back to a quiet placeholder when the client name is unresolved', () => {
-    render(<RoomCard entry={{ ...BASE_ENTRY, clientName: null }} />);
-    // Appears twice: the visible name line, and the stretched card link's
-    // sr-only accessible-name span (see the next test).
-    expect(screen.getAllByText('Unnamed room').length).toBeGreaterThan(0);
-  });
-
-  it('the whole card links to the Room View, not just the docref line', () => {
+  it('an undrawn room shows the silhouette plate and the ink word AWAITING DRAWING, no dashed box', () => {
     render(<RoomCard entry={BASE_ENTRY} />);
-    const cardLink = screen.getByRole('link', { name: 'Open the room for Elena Ruiz' });
-    expect(cardLink).toHaveAttribute('href', '/room/9ca186a1-07c8-429d-ac35-f10ba43fe187');
+    const plate = screen.getByTestId('room-plan-thumb-placeholder');
+    expect(plate).toHaveClass('plate');
+    expect(plate.className).not.toMatch(/dashed/);
+    expect(plate).toHaveAttribute('role', 'img');
+    expect(screen.getByText('Awaiting drawing')).toHaveClass('word');
   });
 
-  it('stashes /rooms as the room origin when the card is clicked (Phase-2 gate fix)', () => {
+  it('a drawn room holds its plan in the plate and no AWAITING DRAWING word', () => {
+    render(<RoomCard entry={{ ...BASE_ENTRY, geometry: DRAWN_GEOMETRY }} />);
+    expect(screen.getByTestId('room-plan-thumb')).toHaveClass('plate');
+    expect(screen.queryByText('Awaiting drawing')).not.toBeInTheDocument();
+    expect(screen.getByText('Dining room · plan drawn from the scan')).toBeInTheDocument();
+  });
+
+  it('names the room, not the client, and prints its size in feet and inches', () => {
+    render(<RoomCard entry={BASE_ENTRY} />);
+    expect(screen.getByRole('link', { name: 'Dining room' })).toBeInTheDocument();
+    expect(screen.queryByText('Elena Ruiz')).not.toBeInTheDocument();
+    expect(screen.getByText('14′ 0″ × 14′ 0″')).toBeInTheDocument();
+    expect(screen.getByText('Room · scanned Tuesday 14 July')).toBeInTheDocument();
+  });
+
+  it('falls back to a quiet name when the room type is unknown', () => {
+    render(<RoomCard entry={{ ...BASE_ENTRY, roomType: null }} />);
+    expect(screen.getByRole('link', { name: 'Unnamed room' })).toBeInTheDocument();
+  });
+
+  it('the room name links to the Room View and stashes /rooms as the origin', () => {
     clearRoomOrigin();
     render(<RoomCard entry={BASE_ENTRY} />);
-    const cardLink = screen.getByRole('link', { name: 'Open the room for Elena Ruiz' });
-    fireEvent.click(cardLink);
-    // Previously a no-op (isRoomPath('/rooms') blocked the stash) — the
-    // origin silently stayed '/desk' and the leave affordance read
-    // "← the Desk" instead of "← the Rooms".
+    const link = screen.getByRole('link', { name: 'Dining room' });
+    expect(link).toHaveAttribute('href', '/room/9ca186a1-07c8-429d-ac35-f10ba43fe187');
+    fireEvent.click(link);
     expect(readRoomOrigin()).toBe('/rooms');
     clearRoomOrigin();
   });
 });
+
+describe('RoomRow', () => {
+  it('is a ledger row with the room name link, the state words, the size and the day', () => {
+    const { container } = render(<RoomRow entry={BASE_ENTRY} />);
+    expect(container.querySelector('[data-room-row]')).toHaveClass('lrow');
+    expect(screen.getByRole('link', { name: 'Dining room' })).toHaveAttribute(
+      'href',
+      '/room/9ca186a1-07c8-429d-ac35-f10ba43fe187',
+    );
+    expect(screen.getByText('Awaiting drawing')).toHaveClass('word');
+    expect(screen.getByText('Quality excellent')).toHaveClass('word');
+    expect(screen.getByText('Scanned Tuesday 14 July')).toBeInTheDocument();
+  });
+});
+

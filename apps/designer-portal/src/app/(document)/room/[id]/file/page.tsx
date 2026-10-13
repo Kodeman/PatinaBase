@@ -16,7 +16,8 @@
  *
  * No RoomShell: the Room File is a leaf reading, not a Room you walk into. It
  * mounts bare inside the (document) layout — paper background, Studio Drawer,
- * ⌘K — and carries its own back-to-the-room line. Flag gate (`room-file`,
+ * ⌘K — and carries the Header line it shares with the room (RoomHeaderLine,
+ * US-28 S10a), whose back act returns to the room. Flag gate (`room-file`,
  * fail-closed), hydration gate, and every fetch live in RoomFileView.
  */
 
@@ -30,7 +31,7 @@ export default function RoomFilePage({
 }) {
   const { id } = use(params);
   return (
-    <div className="px-5 pt-8 sm:px-8">
+    <div className="px-4 sm:px-6">
       <RoomFileView scanId={id} />
     </div>
   );

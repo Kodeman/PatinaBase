@@ -1,101 +1,127 @@
 /**
- * RoomPlanThumb — the roster card's mini-plan (R107 §1, prototype scene 01's
- * `.mini`). A pure, stroke-only sketch of the room's real geometry: the wall
- * outline plus window ticks, quiet enough to sit inside a card without
- * competing with the client's name.
+ * RoomPlanThumb — the plate in a room Card's plate slot (US-28 S10a; uplift.md
+ * (c) area 3; A10 plate and caption). The plate is a mat edged in 1px
+ * --card-edge (`.plate`, the S1 block): no dashed box, no fill, one edge.
  *
- * Deliberately NOT drawn here (confirmed against scene 01 — every one of its
- * four roster minis renders a plain closed outline, no door gap, no swing,
- * even though every room in the mock clearly has a door):
+ * Drawn: a pure, stroke-only sketch of the room's real geometry, the wall
+ * outline plus window ticks, in ink.
+ * Undrawn: the A10 silhouette, a faint outline in the room's proportions with
+ * a door swing and two hatch lines. The plate carries no word; the Card's
+ * caption prints the ink word AWAITING DRAWING beside it, so the state never
+ * rests on the drawing alone.
+ *
+ * Deliberately NOT drawn on a drawn plate:
  *   - doors / openings — no gap, no leaf, no arc;
- *   - detected furniture ghosts — three of the four prototype minis DO sketch
- *     unlabeled furniture silhouettes, but always axis-aligned. Real geometry
- *     carries `rotationDeg` (RoomPlan oriented boxes — confirmed non-zero on
- *     the seeded exemplar scan's chairs), and the prototype's simplified mini
- *     treatment has no rotated-ghost convention to port. Skipping ghosts here
- *     is a documented judgment call, not an oversight — see the roster's
- *     handoff notes ("thumbnails skip ghosts entirely — wall-only").
- *   - dimension labels, hover tips, low-confidence dashing — all facts-rail /
- *     interactive-Plan concerns (Phase 2.2), not this quiet index thumbnail.
+ *   - detected furniture ghosts — real geometry carries `rotationDeg`, and the
+ *     thumbnail has no rotated-ghost convention; walls only;
+ *   - dimension labels, hover tips, low-confidence dashing — Plan concerns.
  *
- * This component owns the single feet -> pixel transform (a fixed 190x140
- * viewBox, matching the prototype's mini exactly) — planPrimitives/geometry.ts
- * never touch pixels, per their module contracts.
+ * This component owns the single feet -> pixel transform (a fixed 300x200
+ * viewBox, the plate's 3:2) — planPrimitives/geometry.ts never touch pixels.
  */
 
 import { planPrimitives, type PlanPrimitive } from '@/lib/room-view/plan-primitives';
 import { overallDims, type RoomGeometry } from '@/lib/room-view/geometry';
 
-const VIEW_W = 190;
-const VIEW_H = 140;
-const PAD = 16;
+const VIEW_W = 300;
+const VIEW_H = 200;
+const PAD = 22;
 
-export function RoomPlanThumb({ geometry }: { geometry: RoomGeometry | null }) {
+export function RoomPlanThumb({
+  geometry,
+  dims = null,
+  label,
+}: {
+  geometry: RoomGeometry | null;
+  /** The scan's overall size in feet, for the undrawn silhouette's proportions. */
+  dims?: { w: number; d: number } | null;
+  /** What the plate shows, for assistive technology. */
+  label: string;
+}) {
   if (!geometry) {
     return (
-      <div
-        className="flex aspect-[19/14] w-full items-center justify-center rounded-[2px] border border-dashed border-[var(--doc-ink-border)]"
+      <span
+        className="plate"
+        role="img"
+        aria-label={label}
         data-testid="room-plan-thumb-placeholder"
       >
-        <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-60">
-          Awaiting drawing
-        </span>
-      </div>
+        <Silhouette dims={dims} />
+      </span>
     );
   }
 
   const { w, d } = overallDims(geometry);
-  const availW = VIEW_W - PAD * 2;
-  const availH = VIEW_H - PAD * 2;
-  const scale = w > 0 && d > 0 ? Math.min(availW / w, availH / d) : 1;
-  const offsetX = PAD + Math.max(0, (availW - w * scale) / 2);
-  const offsetY = PAD + Math.max(0, (availH - d * scale) / 2);
+  const { scale, offsetX, offsetY } = fit(w, d);
   const px = (x: number) => x * scale + offsetX;
   const pz = (z: number) => z * scale + offsetY;
 
   const primitives = planPrimitives(geometry, { hideObjects: true });
 
   return (
-    <svg
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-      className="block h-auto w-full"
-      role="img"
-      aria-label="Room plan sketch"
-    >
-      {/* Wall strips, stroke-only (no fill) — the mini reads as a sketch, not
-          the filled Plan. Each wall keeps its own opacity so a low-confidence
-          run stays honest (I73a) even at thumbnail scale, without the dashed
-          treatment (illegible this small — a quieter version of the same
-          honesty signal). */}
-      {primitives.filter(isWallStrip).map((wall) => (
-        <polygon
-          key={`wall-${wall.wallIndex}`}
-          points={rectPoints(wall.rect, px, pz)}
-          fill="none"
-          stroke="var(--color-aged-oak)"
-          strokeWidth={1.1}
-          strokeLinejoin="round"
-          opacity={wall.lowConf ? 0.5 : 1}
-        />
-      ))}
-
-      {/* Window ticks — the same triple-line glass motif as the full Plan,
-          just scaled into this transform. */}
-      {primitives.filter(isWindowLines).flatMap((win) =>
-        win.lines.map((seg, i) => (
-          <line
-            key={`win-${win.windowIndex}-${i}`}
-            x1={px(seg.x1)}
-            y1={pz(seg.z1)}
-            x2={px(seg.x2)}
-            y2={pz(seg.z2)}
-            stroke="var(--color-aged-oak)"
-            strokeWidth={1}
+    <span className="plate" role="img" aria-label={label} data-testid="room-plan-thumb">
+      <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} aria-hidden="true" focusable="false">
+        {/* Wall strips, stroke-only. Each wall keeps its own opacity so a
+            low-confidence run stays honest (I73a) at thumbnail scale. */}
+        {primitives.filter(isWallStrip).map((wall) => (
+          <polygon
+            key={`wall-${wall.wallIndex}`}
+            points={rectPoints(wall.rect, px, pz)}
+            className="room-pl-wall"
+            opacity={wall.lowConf ? 0.5 : 1}
           />
-        )),
-      )}
+        ))}
+
+        {/* Window ticks — the full Plan's glass motif, in this transform. */}
+        {primitives.filter(isWindowLines).flatMap((win) =>
+          win.lines.map((seg, i) => (
+            <line
+              key={`win-${win.windowIndex}-${i}`}
+              x1={px(seg.x1)}
+              y1={pz(seg.z1)}
+              x2={px(seg.x2)}
+              y2={pz(seg.z2)}
+              className="room-pl-thin"
+            />
+          )),
+        )}
+      </svg>
+    </span>
+  );
+}
+
+/** The A10 silhouette: the room's proportions when the scan has them, a
+ *  quiet 3:4 room when it does not. Never a dimension, never a word. */
+function Silhouette({ dims }: { dims: { w: number; d: number } | null }) {
+  const w = dims && dims.w > 0 ? dims.w : 3;
+  const d = dims && dims.d > 0 ? dims.d : 4;
+  const { scale, offsetX, offsetY } = fit(w, d);
+  const x0 = offsetX;
+  const z0 = offsetY;
+  const x1 = x0 + w * scale;
+  const z1 = z0 + d * scale;
+  const door = Math.min(x1 - x0, z1 - z0) * 0.27;
+  return (
+    <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} aria-hidden="true" focusable="false">
+      <path className="room-pl-sil" d={`M${x0} ${z0}H${x1}V${z1}H${x0}Z`} />
+      <path className="room-pl-sil" d={`M${x1 - door - 6} ${z1}a${door} ${door} 0 0 1 ${door} ${-door}`} />
+      <path
+        className="room-pl-hatch"
+        d={`M${x0 + 8} ${z0 + 10}h${(x1 - x0) * 0.4}M${x0 + 8} ${z0 + 18}h${(x1 - x0) * 0.28}`}
+      />
     </svg>
   );
+}
+
+function fit(w: number, d: number) {
+  const availW = VIEW_W - PAD * 2;
+  const availH = VIEW_H - PAD * 2;
+  const scale = w > 0 && d > 0 ? Math.min(availW / w, availH / d) : 1;
+  return {
+    scale,
+    offsetX: PAD + Math.max(0, (availW - w * scale) / 2),
+    offsetY: PAD + Math.max(0, (availH - d * scale) / 2),
+  };
 }
 
 function isWallStrip(p: PlanPrimitive): p is Extract<PlanPrimitive, { kind: 'wallStrip' }> {
