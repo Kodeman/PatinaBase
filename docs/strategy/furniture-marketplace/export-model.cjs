@@ -1,0 +1,11 @@
+const fs=require('fs');
+const path=require('path');
+const M=require('./model.cjs');
+const out=__dirname;
+const projection=Object.fromEntries(Object.entries(M.scenarios).map(([n,a])=>[n,M.simulate(a)]));
+fs.writeFileSync(path.join(out,'assumptions.json'),JSON.stringify(M.scenarios,null,2)+'\n');
+fs.writeFileSync(path.join(out,'projection-results.json'),JSON.stringify(projection,null,2)+'\n');
+const rows=Object.entries(projection).flatMap(([scenario,result])=>result.rows.map(row=>({scenario,...row})));
+const keys=Object.keys(rows[0]);
+fs.writeFileSync(path.join(out,'projections.csv'),keys.join(',')+'\n'+rows.map(r=>keys.map(k=>typeof r[k]==='number'?r[k].toFixed(6):r[k]).join(',')).join('\n')+'\n');
+for(const [scenario,result] of Object.entries(projection))console.log(JSON.stringify({scenario,annual:result.annual,peakFunding:result.peakFunding,sustainedPositive:result.sustainedPositive,cashRecovery:result.cumulativePositive,m36ServiceFTE:result.rows.at(-1).serviceHours/110,cac:result.cac,subscriptionPayback:result.subscriptionPayback}));
