@@ -107,21 +107,51 @@ export function specBookArtifactRetryLabel(
 
 /* US-28 S7b — the spec book (U-Q18; specimens/specbook-{1440,390}.html).
    State is an ink word (U-Q13): the word is the state, never a pigment, and a
-   missing field names itself instead of hiding behind a tooltip. */
-const FIELD_WORDS: Record<string, string> = {
-  sku: "SKU",
-  finish: "finish",
-  material: "material",
-  color_fabric: "colour / fabric",
-  colorFabric: "colour / fabric",
-  selected_dimensions: "dimensions",
-  dimensions: "dimensions",
-  exact_location: "location",
-  exactLocation: "location",
-};
+   missing field names itself instead of hiding behind a tooltip.
 
-function fieldWord(field: string): string {
-  return FIELD_WORDS[field] ?? field.replaceAll("_", " ");
+   Readiness (get_project_ffe_readiness, 00733) names what a line lacks by
+   schema key. No key ever reaches the screen: each known key has its plain
+   words, listed in the order a designer settles them, and an unknown key is
+   left unnamed (the line still reads Incomplete). */
+const MISSING_WORDS = new Map<string, string>([
+  ["finish", "No finish"],
+  ["removed", "Removed"],
+  ["releaseBlock", "On hold"],
+  ["parent_not_ready", "Waits on its piece"],
+  ["designDisposition", "Not chosen yet"],
+  ["selection", "No library piece"],
+  ["vendor", "No maker"],
+  ["itemType", "Fixed or allowance not set"],
+  ["clientPrice", "No client price"],
+  ["allowanceCeiling", "No allowance ceiling"],
+  ["quantity", "No quantity"],
+  ["room", "No room"],
+  ["name", "No name"],
+  ["documentCode", "No document code"],
+  ["image", "No image"],
+  ["sku", "No SKU"],
+  ["material", "No material"],
+  ["color_fabric", "No colour / fabric"],
+  ["colorFabric", "No colour / fabric"],
+  ["selected_dimensions", "No dimensions"],
+  ["dimensions", "No dimensions"],
+  ["exact_location", "No location"],
+  ["exactLocation", "No location"],
+]);
+const MISSING_ORDER = [...MISSING_WORDS.keys()];
+
+/** What a line lacks, in plain words and settling order. */
+function missingWords(missingFields: readonly string[]): string[] {
+  const known = missingFields
+    .filter((field) => MISSING_WORDS.has(field))
+    .sort((a, b) => MISSING_ORDER.indexOf(a) - MISSING_ORDER.indexOf(b));
+  return [...new Set(known.map((field) => MISSING_WORDS.get(field) as string))];
+}
+
+/** The line's finish is empty and not declared as not applying. */
+function finishMissing(item: SpecBookWorkItem): boolean {
+  const finish = resolveSpecValue(item, "finish");
+  return finish.value == null && !finish.na;
 }
 
 const FACT_LABELS: Record<SpecField, string> = {
@@ -151,9 +181,14 @@ const SOURCE_WORDS: Record<ResolvedSpecValue["source"], string> = {
   declaration: "Does not apply",
 };
 
+/** The state word. A row names the first thing a line lacks and counts the
+ *  rest; the opened piece (`full`) names them all. A line without a finish
+ *  leads with "No finish", as its "Add a finish" act does (SPEC §S7b p1). */
 function readinessWord(
   value: DerivedReadiness,
   missingFields: readonly string[] = [],
+  item?: SpecBookWorkItem,
+  full = false,
 ): { text: string; quiet: boolean } {
   switch (value) {
     case "ready":
@@ -162,21 +197,31 @@ function readinessWord(
       return { text: "Checking", quiet: true };
     case "unavailable":
       return { text: "Readiness unavailable", quiet: true };
-    default:
-      return missingFields.length > 0
-        ? { text: `No ${missingFields.map(fieldWord).join(", ")}`, quiet: false }
-        : { text: "Incomplete", quiet: false };
+    default: {
+      const words = missingWords(
+        item && finishMissing(item) ? ["finish", ...missingFields] : missingFields,
+      );
+      if (words.length === 0) return { text: "Incomplete", quiet: false };
+      if (full || words.length === 1) {
+        return { text: words.join(" · "), quiet: false };
+      }
+      return { text: `${words[0]} and ${words.length - 1} more`, quiet: false };
+    }
   }
 }
 
 function ReadinessWord({
   status,
   missingFields = [],
+  item,
+  full = false,
 }: {
   status: DerivedReadiness;
   missingFields?: readonly string[];
+  item?: SpecBookWorkItem;
+  full?: boolean;
 }) {
-  const word = readinessWord(status, missingFields);
+  const word = readinessWord(status, missingFields, item, full);
   return (
     <span className={word.quiet ? "word word--quiet" : "word"}>
       {word.text}
@@ -219,11 +264,9 @@ function roomWord(item: SpecBookWorkItem): string {
 
 /** Finish · maker · room: the row's one sentence (SPEC §S7b.4). */
 function rowSentence(item: SpecBookWorkItem): string {
-  const finish = resolveSpecValue(item, "finish");
-  const finishWord =
-    finish.value == null && !finish.na
-      ? "No finish yet"
-      : displayResolvedValue(finish);
+  const finishWord = finishMissing(item)
+    ? "No finish yet"
+    : displayResolvedValue(resolveSpecValue(item, "finish"));
   return [finishWord, item.vendor_name, roomWord(item)]
     .filter(Boolean)
     .join(" · ");
@@ -252,8 +295,8 @@ function PieceRow({
 }) {
   const image = imageFor(item);
   const name = item.name ?? "Untitled item";
-  const needsFinish =
-    readiness === "incomplete" && missingFields.includes("finish");
+  // The readiness rules never name the finish; the line says it (SPEC §S7b p1).
+  const needsFinish = finishMissing(item);
   return (
     <li className="lrow plain">
       <span className="lname">
@@ -286,7 +329,11 @@ function PieceRow({
       </span>
       <span className="lsent">{rowSentence(item)}</span>
       <span className="lwhen sb-words">
-        <ReadinessWord status={readiness} missingFields={missingFields} />
+        <ReadinessWord
+          status={readiness}
+          missingFields={missingFields}
+          item={item}
+        />
         {drift && <span className="word">Changed since issue</span>}
       </span>
       <span className="lact">
@@ -640,7 +687,12 @@ export function SelectionEditor({
       <p className="eb sb-spec-head">
         {heading && <span>{heading}</span>}
         <span>Project line · v{item.spec.row_version}</span>
-        <ReadinessWord status={readiness} missingFields={missingFields} />
+        <ReadinessWord
+          status={readiness}
+          missingFields={missingFields}
+          item={item}
+          full
+        />
       </p>
 
       <dl className="sb-facts">
@@ -657,12 +709,16 @@ export function SelectionEditor({
               <dt>{FACT_LABELS[field]}</dt>
               <dd>
                 {displayResolvedValue(resolved)}
-                <span className="t-meta">
-                  {SOURCE_WORDS[resolved.source]}
-                  {resolved.verifiedAt
-                    ? ` · verified ${new Date(resolved.verifiedAt).toLocaleDateString()}`
-                    : ""}
-                </span>
+                {/* An empty fact says "Not specified" once, with no source
+                    under it (SPEC §S7b p3). */}
+                {(resolved.value != null || resolved.na) && (
+                  <span className="t-meta">
+                    {SOURCE_WORDS[resolved.source]}
+                    {resolved.verifiedAt
+                      ? ` · verified ${new Date(resolved.verifiedAt).toLocaleDateString()}`
+                      : ""}
+                  </span>
+                )}
               </dd>
             </Fragment>
           );
@@ -1322,6 +1378,10 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   }
 
   const projectName = project.data?.name ?? project.data?.title ?? "Project";
+  // The book is named by its job (SPEC §S7b p1), never the stored "— Spec Book".
+  const bookTitle = project.data
+    ? `${projectName} · specification book`
+    : "Specification book";
   const issueBusy =
     prepareIssue.isPending ||
     renderArtifact.isPending;
@@ -1367,7 +1427,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
             >
               ← {projectName}
             </DocumentAction>
-            <h1 className="t-d2">{data.book.title}</h1>
+            <h1 className="t-d2">{bookTitle}</h1>
             <span className="t-meta sb-title-meta">
               {editionWord} · working copy
             </span>
@@ -1675,7 +1735,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
               <AudiencePreview
                 item={selectedItem}
                 audience={previewAudience}
-                footLine={`${data.book.title} · ${editionWord}`}
+                footLine={`${bookTitle} · ${editionWord}`}
               />
             </section>
           </div>

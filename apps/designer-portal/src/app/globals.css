@@ -2918,6 +2918,11 @@ html:has([data-document-shell]) {
 }
 /* end US-28 S7b spec book */
 
+/* US-28 walk-fix spec book (SQ-857) — the opened piece's row reads as one
+   with its fold below, untinted, as the specimen draws it (SPEC §S7b p2). */
+.sb-ground .lrow:has(.sb-name[aria-expanded="true"]):hover { background: none; }
+/* end US-28 walk-fix spec book */
+
 /* US-28 S3 desk — Today's cards and the ledger under them. Only the S1
    tokens and classes; the old .day-sheet-* and .desk-ledger-* rules above are
    no longer drawn by the Desk. */

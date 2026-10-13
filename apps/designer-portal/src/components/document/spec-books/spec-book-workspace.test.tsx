@@ -21,6 +21,11 @@ const artifactRetry = jest.fn();
 const opened = jest.fn();
 const renderArtifactMutateAsync = jest.fn();
 let mockWorkbenchHookResult: unknown;
+let mockReadinessData: Array<{
+  selectionId: string;
+  ready: boolean;
+  missingFields: string[];
+}> = [];
 
 jest.mock("@patina/supabase", () => ({
   useCreateSpecBookShare: () => ({
@@ -32,7 +37,7 @@ jest.mock("@patina/supabase", () => ({
     isPending: false,
   }),
   useProjectFfeReadiness: () => ({
-    data: [],
+    data: mockReadinessData,
     isLoading: false,
     isError: false,
   }),
@@ -172,6 +177,7 @@ beforeEach(() => {
   opened.mockClear();
   mockSearchParams = new URLSearchParams();
   mockCanSeeMargin = false;
+  mockReadinessData = [];
   mockWorkbenchHookResult = {
     data: {
       book: { id: "book-1", title: "Oak project specification" },
@@ -264,8 +270,9 @@ describe("SelectionEditor — structured dimensions", () => {
         missingFields={["finish", "selected_dimensions"]}
       />,
     );
-    // US-28 S7b: the ink word names what is missing, not a tooltip.
-    const word = screen.getByText("No finish, dimensions");
+    // US-28 S7b: the ink word names what is missing, not a tooltip; the
+    // opened piece names every gap in plain words (SQ-857).
+    const word = screen.getByText("No finish · No dimensions");
     expect(word).toHaveClass("word");
     expect(word).not.toHaveAttribute("title");
     expect(screen.queryByRole("combobox", { name: "Issue readiness" })).not.toBeInTheDocument();
@@ -749,5 +756,143 @@ describe("US-28 S7b — the spec book by trade", () => {
     const fold = seen.container.querySelector(".sb-open") as HTMLElement;
     expect(within(fold).getByText("Trade price", { exact: true }).tagName).toBe("DT");
     expect(within(fold).getByText("$4180.50")).toHaveClass("lfig");
+  });
+});
+
+/**
+ * SQ-857 — the SQ-834 walk found the state column printing readiness schema
+ * keys ("NO DESIGNDISPOSITION, DOCUMENTCODE, IMAGE…"), "Open" where the line
+ * lacks a finish, the stored "— Spec Book" title, a doubled "Not specified",
+ * and a tinted opened row (CSS only, globals.css walk-fix block).
+ */
+describe("SQ-857 — the spec book walk fixes", () => {
+  // Every key get_project_ffe_readiness (00733) emits, the legacy spec-field
+  // keys, and keys this client has never seen.
+  const EVERY_KEY = [
+    "name",
+    "documentCode",
+    "room",
+    "quantity",
+    "image",
+    "selection",
+    "designDisposition",
+    "removed",
+    "releaseBlock",
+    "vendor",
+    "clientPrice",
+    "allowanceCeiling",
+    "itemType",
+    "parent_not_ready",
+    "sku",
+    "finish",
+    "material",
+    "color_fabric",
+    "colorFabric",
+    "selected_dimensions",
+    "exact_location",
+    "exactLocation",
+    "someFutureRule",
+    "another_future_rule",
+  ];
+  // A key a reader would see as a schema name: camelCase, snake_case, or the
+  // same run of letters once CSS uppercases it.
+  const COMPOUND_KEYS = EVERY_KEY.filter((key) => /[A-Z_]/.test(key));
+
+  function expectNoSchemaKey(node: Element) {
+    const text = node.textContent ?? "";
+    expect(text).not.toMatch(/[a-z][A-Z]/);
+    expect(text).not.toMatch(/_/);
+    // `.word` is uppercased by CSS, so "designDisposition" would read as the
+    // one run DESIGNDISPOSITION; plain words keep their spaces.
+    const shouted = text.toUpperCase();
+    for (const key of COMPOUND_KEYS) {
+      expect(shouted).not.toContain(key.toUpperCase().replace(/_/g, ""));
+    }
+  }
+
+  function withLines(...items: SpecBookWorkItem[]) {
+    (mockWorkbenchHookResult as { data: { items: SpecBookWorkItem[] } }).data.items =
+      items;
+  }
+
+  it("never prints a schema key in the state cell or the opened piece", async () => {
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench" }));
+    mockReadinessData = [
+      { selectionId: "bench", ready: false, missingFields: EVERY_KEY },
+    ];
+    const user = userEvent.setup();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    const cell = container.querySelector(".lrow .lwhen") as HTMLElement;
+    expectNoSchemaKey(cell);
+    // the row names the first gap and counts the rest
+    expect(cell).toHaveTextContent(/^No finish and \d+ more$/);
+
+    await user.click(screen.getByRole("button", { name: "Built-in bench" }));
+    const head = container.querySelector(".sb-open .sb-spec-head .word") as HTMLElement;
+    expectNoSchemaKey(head);
+    expect(head).toHaveTextContent("No document code");
+    expect(head).toHaveTextContent("No image");
+    expect(head).toHaveTextContent("Not chosen yet");
+  });
+
+  it("leaves an unknown key unnamed rather than print it", () => {
+    withLines(buildItem({}, { id: "bench", name: "Built-in bench" }));
+    mockReadinessData = [
+      { selectionId: "bench", ready: false, missingFields: ["someFutureRule"] },
+    ];
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    const cell = container.querySelector(".lrow .lwhen") as HTMLElement;
+    expect(cell).toHaveTextContent("Incomplete");
+    expectNoSchemaKey(cell);
+  });
+
+  it("offers Add a finish where the line has none, and Open where it has one", async () => {
+    withLines(
+      buildItem({ finish: null }, { id: "table", name: "Turned side table", finish: null }),
+      buildItem({}, { id: "bench", name: "Built-in bench" }),
+    );
+    mockReadinessData = [
+      { selectionId: "table", ready: false, missingFields: [] },
+      { selectionId: "bench", ready: true, missingFields: [] },
+    ];
+    const user = userEvent.setup();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    const table = container.querySelector("#spec-book-item-table")?.closest("li") as HTMLElement;
+    const bench = container.querySelector("#spec-book-item-bench")?.closest("li") as HTMLElement;
+    expect(within(table).getByText("No finish")).toHaveClass("word");
+    expect(within(bench).getByText("Ready")).toHaveClass("word");
+    expect(within(bench).getByRole("button", { name: "Open" })).toBeInTheDocument();
+
+    await user.click(within(table).getByRole("button", { name: "Add a finish" }));
+    expect(screen.getByLabelText("Finish")).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Save the finish" })).toBeInTheDocument();
+  });
+
+  it("names the book by its job, as the specimen does", () => {
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      /^Oak project · specification book$/,
+    );
+  });
+
+  it("says Not specified once for an empty fact", async () => {
+    withLines(
+      buildItem({ sku: null }, { id: "bench", name: "Built-in bench", sku: null }),
+    );
+    const user = userEvent.setup();
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    await user.click(screen.getByRole("button", { name: "Built-in bench" }));
+    const fold = container.querySelector(".sb-open") as HTMLElement;
+    const sku = within(fold).getByText("SKU", { selector: "dt" });
+    const value = sku.nextElementSibling as HTMLElement;
+    expect(value).toHaveTextContent(/^Not specified$/);
+    // a set fact still says where it comes from
+    const finish = within(fold).getByText("Finish", { selector: "dt" });
+    expect(finish.nextElementSibling).toHaveTextContent("Set for this job");
   });
 });
