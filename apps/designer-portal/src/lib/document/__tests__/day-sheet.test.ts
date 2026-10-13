@@ -20,10 +20,14 @@ import { deriveHandoffNeeds, deskDesignersOf, type DeskLeads } from '@/lib/docum
 import {
   DAY_SHEET_LINES,
   deriveDaySheet,
+  draftedForWords,
+  groupSheetByJob,
   localDay,
   nextWorkingDay,
   timeWord,
   type DaySheetInput,
+  type SheetEntry,
+  type SheetNeedState,
 } from '@/lib/document/day-sheet';
 
 // Friday 9 October 2026, mid-morning local time.
@@ -89,7 +93,7 @@ describe('deriveDaySheet — Q1 guards', () => {
   it('carries no count anywhere in its output — no overflow, no streak, no cleared-today', () => {
     const result = sheet({ needs: EIGHT });
     expect(Object.keys(result).sort()).toEqual(
-      ['empty', 'lines', 'setAside', 'unchecked', 'waitingOn'].sort(),
+      ['alsoYours', 'empty', 'lines', 'setAside', 'standing', 'unchecked', 'waitingOn'].sort(),
     );
     const text = JSON.stringify(result);
     expect(text).not.toMatch(/\d+ more/i);
@@ -131,10 +135,29 @@ describe('deriveDaySheet — Not today lasts one working day', () => {
     expect(sheet({ needs: [a, b], states, now: new Date(2026, 9, 12, 8) }).setAside).toEqual([]);
   });
 
-  it('lets a sixth need step up when one is put off, never printing six', () => {
+  it('lets a sixth need step up for one put off on an earlier day, never printing six', () => {
+    // No `updatedAt` of today: the deferral was written before this morning.
     const states = new Map([[EIGHT[0].key, state(EIGHT[0].key, { deferredUntil: '2026-10-12' })]]);
     const result = sheet({ needs: EIGHT, states });
     expect(result.lines.map((l) => l.key)).toEqual(EIGHT.slice(1, 6).map((e) => e.key));
+  });
+
+  it('keeps a "Not today" written today on its line, settled, and refills nothing (U-Q2)', () => {
+    const states = new Map([
+      [EIGHT[0].key, {
+        ...state(EIGHT[0].key, { deferredUntil: '2026-10-12' }),
+        updatedAt: new Date(2026, 9, 9, 9, 30).toISOString(),
+      }],
+    ]);
+    const result = sheet({ needs: EIGHT, states });
+    expect(result.lines.map((l) => l.key)).toEqual(EIGHT.slice(0, 5).map((e) => e.key));
+    expect(result.lines[0].settled).toEqual({
+      kind: 'not_today',
+      at: new Date(2026, 9, 9, 9, 30).toISOString(),
+      until: '2026-10-12',
+    });
+    expect(result.alsoYours.map((l) => l.key)).toEqual(EIGHT.slice(5).map((e) => e.key));
+    expect(result.setAside).toEqual([]);
   });
 });
 
@@ -315,12 +338,27 @@ describe('deriveDaySheet — an aggregate acts one record at a time (SQ-751 F7)'
     expect(result.waitingOn).toEqual([]);
   });
 
-  it('waits once every record is acted on', () => {
+  it('settles in place once every record is acted on today (U-Q2)', () => {
+    const first = new Date(2026, 9, 9, 8, 0).toISOString();
     const result = sheet({
       needs: [twoPos()],
       states: new Map([
-        ['po_unacknowledged:po-1', state('po_unacknowledged:po-1', { actedAt: '2026-10-09T08:00:00.000Z' })],
-        ['po_unacknowledged:po-2', state('po_unacknowledged:po-2', { actedAt: '2026-10-09T09:00:00.000Z' })],
+        ['po_unacknowledged:po-1', state('po_unacknowledged:po-1', { actedAt: first })],
+        ['po_unacknowledged:po-2', state('po_unacknowledged:po-2', { actedAt: new Date(2026, 9, 9, 9, 0).toISOString() })],
+      ]),
+    });
+    expect(result.lines.map((l) => [l.key, l.settled?.kind, l.settled?.at])).toEqual([
+      ['po_unacknowledged:po-1', 'acted', first],
+    ]);
+    expect(result.waitingOn).toEqual([]);
+  });
+
+  it('waits once every record was acted on before today', () => {
+    const result = sheet({
+      needs: [twoPos()],
+      states: new Map([
+        ['po_unacknowledged:po-1', state('po_unacknowledged:po-1', { actedAt: new Date(2026, 9, 8, 8, 0).toISOString() })],
+        ['po_unacknowledged:po-2', state('po_unacknowledged:po-2', { actedAt: new Date(2026, 9, 8, 9, 0).toISOString() })],
       ]),
     });
     expect(result.lines).toEqual([]);
@@ -466,5 +504,316 @@ describe('deriveDaySheet — a hand-off with no name on record (SQ-777 F5)', () 
       now,
     });
     expect(result.lines.filter((line) => line.key.startsWith('handoff:'))).toHaveLength(1);
+  });
+});
+
+// US-28 U-Q2 / U-Q11 — Today is the top five of ONE ranked list of the open
+// needs and the needs settled today. Settling never changes rank, so no slot
+// ever refills. The x4 / x6 specimens (uplift.md "The x4 / x6 inconsistency,
+// resolved"), on Monday 12 October 2026.
+describe('deriveDaySheet — settled lines stay until the next morning (US-28)', () => {
+  const at = (h: number, m: number, day = 12) => new Date(2026, 9, day, h, m).toISOString();
+  const job = (
+    key: string,
+    projectId: string,
+    projectName: string,
+    over: Partial<NeedLine> = {},
+  ): DeskNeed => ({
+    key,
+    projectId,
+    projectName,
+    need: {
+      key,
+      kind: 'task_due',
+      text: `${projectName} is due`,
+      actionLabel: 'Open the task',
+      stamp: { label: 'DUE', color: 'var(--color-clay)' },
+      urgent: false,
+      owner: 'designer',
+      ...over,
+    } as NeedLine,
+  });
+  const morning = [
+    job('task_due:hol-1', 'p-holloway', 'Holloway', { dueOn: '2026-10-05' }),
+    job('task_due:hol-2', 'p-holloway', 'Holloway', { dueOn: '2026-10-06' }),
+    job('task_due:linden', 'p-linden', 'Linden', { dueOn: '2026-10-07' }),
+    job('task_due:pell', 'p-pell', 'Pell Court', { dueOn: '2026-10-08' }),
+    job('task_due:ines', 'p-ines', 'Ines Calder', { dueOn: '2026-10-09' }),
+  ];
+  const ainsley = job('new_lead:ainsley', 'eng-ainsley', 'Ainsley Moore', {
+    kind: 'new_lead' as NeedKind,
+    at: at(11, 20),
+  });
+  const thornfield = job('proposal_signed:thornfield', 'p-thornfield', 'Thornfield', {
+    kind: 'proposal_signed' as NeedKind,
+    at: null,
+  });
+  const needs = [...morning, ainsley, thornfield];
+  const morningStates = (): Map<string, SheetNeedState> =>
+    new Map<string, SheetNeedState>([
+      ['task_due:hol-1', state('task_due:hol-1', { actedAt: at(8, 42), waitingOn: 'Mara' })],
+      ['task_due:hol-2', { ...state('task_due:hol-2', { deferredUntil: '2026-10-13' }), updatedAt: at(8, 47) }],
+      ['task_due:linden', {
+        ...state('task_due:linden', { setAsideUntil: '2026-10-20', setAsideReason: 'client away' }),
+        updatedAt: at(9, 5),
+      }],
+      ['task_due:pell', state('task_due:pell', { actedAt: at(9, 12), waitingOn: 'Fenmoor Joinery' })],
+      ['task_due:ines', state('task_due:ines', { actedAt: at(9, 20), waitingOn: 'Ines' })],
+    ]);
+  const roster = new Map([
+    ['p-holloway', { name: 'Holloway', stage: 'install' as const }],
+    ['p-linden', { name: 'Linden', stage: 'project' as const }],
+    ['p-pell', { name: 'Pell Court', stage: 'project' as const }],
+    ['p-ines', { name: 'Ines Calder', stage: 'brief' as const }],
+  ]);
+
+  it('x4 at 11:21 — five settled lines hold Today; Ainsley and Thornfield are Also yours', () => {
+    const result = sheet({ needs, states: morningStates(), now: new Date(2026, 9, 12, 11, 21) });
+
+    expect(result.lines.map((l) => [l.key, l.settled?.kind, l.settled?.at])).toEqual([
+      ['task_due:hol-1', 'acted', at(8, 42)],
+      ['task_due:hol-2', 'not_today', at(8, 47)],
+      ['task_due:linden', 'set_aside', at(9, 5)],
+      ['task_due:pell', 'acted', at(9, 12)],
+      ['task_due:ines', 'acted', at(9, 20)],
+    ]);
+    expect(result.lines[0].settled?.who).toBe('Mara');
+    expect(result.lines[2].settled).toMatchObject({ until: '2026-10-20', reason: 'client away' });
+    // No slot refilled: the class-2 inquiry arriving after Ines does not
+    // outrank the fifth line, and Thornfield stays past five.
+    expect(result.alsoYours.map((l) => l.key).sort()).toEqual(
+      [ainsley.key, thornfield.key].sort(),
+    );
+    expect(result.alsoYours.every((l) => !l.settled)).toBe(true);
+    expect(result.waitingOn).toEqual([]);
+    expect(result.setAside).toEqual([]);
+    expect(result.empty).toBe(false);
+    expect(Object.fromEntries(result.standing)).toEqual({
+      'p-holloway': 'settled',
+      'p-linden': 'settled',
+      'p-pell': 'settled',
+      'p-ines': 'settled',
+      'eng-ainsley': 'yours',
+      'p-thornfield': 'yours',
+    });
+    // The morning's four cards and five settled lines.
+    expect(groupSheetByJob(result.lines, roster).map((c) => [c.name, c.lines.length])).toEqual([
+      ['Holloway', 2],
+      ['Linden', 1],
+      ['Pell Court', 1],
+      ['Ines Calder', 1],
+    ]);
+  });
+
+  it('x6 at 5:50 pm — the same five lines; Ainsley and Thornfield settle in place in Also yours', () => {
+    const states = morningStates();
+    states.set(ainsley.key, state(ainsley.key, { actedAt: at(14, 40), waitingOn: 'Ainsley Moore' }));
+    states.set(thornfield.key, {
+      ...state(thornfield.key, { deferredUntil: '2026-10-13' }),
+      updatedAt: at(16, 15),
+    });
+    const result = sheet({ needs, states, now: new Date(2026, 9, 12, 17, 50) });
+
+    expect(result.lines.map((l) => l.key)).toEqual(morning.map((m) => m.key));
+    expect(result.lines.every((l) => l.settled)).toBe(true);
+    const byKey = new Map(result.alsoYours.map((l) => [l.key, l.settled]));
+    expect(byKey.get(ainsley.key)).toEqual({ kind: 'acted', at: at(14, 40), who: 'Ainsley Moore' });
+    expect(byKey.get(thornfield.key)).toEqual({ kind: 'not_today', at: at(16, 15), until: '2026-10-13' });
+    expect(result.standing.get('p-thornfield')).toBe('settled');
+  });
+
+  it('the next morning (Tuesday) Thornfield is open again and the acted lines wait on others', () => {
+    const states = morningStates();
+    states.set(ainsley.key, state(ainsley.key, { actedAt: at(14, 40), waitingOn: 'Ainsley Moore' }));
+    states.set(thornfield.key, {
+      ...state(thornfield.key, { deferredUntil: '2026-10-13' }),
+      updatedAt: at(16, 15),
+    });
+    const result = sheet({ needs, states, now: new Date(2026, 9, 13, 8, 0) });
+
+    expect(result.lines.map((l) => l.key)).toEqual(['task_due:hol-2', thornfield.key]);
+    expect(result.lines.every((l) => !l.settled)).toBe(true);
+    expect(result.waitingOn.map((w) => w.need.key)).toEqual([
+      'task_due:hol-1',
+      'task_due:pell',
+      'task_due:ines',
+      ainsley.key,
+    ]);
+    expect(result.setAside).toEqual([{ need: morning[2], until: '2026-10-20', reason: 'client away' }]);
+    expect(Object.fromEntries(result.standing)).toEqual({
+      'p-holloway': 'yours',
+      'p-thornfield': 'yours',
+      'p-linden': 'back',
+      'p-pell': 'others',
+      'p-ines': 'others',
+      'eng-ainsley': 'others',
+    });
+  });
+
+  it('M7 — an arrival that outranks a line enters Today; the fifth moves to Also yours with its state', () => {
+    const failed = job('payment_failed:pay-1', 'p-pay', 'Marsh Street', {
+      kind: 'payment_failed' as NeedKind,
+      urgent: true,
+      dueOn: '2026-10-02',
+    });
+    const result = sheet({
+      needs: [...needs, failed],
+      states: morningStates(),
+      now: new Date(2026, 9, 12, 11, 30),
+    });
+
+    expect(result.lines).toHaveLength(DAY_SHEET_LINES);
+    expect(result.lines[0].key).toBe(failed.key);
+    expect(result.lines.map((l) => l.key)).not.toContain('task_due:ines');
+    expect(result.alsoYours[0]).toMatchObject({
+      key: 'task_due:ines',
+      settled: { kind: 'acted', at: at(9, 20), who: 'Ines' },
+    });
+  });
+
+  it('change 5 — a silent overdue invoice or PO with no state is yours; acted on yesterday is with others', () => {
+    const invoice = job('overdue_invoice:inv-1', 'p-inv', 'Invoice job', {
+      kind: 'overdue_invoice' as NeedKind,
+      owner: 'client',
+      dueOn: '2026-10-01',
+      urgent: true,
+    });
+    const po = job('po_unacknowledged:po-1', 'p-po', 'PO job', {
+      kind: 'po_unacknowledged' as NeedKind,
+      owner: 'maker',
+      at: '2026-10-01T09:00:00.000Z',
+    });
+    const chased = job('po_unacknowledged:po-9', 'p-chased', 'Chased job', {
+      kind: 'po_unacknowledged' as NeedKind,
+      owner: 'maker',
+    });
+    const result = sheet({
+      needs: [invoice, po, chased],
+      states: new Map([[chased.key, state(chased.key, { actedAt: at(16, 0, 11) })]]),
+      now: new Date(2026, 9, 12, 9, 0),
+    });
+
+    expect(result.lines.map((l) => l.key)).toEqual([invoice.key, po.key]);
+    expect(Object.fromEntries(result.standing)).toEqual({
+      'p-inv': 'yours',
+      'p-po': 'yours',
+      'p-chased': 'others',
+    });
+    expect(result.waitingOn).toEqual([{ need: chased, who: 'the maker', since: at(16, 0, 11) }]);
+  });
+});
+
+describe('deriveDaySheet — drafted, read and a teammate’s act settle in place (US-28)', () => {
+  const monday = new Date(2026, 9, 12, 17, 50);
+  const at = (h: number, m: number, day = 12) => new Date(2026, 9, day, h, m).toISOString();
+
+  it('change 7 — a draft saved for the lead settles as drafted, waiting on her', () => {
+    const pell = entry(1, {}, 'p-pell');
+    const counterpart = entry(2, {}, 'p-pell');
+    const leads: DeskLeads = new Map([
+      ['p-pell', { leadUserId: 'leah', leadName: 'Leah Warner', assignedAt: '2026-10-01T00:00:00Z' }],
+    ]);
+    const result = sheet({
+      needs: [pell, counterpart],
+      leads,
+      meUserId: 'jordan',
+      states: new Map([
+        [pell.key, state(pell.key, { actedAt: at(9, 30), waitingOn: 'Leah' })],
+        [counterpart.key, state(counterpart.key, { actedAt: at(9, 40), waitingOn: 'Fenmoor Joinery' })],
+      ]),
+      now: monday,
+    });
+
+    expect(result.lines.map((l) => l.settled)).toEqual([
+      { kind: 'drafted', at: at(9, 30), who: 'Leah' },
+      { kind: 'acted', at: at(9, 40), who: 'Fenmoor Joinery' },
+    ]);
+    expect(draftedForWords('Leah')).toBe('Drafted for Leah · she sees this first');
+  });
+
+  it('a hand-off read today settles as read, and is gone the next morning', () => {
+    const leads: DeskLeads = new Map([
+      ['p1', {
+        leadUserId: 'me',
+        leadName: 'Bea Lund',
+        previousLeadUserId: 'leah',
+        previousLeadName: 'Leah Hartwell',
+        assignedAt: '2026-10-10T09:00:00.000Z',
+      }],
+    ]);
+    const live = [
+      { project_id: 'p1', engagement_id: 'e1', title: 'Ridge House', designer_id: 'leah' } as DocumentStateRow,
+    ];
+    const states = new Map([['handoff:p1', state('handoff:p1', { projectId: 'p1', actedAt: at(9, 0) })]]);
+    const read = (now: Date) =>
+      deriveDaySheet({
+        needs: deriveHandoffNeeds(live, leads, 'me', states, null, now),
+        states,
+        leads,
+        meUserId: 'me',
+        scope: 'mine',
+        designers: deskDesignersOf(live),
+        unreadFeeds: [],
+        now,
+      });
+
+    expect(read(monday).lines.map((l) => [l.key, l.settled])).toEqual([
+      ['handoff:p1', { kind: 'read', at: at(9, 0) }],
+    ]);
+    expect(read(new Date(2026, 9, 13, 8, 0)).lines).toEqual([]);
+  });
+
+  it('U-Q4 — only the job holder’s act settles the line; anyone else’s leaves it open', () => {
+    const line = entry(1, {}, 'p-j');
+    const leads: DeskLeads = new Map([
+      ['p-j', { leadUserId: 'jordan', leadName: 'Jordan Pell', assignedAt: '2026-10-01T00:00:00Z' }],
+    ]);
+    const withActs = (acts: { userId: string; actedAt: string }[]) =>
+      sheet({
+        needs: [line],
+        leads,
+        meUserId: 'leah',
+        teammateActs: new Map([[line.key, acts]]),
+        now: monday,
+      });
+
+    const held = withActs([{ userId: 'jordan', actedAt: at(9, 30) }]);
+    expect(held.lines[0].settled).toMatchObject({ kind: 'acted', at: at(9, 30), by: 'jordan' });
+    expect(held.standing.get('p-j')).toBe('settled');
+
+    expect(withActs([{ userId: 'anneke', actedAt: at(9, 30) }]).lines[0].settled).toBeUndefined();
+
+    const yesterday = withActs([{ userId: 'jordan', actedAt: at(16, 0, 11) }]);
+    expect(yesterday.lines).toEqual([]);
+    expect(yesterday.waitingOn).toEqual([
+      { need: line, who: line.projectName, since: at(16, 0, 11), by: 'jordan' },
+    ]);
+    expect(yesterday.standing.get('p-j')).toBe('others');
+  });
+});
+
+describe('groupSheetByJob (US-28 change 1)', () => {
+  const ash1 = entry(1, {}, 'p-ash') as SheetEntry;
+  const birch = entry(2, {}, 'p-birch') as SheetEntry;
+  const ashHandoff = entry(3, { kind: 'handoff' as NeedKind }, 'p-ash') as SheetEntry;
+  const roster = new Map([
+    ['p-ash', { name: 'Ash House', stage: 'project' as const }],
+    ['p-birch', { name: 'Birch Lane', stage: 'install' as const }],
+  ]);
+
+  it('orders cards by their first line, puts a hand-off first, and reads the stage off the roster', () => {
+    const holder = { userId: 'leah', name: 'Leah', mine: true };
+    const cards = groupSheetByJob([ash1, birch, ashHandoff], roster, () => holder);
+
+    expect(cards).toEqual([
+      { jobId: 'p-ash', name: 'Ash House', stage: 'project', holder, lines: [ashHandoff, ash1] },
+      { jobId: 'p-birch', name: 'Birch Lane', stage: 'install', holder, lines: [birch] },
+    ]);
+  });
+
+  it('falls back to the line’s own name, no stage and no holder', () => {
+    expect(groupSheetByJob([birch], new Map())).toEqual([
+      { jobId: 'p-birch', name: 'Job 2', stage: null, holder: null, lines: [birch] },
+    ]);
   });
 });

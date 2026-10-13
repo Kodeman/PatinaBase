@@ -10,11 +10,6 @@ export type DeskLeads = ReadonlyMap<
   Pick<ProjectLead, 'leadUserId' | 'leadName' | 'previousLeadUserId' | 'previousLeadName' | 'assignedAt'>
 >;
 
-type CustodyNeed = NeedLine & {
-  makerName?: string | null;
-  clientName?: string | null;
-};
-
 /** The engagement's `designer_id`, by the project id the leads map is keyed
  *  on (`project_id ?? engagement_id`) — who carries a job no one leads yet. */
 export type DeskDesigners = ReadonlyMap<string, string | null>;
@@ -58,27 +53,61 @@ export function scopeDeskNeeds(
   return needs.filter((entry) => isMyJob(entry.projectId, leads, meUserId, designers));
 }
 
-function firstName(name: string | null | undefined): string | null {
+export function firstName(name: string | null | undefined): string | null {
   return name?.trim().split(/\s+/)[0] || null;
 }
 
-/** Name the person holding the next move, using the active project lead. */
+/**
+ * Name the person holding the next move, using the active project lead.
+ *
+ * US-28 change 5 — one meaning of "with others": the studio waits on someone
+ * only once it owes no act. A need the studio has not acted on is in the
+ * studio's hand whoever its `owner` is (a silent overdue invoice or PO still
+ * needs her); `owner` is the sentence's subject only. `awaiting` is who the
+ * studio waits on after it acted (the Day Sheet's `waitingOn`).
+ */
 export function custodyFor(
-  need: CustodyNeed | null,
+  need: NeedLine | null,
   leads: DeskLeads,
   meUserId: string | null | undefined,
   projectId?: string | null,
+  awaiting?: string | null,
 ): string {
   if (!need) return 'No current alert';
-  if (need.owner === 'maker') {
-    return `Awaiting ${need.makerName?.trim() || need.draft?.maker?.trim() || 'supplier'}`;
-  }
-  if (need.owner === 'client') {
-    return `Awaiting ${need.clientName?.trim() || 'client'}`;
-  }
+  if (awaiting?.trim()) return `Awaiting ${awaiting.trim()}`;
   const lead = projectId ? leads.get(projectId) : undefined;
   if (!lead || lead.leadUserId === meUserId) return 'Action with you';
   return `With ${firstName(lead.leadName) ?? 'the project lead'}`;
+}
+
+/** Who carries a job: its lead, else (no lead row) its designer — the seat
+ *  `isMyJob` reads. */
+export interface DeskHolder {
+  userId: string | null;
+  /** The holder's first name, where the read has one. */
+  name: string | null;
+  /** This seat carries it (`isMyJob`). */
+  mine: boolean;
+}
+
+/** The holder of each job, by the id the leads map is keyed on. `names` maps a
+ *  studio member's user id to her name, for a job no one leads yet. */
+export function deskHolderOf(
+  leads: DeskLeads,
+  meUserId: string | null | undefined,
+  designers: DeskDesigners = new Map(),
+  names: ReadonlyMap<string, string> = new Map(),
+): (jobId: string) => DeskHolder {
+  return (jobId) => {
+    const lead = leads.get(jobId);
+    const userId = lead ? lead.leadUserId : (designers.get(jobId) ?? null);
+    const named = lead?.leadName?.trim() ? lead.leadName : userId ? names.get(userId) : null;
+    return {
+      userId,
+      name: firstName(named),
+      mine: isMyJob(jobId, leads, meUserId, designers),
+    };
+  };
 }
 
 /**
@@ -125,13 +154,18 @@ export function handoffNoteFor(
   return seat?.invited_by === lead.previousLeadUserId ? note : null;
 }
 
-/** Derive unread hand-offs for projects now led by this viewer. */
+/**
+ * Derive unread hand-offs for projects now led by this viewer. With `now`, a
+ * hand-off read on that local day stays too: the Day Sheet settles it in
+ * place as "Note read", so its slot never refills (US-28 U-Q2).
+ */
 export function deriveHandoffNeeds(
   live: readonly DocumentStateRow[],
   leads: DeskLeads,
   meUserId: string | null | undefined,
   states: ReadonlyMap<string, NeedState> = new Map(),
   seat: HandoffSeat | null = null,
+  now?: Date,
 ): DeskNeed[] {
   if (!meUserId) return [];
   const rowsByProject = new Map(
@@ -144,7 +178,11 @@ export function deriveHandoffNeeds(
     const row = rowsByProject.get(projectId);
     if (!row) continue;
     const key = `handoff:${projectId}`;
-    if (handoffReadFor(states.get(key), lead.assignedAt)) continue;
+    const state = states.get(key);
+    const readToday =
+      Boolean(now && state?.actedAt) &&
+      new Date(state!.actedAt!).toDateString() === now!.toDateString();
+    if (handoffReadFor(state, lead.assignedAt) && !readToday) continue;
     const assigned = new Date(lead.assignedAt);
     if (!Number.isFinite(assigned.getTime())) continue;
     // Walk W-D7 — "Leah handed you …", the full name only when it has no first;

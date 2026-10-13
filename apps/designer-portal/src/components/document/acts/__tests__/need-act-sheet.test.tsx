@@ -290,10 +290,19 @@ describe('Chase this PO', () => {
     // never to a job someone else leads.
     expect(screen.queryByText(/Start with the Olsen lake house/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Save the draft for Leah' }));
-    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    await waitFor(() => expect(mockSetNeedState).toHaveBeenCalled());
+    expect(mockUpdate).toHaveBeenCalled();
     expect(mockCompose).toHaveBeenCalledWith({ kind: 'ack_chase', purchaseOrderId: 'po-1' });
     expect(mockSendDraft).toHaveBeenCalledTimes(0);
-    expect(mockSetNeedState).toHaveBeenCalledTimes(0);
+    // US-28 change 7 — the saved draft is her act: the need waits on the lead,
+    // and her line settles as "Drafted for Leah · she sees this first".
+    expect(mockSetNeedState).toHaveBeenCalledTimes(1);
+    expect(mockSetNeedState).toHaveBeenCalledWith({
+      needKey: 'po_unacknowledged:po-1',
+      engagementId: 'proj-1',
+      action: 'acted',
+      waitingOn: 'Leah',
+    });
   });
 
   it('prints the hand-off note on the job its writer handed her (SQ-778 N3)', () => {

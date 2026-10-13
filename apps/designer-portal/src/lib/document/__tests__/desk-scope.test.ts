@@ -1,6 +1,7 @@
 import {
   custodyFor,
   deriveHandoffNeeds,
+  deskHolderOf,
   handoffNoteFor,
   handoffReadFor,
   scopeDeskNeeds,
@@ -71,10 +72,29 @@ describe('Desk scope and custody', () => {
   it.each([
     [deskNeed('mine', 'designer'), 'mine', 'Action with you'],
     [deskNeed('theirs', 'designer'), 'theirs', 'With Nina'],
-    [deskNeed('mine', 'maker', { makerName: 'Ari Maker' } as Partial<NeedLine>), 'mine', 'Awaiting Ari Maker'],
-    [deskNeed('mine', 'client', { clientName: 'Leah Client' } as Partial<NeedLine>), 'mine', 'Awaiting Leah Client'],
+    // US-28 change 5 — an act still owed is hers, whoever owns the need.
+    [deskNeed('mine', 'maker'), 'mine', 'Action with you'],
+    [deskNeed('mine', 'client'), 'mine', 'Action with you'],
   ] as const)('names the custody holder as %s', (entry, projectId, expected) => {
     expect(custodyFor(entry.need, leads, 'u-me', projectId)).toBe(expected);
+  });
+
+  it('says Awaiting {who} once the studio has acted, and No current alert with no need', () => {
+    expect(custodyFor(deskNeed('mine', 'client').need, leads, 'u-me', 'mine', 'Ari')).toBe('Awaiting Ari');
+    expect(custodyFor(deskNeed('mine', 'client').need, leads, 'u-me', 'mine', '  ')).toBe('Action with you');
+    expect(custodyFor(null, leads, 'u-me', 'mine', 'Ari')).toBe('No current alert');
+  });
+
+  it('deskHolderOf names the lead, else the designer, and marks the seat’s own', () => {
+    const designers = new Map<string, string | null>([['eng-hers', 'u-other'], ['eng-mine', 'u-me']]);
+    const names = new Map([['u-other', 'Nina Park'], ['u-me', 'Maya Lee']]);
+    const holderOf = deskHolderOf(leads, 'u-me', designers, names);
+
+    expect(holderOf('mine')).toEqual({ userId: 'u-me', name: 'Maya', mine: true });
+    expect(holderOf('theirs')).toEqual({ userId: 'u-other', name: 'Nina', mine: false });
+    expect(holderOf('eng-hers')).toEqual({ userId: 'u-other', name: 'Nina', mine: false });
+    expect(holderOf('eng-mine')).toEqual({ userId: 'u-me', name: 'Maya', mine: true });
+    expect(holderOf('unknown')).toEqual({ userId: null, name: null, mine: false });
   });
 
   it('shows an unread project hand-off only to its new lead, then suppresses it after acting', () => {
@@ -137,6 +157,26 @@ describe('Desk scope and custody', () => {
     expect(handoffReadFor({ actedAt: '2026-10-01T12:00:00.000Z' }, '2026-10-10T12:00:00.000Z')).toBe(false);
     expect(handoffReadFor({ actedAt: '2026-10-10T12:00:00.000Z' }, '2026-10-10T12:00:00.000Z')).toBe(true);
     expect(handoffReadFor(undefined, '2026-10-10T12:00:00.000Z')).toBe(false);
+  });
+
+  it('keeps a hand-off read today, for the Day Sheet to settle in place (US-28 U-Q2)', () => {
+    const leads: DeskLeads = new Map([
+      ['project-1', {
+        leadUserId: 'u-me',
+        leadName: 'Maya Lee',
+        previousLeadUserId: 'u-old',
+        previousLeadName: 'Nina Park',
+        assignedAt: '2026-10-10T12:00:00.000Z',
+      }],
+    ]);
+    const live = [{ project_id: 'project-1', title: 'Oak House' } as DocumentStateRow];
+    const read = new Map([
+      ['handoff:project-1', { actedAt: new Date(2026, 9, 12, 9, 0).toISOString() } as NeedState],
+    ]);
+
+    expect(deriveHandoffNeeds(live, leads, 'u-me', read, null, new Date(2026, 9, 12, 17, 50))).toHaveLength(1);
+    expect(deriveHandoffNeeds(live, leads, 'u-me', read, null, new Date(2026, 9, 13, 8, 0))).toEqual([]);
+    expect(deriveHandoffNeeds(live, leads, 'u-me', read)).toEqual([]);
   });
 
   it('names a previous lead with no first name in full (walk W-D7)', () => {

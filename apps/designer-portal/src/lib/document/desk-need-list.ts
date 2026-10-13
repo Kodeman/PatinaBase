@@ -77,7 +77,7 @@ export function rankByNext<T>(
 }
 
 /** The needs, one line per key — the first handed in — ranked. */
-export function rankDeskNeeds(needs: readonly DeskNeed[], now: Date): DeskNeed[] {
+export function rankDeskNeeds<T extends DeskNeed>(needs: readonly T[], now: Date): T[] {
   const seen = new Set<NeedKey>();
   const unique = needs.filter((entry) => {
     if (seen.has(entry.key)) return false;
