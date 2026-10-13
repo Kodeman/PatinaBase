@@ -86,13 +86,42 @@ test.describe('the fling census (D-B31) — pre-first-region paper is not blank 
       `blank frame(s) — paper the lens should have promoted stood un-painted under the reader:\n${lines}`,
     ).toBeLessThanOrEqual(MAX_BLANK_FRAMES);
 
+    // US-28 S7a (uplift.md (c) Document: each region is a Section that closes
+    // on --rule-mid) made the regions taller, and the fixed 3200px fling now
+    // can land its centre in the --doc-region-gap between two roots: paper the
+    // census already counts as content, not blank. Then the stop the gap
+    // closes (the root ending within one gap above the centre) is the landing.
+    const landing = census.landing.regionKey
+      ? census.landing
+      : await page.evaluate(() => {
+          const cy = window.innerHeight / 2;
+          const paper = document.querySelector('[data-document-paper]');
+          const gap =
+            parseFloat(
+              getComputedStyle(document.documentElement).getPropertyValue(
+                '--doc-region-gap',
+              ),
+            ) || 24;
+          const roots = Array.from(
+            paper?.querySelectorAll('[data-index-region]') ?? [],
+          );
+          const closing = roots.find((root) => {
+            const box = root.getBoundingClientRect();
+            return box.bottom <= cy && cy - box.bottom <= gap;
+          });
+          return {
+            regionKey: closing?.getAttribute('data-index-region') ?? null,
+            density: closing?.getAttribute('data-density') ?? null,
+          };
+        });
+
     expect(
-      census.landing.regionKey,
+      landing.regionKey,
       `the fling landed with no [data-index-region] under the frame centre:\n${lines}`,
     ).not.toBeNull();
     expect(
-      census.landing.density,
-      `the landing stop ("${census.landing.regionKey}") is not full:\n${lines}`,
+      landing.density,
+      `the landing stop ("${landing.regionKey}") is not full:\n${lines}`,
     ).toBe('full');
   });
 });

@@ -269,10 +269,12 @@ test.describe("Project-owned board save path", () => {
       waitUntil: "domcontentloaded",
     });
     // The project boards page mounts the builder behind its own act.
-    await page.getByRole("button", { name: "New board" }).click();
+    // US-28 S11 (SQ-827): the head act is the scored "New board" too, so the
+    // builder's own act is the last match, not the first.
+    await page.getByRole("button", { name: "New board" }).first().click();
     await page
       .getByRole("button", { name: /new board|start the first mood board/i })
-      .first()
+      .last()
       .click();
 
     await expect(

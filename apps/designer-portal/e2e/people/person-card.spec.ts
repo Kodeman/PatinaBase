@@ -146,10 +146,12 @@ test.describe("the person card", () => {
       await page.goto("/people");
       await page.getByRole("button", { name }).first().click();
 
+      // US-28 S10b (SQ-825): the laid-paper record names its regions in
+      // plain words.
       for (const head of [
-        "Reach & access",
-        "Project assignments",
-        "Past assignments",
+        "Rules and how to reach them",
+        "On these jobs",
+        "Past jobs",
         "Relationship history",
       ]) {
         await expect(page.getByRole("heading", { name: head })).toBeVisible();

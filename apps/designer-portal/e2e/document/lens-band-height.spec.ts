@@ -192,6 +192,13 @@ test.describe('the lens band’s declared height', () => {
             })
             .toBe('none');
           const box = await bandBox(band);
+          // US-28 S7a, U-Q19 (V20): at 390 the NEXT band wraps to a second
+          // line rather than clip, so 56px is its floor there, not its height.
+          if (size.width <= 390) {
+            expect(box.rect).toBeGreaterThanOrEqual(BAND_HEIGHT);
+            expect(box.offset).toBe(Math.round(box.rect));
+            continue;
+          }
           expect(
             box.rect,
             `${paper.label} · ${size.label} · scrollY ${offset} — ` +
