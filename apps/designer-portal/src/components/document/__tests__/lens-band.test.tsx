@@ -892,6 +892,23 @@ describe('LensBand · one voice (slice 2, flag `one-voice`)', () => {
     expect(band().textContent).not.toMatch(/MORE/);
   });
 
+  it('D-B38 at 390 — pinned, line 1 prints the same words it printed at rest, so it keeps its rows', () => {
+    // Next names no money, so the figure stays on line 1 in both states.
+    render(<LensBand model={chen({ needs: [CHEN_NEEDS[0]] })} docId="doc-1" onToTop={jest.fn()} />);
+    const slot = () => line('1').querySelector('[data-lens-right-flush]') as HTMLElement;
+    expect(slot()).toHaveTextContent(/^\$17,500 OUT$/);
+
+    passSentinel();
+    const wide = slot().querySelector('[data-lens-right-flush-wide]') as HTMLElement;
+    expect(wide).toHaveTextContent('INSTALL SEP 15 · $17,500 OUT');
+    expect(wide).toHaveClass('max-[599px]:hidden');
+    // The phone's form is the at-rest figure, word for word, and nothing else.
+    const narrow = Array.from(slot().children).filter((node) => node !== wide);
+    expect(narrow).toHaveLength(1);
+    expect(narrow[0]).toHaveClass('hidden', 'max-[599px]:inline');
+    expect(narrow[0]).toHaveTextContent(/^\$17,500 OUT$/);
+  });
+
   it('prints `Project · On hold` on the held fixture and `Care · Closed` with no Next once closed', () => {
     const { unmount } = render(
       <LensBand model={chen({ projectStatus: 'on_hold' })} docId="doc-1" />,

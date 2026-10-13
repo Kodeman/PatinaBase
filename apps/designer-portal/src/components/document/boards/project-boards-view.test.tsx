@@ -8,8 +8,9 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Suspense } from 'react';
 
 const mockReplace = jest.fn();
+const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn(), replace: mockReplace }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
   usePathname: () => '/doc/eng-1/boards',
 }));
 
@@ -29,10 +30,43 @@ jest.mock('@patina/supabase', () => ({
   useBoardReactionStatuses: () => mockStatuses(),
 }));
 
+// SQ-852 — the launcher prints its own `New board` act. It must never mount on
+// this page beside the head's; the mock keeps that act so a regression shows.
 jest.mock('@/components/portal/scope-builder/boards-builder', () => ({
-  BoardsBuilder: ({ projectId }: { projectId: string }) => (
-    <div data-testid="boards-builder">{projectId}</div>
+  BoardsBuilder: () => (
+    <button type="button" data-testid="boards-builder">
+      New board
+    </button>
   ),
+}));
+
+type PickerProps = {
+  owner: { kind: string; id: string };
+  boardsCount: number;
+  sortOrderSeed?: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (boardId: string, meta: { materialized: boolean }) => void;
+};
+jest.mock('@/components/portal/scope-builder/board-create-picker-dialog', () => ({
+  BoardCreatePickerDialog: (props: PickerProps) =>
+    props.open ? (
+      <div
+        role="dialog"
+        aria-label="Start a mood board"
+        data-testid="board-picker"
+        data-owner={`${props.owner.kind}:${props.owner.id}`}
+        data-boards-count={props.boardsCount}
+        data-sort-order-seed={props.sortOrderSeed}
+      >
+        <button type="button" onClick={() => props.onCreated('b-new', { materialized: false })}>
+          Blank board
+        </button>
+        <button type="button" onClick={() => props.onCreated('b-tpl', { materialized: true })}>
+          From a template
+        </button>
+      </div>
+    ) : null,
 }));
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -63,6 +97,7 @@ function engagement(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   startBoardPending.projectId = null;
   mockReplace.mockClear();
+  mockPush.mockClear();
   mockStatuses.mockImplementation(() => new Map());
   mockEngagement.mockReturnValue(engagement());
   mockLive.mockReturnValue({
@@ -143,38 +178,62 @@ describe('the boards page', () => {
     ).toHaveAttribute('href', '/doc/eng-1');
   });
 
-  it('starts a board in flow, and on the act the sheet already fires (F30)', () => {
+  // SQ-852 — the head's ＋ New board opens the create picker itself; it never
+  // mounts the launcher, whose own `New board` act would make two.
+  it('opens the create picker from the one New board act, and no second act appears', () => {
     render(<ProjectBoardsView routeId="eng-1" />);
 
-    expect(screen.queryByTestId('boards-builder')).toBeNull();
+    expect(screen.queryByTestId('board-picker')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'New board' }));
-    expect(screen.getByTestId('boards-builder')).toHaveTextContent('proj-1');
+
+    const picker = screen.getByTestId('board-picker');
+    expect(picker).toHaveAttribute('data-owner', 'project:proj-1');
+    // Named from the open boards; ordered after every board, archived included.
+    expect(picker).toHaveAttribute('data-boards-count', '1');
+    expect(picker).toHaveAttribute('data-sort-order-seed', '2');
+    expect(screen.queryByTestId('boards-builder')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'New board' })).toHaveLength(1);
   });
 
-  it('opens the same builder when the Add-to-project sheet asks for a board', () => {
+  it('opens the new board in its room, flagging a template for Promote all (DV3)', () => {
+    render(<ProjectBoardsView routeId="eng-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New board' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Blank board' }));
+    expect(mockPush).toHaveBeenLastCalledWith(expect.stringContaining('/board/b-new'));
+    expect(mockPush.mock.calls[0][0]).not.toContain('materialized=template');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New board' }));
+    fireEvent.click(screen.getByRole('button', { name: 'From a template' }));
+    expect(mockPush).toHaveBeenLastCalledWith(
+      expect.stringMatching(/\/board\/b-tpl\?.*&materialized=template$/),
+    );
+  });
+
+  it('opens the same picker when the Add-to-project sheet asks for a board (F30)', () => {
     render(<ProjectBoardsView routeId="eng-1" />);
 
     act(() => {
       window.dispatchEvent(new CustomEvent('document:new-project-board'));
     });
 
-    expect(screen.getByTestId('boards-builder')).toBeInTheDocument();
+    expect(screen.getByTestId('board-picker')).toBeInTheDocument();
   });
 
   // D4' — ⌘K's "Start a board…" command navigates here before the event it
   // would fire has a listener; the pending flag carries the intent across
   // that navigation instead, same pattern as command-bar.tsx's callSheetPending.
-  it('opens the builder immediately when it lands carrying its own project’s pending flag', () => {
+  it('opens the picker immediately when it lands carrying its own project’s pending flag', () => {
     startBoardPending.projectId = 'proj-1'; // this page's project (engagement()'s fixture)
     render(<ProjectBoardsView routeId="eng-1" />);
 
-    expect(screen.getByTestId('boards-builder')).toBeInTheDocument();
+    expect(screen.getByTestId('board-picker')).toBeInTheDocument();
     expect(startBoardPending.projectId).toBeNull();
   });
 
-  it('does not auto-open the builder when no pending flag was set', () => {
+  it('does not auto-open the picker when no pending flag was set', () => {
     render(<ProjectBoardsView routeId="eng-1" />);
-    expect(screen.queryByTestId('boards-builder')).toBeNull();
+    expect(screen.queryByTestId('board-picker')).toBeNull();
   });
 
   // The P2 fix: a boolean flag left stuck true by an abandoned navigation
@@ -187,7 +246,7 @@ describe('the boards page', () => {
     startBoardPending.projectId = 'proj-abandoned';
     render(<ProjectBoardsView routeId="eng-1" />);
 
-    expect(screen.queryByTestId('boards-builder')).toBeNull();
+    expect(screen.queryByTestId('board-picker')).toBeNull();
     expect(startBoardPending.projectId).toBeNull();
   });
 

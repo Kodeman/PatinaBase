@@ -268,14 +268,12 @@ test.describe("Project-owned board save path", () => {
     await page.goto(`/doc/${PROJECT_ID}/boards`, {
       waitUntil: "domcontentloaded",
     });
-    // The project boards page mounts the builder behind its own act.
-    // US-28 S11 (SQ-827): the head act is the scored "New board" too, so the
-    // builder's own act is the last match, not the first.
-    await page.getByRole("button", { name: "New board" }).first().click();
-    await page
-      .getByRole("button", { name: /new board|start the first mood board/i })
-      .last()
-      .click();
+    // US-28 S11 (SQ-827): the head's scored "New board" is the page's one act
+    // that starts a board, and it opens the picker itself (SQ-852): no second
+    // launcher act is mounted beside it.
+    const newBoard = page.getByRole("button", { name: "New board" });
+    await expect(newBoard).toHaveCount(1);
+    await newBoard.click();
 
     await expect(
       page.getByRole("heading", { name: "Start a mood board" }),

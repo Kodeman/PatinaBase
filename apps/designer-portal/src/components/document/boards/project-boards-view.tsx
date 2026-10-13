@@ -22,7 +22,7 @@ import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { boardsRoutePath } from '@/lib/document/registry';
 import { NEW_BOARD_EVENT, startBoardPending } from '@/lib/document/shelves';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
-import { BoardsBuilder } from '@/components/portal/scope-builder/boards-builder';
+import { BoardCreatePickerDialog } from '@/components/portal/scope-builder/board-create-picker-dialog';
 import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
 import type { BoardReactionStatus } from '@patina/supabase';
 import { STAGE_WORD } from '@/lib/document/act-names';
@@ -147,7 +147,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
   }, [resolution, router]);
 
   // F30 — the Add-to-project sheet's "Create design board" fires this at whichever
-  // boards surface is mounted; on this page that is the builder below.
+  // boards surface is mounted; on this page it opens the create picker below.
   useEffect(() => {
     const open = () => setStarting(true);
     window.addEventListener(NEW_BOARD_EVENT, open);
@@ -292,13 +292,28 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
           </p>
         )}
 
-        {starting && (
-          <div className="mb-8 mt-6">
-            <BoardsBuilder projectId={projectId} />
-          </div>
-        )}
+        {/* SQ-852 — the head's ＋ New board is this page's one act that starts
+            a board, and it opens the create picker itself. Mounting the
+            launcher here printed a second `New board` act (and a second strip
+            of the same boards) beside the head's. */}
+        <BoardCreatePickerDialog
+          owner={{ kind: 'project', id: projectId }}
+          boardsCount={liveBoards.length}
+          sortOrderSeed={(live.data ?? []).length}
+          open={starting}
+          onOpenChange={setStarting}
+          onCreated={(boardId, meta) =>
+            // DV3 — a template materialized onto a project board offers the
+            // room's one-shot "Promote all" on arrival.
+            router.push(
+              meta.materialized
+                ? `${boardHref(boardId)}&materialized=template`
+                : boardHref(boardId),
+            )
+          }
+        />
 
-        {empty && !starting ? (
+        {empty ? (
           <EmptyState eyebrow="Design boards" className="s11-first">
             No boards yet · start one
           </EmptyState>
