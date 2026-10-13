@@ -259,6 +259,7 @@ Deno.test("a dead address refuses the letter, and an unsubscribed one does too",
     const recorded = blank();
     const client = emailClient([{ ...liveRow, status }], recorded);
     const prepared = await prepareCompliantEmail(client, {
+      authority: { kind: "designer", userId: "designer-1" },
       to: "dana@kowalskitile.test",
       subject: "Your certificate lapses Friday",
       html: "<p>hello</p>",
@@ -276,6 +277,7 @@ Deno.test("a soft-bounced address still sends — one bounce is not a dead mailb
   const recorded = blank();
   const client = emailClient([{ ...liveRow, status: "bounced" }], recorded);
   const prepared = await prepareCompliantEmail(client, {
+    authority: { kind: "designer", userId: "designer-1" },
     to: "dana@kowalskitile.test",
     subject: "s",
     html: "<p>h</p>",
@@ -289,6 +291,7 @@ Deno.test("a channel letter carries List-Unsubscribe with a channel subject, in 
   const recorded = blank();
   const client = emailClient([liveRow], recorded);
   const prepared = await prepareCompliantEmail(client, {
+    authority: { kind: "designer", userId: "designer-1" },
     to: "dana@kowalskitile.test",
     subject: "s",
     html: "<p>h</p>",
@@ -313,6 +316,7 @@ Deno.test("an account holder's letter files no channel RECORD — no ref, no cha
   const recorded = blank();
   const client = emailClient([liveRow], recorded);
   const prepared = await prepareCompliantEmail(client, {
+    authority: { kind: "designer", userId: "designer-1" },
     to: "dana@kowalskitile.test",
     subject: "s",
     html: "<p>h</p>",
@@ -339,6 +343,7 @@ Deno.test("a dead address does NOT send to an account holder whose profile is un
     // account-less letter (notification_log.user_id NULL).
     const client = emailClient([{ ...liveRow, status }], recorded);
     const prepared = await prepareCompliantEmail(client, {
+      authority: { kind: "designer", userId: "designer-1" },
       to: "dana@kowalskitile.test",
       subject: "Invoice 0002",
       html: "<p>h</p>",
@@ -357,6 +362,7 @@ Deno.test("the widened gate still asks the address ONCE per letter, and still ad
   const recorded = blank();
   const client = emailClient([liveRow], recorded);
   await prepareCompliantEmail(client, {
+    authority: { kind: "designer", userId: "designer-1" },
     to: "dana@kowalskitile.test",
     subject: "s",
     html: "<p>h</p>",
@@ -378,6 +384,7 @@ Deno.test("the channel letter's log row carries the deliverability ref, and the 
     );
   try {
     const result = await sendCompliantEmail(client, {
+      authority: { kind: "designer", userId: "designer-1" },
       to: "dana@kowalskitile.test",
       subject: "s",
       html: "<p>h</p>",
@@ -410,6 +417,7 @@ Deno.test("a refused letter writes a suppressed log row with the same ref", asyn
   const recorded = blank();
   const client = emailClient([{ ...liveRow, status: "dead" }], recorded);
   const result = await sendCompliantEmail(client, {
+    authority: { kind: "designer", userId: "designer-1" },
     to: "dana@kowalskitile.test",
     subject: "s",
     html: "<p>h</p>",
@@ -438,6 +446,7 @@ Deno.test("the out touch names the sending studio's own card, never another stud
     Promise.resolve(new Response(JSON.stringify({ id: "resend-2" }), { status: 200 }));
   try {
     await sendCompliantEmail(client, {
+      authority: { kind: "designer", userId: "designer-1" },
       to: "dana@kowalskitile.test",
       subject: "s",
       html: "<p>h</p>",
@@ -462,6 +471,7 @@ Deno.test("the STATUS verdict stays address-wide (D-6) even when the sending stu
     recorded,
   );
   const prepared = await prepareCompliantEmail(client, {
+    authority: { kind: "designer", userId: "designer-1" },
     to: "dana@kowalskitile.test",
     subject: "s",
     html: "<p>h</p>",
@@ -484,6 +494,7 @@ Deno.test("a letter that names no studio files no touch and no channel ref", asy
     Promise.resolve(new Response(JSON.stringify({ id: "resend-3" }), { status: 200 }));
   try {
     await sendCompliantEmail(client, {
+      authority: { kind: "designer", userId: "designer-1" },
       to: "dana@kowalskitile.test",
       subject: "s",
       html: "<p>h</p>",

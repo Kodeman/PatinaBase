@@ -100,6 +100,7 @@ Deno.test("the entity type and id reach the RPC unchanged — they are the deep 
   for (const entityType of ["proposal", "invoice", "decision"] as const) {
     const { client, calls } = recorder();
     const out = await notifyClientAttention(client, {
+      authority: { kind: "designer", userId: "designer-1" },
       userId: "d5000000-0000-4000-8000-000000000002",
       entityType,
       entityId: ID,

@@ -125,10 +125,18 @@ function withSendClaim(fake: FakeSupabase): FakeSupabase {
 
 // ── (a) The status-code table ───────────────────────────────────────────────
 
+/** Party p1 on a project with a designer, so an internal job has a send authority. */
+function partyFake(): FakeSupabase {
+  return createFakeSupabase({
+    project_parties: [{ id: "p1", project_id: "proj-1" }],
+    projects: [{ id: "proj-1", designer_id: "designer-1" }],
+  });
+}
+
 Deno.test("200 only when the text is gone", async () => {
   const s = sender({ sent: true, status: "sent", messageId: "m1" });
   const res = await handleSmsDispatch(post({ partyId: "p1", body: "hi" }), {
-    supabase: createFakeSupabase() as never,
+    supabase: partyFake() as never,
     getEnv: envOf(BASE_ENV),
     sendPartySms: s.fn,
   });
@@ -163,7 +171,7 @@ Deno.test("202 for accepted-but-not-delivered: queued, deferred, already claimed
   for (const [result, status] of cases) {
     const s = sender(result);
     const res = await handleSmsDispatch(post({ partyId: "p1", body: "hi" }), {
-      supabase: createFakeSupabase() as never,
+      supabase: partyFake() as never,
       getEnv: envOf(BASE_ENV),
       sendPartySms: s.fn,
     });
@@ -189,7 +197,7 @@ Deno.test("422 for every consent or suppression refusal", async () => {
   ) {
     const s = sender({ sent: false, status: "failed", reason });
     const res = await handleSmsDispatch(post({ partyId: "p1", body: "hi" }), {
-      supabase: createFakeSupabase() as never,
+      supabase: partyFake() as never,
       getEnv: envOf(BASE_ENV),
       sendPartySms: s.fn,
     });
@@ -206,7 +214,7 @@ Deno.test("502 when the provider said no, carrying its own code", async () => {
     provider_code: "21610",
   });
   const res = await handleSmsDispatch(post({ partyId: "p1", body: "hi" }), {
-    supabase: createFakeSupabase() as never,
+    supabase: partyFake() as never,
     getEnv: envOf(BASE_ENV),
     sendPartySms: s.fn,
   });
@@ -220,7 +228,7 @@ Deno.test("503 for a dependency that is not provisioned or a phase not live", as
   for (const reason of ["twilio_not_configured", "field_line_phase_off"]) {
     const s = sender({ sent: false, status: "failed", reason });
     const res = await handleSmsDispatch(post({ partyId: "p1", body: "hi" }), {
-      supabase: createFakeSupabase() as never,
+      supabase: partyFake() as never,
       getEnv: envOf(BASE_ENV),
       sendPartySms: s.fn,
     });
@@ -232,7 +240,7 @@ Deno.test("400 when the job cannot be acted on at all", async () => {
   for (const reason of ["no_phone_number", "empty_body"]) {
     const s = sender({ sent: false, status: "failed", reason });
     const res = await handleSmsDispatch(post({ partyId: "p1", body: "hi" }), {
-      supabase: createFakeSupabase() as never,
+      supabase: partyFake() as never,
       getEnv: envOf(BASE_ENV),
       sendPartySms: s.fn,
     });
@@ -255,7 +263,7 @@ Deno.test("500 when this rail could not write its own record", async () => {
   ) {
     const s = sender({ sent: false, status: "failed", reason });
     const res = await handleSmsDispatch(post({ partyId: "p1", body: "hi" }), {
-      supabase: createFakeSupabase() as never,
+      supabase: partyFake() as never,
       getEnv: envOf(BASE_ENV),
       sendPartySms: s.fn,
     });
@@ -266,7 +274,7 @@ Deno.test("500 when this rail could not write its own record", async () => {
 
 Deno.test("CORS and the job schema are unchanged", async () => {
   const deps = {
-    supabase: createFakeSupabase() as never,
+    supabase: partyFake() as never,
     getEnv: envOf(BASE_ENV),
   };
   const preflight = await handleSmsDispatch(
@@ -330,7 +338,7 @@ Deno.test("the prompt's Ref code reaches the template as {{code}}", async () => 
       vars: { project_name: "Lindqvist" },
     }),
     {
-      supabase: createFakeSupabase() as never,
+      supabase: partyFake() as never,
       getEnv: envOf(BASE_ENV),
       sendPartySms: s.fn,
     },

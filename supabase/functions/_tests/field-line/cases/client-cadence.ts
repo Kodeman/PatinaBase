@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import { CLIENT_PHONE, CLIENT_ROOM, clientFixture } from "../client-fixture.ts";
 import { CLIENT_SMS_TEMPLATES, flushDeferredMessages, sendClientSms } from "../../../_shared/sms.ts";
+import { HARNESS_AUTHORITY } from "../harness.ts";
 import type { GateAssertion, GateCase } from "../types.ts";
 
 type Fixture = ReturnType<typeof clientFixture>;
@@ -122,6 +123,7 @@ export const clientConsentBoundary: GateCase = {
   async run(): Promise<GateAssertion[]> {
     const letter = (f: Fixture) =>
       sendClientSms(f.h.fake as never, {
+        authority: HARNESS_AUTHORITY,
         partyId: "party-c",
         projectId: "project-a",
         templateKey: "sms_client_first_letter",
@@ -193,6 +195,7 @@ export const clientCampaignApproval: GateCase = {
     const off = clientFixture({ env: { FIELD_LINE_CAMPAIGN_APPROVED: "" } });
     for (const templateKey of CLIENT_SMS_TEMPLATES) {
       const res = await sendClientSms(off.h.fake as never, {
+        authority: HARNESS_AUTHORITY,
         partyId: "party-c",
         projectId: "project-a",
         templateKey,
@@ -224,6 +227,7 @@ export const clientCampaignApproval: GateCase = {
     // and the row waits with the reason on it (contract P13).
     const overnight = clientFixture({ now: new Date("2026-11-02T10:00:00.000Z") });
     const stored = await sendClientSms(overnight.h.fake as never, {
+      authority: HARNESS_AUTHORITY,
       partyId: "party-c",
       projectId: "project-a",
       templateKey: "sms_client_first_letter",
@@ -236,6 +240,7 @@ export const clientCampaignApproval: GateCase = {
     overnight.h.advanceTo(new Date("2026-11-02T18:00:00.000Z"));
     const held = await flushDeferredMessages(
       overnight.h.fake as never,
+      HARNESS_AUTHORITY,
       depsOf(overnight, { FIELD_LINE_CAMPAIGN_APPROVED: "0" }),
     );
     assertEquals(held.flushed, 0, "the flag came down overnight, so nothing flushes");
@@ -245,7 +250,7 @@ export const clientCampaignApproval: GateCase = {
     assertEquals(row.error_message, "campaign_not_approved", "and says why it is still there");
     assertEquals(wiresTo(overnight, CLIENT_PHONE).length, 0);
 
-    const resumed = await flushDeferredMessages(overnight.h.fake as never, depsOf(overnight));
+    const resumed = await flushDeferredMessages(overnight.h.fake as never, HARNESS_AUTHORITY, depsOf(overnight));
     assertEquals(resumed.flushed, 1, "and with the flag back up, it goes");
     assertEquals(wiresTo(overnight, CLIENT_PHONE).length, 1);
     return pass(

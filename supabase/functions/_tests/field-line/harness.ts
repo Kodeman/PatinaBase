@@ -1,8 +1,18 @@
 import { createFakeSupabase, type FakeSupabase } from "../fake-supabase.ts";
 import { fieldLineBindings } from "./adapters.ts";
 import { signedInboundFixture, signedStatusFixture } from "./fixtures.ts";
+import type { SendAuthority } from "../../_shared/send-authority.ts";
 
 type SendPartySmsInput = Parameters<typeof fieldLineBindings.sendPartySms>[1];
+type WithOptionalAuthority<T> = T extends unknown
+  ? Omit<T, "authority"> & { authority?: SendAuthority }
+  : never;
+type HarnessSendInput = WithOptionalAuthority<SendPartySmsInput>;
+
+/** Authority is only recorded by the SMS rail, so cases default to a designer's click. */
+export const HARNESS_AUTHORITY: SendAuthority = { kind: "designer", userId: "harness-designer" };
+const withAuthority = (input: HarnessSendInput) =>
+  ({ authority: HARNESS_AUTHORITY, ...input }) as SendPartySmsInput;
 type InboundParams = Parameters<typeof fieldLineBindings.processInbound>[0];
 
 export const FIELD_LINE_CLOCK = new Date("2026-11-01T14:00:00.000Z");
@@ -63,7 +73,7 @@ export interface FieldLineHarness {
   signedInbound(overrides?: Partial<InboundParams>): ReturnType<typeof signedInboundFixture>;
   signedStatus(overrides?: Record<string, string>): ReturnType<typeof signedStatusFixture>;
   processInbound(overrides?: Partial<InboundParams>): Promise<Awaited<ReturnType<typeof fieldLineBindings.processInbound>>>;
-  send(input: SendPartySmsInput): ReturnType<typeof fieldLineBindings.sendPartySms>;
+  send(input: HarnessSendInput): ReturnType<typeof fieldLineBindings.sendPartySms>;
   flush(): ReturnType<typeof fieldLineBindings.flushDeferredMessages>;
   daily(): ReturnType<typeof fieldLineBindings.runFieldDaily>;
 }
@@ -199,12 +209,12 @@ export function createFieldLineHarness(
         parseFn: async () => ({ intent: "note", target_ref: null, new_date: null, note: "fixture", confidence: 0 }),
       });
     },
-    send: (input) => fieldLineBindings.sendPartySms(fake as never, input, deps),
-    flush: () => fieldLineBindings.flushDeferredMessages(fake as never, deps),
+    send: (input) => fieldLineBindings.sendPartySms(fake as never, withAuthority(input), deps),
+    flush: () => fieldLineBindings.flushDeferredMessages(fake as never, HARNESS_AUTHORITY, deps),
     daily: () => fieldLineBindings.runFieldDaily(fake as never, {
       ...deps,
       sendFn: (client, input) => fieldLineBindings.sendPartySms(client, input, deps),
-      flushFn: () => fieldLineBindings.flushDeferredMessages(fake as never, deps),
+      flushFn: () => fieldLineBindings.flushDeferredMessages(fake as never, HARNESS_AUTHORITY, deps),
     }),
   };
 }

@@ -17,6 +17,11 @@ function createFakeSupabase(...args: Parameters<typeof baseFakeSupabase>) {
   let code = 20;
   fake.rpc = async (name, params = {}) => {
     if (name === "sms_is_suppressed") return { data: false, error: null };
+    if (name === "resolve_studio_identity") {
+      // The studio-schedule authority names the project's studio.
+      const project = (fake._data.projects ?? []).find((p) => p.id === params.p_project_id);
+      return { data: project?.studio_id ? [{ studio_id: project.studio_id, name: "Studio", source: "studio" }] : [], error: null };
+    }
     if (name === "sms_create_prompt") {
       const row = { id: crypto.randomUUID(), short_code: String(code++), party_id: params.p_party_id, project_id: params.p_project_id,
         subject_id: params.p_subject_id, kind: params.p_kind, version: params.p_version, sender_number: params.p_sender_number,
