@@ -35,6 +35,7 @@ import {
   type LlmLedgerPort,
   type ModelResponse,
   type ModelUsage,
+  parseDraftResponse,
   type PassDeps,
   type ProductRow,
   PROMPT_VERSION,
@@ -635,7 +636,7 @@ Deno.test('batch and concurrency match §12.2 (documented discipline)', () => {
 
 // ─── Request building ────────────────────────────────────────────────────────
 
-Deno.test('buildDraftRequest: cached system prefix, ≤3 URL images, archetype enum, structured output', () => {
+Deno.test('buildDraftRequest: cached system prefix, ≤3 URL images, archetype enum, schema in the prompt', () => {
   const product = makeProduct(PRODUCT_A);
   product.images = [
     'https://cdn.example.com/1.jpg',
@@ -666,9 +667,14 @@ Deno.test('buildDraftRequest: cached system prefix, ≤3 URL images, archetype e
   assert(textBlock.text.includes('Walnut Credenza'));
   assert(textBlock.text.includes('$1850.00'), 'price included');
 
-  const format = (request.output_config as Record<string, Record<string, unknown>>).format;
-  assertEquals(format.type, 'json_schema');
-  const schema = format.schema as Record<string, Record<string, Record<string, Record<string, unknown>>>>;
+  // Structured outputs refuse this schema ("compiled grammar is too large"),
+  // so it rides in the cached system prompt and validateDraft guards the shape.
+  assertEquals(request.output_config, undefined);
+  const schema = buildDraftSchema(ARCHETYPE_NAMES) as Record<
+    string,
+    Record<string, Record<string, Record<string, unknown>>>
+  >;
+  assert(system[0].text.includes(JSON.stringify(schema)), 'schema described in the system prompt');
   const primaryEnum = schema.properties.style.properties!.primary_archetype as unknown as {
     enum: string[];
   };
@@ -720,24 +726,21 @@ Deno.test('validateDraft rejects unknown primary archetype as schema failure', (
   assertEquals(result.kind, 'schema_failure');
 });
 
-// The API 400s a schema with more than 16 union-typed parameters (it had 34).
-Deno.test('buildDraftSchema stays within the 16 union-parameter limit', () => {
-  // deno-lint-ignore no-explicit-any
-  const unions = (s: any): number => {
-    if (!s || typeof s !== 'object') return 0;
-    let n = Array.isArray(s.type) || s.anyOf || s.oneOf ? 1 : 0;
-    for (const v of Object.values(s.properties ?? {})) n += unions(v);
-    if (s.items) n += unions(s.items);
-    for (const b of [...(s.anyOf ?? []), ...(s.oneOf ?? [])]) n += unions(b);
-    return n;
-  };
-  assert(unions(buildDraftSchema(ARCHETYPE_NAMES)) <= 16);
-});
-
 Deno.test('validateDraft stores an empty text field as null', () => {
   const raw = structuredClone(highDraft) as Record<string, unknown>;
   (raw.identity as Record<string, unknown>).era = '  ';
   const result = validateDraft(raw, ARCHETYPE_NAMES);
   assert(result.ok);
   assertEquals((result.draft.identity as Record<string, unknown>).era, null);
+});
+
+Deno.test('parseDraftResponse reads a draft wrapped in a code fence', () => {
+  const result = parseDraftResponse(
+    {
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: '```json\n' + JSON.stringify(highDraft) + '\n```' }],
+    } as unknown as ModelResponse,
+    ARCHETYPE_NAMES,
+  );
+  assert(result.ok);
 });

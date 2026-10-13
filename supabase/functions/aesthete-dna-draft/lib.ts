@@ -199,13 +199,13 @@ Style archetypes — choose the primary and up to two secondary archetypes from 
 ${archetypeBlock}`;
 }
 
-// ─── Output schema (§6.3 contract, structured-outputs dialect) ──────────────
-// Structured-outputs constraints: every object carries additionalProperties:
-// false + required; no numeric min/max (ranges are clamped in validateDraft);
-// nullable numbers via anyOf. The API rejects schemas with more than 16
-// union-typed parameters, so unknown text fields come back as "" (optStr) and
-// validateDraft maps them to null. Archetype names are an enum built from the
-// styles table so drafts always resolve to real style ids.
+// ─── Output schema (§6.3 contract) ──────────────────────────────────────────
+// Described to the model in the system prompt, NOT sent as output_config:
+// structured outputs rejected it on 2026-10-13, first for more than 16
+// union-typed parameters, then with "compiled grammar is too large".
+// validateDraft is the guard: anything off-shape is a schema_failure, which
+// escalates to Sonnet. Unknown text fields come back as "" (optStr), and
+// validateDraft maps them to null. Ranges are clamped in validateDraft.
 
 type Schema = Record<string, unknown>;
 
@@ -355,17 +355,17 @@ export function buildDraftRequest(
     system: [
       {
         type: 'text',
-        text: buildSystemPrompt(archetypes),
+        text: `${buildSystemPrompt(archetypes)}
+
+## Output
+
+Respond with one JSON object and nothing else — no prose, no code fence. It must match this JSON Schema exactly, with every listed property present:
+
+${JSON.stringify(buildDraftSchema(archetypes.map((a) => a.name)))}`,
         cache_control: { type: 'ephemeral' },
       },
     ],
     messages: [{ role: 'user', content }],
-    output_config: {
-      format: {
-        type: 'json_schema',
-        schema: buildDraftSchema(archetypes.map((a) => a.name)),
-      },
-    },
   };
   return request;
 }
@@ -510,9 +510,12 @@ export function parseDraftResponse(
   if (!text) {
     return { ok: false, kind: 'schema_failure', detail: 'no text block in response' };
   }
+  // Without a wire schema the model may still wrap the object in a fence.
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(start >= 0 && end > start ? text.slice(start, end + 1) : text);
   } catch {
     return { ok: false, kind: 'schema_failure', detail: 'response is not valid JSON' };
   }
