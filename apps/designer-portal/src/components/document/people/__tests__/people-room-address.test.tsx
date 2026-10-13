@@ -20,7 +20,9 @@ const mockPush = jest.fn();
 const mergedSurvivor: { current: string | null } = { current: null };
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
+jest.mock("../../command-bar", () => ({ openCommandBar: jest.fn() }));
 
 const ROWS = [
   {
@@ -77,15 +79,17 @@ jest.mock("../../mobile/mobile-shell", () => ({
 jest.mock("../../rooms/room-shell", () => ({
   RoomShell: ({
     title,
+    heading,
     count,
     children,
   }: {
     title: string;
+    heading?: React.ReactNode;
     count?: string;
     children: React.ReactNode;
   }) => (
     <div>
-      <h1>{title}</h1>
+      {heading ?? <h1>{title}</h1>}
       {count && <p data-testid="room-count">{count}</p>}
       {children}
     </div>
@@ -243,18 +247,47 @@ describe("the address", () => {
   /**
    * CR3-4 — the body is chosen `openFirm ? <CompanyCard/> : openPerson ? … :
    * view`, and `goView` cleared everything EXCEPT `openFirm`. So choosing a
-   * rail view with a firm card open left the card standing, the rail showing
-   * nothing active, and the card's own Back the only way out.
+   * view with a firm card open left the card standing.
+   *
+   * US-28 — the views are no longer a rail in the Room; a sub-room opens from
+   * More or ⌘K at `/people?view=<key>`, and the standing Room follows it.
    */
-  it("choosing a view puts the company card down", () => {
+  it("walking to a sub-room's address puts the company card down", () => {
     goTo("?firm=firm-northgate");
-    render(<PeopleRoom />);
+    const { rerender } = render(<PeopleRoom />);
     expect(screen.getByTestId("company-card")).toBeInTheDocument();
-    const rail = document.querySelector<HTMLElement>(
-      "[data-people-desktop-rail]",
-    );
-    fireEvent.click(within(rail!).getByRole("button", { name: /Correspondence/ }));
+    goTo("?view=threads");
+    rerender(<PeopleRoom />);
     expect(screen.queryByTestId("company-card")).toBeNull();
+    expect(
+      document.querySelector("[data-people-sub-room]"),
+    ).toHaveAttribute("data-people-sub-room", "client-relations");
+  });
+
+  it("US-28 — a fresh arrival at a sub-room's address opens it and never strips ?view=", async () => {
+    goTo("?view=threads");
+    render(<PeopleRoom />);
+    expect(document.querySelector("[data-people-main-panel]")).toHaveAttribute(
+      "data-people-current-view",
+      "threads",
+    );
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-people-main-panel]"),
+      ).toHaveAttribute("data-people-sub-room", "client-relations"),
+    );
+    expect(mockReplace).not.toHaveBeenCalledWith("/people", expect.anything());
+  });
+
+  it("the Header line's way back from a record returns to the Directory", () => {
+    goTo("?person=card-dana");
+    render(<PeopleRoom />);
+    expect(screen.getByTestId("person-card")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Back to Studio contacts" }),
+    );
+    expect(screen.queryByTestId("person-card")).toBeNull();
+    expect(screen.getByTestId("directory-view")).toBeInTheDocument();
   });
 });
 

@@ -1222,6 +1222,21 @@ export function directoryBandOf(p: DirectoryPerson): DirectoryChip {
   return "crew";
 }
 
+/** US-28 (people specimen) — the ledger's kind column, one word per band. */
+const BAND_KIND_WORD: Record<DirectoryChip, string> = {
+  everyone: "Contact",
+  clients: "Client",
+  crew: "Trade",
+  makers: "Maker",
+  studio: "Studio",
+  firms: "Company",
+};
+
+/** "Client" · "Trade" · "Maker" · "Studio" · "Company": the row's kind word. */
+export function directoryKindWord(p: DirectoryPerson): string {
+  return BAND_KIND_WORD[directoryBandOf(p)];
+}
+
 /**
  * PR-g: firms appear under Everyone as well as under Firms, sorted into the
  * band of the crew they carry. A chip admits an entry when the entry's own

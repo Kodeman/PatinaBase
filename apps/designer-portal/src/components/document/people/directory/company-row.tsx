@@ -57,7 +57,7 @@ export function CompanyRow({
   onOpen,
 }: CompanyRowProps) {
   return (
-    <li data-company-row={firmId} className="lrow plain people-row">
+    <li data-company-row={firmId} className="lrow people-row">
       <div className="lname">
         <span className="people-who">
           <Avatar name={name} role={kind} shape="square" />
@@ -71,6 +71,10 @@ export function CompanyRow({
           </button>
         </span>
       </div>
+      {/* US-28 (people specimen) — the kind column. */}
+      <span className="lphase t-meta" data-row-kind>
+        Company
+      </span>
       <div className="lsent t-body-sm min-w-0">
         <p className="t-meta text-[var(--ink-subtle)]">{line}</p>
         <p className="people-words">

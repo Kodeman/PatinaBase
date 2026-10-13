@@ -53,6 +53,7 @@ import { partyKindOwesPaper } from "@patina/types";
 import {
   directoryBandOf,
   directoryContactKind,
+  directoryKindWord,
   directoryEntryKind,
   isClientSideKind,
 } from "@/lib/document/people-derivation";
@@ -183,6 +184,14 @@ export function authorityPhrase(grant: {
 }
 
 /** The seat's own facts beneath its line, in the order SPEC §5.2 #7 prints. */
+/** "Maker · Fenmoor Joinery": the record's eyebrow, kind then firm. */
+function recordEyebrow(
+  person: Parameters<typeof directoryKindWord>[0],
+  firm: string | null,
+): string {
+  return [directoryKindWord(person), firm].filter(Boolean).join(" · ");
+}
+
 function SeatFacts({ seat }: { seat: PeopleDirectorySeat }) {
   const { data: authority } = usePartyAuthority(seat.seat_id);
   const phrases = (authority ?? []).map(authorityPhrase);
@@ -487,25 +496,21 @@ export function PersonProfile({
 
   return (
     <>
-      {/* US-28 S10 — the record is a PAGE VIEW: the way back is a word on the
-          ground, and the record itself is laid paper (L1), its edge the stock
-          step rather than a box. */}
-      <DocumentAction
-        actionKey="back-to-directory"
-        surfaceKey="people"
-        regionKey="person-card"
-        variant="tertiary"
-        leading="←"
-        aria-label="Back to Studio contacts"
-        onClick={onBack}
-      >
-        Studio contacts
-      </DocumentAction>
+      {/* US-28 — the record is a PAGE VIEW: the way back, "← Studio
+          contacts", is a word on the Room's Header line (people-room.tsx), and
+          the record itself is laid paper (L1), its edge the stock step rather
+          than a box. */}
       <article
         data-person-card={person.person_id}
         aria-labelledby={`person-name-${person.person_id}`}
         className="paper people-record"
       >
+        {/* The specimen's eyebrow: the kind, then the firm. */}
+        {recordEyebrow(person, firmName) && (
+          <p className="eb" data-person-eyebrow>
+            {recordEyebrow(person, firmName)}
+          </p>
+        )}
         {/* R1 — Identity */}
         <header className="people-record-head">
           <Avatar name={person.display_name} role={person.role} />

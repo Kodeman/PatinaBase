@@ -818,6 +818,15 @@ describe('F37 / F13 / F17 — the order, the titles, and the renamed room', () =
     expect(screen.getByText('Aspen guest house')).toBeInTheDocument();
   });
 
+  it("US-28 — opens Studio contacts' three rooms at their own address", () => {
+    openPalette();
+    for (const name of ['Client relations', 'Studio marketing', 'The Engine']) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByText('Client relations').closest('button')!);
+    expect(mockPush).toHaveBeenCalledWith('/people?view=threads');
+  });
+
   it('names the scans, and the words "The Rooms" appear nowhere', () => {
     const dialog = openPalette();
 

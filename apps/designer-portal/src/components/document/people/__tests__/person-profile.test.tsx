@@ -340,14 +340,18 @@ describe("the regions", () => {
     }
   });
 
-  it("is a laid-paper record with the way back to Studio contacts (US-28 S10)", () => {
+  it("is a laid-paper record under its kind eyebrow; the way back lives on the Room's Header line (US-28)", () => {
     renderCard();
     expect(document.querySelector("[data-person-card]")?.className).toMatch(
       /\bpaper\b/,
     );
+    // The way back moved up to the Header line (people-room-address.test).
     expect(
-      screen.getByRole("button", { name: "Back to Studio contacts" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Back to Studio contacts" }),
+    ).toBeNull();
+    expect(document.querySelector("[data-person-eyebrow]")).toHaveTextContent(
+      /\S/,
+    );
   });
 
   it("R-V — an absent record prints its own sentence, exactly", () => {

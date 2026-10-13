@@ -48,6 +48,13 @@ jest.mock("@/hooks/use-projects", () => ({
   useProjects: () => ({ data: [] }),
 }));
 
+// US-28 — an Inbound row's act opens the brief when the lead has one on the
+// desk ("Open the brief"); otherwise it opens the record.
+const mockDeskEngagements = jest.fn(() => ({ data: undefined as unknown }));
+jest.mock("@/hooks/use-desk-engagements", () => ({
+  useDeskEngagements: () => mockDeskEngagements(),
+}));
+
 jest.mock("../directory/makers-marketplace", () => ({
   MakersMarketplace: () => <div data-testid="marketplace" />,
 }));
@@ -186,6 +193,7 @@ beforeEach(() => {
   mockUsePeopleSeats.mockReset();
   mockUsePeopleSeats.mockReturnValue({ data: [] });
   mockUseContactRules.mockReturnValue({ data: [] });
+  mockDeskEngagements.mockReturnValue({ data: undefined });
 });
 
 describe("the six chips", () => {
@@ -197,11 +205,12 @@ describe("the six chips", () => {
         .getAllByRole("button")
         .map((b) => b.textContent),
     ).toEqual([
-      "All contacts",
+      // US-28 (people specimen) — the filter words, not chip names.
+      "Everyone",
       "Clients",
-      "Trades & contractors",
-      "Makers & suppliers",
-      "Studio team",
+      "Trades",
+      "Makers",
+      "Studio",
       "Companies",
     ]);
   });
@@ -209,8 +218,22 @@ describe("the six chips", () => {
   it("Everyone is the pressed chip on open", () => {
     renderDirectory([]);
     expect(
-      screen.getByRole("button", { name: "All contacts" }),
+      screen.getByRole("button", { name: "Everyone" }),
     ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("US-28 — the scope lens sits on the one filter line as pressed words", () => {
+    renderDirectory([]);
+    const line = document.querySelector(".people-filter-line") as HTMLElement;
+    const lens = within(line).getByRole("group", {
+      name: "Contact visibility",
+    });
+    expect(
+      within(lens).getByRole("button", { name: "Studio contacts" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(lens).getByRole("button", { name: "My contacts" }),
+    ).toHaveAttribute("aria-pressed", "false");
   });
 
   it("shows the trade line only under Crew and Makers", () => {
@@ -453,6 +476,44 @@ describe("Inbound first (US-28 S10, uplift (c) area 4)", () => {
       inbound.compareDocumentPosition(directory) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it("US-28 — an inbound row names its kind and opens the brief when the Desk holds one, else the record", () => {
+    const ines = row({
+      person_id: "card-ines",
+      role: "lead",
+      display_name: "Ines Varga",
+      scope: "mine",
+      status_raw: "new",
+      meta: { entity_kind: "person", contact_kind: "client" },
+    });
+    const { unmount } = renderDirectory([ines]);
+    let inboundRow = document.querySelector(
+      '[data-inbound-person="card-ines"]',
+    ) as HTMLElement;
+    expect(inboundRow.querySelector("[data-row-kind]")).toHaveTextContent(
+      /\S/,
+    );
+    fireEvent.click(
+      within(inboundRow).getByRole("button", {
+        name: "Open the record for Ines Varga",
+      }),
+    );
+    expect(NAV.openPerson).toHaveBeenCalledWith("card-ines", "lead");
+    unmount();
+
+    mockDeskEngagements.mockReturnValue({
+      data: { live: [{ lead_id: "card-ines", engagement_id: "eng-ines" }] },
+    });
+    renderDirectory([ines]);
+    inboundRow = document.querySelector(
+      '[data-inbound-person="card-ines"]',
+    ) as HTMLElement;
+    expect(
+      within(inboundRow).getByRole("link", {
+        name: "Open the brief for Ines Varga",
+      }),
+    ).toHaveAttribute("href", "/doc/eng-ines");
   });
 
   it("prints no Inbound Section when nothing is new", () => {

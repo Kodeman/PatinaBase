@@ -14,7 +14,12 @@ import {
   useUnreadInboxCount,
   useProcurementUnreadCount,
 } from '@patina/supabase';
-import { ALL_STUDIO_SURFACES, boardsRoutePath } from '@/lib/document/registry';
+import {
+  ALL_STUDIO_SURFACES,
+  PEOPLE_SUB_ROOM_HREF,
+  PEOPLE_SUB_ROOM_SURFACES,
+  boardsRoutePath,
+} from '@/lib/document/registry';
 import {
   DOCUMENT_INDEX_LABELS,
   type DocumentIndexKey,
@@ -63,6 +68,7 @@ const DOCK_PLACE_WORDS: Partial<Record<DocumentIndexKey, string>> = {
 };
 
 const MAIL_GROUP_LABEL_ID = 'mobile-more-mail-group';
+const PEOPLE_ROOMS_GROUP_LABEL_ID = 'mobile-more-people-rooms-group';
 const IN_DOCUMENT_GROUP_LABEL_ID = 'mobile-more-in-document-group';
 
 /** A shelf the spine offers at 1440, as a door the phone can reach: either a
@@ -643,6 +649,35 @@ export function MobileBar() {
               </span>
             </span>
           </button>
+          {/* US-28 (Kody, 2026-10-13) — the three rooms that left Studio
+              contacts' index, worded, each at its own `?view=` address. */}
+          <div role="group" aria-labelledby={PEOPLE_ROOMS_GROUP_LABEL_ID}>
+            <div className="border-b border-[var(--doc-ink-border)] px-3 pt-2">
+              <span
+                id={PEOPLE_ROOMS_GROUP_LABEL_ID}
+                className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-subtle)]"
+              >
+                From Studio contacts
+              </span>
+            </div>
+            {PEOPLE_SUB_ROOM_SURFACES.map((room) => (
+              <Link
+                key={room.key}
+                href={PEOPLE_SUB_ROOM_HREF[room.key]}
+                data-mobile-people-room={room.key}
+                onClick={() => setMoreOpen(false)}
+                className={MENU_ITEM}
+              >
+                <span
+                  aria-hidden
+                  className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay-ink)]"
+                >
+                  →
+                </span>
+                <span className="min-w-0 flex-1 text-[14px]">{room.label}</span>
+              </Link>
+            ))}
+          </div>
           {/* SP-11/F83 — a connecting group label so a first-time reader can
               infer The Post is kin to the letterhead's "Message {Family}" act,
               without merging the two doors or renaming The Post itself. The

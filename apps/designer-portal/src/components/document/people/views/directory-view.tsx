@@ -53,6 +53,7 @@ import {
   directoryEntryMatches,
   directoryFirmOf,
   directoryIdentityRows,
+  directoryKindWord,
   directoryRolodexOrgId,
   directorySeatTradeIndex,
   directoryTradeAdmits,
@@ -71,6 +72,8 @@ import {
 import { consentSentenceForRecord } from "../consent-sentence";
 import { CompareMergeSheet } from "../compare-merge-sheet";
 import { useProjects } from "@/hooks/use-projects";
+import { useDeskEngagements } from "@/hooks/use-desk-engagements";
+import { DocumentAction } from "../../document-action";
 import { peopleEvents } from "@/lib/analytics/people-events";
 import { EmptyState } from "../../empty-state";
 import { Avatar } from "../person-bits";
@@ -98,6 +101,13 @@ const BAND_ORDER: Record<DirectoryChip, number> = {
   studio: 3,
   firms: 4,
 };
+
+/** "Monday 12 October" — the Inbound eyebrow's day. */
+const INBOUND_DAY = new Intl.DateTimeFormat("en-GB", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
 
 /** The trades the second line offers, in the order SPEC §5.1 #3 prints them. */
 const TRADE_LINE: readonly string[] = [
@@ -380,6 +390,17 @@ export function DirectoryView({
     row.scope !== "studio" &&
     (row.status_raw === "new" || row.status_raw === "viewed");
   const inbound = narrowed.filter(isInbound);
+
+  /** A lead's brief is its Desk folder (`/doc/<engagement>`), found by the
+   *  lead id the inbound row carries as its own id. */
+  const { data: desk } = useDeskEngagements();
+  const briefHrefFor = useMemo(() => {
+    const hrefs = new Map<string, string>();
+    for (const row of desk?.live ?? []) {
+      if (row.lead_id) hrefs.set(row.lead_id, `/doc/${row.engagement_id}`);
+    }
+    return hrefs;
+  }, [desk]);
   const listed =
     inbound.length > 0 ? narrowed.filter((r) => !isInbound(r)) : narrowed;
 
@@ -407,7 +428,9 @@ export function DirectoryView({
         </p>
       )}
 
-      {/* US-28 S10 — the filters are underline words, never boxed tabs. */}
+      {/* US-28 S10 — the filters are underline words, never boxed tabs. US-28
+          (people specimen) — the visibility lens rides the same line. */}
+      <div className="people-filter-line">
       <div role="group" aria-label="Filter directory" className="filters">
         {DIRECTORY_CHIPS.map((key) => {
           const on = chip === key;
@@ -426,6 +449,8 @@ export function DirectoryView({
             </button>
           );
         })}
+      </div>
+      <ScopeLens scope={scope} onScope={onScopeChange} />
       </div>
 
       {showsTradeLine && !marketplace && (
@@ -457,10 +482,12 @@ export function DirectoryView({
         </div>
       )}
 
-      <ScopeLens scope={scope} onScope={onScopeChange} />
-
       {chip === "makers" && (
-        <p className="mb-4 flex items-baseline gap-x-3 border-b border-[var(--hairline-strong)] pb-2">
+        <div
+          role="group"
+          aria-label="Which suppliers"
+          className="filters people-trades"
+        >
           {(
             [
               ["roster", "Studio suppliers"],
@@ -471,17 +498,13 @@ export function DirectoryView({
               key={key}
               type="button"
               onClick={() => onMakerLens(key)}
-              aria-current={makerLens === key ? "true" : undefined}
-              className={`min-h-11 font-mono text-[11px] uppercase tracking-[0.1em] ${
-                makerLens === key
-                  ? "text-[var(--ink)]"
-                  : "text-[var(--ink-subtle)]"
-              }`}
+              aria-pressed={makerLens === key}
+              data-maker-lens={key}
             >
               {label}
             </button>
           ))}
-        </p>
+        </div>
       )}
 
       {duplicates.length > 0 && !marketplace && (
@@ -566,7 +589,8 @@ export function DirectoryView({
               <div className="sec-head">
                 <h3 className="eb" id="people-inbound-head">
                   <SectionOrnament />
-                  <span>Inbound · {inbound.length} new</span>
+                  {/* The specimen's eyebrow: the day, never a tally. */}
+                  <span>Inbound · {INBOUND_DAY.format(now)}</span>
                 </h3>
               </div>
               <ul className="rows m-0 list-none p-0">
@@ -574,7 +598,7 @@ export function DirectoryView({
                   <li
                     key={`inbound:${row.person_id}`}
                     data-inbound-person={row.person_id}
-                    className="lrow plain"
+                    className="lrow"
                   >
                     <div className="lname">
                       <span className="people-who">
@@ -589,6 +613,9 @@ export function DirectoryView({
                         </button>
                       </span>
                     </div>
+                    <span className="lphase t-meta" data-row-kind>
+                      {directoryKindWord(row)}
+                    </span>
                     {/* US-28 R8 — an inbound lead keeps the Directory's
                         contact-safety facts: an opted-out or do-not-contact
                         lead says so here, not one Section down. */}
@@ -611,7 +638,34 @@ export function DirectoryView({
                     <span className="lwhen t-meta">
                       {humanizeSince(row.last_touch_at, now)}
                     </span>
-                    <span className="lact" />
+                    {/* US-28 (people specimen) — each inbound row carries
+                        its act: the lead's brief when its folder is open on
+                        the Desk, else the record itself. */}
+                    <span className="lact">
+                      {briefHrefFor.get(row.person_id) ? (
+                        <DocumentAction
+                          actionKey="open-inbound-brief"
+                          surfaceKey="people"
+                          regionKey="people-inbound"
+                          variant="tertiary"
+                          href={briefHrefFor.get(row.person_id)}
+                          aria-label={`Open the brief for ${row.display_name}`}
+                        >
+                          Open the brief
+                        </DocumentAction>
+                      ) : (
+                        <DocumentAction
+                          actionKey="open-inbound-record"
+                          surfaceKey="people"
+                          regionKey="people-inbound"
+                          variant="tertiary"
+                          aria-label={`Open the record for ${row.display_name}`}
+                          onClick={() => openPerson(row.person_id, row.role)}
+                        >
+                          Open the record
+                        </DocumentAction>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>

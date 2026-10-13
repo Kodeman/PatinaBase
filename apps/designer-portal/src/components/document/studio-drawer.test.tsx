@@ -144,6 +144,22 @@ describe('StudioDrawer', () => {
     ).not.toBeInTheDocument();
   });
 
+  it("US-28 — More carries Studio contacts' three rooms, each to its own address", () => {
+    render(<StudioDrawer />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
+    const rooms = screen.getByRole('group', { name: 'From Studio contacts' });
+    expect(
+      within(rooms)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Client relations', 'Studio marketing', 'The Engine']);
+    fireEvent.click(within(rooms).getByRole('button', { name: 'The Engine' }));
+    expect(mockPush).toHaveBeenCalledWith('/people?view=nurture');
+    expect(
+      screen.queryByRole('group', { name: 'From Studio contacts' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('SQ-856 — the crumb holds one line on a track sized to it, and the doors wrap instead', () => {
     mockPathname = '/rooms';
     render(<StudioDrawer />);

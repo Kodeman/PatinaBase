@@ -319,6 +319,28 @@ describe('the More menu · Ledgers (C20)', () => {
     mockCallSheetOn = true;
   });
 
+  it("US-28 — carries Studio contacts' three rooms, each a link to its own address", () => {
+    mountBar();
+    const menu = openMore();
+    const rooms = menu.getByRole('group', { name: 'From Studio contacts' });
+    expect(
+      within(rooms)
+        .getAllByRole('link')
+        .map((link) => [
+          link.textContent?.replace('→', ''),
+          link.getAttribute('href'),
+        ]),
+    ).toEqual([
+      ['Client relations', '/people?view=threads'],
+      ['Studio marketing', '/people?view=portfolio'],
+      ['The Engine', '/people?view=nurture'],
+    ]);
+    fireEvent.click(within(rooms).getByRole('link', { name: /The Engine/ }));
+    expect(
+      screen.queryByRole('group', { name: 'More studio actions' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('calls the books Ledgers, as the drawer and the Desk do', () => {
     mountBar();
     const menu = openMore();

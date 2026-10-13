@@ -29,7 +29,11 @@ import {
   useUnreadInboxCount,
   useProcurementUnreadCount,
 } from '@patina/supabase';
-import { ALL_STUDIO_SURFACES } from '@/lib/document/registry';
+import {
+  ALL_STUDIO_SURFACES,
+  PEOPLE_SUB_ROOM_HREF,
+  PEOPLE_SUB_ROOM_SURFACES,
+} from '@/lib/document/registry';
 import { useSheetSurfaceKey } from '@/lib/help-system/use-sheet-surface-key';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DocSheet } from './overlays/doc-sheet';
@@ -272,7 +276,17 @@ export function StudioDrawer() {
    *  don't (yet) carry their own source through the event, so it stays silent
    *  rather than mislabeling their opens as the drawer's. */
   const enterRoom = (href: string, key: string, source?: 'drawer') => {
-    if (pathname === href) return;
+    // US-28 — inside one of Studio contacts' three rooms (`/people?view=`),
+    // the Studio contacts door still walks back to the directory.
+    const inPeopleSubRoom =
+      href === '/people' &&
+      pathname === '/people' &&
+      new URLSearchParams(window.location.search).has('view');
+    if (pathname === href && !inPeopleSubRoom) return;
+    if (inPeopleSubRoom) {
+      router.push(href);
+      return;
+    }
     if (source) documentEvents.wayfinding.roomEntered({ key, source });
     rememberRoomOrigin(pathname);
     router.push(href);
@@ -482,6 +496,44 @@ export function StudioDrawer() {
                     </button>
                   );
                 })}
+                {/* US-28 (Kody, 2026-10-13) — the three rooms that left
+                    Studio contacts' index, worded, at their own address. */}
+                <div role="group" aria-labelledby="studio-people-rooms-label">
+                  <div className="border-y border-[var(--doc-ink-border)] px-3 py-2">
+                    <span
+                      id="studio-people-rooms-label"
+                      className="font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--text-subtle)]"
+                    >
+                      From Studio contacts
+                    </span>
+                  </div>
+                  {PEOPLE_SUB_ROOM_SURFACES.map((room) => (
+                    <button
+                      key={room.key}
+                      type="button"
+                      data-people-sub-room-door={room.key}
+                      onClick={() => {
+                        setBooksOpen(false);
+                        documentEvents.wayfinding.doorOpened({
+                          key: room.key,
+                          weight: 'room',
+                          source: 'drawer',
+                        });
+                        // Already in Studio contacts, the origin stays the
+                        // one the Room was entered from.
+                        if (!(pathname ?? '').startsWith('/people')) {
+                          rememberRoomOrigin(pathname);
+                        }
+                        router.push(PEOPLE_SUB_ROOM_HREF[room.key]);
+                      }}
+                      className="flex min-h-11 w-full items-center gap-3 border-b border-[var(--doc-ink-border)] px-3 py-2 text-left text-[var(--text-body)] last:border-b-0 hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--clay-ink)]"
+                    >
+                      <span className="min-w-0 flex-1 text-[14px] text-[var(--text-primary)]">
+                        {room.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>

@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   usePeopleDirectory,
   useOrganizations,
@@ -53,10 +53,12 @@ import { AddPersonSheet } from "./directory/add-person-sheet";
 import type { PeopleView, PeopleViewProps } from "./types";
 import type { PeopleDirectorySeat } from "@patina/supabase";
 import {
-  PeopleCompactSelector,
-  PeopleDesktopRail,
+  EngineNudgeLine,
+  SubRoomFilters,
+  peopleSubRoomOf,
   peopleViewFromParam,
 } from "./view-shell";
+import { openCommandBar } from "../command-bar";
 import { useDocumentSurface } from "@/lib/help-system/use-document-surface";
 import { DOCUMENT_SURFACE_KEYS } from "@/lib/help-system/document-surface-keys";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
@@ -71,7 +73,13 @@ import { useMobilePrimaryAction } from "../mobile/mobile-shell";
 export function PeopleRoom() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.people); // R89 — scope help to the People room
   const router = useRouter();
-  const [view, setView] = useState<PeopleView>("directory");
+  // US-28 — the Room opens on the view its address names (a sub-room walked
+  // to from More or ⌘K), so the address writer below never sees a stale
+  // "directory" on the first commit and strips `?view=` before it is read.
+  const viewParam = useSearchParams()?.get("view") ?? null;
+  const [view, setView] = useState<PeopleView>(
+    () => peopleViewFromParam(viewParam) ?? "directory",
+  );
   const [openPerson, setOpenPerson] = useState<{
     id: string;
     role: PartyRole;
@@ -153,17 +161,6 @@ export function PeopleRoom() {
   // nudge; `all` above is untouched so the count/deep-link uses keep the
   // wide read they actually need.
   const { data: mine } = usePeopleDirectory({ role: "all", scope: "mine" });
-  /**
-   * CR11-2: the number beside "Directory" counts the same book the head above
-   * it counts. `all` is the RAW view — company-only seats and legacy client
-   * rows carded elsewhere are rows there and not identities, so the bare
-   * `all.length` printed a second, larger count of one book one screen away
-   * from `directoryHeadLine(directoryEntryCounts(directoryIdentityRows(all)))`.
-   */
-  const directoryIdentityCount = useMemo(
-    () => (all ? directoryIdentityRows(all).length : undefined),
-    [all],
-  );
   const now = useMemo(() => new Date(), []);
 
   // Call Sheet Wave 2 — the active studio, for the Companies chip / rolodex
@@ -374,6 +371,25 @@ export function PeopleRoom() {
     if (next === window.location.search.replace(/^\?/, "")) return;
     router.replace(next ? `/people?${next}` : "/people", { scroll: false });
   }, [view, chip, scope, trade, openPerson, openFirm, router]);
+
+  /**
+   * US-28 — the dock's More and ⌘K walk to `/people?view=<key>` while the
+   * Room may already be standing, so the Room follows the address after its
+   * first read too. Its own writes above leave the address equal to its state,
+   * so only an outside move changes anything here.
+   */
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  useEffect(() => {
+    if (!deepLinkHandledRef.current) return;
+    const wanted = peopleViewFromParam(viewParam) ?? "directory";
+    if (wanted === viewRef.current) return;
+    setOpenPerson(null);
+    setOpenFirm(null);
+    setPendingThreadId(null);
+    setNotice(null);
+    setView(wanted);
+  }, [viewParam]);
 
   // The live Engine nudge: the strongest dormant tie from the nurture queue.
   // Reads `mine` (scope:'mine'), NOT `all` — see the note above `mine`.
@@ -589,13 +605,63 @@ export function PeopleRoom() {
     <OutreachView {...nav} />
   );
 
+  const subRoom = peopleSubRoomOf(view);
+  const recordOpen = !!openPerson || !!openFirm;
+  const measure = "mx-auto max-w-[1296px] px-4 sm:px-6 min-[1180px]:px-8";
+
+  /** The way back from a record or a room: a word on the Header line. */
+  const backToContacts = (
+    <DocumentAction
+      actionKey="back-to-directory"
+      surfaceKey="people"
+      regionKey="room-header-line"
+      variant="tertiary"
+      leading="←"
+      wrap
+      aria-label="Back to Studio contacts"
+      onClick={() => nav.goView("directory")}
+    >
+      Studio contacts
+    </DocumentAction>
+  );
+
+  /** Find, tertiary; the chord prints only for a fine pointer. It sits in the
+   *  head's DocumentActionGroup, which carries its surface and region. */
+  const findAct = (
+    <DocumentAction
+      actionKey="people-find"
+      variant="tertiary"
+      aria-label="Find anything (⌘K)"
+      onClick={() => openCommandBar()}
+    >
+      Find <kbd className="people-kbd">⌘K</kbd>
+    </DocumentAction>
+  );
+
   return (
     <RoomShell
-      title="Studio contacts"
+      title={subRoom ? subRoom.name : "Studio contacts"}
       topLevel
-      measure="mx-auto max-w-[1296px] px-4 sm:px-6 min-[1180px]:px-8"
+      measure={measure}
+      heading={
+        recordOpen ? (
+          // US-28 — the record is a page view: back on the Header line, the
+          // name on the paper below it.
+          <>
+            {backToContacts}
+            <h1 className="sr-only">Studio contacts</h1>
+          </>
+        ) : subRoom ? (
+          <>
+            {backToContacts}
+            <h1 className="t-d2 m-0 text-[var(--text-primary)]">
+              {subRoom.name}
+            </h1>
+          </>
+        ) : undefined
+      }
       count={
-        all
+        !recordOpen && !subRoom && all
           ? // QA-R2-9: the head counts identities, and a company-only
             // engagement with nobody named is the firm, already counted once.
             directoryHeadLine(directoryEntryCounts(directoryIdentityRows(all)))
@@ -613,52 +679,45 @@ export function PeopleRoom() {
         >
           {/* US-28 S10 (uplift (c) area 4) — People has no filled act;
               Add contact is a secondary. */}
-          <DocumentAction
-            actionKey="add-person"
-            variant="secondary"
-            leading="+"
-            onClick={() => setAddOpen(true)}
-          >
-            Add contact
-          </DocumentAction>
+          {!recordOpen && !subRoom && (
+            <DocumentAction
+              actionKey="add-person"
+              variant="secondary"
+              leading="+"
+              onClick={() => setAddOpen(true)}
+            >
+              Add contact
+            </DocumentAction>
+          )}
+          {findAct}
         </DocumentActionGroup>
       }
     >
-      {/* Ask bar — over people + history (derivation-backed v1). */}
-      <AskBar value={ask} onChange={setAsk} onAsk={askEngine} />
-
-      <PeopleCompactSelector
-        currentView={view}
-        profileOpen={!!openPerson || !!openFirm}
-        directoryCount={directoryIdentityCount}
-        nudge={nudge}
-        onSelect={nav.goView}
-      />
-
-      {/* PR-q / C2 — the Directory is the studio's LEDGER, so the room widens
-          to the 1200 studio band. The 760px cap was a DocSheet measure, and a
-          five-column ledger row cannot live inside one. */}
-      <div
-        data-people-layout
+      {/* US-28 (Kody, 2026-10-13) — the specimen's structure only: the
+          Header line, the search, the filter words, Inbound, the Directory.
+          The left index and the view selector are gone; the rooms they held
+          open from the dock's More and ⌘K at their own `?view=` address. */}
+      <main
+        data-people-main-panel
         data-people-current-view={
           openPerson ? "profile" : openFirm ? "firm" : view
         }
-        className="mx-auto flex w-full max-w-[1296px]"
+        data-people-sub-room={subRoom?.key}
+        className={measure}
       >
-        <PeopleDesktopRail
-          activeView={openPerson || openFirm ? null : view}
-          directoryCount={directoryIdentityCount}
-          nudge={nudge}
-          onSelect={nav.goView}
-        />
-        {/* Main panel. */}
-        <main
-          data-people-main-panel
-          className="min-w-0 w-full flex-1 px-4 py-6 sm:px-6 min-[1180px]:px-8"
-        >
-          <div className="mx-auto max-w-[1200px]">{body}</div>
-        </main>
-      </div>
+        {!recordOpen && !subRoom && (
+          <AskBar value={ask} onChange={setAsk} onAsk={askEngine} />
+        )}
+        {subRoom && !recordOpen && (
+          <>
+            <SubRoomFilters room={subRoom} view={view} onSelect={nav.goView} />
+            {subRoom.key === "the-engine" && nudge && (
+              <EngineNudgeLine nudge={nudge} />
+            )}
+          </>
+        )}
+        {body}
+      </main>
 
       {/* Add a person — a paper sheet over the Room. */}
       <AddPersonSheet

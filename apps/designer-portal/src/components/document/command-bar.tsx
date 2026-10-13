@@ -70,6 +70,8 @@ import {
 import {
   DOCUMENT_SCOPED_SURFACES,
   FOCUS_FFE_LINE_EVENT,
+  PEOPLE_SUB_ROOM_HREF,
+  PEOPLE_SUB_ROOM_SURFACES,
   STUDIO_ROOMS,
   STUDIO_LEDGERS,
   STUDIO_VERBS,
@@ -653,6 +655,10 @@ export function CommandBar() {
     // Post opens its own sheet; the Drafting Room needs a proposal in hand (else
     // it falls to the draft-a-proposal picker, the doorway when none is held).
     const runForSurface = (s: StudioSurface): (() => void) => {
+      // US-28 — the three rooms that left Studio contacts' index keep their
+      // address; the row walks there.
+      const subRoomHref = PEOPLE_SUB_ROOM_HREF[s.key];
+      if (subRoomHref) return () => router.push(subRoomHref);
       switch (s.key) {
         case 'capture-lead':
           return () => {
@@ -1131,6 +1137,7 @@ export function CommandBar() {
         eyebrow: 'Studio resources & administration',
         rows: [
           ...STUDIO_ROOMS.filter((s) => s.scope === 'global'),
+          ...PEOPLE_SUB_ROOM_SURFACES,
           ...STUDIO_LEDGERS.filter((s) => s.scope === 'global'),
         ].map(surfaceRow),
       });

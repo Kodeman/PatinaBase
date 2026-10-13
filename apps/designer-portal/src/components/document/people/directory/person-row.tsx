@@ -33,6 +33,7 @@ import {
   type StudioContactRule,
 } from "@patina/supabase";
 import {
+  directoryKindWord,
   entryPaperWord,
   personIdentityLine,
   splitRoutedClause,
@@ -125,7 +126,7 @@ export function PersonRow({
     <li
       data-person-row={person.person_id}
       data-highlighted={highlighted ? "true" : undefined}
-      className="lrow plain people-row"
+      className="lrow people-row"
     >
       <div className="lname">
         <span className="people-who">
@@ -140,6 +141,11 @@ export function PersonRow({
           </button>
         </span>
       </div>
+
+      {/* US-28 (people specimen) — the kind column. */}
+      <span className="lphase t-meta" data-row-kind>
+        {directoryKindWord(person)}
+      </span>
 
       <div className="lsent t-body-sm min-w-0">
         <p className="t-meta text-[var(--ink-subtle)]">
