@@ -68,6 +68,85 @@ Deno.test("page plan paginates contents and assigns stable chapter page numbers"
   assertEquals(lastChapter?.pageNumber, 82);
 });
 
+Deno.test("chapter dividers say Trade, Room or Chapter (00767, SQ-842 F9)", async () => {
+  // As _prepare_spec_book_issue_00403 freezes them (00380:1558): a trade
+  // chapter has no room and the 'trade' page template; a room chapter has a
+  // room; a chapter the studio made by hand has neither.
+  const chapters = [
+    {
+      id: "trade-lighting",
+      projectRoomId: null,
+      title: "Lighting",
+      position: 30,
+      pageTemplate: "trade",
+    },
+    {
+      id: "room-hall",
+      projectRoomId: "room-hall",
+      title: "Hall",
+      position: 40,
+      pageTemplate: "room",
+    },
+    {
+      id: "studio-owners",
+      projectRoomId: null,
+      title: "Owners selections",
+      position: 50,
+      pageTemplate: "room",
+    },
+  ];
+  const items = [
+    ...chapters.map((chapter, index) => ({
+      id: `item-${index}`,
+      chapterId: chapter.id,
+      position: 0,
+      documentCode: `C-${index}`,
+      name: `Selection ${index}`,
+      contentHash: `hash-${index}`,
+    })),
+    {
+      id: "item-unfiled",
+      position: 0,
+      documentCode: "C-9",
+      name: "Unfiled selection",
+      contentHash: "hash-unfiled",
+    },
+  ];
+  const model = await buildAudienceRenderModel(
+    frozenSnapshot({ chapters, items, allowances: [], tbd: [] }),
+    "client",
+    context,
+  );
+  assertEquals(
+    model.chapters.map((chapter) => [chapter.id, chapter.kind]),
+    [
+      ["trade-lighting", "trade"],
+      ["room-hall", "room"],
+      ["studio-owners", "chapter"],
+    ],
+  );
+  const dividers = buildPagePlan(model).flatMap((entry) =>
+    entry.kind === "chapter" ? [[entry.eyebrow, entry.name]] : []
+  );
+  assertEquals(dividers, [
+    ["Trade", "Lighting"],
+    ["Room", "Hall"],
+    ["Chapter", "Owners selections"],
+    ["Chapter", "Unassigned"],
+  ]);
+
+  // The eyebrow prints upper case and letter-spaced ("T R A D E").
+  const text = (await extractedText(await renderSpecBookPdf(model)))
+    .replace(/\s+/g, "");
+  assert(text.includes("TRADELighting"), "a trade divider prints Trade");
+  assert(text.includes("ROOMHall"), "a room divider keeps Room");
+  assert(
+    text.includes("CHAPTEROwnersselections"),
+    "a hand-made divider prints Chapter",
+  );
+  assert(!text.includes("ROOMLighting"), "a trade divider never prints Room");
+});
+
 Deno.test("empty book still receives a deterministic contents page", async () => {
   const model = await buildAudienceRenderModel(
     frozenSnapshot({

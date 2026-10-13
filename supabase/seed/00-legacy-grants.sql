@@ -21596,13 +21596,67 @@ END $g$;
 
 -- 00765_studio_need_states.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.set_need_state(text, uuid, text, text, date, text) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.set_need_state(text, uuid, text, text, date, text, uuid) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00765_studio_need_states.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.set_need_state(text, uuid, text, text, date, text) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.set_need_state(text, uuid, text, text, date, text, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00766_studio_need_states_select_studio.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.studio_need_state_facts() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00766_studio_need_states_select_studio.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.studio_need_state_facts() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00767_spec_book_trade_chapters.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._spec_book_current_item_snapshots(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00767_spec_book_trade_chapters.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._spec_book_current_item_snapshots(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00767_spec_book_trade_chapters.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._spec_book_trade_for(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00767_spec_book_trade_chapters.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._spec_book_trade_chapter(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00767_spec_book_trade_chapters.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._spec_book_refile(uuid, uuid[]) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00767_spec_book_trade_chapters.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.spec_book_prune_unsorted_chapter() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00767_spec_book_trade_chapters.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.spec_book_refile_ffe_line() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

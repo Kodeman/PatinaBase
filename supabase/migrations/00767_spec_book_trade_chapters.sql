@@ -8,22 +8,40 @@
 -- ensure_project_spec_book made one chapter per project room and filed each
 -- line into its room's chapter (00380:844-866; SPEC §S7b.5.1).
 --
+-- Repaired in place by SQ-844 (the SQ-842 review, F2/F3/F5/F6/F8/F9): never
+-- applied to Strata before the repair (Strata head 00765 on 2026-10-13).
+--
 -- ── THE CHAPTER SHAPE ───────────────────────────────────────────────────────
 -- spec_book_chapters gains `trade` (text, nullable). A chapter is one of:
 --   * a trade chapter: trade IS NOT NULL, project_room_id IS NULL. Unique per
---     book (idx_spec_book_chapters_trade, mirroring the room index);
+--     book (idx_spec_book_chapters_trade, mirroring the room index). Made
+--     with page_template 'trade', the one chapter field an issued edition
+--     freezes (00380:1558) that tells a trade chapter from a studio chapter,
+--     so spec-book-render prints a "Trade" divider (pdf.ts);
 --   * a room chapter (legacy): project_room_id IS NOT NULL, trade IS NULL. No
---     path creates one any more; the re-file below retires them once empty;
+--     path creates one any more. The re-file retires a DEFAULT one (title the
+--     room's name, hero_media '[]', page_template 'room', review_state
+--     'draft', as 00380:844-852 made it) by re-filing its lines by trade and
+--     deleting it once empty. A room chapter the studio CUSTOMISED (any of
+--     those four differs) is never deleted: it becomes a studio chapter
+--     (project_room_id := NULL) and keeps its metadata and its lines;
 --   * a studio chapter: both NULL. A chapter a studio made by hand. Kept, and
 --     a line the studio put there stays there.
 -- A CHECK keeps room and trade exclusive.
 --
 -- A line's trade is the top-level category of its ffe_category in the 00128
 -- taxonomy (_spec_book_trade_for). The value matches a category slug (or,
--- leniently, its label) among the system rows, the project designer's own rows
--- and the project proposal's rows, in that order of preference after an exact
--- slug match; parent_id is walked to the top within those scopes only, so a
--- studio never files under, or reads the label of, another studio's category.
+-- leniently, its label) among the system rows, the rows owned by the
+-- project's studio (projects.studio_id: its active, non-guest members of an
+-- active design studio, as 00584's ffe_categories_studio_select and
+-- useFFECategories expose them; the project designer's own rows always) and
+-- the project proposal's rows, in that order of preference after an exact
+-- slug match (the project designer's row before a teammate's); parent_id is
+-- walked to the top within those scopes only, so a studio never files under,
+-- or reads the label of, another studio's category.
+-- Known limitation (ruled for this release, SQ-842 F7): a later taxonomy edit
+-- (a new, deleted or re-parented category) does not move lines already filed;
+-- new lines file by the current taxonomy and a designer can move lines by hand.
 --   trade     the top-level slug           title  its label
 --   position  its sort_order (system rows: 10..130); a studio category sorts
 --             after the system ones at 1000 + its sort_order
@@ -32,9 +50,26 @@
 -- 1000 (ties order by title, as the renderer already does). A line with no
 -- category files into the Unsorted chapter: trade 'unsorted', title
 -- 'Unsorted', position 2147483647 (last). Unsorted exists only while it holds
--- lines (trg_spec_book_prune_unsorted). Trade chapters are created on demand,
--- when a line first needs one, and are not removed when they empty: they may
--- carry a studio's title, inclusion or review state.
+-- a line that is not removed (trg_spec_book_prune_unsorted; a soft-removed
+-- line, 00737 remove_project_selection, does not hold it open, as it is not
+-- in the snapshot either). Trade chapters are created on demand, when a line
+-- first needs one, and are not removed when they empty: they may carry a
+-- studio's title, inclusion or review state.
+--
+-- ── CONCURRENCY (READ COMMITTED, the PostgREST/RPC default) ─────────────────
+-- A delete of an emptied chapter (the Unsorted prune, the room-chapter retire)
+-- first locks the chapter row FOR UPDATE in one statement, then deletes it
+-- under NOT EXISTS in the next, which takes a fresh snapshot. Every writer
+-- that files a line into a chapter holds FOR KEY SHARE on that chapter row
+-- until it commits (the item_settings.chapter_id foreign-key check, and
+-- _spec_book_trade_chapter's own read), and FOR UPDATE conflicts with it. So
+-- the delete waits for any uncommitted filing and then sees it (no line is
+-- orphaned by ON DELETE SET NULL); and of two transactions moving the last
+-- two lines out, the second waits for the first's commit and then sees the
+-- chapter empty (no empty Unsorted is left). _spec_book_refile, and
+-- ensure_project_spec_book before it files anything, also take a
+-- per-book transaction advisory lock, so two re-files of one book run one
+-- after the other.
 --
 -- ── FILING PATHS (every function that creates, files into or orders by
 --    chapters; latest bodies found with grep | sort | tail -1) ──────────────
@@ -68,9 +103,12 @@
 --   not its chapter; the successor files through spec_book_attach_ffe_line.
 --
 -- ── RE-FILE OF EXISTING BOOKS (idempotent) ──────────────────────────────────
--- For every book, _spec_book_refile re-points each line setting whose chapter
--- is NULL or a room chapter to the trade chapter for its category, then
--- deletes room chapters that hold no line. The only foreign key to
+-- For every book, _spec_book_refile first turns each customised room chapter
+-- into a studio chapter (its lines stay in it), then re-points each line
+-- setting whose chapter is NULL or a default room chapter to the trade
+-- chapter for its category, then deletes room chapters that hold no line. The
+-- migration's notice reports how many room chapters were kept that way (on
+-- 2026-10-13 Strata had 15 room chapters, none customised). The only foreign key to
 -- spec_book_chapters is spec_book_item_settings.chapter_id (ON DELETE SET
 -- NULL, checked in pg_constraint), so an empty room chapter is referenced by
 -- nothing. Issued editions do not reference working chapters: a revision
@@ -87,8 +125,14 @@
 -- the helpers and trigger functions are revoked from PUBLIC, anon and
 -- authenticated (trigger functions also from service_role, per 00381).
 -- ensure_project_spec_book keeps its 00380 auth check and grant unchanged.
--- Adds REVOKE → the next reset owner regenerates
--- supabase/seed/00-legacy-grants.sql (00758 practice).
+-- Adds REVOKE → supabase/seed/00-legacy-grants.sql is regenerated with
+-- scripts/generate-legacy-grants.py (SQ-844), so a fresh local reset replays
+-- these revokes after the seed's blanket baseline grant.
+--
+-- Ops: lock_timeout 10s (below). The ALTER TABLE takes ACCESS EXCLUSIVE on
+-- spec_book_chapters and the trigger DDL blocks writes to project_ffe_items
+-- and spec_book_item_settings until commit; a contended push fails fast and
+-- can be retried instead of queueing every write behind it.
 --
 -- Revert (unapplied-on-prod remediation only; after prod apply, fix forward):
 --   DROP TRIGGER trg_spec_book_refile_ffe_line ON public.project_ffe_items;
@@ -99,6 +143,8 @@
 --   per book, re-create room chapters as 00380:844-852 does and re-point every
 --   setting in a trade chapter to its line's room chapter; then
 --   DELETE FROM public.spec_book_chapters WHERE trade IS NOT NULL;
+--   (a customised room chapter kept as a studio chapter stays one: its room
+--   is not recorded once project_room_id is NULL);
 --   DROP FUNCTION public.spec_book_refile_ffe_line(),
 --     public.spec_book_prune_unsorted_chapter(),
 --     public._spec_book_refile(uuid, uuid[]),
@@ -108,6 +154,8 @@
 --     DROP CONSTRAINT spec_book_chapters_room_or_trade, DROP COLUMN trade;
 --   (DROP COLUMN also drops idx_spec_book_chapters_trade.)
 -- ═══════════════════════════════════════════════════════════════════════════
+
+SET LOCAL lock_timeout = '10s';
 
 -- ─── 1. The trade key ───────────────────────────────────────────────────────
 
@@ -153,9 +201,28 @@ AS $$
     SELECT NULLIF(lower(btrim(p_category)), '') AS k
   ),
   project AS (
-    SELECT pr.designer_id, pr.proposal_id
+    SELECT pr.designer_id, pr.proposal_id, pr.studio_id
     FROM public.projects pr
     WHERE pr.id = p_project_id
+  ),
+  -- SQ-844 (SQ-842 F6): the users whose own categories the project's studio
+  -- shares. 00584's ffe_categories_studio_select read from the project's side
+  -- instead of the caller's: the active, non-guest members of the project's
+  -- active design studio, plus the project designer (whose rows count on a
+  -- studio-less legacy job too).
+  owners AS (
+    SELECT project.designer_id AS user_id
+    FROM project
+    WHERE project.designer_id IS NOT NULL
+    UNION
+    SELECT m.user_id
+    FROM project
+    JOIN public.organizations o ON o.id = project.studio_id
+    JOIN public.organization_members m ON m.organization_id = o.id
+    WHERE o.type = 'design_studio'
+      AND o.status = 'active'
+      AND m.status = 'active'
+      AND m.role <> 'guest'
   ),
   hit AS (
     SELECT c.id
@@ -164,10 +231,11 @@ AS $$
       ON lower(c.slug) = wanted.k OR lower(btrim(c.label)) = wanted.k
     LEFT JOIN project ON true
     WHERE c.is_system
-       OR (c.proposal_id IS NULL AND c.designer_id = project.designer_id)
+       OR (c.proposal_id IS NULL AND c.designer_id IN (SELECT user_id FROM owners))
        OR (c.proposal_id IS NOT NULL AND c.proposal_id = project.proposal_id)
     ORDER BY (lower(c.slug) = wanted.k) DESC, c.is_system DESC,
-             (c.proposal_id IS NULL) DESC, c.id
+             (c.proposal_id IS NULL) DESC,
+             (c.designer_id IS NOT DISTINCT FROM project.designer_id) DESC, c.id
     LIMIT 1
   ),
   chain AS (
@@ -184,7 +252,7 @@ AS $$
     WHERE chain.depth < 16
       AND (
         p.is_system
-        OR (p.proposal_id IS NULL AND p.designer_id = project.designer_id)
+        OR (p.proposal_id IS NULL AND p.designer_id IN (SELECT user_id FROM owners))
         OR (p.proposal_id IS NOT NULL AND p.proposal_id = project.proposal_id)
       )
   ),
@@ -214,7 +282,7 @@ $$;
 
 COMMENT ON FUNCTION public._spec_book_trade_for(uuid, text) IS
   'The spec-book trade for a line category in a project (00767, V20 U-Q18): the top-level 00128 '
-  'category (system, the project designer''s, or the project proposal''s) as trade key, label and '
+  'category (system, the project studio''s members'' own, or the project proposal''s) as trade key, label and '
   'chapter position; an unknown category as its own title-cased trade at 1000; no category as '
   '''unsorted'' / ''Unsorted'' at 2147483647. Internal.';
 
@@ -245,13 +313,15 @@ BEGIN
     RAISE EXCEPTION 'spec book not found' USING errcode = 'foreign_key_violation';
   END IF;
 
-  -- Insert, or read the existing chapter under a key-share lock so a
-  -- concurrent prune of an empty Unsorted chapter waits for this transaction.
-  -- If a prune already removed it between the two statements, the next pass
-  -- creates it again.
+  -- Insert, or read the existing chapter under a key-share lock held to
+  -- commit, so a concurrent prune (which locks the chapter FOR UPDATE before
+  -- its NOT EXISTS check) waits for this transaction's filing and then sees
+  -- it. If a prune already removed it between the two statements, the next
+  -- pass creates it again. page_template 'trade' marks the chapter as a trade
+  -- chapter in every edition it is issued in (see the header).
   FOR v_attempt IN 1..3 LOOP
-    INSERT INTO public.spec_book_chapters (spec_book_id, trade, title, position)
-    VALUES (p_spec_book_id, v_trade, v_title, v_position)
+    INSERT INTO public.spec_book_chapters (spec_book_id, trade, title, position, page_template)
+    VALUES (p_spec_book_id, v_trade, v_title, v_position, 'trade')
     ON CONFLICT (spec_book_id, trade) WHERE trade IS NOT NULL DO NOTHING
     RETURNING id INTO v_chapter_id;
     IF v_chapter_id IS NOT NULL THEN
@@ -291,9 +361,30 @@ DECLARE
   v_chapter_id uuid;
   v_moved integer := 0;
 BEGIN
-  -- Book-wide (p_ffe_item_ids NULL): lines with no chapter or in a room
-  -- chapter. Named lines (a category change): also lines in a trade chapter.
-  -- A line in a studio chapter is never moved.
+  -- One re-file of a book at a time (see CONCURRENCY in the header).
+  PERFORM pg_advisory_xact_lock(hashtextextended('spec_book:' || p_spec_book_id::text, 0));
+
+  -- SQ-844 (SQ-842 F2): a room chapter the studio customised is never
+  -- deleted. It becomes a studio chapter, keeping its title, hero media, page
+  -- template, review state, inclusion and lines; the loop below then leaves
+  -- its lines where they are. A default room chapter is exactly what 00380
+  -- seeded (00380:844-852): the room's name, no hero media, the 'room' page
+  -- template, still a draft.
+  UPDATE public.spec_book_chapters c
+     SET project_room_id = NULL
+    FROM public.project_rooms r
+   WHERE c.spec_book_id = p_spec_book_id
+     AND r.id = c.project_room_id
+     AND (
+       c.title IS DISTINCT FROM r.name
+       OR c.hero_media <> '[]'::jsonb
+       OR c.page_template <> 'room'
+       OR c.review_state <> 'draft'
+     );
+
+  -- Book-wide (p_ffe_item_ids NULL): lines with no chapter or in a (default)
+  -- room chapter. Named lines (a category change): also lines in a trade
+  -- chapter. A line in a studio chapter is never moved.
   FOR v_row IN
     SELECT
       s.id,
@@ -325,7 +416,16 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- A room chapter retires once no line setting points at it.
+  -- A (default) room chapter retires once no line setting points at it. Lock
+  -- first, check in the next statement (a fresh snapshot): a writer still
+  -- filing a line into one holds FOR KEY SHARE on it until commit, so this
+  -- waits for it and then keeps the chapter.
+  PERFORM 1
+    FROM public.spec_book_chapters c
+   WHERE c.spec_book_id = p_spec_book_id
+     AND c.project_room_id IS NOT NULL
+   ORDER BY c.id
+     FOR UPDATE;
   DELETE FROM public.spec_book_chapters c
    WHERE c.spec_book_id = p_spec_book_id
      AND c.project_room_id IS NOT NULL
@@ -339,10 +439,12 @@ END;
 $$;
 
 COMMENT ON FUNCTION public._spec_book_refile(uuid, uuid[]) IS
-  'Files line settings into trade chapters (00767, V20 U-Q18). Book-wide: settings with no chapter or a '
-  'room chapter; named lines: also settings in a trade chapter. Never moves a line out of a studio '
-  'chapter. Carries an excluded room chapter''s exclusion onto the line, then deletes room chapters no '
-  'setting points at. Idempotent. Returns the number of settings re-pointed. Internal.';
+  'Files line settings into trade chapters (00767, V20 U-Q18). Serialised per book. First turns a '
+  'customised room chapter (title, hero media, page template or review state changed) into a studio '
+  'chapter that keeps its lines. Book-wide: settings with no chapter or a default room chapter; named '
+  'lines: also settings in a trade chapter. Never moves a line out of a studio chapter. Carries an '
+  'excluded room chapter''s exclusion onto the line, then deletes room chapters no setting points at. '
+  'Idempotent. Returns the number of settings re-pointed. Internal.';
 
 -- ─── 5. Unsorted exists only while it holds lines ───────────────────────────
 
@@ -362,13 +464,29 @@ BEGIN
   END IF;
 
   IF v_left IS NOT NULL THEN
-    DELETE FROM public.spec_book_chapters c
+    -- SQ-844 (SQ-842 F3, F8a): lock the chapter, then check in the next
+    -- statement, which takes a fresh snapshot. A transaction still filing a
+    -- line here holds FOR KEY SHARE on the row until it commits, and another
+    -- transaction pruning it holds FOR UPDATE; either way this waits, then
+    -- sees what they committed (see CONCURRENCY in the header).
+    PERFORM 1
+      FROM public.spec_book_chapters c
      WHERE c.id = v_left
        AND c.trade = 'unsorted'
-       AND NOT EXISTS (
-         SELECT 1 FROM public.spec_book_item_settings s
-         WHERE s.chapter_id = c.id
-       );
+       FOR UPDATE;
+    IF FOUND THEN
+      -- SQ-844 (SQ-842 F8b): a soft-removed line (removed_at set, 00737)
+      -- does not hold Unsorted open, as the snapshot leaves it out (§9).
+      DELETE FROM public.spec_book_chapters c
+       WHERE c.id = v_left
+         AND NOT EXISTS (
+           SELECT 1
+             FROM public.spec_book_item_settings s
+             JOIN public.project_ffe_items i ON i.id = s.ffe_item_id
+            WHERE s.chapter_id = c.id
+              AND i.removed_at IS NULL
+         );
+    END IF;
   END IF;
   RETURN NULL;
 END;
@@ -452,8 +570,8 @@ CREATE TRIGGER trg_spec_book_refile_ffe_line
 
 -- ─── 8. ensure_project_spec_book (00380 body; trade chapters) ───────────────
 -- Lineage: 00380:795 (the only body). Verbatim through the book upsert; the
--- room-chapter seed and room filing (00380:844-867) are replaced by trade
--- filing.
+-- room-chapter seed and room filing (00380:844-867) are replaced by the
+-- book's re-file lock and trade filing.
 CREATE OR REPLACE FUNCTION public.ensure_project_spec_book(p_project_id uuid)
 RETURNS public.spec_books
 LANGUAGE plpgsql
@@ -502,6 +620,11 @@ BEGIN
   ON CONFLICT (project_id) DO NOTHING;
 
   SELECT * INTO v_book FROM public.spec_books WHERE project_id = p_project_id;
+
+  -- 00767 (SQ-844): the book's re-file lock (as _spec_book_refile takes it),
+  -- before this files anything, so it never holds a chapter lock while
+  -- waiting for another re-file of the same book.
+  PERFORM pg_advisory_xact_lock(hashtextextended('spec_book:' || v_book.id::text, 0));
 
   -- 00767: trade chapters (V20 U-Q18). No room chapters are made. A line
   -- without a working setting gets one, filed into the chapter for its
@@ -706,11 +829,32 @@ DO $$
 DECLARE
   v_book record;
   v_moved integer := 0;
+  v_room_before integer;
+  v_studio_before integer;
+  v_kept integer;
 BEGIN
+  -- SQ-844: a trade chapter made by this file's first version (applied to
+  -- local databases only, never to Strata) gets the 'trade' page template
+  -- _spec_book_trade_chapter now gives one. Matches nothing on a first apply.
+  UPDATE public.spec_book_chapters
+     SET page_template = 'trade'
+   WHERE trade IS NOT NULL
+     AND page_template = 'room';
+
+  SELECT count(*) FILTER (WHERE project_room_id IS NOT NULL),
+         count(*) FILTER (WHERE project_room_id IS NULL AND trade IS NULL)
+    INTO v_room_before, v_studio_before
+    FROM public.spec_book_chapters;
+
   FOR v_book IN SELECT id FROM public.spec_books ORDER BY id LOOP
     v_moved := v_moved + public._spec_book_refile(v_book.id, NULL);
   END LOOP;
-  RAISE NOTICE '00767: % spec-book line settings re-filed into trade chapters', v_moved;
+
+  SELECT count(*) FILTER (WHERE project_room_id IS NULL AND trade IS NULL) - v_studio_before
+    INTO v_kept
+    FROM public.spec_book_chapters;
+  RAISE NOTICE '00767: % spec-book line settings re-filed into trade chapters; of % room chapters, % customised kept as studio chapters with their lines, the rest retired',
+    v_moved, v_room_before, v_kept;
 END;
 $$;
 

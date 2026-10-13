@@ -20,6 +20,18 @@
 --   5. an issued snapshot is unchanged and keeps its room grouping;
 --   6. a studio's own chapters survive, with the line the studio put there;
 --   7. cross-studio isolation is unchanged.
+-- SQ-844 (the SQ-842 review):
+--   4b. (F2) a room chapter the studio customised (title, hero media, page
+--       template or review state) survives as a studio chapter with its
+--       metadata and its lines; a default room chapter is re-filed and removed;
+--   8. (F6) the taxonomy is the project's studio's: a teammate's child
+--      category files under its top-level trade, a teammate's top-level
+--      category titles its chapter, the project designer's own slug beats a
+--      teammate's, and a guest member's category is not read;
+--   9. (F8b) a soft-removed line (archive_project_selection) does not hold
+--      Unsorted open.
+-- The two-session prune races (F3, F8a) are in
+-- 00767_unsorted_prune_concurrency.test.sh.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -33,12 +45,16 @@ INSERT INTO auth.users (
 )
 VALUES
   ('76700000-0000-4000-8000-000000000001', 'trade-a@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('76700000-0000-4000-8000-000000000002', 'trade-b@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('76700000-0000-4000-8000-000000000002', 'trade-b@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('76700000-0000-4000-8000-000000000003', 'trade-a-mate@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('76700000-0000-4000-8000-000000000004', 'trade-a-guest@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
 VALUES
   ('76700000-0000-4000-8000-000000000001', 'trade-a@test.invalid', 'Leah Trade', now(), now()),
-  ('76700000-0000-4000-8000-000000000002', 'trade-b@test.invalid', 'Jordan Other', now(), now())
+  ('76700000-0000-4000-8000-000000000002', 'trade-b@test.invalid', 'Jordan Other', now(), now()),
+  ('76700000-0000-4000-8000-000000000003', 'trade-a-mate@test.invalid', 'Studio A Teammate', now(), now()),
+  ('76700000-0000-4000-8000-000000000004', 'trade-a-guest@test.invalid', 'Studio A Guest', now(), now())
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
 
 INSERT INTO public.organizations (id, type, name, slug)
@@ -48,7 +64,9 @@ VALUES
 INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
 VALUES
   ('76700000-0000-4000-8000-000000000001', '76700000-0000-4000-8000-0000000000a1', 'owner', 'active', now()),
-  ('76700000-0000-4000-8000-000000000002', '76700000-0000-4000-8000-0000000000a2', 'owner', 'active', now());
+  ('76700000-0000-4000-8000-000000000002', '76700000-0000-4000-8000-0000000000a2', 'owner', 'active', now()),
+  ('76700000-0000-4000-8000-000000000003', '76700000-0000-4000-8000-0000000000a1', 'member', 'active', now()),
+  ('76700000-0000-4000-8000-000000000004', '76700000-0000-4000-8000-0000000000a1', 'guest', 'active', now());
 
 -- P1 = new book (A). P2 = legacy room-chapter book (A). P3 = B's project.
 INSERT INTO public.projects (id, name, designer_id, client_id, created_by)
@@ -67,7 +85,11 @@ VALUES
   ('76700000-0000-4000-8000-000000000202', '76700000-0000-4000-8000-000000000101', 'Bedroom', 1),
   ('76700000-0000-4000-8000-000000000203', '76700000-0000-4000-8000-000000000102', 'Hall', 0),
   ('76700000-0000-4000-8000-000000000204', '76700000-0000-4000-8000-000000000102', 'Garage', 1),
-  ('76700000-0000-4000-8000-000000000205', '76700000-0000-4000-8000-000000000103', 'Other Room', 0);
+  ('76700000-0000-4000-8000-000000000205', '76700000-0000-4000-8000-000000000103', 'Other Room', 0),
+  ('76700000-0000-4000-8000-000000000206', '76700000-0000-4000-8000-000000000102', 'Study', 2),
+  ('76700000-0000-4000-8000-000000000207', '76700000-0000-4000-8000-000000000102', 'Porch', 3),
+  ('76700000-0000-4000-8000-000000000208', '76700000-0000-4000-8000-000000000102', 'Den', 4),
+  ('76700000-0000-4000-8000-000000000209', '76700000-0000-4000-8000-000000000102', 'Loft', 5);
 
 -- Studio categories: A's own top-level category and a child of system
 -- Lighting; B's private category, whose label A must never read.
@@ -77,6 +99,18 @@ VALUES
   ('76700000-0000-4000-8000-000000000302', 'task_lamps', 'Task Lamps', false, '76700000-0000-4000-8000-000000000001',
     (SELECT id FROM public.ffe_categories WHERE is_system AND slug = 'lighting'), 0),
   ('76700000-0000-4000-8000-000000000303', 'b_secret', 'B Secret Label', false, '76700000-0000-4000-8000-000000000002', NULL, 0);
+
+-- SQ-844 (F6): categories owned by Leah's teammates in studio A. A child of
+-- system Lighting; a top-level category; a teammate's 'task_lamps' that sorts
+-- before Leah's own by id, so only the own-row preference keeps Leah's; and a
+-- guest member's category, which the studio does not share.
+INSERT INTO public.ffe_categories (id, slug, label, is_system, designer_id, parent_id, sort_order)
+VALUES
+  ('76700000-0000-4000-8000-000000000300', 'task_lamps', 'Teammate Task Lamps', false, '76700000-0000-4000-8000-000000000003', NULL, 0),
+  ('76700000-0000-4000-8000-000000000304', 'teammate_sconces', 'Teammate Sconces', false, '76700000-0000-4000-8000-000000000003',
+    (SELECT id FROM public.ffe_categories WHERE is_system AND slug = 'lighting'), 0),
+  ('76700000-0000-4000-8000-000000000305', 'teammate_joinery', 'Teammate Joinery', false, '76700000-0000-4000-8000-000000000003', NULL, 5),
+  ('76700000-0000-4000-8000-000000000306', 'guest_secret', 'Guest Secret Label', false, '76700000-0000-4000-8000-000000000004', NULL, 0);
 
 -- P1 lines, before its book exists.
 INSERT INTO public.project_ffe_items (
@@ -104,7 +138,11 @@ VALUES
   ('76700000-0000-4000-8000-000000000512', '76700000-0000-4000-8000-000000000102', '76700000-0000-4000-8000-000000000203', 'room', 'Hall unknown',  'L-02', 'specified', 1, 1, NULL),
   ('76700000-0000-4000-8000-000000000513', '76700000-0000-4000-8000-000000000102', '76700000-0000-4000-8000-000000000204', 'room', 'Garage bench',  'L-03', 'specified', 1, 0, 'seating'),
   ('76700000-0000-4000-8000-000000000514', '76700000-0000-4000-8000-000000000102', '76700000-0000-4000-8000-000000000203', 'room', 'Hall runner',   'L-04', 'specified', 1, 2, 'rugs'),
-  ('76700000-0000-4000-8000-000000000515', '76700000-0000-4000-8000-000000000102', '76700000-0000-4000-8000-000000000203', 'room', 'Hall console',  'L-05', 'specified', 1, 3, 'tables');
+  ('76700000-0000-4000-8000-000000000515', '76700000-0000-4000-8000-000000000102', '76700000-0000-4000-8000-000000000203', 'room', 'Hall console',  'L-05', 'specified', 1, 3, 'tables'),
+  ('76700000-0000-4000-8000-000000000516', '76700000-0000-4000-8000-000000000102', '76700000-0000-4000-8000-000000000206', 'room', 'Study desk',    'L-06', 'specified', 1, 0, 'tables'),
+  ('76700000-0000-4000-8000-000000000517', '76700000-0000-4000-8000-000000000102', '76700000-0000-4000-8000-000000000207', 'room', 'Porch swing',   'L-07', 'specified', 1, 0, 'seating'),
+  ('76700000-0000-4000-8000-000000000518', '76700000-0000-4000-8000-000000000102', '76700000-0000-4000-8000-000000000208', 'room', 'Den sofa',      'L-08', 'specified', 1, 0, 'seating'),
+  ('76700000-0000-4000-8000-000000000519', '76700000-0000-4000-8000-000000000102', '76700000-0000-4000-8000-000000000209', 'room', 'Loft lamp',     'L-09', 'specified', 1, 0, 'lighting');
 
 -- P3 line (B).
 INSERT INTO public.project_ffe_items (
@@ -131,6 +169,21 @@ VALUES
   ('76700000-0000-4000-8000-000000000702', '76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000204', 'Garage', 1, false),
   ('76700000-0000-4000-8000-000000000703', '76700000-0000-4000-8000-000000000602', NULL, 'Owner''s selections', 5, true),
   ('76700000-0000-4000-8000-000000000704', '76700000-0000-4000-8000-000000000602', NULL, 'Notes', 6, true);
+-- SQ-844 (F2): four room chapters the studio customised, one field each.
+-- Loft is also excluded, which stays on the chapter.
+INSERT INTO public.spec_book_chapters (
+  id, spec_book_id, project_room_id, title, position, included,
+  hero_media, page_template, review_state
+)
+VALUES
+  ('76700000-0000-4000-8000-000000000705', '76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000206',
+    'Study, north wall', 2, true, '[]', 'room', 'draft'),
+  ('76700000-0000-4000-8000-000000000706', '76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000207',
+    'Porch', 3, true, '[{"url":"https://media.test.invalid/porch.jpg"}]', 'room', 'draft'),
+  ('76700000-0000-4000-8000-000000000707', '76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000208',
+    'Den', 4, true, '[]', 'item_sheet', 'draft'),
+  ('76700000-0000-4000-8000-000000000708', '76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000209',
+    'Loft', 7, false, '[]', 'room', 'in_review');
 -- The book was inserted after its lines, so no trigger made settings: these
 -- are the 00380 room filings, plus the studio's move and one unfiled line.
 INSERT INTO public.spec_book_item_settings (spec_book_id, ffe_item_id, chapter_id, position)
@@ -139,7 +192,11 @@ VALUES
   ('76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000512', '76700000-0000-4000-8000-000000000701', 1),
   ('76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000513', '76700000-0000-4000-8000-000000000702', 0),
   ('76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000514', '76700000-0000-4000-8000-000000000703', 2),
-  ('76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000515', NULL, 3);
+  ('76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000515', NULL, 3),
+  ('76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000516', '76700000-0000-4000-8000-000000000705', 0),
+  ('76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000517', '76700000-0000-4000-8000-000000000706', 0),
+  ('76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000518', '76700000-0000-4000-8000-000000000707', 0),
+  ('76700000-0000-4000-8000-000000000602', '76700000-0000-4000-8000-000000000519', '76700000-0000-4000-8000-000000000708', 0);
 
 -- An issued edition, frozen with the room grouping.
 INSERT INTO public.spec_book_revisions (
@@ -270,6 +327,10 @@ BEGIN
     SELECT 1 FROM public.spec_book_chapters
     WHERE spec_book_id = v_book.id AND project_room_id IS NOT NULL
   ), '1: a new book makes no room chapters, though the project has rooms';
+  ASSERT (
+    SELECT bool_and(page_template = 'trade') FROM public.spec_book_chapters
+    WHERE spec_book_id = v_book.id
+  ), '1: a trade chapter carries the trade page template an issued edition freezes (SQ-844 F9)';
 
   ASSERT pg_temp.line_trade('76700000-0000-4000-8000-000000000501') = 'lighting', '2: system slug';
   ASSERT pg_temp.line_trade('76700000-0000-4000-8000-000000000502') = 'seating', '2: system slug';
@@ -395,6 +456,7 @@ DECLARE
   v_items_before text;
   v_hash_before text;
   v_working_before text;
+  v_customised_before text;
   v_moved integer;
 BEGIN
   SELECT md5(r::text) INTO v_revision_before
@@ -405,8 +467,53 @@ BEGIN
   FROM public._spec_book_current_item_snapshots(v_book_id)
   WHERE ffe_item_id = '76700000-0000-4000-8000-000000000511';
 
+  SELECT md5(string_agg(
+           concat_ws('|', c.id, c.title, c.position, c.included, c.hero_media, c.page_template, c.review_state),
+           '#' ORDER BY c.id))
+    INTO v_customised_before
+  FROM public.spec_book_chapters c
+  WHERE c.id IN ('76700000-0000-4000-8000-000000000705', '76700000-0000-4000-8000-000000000706',
+                 '76700000-0000-4000-8000-000000000707', '76700000-0000-4000-8000-000000000708');
+
   v_moved := public._spec_book_refile(v_book_id, NULL);
-  ASSERT v_moved = 4, format('4: four room/unfiled lines re-filed; got %s', v_moved);
+  ASSERT v_moved = 4, format('4: four default-room/unfiled lines re-filed, none from a customised chapter; got %s', v_moved);
+
+  -- 4b (SQ-844 F2). The default room chapters, Hall and Garage, are re-filed
+  -- and removed.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.spec_book_chapters
+    WHERE id IN ('76700000-0000-4000-8000-000000000701', '76700000-0000-4000-8000-000000000702')
+  ), '4b: the default room chapters are removed once re-filed';
+  -- Each customised room chapter is now a studio chapter: same metadata,
+  -- same inclusion, same lines, no room.
+  ASSERT (
+    SELECT count(*) FROM public.spec_book_chapters
+    WHERE id IN ('76700000-0000-4000-8000-000000000705', '76700000-0000-4000-8000-000000000706',
+                 '76700000-0000-4000-8000-000000000707', '76700000-0000-4000-8000-000000000708')
+      AND project_room_id IS NULL AND trade IS NULL
+  ) = 4, '4b: a customised room chapter (title, hero media, page template, review state) survives as a studio chapter';
+  ASSERT (
+    SELECT md5(string_agg(
+             concat_ws('|', c.id, c.title, c.position, c.included, c.hero_media, c.page_template, c.review_state),
+             '#' ORDER BY c.id))
+    FROM public.spec_book_chapters c
+    WHERE c.id IN ('76700000-0000-4000-8000-000000000705', '76700000-0000-4000-8000-000000000706',
+                   '76700000-0000-4000-8000-000000000707', '76700000-0000-4000-8000-000000000708')
+  ) = v_customised_before, '4b: a kept chapter keeps its title, hero media, page template, review state and inclusion';
+  ASSERT (
+    SELECT bool_and(s.chapter_id = x.chapter_id AND s.included) AND count(*) = 4
+    FROM (VALUES
+      ('76700000-0000-4000-8000-000000000516'::uuid, '76700000-0000-4000-8000-000000000705'::uuid),
+      ('76700000-0000-4000-8000-000000000517', '76700000-0000-4000-8000-000000000706'),
+      ('76700000-0000-4000-8000-000000000518', '76700000-0000-4000-8000-000000000707'),
+      ('76700000-0000-4000-8000-000000000519', '76700000-0000-4000-8000-000000000708')
+    ) AS x(ffe_item_id, chapter_id)
+    JOIN public.spec_book_item_settings s ON s.ffe_item_id = x.ffe_item_id
+  ), '4b: a kept chapter keeps its lines, not re-filed, their own inclusion untouched';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public._spec_book_current_item_snapshots(v_book_id)
+    WHERE ffe_item_id = '76700000-0000-4000-8000-000000000519'
+  ), '4b: the excluded Loft chapter still leaves its line out of the next edition';
 
   ASSERT pg_temp.line_trade('76700000-0000-4000-8000-000000000511') = 'lighting', '4: Hall pendant -> Lighting';
   ASSERT pg_temp.line_trade('76700000-0000-4000-8000-000000000512') = 'unsorted', '4: uncategorised -> Unsorted';
@@ -477,6 +584,13 @@ BEGIN
   WHERE id = '76700000-0000-4000-8000-000000000514';
   ASSERT pg_temp.line_trade('76700000-0000-4000-8000-000000000514') = '!studio',
     '6: a category change leaves a line in a studio chapter';
+  UPDATE public.project_ffe_items SET ffe_category = 'lighting'
+  WHERE id = '76700000-0000-4000-8000-000000000516';
+  ASSERT (
+    SELECT chapter_id FROM public.spec_book_item_settings
+    WHERE ffe_item_id = '76700000-0000-4000-8000-000000000516'
+  ) = '76700000-0000-4000-8000-000000000705',
+    '4b: a category change leaves a line in a kept (formerly room) chapter';
 
   -- A room chapter and a trade key cannot share a row.
   BEGIN
@@ -568,5 +682,92 @@ BEGIN
 END;
 $$;
 
-\echo '00767_spec_book_trade_chapters_test: trade chapters in taxonomy order; filing, refiling and Unsorted; idempotent re-file; issued edition unchanged; studio chapters kept; studios isolated'
+-- ─── 8. The taxonomy is the project's studio's (SQ-844, SQ-842 F6) ──────────
+DO $$
+DECLARE
+  v_book_id uuid := (SELECT id FROM public.spec_books WHERE project_id = '76700000-0000-4000-8000-000000000101');
+BEGIN
+  -- New lines on Leah's job, in categories her teammates own.
+  INSERT INTO public.project_ffe_items (
+    id, project_id, project_room_id, assignment_scope, name, doc_code, status,
+    quantity, sort_order, ffe_category
+  )
+  VALUES
+    ('76700000-0000-4000-8000-000000000531', '76700000-0000-4000-8000-000000000101',
+      '76700000-0000-4000-8000-000000000201', 'room', 'Wall sconce', 'T-31', 'specified', 1, 31, 'teammate_sconces'),
+    ('76700000-0000-4000-8000-000000000532', '76700000-0000-4000-8000-000000000101',
+      '76700000-0000-4000-8000-000000000201', 'room', 'Window seat', 'T-32', 'specified', 1, 32, 'Teammate Joinery'),
+    ('76700000-0000-4000-8000-000000000533', '76700000-0000-4000-8000-000000000101',
+      '76700000-0000-4000-8000-000000000202', 'room', 'Guest piece', 'T-33', 'specified', 1, 33, 'guest_secret');
+
+  ASSERT pg_temp.line_trade('76700000-0000-4000-8000-000000000531') = 'lighting',
+    '8: a teammate''s child category files under its top-level system trade';
+  ASSERT pg_temp.line_trade('76700000-0000-4000-8000-000000000532') = 'teammate_joinery',
+    '8: a teammate''s top-level category (matched by label) is its own trade';
+  ASSERT (
+    SELECT (title, position) = ('Teammate Joinery', 1005)
+    FROM public.spec_book_chapters WHERE spec_book_id = v_book_id AND trade = 'teammate_joinery'
+  ), '8: a teammate''s category chapter takes its label, after the system trades';
+  ASSERT (
+    SELECT t.trade FROM public._spec_book_trade_for('76700000-0000-4000-8000-000000000101', 'task_lamps') t
+  ) = 'lighting', '8: the project designer''s own slug beats a teammate''s identical one';
+  ASSERT pg_temp.line_trade('76700000-0000-4000-8000-000000000533') = 'guest_secret',
+    '8: a guest member''s category is not the studio''s';
+  ASSERT (
+    SELECT title FROM public.spec_book_chapters WHERE spec_book_id = v_book_id AND trade = 'guest_secret'
+  ) = 'Guest Secret', '8: a guest member''s label never titles a chapter';
+  ASSERT (
+    SELECT (t.trade, t.chapter_position) = ('teammate_joinery', 1000)
+    FROM public._spec_book_trade_for('76700000-0000-4000-8000-000000000103', 'teammate_joinery') t
+  ), '8: on another studio''s job the category is unknown (position 1000, not its studio sort 1005)';
+END;
+$$;
+
+-- ─── 9. A soft-removed line does not hold Unsorted open (SQ-844, F8b) ───────
+DO $$
+DECLARE
+  v_book_id uuid := (SELECT id FROM public.spec_books WHERE project_id = '76700000-0000-4000-8000-000000000101');
+  v_unsorted uuid;
+BEGIN
+  INSERT INTO public.project_ffe_items (
+    id, project_id, project_room_id, assignment_scope, name, doc_code, status,
+    quantity, sort_order, ffe_category
+  )
+  VALUES
+    ('76700000-0000-4000-8000-000000000534', '76700000-0000-4000-8000-000000000101',
+      '76700000-0000-4000-8000-000000000201', 'room', 'Loose piece A', 'T-34', 'specified', 1, 34, NULL),
+    ('76700000-0000-4000-8000-000000000535', '76700000-0000-4000-8000-000000000101',
+      '76700000-0000-4000-8000-000000000202', 'room', 'Loose piece B', 'T-35', 'specified', 1, 35, NULL);
+  SELECT id INTO v_unsorted FROM public.spec_book_chapters
+  WHERE spec_book_id = v_book_id AND trade = 'unsorted';
+  ASSERT v_unsorted IS NOT NULL, '9: two uncategorised lines open Unsorted';
+
+  -- Leah removes A while building (00737's soft removal: the line stays, with
+  -- removed_at set; its setting and chapter are untouched).
+  PERFORM pg_temp.as_user('76700000-0000-4000-8000-000000000001');
+  PERFORM public.archive_project_selection('76700000-0000-4000-8000-000000000534', 'removed in the 00767 test');
+  PERFORM pg_temp.as_postgres();
+  ASSERT (
+    SELECT removed_at IS NOT NULL FROM public.project_ffe_items
+    WHERE id = '76700000-0000-4000-8000-000000000534'
+  ), '9: archive_project_selection soft-removes the line';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public._spec_book_current_item_snapshots(v_book_id)
+    WHERE ffe_item_id = '76700000-0000-4000-8000-000000000534'
+  ), '9: the removed line is out of the snapshot';
+
+  -- B, the last line not removed, leaves: Unsorted goes, though A's setting
+  -- still pointed at it.
+  UPDATE public.project_ffe_items SET ffe_category = 'rugs'
+  WHERE id = '76700000-0000-4000-8000-000000000535';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.spec_book_chapters WHERE id = v_unsorted),
+    '9: a soft-removed line does not hold Unsorted open';
+  ASSERT (
+    SELECT chapter_id IS NULL FROM public.spec_book_item_settings
+    WHERE ffe_item_id = '76700000-0000-4000-8000-000000000534'
+  ), '9: the removed line''s setting is kept, with no chapter';
+END;
+$$;
+
+\echo '00767_spec_book_trade_chapters_test: trade chapters in taxonomy order; filing, refiling and Unsorted; idempotent re-file; issued edition unchanged; studio and customised room chapters kept; studios isolated; studio taxonomy; soft-removed lines do not hold Unsorted'
 ROLLBACK;

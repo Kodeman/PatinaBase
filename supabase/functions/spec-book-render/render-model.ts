@@ -110,6 +110,11 @@ export interface RenderChapter {
   projectRoomId: string | null;
   name: string;
   position: number;
+  /**
+   * 00767 (V20 U-Q18): a room-linked chapter, a trade chapter (page template
+   * 'trade', no room), or a chapter the studio made by hand (neither).
+   */
+  kind: "room" | "trade" | "chapter";
 }
 
 export interface AddendumChange {
@@ -823,23 +828,37 @@ async function buildAudienceItem(
   return normalized;
 }
 
+function chapterKind(
+  projectRoomId: string | null,
+  chapter: JsonRecord,
+): RenderChapter["kind"] {
+  if (projectRoomId) return "room";
+  return stringValue(chapter.pageTemplate ?? chapter.page_template) === "trade"
+    ? "trade"
+    : "chapter";
+}
+
 function normalizeChapters(chapters: JsonRecord[]): RenderChapter[] {
   return chapters
-    .map((chapter) => ({
-      id: stringValue(chapter.id ?? chapter.roomId ?? chapter.room_id) ?? "",
-      projectRoomId: stringValue(
+    .map((chapter) => {
+      const projectRoomId = stringValue(
         chapter.projectRoomId ?? chapter.project_room_id ?? chapter.roomId ??
           chapter.room_id,
-      ),
-      name: stringValue(
-        chapter.name ?? chapter.title ?? chapter.roomName ??
-          chapter.room_name,
-      ) ??
-        "Untitled room",
-      position: numberValue(
-        chapter.position ?? chapter.sortOrder ?? chapter.sort_order,
-      ) ?? 0,
-    }))
+      );
+      return {
+        id: stringValue(chapter.id ?? chapter.roomId ?? chapter.room_id) ?? "",
+        projectRoomId,
+        name: stringValue(
+          chapter.name ?? chapter.title ?? chapter.roomName ??
+            chapter.room_name,
+        ) ??
+          "Untitled room",
+        position: numberValue(
+          chapter.position ?? chapter.sortOrder ?? chapter.sort_order,
+        ) ?? 0,
+        kind: chapterKind(projectRoomId, chapter),
+      };
+    })
     .sort((a, b) =>
       a.position - b.position || a.name.localeCompare(b.name) ||
       a.id.localeCompare(b.id)

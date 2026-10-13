@@ -18,6 +18,7 @@ import type {
   AudienceConfigurationSummary,
   AudienceItem,
   AudienceRenderModel,
+  RenderChapter,
 } from "./render-model.ts";
 import {
   alsoInText,
@@ -34,7 +35,13 @@ const CHANGE_ROWS_PER_PAGE = 28;
 export type PagePlanEntry =
   | { kind: "cover"; pageNumber: number }
   | { kind: "contents"; pageNumber: number; rows: ContentsRow[] }
-  | { kind: "chapter"; pageNumber: number; chapterId: string; name: string }
+  | {
+    kind: "chapter";
+    pageNumber: number;
+    chapterId: string;
+    name: string;
+    eyebrow: string;
+  }
   | { kind: "item"; pageNumber: number; item: AudienceItem }
   | {
     kind: "schedule";
@@ -48,6 +55,14 @@ export interface ContentsRow {
   label: string;
   pageNumber: number;
 }
+
+// The word above a chapter divider's title. A hand-made chapter, and the
+// group of lines filed in no chapter, print "Chapter".
+const CHAPTER_EYEBROW: Record<RenderChapter["kind"], string> = {
+  room: "Room",
+  trade: "Trade",
+  chapter: "Chapter",
+};
 
 function chunks<T>(values: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -140,6 +155,7 @@ export function buildPagePlan(model: AudienceRenderModel): PagePlanEntry[] {
       pageNumber: cursor++,
       chapterId: chapter.id,
       name: chapter.name,
+      eyebrow: CHAPTER_EYEBROW[chapter.kind],
     });
     for (const item of items) {
       plan.push({ kind: "item", pageNumber: cursor++, item });
@@ -151,6 +167,7 @@ export function buildPagePlan(model: AudienceRenderModel): PagePlanEntry[] {
       pageNumber: cursor++,
       chapterId: "unassigned",
       name: "Unassigned",
+      eyebrow: CHAPTER_EYEBROW.chapter,
     });
     for (const item of unassigned) {
       plan.push({ kind: "item", pageNumber: cursor++, item });
@@ -610,7 +627,7 @@ function documentNode(
           style: [styles.page, styles.cover],
           wrap: false,
         },
-        h(Text, { style: styles.eyebrow }, "Room"),
+        h(Text, { style: styles.eyebrow }, entry.eyebrow),
         h(Text, { style: styles.coverTitle }, entry.name),
         pageFooter(model, entry.pageNumber, totalPages),
       );
