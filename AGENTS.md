@@ -19,7 +19,7 @@ Eleven engineering `patina-*` skills in `.agents/skills/` carry the verified pro
 - Task queue = `agent_tasks` via `@patina/agent-queue` + its RPCs (docs/agent-os/). Never a parallel queue; `cowork_tasks` is frozen (00298).
 - service_role stays server-side; agent DB access = `agent_reader`/`agent_writer`. Agents read broadly, write ONLY via `enqueue_agent_task` — never directly to business tables. `agent_reader`/`agent_writer` are NOLOGIN privilege roles (docs/agent-os/agent-roles-runbook.md) — never login roles.
 - Every queue transition is audited (`agent_task_audit`, actor from `app.actor`).
-- No automated external sends — drafts land `awaiting_review`.
+- No automated external sends — drafts land `awaiting_review`; studio outbound follows V22 (draft-first, designer Send).
 - Internal payable-state tables are the source of truth: reconcile Stripe toward them, never the reverse.
 - Scheduled jobs = pg_cron (SQL RPC or `public.invoke_edge_function`); run history = `job_runs`.
 

@@ -557,4 +557,14 @@ Both start with a design spike: specimens, then the build.
 
 **Source:** Kody's multiple-choice interview of 2026-10-12.
 
-*Entries add: … · V19 · V20 · last id = V20*
+### V22 · Every studio message waits for a designer's Send — Kody 2026-10-13
+
+**Ruling:** Studio outbound to clients, vendors, and trades waits for a designer's Send. A studio owner may opt in per template kind to **send on schedule**, but that setting never applies to model-written messages. Trade texts are staged in a daily batch and expire at the end of their window. A designer may send a checked batch of drafts.
+
+**Exempt:** auth; receipts for the recipient's own action; carrier STOP/HELP; internal mail to studio members or Patina staff; Patina-to-designer mail; marketplace consumer mail. These retain their existing behavior.
+
+**Supersedes:** the `invoice-reminders` header ruling that treated its outbound reminder as “deliberately exempt.” Invoice reminders follow this draft-first ruling.
+
+**Source:** Kody, 2026-10-13.
+
+*Entries add: … · V18 · V19 · V20 (US-28) · V21 (Founding Circle) · V22 · last id = V22*
