@@ -437,3 +437,83 @@ Tools sheet at 390:
 - **Board** `9dcbdaef-031c-436e-a2a6-b5f6a4e70a9c` ("Palette + materials study", Whole Home Renovation) and its 2 `document_shares` rows were created for this walk. They were deleted from local Supabase after the walk.
 - **One Desk "Not today"** on Chen Residence was acted on and undone. The local state is restored.
 - **Throwaway env files** `apps/{designer,client}-portal/.env.local` were deleted. Both dev servers were stopped.
+
+## Re-walk (SQ-873)
+
+Walked 2026-10-13 at feat/portal-uplift **482b32403**, which includes SQ-865 (f00b9b97e), SQ-874 (4d0ff69cb) and SQ-876. The pages before the board room were first walked at 12bc8623d. Between 12bc8623d and 482b32403 only the board room, the export dialog, BoardsBlock and People ⌘K changed, and People ⌘K was walked again at 482b32403.
+
+**Method.** The §0 method was used:
+- designer `next dev` on :3005 and the client portal on :3006, with local Supabase only (`NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321`);
+- seed `seed_uplift_walk_v2.sql` re-applied with psql, and 00766/00767 already applied;
+- Playwright Chromium, signed in as Leah;
+- the same per-capture probes.
+
+The flags on in production were set on locally through `NEXT_PUBLIC_FLAG_OVERRIDES`, so the TESTER mark renders.
+
+The raw JSON, logs, the exported PNG and every screenshot are outside the repo, in `~/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-873/`: `pass1-*.json`, `pass2-1440.json`, `pass3-*.json`, `pass4-*.json`, `pass5-390.json`, `board.json`, `share.json`, `cmdk*.log` and `shots/`. No screenshots were added to this folder; WALK.md is the only write.
+
+**Cross-cutting, every route at 1180, 1280, 1440 and 390:**
+- no horizontal scroll;
+- no box-shadow that is not transparent;
+- no truncation flagged;
+- no page with a filled act of its own, except area 8's "Record $3,400.00".
+
+### Verdicts
+
+| # | Finding | Verdict | Evidence |
+|---|---|---|---|
+| W1 | The section dock collapses at 1180 and up | **FIXED** | The dock was walked at 1180, 1280 and 1440 on the document, compose, people, ceremony and room file.<br>• All 8 buttons are on screen (`offscreen 0`).<br>• No label is stacked one letter per line.<br>• Long crumbs ("PROPOSAL WORKSPACE", "STUDIO CONTACTS") print whole.<br>• The dock is 111 px tall at 1280 and 1440, and 163 px at 1180 (see N3). |
+| W2 | TESTER covers live controls | **FIXED** | • TESTER now sits in the dock row as an in-flow 64×44 act, and the hit-test lands on TESTER with no overlaps.<br>• In the board room it sits on the Header line after Share: (1352,7) at 1440, and its own row at 390.<br>• A real pointer click opens it at both widths, and a real click reaches Export.<br>• Residual: N5. |
+| W3 | 390 dock band and popover are dark | **FIXED, with one residual** | • The 390 dock is the light paper band "STUDIO SECTION · ··· MORE" (`rgb(252,250,246)`).<br>• The More sheet is light, square-cornered and has no shadow.<br>• The Ledgers path still opens a dark sheet: N1. |
+| W4 | Preferences has targets under 44 px | **FIXED** | • Each switch row is a full-width label row, visually 44 px or taller.<br>• The 7 sub-44 hits the probe reports are 1×1 visually hidden checkbox inputs inside those labels, so they are an artifact of the probe. |
+| W5 | Spec book prints raw field keys, plus "Add a finish", the title, the doubled "Not specified" and the row tint | **FIXED** | • No raw keys appear (0 matches for DESIGNDISPOSITION, DOCUMENTCODE, ITEMTYPE or camelCase).<br>• "Add a finish" appears 25 times.<br>• The heading is "Whole Home Renovation · specification book".<br>• No "Not specified / Not specified" pair appears.<br>• The opened row's background is transparent (`b2-spec-book-open-*`).<br>• The browser tab title is still wrong: N8. |
+| W6 | The record-payment commit is a link | **FIXED** | • "Record $3,400.00" is a filled ink button, `rgb(44,41,38)`, 184×48, at both widths.<br>• It is the sheet's only filled act. |
+| W7 | Invoice labels touch their values at 390 | **FIXED** | • In INV-2026-0723 the SUBTOTAL and TOTAL rows hold their values in a separate column, 145–168 px apart at 390 and 524–547 px at 1440.<br>• The inline "TOTAL $9,200.00" summary keeps a word space between the two (7 px). |
+| W8 | Accounts shows whole dollars, newest first | **FIXED** | • Every row amount carries cents (19 of 19).<br>• The list is headed "INVOICES · WHAT IS OWED FIRST", and the most overdue invoice leads (INV-2026-114, $17,500.00, 7 days overdue).<br>• The summary sentence keeps whole dollars ("$42,860 is out"); see N9. |
+| W9 | Board room: sans title, canvas clipped at 1440, opens at 100% at 390, Share lift, rounded Export cards, boxed tools | **FIXED** | • The Playfair title sits on the Header line with "← WHOLE HOME RENOVATION".<br>• The canvas fits at 1440 (90–92%): all 4 swatches and 3 frames are inside the stage. It also fits at 390, where it opens at 32%.<br>• The Share and Export dialogs have `box-shadow: none` and a 2 px radius.<br>• The tools are underlined words. "Section name" is an input, so its edge is a field edge.<br>• The export option rows still carry a 3 px or 9.5 px radius: N10. |
+| W10 | Client `/share` at 390 drops the Materials placeholders | **FIXED** | Textile, Stone or surface, and Wood or finish all print at 390 (`b6-client-share-full-390`). |
+| SQ-865 | Turned captions; Export size equals the PNG | **PASS** | • Notes turned 90, 180 and 270 degrees and placed at the canvas's top edge print whole in the room. The 90° caption's top is at y=122, below the stage top at y=106. They also print whole on the client share at 1440, and stack as text at 390.<br>• The preflight reported 2400 × 1800 before the captions and 2400 × 1802 after them. The downloaded PNG measured 2400 × 1800 and 2400 × 1802 respectively, an exact match both times. |
+| W11 | "Send reminder" shows twice at 390 | **FIXED** | One SEND REMINDER, in the paper's next band. The 390 dock reads "SECTION: APPROVALS · MORE". |
+| W12 | "Message the client" and "Write to your client" | **FIXED, per ruling (a)** | • The paper shows one writer, "MESSAGE THE CLIENT", at both widths.<br>• The demoted note act was not on Holloway's paper (it has no standing client note), so the rename was not exercised. |
+| W13 | Playfair region heads | **FIXED** | The six region heads (Client approvals, Project schedule, FF&E selections, Project financials, Project closeout, Project record) are DM Mono Section headers with ticks. |
+| W14 | Old white head band on Rooms, room file, People, Library, Drafting, Compose | **FIXED** | • All six use `.hline`, and none has a separate "← BACK" band.<br>• SQ-866 F3 alignment holds: each header spans the same x as its first body section:<br>&nbsp;&nbsp;– Rooms: 259–1181 on both.<br>&nbsp;&nbsp;– Room file: 285–1156 on both.<br>&nbsp;&nbsp;– Library: 141–1300 on both.<br>&nbsp;&nbsp;– Compose: 376–1064 on both.<br>&nbsp;&nbsp;– People: 108–1332 on both.<br>&nbsp;&nbsp;– Drafting: the header spans 136–1304, and the body's left column starts at 136. |
+| W15 | Bespoke empty states on Plans and the room file | **FIXED** | • The shared EmptyState (`.empty-t`) renders on Plans ("No plans yet. Bring in a drawing set to begin."), the boards tab ("No boards yet · start one") and the room file.<br>• Two residuals: N6 and N7. |
+| W16 | Room cards lack "Open the scan"; the Library has no "All shelves" | **FIXED** | • The room card carries "OPEN THE SCAN".<br>• The Library opens on "ALL SHELVES · 29". |
+| W17 | People is largely unbuilt | **FIXED** (Kody: "match specimen fully") | • People has the Header line "Studio contacts · 60 people · 21 firms" with + Add contact and Find ⌘K, then the search, then the filter words and the My/Studio scope lens on one line, then Inbound (kind column and "OPEN THE BRIEF"), then the Directory. There is no left index.<br>• Client relations, Studio marketing and The Engine each open:<br>&nbsp;&nbsp;– from the desktop dock popover ("Ledgers ↑", group "FROM STUDIO CONTACTS");<br>&nbsp;&nbsp;– from the 390 More sheet;<br>&nbsp;&nbsp;– from ⌘K.<br>&nbsp;&nbsp;Each reaches `/people?view=threads`, `portfolio` or `nurture` with its own h1.<br>• SQ-874 holds: "Client reviews" opens `view=reviews`, "Email campaigns" opens `view=outreach`, and "Design profile" opens `view=your-eye`. A ⌘K person row chosen from inside Client relations opens that person's record.<br>• The person record's way back, "← STUDIO CONTACTS", sits on its Header line with Find ⌘K, as in people-p2.<br>• Residuals: N2, N4 and N11. |
+| W18 | Procurement is unbuilt | **OWED** (unchanged) | Not re-walked (Kody: ship as is). |
+| W19 | The Desk defaults to MINE | **KEEP** (unchanged) | Still defaults to MINE. |
+| W20 | Paper teaching hint, extra head acts, edged margin box | **KEEP** (unchanged) | All still present. |
+| W21 | Polish items | **KEEP** (unchanged) | Seen again: the Desk "Until…" row; dashed, tilted placeholders on screen; the room file's back link reads "OPEN KITCHEN" above the title "Open Kitchen". |
+| W22 | Known items | Already handled | — |
+
+**Not REGRESSED.** None of the W1–W17 items regressed.
+
+### New findings
+
+| # | Severity | Finding | What a user would misunderstand |
+|---|---|---|---|
+| N1 | **MEDIUM** | At 390, More → **Ledgers** opens the old dark "The drawer · six books" sheet: an ink stock with a veil, with Library / Orders / Accounts / People / Rooms / Hours (`b9-dock-ledgers-sheet-390`). This is the W3 dark popover, one tap deeper. | A second visual system appears in the dock's own menu. The phone user lands on a dark sheet, styled unlike every other sheet, that lists rooms they just left. |
+| N2 | **MEDIUM-LOW** | On the person record (`/people?person=…`), the record body starts 64 px to the right of its Header line: the header at x=108, "CLIENT / Ainsley Moore" at x=172. Specimen people-p2 aligns both at the same x (232). This is the SQ-866 F3 rule that the six Header-line pages now meet. | The way back reads as belonging to a different column from the record, so the page looks like two stacked documents. |
+| N3 | LOW | At 1180 the section dock wraps to 3 rows and 163 px (18% of a 900 px viewport). Find loses its "Find anything" label to a bare ⌘K chip, and "?" is a 24 px chip. At 1280 and 1440 it is 2 rows and 111 px. The Desk/boards dock is 60 px. | Less room for the page; Find is harder to read as a control at 1180. |
+| N4 | LOW | On desktop, the People sub-rooms live in the dock popover labelled **"Ledgers ↑"**, under "FROM STUDIO CONTACTS". The desktop dock has no "More". | A designer looking for Client relations would not think to open "Ledgers". |
+| N5 | LOW | On pages with no dock (Preferences, Help), the TESTER mark is the fixed fallback. At 390 it rests over the "Commission earned" switch row on Preferences. | Covers one row at rest; scrolling frees it. |
+| N6 | LOW | Plans still uses the old full-width sticky head, not `.hline`. Its h1 sits at x=170, while the body column is at 378–1062. Plans was not in SQ-866 F3's list. | The header and body don't share a left edge. |
+| N7 | LOW | The boards tab says it is empty twice: the Header line subtitle "No design boards yet. Create one to begin." and the EmptyState "No boards yet · start one". | Redundant copy. |
+| N8 | LOW | The spec book's browser tab title is "Studio overview · Patina", not the book's name. | The wrong tab name in the browser and in history. |
+| N9 | LOW | The Accounts summary sentence keeps whole dollars ("$42,860 is out with clients; $38,800 of it is overdue; $14,255 collected") while every row shows cents. | Minor mismatch with "cents everywhere". |
+| N10 | LOW | The Export dialog's option rows keep a 3 px or 9.5 px radius inside the 2 px square sheet. | Polish against the square-sheet rule. |
+| N11 | LOW | At 390 the People dock act reads "ADD PERSON", while the Header line reads "+ ADD CONTACT". The account button in the desktop dock is 148×40, under 44 px tall. | Two names for one act; one target slightly under 44 px. |
+
+### Not walked / limits
+
+- **Jordan's Desk** was not walked; no finding in scope needed it.
+- **The demoted client-note act (W12)** needs a project with a standing note.
+- **The 390 drawer's Accounts entry** was not followed. N1's Accounts capture is a scripted open, so `b8-accounts-sheet-390` shows the drawer still over the sheet: that is the script, not the product.
+- **The procurement sheet (W18)** was not walked.
+
+### Leftovers (local only, cleaned before submit)
+
+- **Board** `6ecffbdb-…` ("Palette + materials study", Whole Home Renovation): created for this walk, together with 3 turned notes and 2 `document_shares` rows (one revoked by the walk script). All three were deleted from local Supabase.
+- **The walk seed** was re-applied, which resets the fixture's need states.
+- **No payment was recorded.** The record-payment sheet was opened and put back.
+- **Throwaway env files** were deleted, and both dev servers were stopped.
