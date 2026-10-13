@@ -38,13 +38,20 @@ export function useNeedActSheet(): NeedActSheetApi {
 
 const SHEETS: Record<
   ActSheetKind,
-  { title: string; icon: LucideIcon; Body: (props: { need: DeskNeed; onDone: () => void }) => ReactNode }
+  {
+    title: string;
+    icon: LucideIcon;
+    Body: (props: { need: DeskNeed; onDone: () => void }) => ReactNode;
+    /** SQ-858 (money-p3) — the body prints its own head and puts Put back
+     *  in its foot, beside its filled act. */
+    ownsHead?: true;
+  }
 > = {
   'po-chase': { title: 'Follow up on this purchase order', icon: Send, Body: PoChaseSheet },
   'invoice-reminder': { title: 'Send an invoice reminder', icon: Receipt, Body: InvoiceReminderSheet },
   'proposal-follow-up': { title: 'Follow up on this proposal', icon: MessageSquare, Body: ProposalFollowUpSheet },
   'release-order': { title: "Approve this order's release", icon: PackageCheck, Body: ReleaseOrderSheet },
-  'record-payment': { title: 'Record a payment', icon: Banknote, Body: RecordPaymentSheet },
+  'record-payment': { title: 'Record a payment', icon: Banknote, Body: RecordPaymentSheet, ownsHead: true },
 };
 
 export function NeedActSheetProvider({ children }: { children: ReactNode }) {
@@ -71,7 +78,8 @@ export function NeedActSheetProvider({ children }: { children: ReactNode }) {
           open={isOpen}
           onClose={close}
           title={sheet.title}
-          icon={sheet.icon}
+          icon={sheet.ownsHead ? undefined : sheet.icon}
+          headOwnedByChild={sheet.ownsHead}
           kind={`act-${current.kind}`}
         >
           {/* A fresh body per open, so a reopened sheet prefills again. */}

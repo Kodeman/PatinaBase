@@ -179,8 +179,50 @@ describe('Record a payment to a maker', () => {
     expect(dialogs[0]).toHaveTextContent('Balance to Calloway & Brandt Upholstery, $3,400.00, due');
     expect(dialogs[0]).toHaveTextContent('It sends nothing to Calloway & Brandt Upholstery.');
     const record = screen.getByRole('button', { name: 'Record $3,400.00' });
-    expect(record).toHaveAttribute('data-action-variant', 'primary');
-    expect(document.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
+    // SQ-858 (money-p3) — the commit is the filled terminal act, and the only
+    // filled act in the sheet: no other terminal, primary or inked act.
+    expect(record).toHaveAttribute('data-action-variant', 'terminal');
+    expect(record).toHaveClass('da-terminal');
+    expect(document.querySelectorAll('[data-action-variant="terminal"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-action-variant="primary"], [data-action-variant="inked"]')).toHaveLength(0);
+  });
+
+  it('stands Put back in the foot beside the filled act, never in the head (money-p3)', async () => {
+    openSheet(PAYMENT_NEED);
+    const dialog = screen.getByRole('dialog');
+    const head = dialog.querySelector('[data-doc-sheet-title-line]')!.parentElement!.parentElement!;
+    expect(head).toHaveTextContent('Record a payment');
+    expect(head).not.toHaveTextContent(/put back/i);
+    expect(screen.queryByRole('button', { name: 'Put back · Esc' })).not.toBeInTheDocument();
+    const foot = screen.getByRole('button', { name: 'Record $3,400.00' }).closest('[role="group"]') as HTMLElement;
+    expect(foot).toHaveClass('rec-foot');
+    const putBack = screen.getByRole('button', { name: 'Put back' });
+    expect(foot).toContainElement(putBack);
+    await userEvent.setup().click(putBack);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockRecordVendor).not.toHaveBeenCalled();
+  });
+
+  it('reads the day in words and runs the amount field the sheet’s width (money-p3)', async () => {
+    openSheet(PAYMENT_NEED);
+    const amount = screen.getByLabelText('Amount');
+    expect(amount.closest('[data-act-record-payment]')).not.toBeNull();
+    const [y, m, d] = todayYmd().split('-').map(Number);
+    const today = new Date(y!, m! - 1, d!, 12);
+    const words = `${today.toLocaleDateString('en-GB', { weekday: 'long' })} ${today.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    const day = screen.getByRole('button', { name: `Paid on ${words}` });
+    expect(day).toHaveTextContent(words);
+    expect(day).not.toHaveTextContent(/\d{2}\/\d{2}\/\d{4}/);
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('Choose a date from the calendar');
+    await userEvent.setup().click(day);
+    expect(day).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('keeps Put back in the foot while the record is still on its way', () => {
+    mockScheduleRead = pendingRead();
+    openSheet(PAYMENT_NEED);
+    expect(screen.getByRole('dialog')).toHaveTextContent('Loading the record…');
+    expect(screen.getByRole('button', { name: 'Put back' }).closest('[role="group"]')).toHaveClass('rec-foot');
   });
 
   it('writes the remainder through the maker-payment writer, then puts the sheet back', async () => {

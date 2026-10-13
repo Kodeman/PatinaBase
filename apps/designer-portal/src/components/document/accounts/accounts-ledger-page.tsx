@@ -2,7 +2,7 @@
 
 /**
  * The Accounts book · Ledger (R36, R74): every invoice in the studio's book,
- * newest first — draft / sent / partially-paid / paid / void — narrated as
+ * what is owed first — draft / sent / partially-paid / paid / void — narrated as
  * paper rows, not a dashboard. The old Billing list, re-housed.
  *
  * R74 made the book WRITE: rows are folio-first (the row opens the Invoice
@@ -13,6 +13,9 @@
  * US-28 S8: the register is one Section of Ledger rows closing on its rule.
  * State is an ink word (U-Q13), invoices are never Cards, and nothing
  * truncates — a long line wraps at 390.
+ *
+ * SQ-858 (money-p1): "Who owes us what?" — the register reads what is owed
+ * first (see `owedFirst`), and every figure prints to the cent.
  */
 
 import { useEffect, useRef } from 'react';
@@ -25,7 +28,8 @@ import {
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DeliveryWord } from '../delivery-word';
 import { EmptyState } from '../empty-state';
-import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { formatCurrency } from '@patina/shared';
+import { fmtDay } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
 import { AccountsExportAction } from './accounts-export';
 import { openInvoiceComposer, openInvoiceFolio } from './invoice-overlays';
@@ -106,6 +110,25 @@ export function AccountsLedgerPage({
   );
 }
 
+/** An open receivable: issued, with money still owed on it. */
+const owedNowOf = (inv: Invoice) =>
+  (inv.status === 'sent' || inv.status === 'partially_paid') && invoiceBalanceCents(inv) > 0;
+
+/** money-p1's order: overdue, then owed and not yet due, then drafts, then
+ *  paid, then void. Within each, the book's own order (newest first) holds. */
+function owedRank(inv: Invoice) {
+  if (owedNowOf(inv)) return invoiceDaysOverdue(inv) > 0 ? 0 : 1;
+  if (inv.status === 'draft') return 2;
+  if (inv.status === 'void') return 4;
+  return 3;
+}
+
+export const owedFirst = (invoices: readonly Invoice[]) =>
+  invoices
+    .map((inv, at) => ({ inv, at, rank: owedRank(inv) }))
+    .sort((a, b) => a.rank - b.rank || a.at - b.at)
+    .map(({ inv }) => inv);
+
 function InvoiceRows({
   invoices,
   deliveryByRef,
@@ -124,11 +147,11 @@ function InvoiceRows({
           <svg className="orn" viewBox="0 0 34 12" aria-hidden="true" focusable="false">
             <path d="M0 2h34M0 6h28M0 10h20" />
           </svg>
-          <span>Invoices · newest first</span>
+          <span>Invoices · what is owed first</span>
         </p>
       </div>
       <ul className="rows">
-        {invoices.map((inv) => {
+        {owedFirst(invoices).map((inv) => {
           const balance = invoiceBalanceCents(inv);
           // "Owed" only reads true for an issued receivable — a draft isn't
           // owed yet (it's not been sent), so it says nothing more.
@@ -143,7 +166,7 @@ function InvoiceRows({
                 : null
               : owedNow && balance > 0
                 ? [
-                    balance !== inv.total_cents ? `${fmtUsd(balance)} owed` : null,
+                    balance !== inv.total_cents ? `${formatCurrency(balance, inv.currency)} owed` : null,
                     inv.due_date && overdueDays === 0 ? `due ${fmtDay(inv.due_date)}` : null,
                   ]
                     .filter(Boolean)
@@ -196,7 +219,7 @@ function InvoiceRows({
                 <InvoiceStateWord status={inv.status} overdueDays={overdueDays} />
                 {clause && <span className="t-body-sm money-clause">{clause}</span>}
               </span>
-              <span className="lfig">{fmtUsd(inv.total_cents)}</span>
+              <span className="lfig">{formatCurrency(inv.total_cents, inv.currency)}</span>
             </li>
           );
         })}

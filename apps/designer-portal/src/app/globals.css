@@ -2467,6 +2467,20 @@ html:has([data-document-shell]) {
 }
 /* ═══ end US-28 S8 money ══════════════════════════════════════════════════ */
 
+/* US-28 walk-fix money ═════════════════════════════════════════════════════
+   SQ-858, from the SQ-834 walk (WALK §2, §8) against money-p2 and money-p3.
+   - The folio's money rows keep label and figure apart at every width: the
+     §A14 <520px rule set them display:block, so "SUBTOTAL" ran into
+     "$9,200.00". A figure that wraps keeps to the right rule.
+   - The record-payment sheet: the amount field runs the sheet's width, and the
+     foot carries Put back beside the one filled act. */
+.money-folio-sec .money-rows > .money-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; }
+.money-folio-sec .money-rows > .money-row > :last-child { margin-left: auto; }
+[data-act-record-payment] .field-money { display: block; }
+[data-act-record-payment] .field-money .field-control { max-width: none; }
+.rec-foot { justify-content: space-between; gap: 8px 20px; margin: 16px 0 0 -6px; padding-top: 8px; border-top: var(--rule-hair); }
+/* end US-28 walk-fix money */
+
 /* ═══ US-28 S9 papers ═══════════════════════════════════════════════════════
    Area 7, Making papers (uplift.md (c) 7; specimens/papers-{1440,390}.html):
    drafting, compose and the ceremony. Facets are Cards on the shared edge
