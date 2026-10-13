@@ -477,6 +477,29 @@ interface FieldDraftInput {
   automationPhase?: number;
   cadenceClass?: "event" | "recurring";
   clientInvitationId?: string;
+  dedupeKey?: string;
+}
+
+export function fieldDraftRecipient(partyId: string, phone: string | null | undefined): { party_id: string; address: string | null } {
+  return { party_id: partyId, address: phone ?? null };
+}
+
+export function fieldDraftIdentity(input: Pick<FieldDraftInput, "kind" | "partyId" | "projectId" | "templateKey" | "dedupeKey"> & {
+  dedupeDay: string;
+  vars: Record<string, unknown>;
+}): { dedupeKey: string; refType: string; refId: string } {
+  const logicalKey = input.dedupeKey || input.templateKey;
+  const promptId = input.vars.__prompt_id;
+  const batchId = input.vars.__batch_id;
+  const ref = typeof batchId === "string"
+    ? { refType: "field_batch", refId: batchId }
+    : typeof promptId === "string"
+    ? { refType: "field_prompt", refId: promptId }
+    : { refType: `field_message:${input.kind}:${logicalKey}`, refId: input.partyId };
+  return {
+    dedupeKey: `field:${input.kind}:${input.partyId}:${input.projectId}:${input.dedupeDay}:${logicalKey}`,
+    ...ref,
+  };
 }
 
 async function composeFieldDraft(
@@ -495,7 +518,7 @@ async function composeFieldDraft(
     return { sent: false, status: "failed", reason: "sms_template_missing" };
   }
   const { data: project } = await supabase.from("projects").select("name").eq("id", input.projectId).maybeSingle();
-  const { data: party } = await supabase.from("project_parties").select("display_name").eq("id", input.partyId).maybeSingle();
+  const { data: party } = await supabase.from("project_parties").select("display_name, phone_e164").eq("id", input.partyId).maybeSingle();
   const vars = {
     ...input.vars,
     project_name: (project as { name?: string } | null)?.name ?? "your project",
@@ -505,17 +528,17 @@ async function composeFieldDraft(
   };
   const body = interpolate(raw, vars);
   const dedupeDay = localDayInTimezone(now, (deps.getEnv?.("FIELD_TZ") ?? Deno.env.get("FIELD_TZ")) || "America/Chicago");
-  const dedupeKey = `field:${input.kind}:${input.partyId}:${input.projectId}:${dedupeDay}`;
+  const identityKey = fieldDraftIdentity({ ...input, dedupeDay });
   const { data: id, error: composeError } = await supabase.rpc("compose_outbound_draft", {
     p_kind: input.kind, p_org: identity.studioId, p_project: input.projectId,
     p_channel: "sms", p_recipient_kind: input.recipientKind,
-    p_to: { party_id: input.partyId }, p_subject: null, p_body: body,
+    p_to: fieldDraftRecipient(input.partyId, (party as { phone_e164?: string } | null)?.phone_e164), p_subject: null, p_body: body,
     p_payload: {
       sms_template_key: input.templateKey, sms_vars: input.vars,
       automation_phase: input.automationPhase, cadence_class: input.cadenceClass,
       client_invitation_id: input.clientInvitationId,
     },
-    p_ref_type: "project_party", p_ref_id: input.partyId, p_dedupe_key: dedupeKey,
+    p_ref_type: identityKey.refType, p_ref_id: identityKey.refId, p_dedupe_key: identityKey.dedupeKey,
     p_due_at: input.dueAt.toISOString(), p_expires_at: input.expiresAt.toISOString(), p_composed_by: "system",
   });
   if (composeError || !id) return { sent: false, status: "failed", reason: composeError?.message ?? "draft_compose_failed" };
@@ -622,7 +645,7 @@ async function composeSmsInput(
     vars: input.vars ?? {}, recipientKind,
     expiresAt: draftExpiryFor(templateKey, now, tz, input.vars), dueAt: now,
     automationPhase: input.automationPhase, cadenceClass: input.cadenceClass,
-    clientInvitationId: input.clientInvitationId,
+    clientInvitationId: input.clientInvitationId, dedupeKey: input.dedupeKey,
   }, now, deps);
 }
 
