@@ -32,7 +32,7 @@ No product code changed.
 5. **The counts differ from the plan.** In `packages/supabase/src` and `apps/designer-portal/src`
    (non-test) I counted:
    - 655 `useMutation` lines;
-   - 9 `onMutate` sites across 7 files, not 5:
+   - 9 `onMutate` sites across 6 files, not 5:
      - `use-availability.ts:82`;
      - `use-coordination.ts:1291`;
      - `use-scope-builder.ts:235` and `:285`;
@@ -40,8 +40,13 @@ No product code changed.
      - `hooks/use-orders.ts:161`, `:200` and `:234`;
      - `hooks/use-piece-field.ts:64`;
    - 1,400 `invalidateQueries` lines;
-   - 51 single-line whole-`['document-state']` invalidations across 38 files;
+   - 51 single-line whole-`['document-state']` invalidations across 36 files;
    - 212 `auth.getUser()` sites.
+
+   Counting expressions (SQ-963 recount; `.test`/`.spec` files and `__tests__` excluded; line counts of these
+   patterns, not AST-proven independent behaviours): `useMutation\s*[(<]` (655 lines),
+   `\bonMutate\s*:` (9 lines, 6 files), `auth\.getUser\(\)` (212 lines), and the literal
+   `queryKey: ['document-state'] })` (51 lines, 36 files).
 
 ## 1. Mutation ranking
 
@@ -59,8 +64,8 @@ Several high-count keys are not writes:
 
 | | write (PATCH `project_tasks`) | tick shows new state | network settled | refetches after write |
 |---|---|---|---|---|
-| tick | 214→447 (233 ms) | **748** [579–789] | **1,368** [1,234–1,453] | 27 [27–29] |
-| untick | 37→218 (177 ms) | **465** [456–470] | **1,126** [1,118–1,135] | 27 |
+| tick | median duration **233 ms** [179–266]; runs 236→502, 87→320, 214→393 | **748** [579–789] | **1,368** [1,234–1,453] | 27 [27–29] |
+| untick | median duration **177 ms** [175–185]; runs 37→222, 43→218, 37→214 | **465** [456–470] | **1,126** [1,118–1,135] | 27 |
 
 How a click plays out:
 1. The click issues the write.

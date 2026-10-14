@@ -129,8 +129,8 @@ rule that nothing says "deleted" before the server does, while still answering w
 | Class | Grammar | Why | Today's examples |
 |---|---|---|---|
 | **Toggle / tick** | Optimistic, via the cache (`onMutate`), because the tally, the Desk need-list and the phase gates read the same rows | Reversible and idempotent: the final state wins. Two fast ticks serialize (§6.3) | `work-block.tsx:314`, `coordination-work.tsx:152`, `:160` |
-| **Edit in place** (a field on blur, a select) | Optimistic by nature: the input already shows the value. S2 `saving…` sits beside the field. On S4, **keep the typed text** and show the line. Never wipe what she typed | Data-loss prevention | `palette-swatch-editor.tsx:50`, `:62`; `use-piece-field.ts:64` |
-| **Create** (room, piece, task) | Optimistic **ghost row**, drawn from the mutation's `variables`, which is TanStack's "simpler variant" with no cache surgery (`r-patterns.md` §3). The ghost keeps her words through failure. Try again / Discard | Never clear the input before the server confirms. Today two sites do (§4) | `ffe-section.tsx:940`, `rooms-rail.tsx:74`, `work-block.tsx:225`, `coordination-work.tsx:93` |
+| **Edit in place** (a field on blur, a select) | Optimistic by nature: the input already shows the value. S2 `saving…` sits beside the field. On S4, **keep the typed text** and show the line. Never wipe what they typed | Data-loss prevention | `palette-swatch-editor.tsx:50`, `:62`; `use-piece-field.ts:64` |
+| **Create** (room, piece, task) | Optimistic **ghost row**, drawn from the mutation's `variables`, which is TanStack's "simpler variant" with no cache surgery (`r-patterns.md` §3). The ghost keeps their words through failure. Try again / Discard | Never clear the input before the server confirms. Today two sites do (§4) | `ffe-section.tsx:940`, `rooms-rail.tsx:74`, `work-block.tsx:225`, `coordination-work.tsx:93` |
 | **Reorder** | Optimistic (this already exists). On S4 the item snaps back with one line. Keyboard moves announce "Moved Sofa to 3 of 7" | Fully reversible | `use-scope-builder.ts:235`, `:285` |
 | **Status advance** (phase) | **Pending-only.** Not optimistic | `advance_project_phase` is guarded by an expected status and returns a receipt that decides the outcome text. It fans out into gates, the margin and the Strata Mark. Showing the next phase early could show a phase the RPC refuses | `phase-advance-control.tsx:417` → `use-project-v2.ts:626-642` |
 | **Draft approve / send** (V23 draft-first) | **Pending-only, never optimistic.** "Sending" at S1. "Sent to …" only on receipt. "Not sent" when it is known that nothing went | A client or vendor send is an external fact. The existing outbound and ActDraft code is already right: keep it as the reference | `outbound-draft-review.tsx:228`, `ready-to-send-sheet.tsx:314`, `act-draft.tsx:354`, `act-sheets.tsx:125`, `:238` |
@@ -151,7 +151,7 @@ exactly 9.** On reading them, only 4 are genuinely silent at the act site.
 | # | Component | Call sites | Verdict | Strip |
 |---|---|---|---|---|
 | 1 | `components/document/acts/act-sheets.tsx` | 97, 99, 125, 176, 182, 238, 278 | **Has feedback**, delegated: each `mutateAsync` runs inside `<ActDraft onSend>`, which owns `pending`, "Sending…"/"Approving…" and the honest error states (`act-draft.tsx:127`, `:354`). This is the reference for P9 | `#frame-c1` |
-| 2 | `components/document/coordination/compose-decision-sheet.tsx` | 81 | **Background by design.** It is a best-effort link stamp after the decision exists ("a lost link never blocks"). Untagged, so a failure raises the global "Error" toast for a link she never asked for → tag it `errorSurface: 'inline'` and log only | `#frame-c2` |
+| 2 | `components/document/coordination/compose-decision-sheet.tsx` | 81 | **Background by design.** It is a best-effort link stamp after the decision exists ("a lost link never blocks"). Untagged, so a failure raises the global "Error" toast for a link they never asked for → tag it `errorSurface: 'inline'` and log only | `#frame-c2` |
 | 3 | `components/document/coordination/coordination-work.tsx` | 93 (create), 152, 160 (tick) | **Silent.** The tick waits 0.5–3 s with no change. A create clears the input and closes the field before the server answers (`:93-100`) | `#frame-c3` |
 | 4 | `components/document/plans/plan-issue-ceremony.tsx` | 191, 209 | **Has feedback** (`sending` state, `loadingLabel="Sending…"`, a per-recipient unsent list, `idempotencyKey`). The heuristic missed the word `sending`. Reference for money/send retries | `#frame-c4` |
 | 5 | `components/document/rooms/piece/piece-folio.tsx` | 39 | **Optimistic, no pending, and a delete with no Undo.** `usePieceField` writes the cache and rolls back (`use-piece-field.ts:64-80`). There is no S2 word, the error `<p>` has no `role="alert"` (`:283-286`), and image **remove** (`:96`) is an optimistic delete with no Undo | `#frame-c5` |
@@ -165,7 +165,7 @@ somewhere:
 
 - `ffe-section.tsx:934-946` (**P8, add a room**): it clears the name and budget and closes the
   field **before** the write. Nothing appears for 0.5–3 s. On failure the global toast fires and
-  **her typed name is gone**. This is the worst create in the portal.
+  **the typed name is gone**. This is the worst create in the portal.
 - `rooms-rail.tsx:74-86`: it has a guard and "Adding…", but no `onError`, so failure means a
   global toast while the field sits there unchanged.
 - `resolve-signoff.tsx:48-75`: it has "Recording…"/"Nudging…", but no `onError`, so failure means
@@ -189,8 +189,8 @@ at S0 / S1 / S2 (400 ms) / S3 / S4, with S5 where it applies. A scrubber (0–3,
   disagrees with the notice for 0.5–3 s. Proposed: write the receipt into
   `['project-phases', id]` on success (E1). Add the 8 s "still working" line.
 - **P8, add a room or piece** (`ffe-section.tsx:940`, `rooms-rail.tsx:74`). Today the field
-  closes and goes blank, and the room arrives 0.5–3 s later (or never, with her words lost).
-  Proposed: a ghost row at S1 with her words in faint ink, and the input stays open, empty and
+  closes and goes blank, and the room arrives 0.5–3 s later (or never, with their words lost).
+  Proposed: a ghost row at S1 with their words in faint ink, and the input stays open, empty and
   focused for the next room. "adding…" at 400 ms. On S3 the ink goes solid and "Sunroom added." is
   announced politely. On S4 the ghost keeps the name, with Try again / Discard.
 - **P9, approve or send a draft** (`outbound-draft-review.tsx:228`, `ready-to-send-sheet.tsx:314`).
@@ -229,7 +229,7 @@ data-loss prevention and does not need a ruling.
 - Pending-only acts: hold the control with a ref guard plus `disabled`/`aria-busy`. This exists in
   `phase-advance-control.tsx:408`, `rooms-rail.tsx:72` and `DocumentAction`.
 - Toggles: **do not block a fast second tick.** Last intent wins. Serialize the writes per task
-  with a mutation scope id `task:{id}`, so the server ends at the state she last saw. E1 should
+  with a mutation scope id `task:{id}`, so the server ends at the state they last saw. E1 should
   confirm TanStack v5 `scope` support in 5.90.21.
 - Creates: Enter while a ghost is pending creates a *second* ghost, never a duplicate of the first.
 

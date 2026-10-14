@@ -82,29 +82,29 @@ figure the change improves. Figures marked ESTIMATE are not measured.
 | D2.17 | Double-click guards: a ref guard for pending-only; scope serialization for toggles; a second ghost, never a duplicate | E1-1 `scope` (supported in query-core 5.90.20, `e1-data-writes.md` §2.1) | S | — | N2 |
 | D2.18 | Focus rules; `aria-pressed` on the tick (§6.4) | None | S | The tick glyph is `aria-hidden`, so its state is heard only through meta text (`work-block.tsx:337-349`) | F16 |
 | D2.19 | Task rows at 44 px | None | S | The work-block row is ~29 px (from classes); the coordination tick is 13 px (`coordination-work.tsx:177-178`) | F16 (not waivable, so not a PQ) |
-| D2.20 | The component fixes: C2 and C7 background stamps never toast; C3 coordination tick and create; C5 folio S2/S4 and image remove; C6 work-block; C8 dismiss announcement; C9 swatch role rollback and pending delete. Plus the three the heuristic missed: `ffe-section.tsx:934-946`, `rooms-rail.tsx:74-86`, `resolve-signoff.tsx:48-75` | E1-10; per-hook `errorSurface` | S each | Add room wipes her typed name on failure (`d2-feedback.md` §4) | F15, F16, N4 |
+| D2.20 | The component fixes: C2 and C7 background stamps never toast; C3 coordination tick and create; C5 folio S2/S4 and image remove; C6 work-block; C8 dismiss announcement; C9 swatch role rollback and pending delete. Plus the three the heuristic missed: `ffe-section.tsx:934-946`, `rooms-rail.tsx:74-86`, `resolve-signoff.tsx:48-75` | E1-10; per-hook `errorSurface` | S each | Add room wipes the typed name on failure (`d2-feedback.md` §4) | F15, F16, N4 |
 | D2.21 | Undo for folio image remove and swatch delete (D2-PQ8, D2-PQ11) | A restore path per hook (re-persist the previous list) | S each | Two optimistic deletes without Undo today (`piece-folio.tsx:96`, `palette-swatch-editor.tsx:73`) | F15 (pending-only now), N15, PQ14 |
 | D2.22 | Expressive extras: hairline, settle wash, fixed Undo row with a shadow, "Saved · 10:42" | None | S | — | PQ13 (recommended no) |
 
 ## 3. Engineering changes: what a studio member will feel
 
-| Id | Change | What she feels | Track |
+| Id | Change | What the studio member feels | Track |
 |---|---|---|---|
 | E1-1 | Optimistic helper | Invisible by itself. It is what makes N3 safe to build | N2 |
-| E1-2 | Optimistic tick and add task | The tick lands under her finger. Today it takes about three quarters of a second (`e1-P6-1440.json`) | N3 |
-| E1-3 | Narrow `document-state` | Invisible but measurable: 27 → 3 refetches per tick. She may notice the page stop "settling" a second after each tick | F5, N6 |
+| E1-2 | Optimistic tick and add task | The tick lands under the finger. Today it takes about three quarters of a second (`e1-P6-1440.json`) | N3 |
+| E1-3 | Narrow `document-state` | Invisible but measurable: 27 → 3 refetches per tick. They may notice the page stop "settling" a second after each tick | F5, N6 |
 | E1-4 | CommandBar lazy | Invisible but measurable: no 24-request Desk poll every 60 s on an open Document | N7 |
-| E1-5 | Desk stale after send | She stops seeing a draft as "ready to send" after she has sent it | F6 |
-| E1-6 | Room add | The room appears as she presses Enter, and her words survive a failure | N4 |
+| E1-5 | Desk stale after send | They stop seeing a draft as "ready to send" after they have sent it | F6 |
+| E1-6 | Room add | The room appears as they press Enter, and their words survive a failure | N4 |
 | E1-7 | Realtime registry and echo drop | Invisible today: nothing is published (`e1-data-writes.md` §0.3) | S7 |
 | E1-8 | Publish coordination tables | A co-member's tick would appear without a reload. A product change, so it is a ruling | PQ17 |
-| E1-9 | Session-user store | Every hard load is roughly 2.7 s shorter (`e2-page-architecture.md` §0). This is the largest single change she will feel | F1, N1 |
+| E1-9 | Session-user store | Every hard load is roughly 2.7 s shorter (`e2-page-architecture.md` §0). This is the largest single change they will feel | F1, N1 |
 | E1-10 | Pending-only fixes | Remove and Mark satisfied answer the press instead of doing nothing | F16 |
 | E1-11 | Other narrowing | Invisible but measurable: fewer background refetches | N6 |
 | E1-12 | Per-mutation verdicts | Ticks, edits and creates answer at once. Money, sends and the phase advance say what they are doing and never pretend | N3, N12 |
 | E2-1 | `loading.tsx` per segment | No room is ever blank. People stops looking empty while it loads | F13, N10 |
 | E2-2 | Error and not-found boundaries | A broken page keeps the drawer and ⌘K, and offers Try again | F14 |
-| E2-3 | Desk key unification | The Desk lands a little sooner. Invisible but measurable: about 48 fewer requests per hard load | F2 |
+| E2-3 | Desk key unification | The Desk lands a little sooner. Invisible but measurable: about 24 fewer requests per hard load (one duplicate 24-read run) | F2 |
 | E2-4 | Claim-deadline set RPC | Invisible but measurable: one serial hop fewer when POs are live | N8 |
 | E2-5 | CommandBar lazy plus a scoped need read | The Document stops "finishing" seconds after it looks ready. ESTIMATE −0.5 to −1.5 s to no-busy | N7 |
 | E2-6 | Intent prefetch plus the Desk-cache seed | Desk → Document opens with the job's name already set. ESTIMATE −0.3 to −0.6 s | F3 |
@@ -217,7 +217,7 @@ arrival critical path. That needs E2-5's scoped need read. N7 pairs the two.
 
 **M13. Creates: cache patch or ghost row.** E1 #2 and #5 patch the cache with a client UUID and roll back on
 error. D2 §3 and R §3 ("the simpler variant") draw the ghost from mutation `variables`. `variables` survive an
-error, so her words stay with Try again / Discard. **Resolution:** creates that render in one list use the
+error, so their words stay with Try again / Discard. **Resolution:** creates that render in one list use the
 `variables` ghost. Toggles and edits that show in several places (tally, Desk, gates) use E1's cache patch. Both
 keep E1's client UUID, so a retry after an ambiguous failure cannot make two rooms.
 
@@ -237,7 +237,7 @@ PQ3 and the RUM gate.
 1,126–1,368 ms settled (`e1-P6-1440.json`). The plan uses E1's numbers. D2's 400 ms threshold still sits inside the
 measured range.
 
-**M17. Counts.** D2 counts 10 `onMutate` sites. E1 enumerates 9 across 7 files (`e1-data-writes.md` §0.5), and
+**M17. Counts.** D2 counts 10 `onMutate` sites. E1 enumerates 9 across 6 files (`e1-data-writes.md` §0.5), and
 D2's tenth is not named. The plan uses 9. The plan's sweep said 530 `useMutation` and 1,094 `invalidateQueries`;
 E1 counted 655 and 1,400, and `doc/[id]/page.tsx` is 4,112 lines, not 4,019.
 

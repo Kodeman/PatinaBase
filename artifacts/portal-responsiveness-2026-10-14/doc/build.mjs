@@ -74,7 +74,7 @@ const BOOTSTRAP = '<script>(function(){var last=0;function send(){try{var d=docu
   + 'if(h&&Math.abs(h-last)>1){last=h;parent.postMessage({us33SpecH:h},"*");}}catch(e){}}'
   + 'addEventListener("DOMContentLoaded",function(){send();try{new ResizeObserver(send).observe(document.documentElement);}catch(e){}});'
   + 'addEventListener("load",function(){send();setTimeout(send,300);setTimeout(send,1200);});'
-  + 'addEventListener("message",function(){setTimeout(send,60);});})();</script>';
+  + 'addEventListener("message",function(){setTimeout(function(){last=0;send();},60);});})();</script>';
 
 function fail(message) {
   console.error(`build.mjs: ${message}`);

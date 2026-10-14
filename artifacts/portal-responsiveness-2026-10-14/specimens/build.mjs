@@ -545,14 +545,14 @@ const STRIP_CSS = `
 .mrow{display:flex;align-items:center;gap:10px;padding:0 8px;border-bottom:1px solid var(--hair);background:var(--paper-doc);font-size:14px;color:var(--ink)}
 .mrow.short{min-height:29px}
 .mrow.pressed{background:var(--press-in)}
-.mrow.ghost .t{opacity:.55;font-style:italic}
+.mrow.ghost .t{color:var(--ink-faint);font-style:italic}
 .mrow .t{flex:1;min-width:0}
 .mrow .m{font:500 11px/1 var(--f-meta);letter-spacing:.04em;color:var(--ink-faint)}
 .mrow .m.ok{color:var(--sage-ink)}
 .tick{width:20px;height:20px;border:1.5px solid var(--ink-muted);display:grid;place-items:center;font-size:13px;color:var(--sage-ink);flex:none}
 .act{display:inline-flex;align-items:center;gap:8px;padding:0 14px;margin:6px 0 0;font:500 12px/1 var(--f-meta);letter-spacing:.04em;background:var(--ink);color:var(--paper);border:1px solid var(--ink)}
 .act.sec{background:var(--lift);color:var(--clay-ink);border-color:var(--edge)}
-.act.pressed{background:var(--ink-muted);border-color:var(--ink-muted)}
+.act.pressed{background:var(--ink-muted);border-color:var(--ink-muted);color:var(--paper)}
 .act.busy{background:var(--lift);color:var(--ink);border-color:var(--edge)}
 .line{font-size:13px;line-height:1.45;margin:6px 0 0;color:var(--ink)}
 .line.err{color:var(--terracotta-ink)}
@@ -616,9 +616,9 @@ const STRIPS = [
     id: 'p9', title: 'P9 · Send the Holloway reminder', cls: 'external send · never optimistic', never: true, kind: 'pend', undo: false,
     deps: ['still-working', 'inline-failure'],
     cite: 'outbound-draft-review.tsx:228-229, :281-287 · act-draft.tsx:40-51, :354 · V23 draft-first · not measured (sending is never allowed in the lab)',
-    verdict: 'Already honest: no frame claims "sent" before the receipt. Additions: the 8 s line, the Desk card clears after a send (F6), retry only with an idempotency key (F15).',
+    verdict: 'Already honest: no frame claims "sent" before the receipt, and a failure already says how far the send got. Additions: the 8 s line, the Desk card clears after a send (F6), no automatic retry; a second send only after a definite refusal or a proven idempotent retry (F15d, O4).',
     today: [F(draft() + act('Send to Nora and Sam', { p: true }), 'Press.'), F(draft() + act('Sending', { busy: true }), 'The verb at once; the draft is unchanged.'), F(draft() + act('Sending', { busy: true }), 'Same.'), F(line('ok', 'Sent to Nora and Sam Holloway.'), 'Only on the server’s receipt.'), F(line('err', 'Not sent — email to this client is paused right now. Nothing went out.'), 'Existing honest copy (act-draft.tsx:46).'), NA('Never.')],
-    prop: [F(draft() + act('Send to Nora and Sam', { p: true }), 'Same.'), F(draft() + act('Sending', { busy: true }), 'Same: nothing reads as sent.'), F(draft() + act('Sending', { busy: true }) + `<p class="line st still-working" role="status">Still sending.</p>`, 'At 8 s. "Nothing is sent twice." only if O4 proves idempotency.'), F(line('ok', 'Sent to Nora and Sam Holloway.'), 'The receipt; the Desk card clears (F6).'), F(fail('Nothing was sent. The draft is still here.'), 'Retry only with an idempotency key.'), NA('Never.')],
+    prop: [F(draft() + act('Send to Nora and Sam', { p: true }), 'Same.'), F(draft() + act('Sending', { busy: true }), 'Same: nothing reads as sent.'), F(draft() + act('Sending', { busy: true }) + `<p class="line st still-working" role="status">Still sending.</p>`, 'At 8 s. "Nothing is sent twice." only if O4 proves idempotency.'), F(line('ok', 'Sent to Nora and Sam Holloway.'), 'The receipt; the Desk card clears (F6).'), F(fail('Not sent. The draft is still here.') + `<div class="inline-fail" role="alert">${line('err', 'We couldn’t confirm this went out — check the thread before sending again.')}</div>`, 'Two of the three outcomes act-draft.tsx:38-40 already tells apart. A definite refusal before the call offers Try again; an unconfirmed call offers no resend. The third, sent but not recorded here, says “Sent. It didn’t record here.” and retries only the recording.'), NA('Never.')],
   },
   {
     id: 'pay', title: 'Record the Holloway payment', cls: 'money · never optimistic', never: true, kind: 'pend', undo: false,
@@ -806,7 +806,7 @@ function trackRows(spec) {
 function waterfallFrames() {
   const p1Lanes = lanesChart({
     id: 'wf-p1-lanes', title: 'P1 hard-load lanes: before (measured) and after Fix now (EST)',
-    sub: 'Lanes from the /desk hard-load trace that P1 lands on (usable 6,926 ms in that trace; 7,153 ms across the P1 runs). The after lanes are this seat’s arithmetic from the plan’s item savings: F8–F10 remove 220–390 KB at about 1 MB/s; F1 takes the session from a local store, so reads stop waiting on 16 serial auth calls; F2 drops the second copy of the Desk reads. Read the usable range from the milestone chart below, which is the plan’s own figure.',
+    sub: 'Lanes from the /desk hard-load trace that P1 lands on (usable 6,926 ms in that trace; 7,153 ms across the P1 runs). The after lanes are this seat’s arithmetic from the plan’s item savings: F8–F10 remove 220–390 KB at about 1 MB/s; F1 takes the session from a local store, so the Desk reads no longer start behind 16 serial auth calls (overlap not credited); F2 drops the second copy of the Desk reads. Read the usable range from the milestone chart below, which is the plan’s own figure.',
     max: 9000, budgets: [[1500, 'B3 1.5 s']], legendRange: true,
     rows: [
       { grp: true, label: 'JavaScript, CSS, fonts' },
@@ -820,7 +820,7 @@ function waterfallFrames() {
       { label: 'After Fix now', sub: 'start at hydration', kind: 'e', from: 2868, to: 3843, hi: 4013, text: '2.9–4.0 s EST', src: 'this seat: today’s 975 ms read span moved to hydration' },
       { grp: true, label: 'Second copy of the Desk reads, need facts' },
       { label: 'Today', kind: 'm', from: 6926, to: 8372, text: '6.9–8.4 s', src: D_TRACE },
-      { label: 'After Fix now', sub: 'F2: one Desk key', kind: '-', text: 'removed', src: 'plan.md §3.1 F2 (about 48 fewer requests)' },
+      { label: 'After Fix now', sub: 'F2: one Desk key', kind: '-', text: 'removed', src: 'plan.md §3.1 F2 (one duplicate 24-read run, about 24 fewer requests)' },
     ],
   });
   const p1Ms = lanesChart({
@@ -1061,7 +1061,9 @@ invented; no real client, maker or company appears, and none may be added.
 - **Honesty** (not waived): H1–H4 from \`d1-loading.md\` §2; every loading region has \`aria-busy="true"\` and an \`sr-only\`
   sentence; errors are \`role="alert"\`, slow lines \`role="status"\`. Only plain links are drawn as real in a skeleton.
 - **Feedback** (plan §5.1 stages S0–S5): optimistic only for internal acts (P6, P8). Pending-only for P7, P9, the
-  payment, and the removal (§5.2). P9 fails with "Nothing was sent." The payment never reads "paid" before the receipt.
+  payment, and the removal (§5.2). P9's failure keeps the outcomes \`act-draft.tsx:38-40\` already distinguishes: a
+  definite refusal reads "Not sent." with Try again; an unconfirmed call reads "We couldn't confirm this went out — check
+  the thread before sending again." with no resend. The payment never reads "paid" before the receipt.
   Undo appears only where a restore path exists (PQ14).
 - **Scrubber** stage rule: S0 before 50 ms; optimistic acts show S1 until 400 ms, then S2 until
   max(server, 900 ms), so the word holds at least 500 ms; pending-only acts hold S1 and show S2 only from 8 s; then S3

@@ -1,7 +1,7 @@
 # US-33 — Designer portal responsiveness
 
 **Date:** 2026-10-14 · **Story:** US-33 · **For:** Kody and the founding partners
-**Status:** findings document built (SQ-961), not yet published. Adversarial review (SQ-962) and the fix-and-render pass (SQ-963) come next.
+**Status:** findings document built (SQ-961), reviewed by the other provider (SQ-962), fixed and render-checked at 1440 and 390, light and dark (SQ-963). Not yet published.
 
 ## The ask
 
@@ -40,8 +40,8 @@ A hard load spends about seven seconds in a fixed queue before the studio sees i
 | 8–9 Pairing and synthesis | Lead | Opus 5.5 | SQ-959 | `synthesis/pairings.md`, `synthesis/plan.md` |
 | 10 Mockups | Interface build | Opus 5.5 | SQ-960 | `specimens/` |
 | 11 Document | Builder | Opus 5.5 | SQ-961 | `doc/` |
-| 12 Adversarial review | The other provider | GPT-6 Astra (planned) | SQ-962 | to come |
-| 13 Fix pass and render check | Builder | Opus, headless Chrome (planned) | SQ-963 | to come |
+| 12 Adversarial review | The other provider | GPT-6 Astra (Codex) | SQ-962 | `review/adversarial.md` |
+| 13 Fix pass and render check | Builder | Opus 5.5, headless Chrome | SQ-963 | `review/triage.md`, `doc/_renders/RENDER-CHECK.md` |
 
 ## Files
 

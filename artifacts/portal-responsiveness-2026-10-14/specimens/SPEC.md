@@ -205,7 +205,9 @@ invented; no real client, maker or company appears, and none may be added.
 - **Honesty** (not waived): H1–H4 from `d1-loading.md` §2; every loading region has `aria-busy="true"` and an `sr-only`
   sentence; errors are `role="alert"`, slow lines `role="status"`. Only plain links are drawn as real in a skeleton.
 - **Feedback** (plan §5.1 stages S0–S5): optimistic only for internal acts (P6, P8). Pending-only for P7, P9, the
-  payment, and the removal (§5.2). P9 fails with "Nothing was sent." The payment never reads "paid" before the receipt.
+  payment, and the removal (§5.2). P9's failure keeps the outcomes `act-draft.tsx:38-40` already distinguishes: a
+  definite refusal reads "Not sent." with Try again; an unconfirmed call reads "We couldn't confirm this went out — check
+  the thread before sending again." with no resend. The payment never reads "paid" before the receipt.
   Undo appears only where a restore path exists (PQ14).
 - **Scrubber** stage rule: S0 before 50 ms; optimistic acts show S1 until 400 ms, then S2 until
   max(server, 900 ms), so the word holds at least 500 ms; pending-only acts hold S1 and show S2 only from 8 s; then S3
