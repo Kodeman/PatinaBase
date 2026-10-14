@@ -9,8 +9,8 @@ import { DeskJobCard, clockTime, stageClass } from "../desk-job-card";
 
 const mockPrefetchQuery = jest.fn();
 const mockRouterPrefetch = jest.fn();
-jest.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ prefetchQuery: mockPrefetchQuery }),
+jest.mock("@/lib/react-query", () => ({
+  queryClient: { get prefetchQuery() { return mockPrefetchQuery; } },
 }));
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ prefetch: mockRouterPrefetch }),

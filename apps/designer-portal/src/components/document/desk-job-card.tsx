@@ -10,7 +10,7 @@
 import { useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { queryClient } from "@/lib/react-query";
 import { documentEngagementQueryOptions } from "@/hooks/use-document-state";
 import { STAGE_WORD } from "@/lib/document/act-names";
 import type { SectionKey } from "@/lib/document/desk-derivation";
@@ -49,7 +49,6 @@ export function DeskJobCard({
 }) {
   const { stage, holder } = card;
   const router = useRouter();
-  const queryClient = useQueryClient();
   const prefetched = useRef(false);
   const href = `/doc/${card.jobId}`;
   const prefetchDocument = () => {

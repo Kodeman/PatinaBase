@@ -27,7 +27,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { queryClient } from '@/lib/react-query';
 import { documentEngagementQueryOptions } from '@/hooks/use-document-state';
 import type { LucideIcon } from 'lucide-react';
 import { FolderPlus, History, Keyboard, LifeBuoy, Presentation, Search, Type } from 'lucide-react';
@@ -403,7 +403,6 @@ const RESULTS_ID = 'command-bar-results';
 
 export function CommandBar() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const prefetchedDocuments = useRef(new Set<string>());
   const prefetchDocument = (href: string) => {
     if (prefetchedDocuments.current.has(href)) return;

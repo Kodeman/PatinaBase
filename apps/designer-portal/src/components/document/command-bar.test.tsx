@@ -29,9 +29,8 @@ jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname(),
   useRouter: () => ({ push: mockPush, prefetch: mockRouterPrefetch, replace: jest.fn() }),
 }));
-jest.mock('@tanstack/react-query', () => ({
-  ...jest.requireActual('@tanstack/react-query'),
-  useQueryClient: () => ({ prefetchQuery: mockPrefetchQuery }),
+jest.mock('@/lib/react-query', () => ({
+  queryClient: { get prefetchQuery() { return mockPrefetchQuery; } },
 }));
 // Return teaching's in-place and act notes: jest cannot load @patina/help-system
 // behind the real hook, and nothing here is taught.
