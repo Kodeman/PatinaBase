@@ -40,13 +40,16 @@ SELECT ok(
 -- Leah (owner)          a0000000-0000-0000-0000-000000000004
 -- Studio Manager (admin) a0000000-0000-0000-0000-000000000003
 -- Outsider (other studio) cf100000-0000-4000-8000-000000000001
+-- The seed mints vendor, lead and proposal-item ids at random on every reset,
+-- so those anchors are looked up from fixed seed rows, never hard-coded.
 INSERT INTO public.purchase_orders
   (id, designer_id, project_id, vendor_id, payment_pattern, status, held_at, held_by, hold_note, total_cents)
-VALUES
-  ('d7910000-0000-4000-8000-000000000001', 'a0000000-0000-0000-0000-000000000004',
-   'f1900000-0000-4000-8000-000000000003', 'e2188953-ccdb-4489-a24a-d2bc5478ffcd',
-   'fifty_fifty', 'held_for_release', now(), 'a0000000-0000-0000-0000-000000000004',
-   'Over the release limit', 120000);
+SELECT 'd7910000-0000-4000-8000-000000000001', 'a0000000-0000-0000-0000-000000000004',
+       'f1900000-0000-4000-8000-000000000003', po.vendor_id,
+       'fifty_fifty', 'held_for_release', now(), 'a0000000-0000-0000-0000-000000000004',
+       'Over the release limit', 120000
+FROM public.purchase_orders AS po
+WHERE po.id = 'f1900000-0000-4000-8000-000000000023';
 
 INSERT INTO public.receiving_inspections (id, purchase_order_id, inspected_by, outcome, inspected_at)
 VALUES ('d7910000-0000-4000-8000-000000000002', 'f1900000-0000-4000-8000-000000000023',
@@ -58,8 +61,12 @@ VALUES ('a0000000-0000-0000-0000-000000000004', 'claim_window_closing',
         'f1900000-0000-4000-8000-000000000023');
 
 INSERT INTO public.match_ceremonies (id, lead_id, designer_id, state)
-VALUES ('d7910000-0000-4000-8000-000000000004', 'f38c9353-07f8-4222-89ae-58d8bbc8d6b9',
-        'a0000000-0000-0000-0000-000000000004', 'draft');
+SELECT 'd7910000-0000-4000-8000-000000000004', l.id, 'a0000000-0000-0000-0000-000000000004', 'draft'
+FROM public.leads AS l
+WHERE l.designer_id = 'a0000000-0000-0000-0000-000000000004'
+  AND l.status IN ('new', 'viewed', 'contacted')
+ORDER BY l.created_at, l.id
+LIMIT 1;
 
 INSERT INTO public.procurement_exceptions (id, project_id, type, status)
 VALUES ('d7910000-0000-4000-8000-000000000005', 'f1900000-0000-4000-8000-000000000003', 'damage', 'open');
@@ -70,9 +77,11 @@ VALUES ('d7910000-0000-4000-8000-000000000006', 'b0000000-0000-0000-0000-0000000
         (now() AT TIME ZONE 'UTC')::date + 3);
 
 INSERT INTO public.vendor_quotes (id, vendor_id, project_id, received_on, valid_until)
-VALUES ('d7910000-0000-4000-8000-000000000007', 'e2188953-ccdb-4489-a24a-d2bc5478ffcd',
-        'f1900000-0000-4000-8000-000000000003',
-        (now() AT TIME ZONE 'UTC')::date - 10, (now() AT TIME ZONE 'UTC')::date + 1);
+SELECT 'd7910000-0000-4000-8000-000000000007', po.vendor_id,
+       'f1900000-0000-4000-8000-000000000003',
+       (now() AT TIME ZONE 'UTC')::date - 10, (now() AT TIME ZONE 'UTC')::date + 1
+FROM public.purchase_orders AS po
+WHERE po.id = 'f1900000-0000-4000-8000-000000000023';
 
 INSERT INTO public.studio_purchases
   (id, kind, payee_name, purchased_on, amount_cents, project_id, returnable, return_by, status)
@@ -102,7 +111,11 @@ VALUES ('d7910000-0000-4000-8000-000000000012', 'b0000000-0000-0000-0000-0000000
         'invoice', 'd7910000-0000-4000-8000-000000000011', 'sq991-desk-read');
 
 INSERT INTO public.item_feedback (proposal_item_id, client_id, verdict)
-VALUES ('6ecbdf9a-f79a-43af-a22e-016e17ad27b4', 'a0000000-0000-0000-0000-000000000005', 'rejected');
+SELECT pi.id, 'a0000000-0000-0000-0000-000000000005', 'rejected'
+FROM public.proposal_items AS pi
+WHERE pi.proposal_id = 'b0000000-0000-0000-0000-000000000002'
+ORDER BY pi.id
+LIMIT 1;
 INSERT INTO public.proposal_boards (id, proposal_id, name)
 VALUES ('d7910000-0000-4000-8000-000000000013', 'b3900000-0000-4000-8000-000000000001', 'Pins');
 INSERT INTO public.proposal_board_items (id, board_id, type)
