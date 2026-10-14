@@ -196,6 +196,24 @@ it("discovers groups across pages and fetches the complete set in one stably ord
   expect(mockCalls.abortSignal).toHaveLength(4);
 });
 
+it("keeps discovering past ten full pages from one text until the rows run out", async () => {
+  const fullPage = Array.from({ length: 1000 }, () => ({ source_id: "sms-huge" }));
+  mockResponses = [
+    ...Array.from({ length: 10 }, () => fullPage),
+    [{ source_id: "sms-older" }],
+    [apply({ source_id: "sms-huge" }), apply({ id: "apply-older", source_id: "sms-older" })],
+  ];
+  mockFrom.mockImplementation(() => rowsBuilder([]));
+
+  render(<AppliesHarness />, { wrapper: Wrapper });
+  await waitFor(() => expect(screen.getByRole("status").textContent).toContain("sms-older"));
+
+  expect(mockCalls.range.slice(0, 11)).toEqual(
+    Array.from({ length: 11 }, (_, page) => [page * 1000, page * 1000 + 999]),
+  );
+  expect(mockCalls.in).toEqual([["source_id", ["sms-huge", "sms-older"]]]);
+});
+
 it("shows a quiet retry when the applied-by-text query fails", async () => {
   mockQueryError = true;
   mockFrom.mockImplementation(() => rowsBuilder([]));

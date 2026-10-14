@@ -93,7 +93,7 @@ export function useModelApplies(filter: ModelAppliesFilter = {}) {
 
       const sourceIds: string[] = [];
       const seen = new Set<string>();
-      for (let pageIndex = 0; pageIndex < 10 && sourceIds.length < 50; pageIndex += 1) {
+      for (let pageIndex = 0; sourceIds.length < 50; pageIndex += 1) {
         let discovery = supabase
           .from('model_applies')
           .select('source_id')
