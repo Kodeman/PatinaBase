@@ -1,0 +1,155 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+type AuthCallback = (event: string, session: { user: { id: string } } | null) => void;
+
+const h = vi.hoisted(() => {
+  const state = {
+    emit: null as null | ((event: string, session: { user: { id: string } } | null) => void),
+    subscribe: null as null | ((reader: () => void) => () => void),
+    getSnapshot: null as null | (() => string | null),
+  };
+  const auth = {
+    getSession: vi.fn(),
+    getUser: vi.fn(),
+    onAuthStateChange: vi.fn(),
+  };
+  return { state, auth };
+});
+
+vi.mock('../../client', () => ({ createBrowserClient: () => ({ auth: h.auth }) }));
+
+// No renderer here: capture what the hook hands useSyncExternalStore.
+vi.mock('react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react')>()),
+  useSyncExternalStore: (
+    subscribe: (reader: () => void) => () => void,
+    getSnapshot: () => string | null,
+  ) => {
+    h.state.subscribe = subscribe;
+    h.state.getSnapshot = getSnapshot;
+    return getSnapshot();
+  },
+}));
+
+const session = (id: string | null) => (id ? { user: { id } } : null);
+const emit = (event: string, id: string | null) => h.state.emit!(event, session(id));
+
+async function loadStore() {
+  vi.resetModules();
+  return import('../session-user');
+}
+
+beforeEach(() => {
+  h.state.emit = null;
+  h.auth.getSession.mockReset().mockResolvedValue({ data: { session: session('user-a') } });
+  h.auth.getUser.mockReset().mockResolvedValue({ data: { user: { id: 'server-user' } } });
+  h.auth.onAuthStateChange.mockReset().mockImplementation((cb: AuthCallback) => {
+    h.state.emit = cb;
+    return { data: { subscription: { unsubscribe: vi.fn() } } };
+  });
+  vi.stubGlobal('window', {});
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('session-user store (browser)', () => {
+  it('seeds from getSession() and never calls getUser()', async () => {
+    const store = await loadStore();
+
+    await expect(store.getSessionUserId()).resolves.toBe('user-a');
+    await expect(store.getSessionUserId()).resolves.toBe('user-a');
+
+    expect(h.auth.getSession).toHaveBeenCalledTimes(1);
+    expect(h.auth.getUser).not.toHaveBeenCalled();
+  });
+
+  it('opens exactly one onAuthStateChange subscription for reads, hooks and subject listeners', async () => {
+    const store = await loadStore();
+
+    await store.getSessionUserId();
+    store.useSessionUserId();
+    const unsubscribeReader = h.state.subscribe!(() => {});
+    store.useSessionUserId();
+    h.state.subscribe!(() => {});
+    store.onSessionSubjectChange(() => {});
+    store.onSessionSubjectChange(() => {});
+    await store.getSessionUserId();
+    unsubscribeReader();
+
+    expect(h.auth.onAuthStateChange).toHaveBeenCalledTimes(1);
+    expect(h.auth.getSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports user A to user B with no SIGNED_OUT between, before readers re-render', async () => {
+    const store = await loadStore();
+    const calls: string[] = [];
+    store.onSessionSubjectChange((prev, next) => calls.push(`subject ${prev}->${next}`));
+    store.useSessionUserId();
+    h.state.subscribe!(() => calls.push(`reader ${h.state.getSnapshot!()}`));
+    await store.getSessionUserId();
+    calls.length = 0;
+
+    emit('TOKEN_REFRESHED', 'user-a');
+    expect(calls).toEqual([]);
+
+    emit('SIGNED_IN', 'user-b');
+    expect(calls).toEqual(['subject user-a->user-b', 'reader user-b']);
+    await expect(store.getSessionUserId()).resolves.toBe('user-b');
+  });
+
+  it('reports none to someone and someone to none', async () => {
+    h.auth.getSession.mockResolvedValue({ data: { session: null } });
+    const store = await loadStore();
+    const changes: Array<[string | null, string | null]> = [];
+    store.onSessionSubjectChange((prev, next) => changes.push([prev, next]));
+    await expect(store.getSessionUserId()).resolves.toBeNull();
+
+    emit('SIGNED_IN', 'user-a');
+    emit('SIGNED_OUT', null);
+
+    expect(changes).toEqual([
+      [null, 'user-a'],
+      ['user-a', null],
+    ]);
+  });
+
+  it('treats the first reading as the starting subject, whichever arrives first', async () => {
+    let resolveSession!: (value: unknown) => void;
+    h.auth.getSession.mockReturnValue(new Promise((resolve) => (resolveSession = resolve)));
+    const store = await loadStore();
+    const changes: Array<[string | null, string | null]> = [];
+    store.onSessionSubjectChange((prev, next) => changes.push([prev, next]));
+
+    emit('INITIAL_SESSION', 'user-a');
+    resolveSession({ data: { session: session('user-a') } });
+
+    await expect(store.getSessionUserId()).resolves.toBe('user-a');
+    expect(changes).toEqual([]);
+  });
+
+  it('reads as signed out when getSession() fails', async () => {
+    h.auth.getSession.mockRejectedValue(new Error('storage unavailable'));
+    const store = await loadStore();
+
+    await expect(store.getSessionUserId()).resolves.toBeNull();
+    expect(h.auth.getUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('session-user store (no browser)', () => {
+  it('keeps getUser() semantics and never subscribes or stores a subject', async () => {
+    vi.unstubAllGlobals();
+    const store = await loadStore();
+    const listener = vi.fn();
+
+    await expect(store.getSessionUserId()).resolves.toBe('server-user');
+    store.onSessionSubjectChange(listener)();
+
+    expect(h.auth.getUser).toHaveBeenCalledTimes(1);
+    expect(h.auth.onAuthStateChange).not.toHaveBeenCalled();
+    expect(h.auth.getSession).not.toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
+  });
+});

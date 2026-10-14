@@ -87,6 +87,7 @@ jest.mock('@patina/supabase', () => ({
     auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
     from: jest.fn(() => chainBuilder()),
   }),
+  getSessionUserId: async () => 'user-1',
   useRunningTimer: () => ({ data: null }),
   useStartTimer: () => ({ mutateAsync: mockStartTimer }),
   useStopTimer: () => ({ mutateAsync: mockStopTimer }),

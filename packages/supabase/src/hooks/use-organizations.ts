@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { getSessionUserId } from '../auth/session-user';
 import type { StaffRole } from '@patina/types';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -153,8 +154,8 @@ export function useOrganizations(options?: { enabled?: boolean }) {
     enabled: options?.enabled ?? true,
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const userId = await getSessionUserId();
+      if (!userId) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
         .from('organization_members')
@@ -165,7 +166,7 @@ export function useOrganizations(options?: { enabled?: boolean }) {
           joined_at,
           organizations (*)
         `)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('status', 'active');
 
       if (error) throw error;

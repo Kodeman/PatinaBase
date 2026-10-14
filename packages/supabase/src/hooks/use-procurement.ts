@@ -8,6 +8,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { getSessionUserId } from '../auth/session-user';
 import { invalidateProjectWorkflow } from './use-project-workflow';
 
 // Lazy client getter to avoid module-level initialization during SSR
@@ -2543,10 +2544,8 @@ export function useProcurementNotifications(opts?: {
     queryKey: ['procurement-notifications', { unreadOnly }],
     queryFn: async (): Promise<ProcurementNotification[]> => {
       const supabase = getSupabase() as any;
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const userId = await getSessionUserId();
+      if (!userId) throw new Error('Not authenticated');
 
       let query = supabase
         .from('procurement_notifications')
@@ -2562,7 +2561,7 @@ export function useProcurementNotifications(opts?: {
           )
         `
         )
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (unreadOnly) {
@@ -2608,15 +2607,13 @@ export function useProcurementUnreadCount() {
     queryFn: async (): Promise<number> => {
       try {
         const supabase = getSupabase() as any;
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return 0;
+        const userId = await getSessionUserId();
+        if (!userId) return 0;
 
         const { count, error } = await supabase
           .from('procurement_notifications')
           .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .is('read_at', null);
 
         if (error) return 0;

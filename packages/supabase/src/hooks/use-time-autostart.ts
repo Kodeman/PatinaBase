@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { getSessionUserId } from '../auth/session-user';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HT-35 — the automatic timer is disclosed once, and a member may decline it.
@@ -39,8 +40,7 @@ export interface TimeAutostartPreference {
  */
 export async function fetchTimeAutostartPreference(): Promise<TimeAutostartPreference | null> {
   const supabase = getSupabase();
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData?.user?.id;
+  const userId = await getSessionUserId();
   if (!userId) return null;
   const { data, error } = await supabase
     .from('profiles')

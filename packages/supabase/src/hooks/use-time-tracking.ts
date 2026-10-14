@@ -15,6 +15,7 @@
 
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { getSessionUserId } from '../auth/session-user';
 import { normalizePhaseSlug, ALL_PHASE_SLUGS, type PhaseSlug } from '@patina/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -667,8 +668,7 @@ export function useRunningTimer() {
     queryKey: timeKeys.runningTimer(),
     queryFn: async (): Promise<RunningTimer | null> => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData?.user?.id;
+      const userId = await getSessionUserId();
       if (!userId) return null;
 
       const { data, error } = await supabase

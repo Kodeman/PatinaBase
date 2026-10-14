@@ -33,6 +33,7 @@ import {
   useDiscardTimer,
   useDeleteTimeEntry,
   fetchTimeAutostartPreference,
+  getSessionUserId,
   timeAutostartKeys,
   useMarkTimeAutostartDisclosed,
   useRunningTimer,
@@ -244,13 +245,13 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
    *  header-started timer or another tab). */
   const fetchRunning = useCallback(async (): Promise<RunningTimer | null> => {
     const supabase = getSupabase();
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData?.user?.id) return null;
+    const userId = await getSessionUserId();
+    if (!userId) return null;
     const { data, error } = await supabase
       .from('project_time_entries')
       .select('*, project:projects(name, current_phase)')
       .is('duration_minutes', null)
-      .eq('user_id', userData.user.id)
+      .eq('user_id', userId)
       .maybeSingle();
     if (error) throw error;
     return (data ?? null) as RunningTimer | null;
@@ -714,12 +715,12 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
     refetchInterval: 60_000,
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user?.id) return 0;
+      const userId = await getSessionUserId();
+      if (!userId) return 0;
       const { data, error } = await supabase
         .from('project_time_entries')
         .select('duration_minutes')
-        .eq('user_id', userData.user.id)
+        .eq('user_id', userId)
         .gte('started_at', todayStartISO(new Date()))
         .not('duration_minutes', 'is', null);
       if (error) throw error;

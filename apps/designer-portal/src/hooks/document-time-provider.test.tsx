@@ -61,6 +61,8 @@ jest.mock('@patina/supabase', () => ({
     auth: { getUser: authGetUser },
     from: jest.fn(() => chainBuilder()),
   }),
+  // US-34 F1 — the provider's reads take the session subject, not getUser().
+  getSessionUserId: async () => 'user-1',
   useRunningTimer: () => ({ data: null }),
   useStartTimer: () => ({ mutateAsync: startTimerMutateAsync }),
   useStopTimer: () => ({ mutateAsync: stopTimerMutateAsync }),

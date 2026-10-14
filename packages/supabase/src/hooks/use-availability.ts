@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createBrowserClient } from '../client';
+import { getSessionUserId, useSessionUserId } from '../auth/session-user';
 
 const getSupabase = () => createBrowserClient();
 
@@ -40,11 +41,7 @@ export function useAvailability(userId?: string) {
     queryKey: availabilityKeys.status(userId),
     queryFn: async (): Promise<AvailabilityStatus> => {
       const supabase = getSupabase();
-      let id = userId;
-      if (!id) {
-        const { data } = await supabase.auth.getUser();
-        id = data.user?.id;
-      }
+      const id = userId ?? (await getSessionUserId());
       if (!id) return 'offline';
 
       const { data, error } = await supabase
@@ -105,41 +102,32 @@ export function useSetAvailability() {
  */
 export function useAvailabilityRealtime(userId?: string) {
   const qc = useQueryClient();
+  const sessionUserId = useSessionUserId();
+  const id = userId ?? sessionUserId;
 
   useEffect(() => {
+    if (!id) return;
     const supabase = getSupabase();
-    let channel: RealtimeChannel | undefined;
-    let cancelled = false;
-
-    (async () => {
-      let id = userId;
-      if (!id) {
-        const { data } = await supabase.auth.getUser();
-        id = data.user?.id;
-      }
-      if (!id || cancelled) return;
-      channel = supabase
-        .channel(`availability:${id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'profiles',
-            // Fires on any column update for this profile row; the handler
-            // only invalidates one tiny query, so that's acceptable churn.
-            filter: `id=eq.${id}`,
-          },
-          () => {
-            qc.invalidateQueries({ queryKey: availabilityKeys.status(userId) });
-          }
-        )
-        .subscribe();
-    })();
+    const channel: RealtimeChannel = supabase
+      .channel(`availability:${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          // Fires on any column update for this profile row; the handler
+          // only invalidates one tiny query, so that's acceptable churn.
+          filter: `id=eq.${id}`,
+        },
+        () => {
+          qc.invalidateQueries({ queryKey: availabilityKeys.status(userId) });
+        }
+      )
+      .subscribe();
 
     return () => {
-      cancelled = true;
-      if (channel) supabase.removeChannel(channel);
+      supabase.removeChannel(channel);
     };
-  }, [qc, userId]);
+  }, [qc, id, userId]);
 }

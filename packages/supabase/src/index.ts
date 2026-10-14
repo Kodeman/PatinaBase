@@ -38,6 +38,11 @@ export {
   type AuthFailureKind,
   type FinalizeAuthCallbackOptions,
 } from "./auth";
+export {
+  getSessionUserId,
+  useSessionUserId,
+  onSessionSubjectChange,
+} from "./auth/session-user";
 export { getCookieDomain } from "./lib/cookie-domain";
 export {
   normalizeBoardMediaValue,

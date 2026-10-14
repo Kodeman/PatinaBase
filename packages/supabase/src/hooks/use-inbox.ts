@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-query';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createBrowserClient } from '../client';
+import { getSessionUserId, useSessionUserId } from '../auth/session-user';
 import type { Database } from '../database.types';
 
 const getSupabase = () => createBrowserClient();
@@ -95,8 +96,7 @@ export function useInboxNotifications(filters: InboxNotificationFilters = {}) {
     queryKey: inboxKeys.notifications(filters),
     queryFn: async (): Promise<InboxNotification[]> => {
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
-      const userId = userResp.user?.id;
+      const userId = await getSessionUserId();
       if (!userId) return [];
 
       const { data, error } = await supabase
@@ -134,8 +134,7 @@ export function useInboxMessages(limit = 50) {
     queryKey: inboxKeys.messages(),
     queryFn: async (): Promise<InboxMessage[]> => {
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
-      const userId = userResp.user?.id;
+      const userId = await getSessionUserId();
       if (!userId) return [];
 
       const { data: participantRows, error: participantErr } = await supabase
@@ -208,51 +207,43 @@ export function useInboxMessages(limit = 50) {
 
 export function useUnreadInboxCount() {
   const qc = useQueryClient();
+  const userId = useSessionUserId();
 
   useEffect(() => {
+    if (!userId) return;
     const supabase = getSupabase();
-    let channel: RealtimeChannel | undefined;
-    let cancelled = false;
-
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      const userId = data.user?.id;
-      if (!userId || cancelled) return;
-      const queryKeys: QueryKey[] = [
-        inboxKeys.unreadCount(),
-        ['inbox', 'notifications'],
-      ];
-      channel = supabase
-        .channel(`notification_log:${userId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'notification_log',
-            filter: `user_id=eq.${userId}`,
-          },
-          () => {
-            for (const key of queryKeys) {
-              qc.invalidateQueries({ queryKey: key });
-            }
+    const queryKeys: QueryKey[] = [
+      inboxKeys.unreadCount(),
+      ['inbox', 'notifications'],
+    ];
+    const channel: RealtimeChannel = supabase
+      .channel(`notification_log:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notification_log',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          for (const key of queryKeys) {
+            qc.invalidateQueries({ queryKey: key });
           }
-        )
-        .subscribe();
-    })();
+        }
+      )
+      .subscribe();
 
     return () => {
-      cancelled = true;
-      if (channel) supabase.removeChannel(channel);
+      supabase.removeChannel(channel);
     };
-  }, [qc]);
+  }, [qc, userId]);
 
   return useQuery({
     queryKey: inboxKeys.unreadCount(),
     queryFn: async (): Promise<number> => {
       const supabase = getSupabase();
-      const { data: userResp } = await supabase.auth.getUser();
-      const userId = userResp.user?.id;
+      const userId = await getSessionUserId();
       if (!userId) return 0;
 
       const { data, error } = await supabase
@@ -283,37 +274,30 @@ export function useUnreadInboxCount() {
 
 export function useInboxNotificationsRealtime() {
   const qc = useQueryClient();
+  const userId = useSessionUserId();
 
   useEffect(() => {
+    if (!userId) return;
     const supabase = getSupabase();
-    let channel: RealtimeChannel | undefined;
-    let cancelled = false;
-
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      const userId = data.user?.id;
-      if (!userId || cancelled) return;
-      channel = supabase
-        .channel(`notification_log_inbox:${userId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'notification_log',
-            filter: `user_id=eq.${userId}`,
-          },
-          () => {
-            qc.invalidateQueries({ queryKey: ['inbox', 'notifications'] });
-            qc.invalidateQueries({ queryKey: inboxKeys.unreadCount() });
-          }
-        )
-        .subscribe();
-    })();
+    const channel: RealtimeChannel = supabase
+      .channel(`notification_log_inbox:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notification_log',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          qc.invalidateQueries({ queryKey: ['inbox', 'notifications'] });
+          qc.invalidateQueries({ queryKey: inboxKeys.unreadCount() });
+        }
+      )
+      .subscribe();
 
     return () => {
-      cancelled = true;
-      if (channel) supabase.removeChannel(channel);
+      supabase.removeChannel(channel);
     };
-  }, [qc]);
+  }, [qc, userId]);
 }

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { getSessionUserId } from '../auth/session-user';
 
 // Lazy client getter to avoid module-level initialization during SSR.
 const getSupabase = () => createBrowserClient();
@@ -161,15 +162,13 @@ export function useUnseenShipped() {
     queryFn: async (): Promise<Feedback[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return [];
+      const userId = await getSessionUserId();
+      if (!userId) return [];
 
       const { data, error } = await supabase
         .from('feedback')
         .select('*')
-        .eq('created_by', user.id)
+        .eq('created_by', userId)
         .eq('status', 'shipped')
         .is('shipped_seen_at', null)
         .order('updated_at', { ascending: false });

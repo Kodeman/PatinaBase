@@ -13,6 +13,7 @@ import { Toaster, toast as dsToast } from '@patina/design-system';
 import { queryClient } from '@/lib/react-query';
 import { setToastFunction, type ToastOptions } from '@/lib/error-handler';
 import { PostHogAnalyticsProvider } from '@/lib/analytics/PostHogProvider';
+import { useSessionSubjectBoundary } from '@/hooks/use-session-subject-boundary';
 
 // The global react-query handlers (src/lib/react-query.ts) call showErrorToast/
 // showSuccessToast, which forward to whatever setToastFunction registers. Bridge
@@ -28,6 +29,9 @@ const VARIANT_MAP: Record<
 };
 
 export function Providers({ children }: { children: ReactNode }) {
+  // US-34 F1 — no cached read or open channel outlives its signed-in subject.
+  useSessionSubjectBoundary(queryClient);
+
   useEffect(() => {
     setToastFunction(
       ({ title, description, variant = 'default', duration }) => {

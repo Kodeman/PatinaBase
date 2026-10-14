@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { getSessionUserId } from '../auth/session-user';
 import { peopleKeys } from './use-people';
 import { emailDeliveryKeys } from './use-email-delivery';
 import { asWrittenConsentError, consentKeys } from './use-consent';
@@ -201,18 +202,14 @@ export function useDesignerClientForClientUser(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-      if (authError) throw authError;
-      if (!user) return null;
+      const userId = await getSessionUserId();
+      if (!userId) return null;
 
       const { data, error } = await supabase
         .from('designer_clients')
         .select('id, designer_id, client_id, lead_id')
         .eq('client_id', clientUserId)
-        .eq('designer_id', user.id)
+        .eq('designer_id', userId)
         .order('updated_at', { ascending: false })
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
