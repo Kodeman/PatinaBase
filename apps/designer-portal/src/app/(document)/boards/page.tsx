@@ -2,6 +2,7 @@
 
 import { Suspense } from 'react';
 import { StudioBoardsView } from '@/components/document/boards/studio-boards-view';
+import { StudioBoardsSkeleton } from '@/components/loading';
 
 // StudioBoardsView reads `useSearchParams()` (the `?status=` filter) — the
 // ONLY page among this app's routes that does, per the review that caught
@@ -11,7 +12,7 @@ import { StudioBoardsView } from '@/components/document/boards/studio-boards-vie
 // hydrate the real params on the client.
 export default function StudioBoardsPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<StudioBoardsSkeleton />}>
       <StudioBoardsView />
     </Suspense>
   );

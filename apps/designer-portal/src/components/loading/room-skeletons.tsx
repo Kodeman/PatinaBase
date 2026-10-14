@@ -19,7 +19,7 @@ import type { ReactNode } from "react";
 import { Bar, LoadingRegion } from "./placeholder";
 
 /** The Section eyebrow's clay ornament (S1's `.orn`). */
-function Ornament() {
+export function Ornament() {
   return (
     <svg
       className="orn"
@@ -33,7 +33,7 @@ function Ornament() {
 }
 
 /** A 44 px act drawn as a bar: real acts wait for hydration (H3). */
-function ActBar({ width }: { width: number }) {
+export function ActBar({ width }: { width: number }) {
   return (
     <span className="inline-flex min-h-11 items-center">
       <Bar width={width} height={8} />
@@ -49,6 +49,7 @@ function ActBar({ width }: { width: number }) {
 export function RoomFrameSkeleton({
   label,
   title,
+  heading,
   measure = "mx-auto max-w-[976px] px-4 sm:px-6",
   back = false,
   count = false,
@@ -59,6 +60,8 @@ export function RoomFrameSkeleton({
 }: {
   label: string;
   title: string;
+  /** A richer head in place of the plain title, as RoomShell's `heading`. */
+  heading?: ReactNode;
   measure?: string;
   /** A nested room's way out ("← The desk"), drawn as a bar. */
   back?: boolean;
@@ -84,7 +87,9 @@ export function RoomFrameSkeleton({
                 <Bar width={88} height={8} />
               </span>
             )}
-            <h1 className="t-d2 m-0 text-[var(--text-primary)]">{title}</h1>
+            {heading ?? (
+              <h1 className="t-d2 m-0 text-[var(--text-primary)]">{title}</h1>
+            )}
             {count && (
               <span
                 className={`t-meta ${countAtEveryWidth ? "inline" : "hidden sm:inline"}`}

@@ -49,6 +49,8 @@ describe('MoodBoardPage', () => {
     render(<MoodBoardPage params={fulfilledParams} />);
 
     expect(screen.getByLabelText('Loading mood board')).toBeVisible();
+    // US-34 F13e: the same busy board the route's loading.tsx paints.
+    expect(screen.getByLabelText('Loading mood board')).toHaveAttribute('aria-busy', 'true');
     expect(screen.queryByTestId('mood-board-room')).not.toBeInTheDocument();
   });
 

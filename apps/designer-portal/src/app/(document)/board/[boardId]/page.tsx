@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { BoardOwnerRef } from '@patina/types';
 import { useBoard, type BoardWithItems } from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
+import { MoodBoardSkeleton } from '@/components/loading';
 import { MoodBoardRoom } from '@/components/mood-board/board-room-shell';
 
 function moodBoardOwner(board: Pick<BoardWithItems, 'proposal_id' | 'project_id'>): BoardOwnerRef | null {
@@ -67,17 +68,7 @@ export default function MoodBoardPage({
 
   if (board && owner) return <MoodBoardRoom owner={owner} boardId={boardId} />;
 
-  if (boardQuery.isPending) {
-    return (
-      <main
-        aria-label="Loading mood board"
-        className="fixed inset-0 h-[100dvh] overflow-hidden overscroll-contain bg-[var(--bg-muted)]"
-      >
-        <div className="h-14 animate-pulse border-b border-[var(--border-default)] bg-[var(--bg-surface)]" />
-        <div className="h-[calc(100dvh-3.5rem)] animate-pulse bg-[linear-gradient(90deg,var(--bg-muted),var(--bg-surface),var(--bg-muted))]" />
-      </main>
-    );
-  }
+  if (boardQuery.isPending) return <MoodBoardSkeleton />;
 
   // Reached on a successful fetch with no row — either the initial load, or
   // (deliberately) a later refetch discovering the board was deleted or

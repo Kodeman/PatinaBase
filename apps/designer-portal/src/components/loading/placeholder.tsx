@@ -42,22 +42,28 @@ export function Bar({
 export function LoadingRegion({
   label,
   className,
+  as: Region = "div",
+  "aria-label": ariaLabel,
   children,
 }: {
   /** The sentence a screen reader hears: "Loading the directory." */
   label: string;
   className?: string;
-  children: ReactNode;
+  /** `main` where the room itself is a bare landmark (the board, a leaf). */
+  as?: "div" | "main";
+  "aria-label"?: string;
+  children?: ReactNode;
 }) {
   return (
-    <div
+    <Region
       aria-busy="true"
+      aria-label={ariaLabel}
       data-loading-region
       className={className}
       style={{ "--ph-delay": `${PLACEHOLDER_DELAY_MS}ms` } as CSSProperties}
     >
       <span className="sr-only">{label}</span>
       {children}
-    </div>
+    </Region>
   );
 }
