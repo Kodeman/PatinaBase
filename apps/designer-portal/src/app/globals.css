@@ -454,6 +454,48 @@ html[data-loading-register] [data-register-off] {
   visibility: hidden;
   animation: slow-line-in 1ms linear var(--stall-at, 10000ms) forwards;
 }
+/* The navigation rule (US-34 N11, PQ4; components/loading/nav-rule.tsx mounts it only under the
+   register): 1 px of ink at 40%, the arrival's own crawl line, along the top edge of the paper.
+   It draws in at 300 ms from 8% and runs to 60% on the editorial ease while the route is fetched,
+   to 90% while the destination is busy, then to 100% in 120 ms and fades over 200 ms. It never
+   fakes completion. Reduced motion steps between 60%, 90% and done: a state change, not motion. */
+@keyframes nav-rule-in {
+  from {
+    transform: scaleX(0.08);
+  }
+}
+.nav-rule {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 1px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--text-primary) 40%, transparent);
+  transform-origin: 0 50%;
+  transform: scaleX(0.6);
+  animation: nav-rule-in 600ms var(--ease-editorial);
+  transition: transform 600ms var(--ease-editorial);
+}
+.nav-rule[data-stage='data'] {
+  transform: scaleX(0.9);
+}
+.nav-rule[data-stage='done'] {
+  transform: scaleX(1);
+  opacity: 0;
+  transition:
+    transform 120ms var(--ease-editorial),
+    opacity 200ms linear 120ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-rule,
+  .nav-rule[data-stage='done'] {
+    animation: none;
+    transition: none;
+    opacity: 1;
+  }
+}
 
 /* ===== The Life Review (R126) ===================================== */
 

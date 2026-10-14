@@ -1,4 +1,5 @@
 export { Bar, LoadingRegion } from "./placeholder";
+export { NavRule } from "./nav-rule";
 export {
   LOADING_REGISTER_FLAG,
   RegisterFallback,

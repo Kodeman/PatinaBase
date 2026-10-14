@@ -31,6 +31,7 @@ import { ArrivalRoute } from '@/components/document/arrival/arrival-route';
 import { NeedActSheetProvider } from '@/components/document/acts/need-act-sheet';
 import { SavingBand } from '@/components/feedback/saving-band';
 import { InlineErrorSurface } from '@/components/feedback/inline-error-surface';
+import { NavRule } from '@/components/loading/nav-rule';
 import '@/lib/arrival/arrival.css';
 
 export const metadata: Metadata = {
@@ -88,6 +89,9 @@ export default function DocumentLayout({
       <SavingBand />
       {/* US-34 N12b (PQ11) — no global toast for a mutation failing here. */}
       <InlineErrorSurface />
+      {/* US-34 N11 (PQ4) — the navigation rule, behind `loading-register`.
+          Outside the route boundary so the bare /board/* render has it too. */}
+      <NavRule />
       <DocumentRouteBoundary bare={children}>
         <div className="document-route-shell min-h-screen bg-[var(--bg-primary)]">
         {/* One time system above the Desk and every document (R4): the
