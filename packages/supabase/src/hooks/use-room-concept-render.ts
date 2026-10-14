@@ -1,5 +1,5 @@
-import { getSessionUserId } from '../auth/session-user';
 "use client";
+import { getSessionUserId } from '../auth/session-user';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ROOM CONCEPT RENDER — the studio's write path into the PRIVATE `room-renders`
