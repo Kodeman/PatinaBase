@@ -249,7 +249,7 @@ function PaperLinesSource({
     lines: { projectId: string; lines: PaperLine[]; invoices: PaperInvoice[] } | null,
   ) => void;
 }) {
-  const { data } = useProjectFFEItems(projectId, undefined, { withLifecycle: true }) as {
+  const { data } = useProjectFFEItems(projectId) as {
     data: PaperLine[] | undefined;
   };
   const { data: invoices } = useProjectInvoices(projectId) as {

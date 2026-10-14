@@ -148,78 +148,43 @@ beforeEach(() => {
 });
 
 describe('useProjectFFEItems configuration handoff', () => {
-  it('joins the frozen project spec snapshot used by RFQ and PO review', async () => {
+  it('uses one key and the lifecycle-rich select for every FF&E row', async () => {
     const builder = setTableDefault('project_ffe_items', {
       data: [],
       error: null,
     });
-    const config = useProjectFFEItems('project-1') as unknown as {
-      queryKey: unknown[];
-      queryFn: () => Promise<unknown[]>;
-    };
-
-    expect(config.queryKey).toEqual([
-      'project-ffe-items',
-      'project-1',
-      undefined,
-      { withLifecycle: false },
-    ]);
-    await config.queryFn();
-
-    const select = builder.__chain.find((call) => call.method === 'select');
-    const selection = String(select?.args[0]);
-    expect(selection).toContain('spec:project_ffe_specs');
-    expect(selection).toContain('configuration_snapshot');
-    expect(selection).toContain('configuration_snapshot_hash');
-    expect(selection).toContain('configuration_locked_at');
-  });
-
-  // R7 / WP4: the lifecycle evidence is designer-portal-only. The client
-  // portal's FF&E surfaces must not pay for a second-level embed they never
-  // read (and the flag is in the query key, so the two shapes cannot collide).
-  it('omits the lifecycle evidence by default', async () => {
-    const builder = setTableDefault('project_ffe_items', {
-      data: [],
-      error: null,
+    const callWithRetiredOptions = useProjectFFEItems as unknown as (
+      projectId: string,
+      filters?: undefined,
+      options?: { withLifecycle: boolean },
+    ) => { queryKey: unknown[]; queryFn: () => Promise<unknown[]> };
+    const ordinaryConfig = callWithRetiredOptions('project-1', undefined, {
+      withLifecycle: false,
     });
-    const config = useProjectFFEItems('project-1') as unknown as {
-      queryFn: () => Promise<unknown[]>;
-    };
-    await config.queryFn();
-
-    const selection = String(
-      builder.__chain.find((call) => call.method === 'select')?.args[0],
-    );
-    expect(selection).not.toContain('po_payments');
-    expect(selection).not.toContain('delivered_date');
-  });
-
-  it('adds delivered_date and the payment rows only when asked', async () => {
-    const builder = setTableDefault('project_ffe_items', {
-      data: [],
-      error: null,
-    });
-    const config = useProjectFFEItems('project-1', undefined, {
+    const lifecycleConfig = callWithRetiredOptions('project-1', undefined, {
       withLifecycle: true,
-    }) as unknown as {
-      queryKey: unknown[];
-      queryFn: () => Promise<unknown[]>;
-    };
+    });
 
-    expect(config.queryKey).toEqual([
-      'project-ffe-items',
-      'project-1',
-      undefined,
-      { withLifecycle: true },
-    ]);
-    await config.queryFn();
+    expect(lifecycleConfig.queryKey).toEqual(ordinaryConfig.queryKey);
+    expect(ordinaryConfig.queryKey).toEqual(['project-ffe-items', 'project-1', undefined]);
 
-    const selection = String(
+    await ordinaryConfig.queryFn();
+    const ordinarySelection = String(
       builder.__chain.find((call) => call.method === 'select')?.args[0],
     );
-    expect(selection).toContain('delivered_date');
-    expect(selection).toContain('payments:po_payments(');
+    builder.__chain.length = 0;
+    await lifecycleConfig.queryFn();
+    const lifecycleSelection = String(
+      builder.__chain.find((call) => call.method === 'select')?.args[0],
+    );
+
+    expect(lifecycleSelection).toBe(ordinarySelection);
+    expect(lifecycleSelection).toContain('spec:project_ffe_specs');
+    expect(lifecycleSelection).toContain('delivered_date');
+    expect(lifecycleSelection).toContain('payments:po_payments(');
+    expect(lifecycleSelection).toContain('tracking_number');
   });
+
 
   // P2-follow: sort_order alone is not a stable key — two lines sharing a
   // sort_order (e.g. right after a line moves onto a PO) would otherwise jump

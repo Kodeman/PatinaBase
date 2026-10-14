@@ -1255,12 +1255,9 @@ function FFESectionBody({
     name: string;
     scope: FfeAssignmentScope;
   } | null>(null);
-  // withLifecycle: the line unfold draws R7's trail, which needs the PO's
-  // delivered_date and payment rows. Opt-in so no other portal pays for it.
+  // The shared FF&E query includes the lifecycle evidence used by the trail.
   const { data: items, isLoading, isError, refetch } = useProjectFFEItems(
     projectId,
-    undefined,
-    { withLifecycle: true },
   ) as {
     data: FFERow[] | undefined;
     isLoading: boolean;

@@ -203,10 +203,8 @@ describe('⌘K on the paper (D4)', () => {
     });
     // F1 — the request also waits for a Pieces region not yet mounted.
     expect(focusFfeLinePending.request).toEqual({ itemId: 'line-sectional', cell: 'order' });
-    // The palette reads the paper through FFESection's own query arguments.
-    expect(mockUseProjectFFEItems).toHaveBeenCalledWith('proj-chen', undefined, {
-      withLifecycle: true,
-    });
+    // The shared FF&E key carries the lifecycle-rich rows used by the paper.
+    expect(mockUseProjectFFEItems).toHaveBeenCalledWith('proj-chen');
   });
 
   it('reads the synonym table: couch finds the sectional', () => {

@@ -743,7 +743,7 @@ describe('useProjectFFEItems', () => {
     const { chain, calls } = makeChain({ data: [], error: null });
     from.mockReturnValue(chain);
     const config = useProjectFFEItems('p1') as unknown as Config;
-    expect(config.queryKey).toEqual(['project-ffe-items', 'p1', undefined, { withLifecycle: false }]);
+    expect(config.queryKey).toEqual(['project-ffe-items', 'p1', undefined]);
     await config.queryFn();
 
     const select = calls.find(([method]) => method === 'select');

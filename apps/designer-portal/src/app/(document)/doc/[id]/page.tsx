@@ -1933,8 +1933,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // Pieces and the own act read.
   const silenceLines = useProjectFFEItems(
     oneVoice && row?.engagement_kind === 'project' ? (row.project_id ?? '') : '',
-    undefined,
-    { withLifecycle: true },
   ).data as PoSilenceLine[] | undefined;
 
   // US-25 slice 5 — a need's act opens its scoped act sheet first, where one
@@ -2598,9 +2596,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // the test the Desk's `new_lead` need applies.
   const ownActProjectId =
     oneVoice && row?.engagement_kind === 'project' ? (row.project_id ?? '') : '';
-  const ownActFfe = useProjectFFEItems(ownActProjectId, undefined, {
-    withLifecycle: true,
-  }) as {
+  const ownActFfe = useProjectFFEItems(ownActProjectId) as {
     data:
       | (InstallReadingPiece & TicketFFERow)[]
       | undefined;
