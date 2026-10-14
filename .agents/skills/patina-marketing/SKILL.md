@@ -47,14 +47,26 @@ Invoking this skill is the user's opt-in to run the two Workflows below.
    give Kody the link. Only `rendered` is final. List every piece whose status is anything else
    (`image-missing`, `render-skipped`, `render-failed`, `compose-failed`, `lint-failed`,
    `revise-failed`) and every PLACEHOLDER (FLUX) or MISSING image badge on the board, since
-   those are not final.
+   those are not final. Then archive the binaries: `node marketing/tools/archive.mjs push <runDir>`
+   (R2 bucket `patina-marketing`; needs the sandbox off and a wrangler login).
 7. **Approvals and revisions.**
    - "approve P01, P03" → copy `<runDir>/out/<P>/` to `<runDir>/approved/<P>/` for each, then
-     compress PNGs: `sips -Z 2400 <runDir>/approved/<P>/*.png`. Approval files a piece for Kody;
-     it does not post or send it.
+     compress PNGs: `sips -Z 2400 <runDir>/approved/<P>/*.png`, then
+     `archive.mjs push <runDir>` and `archive.mjs file <runDir> P01 P03`. That files the finals in
+     the Middle West OneDrive (`08 - Marketing & Launch/Press/<runId>/<P>/`) and logs the link in
+     `ledger.json`; give Kody the link. Exit 3 means the OneDrive sync folder is missing: say so.
+     Approval files a piece for Kody; it does not post or send it.
    - "revise P02: <feedback>" → Workflow `marketing-compose` with
      `args: {run: "<runDir>", pieces: ["P02"], feedback: "<feedback>"}`, then republish the board
      to the same Artifact and give the link again.
+
+## Storage
+
+Git keeps a run's record (brief, plan, ledger, copy, critique, `mj/*.json|md`, `archive.json`); the
+binaries (`mj/inbox`, `flux`, `compose`, `out`, `approved`, `board.html`) are gitignored and live in
+R2. Commit runs with explicit paths, never a whole run folder. Before revising a run made on another
+machine, `archive.mjs fetch <runDir>`. `archive.mjs prune <runDir> --yes` frees local disk once a run
+is archived. Details: `marketing/README.md` § Archive.
 
 ## Checks
 

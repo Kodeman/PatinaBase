@@ -54,7 +54,9 @@ From a Claude Code session in the repo, ask to "run the press" with a brief (the
    `rendered` is final: `image-missing` (no image for the piece; MISSING badge on the board),
    `render-skipped`, `render-failed`, `compose-failed`, `lint-failed` and `revise-failed` are not.
 6. The main session publishes `board.html` as a **private** Artifact for review.
-7. "approve P01, P03" copies `out/<P>/` to `approved/<P>/` (PNGs compressed with `sips -Z`).
+   Then `node marketing/tools/archive.mjs push <runDir>` archives the run's binaries to R2.
+7. "approve P01, P03" copies `out/<P>/` to `approved/<P>/` (PNGs compressed with `sips -Z`), then
+   `archive.mjs push` and `archive.mjs file <runDir> P01 P03` (finals into the Middle West OneDrive).
    "revise P02: …" reruns `marketing-compose` with `{run, pieces: ["P02"], feedback}`, which
    rewrites only those pieces' copy and re-composes and re-renders only them.
 
@@ -79,7 +81,7 @@ marketing/
   templates/   social, pin, poster, one-pager, email (HTML); deck/; video/{9x16,16x9}
   tools/       CLIs (below) + lib/run.mjs + test/
   runs/<YYYY-MM-DD>-<slug>/
-    brief.md  plan.json  ledger.json  board.html
+    brief.md  plan.json  ledger.json  archive.json  board.html
     copy/      <P>.opus.md  <P>.sol-prompt.md  <P>.sol.md  <P>.final.md
     critique/  lint-<P>.json  lint-<P>.<seat>.json  cold-read.sol.md  cold-read.resolution.md
                review.md  review.sol.md  picks.md  fix-notes.md
@@ -88,10 +90,32 @@ marketing/
     compose/<P>/  out/<P>/  approved/<P>/
 ```
 
-Git ignores `mj/inbox/`, `flux/` and every `.mp4` under `compose/` and `out/`.
+Git keeps a run's **record** (brief, plan, ledger, copy, critique, `mj/*.json|md`, `archive.json`)
+and ignores its **binaries**: `mj/inbox/`, `flux/`, `compose/`, `out/`, `approved/` and `board.html`
+(the list is `RUN_BINARY_PATHS` in `tools/lib/run.mjs`; keep `.gitignore` in step). Commit a run
+with explicit paths; never `git add` a whole run folder.
+
+## Archive
+
+Binaries live in the private R2 bucket `patina-marketing` (Cloudflare account, no public domain),
+keyed `runs/<runId>/<path>`. `archive.json` in each run records every file's sha256, bytes and
+content type, so git knows what R2 holds. The CLI drives the repo's `wrangler`, which needs a
+logged-in Cloudflare session (and the sandbox off).
+
+- `archive.mjs push <run>`: uploads new or changed binaries; a re-run uploads nothing.
+- `archive.mjs fetch <run> [--only out,approved]`: restores missing files and checks each sha256.
+  Run it before revising a run that was made on another machine.
+- `archive.mjs status <run>`: archived, not archived, changed, archived-but-not-local.
+- `archive.mjs prune <run> [--yes]`: deletes the local `mj/inbox/`, `flux/` and `compose/` once
+  they are archived (dry run without `--yes`); `out/` and `approved/` stay.
+- `archive.mjs file <run> <P...>`: copies `approved/<P>/` into the Middle West OneDrive, in
+  `FILES/1-Projects/Patina/08 - Marketing & Launch/Press/<runId>/<P>/`, through the OneDrive sync
+  client's local folder (`$PATINA_PRESS_ONEDRIVE` overrides it), and logs the SharePoint link in
+  `ledger.json`. Only approved pieces go there; it never deletes or changes sharing. The Microsoft
+  365 connector is read-only, so it can confirm the upload but not make it.
 
 Tools (`node marketing/tools/<x>.mjs`): `preflight`, `plan-check <run>`, `sol`, `voice-lint`,
-`mj-pack`, `ingest`, `flux`, `compose`, `render`, `board`. Each prints its usage when run without
+`mj-pack`, `ingest`, `flux`, `compose`, `render`, `board`, `archive`. Each prints its usage when run without
 arguments.
 
 ## Model seats
