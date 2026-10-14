@@ -904,6 +904,8 @@ export function useUpdateDraftInvoice() {
 export function useUpsertLineItems() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'money' },
+    retry: false,
     mutationFn: async ({
       invoiceId,
       lines,
@@ -956,6 +958,8 @@ export function useUpsertLineItems() {
 export function useDeleteLineItem() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { act: 'money' },
+    retry: false,
     mutationFn: async ({
       invoiceId,
       lineItemId,

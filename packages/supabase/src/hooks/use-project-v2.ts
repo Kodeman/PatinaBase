@@ -300,7 +300,8 @@ function invalidateFfeCommercials(
 export function useSetFfeLineCommercials(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    meta: { act: 'money', ...(options?.errorSurface ? { errorSurface: options.errorSurface } : undefined) },
+    retry: false,
     mutationFn: setFfeLineCommercials,
     onSuccess: (_, { projectId }) => {
       invalidateFfeCommercials(queryClient, projectId);

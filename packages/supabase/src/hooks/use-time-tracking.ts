@@ -769,6 +769,8 @@ export function useStopTimer() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: { act: 'money' },
+    retry: false,
     mutationFn: async (input: StopTimerInput) => {
       const supabase = getSupabase();
 

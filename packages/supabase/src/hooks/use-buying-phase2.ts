@@ -1382,7 +1382,8 @@ export type InvoiceBillingLineRequest =
 export function useAddInvoiceBillingLines(options?: ErrorSurfaceOptions) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: errorMeta(options),
+    meta: { act: 'money', ...(errorMeta(options)) },
+    retry: false,
     mutationFn: async ({
       invoiceId,
       lines,

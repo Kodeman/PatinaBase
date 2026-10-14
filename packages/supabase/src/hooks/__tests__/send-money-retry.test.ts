@@ -7,9 +7,11 @@ import { describe, expect, it } from 'vitest';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../../');
 const inventory: Record<string, string[]> = {
   'packages/supabase/src/hooks/use-outbound-drafts.ts': ['useSendOutboundDrafts'],
-  'packages/supabase/src/hooks/use-invoices.ts': ['useIssueInvoice', 'useRecordPayment', 'useSendInvoice', 'useChaseInvoice', 'useVoidInvoice'],
+  'packages/supabase/src/hooks/use-invoices.ts': ['useIssueInvoice', 'useRecordPayment', 'useSendInvoice', 'useChaseInvoice', 'useVoidInvoice', 'useUpsertLineItems', 'useDeleteLineItem'],
   'packages/supabase/src/hooks/use-procurement.ts': ['useRecordVendorPayment', 'useLogPaymentPaid', 'useVoidVendorPayment', 'useSendPurchaseOrder'],
-  'packages/supabase/src/hooks/use-buying-phase2.ts': ['useReleasePurchaseOrder', 'useSendBackPurchaseOrder', 'useSendProcurementDraft'],
+  'packages/supabase/src/hooks/use-buying-phase2.ts': ['useReleasePurchaseOrder', 'useSendBackPurchaseOrder', 'useSendProcurementDraft', 'useAddInvoiceBillingLines'],
+  'packages/supabase/src/hooks/use-project-v2.ts': ['useSetFfeLineCommercials'],
+  'packages/supabase/src/hooks/use-time-tracking.ts': ['useStopTimer'],
   'packages/supabase/src/hooks/use-plan-room.ts': ['useCreatePlanIssue', 'useCreatePlanTransmittal', 'useReissuePlanTransmittalLink'],
   'packages/supabase/src/hooks/use-party-sms.ts': ['useSendPartySms'],
   'packages/supabase/src/hooks/use-trade-agreements.ts': ['useSendTradeAgreement'],
