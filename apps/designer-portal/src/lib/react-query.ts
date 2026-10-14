@@ -14,11 +14,10 @@ import type { TeachingBoundaryKey, TeachingNoteState } from './teaching/types';
 /**
  * R83 — the error grammar. Mutations on (document) surfaces render failures as
  * a quiet inline band at the act site (terracotta, with the reason and a retry
- * act) and must NOT also raise the global red toast. A mutation opts out of
- * the toast by declaring `meta: { errorSurface: 'inline' }` — the global
- * MutationCache onError below respects it (errors are still logged, and an
- * expired session still routes to sign-in). Mutations without the meta keep
- * the old toast behavior — the legacy portal pages rely on it until dissolve.
+ * act) and must NOT also raise the global red toast. `meta: { errorSurface:
+ * 'inline' }` opts out when the caller renders its own alert; supporting
+ * background mutations use `'silent'`. The MutationCache logs both without
+ * toasting, while mutations without metadata keep the legacy toast behavior.
  */
 declare module '@tanstack/react-query' {
   interface Register {
@@ -28,8 +27,9 @@ declare module '@tanstack/react-query' {
       [key: string]: unknown;
     };
     mutationMeta: {
+      /** 'silent' = supporting/background mutation; log, but do not toast. */
       /** 'inline' = the caller renders the failure inline (R83); no global toast. */
-      errorSurface?: 'inline';
+      errorSurface?: 'silent' | 'inline';
       successMessage?: string;
       /** Return teaching: a named completion act (see `onTeachingBoundary`). */
       teachingBoundary?: true;
@@ -112,6 +112,7 @@ const mutationCache = new MutationCache({
     // R83 — mutations that render their own inline error band opt out of the
     // global toast (see the meta contract at the top of this file).
     const inlineErrorSurface = mutation.meta?.errorSurface === 'inline';
+    const silentErrorSurface = mutation.meta?.errorSurface === 'silent';
 
     // Log error for monitoring
     logError(appError, {
@@ -134,7 +135,7 @@ const mutationCache = new MutationCache({
       if (
         handleAuthExpiry(error, {
           restoreErrorSurface: (outcome) => {
-            if (inlineErrorSurface) return;
+            if (inlineErrorSurface || silentErrorSurface) return;
             showErrorToast(
               outcome === 'dead' ? appError : toLiveSessionError(appError)
             );
@@ -145,6 +146,7 @@ const mutationCache = new MutationCache({
       }
       if (
         !inlineErrorSurface &&
+        !silentErrorSurface &&
         typeof window !== 'undefined' &&
         !window.location.pathname.startsWith('/auth')
       ) {
@@ -158,7 +160,7 @@ const mutationCache = new MutationCache({
     }
 
     // Inline-surface mutations render the failure at the act site — no toast.
-    if (inlineErrorSurface) {
+    if (inlineErrorSurface || silentErrorSurface) {
       return;
     }
 

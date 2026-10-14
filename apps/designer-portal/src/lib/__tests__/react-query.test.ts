@@ -82,6 +82,24 @@ describe('React Query error surfaces', () => {
     expect(mockShowErrorToast).not.toHaveBeenCalled();
   });
 
+  it('logs but does not toast a silent background mutation failure', async () => {
+    const failure = new Error('background stamp failed');
+    const mutation = queryClient.getMutationCache().build(queryClient, {
+      mutationKey: ['background-stamp'],
+      meta: { errorSurface: 'silent' },
+      mutationFn: async () => { throw failure; },
+      retry: false,
+    });
+
+    await expect(mutation.execute(undefined)).rejects.toBe(failure);
+
+    expect(mockLogError).toHaveBeenCalledWith(failure, {
+      mutationKey: ['background-stamp'],
+      meta: { errorSurface: 'silent' },
+    });
+    expect(mockShowErrorToast).not.toHaveBeenCalled();
+  });
+
   it('keeps the legacy toast for foreground queries without silent metadata', async () => {
     const failure = new Error('foreground query failed');
 
