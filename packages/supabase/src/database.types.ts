@@ -10515,18 +10515,21 @@ export type Database = {
           global_daily_cap_usd: number
           id: boolean
           kill_switch: boolean
+          studio_monthly_cap_usd: number | null
           updated_at: string
         }
         Insert: {
           global_daily_cap_usd?: number
           id?: boolean
           kill_switch?: boolean
+          studio_monthly_cap_usd?: number | null
           updated_at?: string
         }
         Update: {
           global_daily_cap_usd?: number
           id?: boolean
           kill_switch?: boolean
+          studio_monthly_cap_usd?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -42174,14 +42177,25 @@ export type Database = {
         }
         Returns: Json
       }
-      llm_set_controls: {
-        Args: {
-          p_actor: string
-          p_global_daily_cap: number
-          p_kill_switch: boolean
-        }
-        Returns: undefined
-      }
+      llm_set_controls:
+        | {
+            Args: {
+              p_actor: string
+              p_global_daily_cap: number
+              p_kill_switch: boolean
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_actor: string
+              p_global_daily_cap: number
+              p_kill_switch: boolean
+              p_set_studio_monthly_cap: boolean
+              p_studio_monthly_cap: number
+            }
+            Returns: undefined
+          }
       llm_set_feature_control: {
         Args: {
           p_actor: string
