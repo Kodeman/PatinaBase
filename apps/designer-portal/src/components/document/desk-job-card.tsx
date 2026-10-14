@@ -7,8 +7,11 @@
  * name's link covers the card's upper block; the lines keep their own acts.
  */
 
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { documentEngagementQueryOptions } from "@/hooks/use-document-state";
 import { STAGE_WORD } from "@/lib/document/act-names";
 import type { SectionKey } from "@/lib/document/desk-derivation";
 import type { DeskScope } from "@/lib/document/desk-scope";
@@ -45,6 +48,16 @@ export function DeskJobCard({
   children: ReactNode;
 }) {
   const { stage, holder } = card;
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const prefetched = useRef(false);
+  const href = `/doc/${card.jobId}`;
+  const prefetchDocument = () => {
+    if (prefetched.current) return;
+    prefetched.current = true;
+    router.prefetch(href);
+    void queryClient.prefetchQuery(documentEngagementQueryOptions(card.jobId));
+  };
   // The holder prints wherever the job could be someone else's: always in
   // the studio's scope, and in Mine only on a job she does not carry.
   const showHolder = !!holder?.name && (scope === "studio" || !holder.mine);
@@ -70,7 +83,10 @@ export function DeskJobCard({
         {eyebrow.length > 0 && <p className="eb">{eyebrow.join(" · ")}</p>}
         <h3 className="t-d3 name-h">
           <Link
-            href={`/doc/${card.jobId}`}
+            href={href}
+            prefetch={false}
+            onPointerEnter={prefetchDocument}
+            onFocus={prefetchDocument}
             className="name"
             data-part={first ? "job" : undefined}
             data-day-sheet-job

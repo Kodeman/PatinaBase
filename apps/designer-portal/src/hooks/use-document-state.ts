@@ -26,9 +26,10 @@
  *     /portal/decisions/[id]'s permanent redirect rides this leg.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { createBrowserClient, docKeys } from '@patina/supabase';
 import type { DocumentStateRow } from '@/lib/document/desk-derivation';
+import type { DeskData } from './use-desk-engagements';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
@@ -44,8 +45,10 @@ export type DocumentResolution =
   | { kind: 'redirect'; projectId: string }
   | { kind: 'missing' };
 
-export function useDocumentEngagement(id: string) {
-  return useQuery<DocumentResolution>({
+export function documentEngagementQueryOptions(
+  id: string,
+): UseQueryOptions<DocumentResolution> {
+  return {
     queryKey: docKeys.engagement(id),
     enabled: UUID_RE.test(id),
     queryFn: async () => {
@@ -168,5 +171,18 @@ export function useDocumentEngagement(id: string) {
 
       return { kind: 'missing' };
     },
+  };
+}
+
+export function useDocumentEngagement(id: string) {
+  const queryClient = useQueryClient();
+  const desk = queryClient.getQueryData<DeskData>(docKeys.desk());
+  const seededRow = desk?.live.find((row) =>
+    [row.engagement_id, row.project_id, row.proposal_id, row.lead_id].includes(id),
+  );
+
+  return useQuery<DocumentResolution>({
+    ...documentEngagementQueryOptions(id),
+    placeholderData: seededRow ? { kind: 'engagement', row: seededRow } : undefined,
   });
 }

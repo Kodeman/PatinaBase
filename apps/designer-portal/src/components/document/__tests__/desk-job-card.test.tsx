@@ -3,9 +3,18 @@
  * `<article data-stage>` on its stage edge, the eyebrow (stage · holder ·
  * freshness), the job's name opening the job, then its lines.
  */
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, fireEvent } from "@testing-library/react";
 import type { SheetCard } from "@/lib/document/day-sheet";
 import { DeskJobCard, clockTime, stageClass } from "../desk-job-card";
+
+const mockPrefetchQuery = jest.fn();
+const mockRouterPrefetch = jest.fn();
+jest.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ prefetchQuery: mockPrefetchQuery }),
+}));
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ prefetch: mockRouterPrefetch }),
+}));
 
 // Monday 12 October 2026, 10:40am local.
 const NOW = new Date(2026, 9, 12, 10, 40);
@@ -118,6 +127,30 @@ describe("DeskJobCard", () => {
     expect(
       screen.getByRole("link", { name: "Holloway Den" }),
     ).not.toHaveAttribute("data-part");
+  });
+
+  it("prefetches the Document once on hover and keyboard focus", () => {
+    mockPrefetchQuery.mockClear();
+    mockRouterPrefetch.mockClear();
+    const { rerender } = renderCard();
+    const link = screen.getByRole("link", { name: "Holloway Den" });
+    fireEvent.pointerEnter(link);
+    fireEvent.focus(link);
+    expect(mockRouterPrefetch).toHaveBeenCalledTimes(1);
+    expect(mockRouterPrefetch).toHaveBeenCalledWith("/doc/p-holloway");
+    expect(mockPrefetchQuery).toHaveBeenCalledTimes(1);
+    expect(mockPrefetchQuery.mock.calls[0][0].queryKey).toEqual([
+      "document-state",
+      "engagement",
+      "p-holloway",
+    ]);
+    rerender(
+      <DeskJobCard card={card()} scope="studio" now={NOW}>
+        <li>a line</li>
+      </DeskJobCard>,
+    );
+    fireEvent.pointerEnter(screen.getByRole("link", { name: "Holloway Den" }));
+    expect(mockPrefetchQuery).toHaveBeenCalledTimes(1);
   });
 
   it("writes no shadow, badge or count", () => {

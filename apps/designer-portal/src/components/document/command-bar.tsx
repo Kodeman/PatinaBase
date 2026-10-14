@@ -27,6 +27,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { documentEngagementQueryOptions } from '@/hooks/use-document-state';
 import type { LucideIcon } from 'lucide-react';
 import { FolderPlus, History, Keyboard, LifeBuoy, Presentation, Search, Type } from 'lucide-react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
@@ -126,6 +128,7 @@ type PaletteRow =
       /** US-28 S6 — a job's stage: the row's tick and its ink word. */
       stage?: SectionKey;
       hint?: string;
+      prefetchHref?: string;
       run: () => void;
       match: string;
     }
@@ -400,6 +403,15 @@ const RESULTS_ID = 'command-bar-results';
 
 export function CommandBar() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const prefetchedDocuments = useRef(new Set<string>());
+  const prefetchDocument = (href: string) => {
+    if (prefetchedDocuments.current.has(href)) return;
+    prefetchedDocuments.current.add(href);
+    const id = href.slice('/doc/'.length);
+    router.prefetch(href);
+    void queryClient.prefetchQuery(documentEngagementQueryOptions(id));
+  };
   const pathname = usePathname();
   const { data } = useDeskEngagements();
   // The missing noun beside documents + ledgers (G3): every party in the
@@ -597,6 +609,7 @@ export function CommandBar() {
       sub: r.title,
       stage: r.active_section,
       hint,
+      prefetchHref: `/doc/${r.engagement_id}`,
       run: () => router.push(`/doc/${r.engagement_id}`),
       match: `${folderTab(r)} ${r.title}`.toLowerCase(),
     });
@@ -615,6 +628,7 @@ export function CommandBar() {
         label: title,
         sub: household,
         ...(live ? { stage: live.active_section } : {}),
+        prefetchHref: `/doc/${entry.id}`,
         run: () => router.push(`/doc/${entry.id}`),
         match: `${title} ${household}`.toLowerCase(),
       };
@@ -978,6 +992,7 @@ export function CommandBar() {
           label: `${stageLabels[stage]} · ${inStage.length}`,
           sub,
           stage,
+          prefetchHref: `/doc/${head.engagement_id}`,
           run: () => router.push(`/doc/${head.engagement_id}`),
           match: [
             stageLabels[stage],
@@ -1909,7 +1924,17 @@ export function CommandBar() {
                             id={optionId(index)}
                             role="option"
                             aria-selected={index === active}
-                            onMouseEnter={() => setActive(index)}
+                            onPointerEnter={() => {
+                              setActive(index);
+                              if (row.kind === 'document' && row.prefetchHref) {
+                                prefetchDocument(row.prefetchHref);
+                              }
+                            }}
+                            onFocus={() => {
+                              if (row.kind === 'document' && row.prefetchHref) {
+                                prefetchDocument(row.prefetchHref);
+                              }
+                            }}
                             onClick={() => choose(row, index)}
                             className={`lrow cmd-row${index === active ? ' is-active' : ''}`}
                           >

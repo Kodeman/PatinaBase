@@ -1,4 +1,5 @@
 const fromMock = jest.fn();
+let deskCache: unknown;
 /** Every `.eq()`/`.order()` call the J6 chain leg makes, in call order —
  *  lets NAV-1's tie-break test assert the exact ORDER BY shape without
  *  re-deriving it from the mock's resolved data. */
@@ -17,6 +18,7 @@ jest.mock('@patina/supabase', () => ({
 
 jest.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
+  useQueryClient: () => ({ getQueryData: () => deskCache }),
 }));
 
 import { useDocumentEngagement } from '../use-document-state';
@@ -135,6 +137,24 @@ function stubTables(opts: {
     throw new Error(`unexpected table ${table}`);
   });
 }
+
+describe('useDocumentEngagement Desk cache seed', () => {
+  beforeEach(() => {
+    deskCache = {
+      live: [{ engagement_id: ID, project_id: ID, proposal_id: null, lead_id: null, title: 'Desk-seeded title' }],
+    };
+  });
+
+  it('returns the matching Desk row as placeholder data before the query resolves', () => {
+    const query = useDocumentEngagement(ID) as unknown as {
+      placeholderData: { kind: string; row: { title: string } };
+    };
+    expect(query.placeholderData).toEqual({
+      kind: 'engagement',
+      row: expect.objectContaining({ title: 'Desk-seeded title' }),
+    });
+  });
+});
 
 describe('useDocumentEngagement — J6 designer_client_id chain leg', () => {
   beforeEach(() => {
