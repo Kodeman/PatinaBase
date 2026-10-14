@@ -11,7 +11,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
  */
 const mockRpc = jest.fn();
 const mockFrom = jest.fn();
-const mockCalls: { gte: unknown[][] } = { gte: [] };
+const mockCalls: { gte: unknown[][]; eq: unknown[][]; range: unknown[][] } = { gte: [], eq: [], range: [] };
+let mockResponses: unknown[][] = [];
 let mockQueryError = false;
 let queryClientForTest: QueryClient;
 
@@ -68,7 +69,15 @@ function rowsBuilder(rows: unknown[]) {
   const b: any = {};
   b.select = jest.fn(() => b);
   b.order = jest.fn(() => b);
-  b.eq = jest.fn(() => b);
+  b.eq = jest.fn((...args: unknown[]) => {
+    mockCalls.eq.push(args);
+    return b;
+  });
+  b.limit = jest.fn(() => b);
+  b.range = jest.fn((...args: unknown[]) => {
+    mockCalls.range.push(args);
+    return b;
+  });
   b.gte = jest.fn((...args: unknown[]) => {
     mockCalls.gte.push(args);
     return b;
@@ -106,6 +115,9 @@ beforeEach(() => {
   mockRpc.mockReset();
   mockFrom.mockReset();
   mockCalls.gte = [];
+  mockCalls.eq = [];
+  mockCalls.range = [];
+  mockResponses = [];
   mockQueryError = false;
 });
 
@@ -143,13 +155,20 @@ it("shows a quiet retry when the applied-by-text query fails", async () => {
 });
 
 it("lists one line per text with its project, and Undo puts the text back", async () => {
-  mockFrom.mockImplementation(() =>
-    rowsBuilder([
+  mockFrom.mockImplementation(() => rowsBuilder(mockResponses.shift() ?? []));
+  mockResponses = [
+    [{ source_id: 'sms-1' }],
+    [
       apply(),
-      // mark_done also unblocked a task: same text, one line, one Undo.
-      apply({ id: "apply-2", target_table: "project_tasks", target_id: "task-1" }),
-    ]),
-  );
+      // mark_done also unblocked a task: the complete group arrives together.
+      apply({ id: 'apply-2', target_table: 'project_tasks', target_id: 'task-1' }),
+    ],
+    [{ source_id: 'sms-1' }],
+    [
+      apply({ reverted_at: new Date().toISOString() }),
+      apply({ id: 'apply-2', target_table: 'project_tasks', target_id: 'task-1', reverted_at: new Date().toISOString() }),
+    ],
+  ];
   mockRpc.mockResolvedValue({
     data: { outcome: "restored", sourceId: "sms-1", restored: 2 },
     error: null,
@@ -158,6 +177,10 @@ it("lists one line per text with its project, and Undo puts the text back", asyn
   const invalidateSpy = jest.spyOn(queryClientForTest, "invalidateQueries");
 
   expect(await screen.findByText("Applied by text")).toBeInTheDocument();
+  expect(mockCalls.eq).toContainEqual(["source", "sms"]);
+  expect(mockCalls.eq).toContainEqual(["source_id", "sms-1"]);
+  expect(mockCalls.range).toContainEqual([0, 999]);
+  expect(mockCalls.gte).toHaveLength(1);
   expect(screen.getByText("Tile delivery marked done")).toBeInTheDocument();
   expect(screen.getByText("Maple")).toBeInTheDocument();
   const undos = screen.getAllByRole("button", { name: /^Undo/ });
