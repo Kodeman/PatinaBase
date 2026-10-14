@@ -463,7 +463,7 @@ describe('useUpdateProjectPhaseStatus', () => {
     ).rejects.toThrow(/invalid transition receipt/);
   });
 
-  it('applies the receipt to project phases before invalidating only this engagement and the Desk', () => {
+  it('applies the receipt to project phases before reconciling phase, project, document-state and workflow readers', () => {
     const config = useUpdateProjectPhaseStatus() as unknown as PhaseTransitionMutationConfig;
     const receipt: ProjectPhaseTransitionReceipt = {
       completed_phase_id: 'phase-1',
@@ -493,10 +493,18 @@ describe('useUpdateProjectPhaseStatus', () => {
     expect(setQueryData.mock.invocationCallOrder[0]).toBeLessThan(
       invalidateQueries.mock.invocationCallOrder[0],
     );
-    expect(invalidateQueries.mock.calls).toEqual([
-      [{ queryKey: ['document-state', 'engagement', 'project-7'] }],
-      [{ queryKey: ['document-state', 'desk'], refetchType: 'none' }],
+    expect(invalidateQueries.mock.calls.map((call) => call[0].queryKey)).toEqual([
+      ['project-phases', 'project-7'],
+      ['project-v2', 'project-7'],
+      ['projects'],
+      ['document-state', 'engagement', 'project-7'],
+      ['document-state', 'desk'],
+      ['project-workflow', 'project-7'],
     ]);
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['document-state', 'desk'],
+      refetchType: 'none',
+    });
   });
 });
 

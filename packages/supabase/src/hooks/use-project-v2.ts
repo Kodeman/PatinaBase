@@ -622,8 +622,14 @@ export function useUpdateProjectPhaseStatus() {
           return phase;
         });
       });
+      // The receipt above paints the advance at once; these reconcile what it
+      // cannot carry (completed_at, trigger-drafted milestones, workflow blockers).
+      queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: docKeys.engagement(projectId) });
       queryClient.invalidateQueries({ queryKey: docKeys.desk(), refetchType: 'none' });
+      void invalidateProjectWorkflow(queryClient, projectId);
     },
   });
 }
