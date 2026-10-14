@@ -161,6 +161,19 @@ describe('PhaseAdvanceControl', () => {
     mockOneVoice = false;
   });
 
+  it('adds the Still working line after the shared 8 s write threshold', () => {
+    jest.useFakeTimers();
+    render(<PhaseAdvanceControl projectId="project-1" phases={[mainActive]} />);
+    fireEvent.click(completeDevelopmentButton());
+
+    expect(screen.getByRole('status')).not.toHaveTextContent('Still working.');
+    act(() => jest.advanceTimersByTime(7_999));
+    expect(screen.getByRole('status')).not.toHaveTextContent('Still working.');
+    act(() => jest.advanceTimersByTime(1));
+    expect(screen.getByRole('status')).toHaveTextContent('Still working.');
+    jest.useRealTimers();
+  });
+
   // US-19 FR2 F2-13 (R150 R5) — Aspen: two phases in progress at once printed
   // two scored `Complete phase` acts. One scored leader per region: the first
   // row keeps it, the rest print plain. The label is unchanged.

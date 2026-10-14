@@ -19,6 +19,7 @@ import {
   useUpdateProjectPhaseStatus,
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { STILL_WORKING_WRITE_MS } from '@/lib/loading/thresholds';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
 type PhaseRow = Database['public']['Tables']['project_phases']['Row'];
@@ -235,6 +236,7 @@ function PhaseActionRow({
   action,
   disabled,
   pending,
+  stillWorking,
   notice,
   onTransition,
   leads,
@@ -243,6 +245,7 @@ function PhaseActionRow({
   action: ActivePhaseAction;
   disabled: boolean;
   pending: boolean;
+  stillWorking: boolean;
   notice: PhaseNotice | null;
   onTransition: (action: ActivePhaseAction) => void;
   /** Whether this row's act is the region's one scored leader. */
@@ -330,6 +333,7 @@ function PhaseActionRow({
           {completing
             ? `Completing ${action.phase.name}…`
             : `Resuming ${action.phase.name}…`}
+          {stillWorking ? ' Still working.' : null}
         </p>
       ) : null}
       {notice ? (
@@ -362,6 +366,7 @@ export function PhaseAdvanceControl({
   const coordination = useCoordinationItems(projectId);
   const pendingPhaseRef = useRef<string | null>(null);
   const [pendingPhaseId, setPendingPhaseId] = useState<string | null>(null);
+  const [stillWorking, setStillWorking] = useState(false);
   const [noticeByPhase, setNoticeByPhase] = useState<
     Record<string, PhaseNotice | undefined>
   >({});
@@ -383,8 +388,16 @@ export function PhaseAdvanceControl({
   authorityKeyRef.current = authorityKey;
 
   useEffect(() => {
+    setStillWorking(false);
+    if (pendingPhaseId === null) return;
+    const timer = setTimeout(() => setStillWorking(true), STILL_WORKING_WRITE_MS);
+    return () => clearTimeout(timer);
+  }, [pendingPhaseId]);
+
+  useEffect(() => {
     pendingPhaseRef.current = null;
     setPendingPhaseId(null);
+    setStillWorking(false);
     setNoticeByPhase({});
   }, [authoritativePhaseSignature, projectId]);
 
@@ -462,6 +475,7 @@ export function PhaseAdvanceControl({
             action={action}
             disabled={transitionPending}
             pending={pendingPhaseId === action.phase.id}
+            stillWorking={stillWorking && pendingPhaseId === action.phase.id}
             notice={noticeByPhase[action.phase.id] ?? null}
             onTransition={handleTransition}
             // US-19 FR2 F2-13 (R150 R5, `one-voice`) — one scored leader per

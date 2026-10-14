@@ -609,13 +609,21 @@ export function useUpdateProjectPhaseStatus() {
       }
       return data;
     },
-    onSuccess: (_, { projectId }) => {
-      queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    onSuccess: (receipt, { projectId, status }) => {
+      queryClient.setQueryData<ProjectPhaseRow[]>(['project-phases', projectId], (current) => {
+        if (!current) return current;
+        return current.map((phase) => {
+          if (status === 'completed' && phase.id === receipt.completed_phase_id) {
+            return { ...phase, status: 'completed', progress: 100 };
+          }
+          if (receipt.next_phase_ids.includes(phase.id)) {
+            return { ...phase, status: 'in_progress', completed_at: null };
+          }
+          return phase;
+        });
+      });
       queryClient.invalidateQueries({ queryKey: docKeys.engagement(projectId) });
       queryClient.invalidateQueries({ queryKey: docKeys.desk(), refetchType: 'none' });
-      void invalidateProjectWorkflow(queryClient, projectId);
     },
   });
 }

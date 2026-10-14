@@ -106,10 +106,11 @@ vi.mock('@supabase/ssr', () => ({
 }));
 
 const invalidateQueries = vi.fn();
+const setQueryData = vi.fn();
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
-  useQueryClient: () => ({ invalidateQueries }),
+  useQueryClient: () => ({ invalidateQueries, setQueryData }),
 }));
 
 // Import AFTER mocks.
@@ -141,6 +142,7 @@ import type {
 beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
   invalidateQueries.mockReset();
+  setQueryData.mockReset();
   supabaseClient.auth.getUser.mockReset();
   supabaseClient.auth.getSession.mockReset();
   supabaseClient.from.mockClear();
@@ -461,13 +463,25 @@ describe('useUpdateProjectPhaseStatus', () => {
     ).rejects.toThrow(/invalid transition receipt/);
   });
 
-  it('invalidates phase, project detail, project list, and document-state readers', () => {
+  it('applies the receipt to project phases before invalidating only this engagement and the Desk', () => {
     const config = useUpdateProjectPhaseStatus() as unknown as PhaseTransitionMutationConfig;
     const receipt: ProjectPhaseTransitionReceipt = {
       completed_phase_id: 'phase-1',
-      next_phase_ids: [],
-      terminal: true,
+      next_phase_ids: ['phase-2'],
+      terminal: false,
     };
+    const previous = [
+      { id: 'phase-1', status: 'in_progress', progress: 45 },
+      { id: 'phase-2', status: 'pending', completed_at: null },
+      { id: 'phase-unrelated', status: 'pending' },
+    ];
+    setQueryData.mockImplementation((_key, update) => {
+      expect(update(previous)).toEqual([
+        { id: 'phase-1', status: 'completed', progress: 100 },
+        { id: 'phase-2', status: 'in_progress', completed_at: null },
+        { id: 'phase-unrelated', status: 'pending' },
+      ]);
+    });
 
     config.onSuccess(receipt, {
       projectId: 'project-7',
@@ -475,19 +489,14 @@ describe('useUpdateProjectPhaseStatus', () => {
       status: 'completed',
     });
 
-    const invalidatedKeys = invalidateQueries.mock.calls.map((call) => call[0].queryKey);
-    expect(invalidatedKeys).toEqual([
-      ['project-phases', 'project-7'],
-      ['project-v2', 'project-7'],
-      ['projects'],
-      ['document-state', 'engagement', 'project-7'],
-      ['document-state', 'desk'],
-      ['project-workflow', 'project-7'],
+    expect(setQueryData).toHaveBeenCalledWith(['project-phases', 'project-7'], expect.any(Function));
+    expect(setQueryData.mock.invocationCallOrder[0]).toBeLessThan(
+      invalidateQueries.mock.invocationCallOrder[0],
+    );
+    expect(invalidateQueries.mock.calls).toEqual([
+      [{ queryKey: ['document-state', 'engagement', 'project-7'] }],
+      [{ queryKey: ['document-state', 'desk'], refetchType: 'none' }],
     ]);
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['document-state', 'desk'],
-      refetchType: 'none',
-    });
   });
 });
 
