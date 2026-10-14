@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
  */
 const mockRpc = jest.fn();
 const mockFrom = jest.fn();
-const mockCalls: { gte: unknown[][]; eq: unknown[][]; range: unknown[][] } = { gte: [], eq: [], range: [] };
+const mockCalls: { gte: unknown[][]; eq: unknown[][]; range: unknown[][]; order: unknown[][]; in: unknown[][]; abortSignal: unknown[][] } = { gte: [], eq: [], range: [], order: [], in: [], abortSignal: [] };
 let mockResponses: unknown[][] = [];
 let mockQueryError = false;
 let queryClientForTest: QueryClient;
@@ -50,6 +50,13 @@ jest.mock("../../section-eyebrow", () => ({
 
 import { FieldDesk } from "../field-desk";
 
+import { useModelApplies } from "../../../../../../../packages/supabase/src/hooks/use-model-applies";
+
+function AppliesHarness() {
+  const { data = [] } = useModelApplies({ since: new Date(0).toISOString() });
+  return <output>{data.map((row) => row.source_id).join(",")}</output>;
+}
+
 function Wrapper({ children }: { children: React.ReactNode }) {
   const [client] = React.useState(
     () =>
@@ -68,12 +75,22 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 function rowsBuilder(rows: unknown[]) {
   const b: any = {};
   b.select = jest.fn(() => b);
-  b.order = jest.fn(() => b);
+  b.order = jest.fn((...args: unknown[]) => {
+    mockCalls.order.push(args);
+    return b;
+  });
   b.eq = jest.fn((...args: unknown[]) => {
     mockCalls.eq.push(args);
     return b;
   });
-  b.limit = jest.fn(() => b);
+  b.in = jest.fn((...args: unknown[]) => {
+    mockCalls.in.push(args);
+    return b;
+  });
+  b.abortSignal = jest.fn((...args: unknown[]) => {
+    mockCalls.abortSignal.push(args);
+    return b;
+  });
   b.range = jest.fn((...args: unknown[]) => {
     mockCalls.range.push(args);
     return b;
@@ -85,7 +102,10 @@ function rowsBuilder(rows: unknown[]) {
   b.then = (
     resolve: (v: unknown) => unknown,
     reject: (e: unknown) => unknown,
-  ) => Promise.resolve({ data: mockQueryError ? null : rows, error: mockQueryError ? new Error('offline') : null }).then(resolve, reject);
+  ) => {
+    const responseRows = mockResponses.length ? mockResponses.shift() : rows;
+    return Promise.resolve({ data: mockQueryError ? null : responseRows, error: mockQueryError ? new Error('offline') : null }).then(resolve, reject);
+  };
   return b;
 }
 
@@ -117,6 +137,9 @@ beforeEach(() => {
   mockCalls.gte = [];
   mockCalls.eq = [];
   mockCalls.range = [];
+  mockCalls.order = [];
+  mockCalls.in = [];
+  mockCalls.abortSignal = [];
   mockResponses = [];
   mockQueryError = false;
 });
@@ -134,6 +157,43 @@ it("is hidden entirely when nothing was applied by text today", async () => {
   expect(since).toBe(midnight.toISOString());
   expect(screen.queryByText("Applied by text")).toBeNull();
   expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
+});
+
+it("discovers groups across pages and fetches the complete set in one stably ordered batch", async () => {
+  const discovery = Array.from({ length: 1000 }, () => ({ source_id: "sms-large" }));
+  const firstFetchPage = [
+    apply({ source_id: "sms-large" }),
+    apply({ id: "apply-two", source_id: "sms-two" }),
+    ...Array.from({ length: 998 }, (_, index) =>
+      apply({ id: `apply-${index + 3}`, source_id: "sms-large" }),
+    ),
+  ];
+  mockResponses = [
+    discovery,
+    [{ source_id: "sms-two" }, { source_id: "sms-three" }],
+    firstFetchPage,
+    [apply({ id: "apply-last", source_id: "sms-three" })],
+  ];
+  mockFrom.mockImplementation(() => rowsBuilder([]));
+
+  render(<AppliesHarness />, { wrapper: Wrapper });
+  await waitFor(() => expect(screen.getByRole("status").textContent).toContain("sms-three"));
+
+  expect(mockCalls.range).toEqual([
+    [0, 999],
+    [1000, 1999],
+    [0, 999],
+    [1000, 1999],
+  ]);
+  expect(mockCalls.in).toEqual([
+    ["source_id", ["sms-large", "sms-two", "sms-three"]],
+  ]);
+  expect(mockCalls.order).toHaveLength(6);
+  for (let i = 0; i < mockCalls.order.length; i += 2) {
+    expect(mockCalls.order[i]).toEqual(["applied_at", { ascending: false }]);
+    expect(mockCalls.order[i + 1]).toEqual(["id", { ascending: false }]);
+  }
+  expect(mockCalls.abortSignal).toHaveLength(4);
 });
 
 it("shows a quiet retry when the applied-by-text query fails", async () => {
@@ -155,7 +215,7 @@ it("shows a quiet retry when the applied-by-text query fails", async () => {
 });
 
 it("lists one line per text with its project, and Undo puts the text back", async () => {
-  mockFrom.mockImplementation(() => rowsBuilder(mockResponses.shift() ?? []));
+  mockFrom.mockImplementation(() => rowsBuilder([]));
   mockResponses = [
     [{ source_id: 'sms-1' }],
     [
@@ -178,7 +238,11 @@ it("lists one line per text with its project, and Undo puts the text back", asyn
 
   expect(await screen.findByText("Applied by text")).toBeInTheDocument();
   expect(mockCalls.eq).toContainEqual(["source", "sms"]);
-  expect(mockCalls.eq).toContainEqual(["source_id", "sms-1"]);
+  expect(mockCalls.eq).not.toContainEqual(["source_id", "sms-1"]);
+  expect(mockCalls.in).toContainEqual([
+    "source_id",
+    ["sms-1"],
+  ]);
   expect(mockCalls.range).toContainEqual([0, 999]);
   expect(mockCalls.gte).toHaveLength(1);
   expect(screen.getByText("Tile delivery marked done")).toBeInTheDocument();

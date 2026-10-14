@@ -60,59 +60,67 @@ export function useModelApplies(filter: ModelAppliesFilter = {}) {
     enabled: filter.enabled ?? true,
     staleTime: 15_000,
     refetchInterval: 30_000,
-    queryFn: async (): Promise<ModelApplyRow[]> => {
+    queryFn: async ({ signal }): Promise<ModelApplyRow[]> => {
       const supabase = getSupabase();
-      const baseQuery = (includeSince = true) => {
+      const pageQuery = (includeSince = true) => {
         let query = supabase
           .from('model_applies')
           .select(
             'id, studio_id, project_id, source, source_id, effect_type, target_table, target_id, inserted, summary, applied_at, reverted_at, revert_outcome, project:projects(id, name)',
           )
           .eq('source', 'sms')
-          .order('applied_at', { ascending: false });
+          .order('applied_at', { ascending: false })
+          .order('id', { ascending: false });
         if (projectId) query = query.eq('project_id', projectId);
         if (includeSince && since) query = query.gte('applied_at', since);
         if (sourceId) query = query.eq('source_id', sourceId);
         return query;
       };
+      const readPages = async <T,>(query: any): Promise<T[]> => {
+        const rows: T[] = [];
+        for (let offset = 0; ; offset += 1000) {
+          const { data, error } = await query
+            .abortSignal(signal)
+            .range(offset, offset + 999);
+          if (error) throw error;
+          const page = (data ?? []) as T[];
+          rows.push(...page);
+          if (page.length < 1000) return rows;
+        }
+      };
 
-      if (sourceId || !since) {
-        const { data, error } = await baseQuery();
+      if (sourceId || !since) return readPages<ModelApplyRow>(pageQuery());
+
+      const sourceIds: string[] = [];
+      const seen = new Set<string>();
+      for (let pageIndex = 0; pageIndex < 10 && sourceIds.length < 50; pageIndex += 1) {
+        let discovery = supabase
+          .from('model_applies')
+          .select('source_id')
+          .eq('source', 'sms')
+          .order('applied_at', { ascending: false })
+          .order('id', { ascending: false })
+          .gte('applied_at', since);
+        if (projectId) discovery = discovery.eq('project_id', projectId);
+        const { data, error } = await discovery
+          .abortSignal(signal)
+          .range(pageIndex * 1000, pageIndex * 1000 + 999);
         if (error) throw error;
-        return data ?? [];
+        const page = data ?? [];
+        for (const row of page) {
+          if (row.source_id && !seen.has(row.source_id)) {
+            seen.add(row.source_id);
+            sourceIds.push(row.source_id);
+            if (sourceIds.length === 50) break;
+          }
+        }
+        if (page.length < 1000) break;
       }
-
-      // Discover at most 50 recent SMS groups, then load every row in those
-      // groups separately so PostgREST's row cap cannot split a displayed text.
-      let idsQuery = supabase
-        .from('model_applies')
-        .select('source_id')
-        .eq('source', 'sms')
-        .order('applied_at', { ascending: false })
-        .gte('applied_at', since)
-        .limit(1000);
-      if (projectId) idsQuery = idsQuery.eq('project_id', projectId);
-      const { data: idRows, error: idsError } = await idsQuery;
-      if (idsError) throw idsError;
-      const sourceIds = [...new Set((idRows ?? []).map((row) => row.source_id).filter((id): id is string => !!id))].slice(0, 50);
       if (sourceIds.length === 0) return [];
 
-      const groups = await Promise.all(
-        sourceIds.map(async (id) => {
-          const rows: ModelApplyRow[] = [];
-          for (let offset = 0; ; offset += 1000) {
-            const { data, error } = await baseQuery(false)
-              .eq('source_id', id)
-              .range(offset, offset + 999);
-            if (error) throw error;
-            const page = data ?? [];
-            rows.push(...page);
-            if (page.length < 1000) break;
-          }
-          return rows;
-        }),
-      );
-      return groups.flat();
+      // The 50-text bound is deliberate for the Desk's today list (D8 has no more affordance).
+      const batchedQuery = pageQuery(false).in('source_id', sourceIds);
+      return readPages<ModelApplyRow>(batchedQuery);
     },
   });
 }
