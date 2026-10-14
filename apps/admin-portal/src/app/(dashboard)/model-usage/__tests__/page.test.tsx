@@ -4,7 +4,7 @@ import type { ModelUsageOverview } from '@/app/api/admin/model-usage/route';
 import ModelUsagePage from '../page';
 
 const overview: ModelUsageOverview = {
-  controls: { killSwitch: false, globalDailyCapUsd: 25, updatedAt: '2026-10-13T00:00:00Z' },
+  controls: { killSwitch: false, globalDailyCapUsd: 25, studioMonthlyCapUsd: 50, updatedAt: '2026-10-13T00:00:00Z' },
   todayUsd: 1.5,
   monthUsd: 12.25,
   features: [
@@ -63,6 +63,22 @@ describe('ModelUsagePage', () => {
       expect(fetchMock).toHaveBeenCalledWith(
         '/api/admin/model-usage/controls',
         expect.objectContaining({ method: 'POST', body: JSON.stringify({ killSwitch: true }) }),
+      ),
+    );
+  });
+
+  it('posts only the global studio cap and uses null for a blank no-cap value', async () => {
+    const fetchMock = setup();
+    const input = await screen.findByLabelText('Per-studio monthly cap (all features) in USD');
+    const row = input.closest('tr') as HTMLElement;
+    const save = within(row).getByRole('button', { name: 'Save' });
+    expect(input).toHaveValue('50');
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/admin/model-usage/controls',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ studioMonthlyCapUsd: null }) }),
       ),
     );
   });

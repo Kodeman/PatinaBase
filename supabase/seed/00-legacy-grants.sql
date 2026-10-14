@@ -22284,6 +22284,42 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00788_llm_studio_total_cap.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00788_llm_studio_total_cap.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.llm_reserve(text, uuid, uuid, numeric, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00788_llm_studio_total_cap.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.llm_set_controls(boolean, numeric, uuid, numeric, boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00788_llm_studio_total_cap.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.llm_set_controls(boolean, numeric, uuid, numeric, boolean) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00788_llm_studio_total_cap.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.llm_set_controls(boolean, numeric, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00788_llm_studio_total_cap.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.llm_set_controls(boolean, numeric, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

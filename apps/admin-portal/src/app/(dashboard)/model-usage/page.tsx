@@ -47,7 +47,7 @@ export default function ModelUsagePage() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: QUERY_KEY });
 
   const controls = useMutation({
-    mutationFn: (next: { killSwitch?: boolean; globalDailyCapUsd?: number }) =>
+    mutationFn: (next: { killSwitch?: boolean; globalDailyCapUsd?: number; studioMonthlyCapUsd?: number | null }) =>
       postJson('/api/admin/model-usage/controls', next),
     onSettled: refresh,
   });
@@ -93,7 +93,7 @@ export default function ModelUsagePage() {
       {data && (
         <>
           <ControlsSection
-            key={`${data.controls.killSwitch}:${data.controls.globalDailyCapUsd}`}
+            key={`${data.controls.killSwitch}:${data.controls.globalDailyCapUsd}:${data.controls.studioMonthlyCapUsd}`}
             overview={data}
             saving={controls.isPending}
             onSave={async (next, successMessage) => {
@@ -136,7 +136,7 @@ export default function ModelUsagePage() {
             )}
             <p className="type-meta-small mt-4 text-[var(--text-muted)]">
               Blank cap = no cap at that level. The studio monthly cap applies to each studio&apos;s
-              spend on that feature unless the studio has an override below.
+              spend on that feature in addition to the total studio cap.
             </p>
           </Section>
 
@@ -167,8 +167,7 @@ export default function ModelUsagePage() {
               </Table>
             )}
             <p className="type-meta-small mt-4 text-[var(--text-muted)]">
-              An override replaces every feature&apos;s studio monthly cap for that studio, per
-              feature. Overrides cannot be removed here, only changed.
+              An override sets that studio&apos;s total monthly cap across all features. It does not replace feature-level caps.
             </p>
           </Section>
 
@@ -207,14 +206,18 @@ function ControlsSection({
 }: {
   overview: ModelUsageOverview;
   saving: boolean;
-  onSave: (next: { killSwitch?: boolean; globalDailyCapUsd?: number }, successMessage: string) => Promise<void>;
+  onSave: (next: { killSwitch?: boolean; globalDailyCapUsd?: number; studioMonthlyCapUsd?: number | null }, successMessage: string) => Promise<void>;
 }) {
-  const { killSwitch, globalDailyCapUsd } = overview.controls;
+  const { killSwitch, globalDailyCapUsd, studioMonthlyCapUsd } = overview.controls;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [capText, setCapText] = useState(String(globalDailyCapUsd));
+  const [studioCapText, setStudioCapText] = useState(studioMonthlyCapUsd === null ? '' : String(studioMonthlyCapUsd));
   const parsedCap = parseCapText(capText);
+  const parsedStudioCap = parseCapText(studioCapText);
   const capValid = typeof parsedCap === 'number';
+  const studioCapValid = parsedStudioCap !== undefined;
   const capDirty = capText.trim() !== String(globalDailyCapUsd);
+  const studioCapDirty = studioCapText.trim() !== (studioMonthlyCapUsd === null ? '' : String(studioMonthlyCapUsd));
 
   return (
     <Section title="Controls" className="mt-10">
@@ -240,6 +243,39 @@ function ControlsSection({
                 onCheckedChange={() => setConfirmOpen(true)}
                 aria-label="Kill switch"
               />
+            </TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell className="py-3 pr-4 align-top">
+              <div className="type-label">Per-studio monthly cap (all features)</div>
+              <div className="type-meta-small text-[var(--text-muted)]">
+                Blank means no default cap; a studio override replaces this total.
+              </div>
+            </TableCell>
+            <TableCell className="py-3 pr-4 align-top">
+              <Input
+                className="h-8 w-28 font-mono text-[0.8rem]"
+                inputMode="decimal"
+                placeholder="No cap"
+                value={studioCapText}
+                onChange={(e) => setStudioCapText(e.target.value)}
+                aria-label="Per-studio monthly cap (all features) in USD"
+                aria-invalid={!studioCapValid}
+              />
+            </TableCell>
+            <TableCell className="py-3 text-right align-top">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!studioCapDirty || !studioCapValid || saving}
+                onClick={() => {
+                  if (parsedStudioCap !== undefined) {
+                    void onSave({ studioMonthlyCapUsd: parsedStudioCap }, 'Per-studio monthly cap saved.');
+                  }
+                }}
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </Button>
             </TableCell>
           </TableRow>
           <TableRow>

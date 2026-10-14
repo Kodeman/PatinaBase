@@ -11,6 +11,7 @@ import { getAuthenticatedAdmin, serverError } from '@/lib/supabase-admin';
 export interface ModelUsageControls {
   killSwitch: boolean;
   globalDailyCapUsd: number;
+  studioMonthlyCapUsd: number | null;
   updatedAt: string;
 }
 
@@ -110,7 +111,7 @@ export async function GET(request: NextRequest) {
   try {
     const [controlsRes, featuresRes, overridesRes, auditRes, todayRes, monthRes] =
       await Promise.all([
-        db.from('llm_controls').select('kill_switch, global_daily_cap_usd, updated_at').eq('id', true).maybeSingle(),
+        db.from('llm_controls').select('kill_switch, global_daily_cap_usd, studio_monthly_cap_usd, updated_at').eq('id', true).maybeSingle(),
         db.from('llm_feature_controls').select('feature, enabled, daily_cap_usd, studio_monthly_cap_usd').order('feature'),
         db.from('llm_studio_overrides').select('studio_id, monthly_cap_usd'),
         db.from('llm_controls_audit').select('id, at, actor, target, before, after').order('at', { ascending: false }).order('id', { ascending: false }).limit(20),
@@ -122,6 +123,12 @@ export async function GET(request: NextRequest) {
       if (res.error) throw res.error;
     }
     if (!controlsRes.data) throw new Error('llm_controls row is missing');
+    const controlsRow = controlsRes.data as {
+      kill_switch: boolean;
+      global_daily_cap_usd: number | string;
+      studio_monthly_cap_usd: number | string | null;
+      updated_at: string;
+    };
 
     const today = parseSummary(todayRes.data ?? {});
     const month = parseSummary(monthRes.data ?? {});
@@ -166,9 +173,12 @@ export async function GET(request: NextRequest) {
 
     const overview: ModelUsageOverview = {
       controls: {
-        killSwitch: controlsRes.data.kill_switch,
-        globalDailyCapUsd: asNumber(controlsRes.data.global_daily_cap_usd),
-        updatedAt: controlsRes.data.updated_at,
+        killSwitch: controlsRow.kill_switch,
+        globalDailyCapUsd: asNumber(controlsRow.global_daily_cap_usd),
+        studioMonthlyCapUsd: controlsRow.studio_monthly_cap_usd === null
+          ? null
+          : asNumber(controlsRow.studio_monthly_cap_usd),
+        updatedAt: controlsRow.updated_at,
       },
       todayUsd: today.totalUsd,
       monthUsd: month.totalUsd,
