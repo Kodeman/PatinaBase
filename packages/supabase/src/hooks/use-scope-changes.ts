@@ -140,6 +140,7 @@ export function useCreateScopeChangeRequest(options?: { errorSurface?: 'inline' 
 export function useSendScopeChangeRequest(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     // R83 — see useCreateScopeChangeRequest.
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({ requestId, projectId }: { requestId: string; projectId: string }) => {

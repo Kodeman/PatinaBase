@@ -1022,6 +1022,7 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    retry: false,
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       proposalId,
@@ -1247,6 +1248,7 @@ export function useSendProposal(options?: { errorSurface?: 'inline' }) {
 export function useRetryProposalSend(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     meta: options?.errorSurface
       ? { errorSurface: options.errorSurface }
       : undefined,

@@ -166,7 +166,7 @@ export function useComPaper({
 }): ComPaper {
   const { data: lines } = useFfePairLines(projectId);
   const { data: submittals } = useProjectSubmittals(projectId);
-  const setSupplies = useSetPurchaseOrderSupplies({ errorSurface: 'inline' });
+  const setSupplies = useSetPurchaseOrderSupplies({ errorSurface: 'silent' });
   const key = itemIds.join(',');
 
   return useMemo(() => {

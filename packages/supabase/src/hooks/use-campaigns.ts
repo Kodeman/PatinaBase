@@ -122,6 +122,7 @@ export function useSendCampaign() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    retry: false,
     mutationFn: async (id: string) => {
       const headers = await getAuthHeaders();
       const res = await fetch(`/api/campaigns/${id}/send`, {

@@ -572,6 +572,7 @@ export function useCreatePlanTransmittal(projectId: string) {
 export function useReissuePlanTransmittalLink(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     // The result carries the raw token; gcTime: 0 evicts it from the
     // MutationCache on unmount instead of the default five minutes.
     gcTime: 0,

@@ -745,6 +745,7 @@ function invalidateVendorPaymentCaches(queryClient: QueryClient, purchaseOrderId
 export function useRecordVendorPayment(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: recordVendorPayment,
     onSuccess: (_, { purchaseOrderId }) => {
@@ -762,6 +763,7 @@ export function useRecordVendorPayment(options?: { errorSurface?: 'inline' }) {
 export function useLogPaymentPaid() {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     mutationFn: ({
       paymentId,
       purchaseOrderId,
@@ -798,6 +800,7 @@ export function useLogPaymentPaid() {
 export function useVoidVendorPayment(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       paymentId,
@@ -2415,6 +2418,7 @@ function poSendUrl(): string {
 export function useSendPurchaseOrder(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (
       input: SendPurchaseOrderInput

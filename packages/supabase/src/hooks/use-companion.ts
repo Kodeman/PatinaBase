@@ -150,6 +150,7 @@ export function useSendCompanionMessage() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    retry: false,
     mutationFn: async ({
       message,
       context,

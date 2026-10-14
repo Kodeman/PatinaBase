@@ -146,7 +146,7 @@ function invalidatePurchaseOrder(queryClient: QueryClient, po: Pick<PurchaseOrde
   invalidateFfeCaches(queryClient, po.project_id);
 }
 
-type ErrorSurfaceOptions = { errorSurface?: 'inline' };
+type ErrorSurfaceOptions = { errorSurface?: 'inline' | 'silent' };
 const errorMeta = (options?: ErrorSurfaceOptions) =>
   options?.errorSurface ? { errorSurface: options.errorSurface } : undefined;
 
@@ -845,6 +845,7 @@ export function useDiscardProcurementDraft(options?: ErrorSurfaceOptions) {
 export function useSendProcurementDraft(options?: ErrorSurfaceOptions) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     meta: errorMeta(options),
     mutationFn: sendProcurementDraft,
     onSettled: () => invalidateDrafts(queryClient),
@@ -1550,6 +1551,7 @@ export function useHoldPurchaseOrderForRelease(options?: ErrorSurfaceOptions) {
 export function useReleasePurchaseOrder(options?: ErrorSurfaceOptions) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     meta: errorMeta(options),
     mutationFn: async (purchaseOrderId: string): Promise<PurchaseOrder> => {
       const { data, error } = await getSupabase().rpc('release_purchase_order', { p_po_id: purchaseOrderId });
@@ -1564,6 +1566,7 @@ export function useReleasePurchaseOrder(options?: ErrorSurfaceOptions) {
 export function useSendBackPurchaseOrder(options?: ErrorSurfaceOptions) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     meta: errorMeta(options),
     mutationFn: async ({ purchaseOrderId, note }: { purchaseOrderId: string; note: string }): Promise<PurchaseOrder> => {
       const { data, error } = await getSupabase().rpc('send_back_purchase_order', {

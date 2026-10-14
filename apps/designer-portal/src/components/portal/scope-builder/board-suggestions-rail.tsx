@@ -42,7 +42,7 @@ interface BoardSuggestionsRailProps {
 export function BoardSuggestionsRail({ items, onAdd }: BoardSuggestionsRailProps) {
   const [open, setOpen] = useState(true);
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
-  const logEvent = useLogSuggestionEvent();
+  const logEvent = useLogSuggestionEvent({ errorSurface: 'silent' });
 
   // Last-added product item on the board (created_at desc, z_index desc).
   const anchor = useMemo(() => {

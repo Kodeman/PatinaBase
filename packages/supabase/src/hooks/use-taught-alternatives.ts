@@ -74,8 +74,9 @@ export function useTaughtAlternatives(productId: string | null | undefined, limi
  * row or many. designer_id is pinned to auth.uid() by the RLS INSERT policy.
  * Callers fire-and-forget (.mutate); a lost signal never blocks the act.
  */
-export function useLogSuggestionEvent() {
+export function useLogSuggestionEvent(options?: { errorSurface?: 'silent' }) {
   return useMutation({
+    ...(options?.errorSurface ? { meta: { errorSurface: options.errorSurface } } : {}),
     mutationFn: async (input: SuggestionEventInput | SuggestionEventInput[]): Promise<void> => {
       const list = Array.isArray(input) ? input : [input];
       if (list.length === 0) return;
@@ -139,6 +140,7 @@ export function useSwapLineToProduct() {
 export function useEscalateFeedbackToDecision() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorSurface: 'silent' },
     mutationFn: async (input: { feedbackId: string; decisionId: string; proposalId: string }) => {
       const supabase = getSupabase();
       const { data, error } = await supabase.rpc('escalate_item_feedback_to_decision', {

@@ -1150,6 +1150,7 @@ export function useSendDecisionReminder() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    retry: false,
     mutationFn: async ({ decisionId }: { decisionId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;

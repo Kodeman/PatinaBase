@@ -1021,6 +1021,7 @@ export function useDeleteDraftInvoice(options?: { errorSurface?: 'inline' }) {
 export function useIssueInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       invoiceId,
@@ -1058,6 +1059,7 @@ export function useIssueInvoice(options?: { errorSurface?: 'inline' }) {
 export function useRecordPayment(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       invoiceId,
@@ -1117,10 +1119,10 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
       teachingBoundary: true,
       boundaryKey: 'invoice_sent',
     },
-    // SQ-781 R1 — an email is not idempotent here (no key reaches the
-    // provider): a failure may follow a delivery whose answer was lost, so the
-    // send never goes again on its own. The caller decides what to say.
-    retry: 0,
+    // SQ-781 R1 / O4 — this send is not idempotent (no key reaches the
+    // provider), so a timeout may follow a delivered email. Keyed retry is
+    // blocked by O4; only an explicit caller action may send again.
+    retry: false,
     mutationFn: async ({
       invoiceId,
       message,
@@ -1184,6 +1186,7 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
 export function useChaseInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       invoiceId,
@@ -1562,6 +1565,7 @@ export function useNotifyCheckIntent() {
 export function useVoidInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       invoiceId,

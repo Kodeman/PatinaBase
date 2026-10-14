@@ -35,6 +35,7 @@ export function ResolveSignoff({
   const resolve = useResolveCoordinationItem(projectId);
   const nudge = useNudgeCoordinationItem(projectId);
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [actError, setActError] = useState<string | null>(null);
 
   // A sign-off may carry an Approve / Request-changes option pair (like a gate);
   // record the approving option when present, else record a plain approval note.
@@ -54,11 +55,13 @@ export function ResolveSignoff({
           },
       {
         onSuccess: () => {
+          setActError(null);
           setConfirm(
             'Signed off — the phase advances. The Strata Mark and the margin re-read.',
           );
           window.setTimeout(onResolved, 900);
         },
+        onError: () => setActError('Couldn’t complete the sign-off action. Try again.'),
       },
     );
   };
@@ -73,6 +76,7 @@ export function ResolveSignoff({
           );
           window.setTimeout(onResolved, 900);
         },
+        onError: () => setActError('Couldn’t complete the sign-off action. Try again.'),
       },
     );
   };
@@ -101,6 +105,7 @@ export function ResolveSignoff({
           {nudge.isPending ? 'Nudging…' : 'Nudge them'}
         </ResolveButton>
       </ButtonRow>
+      {actError && <p role="alert" className="text-sm text-[var(--color-clay)]">{actError}</p>}
       {confirm && <QuietConfirm>{confirm}</QuietConfirm>}
     </ResolveShell>
   );

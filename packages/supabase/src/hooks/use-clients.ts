@@ -452,6 +452,7 @@ export function useSendClientMessage() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    retry: false,
     mutationFn: async ({
       designerClientId,
       message,

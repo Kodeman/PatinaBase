@@ -51,6 +51,7 @@ export function RoomsRail({
   const addRoom = useAddScopeRoom();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
+  const [addError, setAddError] = useState(false);
 
   // A chain supersede remints scope-room ids while the page's remount key is
   // the chain-root route id, so a held id can die under the hold. A held room
@@ -75,6 +76,7 @@ export function RoomsRail({
       { proposalId, name: trimmed },
       {
         onSuccess: () => {
+          setAddError(false);
           // The facet's own creation flow ends with this event (RoomsInScope).
           proposalEvents.scopeUpdated({
             proposalId,
@@ -84,6 +86,7 @@ export function RoomsRail({
           setName('');
           setAdding(false);
         },
+        onError: () => setAddError(true),
       },
     );
   };
@@ -136,8 +139,14 @@ export function RoomsRail({
           })}
 
           {adding ? (
-            <span
-              className="inline-flex items-baseline gap-2"
+            <>
+              {addError && (
+                <span role="alert" className="text-[13px] text-[var(--color-clay)]">
+                  Couldn’t add the room. Try again.
+                </span>
+              )}
+              <span
+                className="inline-flex items-baseline gap-2"
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   e.stopPropagation();
@@ -175,7 +184,8 @@ export function RoomsRail({
               >
                 Cancel
               </button>
-            </span>
+              </span>
+            </>
           ) : (
             <button
               type="button"

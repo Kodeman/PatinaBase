@@ -328,6 +328,7 @@ export function useCheckout() {
 // Payments
 export function useCreatePaymentIntent() {
   return useMutation({
+    retry: false,
     mutationFn: ({
       orderId,
       data,
@@ -346,6 +347,7 @@ export function useConfirmPayment() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    retry: false,
     mutationFn: (paymentIntentId: string) => ordersApi.confirmPayment(paymentIntentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });

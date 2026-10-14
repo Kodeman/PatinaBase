@@ -136,6 +136,17 @@ describe('RoomsRail', () => {
     expect(screen.getByRole('button', { name: '+ Add a room' })).toBeInTheDocument();
   });
 
+  it('shows an inline alert when adding a room fails', () => {
+    mockMutate.mockImplementation((_vars, opts) => opts?.onError?.(new Error('failed')));
+    rail();
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a room' }));
+    fireEvent.change(screen.getByLabelText('Room name'), { target: { value: 'Study' } });
+    fireEvent.keyDown(screen.getByLabelText('Room name'), { key: 'Enter' });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t add the room. Try again.');
+  });
+
   it('does not save an empty name', () => {
     rail();
 

@@ -675,6 +675,7 @@ export async function fetchCommercialDocumentSendFingerprint(
 export function useSendServiceAgreement(proposalId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     mutationKey: ["send-service-agreement", proposalId],
     mutationFn: async ({
       personalMessage,
@@ -1158,6 +1159,7 @@ function mapReleaseForAuthorizationResult(
 export function useReleaseForAuthorization(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     mutationKey: ["release-for-authorization", projectId],
     mutationFn: async ({
       name,
@@ -1288,6 +1290,7 @@ export function useAuthorizationLineDrift(
 export function useSendFurnishingsAuthorization(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     mutationKey: ["send-furnishings-authorization", projectId],
     mutationFn: async (proposalId: string) => {
       const supabase = getSupabase();
@@ -1725,6 +1728,7 @@ export function useSelectTradeBid(projectId: string) {
 export function useSendTradeScope(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     mutationKey: ["send-trade-scope", projectId],
     mutationFn: async (proposalId: string) => {
       const supabase = getSupabase();
@@ -1909,6 +1913,7 @@ export interface IssueTradeDrawInput {
 export function useIssueTradeDrawInvoice(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     mutationKey: ["issue-trade-draw-invoice", projectId],
     mutationFn: async ({ drawId, proposalId }: IssueTradeDrawInput) => {
       const supabase = getSupabase();
@@ -2137,6 +2142,7 @@ async function tradeRfqSendFailureMessage(
 export function useSendTradeRfq(scopeId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     mutationKey: ["send-trade-rfq", scopeId],
     mutationFn: async (input: SendTradeRfqInput): Promise<SendTradeRfqResult> => {
       const supabase = getSupabase();

@@ -99,6 +99,7 @@ export function useSendAmendment() {
   const qc = useQueryClient();
   const send = useSendScopeChangeRequest({ errorSurface: 'inline' });
   return useMutation({
+    retry: false,
     meta: { errorSurface: 'inline' as const },
     mutationFn: async ({ requestId, projectId }: { requestId: string; projectId: string }) =>
       send.mutateAsync({ requestId, projectId }),

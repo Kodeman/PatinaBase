@@ -93,6 +93,7 @@ export interface SendProjectNoteInput {
 export function useSendProjectNote() {
   const queryClient = useQueryClient();
   return useMutation({
+    retry: false,
     mutationFn: async ({
       projectId,
       body,
