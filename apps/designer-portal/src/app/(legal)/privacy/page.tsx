@@ -125,7 +125,8 @@ export default function PrivacyPage() {
           itself, not your clients&rsquo; names or contact details.
         </p>
         <p>
-          Your studio can opt out at any time by writing to{' '}
+          An owner or admin can opt your studio out at any time in Studio
+          settings &rarr; Teaching, or by writing to{' '}
           <a
             href="mailto:hello@patina.cloud"
             className="underline decoration-[var(--border-default)] hover:text-[var(--color-charcoal)]"

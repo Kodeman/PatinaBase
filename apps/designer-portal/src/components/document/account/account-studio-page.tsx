@@ -57,6 +57,7 @@ import { StudioRateRows } from './studio-rate-rows';
 import { StudioPaymentMethodsCard } from './studio-payment-methods';
 import { StudioMarginVisibilityCard } from './studio-margin-visibility';
 import { StudioReleaseGateCard } from './studio-release-gate';
+import { StudioTeachingSharingCard } from './studio-teaching-sharing';
 import { StudioCorrespondenceCard } from './studio-correspondence-card';
 import { StudioLocationsEditor } from '../people/studio-locations-editor';
 import { AgreementLibraryCard } from './agreement-library-card';
@@ -1210,6 +1211,10 @@ export function AccountStudioPage() {
       {/* Held for release (US-16 C-32, R-PB2) — off by default; owners and
           admins set it, every other seat reads it. */}
       <StudioReleaseGateCard studioId={studio.id} canManage={canManage} />
+
+      {/* Teaching (R5, V23) — on by default; owners and admins keep the
+          studio's corrections to itself, every other seat reads it. */}
+      <StudioTeachingSharingCard studioId={studio.id} canManage={canManage} />
 
       {/* Correspondence (US-31 B5b) — which messages to clients and trades
           wait for a Send; owners and admins set it, every other seat reads it. */}

@@ -2042,6 +2042,16 @@ export type {
 } from "./use-studio-license-attestation";
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Teaching sharing — whether the studio's corrections help Patina for every
+// studio; owners and admins turn it off (R5, migration 00790)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  studioTeachingKeys,
+  useStudioTeachingSharing,
+  useSetStudioTeachingSharing,
+} from "./use-studio-teaching";
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Direct orders — client "buy now" on Patina-managed products, the third
 // payable_type on the consolidated Stripe rail (migration 00267)
 // ═══════════════════════════════════════════════════════════════════════════
