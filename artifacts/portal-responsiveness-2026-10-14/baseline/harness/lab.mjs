@@ -327,7 +327,12 @@ async function scenario(browser, name, vp) {
         const done = `button[aria-label='Mark "${title}" not done'], button[aria-label='Mark "${title}" done'][aria-pressed="true"]`;
         const task = page.locator(undone);
         if (!(await task.count())) throw new Error('P6: fixture task row not rendered');
+        rec.t0 = Date.now();
         await task.scrollIntoViewIfNeeded();
+        // SQ-1010, setup only: the scroll pins the lens band, whose reads, layout shift and long
+        // tasks used to land inside the tick's window and hold the press back 218-416 ms. Settle
+        // (no request in flight, 1 s with no request or DOM change) before writeAct starts t0.
+        await settle(page, rec, { need: null, quiet: 1000 });
         const isWrite = isReq('PATCH', /\/rest\/v1\/project_tasks$/);
         const tick = await writeAct(page, rec, { action: 'tick', isWrite, act: () => task.click(),
           watches: [{ key: 'tickShowsState', sel: done, present: true }] });
