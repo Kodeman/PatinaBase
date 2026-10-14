@@ -515,9 +515,14 @@ describe('useUpdateProjectPhaseStatus', () => {
       ['project-phases', 'project-7'],
       ['project-v2', 'project-7'],
       ['projects'],
-      ['document-state'],
+      ['document-state', 'engagement', 'project-7'],
+      ['document-state', 'desk'],
       ['project-workflow', 'project-7'],
     ]);
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['document-state', 'desk'],
+      refetchType: 'none',
+    });
   });
 });
 
