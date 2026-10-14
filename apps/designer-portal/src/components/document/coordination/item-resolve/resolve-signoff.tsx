@@ -105,7 +105,7 @@ export function ResolveSignoff({
           {nudge.isPending ? 'Nudging…' : 'Nudge them'}
         </ResolveButton>
       </ButtonRow>
-      {actError && <p role="alert" className="text-sm text-[var(--color-clay)]">{actError}</p>}
+      {actError && <p role="alert" className="text-sm text-[var(--color-clay-ink)]">{actError}</p>}
       {confirm && <QuietConfirm>{confirm}</QuietConfirm>}
     </ResolveShell>
   );

@@ -141,7 +141,7 @@ export function RoomsRail({
           {adding ? (
             <>
               {addError && (
-                <span role="alert" className="text-[13px] text-[var(--color-clay)]">
+                <span role="alert" className="text-[13px] text-[var(--color-clay-ink)]">
                   Couldn’t add the room. Try again.
                 </span>
               )}
