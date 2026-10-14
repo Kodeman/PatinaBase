@@ -14,6 +14,7 @@ import type {
 import { createBrowserClient } from '../client';
 import { boardOwnerQueryKeys } from './use-boards';
 import { invalidateFfeCaches } from './use-procurement';
+import { useOptimisticMutation } from './optimistic';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -221,13 +222,43 @@ export function usePromoteBoardReferenceToSelection() {
   });
 }
 
-export function useCreateNamedProjectNeed() {
+const NO_NEEDS: CreateNamedProjectNeedRequest[] = [];
+
+/**
+ * Adds a named line to the schedule. With `optimistic` (US-34 N3, flag
+ * `optimistic-ink`) the caller draws the line at once from `pending` (M13:
+ * one list, so a `variables` ghost); the RPC's selection is the receipt, and
+ * the write stays pending until the project's lines have re-read (M1b), so
+ * the ghost hands over to the real line without a gap.
+ */
+export function useCreateNamedProjectNeed(options: { optimistic?: boolean } = {}) {
   const queryClient = useQueryClient();
-  return useMutation({
+  const plain = useMutation({
     mutationFn: async (request: CreateNamedProjectNeedRequest): Promise<PlaceProductInProjectResult> =>
       normalizePlacement(await callJsonCommand<unknown>('create_named_project_need', request)),
     onSuccess: (_result, request) => invalidateProjectFfe(queryClient, request.projectId, request.boardId),
   });
+  const ink = useOptimisticMutation<CreateNamedProjectNeedRequest, PlaceProductInProjectResult>({
+    honesty: 'internal',
+    scopeId: 'named-project-need',
+    keys: [],
+    meta: { errorSurface: 'inline' },
+    // The receipt: normalizePlacement throws on an empty answer, and on any
+    // outcome but `held` that names no selection (R6).
+    mutationFn: async (request) =>
+      normalizePlacement(await callJsonCommand<unknown>('create_named_project_need', request)),
+    apply: (current) => current,
+    invert: (current) => current,
+    onSuccess: async (_result, request) => {
+      invalidateProjectFfe(queryClient, request.projectId, request.boardId);
+      // Joins the re-read just started above; it never starts a second one.
+      await queryClient.refetchQueries(
+        { queryKey: ['project-ffe-items', request.projectId], type: 'active' },
+        { cancelRefetch: false },
+      );
+    },
+  });
+  return options.optimistic ? ink : { ...plain, pending: NO_NEEDS };
 }
 
 export function useTriageProjectFfeItems() {

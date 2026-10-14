@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { docKeys } from '../query-keys';
+import { useOptimisticMutation } from './optimistic';
 import type { Database } from '../database.types';
 import type { Json } from '../database.types';
 
@@ -31,10 +32,20 @@ export function useOutboundDrafts(options: { projectId?: string | null; organiza
   });
 }
 
-export function useUpdateOutboundDraft() {
+type DraftText = { id: string; subject: string; body: string };
+const NO_DRAFT_EDITS: DraftText[] = [];
+const isDraftList = (key: readonly unknown[]) => key[0] === outboundDraftKeys.all[0] && key[1] !== 'modes';
+
+/**
+ * Saves a draft's TEXT only (never a send or a discard, plan §5.2). With
+ * `optimistic` (US-34 N3, flag `optimistic-ink`) every cached drafts list
+ * shows the new text at once; the RPC's row is the receipt, and a refusal puts
+ * back only this draft's old text, unless a later edit has replaced it.
+ */
+export function useUpdateOutboundDraft(options: { optimistic?: boolean } = {}) {
   const client = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: { id: string; subject: string; body: string }): Promise<OutboundDraft> => {
+  const plain = useMutation({
+    mutationFn: async (input: DraftText): Promise<OutboundDraft> => {
       const { data, error } = await createBrowserClient().rpc('update_outbound_draft', {
         p_id: input.id, p_subject: input.subject, p_body: input.body,
       });
@@ -43,6 +54,38 @@ export function useUpdateOutboundDraft() {
     },
     onSuccess: () => invalidate(client),
   });
+  const keys = options.optimistic
+    ? client.getQueryCache().findAll({ queryKey: outboundDraftKeys.all }).map((q) => q.queryKey).filter(isDraftList)
+    : [];
+  const ink = useOptimisticMutation<DraftText, OutboundDraft | null, OutboundDraft[]>({
+    honesty: 'internal',
+    scopeId: 'outbound-draft-text',
+    keys,
+    meta: { errorSurface: 'inline' },
+    mutationFn: async (input) => {
+      const { data, error } = await createBrowserClient().rpc('update_outbound_draft', {
+        p_id: input.id, p_subject: input.subject, p_body: input.body,
+      });
+      if (error) throw error;
+      return (data ?? null) as OutboundDraft | null;
+    },
+    apply: (drafts, input) =>
+      drafts.map((d) => (d.id === input.id ? { ...d, subject: input.subject, body: input.body } : d)),
+    invert: (drafts, input, { previous }) => {
+      const before = previous.find((d) => d.id === input.id);
+      if (!before) return drafts;
+      return drafts.map((d) =>
+        d.id === input.id && d.subject === input.subject && d.body === input.body
+          ? { ...d, subject: before.subject, body: before.body }
+          : d,
+      );
+    },
+    merge: (drafts, row) => drafts.map((d) => (d.id === row.id ? row : d)),
+    // The receipt is merged; the lists are only marked stale, so a refetch
+    // never lands over another draft's edit still in flight.
+    onSuccess: () => client.invalidateQueries({ queryKey: outboundDraftKeys.all, refetchType: 'none' }),
+  });
+  return options.optimistic ? ink : { ...plain, pending: NO_DRAFT_EDITS };
 }
 
 export function useDiscardOutboundDraft() {

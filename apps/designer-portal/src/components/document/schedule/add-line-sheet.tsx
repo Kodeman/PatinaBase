@@ -7,6 +7,8 @@ import type { FfeAssignmentScope } from '@patina/types';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { useAddComFabricLine } from '../buying/com-piece';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { SavingWord } from '../work-block';
 
 const FIELD_CLASS =
   'min-h-11 w-full rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2.5 text-[13px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)]';
@@ -53,7 +55,11 @@ export function AddLineSheet({
   assignmentScope: FfeAssignmentScope;
   onClose: () => void;
 }) {
-  const addLine = useCreateNamedProjectNeed();
+  // US-34 N3 — `optimistic-ink` on: Enter clears the fields for the next line
+  // at once and the line waits below as a placeholder (M13); a refusal gives
+  // its words back with the same request key. Off: today's "Adding…" path.
+  const ink = useFeatureFlag('optimistic-ink').value === true;
+  const addLine = useCreateNamedProjectNeed({ optimistic: ink });
   const addFabric = useAddComFabricLine();
   const lineRef = useRef<HTMLInputElement>(null);
 
@@ -63,17 +69,21 @@ export function AddLineSheet({
   const [takesCom, setTakesCom] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestKey = useRef<{ fingerprint: string; key: string } | null>(null);
+  const nameRef = useRef(name);
+  nameRef.current = name;
 
   const trimmedName = name.trim();
   const parsedQuantity = Math.max(1, Math.round(Number(quantity) || 1));
   const roughCents = parseRoughDollarsToCents(roughDollars);
-  const pending = addLine.isPending || addFabric.isPending;
+  const pending = (!ink && addLine.isPending) || addFabric.isPending;
   const canSave = trimmedName.length > 0 && !pending;
 
   const save = async () => {
     if (!canSave) return;
     setError(null);
     const submittedName = name;
+    const submitted = { quantity, roughDollars, takesCom };
+    let sentKey: { fingerprint: string; key: string } | null = null;
     try {
       const request = {
         projectId,
@@ -93,9 +103,19 @@ export function AddLineSheet({
           key: globalThis.crypto?.randomUUID?.() ?? `need-${projectId}-${Date.now()}`,
         };
       }
+      sentKey = requestKey.current;
+      if (ink) {
+        // The answer: the fields clear for the next line now; this one waits
+        // below with `saving…` until its receipt.
+        setName('');
+        setQuantity('1');
+        setRoughDollars('');
+        setTakesCom(false);
+        requestKey.current = null;
+      }
       const created = await addLine.mutateAsync({
         ...request,
-        idempotencyKey: requestKey.current.key,
+        idempotencyKey: sentKey.key,
       });
       // C-24: the piece's COM fabric is its own line, linked to the piece.
       if (takesCom && created.selectionId) {
@@ -107,13 +127,29 @@ export function AddLineSheet({
         });
       }
       // The next line starts here. A name typed while this one saved is kept.
-      setName((current) => (current === submittedName ? '' : current));
-      setQuantity('1');
-      setRoughDollars('');
-      setTakesCom(false);
-      requestKey.current = null;
+      // (With ink the fields already cleared at the press.)
+      if (!ink) {
+        setName((current) => (current === submittedName ? '' : current));
+        setQuantity('1');
+        setRoughDollars('');
+        setTakesCom(false);
+        requestKey.current = null;
+      }
       lineRef.current?.focus();
     } catch (cause) {
+      if (ink && sentKey) {
+        // Restore truth: the words come back (unless a next line is already
+        // being typed) with the same request key, so Try again cannot add two.
+        if (!nameRef.current.trim()) {
+          requestKey.current = sentKey;
+          setName(submittedName);
+          setQuantity(submitted.quantity);
+          setRoughDollars(submitted.roughDollars);
+          setTakesCom(submitted.takesCom);
+        }
+        setError(`Couldn’t add “${trimmedName}”. Try again.`);
+        return;
+      }
       setError(
         cause instanceof Error
           ? cause.message
@@ -193,6 +229,23 @@ export function AddLineSheet({
           ? `This adds two lines to ${roomName} as candidates: the piece, and its COM fabric linked to it. Nothing is released until you say so.`
           : `It lands in ${roomName} as a candidate — nothing is released until you say so.`}
       </p>
+
+      {ink && addLine.pending.length > 0 && (
+        <ul aria-label="Lines being added" className="mt-2">
+          {addLine.pending.map((line) => (
+            <li
+              key={line.idempotencyKey ?? line.name}
+              aria-busy
+              className="flex items-baseline justify-between border-b border-dashed border-[var(--color-pearl)] py-1.5 text-[12px] italic text-[var(--text-muted)]"
+            >
+              <span>{line.name}</span>
+              <span className="font-mono text-[11px] not-italic">
+                <SavingWord active />
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {error && (
         <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta-ink)]">

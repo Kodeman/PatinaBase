@@ -55,7 +55,11 @@ export interface UseOptimisticMutationOptions<
   > {
   /** The write. Returns the changed row(s) or an exact count; zero rows rolls back. */
   mutationFn: (variables: TVariables) => Promise<TReceipt>;
-  /** Pure patch of one cached key. Keys that are not cached are skipped. */
+  /**
+   * Pure patch of one cached key. Keys that are not cached are skipped. It
+   * must be idempotent: after a receipt merges, the patches of the scope's
+   * later writes that are still pending are applied again.
+   */
   apply: (current: TCache, variables: TVariables, key: QueryKey) => TCache;
   /**
    * Pure inverse of `apply` for this write's own row(s), run on the CURRENT
@@ -143,10 +147,21 @@ export function optimisticMutationOptions<
     },
     onSuccess: async (receipt, variables, patched, context) => {
       if (merge) {
+        // A later write of this scope is still waiting for its receipt: its
+        // patch goes back on over this receipt, so a tick then an untick never
+        // shows the first value again while the second is in flight.
+        const scoped = queryClient
+          .getMutationCache()
+          .findAll({ mutationKey: optimisticMutationKey(scopeId), status: 'pending' })
+          .sort((a, b) => a.state.submittedAt - b.state.submittedAt);
+        const self = scoped.findIndex((m) => m.state.variables === variables);
+        const later = self < 0 ? [] : scoped.slice(self + 1).map((m) => m.state.variables as TVariables);
         for (const key of keys) {
           const current = queryClient.getQueryData<TCache>(key);
           if (current === undefined) continue;
-          queryClient.setQueryData<TCache>(key, merge(current, receipt, variables, key));
+          let next = merge(current, receipt, variables, key);
+          for (const pending of later) next = apply(next, pending, key);
+          queryClient.setQueryData<TCache>(key, next);
         }
       } else {
         await Promise.all(

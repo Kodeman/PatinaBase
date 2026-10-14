@@ -8,12 +8,13 @@
  * kanban, assignees, priority flags.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useCaptureMediaUrls } from '@patina/supabase';
-import { STALL_MS } from '@/lib/loading/thresholds';
+import { PENDING_WORD_DELAY_MS, PENDING_WORD_HOLD_MS, STALL_MS } from '@/lib/loading/thresholds';
 import {
   gateState,
   useCreateSectionTask,
+  type NewSectionTask,
   type SectionGate,
   type SectionTask,
 } from '@/hooks/use-section-work';
@@ -182,6 +183,126 @@ export function useTickPending(
 }
 
 /**
+ * US-34 N3 (§5.1 S2) — an optimistic value stays visibly unconfirmed: after
+ * PENDING_WORD_DELAY_MS of waiting the meta reads `saving…`, and once shown it
+ * holds PENDING_WORD_HOLD_MS so it never blinks. A fast receipt shows nothing.
+ */
+export function useSavingWord(active: boolean) {
+  const [shown, setShown] = useState(false);
+  const shownAt = useRef(0);
+  useEffect(() => {
+    if (active === shown) return;
+    const wait = active
+      ? PENDING_WORD_DELAY_MS
+      : Math.max(0, PENDING_WORD_HOLD_MS - (Date.now() - shownAt.current));
+    const timer = setTimeout(() => {
+      if (active) shownAt.current = Date.now();
+      setShown(active);
+    }, wait);
+    return () => clearTimeout(timer);
+  }, [active, shown]);
+  return shown;
+}
+
+/** The meta column: `saving…` while the receipt is slow, else its own text. */
+export function SavingWord({ active, children }: { active: boolean; children?: ReactNode }) {
+  return <>{useSavingWord(active) ? 'saving…' : children}</>;
+}
+
+/**
+ * US-34 N3 — the tick with `optimistic-ink` on: the row turns over at once
+ * (the hook patches the cache) and is busy until its receipt merges. A
+ * refusal, or a receipt of zero rows, puts the row back (the hook) and leaves
+ * one inline line here with Try again (§5.1 S4).
+ */
+export function useTickInk(toggle: {
+  mutateAsync: (task: SectionTask) => Promise<unknown>;
+  pending: ReadonlyArray<Pick<SectionTask, 'id'>>;
+}) {
+  const [failedId, setFailedId] = useState<string | null>(null);
+  const tick = (task: SectionTask) => {
+    setFailedId((id) => (id === task.id ? null : id));
+    toggle.mutateAsync(task).catch(() => setFailedId(task.id));
+  };
+  const busy = (id: string) => toggle.pending.some((t) => t.id === id);
+  return { busy, tick, failedId };
+}
+
+/** One inline failure line (§5.1 S4): what is true now, and a 44px act. */
+export function InkAlert({
+  children,
+  onRetry,
+  onDiscard,
+}: {
+  children: ReactNode;
+  onRetry: () => void;
+  onDiscard?: () => void;
+}) {
+  const act =
+    'da-press min-h-[44px] px-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-2';
+  return (
+    <p role="alert" className="flex flex-wrap items-center gap-x-2 px-1 text-[11px] text-[var(--color-terracotta-ink)]">
+      {children}
+      <button type="button" className={act} onClick={onRetry}>
+        Try again
+      </button>
+      {onDiscard && (
+        <button type="button" className={act} onClick={onDiscard}>
+          Discard
+        </button>
+      )}
+    </p>
+  );
+}
+
+/**
+ * US-34 N3 (M13) — creates with `optimistic-ink` on: each pending create is a
+ * faint ghost row drawn from its variables. A failed create keeps its words
+ * in a ghost row with Try again, which resends the same client id, so an
+ * ambiguous failure cannot make two tasks.
+ */
+export function useCreateInk(create: {
+  mutateAsync: (input: NewSectionTask) => Promise<unknown>;
+  pending: ReadonlyArray<NewSectionTask>;
+}) {
+  const [failed, setFailed] = useState<NewSectionTask | null>(null);
+  const send = (input: NewSectionTask) => {
+    create.mutateAsync(input).catch(() => setFailed(input));
+  };
+  return {
+    pending: create.pending,
+    failed,
+    add: (input: Omit<NewSectionTask, 'id'>) => send({ ...input, id: crypto.randomUUID() }),
+    retry: () => {
+      if (!failed) return;
+      setFailed(null);
+      send(failed);
+    },
+    discard: () => setFailed(null),
+  };
+}
+
+/** A create that has not landed: its words, faint, with `saving…`. */
+export function GhostTaskRow({ title, failed }: { title: string; failed?: boolean }) {
+  return (
+    <span
+      aria-busy={!failed || undefined}
+      className="grid min-h-[44px] w-full grid-cols-[auto_1fr_auto] content-center items-baseline gap-2.5 px-1 py-1.5"
+    >
+      <span
+        aria-hidden
+        className="relative top-px inline-block h-[13px] w-[13px] rounded-[3px] border-[1.5px] border-dashed"
+        style={{ borderColor: 'var(--doc-ink-border)' }}
+      />
+      <span className="text-[12px] italic leading-snug text-[var(--text-muted)]">{title}</span>
+      <span className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        {failed ? 'not added' : <SavingWord active />}
+      </span>
+    </span>
+  );
+}
+
+/**
  * D-B49 — this block stands INSIDE the FF&E region's body, so it mounts only
  * when the lens promotes that region. Its three reads therefore used to fire
  * on the promotion itself: `useSectionTasks`, `useSectionGates` and
@@ -233,8 +354,11 @@ export function WorkBlock({
    *  Install reading's act). */
   emptyActVariant?: 'primary' | 'secondary';
 }) {
-  const createTask = useCreateSectionTask(projectId);
-  const toggleTask = useToggleSectionTask(projectId);
+  // US-34 N3 — `optimistic-ink` on: ticks and adds answer at once (the hooks
+  // patch or ghost), off: today's pending-only path (F16).
+  const ink = useFeatureFlag('optimistic-ink').value === true;
+  const createTask = useCreateSectionTask(projectId, { optimistic: ink });
+  const toggleTask = useToggleSectionTask(projectId, { optimistic: ink });
   // FR4 Fix 12 (`one-voice`) — a ratio reads as a fraction; convert it.
   const oneVoice = useFeatureFlag('one-voice').value === true;
 
@@ -250,7 +374,13 @@ export function WorkBlock({
     () => (tasks ?? []).filter((t) => t.section_key === sectionKey),
     [tasks, sectionKey],
   );
-  const ticks = useTickPending(tasks, toggleTask.mutateAsync);
+  const heldTicks = useTickPending(tasks, toggleTask.mutateAsync);
+  const inkTicks = useTickInk(toggleTask);
+  const ticks = ink ? inkTicks : heldTicks;
+  const creates = useCreateInk(createTask);
+  const ghosts = creates.pending.filter(
+    (c) => c.sectionKey === sectionKey && !sectionTasks.some((t) => t.id === c.id),
+  );
   const gate = useMemo(
     () => (gates ?? []).find((g) => g.section_key === sectionKey) ?? null,
     [gates, sectionKey],
@@ -289,13 +419,15 @@ export function WorkBlock({
         : when.kind === 'day'
           ? { dueDate: when.date, startsOn: null }
           : { dueDate: when.end, startsOn: when.start };
-    createTask.mutate({
+    const input = {
       title: trimmed,
       sectionKey,
       dueDate: dates.dueDate,
       startsOn: dates.startsOn,
       estimateMinutes: estMin && estMin > 0 ? estMin : null,
-    });
+    };
+    if (ink) creates.add(input);
+    else createTask.mutate(input);
     setTitle('');
     setWhen(null);
     setEstimateH('');
@@ -332,7 +464,7 @@ export function WorkBlock({
     );
   }
 
-  if (sectionTasks.length === 0 && !gate && !capturing) {
+  if (sectionTasks.length === 0 && !gate && !capturing && !(ink && (ghosts.length > 0 || creates.failed))) {
     return (
       <GuidedEmptyState
         className="mb-1 mt-4"
@@ -432,23 +564,44 @@ export function WorkBlock({
                   className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.05em]"
                   style={{ color: overdue ? 'var(--color-terracotta-ink)' : 'var(--text-muted)' }}
                 >
-                  {done
-                    ? t.completed_at
-                      ? `done · ${fmtDay(t.completed_at)}`
-                      : 'done'
-                    : t.starts_on && t.due_date
-                      ? `due ${fmtDay(t.starts_on)} – ${fmtDay(t.due_date)}`
-                      : t.due_date
-                        ? `due ${fmtDay(t.due_date)}`
-                        : ''}
-                  {!done && t.estimate_minutes
-                    ? ` · ${fmtHours(t.estimate_minutes)}`
-                    : ''}
+                  <SavingWord active={ink && ticks.busy(t.id)}>
+                    {done
+                      ? t.completed_at
+                        ? `done · ${fmtDay(t.completed_at)}`
+                        : 'done'
+                      : t.starts_on && t.due_date
+                        ? `due ${fmtDay(t.starts_on)} – ${fmtDay(t.due_date)}`
+                        : t.due_date
+                          ? `due ${fmtDay(t.due_date)}`
+                          : ''}
+                    {!done && t.estimate_minutes
+                      ? ` · ${fmtHours(t.estimate_minutes)}`
+                      : ''}
+                  </SavingWord>
                 </span>
               </button>
+              {ink && inkTicks.failedId === t.id && (
+                <InkAlert onRetry={() => ticks.tick(t)}>
+                  Couldn&rsquo;t save. &ldquo;{t.title}&rdquo; is as it was.
+                </InkAlert>
+              )}
             </li>
           );
         })}
+        {ink &&
+          ghosts.map((g) => (
+            <li key={g.id} className="border-b border-dashed border-[var(--color-pearl)]">
+              <GhostTaskRow title={g.title} />
+            </li>
+          ))}
+        {ink && creates.failed?.sectionKey === sectionKey && (
+          <li className="border-b border-dashed border-[var(--color-pearl)]">
+            <GhostTaskRow title={creates.failed.title} failed />
+            <InkAlert onRetry={creates.retry} onDiscard={creates.discard}>
+              Couldn&rsquo;t add &ldquo;{creates.failed.title}&rdquo;.
+            </InkAlert>
+          </li>
+        )}
       </ul>
 
       {capturing ? (

@@ -1,6 +1,7 @@
 import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { useOptimisticMutation } from './optimistic';
 
 // Lazy client getter to avoid module-level initialization during SSR.
 const getSupabase = () => createBrowserClient();
@@ -287,11 +288,22 @@ export function useSetFeedbackStatus() {
   });
 }
 
-/** React to a shipped note (R7.6.2). */
-export function useReactToFeedback() {
+type FeedbackNoteData = { note: Feedback; events: FeedbackEvent[] } | null;
+type ReactVars = { id: string; emoji: string };
+const NO_REACTIONS: ReactVars[] = [];
+
+/**
+ * React to a shipped note (R7.6.2). With `optimistic` (US-34 N3, flag
+ * `optimistic-ink`) the reaction is drawn at once from `pending`, and the
+ * RPC's event row is the receipt, merged into `['feedback-note', feedbackId]`.
+ * Without it, today's write then refetch.
+ */
+export function useReactToFeedback(
+  options: { optimistic?: boolean; feedbackId?: string | null } = {},
+) {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, emoji }: { id: string; emoji: string }) => {
+  const plain = useMutation({
+    mutationFn: async ({ id, emoji }: ReactVars) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.rpc('react_to_feedback', {
@@ -304,6 +316,30 @@ export function useReactToFeedback() {
       queryClient.invalidateQueries({ queryKey: ['feedback-note', vars.id] });
     },
   });
+  const ink = useOptimisticMutation<ReactVars, FeedbackEvent | null, FeedbackNoteData>({
+    honesty: 'internal',
+    scopeId: `feedback-reaction:${options.feedbackId ?? ''}`,
+    keys: options.feedbackId ? [['feedback-note', options.feedbackId]] : [],
+    meta: { errorSurface: 'inline' },
+    mutationFn: async ({ id, emoji }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('react_to_feedback', {
+        p_id: id,
+        p_emoji: emoji,
+      });
+      if (error) throw error;
+      return (data ?? null) as FeedbackEvent | null;
+    },
+    // The pending reaction is drawn from `pending`; the cache holds only rows.
+    apply: (current) => current,
+    invert: (current) => current,
+    merge: (current, event) =>
+      current && !current.events.some((e) => e.id === event.id)
+        ? { ...current, events: [...current.events, event] }
+        : current,
+  });
+  return options.optimistic ? ink : { ...plain, pending: NO_REACTIONS };
 }
 
 /** Reply on a note's thread (R7.5.4). */

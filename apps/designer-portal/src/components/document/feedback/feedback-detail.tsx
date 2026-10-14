@@ -23,6 +23,8 @@ import {
   type FeedbackStatus,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { InkAlert, SavingWord } from '../work-block';
 import {
   bucketMeta,
   statusMeta,
@@ -51,7 +53,20 @@ export function FeedbackDetail({
   const { isSuperAdmin } = useIsSuperAdmin();
   const setStatus = useSetFeedbackStatus();
   const reply = useReplyToFeedback();
-  const react = useReactToFeedback();
+  // US-34 N3 — `optimistic-ink` on: the reaction shows at once in the thread
+  // and a refusal takes it back with one inline line; off: today's write.
+  const ink = useFeatureFlag('optimistic-ink').value === true;
+  const react = useReactToFeedback({ optimistic: ink, feedbackId: id });
+  const [reactionFailed, setReactionFailed] = useState<string | null>(null);
+  const onReact = (emoji: string) => {
+    if (!note) return;
+    if (!ink) {
+      react.mutate({ id: note.id, emoji });
+      return;
+    }
+    setReactionFailed(null);
+    react.mutateAsync({ id: note.id, emoji }).catch(() => setReactionFailed(emoji));
+  };
 
   const note = data?.note;
   const events = useMemo(() => data?.events ?? [], [data]);
@@ -197,7 +212,7 @@ export function FeedbackDetail({
         ))}
       </div>
 
-      <Thread events={events} />
+      <Thread events={events} pendingReactions={ink ? react.pending.map((r) => r.emoji) : []} />
 
       <TriageActions
         note={note}
@@ -207,8 +222,13 @@ export function FeedbackDetail({
         onSetStatus={(status, text) =>
           setStatus.mutate({ id: note.id, status, note: text })
         }
-        onReact={(emoji) => react.mutate({ id: note.id, emoji })}
+        onReact={onReact}
       />
+      {reactionFailed && (
+        <InkAlert onRetry={() => onReact(reactionFailed)}>
+          Couldn&rsquo;t save your reaction.
+        </InkAlert>
+      )}
 
       {/* Reply — author + admin can add to the thread. */}
       <div className="mt-4 flex items-center gap-2">
@@ -385,11 +405,18 @@ function ContextCell({
   );
 }
 
-function Thread({ events }: { events: FeedbackEvent[] }) {
+function Thread({
+  events,
+  pendingReactions = [],
+}: {
+  events: FeedbackEvent[];
+  /** US-34 N3 — reactions still waiting for their receipt, drawn faint. */
+  pendingReactions?: string[];
+}) {
   const thread = events.filter(
     (e) => e.kind === 'reply' || e.kind === 'reaction',
   );
-  if (!thread.length) return null;
+  if (!thread.length && !pendingReactions.length) return null;
   return (
     <div className="mt-4 flex flex-col gap-2">
       {thread.map((e) => (
@@ -404,6 +431,19 @@ function Thread({ events }: { events: FeedbackEvent[] }) {
           ) : (
             String(e.payload?.text ?? '')
           )}
+        </div>
+      ))}
+      {pendingReactions.map((emoji, i) => (
+        <div
+          key={`pending-${i}`}
+          aria-busy
+          data-testid="pending-reaction"
+          className="flex items-baseline justify-between rounded-lg bg-[rgba(196,165,123,0.03)] px-3 py-2 text-[13px] text-[var(--color-mocha)]"
+        >
+          <span className="text-[16px] opacity-60">{emoji}</span>
+          <span className="font-mono text-[11px] text-[var(--text-muted)]">
+            <SavingWord active />
+          </span>
         </div>
       ))}
     </div>

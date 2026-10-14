@@ -19,7 +19,9 @@ import {
   useGenerateMilestoneInvoice,
   useUpdateMilestoneTrigger,
   type AccountMilestone,
+  type MilestoneTriggerInput,
 } from '@/hooks/use-account-page';
+import { InkAlert, SavingWord } from './work-block';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import {
@@ -61,9 +63,22 @@ function MilestoneRow({
    *  per-milestone primary would stand a second leader beside it. */
   headless: boolean;
 }) {
-  const updateTrigger = useUpdateMilestoneTrigger(projectId);
+  // US-34 N3 — `optimistic-ink` on: the select holds the new trigger at once
+  // and a refusal puts it back with one inline line; off: today's write.
+  const ink = useFeatureFlag('optimistic-ink').value === true;
+  const updateTrigger = useUpdateMilestoneTrigger(projectId, { optimistic: ink });
   const generate = useGenerateMilestoneInvoice(projectId);
   const [invoiceNote, setInvoiceNote] = useState<string | null>(null);
+  const [triggerFailed, setTriggerFailed] = useState<MilestoneTriggerInput | null>(null);
+  const setTrigger = (input: MilestoneTriggerInput) => {
+    if (!ink) {
+      updateTrigger.mutate(input);
+      return;
+    }
+    setTriggerFailed(null);
+    updateTrigger.mutateAsync(input).catch(() => setTriggerFailed(input));
+  };
+  const triggerSaving = ink && updateTrigger.pending.some((p) => p.milestoneId === m.id);
 
   return (
     <div className="grid grid-cols-[1fr_auto] items-baseline gap-2 border-b border-dashed border-[var(--color-pearl)] py-1.5 min-[700px]:grid-cols-[minmax(0,1.2fr)_auto_auto_minmax(0,1.4fr)_auto]">
@@ -78,7 +93,7 @@ function MilestoneRow({
         <select
           value={m.trigger_kind ?? ''}
           onChange={(e) =>
-            updateTrigger.mutate({
+            setTrigger({
               milestoneId: m.id,
               triggerKind: (e.target.value || null) as AccountMilestone['trigger_kind'],
               triggerSectionKey: m.trigger_section_key,
@@ -100,7 +115,7 @@ function MilestoneRow({
           <select
             value={m.trigger_section_key ?? ''}
             onChange={(e) =>
-              updateTrigger.mutate({
+              setTrigger({
                 milestoneId: m.id,
                 triggerKind: 'on_section_settled',
                 triggerSectionKey: (e.target.value || null) as SectionKey | null,
@@ -121,7 +136,7 @@ function MilestoneRow({
           <DateTextInput
             value={m.due_date ?? null}
             onChange={(value) =>
-              updateTrigger.mutate({
+              setTrigger({
                 milestoneId: m.id,
                 triggerKind: 'on_date',
                 dueDate: value,
@@ -130,6 +145,11 @@ function MilestoneRow({
             ariaLabel={`${m.label} date`}
             className="bg-transparent font-mono text-[11px] text-[var(--color-clay-ink)] outline-none"
           />
+        )}
+        {ink && (
+          <span aria-busy={triggerSaving || undefined} className="font-mono text-[11px] text-[var(--text-muted)]">
+            <SavingWord active={triggerSaving} />
+          </span>
         )}
       </span>
       {m.invoice_id ? (
@@ -165,6 +185,13 @@ function MilestoneRow({
         >
           Generate invoice
         </DocumentAction>
+      )}
+      {triggerFailed && (
+        <div className="col-span-full">
+          <InkAlert onRetry={() => setTrigger(triggerFailed)}>
+            Couldn&rsquo;t save the trigger. It is as it was.
+          </InkAlert>
+        </div>
       )}
       {invoiceNote && (
         <p

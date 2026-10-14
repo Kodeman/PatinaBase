@@ -1,4 +1,3 @@
-import { getSessionUserId } from '@patina/supabase';
 /**
  * The Work (R23) — section tasks + approval gates, both riding shipped
  * tables (audit-first: project_tasks 00169 + client_decisions; additive
@@ -14,7 +13,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
   docKeys,
+  getSessionUserId,
   invalidateProjectWorkflow,
+  useOptimisticMutation,
 } from '@patina/supabase';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { invalidateMarginSurfaces } from './use-margin-items';
@@ -86,6 +87,9 @@ export function gateState(gate: SectionGate): 'requested' | 'approved' | 'declin
   return picked?.approves ? 'approved' : 'declined';
 }
 
+const TASK_COLUMNS =
+  'id, project_id, section_key, title, status, due_date, starts_on, completed_at, estimate_minutes, sort_order, owner, owner_party_id, blocked_by_item_id, seq_after_task_id, field_capture_id';
+
 export function useSectionTasks(projectId: string | null) {
   return useQuery<SectionTask[]>({
     queryKey: docKeys.sectionTasks(projectId),
@@ -93,7 +97,7 @@ export function useSectionTasks(projectId: string | null) {
     queryFn: async () => {
       const { data, error } = await getSupabase()
         .from('project_tasks')
-        .select('id, project_id, section_key, title, status, due_date, starts_on, completed_at, estimate_minutes, sort_order, owner, owner_party_id, blocked_by_item_id, seq_after_task_id, field_capture_id')
+        .select(TASK_COLUMNS)
         .eq('project_id', projectId)
         .not('section_key', 'is', null)
         .order('sort_order', { ascending: true })
@@ -104,19 +108,64 @@ export function useSectionTasks(projectId: string | null) {
   });
 }
 
-export function useCreateSectionTask(projectId: string | null) {
+export interface NewSectionTask {
+  /** Client id (M13): a retry after an ambiguous failure cannot make two. */
+  id?: string;
+  title: string;
+  sectionKey: SectionKey;
+  dueDate?: string | null;
+  startsOn?: string | null;
+  estimateMinutes?: number | null;
+}
+const NO_CREATES: NewSectionTask[] = [];
+
+/**
+ * Adds a task. With `optimistic` (US-34 N3, flag `optimistic-ink`) the caller
+ * draws a ghost row from `pending` (M13), the insert carries the client id and
+ * returns its row (R6), and the row is merged into the list, so the ghost
+ * hands over to it with no gap. Without it, today's write then refetch.
+ */
+export function useCreateSectionTask(
+  projectId: string | null,
+  options: { optimistic?: boolean } = {},
+) {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      title: string;
-      sectionKey: SectionKey;
-      dueDate?: string | null;
-      startsOn?: string | null;
-      estimateMinutes?: number | null;
-    }) => {
+  const ink = useOptimisticMutation<NewSectionTask, SectionTask | null, SectionTask[]>({
+    honesty: 'internal',
+    scopeId: `section-task-create:${projectId ?? ''}`,
+    keys: [docKeys.sectionTasks(projectId)],
+    meta: { errorSurface: 'inline' },
+    mutationFn: async (input) => {
+      const { data, error } = await getSupabase()
+        .from('project_tasks')
+        .insert({
+          ...(input.id ? { id: input.id } : {}),
+          project_id: projectId,
+          title: input.title,
+          section_key: input.sectionKey,
+          due_date: input.dueDate ?? null,
+          starts_on: input.startsOn ?? null,
+          estimate_minutes: input.estimateMinutes ?? null,
+          created_by: await getSessionUserId(),
+        })
+        .select(TASK_COLUMNS)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as SectionTask | null;
+    },
+    // The ghost is drawn from `pending`; the list holds only real rows.
+    apply: (tasks) => tasks,
+    invert: (tasks) => tasks,
+    merge: (tasks, row) => (tasks.some((t) => t.id === row.id) ? tasks : [...tasks, row]),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: docKeys.sectionTasks(projectId), refetchType: 'none' });
+      void qc.invalidateQueries({ queryKey: docKeys.engagement(projectId) });
+      void qc.invalidateQueries({ queryKey: docKeys.desk(), refetchType: 'none' });
+    },
+  });
+  const plain = useMutation({
+    mutationFn: async (input: NewSectionTask) => {
       const supabase = getSupabase();
-      const authId = await getSessionUserId();
-      const auth = { user: authId ? { id: authId } : null };
       const { data, error } = await supabase
         .from('project_tasks')
         .insert({
@@ -126,7 +175,7 @@ export function useCreateSectionTask(projectId: string | null) {
           due_date: input.dueDate ?? null,
           starts_on: input.startsOn ?? null,
           estimate_minutes: input.estimateMinutes ?? null,
-          created_by: auth?.user?.id ?? null,
+          created_by: await getSessionUserId(),
         })
         .select()
         .single();
@@ -139,11 +188,27 @@ export function useCreateSectionTask(projectId: string | null) {
       void qc.invalidateQueries({ queryKey: docKeys.desk(), refetchType: 'none' });
     },
   });
+  return options.optimistic ? ink : { ...plain, pending: NO_CREATES };
 }
 
-export function useToggleSectionTask(projectId: string | null) {
+type TickVars = Pick<SectionTask, 'id' | 'status'>;
+const NO_TICKS: TickVars[] = [];
+const ticked = (from: SectionTask['status']) => (from !== 'done' ? 'done' : 'todo');
+
+/**
+ * Ticks or unticks a task. With `optimistic` (US-34 N3, flag `optimistic-ink`)
+ * the row turns over at once. The write returns its changed row (R6): zero
+ * rows, as an RLS-hidden or removed task gives, fails and puts the row back.
+ * The receipt is merged into the list, which is then only marked stale, so a
+ * refetch never lands over a sibling tick still in flight. One scope per list
+ * serializes the ticks. Without it, today's pending-only write (F16).
+ */
+export function useToggleSectionTask(
+  projectId: string | null,
+  options: { optimistic?: boolean } = {},
+) {
   const qc = useQueryClient();
-  return useMutation({
+  const plain = useMutation({
     mutationFn: async (task: Pick<SectionTask, 'id' | 'status'>) => {
       const done = task.status !== 'done';
       const { error } = await getSupabase()
@@ -162,6 +227,51 @@ export function useToggleSectionTask(projectId: string | null) {
       void invalidateProjectWorkflow(qc, projectId);
     },
   });
+  const ink = useOptimisticMutation<TickVars, SectionTask | null, SectionTask[]>({
+    honesty: 'internal',
+    scopeId: `section-tasks:${projectId ?? ''}`,
+    keys: [docKeys.sectionTasks(projectId)],
+    meta: { errorSurface: 'inline' },
+    mutationFn: async (task) => {
+      const done = task.status !== 'done';
+      const { data, error } = await getSupabase()
+        .from('project_tasks')
+        .update({
+          status: done ? 'done' : 'todo',
+          completed_at: done ? new Date().toISOString() : null,
+        })
+        .eq('id', task.id)
+        .select(TASK_COLUMNS)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as SectionTask | null;
+    },
+    apply: (tasks, task) =>
+      tasks.map((t) =>
+        t.id === task.id
+          ? ticked(task.status) === 'done'
+            ? { ...t, status: 'done', completed_at: t.status === 'done' ? t.completed_at : new Date().toISOString() }
+            : { ...t, status: 'todo', completed_at: null }
+          : t,
+      ),
+    invert: (tasks, task, { previous }) => {
+      const before = previous.find((t) => t.id === task.id);
+      if (!before) return tasks;
+      return tasks.map((t) =>
+        t.id === task.id && t.status === ticked(task.status)
+          ? { ...t, status: before.status, completed_at: before.completed_at }
+          : t,
+      );
+    },
+    merge: (tasks, row) => tasks.map((t) => (t.id === row.id ? { ...t, ...row } : t)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: docKeys.sectionTasks(projectId), refetchType: 'none' });
+      void qc.invalidateQueries({ queryKey: docKeys.engagement(projectId) });
+      void qc.invalidateQueries({ queryKey: docKeys.desk(), refetchType: 'none' });
+      void invalidateProjectWorkflow(qc, projectId);
+    },
+  });
+  return options.optimistic ? ink : { ...plain, pending: NO_TICKS };
 }
 
 export function useSectionGates(projectId: string | null) {

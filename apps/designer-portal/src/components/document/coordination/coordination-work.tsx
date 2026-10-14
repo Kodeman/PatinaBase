@@ -32,7 +32,14 @@ import type { CoordinationItem, ProjectParty } from '@patina/supabase';
 import type { SectionTask } from '@/hooks/use-section-work';
 import { OwnerChip, TaskDepLine } from './task-dep-line';
 import { DocumentAction } from '../document-action';
-import { useTickPending } from '../work-block';
+import {
+  GhostTaskRow,
+  InkAlert,
+  SavingWord,
+  useCreateInk,
+  useTickInk,
+  useTickPending,
+} from '../work-block';
 
 const todayYmd = () => new Date().toISOString().slice(0, 10);
 
@@ -58,8 +65,11 @@ export function CoordinationWork({
   tasks,
   parties,
 }: CoordinationWorkProps) {
-  const toggleTask = useToggleSectionTask(projectId);
-  const createTask = useCreateSectionTask(projectId);
+  // US-34 N3 — `optimistic-ink` on: the tick and the add answer at once
+  // (work-block.tsx); off: today's pending-only path (F16).
+  const ink = useFeatureFlag('optimistic-ink').value === true;
+  const toggleTask = useToggleSectionTask(projectId, { optimistic: ink });
+  const createTask = useCreateSectionTask(projectId, { optimistic: ink });
 
   const [capturing, setCapturing] = useState(false);
   const [title, setTitle] = useState('');
@@ -71,7 +81,14 @@ export function CoordinationWork({
     [tasks],
   );
   // F16 — pending-only, busy until the receipt is in the cache (work-block.tsx).
-  const ticks = useTickPending(tasks, toggleTask.mutateAsync);
+  const heldTicks = useTickPending(tasks, toggleTask.mutateAsync);
+  const inkTicks = useTickInk(toggleTask);
+  const ticks = ink ? inkTicks : heldTicks;
+  const creates = useCreateInk(createTask);
+  const ghosts = creates.pending.filter(
+    (c) => c.sectionKey === 'project' && !sectionTasks.some((t) => t.id === c.id),
+  );
+  const failedCreate = creates.failed?.sectionKey === 'project' ? creates.failed : null;
   // isBlocked() reads against ALL tasks (sequence predecessors may live in any
   // section) + all coordination items.
   const allTasks = tasks ?? [];
@@ -93,18 +110,20 @@ export function CoordinationWork({
   const save = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    createTask.mutate({
+    const input = {
       title: trimmed,
-      sectionKey: 'project',
+      sectionKey: 'project' as const,
       dueDate: null,
       estimateMinutes: null,
-    });
+    };
+    if (ink) creates.add(input);
+    else createTask.mutate(input);
     setTitle('');
     setCapturing(false);
   };
 
   // Empty state stays one quiet line — the block earns its space (work-block.tsx).
-  if (sectionTasks.length === 0 && !capturing) {
+  if (sectionTasks.length === 0 && !capturing && !(ink && (ghosts.length > 0 || failedCreate))) {
     return (
       <div className="mb-1 mt-4 flex items-baseline gap-4">
         <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
@@ -238,20 +257,41 @@ export function CoordinationWork({
                         color: overdue ? 'var(--color-terracotta-ink)' : 'var(--text-muted)',
                       }}
                     >
-                      {done
-                        ? t.completed_at
-                          ? `done · ${fmtDay(t.completed_at)}`
-                          : 'done'
-                        : t.due_date
-                          ? `due ${fmtDay(t.due_date)}`
-                          : ''}
+                      <SavingWord active={ink && ticks.busy(t.id)}>
+                        {done
+                          ? t.completed_at
+                            ? `done · ${fmtDay(t.completed_at)}`
+                            : 'done'
+                          : t.due_date
+                            ? `due ${fmtDay(t.due_date)}`
+                            : ''}
+                      </SavingWord>
                     </span>
                   )}
                 </span>
               </div>
+              {ink && inkTicks.failedId === t.id && (
+                <InkAlert onRetry={() => ticks.tick(t)}>
+                  Couldn&rsquo;t save. &ldquo;{t.title}&rdquo; is as it was.
+                </InkAlert>
+              )}
             </li>
           );
         })}
+        {ink &&
+          ghosts.map((g) => (
+            <li key={g.id} className="border-b border-dashed border-[var(--color-pearl)] last:border-b-0">
+              <GhostTaskRow title={g.title} />
+            </li>
+          ))}
+        {ink && failedCreate && (
+          <li className="border-b border-dashed border-[var(--color-pearl)] last:border-b-0">
+            <GhostTaskRow title={failedCreate.title} failed />
+            <InkAlert onRetry={creates.retry} onDiscard={creates.discard}>
+              Couldn&rsquo;t add &ldquo;{failedCreate.title}&rdquo;.
+            </InkAlert>
+          </li>
+        )}
       </ul>
 
       {capturing ? (

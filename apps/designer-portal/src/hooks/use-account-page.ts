@@ -7,7 +7,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { createBrowserClient, useOptimisticMutation } from '@patina/supabase';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { invalidateMarginSurfaces } from './use-margin-items';
 import {
@@ -297,23 +297,42 @@ function categorize(items: ItemSlice[]): RoomVariance['categories'] {
     .sort((a, b) => b.committedCents - a.committedCents);
 }
 
-export function useUpdateMilestoneTrigger(projectId: string | null) {
+export interface MilestoneTriggerInput {
+  milestoneId: string;
+  triggerKind: AccountMilestone['trigger_kind'];
+  triggerSectionKey?: SectionKey | null;
+  dueDate?: string | null;
+}
+const NO_TRIGGER_EDITS: MilestoneTriggerInput[] = [];
+const MILESTONE_COLUMNS =
+  'id, label, percentage, amount_cents, status, due_date, paid_at, trigger_kind, trigger_section_key, invoice_id, sort_order';
+
+/** The fields a trigger write sets, exactly as the update below sets them. */
+function triggerPatch(input: MilestoneTriggerInput): Partial<AccountMilestone> {
+  return {
+    trigger_kind: input.triggerKind,
+    trigger_section_key:
+      input.triggerKind === 'on_section_settled' ? (input.triggerSectionKey ?? null) : null,
+    ...(input.triggerKind === 'on_date' ? { due_date: input.dueDate ?? null } : {}),
+  };
+}
+
+/**
+ * A milestone's trigger: config, not payment (e1 #25). With `optimistic`
+ * (US-34 N3, flag `optimistic-ink`) the select holds the new value instead of
+ * snapping back until the refetch; the write returns its changed row (R6) and
+ * a refusal puts back only the fields this write set. Without it, today's.
+ */
+export function useUpdateMilestoneTrigger(
+  projectId: string | null,
+  options: { optimistic?: boolean } = {},
+) {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      milestoneId: string;
-      triggerKind: AccountMilestone['trigger_kind'];
-      triggerSectionKey?: SectionKey | null;
-      dueDate?: string | null;
-    }) => {
+  const plain = useMutation({
+    mutationFn: async (input: MilestoneTriggerInput) => {
       const { error } = await getSupabase()
         .from('project_payment_milestones')
-        .update({
-          trigger_kind: input.triggerKind,
-          trigger_section_key:
-            input.triggerKind === 'on_section_settled' ? (input.triggerSectionKey ?? null) : null,
-          ...(input.triggerKind === 'on_date' ? { due_date: input.dueDate ?? null } : {}),
-        })
+        .update(triggerPatch(input))
         .eq('id', input.milestoneId);
       if (error) throw error;
     },
@@ -321,6 +340,54 @@ export function useUpdateMilestoneTrigger(projectId: string | null) {
       void qc.invalidateQueries({ queryKey: ['account-page', projectId] });
     },
   });
+  const ink = useOptimisticMutation<MilestoneTriggerInput, AccountMilestone | null, AccountPageData>({
+    honesty: 'internal',
+    scopeId: `account-milestones:${projectId ?? ''}`,
+    keys: [['account-page', projectId]],
+    meta: { errorSurface: 'inline' },
+    mutationFn: async (input) => {
+      const { data, error } = await getSupabase()
+        .from('project_payment_milestones')
+        .update(triggerPatch(input))
+        .eq('id', input.milestoneId)
+        .select(MILESTONE_COLUMNS)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as AccountMilestone | null;
+    },
+    apply: (page, input) => ({
+      ...page,
+      milestones: page.milestones.map((m) =>
+        m.id === input.milestoneId ? { ...m, ...triggerPatch(input) } : m,
+      ),
+    }),
+    invert: (page, input, { previous }) => {
+      const before = previous.milestones.find((m) => m.id === input.milestoneId);
+      if (!before) return page;
+      const patch = triggerPatch(input) as Record<string, unknown>;
+      return {
+        ...page,
+        milestones: page.milestones.map((m) => {
+          if (m.id !== input.milestoneId) return m;
+          const restored = { ...m } as Record<string, unknown>;
+          for (const field of Object.keys(patch)) {
+            if (restored[field] === patch[field]) {
+              restored[field] = (before as unknown as Record<string, unknown>)[field];
+            }
+          }
+          return restored as unknown as AccountMilestone;
+        }),
+      };
+    },
+    merge: (page, row) => ({
+      ...page,
+      milestones: page.milestones.map((m) => (m.id === row.id ? { ...m, ...row } : m)),
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['account-page', projectId], refetchType: 'none' });
+    },
+  });
+  return options.optimistic ? ink : { ...plain, pending: NO_TRIGGER_EDITS };
 }
 
 /** The Generate-invoice act: drafts into the Money margin (review-then-send). */

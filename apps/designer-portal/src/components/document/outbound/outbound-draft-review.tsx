@@ -14,7 +14,9 @@
 
 import { useState } from 'react';
 import { useDiscardOutboundDraft, useOutboundDrafts, useUpdateOutboundDraft } from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocumentAction } from '../document-action';
+import { SavingWord } from '../work-block';
 import { LABEL_CLS } from '../line-unfold/cell';
 
 export type OutboundDraftRow = NonNullable<ReturnType<typeof useOutboundDrafts>['data']>[number];
@@ -100,7 +102,11 @@ export function OutboundDraftReview({
   /** Sends this one message, saving any edit first. */
   onSend: (ids: string[]) => Promise<void>;
 }) {
-  const update = useUpdateOutboundDraft();
+  // US-34 N3 — `optimistic-ink` on: a saved edit becomes the stored text at
+  // once (the TEXT only; sending and discarding stay pending-only, §5.2) and
+  // a refusal puts the old text back, keeping the typed words; off: today's.
+  const ink = useFeatureFlag('optimistic-ink').value === true;
+  const update = useUpdateOutboundDraft({ optimistic: ink });
   const discard = useDiscardOutboundDraft();
   const storedSubject = draft.subject ?? '';
   const [subject, setSubject] = useState(storedSubject);
@@ -148,7 +154,13 @@ export function OutboundDraftReview({
         onEdit(draft.id, null);
         setSaved(true);
       })
-      .catch((e: Error) => setError(e.message || 'The draft was not saved.'));
+      .catch((e: Error) =>
+        setError(
+          ink
+            ? 'Couldn’t save the draft. Your words are kept here.'
+            : e.message || 'The draft was not saved.',
+        ),
+      );
   };
 
   const discardDraft = () => {
@@ -225,7 +237,7 @@ export function OutboundDraftReview({
                     : `${fieldId}-no-address`
               }
               disabled={pending || !ready || !canSend || !recipient || blank}
-              loading={sending || update.isPending}
+              loading={sending || (!ink && update.isPending)}
               loadingLabel="Sending"
               onClick={send}
             >
@@ -244,6 +256,11 @@ export function OutboundDraftReview({
               >
                 {`Save the draft for ${leadName}`}
               </DocumentAction>
+            )}
+            {ink && (
+              <span aria-busy={update.isPending || undefined} className="font-mono text-[11px] text-[var(--text-muted)]">
+                <SavingWord active={update.isPending} />
+              </span>
             )}
             <DocumentAction
               actionKey="discard-outbound-draft"
