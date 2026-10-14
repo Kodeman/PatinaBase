@@ -321,7 +321,10 @@ async function scenario(browser, name, vp) {
       // Tick then untick the fixture task in "The work" (coordination-work.tsx). E1's P6, promoted.
       return await withFixture('P6', async ({ title }) => {
         const { page, rec } = await hardNav(ctx, `${BASE}/doc/${fx.PROJECT}`, SEL.doc);
-        const undone = `button[aria-label='Mark "${title}" done']`, done = `button[aria-label='Mark "${title}" not done']`;
+        // SQ-1002: F16 made the tick one name plus aria-pressed (coordination-work.tsx), so each
+        // state matches both DOMs: the old label pair, or the one label with aria-pressed.
+        const undone = `button[aria-label='Mark "${title}" done']:not([aria-pressed="true"])`;
+        const done = `button[aria-label='Mark "${title}" not done'], button[aria-label='Mark "${title}" done'][aria-pressed="true"]`;
         const task = page.locator(undone);
         if (!(await task.count())) throw new Error('P6: fixture task row not rendered');
         await task.scrollIntoViewIfNeeded();

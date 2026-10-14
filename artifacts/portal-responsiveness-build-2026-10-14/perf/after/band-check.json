@@ -1,0 +1,109 @@
+{
+ "base": "http://localhost:3000",
+ "rows": [
+  {
+   "viewport": 1440,
+   "mode": "saving",
+   "tickVisible": true,
+   "bandState": "saving",
+   "bandText": "saving…",
+   "bandRect": {
+    "left": 1375.8,
+    "top": 20.3,
+    "right": 1422,
+    "bottom": 34.3
+   },
+   "moneyText": "INSTALL 23 NOVEMBER",
+   "moneyRect": {
+    "left": 1011.9,
+    "top": 8.8,
+    "right": 1154,
+    "bottom": 22.8
+   },
+   "overlapPx2": 0,
+   "horizontalGapPx": 221.8,
+   "fixture": {
+    "name": "P6",
+    "teardown": {
+     "left": 0
+    }
+   }
+  },
+  {
+   "viewport": 1440,
+   "mode": "offline",
+   "tickVisible": true,
+   "bandState": "offline",
+   "bandText": "Offline. Ticks and edits will save when you’re back.",
+   "bandRect": {
+    "left": 1078.8,
+    "top": 20.3,
+    "right": 1422,
+    "bottom": 34.3
+   },
+   "moneyText": "INSTALL 23 NOVEMBER",
+   "moneyRect": {
+    "left": 1011.9,
+    "top": 8.8,
+    "right": 1154,
+    "bottom": 22.8
+   },
+   "overlapPx2": 188,
+   "horizontalGapPx": -75.2,
+   "fixture": {
+    "name": "P6",
+    "teardown": {
+     "left": 0
+    }
+   }
+  },
+  {
+   "viewport": 390,
+   "mode": "saving",
+   "tickVisible": true,
+   "bandState": "saving",
+   "bandText": "saving…",
+   "bandRect": {
+    "left": 325.8,
+    "top": 20.3,
+    "right": 372,
+    "bottom": 34.3
+   },
+   "moneyText": "INSTALL 23 NOVEMBER",
+   "moneyRect": null,
+   "overlapPx2": 0,
+   "horizontalGapPx": null,
+   "fixture": {
+    "name": "P6",
+    "teardown": {
+     "left": 0
+    }
+   }
+  },
+  {
+   "viewport": 390,
+   "mode": "offline",
+   "tickVisible": true,
+   "bandState": "offline",
+   "bandText": "Offline. Ticks and edits will save when you’re back.",
+   "bandRect": {
+    "left": 28.8,
+    "top": 20.3,
+    "right": 372,
+    "bottom": 34.3
+   },
+   "moneyText": "INSTALL 23 NOVEMBER",
+   "moneyRect": null,
+   "overlapPx2": 0,
+   "horizontalGapPx": null,
+   "fixture": {
+    "name": "P6",
+    "teardown": {
+     "left": 0
+    }
+   }
+  }
+ ],
+ "covered": 1,
+ "verdict": "covers-money"
+}

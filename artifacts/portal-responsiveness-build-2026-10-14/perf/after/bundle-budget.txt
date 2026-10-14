@@ -1,0 +1,5 @@
+(document)/desk: 1285184 bytes (1255.1 KiB) / 1346026 byte budget, 62 chunks
+(document)/doc/[id]: 1611770 bytes (1574 KiB) / 1687684 byte budget, 70 chunks
+client crypto-browserify modules: 0; chunks: 0
+lucide icon modules: 140 / 200
+Bundle budget passed.

@@ -1,0 +1,474 @@
+{
+ "throttling": {
+  "cpu": 4,
+  "network": {
+   "offline": false,
+   "latency": 165,
+   "downloadThroughput": 1012500,
+   "uploadThroughput": 168750
+  }
+ },
+ "base": "http://localhost:3000",
+ "commit": "2c9bc94ac70863450a280b5acd1357963a27e46a",
+ "arrivalOptIn": true,
+ "doc": "b0000000-0000-0000-0000-00000000c0d1",
+ "writeDoc": "b0000000-0000-0000-0000-0000000000d1",
+ "rows": [
+  {
+   "scenario": "P6",
+   "viewport": "1440",
+   "run": 1,
+   "hostLoad": 5.5,
+   "tick": {
+    "action": "tick",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 7,
+    "placeholder": 269,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 739,
+    "requests": 12,
+    "apiRequests": 7,
+    "authUser": 0,
+    "rpc": 4,
+    "depth": 2,
+    "domMutationBatches": 11,
+    "longTasks": 1,
+    "longTaskMs": 92,
+    "reactCommits": 16,
+    "cls": 0.1578,
+    "layoutShifts": 1,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "tickShowsState": 217,
+    "write": "PATCH project_tasks",
+    "writeStart": 271,
+    "writeEnd": 461,
+    "beforeWrite": [
+     {
+      "k": "GET project_ffe_placements",
+      "s": 166,
+      "e": 338
+     },
+     {
+      "k": "GET project_palettes",
+      "s": 171,
+      "e": 346
+     },
+     {
+      "k": "POST rpc:can_see_studio_margin",
+      "s": 267,
+      "e": 457
+     }
+    ],
+    "refetchesAfterWrite": 3,
+    "refetchesByKind": {
+     "POST rpc:document_open": 1,
+     "POST rpc:desk_read": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "POST rpc:document_open",
+      "s": 520,
+      "e": 703
+     },
+     {
+      "k": "POST rpc:desk_read",
+      "s": 528,
+      "e": 733
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 528,
+      "e": 739
+     }
+    ]
+   },
+   "untick": {
+    "action": "untick",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 39,
+    "placeholder": 68,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 497,
+    "requests": 4,
+    "apiRequests": 4,
+    "authUser": 0,
+    "rpc": 3,
+    "depth": 2,
+    "domMutationBatches": 4,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 7,
+    "cls": 0,
+    "layoutShifts": 0,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "tickShowsState": 50,
+    "write": "PATCH project_tasks",
+    "writeStart": 61,
+    "writeEnd": 242,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 3,
+    "refetchesByKind": {
+     "POST rpc:document_open": 1,
+     "POST rpc:desk_read": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "POST rpc:document_open",
+      "s": 282,
+      "e": 464
+     },
+     {
+      "k": "POST rpc:desk_read",
+      "s": 289,
+      "e": 497
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 289,
+      "e": 497
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P6",
+    "teardown": {
+     "left": 0
+    }
+   }
+  },
+  {
+   "scenario": "P6",
+   "viewport": "1440",
+   "run": 2,
+   "hostLoad": 5.3,
+   "tick": {
+    "action": "tick",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 8,
+    "placeholder": 259,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 721,
+    "requests": 12,
+    "apiRequests": 7,
+    "authUser": 0,
+    "rpc": 4,
+    "depth": 2,
+    "domMutationBatches": 11,
+    "longTasks": 1,
+    "longTaskMs": 91,
+    "reactCommits": 16,
+    "cls": 0.1578,
+    "layoutShifts": 1,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "tickShowsState": 214,
+    "write": "PATCH project_tasks",
+    "writeStart": 263,
+    "writeEnd": 452,
+    "beforeWrite": [
+     {
+      "k": "GET project_ffe_placements",
+      "s": 162,
+      "e": 337
+     },
+     {
+      "k": "GET project_palettes",
+      "s": 190,
+      "e": 386
+     },
+     {
+      "k": "POST rpc:can_see_studio_margin",
+      "s": 262,
+      "e": 450
+     }
+    ],
+    "refetchesAfterWrite": 3,
+    "refetchesByKind": {
+     "POST rpc:document_open": 1,
+     "POST rpc:desk_read": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "POST rpc:document_open",
+      "s": 508,
+      "e": 687
+     },
+     {
+      "k": "POST rpc:desk_read",
+      "s": 515,
+      "e": 716
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 522,
+      "e": 721
+     }
+    ]
+   },
+   "untick": {
+    "action": "untick",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 39,
+    "placeholder": 78,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 495,
+    "requests": 4,
+    "apiRequests": 4,
+    "authUser": 0,
+    "rpc": 3,
+    "depth": 2,
+    "domMutationBatches": 4,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 7,
+    "cls": 0,
+    "layoutShifts": 0,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "tickShowsState": 48,
+    "write": "PATCH project_tasks",
+    "writeStart": 59,
+    "writeEnd": 242,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 3,
+    "refetchesByKind": {
+     "POST rpc:document_open": 1,
+     "POST rpc:desk_read": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "POST rpc:document_open",
+      "s": 277,
+      "e": 460
+     },
+     {
+      "k": "POST rpc:desk_read",
+      "s": 282,
+      "e": 490
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 287,
+      "e": 495
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P6",
+    "teardown": {
+     "left": 0
+    }
+   }
+  },
+  {
+   "scenario": "P6",
+   "viewport": "1440",
+   "run": 3,
+   "hostLoad": 5.2,
+   "tick": {
+    "action": "tick",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 6,
+    "placeholder": 277,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 743,
+    "requests": 12,
+    "apiRequests": 7,
+    "authUser": 0,
+    "rpc": 4,
+    "depth": 2,
+    "domMutationBatches": 11,
+    "longTasks": 2,
+    "longTaskMs": 145,
+    "reactCommits": 16,
+    "cls": 0.1578,
+    "layoutShifts": 1,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "tickShowsState": 217,
+    "write": "PATCH project_tasks",
+    "writeStart": 279,
+    "writeEnd": 468,
+    "beforeWrite": [
+     {
+      "k": "GET project_ffe_placements",
+      "s": 162,
+      "e": 333
+     },
+     {
+      "k": "GET project_palettes",
+      "s": 167,
+      "e": 345
+     },
+     {
+      "k": "POST rpc:can_see_studio_margin",
+      "s": 169,
+      "e": 345
+     }
+    ],
+    "refetchesAfterWrite": 3,
+    "refetchesByKind": {
+     "POST rpc:document_open": 1,
+     "POST rpc:desk_read": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "POST rpc:document_open",
+      "s": 520,
+      "e": 707
+     },
+     {
+      "k": "POST rpc:desk_read",
+      "s": 528,
+      "e": 737
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 529,
+      "e": 743
+     }
+    ]
+   },
+   "untick": {
+    "action": "untick",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 41,
+    "placeholder": 76,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 505,
+    "requests": 4,
+    "apiRequests": 4,
+    "authUser": 0,
+    "rpc": 3,
+    "depth": 2,
+    "domMutationBatches": 4,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 7,
+    "cls": 0,
+    "layoutShifts": 0,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "tickShowsState": 54,
+    "write": "PATCH project_tasks",
+    "writeStart": 63,
+    "writeEnd": 248,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 3,
+    "refetchesByKind": {
+     "POST rpc:document_open": 1,
+     "POST rpc:desk_read": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "POST rpc:document_open",
+      "s": 286,
+      "e": 471
+     },
+     {
+      "k": "POST rpc:desk_read",
+      "s": 287,
+      "e": 500
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 288,
+      "e": 505
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P6",
+    "teardown": {
+     "left": 0
+    }
+   }
+  }
+ ]
+}

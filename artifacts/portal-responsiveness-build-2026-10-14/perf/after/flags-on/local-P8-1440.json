@@ -1,0 +1,204 @@
+{
+ "throttling": {
+  "cpu": 4,
+  "network": {
+   "offline": false,
+   "latency": 165,
+   "downloadThroughput": 1012500,
+   "uploadThroughput": 168750
+  }
+ },
+ "base": "http://localhost:3000",
+ "commit": "2c9bc94ac70863450a280b5acd1357963a27e46a",
+ "arrivalOptIn": true,
+ "doc": "b0000000-0000-0000-0000-00000000c0d1",
+ "writeDoc": "b0000000-0000-0000-0000-0000000000d1",
+ "rows": [
+  {
+   "scenario": "P8",
+   "viewport": "1440",
+   "run": 1,
+   "hostLoad": 6.2,
+   "act": {
+    "action": "add-room",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 40,
+    "placeholder": 87,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 763,
+    "requests": 4,
+    "apiRequests": 2,
+    "authUser": 0,
+    "rpc": 0,
+    "depth": 2,
+    "domMutationBatches": 8,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 10,
+    "cls": 0,
+    "layoutShifts": 0,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "roomShown": 310,
+    "write": "POST project_rooms",
+    "writeStart": 91,
+    "writeEnd": 271,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 1,
+    "refetchesByKind": {
+     "GET project_rooms": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_rooms",
+      "s": 379,
+      "e": 558
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P8",
+    "teardown": {
+     "deleted": 1
+    }
+   }
+  },
+  {
+   "scenario": "P8",
+   "viewport": "1440",
+   "run": 2,
+   "hostLoad": 6.3,
+   "act": {
+    "action": "add-room",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 41,
+    "placeholder": 94,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 777,
+    "requests": 4,
+    "apiRequests": 2,
+    "authUser": 0,
+    "rpc": 0,
+    "depth": 2,
+    "domMutationBatches": 8,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 10,
+    "cls": 0,
+    "layoutShifts": 0,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "roomShown": 317,
+    "write": "POST project_rooms",
+    "writeStart": 97,
+    "writeEnd": 279,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 1,
+    "refetchesByKind": {
+     "GET project_rooms": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_rooms",
+      "s": 394,
+      "e": 571
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P8",
+    "teardown": {
+     "deleted": 1
+    }
+   }
+  },
+  {
+   "scenario": "P8",
+   "viewport": "1440",
+   "run": 3,
+   "hostLoad": 6.4,
+   "act": {
+    "action": "add-room",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 42,
+    "placeholder": 91,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 781,
+    "requests": 4,
+    "apiRequests": 2,
+    "authUser": 0,
+    "rpc": 0,
+    "depth": 2,
+    "domMutationBatches": 8,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 10,
+    "cls": 0,
+    "layoutShifts": 0,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "roomShown": 315,
+    "write": "POST project_rooms",
+    "writeStart": 94,
+    "writeEnd": 276,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 1,
+    "refetchesByKind": {
+     "GET project_rooms": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_rooms",
+      "s": 387,
+      "e": 566
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P8",
+    "teardown": {
+     "deleted": 1
+    }
+   }
+  }
+ ]
+}

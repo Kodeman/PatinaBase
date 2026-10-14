@@ -1,0 +1,336 @@
+{
+ "throttling": {
+  "cpu": 4,
+  "network": {
+   "offline": false,
+   "latency": 165,
+   "downloadThroughput": 1012500,
+   "uploadThroughput": 168750
+  }
+ },
+ "base": "http://localhost:3000",
+ "commit": "2c9bc94ac70863450a280b5acd1357963a27e46a",
+ "arrivalOptIn": true,
+ "doc": "b0000000-0000-0000-0000-00000000c0d1",
+ "writeDoc": "b0000000-0000-0000-0000-0000000000d1",
+ "rows": [
+  {
+   "scenario": "P7",
+   "viewport": "1440",
+   "run": 1,
+   "hostLoad": 5.5,
+   "act": {
+    "action": "complete-phase",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 34,
+    "placeholder": 105,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 722,
+    "requests": 8,
+    "apiRequests": 8,
+    "authUser": 0,
+    "rpc": 4,
+    "depth": 2,
+    "domMutationBatches": 8,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 14,
+    "cls": 0,
+    "layoutShifts": 0,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "phaseShowsState": 327,
+    "pendingShown": 52,
+    "write": "POST rpc:advance_project_phase",
+    "writeStart": 107,
+    "writeEnd": 290,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 7,
+    "refetchesByKind": {
+     "GET projects": 3,
+     "GET project_phases": 1,
+     "POST rpc:document_open": 1,
+     "POST rpc:desk_read": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_phases",
+      "s": 358,
+      "e": 565
+     },
+     {
+      "k": "GET projects",
+      "s": 360,
+      "e": 538
+     },
+     {
+      "k": "GET projects",
+      "s": 361,
+      "e": 621
+     },
+     {
+      "k": "GET projects",
+      "s": 362,
+      "e": 619
+     },
+     {
+      "k": "POST rpc:document_open",
+      "s": 362,
+      "e": 573
+     },
+     {
+      "k": "POST rpc:desk_read",
+      "s": 364,
+      "e": 597
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 371,
+      "e": 722
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P7",
+    "teardown": {
+     "restored": [
+      {
+       "id": "b0000000-0000-0000-0000-00000005c704",
+       "status": "in_progress"
+      },
+      {
+       "id": "b0000000-0000-0000-0000-00000005c705",
+       "status": "pending"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "scenario": "P7",
+   "viewport": "1440",
+   "run": 2,
+   "hostLoad": 5.3,
+   "act": {
+    "action": "complete-phase",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 34,
+    "placeholder": 109,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 728,
+    "requests": 8,
+    "apiRequests": 8,
+    "authUser": 0,
+    "rpc": 4,
+    "depth": 2,
+    "domMutationBatches": 8,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 14,
+    "cls": 0,
+    "layoutShifts": 0,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "phaseShowsState": 334,
+    "pendingShown": 52,
+    "write": "POST rpc:advance_project_phase",
+    "writeStart": 111,
+    "writeEnd": 299,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 7,
+    "refetchesByKind": {
+     "GET projects": 3,
+     "GET project_phases": 1,
+     "POST rpc:document_open": 1,
+     "POST rpc:desk_read": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_phases",
+      "s": 363,
+      "e": 570
+     },
+     {
+      "k": "GET projects",
+      "s": 371,
+      "e": 547
+     },
+     {
+      "k": "GET projects",
+      "s": 371,
+      "e": 617
+     },
+     {
+      "k": "GET projects",
+      "s": 372,
+      "e": 617
+     },
+     {
+      "k": "POST rpc:document_open",
+      "s": 373,
+      "e": 575
+     },
+     {
+      "k": "POST rpc:desk_read",
+      "s": 374,
+      "e": 595
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 378,
+      "e": 728
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P7",
+    "teardown": {
+     "restored": [
+      {
+       "id": "b0000000-0000-0000-0000-00000005c704",
+       "status": "in_progress"
+      },
+      {
+       "id": "b0000000-0000-0000-0000-00000005c705",
+       "status": "pending"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "scenario": "P7",
+   "viewport": "1440",
+   "run": 3,
+   "hostLoad": 6,
+   "act": {
+    "action": "complete-phase",
+    "capped": false,
+    "spa": true,
+    "path": "/doc/[id]",
+    "ttfb": null,
+    "firstPaint": null,
+    "fcp": null,
+    "lcp": null,
+    "firstChange": 34,
+    "placeholder": 111,
+    "anyText": null,
+    "content": null,
+    "usable": null,
+    "noBusy": null,
+    "settled": 734,
+    "requests": 8,
+    "apiRequests": 8,
+    "authUser": 0,
+    "rpc": 4,
+    "depth": 2,
+    "domMutationBatches": 7,
+    "longTasks": 0,
+    "longTaskMs": 0,
+    "reactCommits": 13,
+    "cls": 0,
+    "layoutShifts": 0,
+    "arrivalStart": null,
+    "arrivalEnd": null,
+    "arrivalPlayStart": null,
+    "arrivalPlayed": false,
+    "externalRequests": [],
+    "phaseShowsState": 334,
+    "pendingShown": 53,
+    "write": "POST rpc:advance_project_phase",
+    "writeStart": 114,
+    "writeEnd": 298,
+    "beforeWrite": [],
+    "refetchesAfterWrite": 7,
+    "refetchesByKind": {
+     "GET projects": 3,
+     "GET project_phases": 1,
+     "POST rpc:document_open": 1,
+     "POST rpc:desk_read": 1,
+     "POST rpc:get_project_workflow": 1
+    },
+    "realtimeEchoFrames": [],
+    "requestTimeline": [
+     {
+      "k": "GET project_phases",
+      "s": 365,
+      "e": 573
+     },
+     {
+      "k": "GET projects",
+      "s": 369,
+      "e": 551
+     },
+     {
+      "k": "GET projects",
+      "s": 370,
+      "e": 613
+     },
+     {
+      "k": "GET projects",
+      "s": 371,
+      "e": 618
+     },
+     {
+      "k": "POST rpc:document_open",
+      "s": 372,
+      "e": 574
+     },
+     {
+      "k": "POST rpc:desk_read",
+      "s": 377,
+      "e": 602
+     },
+     {
+      "k": "POST rpc:get_project_workflow",
+      "s": 378,
+      "e": 734
+     }
+    ]
+   },
+   "fixture": {
+    "name": "P7",
+    "teardown": {
+     "restored": [
+      {
+       "id": "b0000000-0000-0000-0000-00000005c704",
+       "status": "in_progress"
+      },
+      {
+       "id": "b0000000-0000-0000-0000-00000005c705",
+       "status": "pending"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

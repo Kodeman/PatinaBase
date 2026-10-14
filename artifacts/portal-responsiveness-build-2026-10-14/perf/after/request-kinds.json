@@ -1,0 +1,50 @@
+{
+ "artifacts/portal-responsiveness-2026-10-14/baseline/traces/local-desk-waterfall.json": {
+  "route": "/desk",
+  "supabaseRequests": 95,
+  "document_state": 2,
+  "rpc/desk_read": 0,
+  "rpc/document_open": 0,
+  "project_ffe_items": 0,
+  "auth/v1/user": 16,
+  "outbound_drafts": 2,
+  "project_tasks": 0,
+  "projects": 5
+ },
+ "artifacts/portal-responsiveness-2026-10-14/baseline/traces/local-doc-waterfall.json": {
+  "route": "/doc/[id]",
+  "supabaseRequests": 145,
+  "document_state": 2,
+  "rpc/desk_read": 0,
+  "rpc/document_open": 0,
+  "project_ffe_items": 3,
+  "auth/v1/user": 21,
+  "outbound_drafts": 1,
+  "project_tasks": 1,
+  "projects": 8
+ },
+ "artifacts/portal-responsiveness-build-2026-10-14/perf/after/traces/local-desk-waterfall.json": {
+  "route": "/desk",
+  "supabaseRequests": 30,
+  "document_state": 0,
+  "rpc/desk_read": 1,
+  "rpc/document_open": 0,
+  "project_ffe_items": 0,
+  "auth/v1/user": 0,
+  "outbound_drafts": 0,
+  "project_tasks": 0,
+  "projects": 3
+ },
+ "artifacts/portal-responsiveness-build-2026-10-14/perf/after/traces/local-doc-waterfall.json": {
+  "route": "/doc/[id]",
+  "supabaseRequests": 103,
+  "document_state": 0,
+  "rpc/desk_read": 1,
+  "rpc/document_open": 1,
+  "project_ffe_items": 2,
+  "auth/v1/user": 1,
+  "outbound_drafts": 0,
+  "project_tasks": 1,
+  "projects": 7
+ }
+}

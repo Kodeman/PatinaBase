@@ -1,0 +1,36 @@
+{
+ "F3_hover": {
+  "supabaseRequests": 0,
+  "document_state": 0,
+  "rpc/desk_read": 0,
+  "rpc/document_open": 0,
+  "project_ffe_items": 0,
+  "auth/v1/user": 0,
+  "outbound_drafts": 0,
+  "project_tasks": 0,
+  "projects": 0
+ },
+ "F3_afterClick": {
+  "supabaseRequests": 79,
+  "document_state": 0,
+  "rpc/desk_read": 1,
+  "rpc/document_open": 1,
+  "project_ffe_items": 2,
+  "auth/v1/user": 1,
+  "outbound_drafts": 0,
+  "project_tasks": 1,
+  "projects": 5
+ },
+ "F4_piecesSpa": {
+  "via": "router.push",
+  "supabaseRequests": 6,
+  "document_state": 0,
+  "rpc/desk_read": 0,
+  "rpc/document_open": 0,
+  "project_ffe_items": 1,
+  "auth/v1/user": 0,
+  "outbound_drafts": 0,
+  "project_tasks": 0,
+  "projects": 0
+ }
+}
