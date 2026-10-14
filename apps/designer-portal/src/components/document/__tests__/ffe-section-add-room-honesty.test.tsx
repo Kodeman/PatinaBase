@@ -10,6 +10,7 @@ type MutateOptions = { onSuccess?: () => void; onError?: (e: Error) => void };
 const mockAddRoom = {
   mutate: jest.fn<void, [unknown, MutateOptions]>(),
   isPending: false,
+  pending: [] as { id: string; name: string; budgetCents?: number | null; sortOrder: number }[],
 };
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -64,6 +65,10 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
   useOverrideBudgetCheckpoint: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (key: string) => ({ value: key === 'optimistic-ink' }),
+}));
+
 jest.mock('@/components/portal/ffe/stages', () => ({
   STAGE_CONFIG: new Proxy(
     {},
@@ -105,6 +110,7 @@ beforeEach(() => {
   __setDensityForTest('full');
   mockAddRoom.mutate.mockReset();
   mockAddRoom.isPending = false;
+  mockAddRoom.pending = [];
 });
 afterEach(() => {
   __setDensityForTest(undefined);
@@ -121,6 +127,18 @@ const openAndType = () => {
 };
 
 describe('F15a — adding a room never loses the typed words', () => {
+  it('renders every optimistic room as a pending ghost row', () => {
+    mockAddRoom.pending = [
+      { id: 'client-room-1', name: 'Library', budgetCents: 120000, sortOrder: 0 },
+      { id: 'client-room-2', name: 'Dining', budgetCents: 0, sortOrder: 1 },
+    ];
+    render(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
+
+    expect(screen.getByText('Library')).toBeInTheDocument();
+    expect(screen.getByText('Dining')).toBeInTheDocument();
+    expect(screen.getAllByRole('status').some((node) => node.textContent === 'Adding…')).toBe(true);
+  });
+
   it('keeps the typed name and budget after a forced failure and says so inline', () => {
     openAndType();
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));

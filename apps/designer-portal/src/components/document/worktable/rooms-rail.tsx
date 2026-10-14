@@ -27,7 +27,9 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useMutationState, useQueryClient } from '@tanstack/react-query';
 import { useAddScopeRoom, useProposalScopeRooms } from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { proposalEvents } from '@/lib/analytics';
 
 interface RailRoom {
@@ -49,6 +51,16 @@ export function RoomsRail({
 }) {
   const { data: rooms = [], isLoading } = useProposalScopeRooms(proposalId);
   const addRoom = useAddScopeRoom();
+  const queryClient = useQueryClient();
+  const optimisticInk = useFeatureFlag('optimistic-ink').value === true;
+  const pendingRooms = useMutationState({
+    filters: { mutationKey: ['proposal-client-copy'], status: 'pending' },
+    select: (mutation) => mutation.state.variables as {
+      proposalId?: string;
+      name?: string;
+      clientRoomId?: string;
+    },
+  }).filter((variables) => variables.proposalId === proposalId && variables.clientRoomId);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [addError, setAddError] = useState(false);
@@ -72,11 +84,24 @@ export function RoomsRail({
   const save = () => {
     const trimmed = name.trim();
     if (!trimmed || addRoom.isPending) return;
+    const variables = {
+      proposalId,
+      name: trimmed,
+      ...(optimisticInk ? { clientRoomId: crypto.randomUUID() } : {}),
+    };
     addRoom.mutate(
-      { proposalId, name: trimmed },
+      variables,
       {
-        onSuccess: () => {
+        onSuccess: (receipt) => {
           setAddError(false);
+          if (optimisticInk) {
+            queryClient.setQueryData<RailRoom[]>(['proposal-scope-rooms', proposalId], (current) => {
+              const row = receipt as RailRoom;
+              return current?.some((room) => room.id === row.id)
+                ? current.map((room) => (room.id === row.id ? row : room))
+                : [...(current ?? []), row];
+            });
+          }
           // The facet's own creation flow ends with this event (RoomsInScope).
           proposalEvents.scopeUpdated({
             proposalId,
@@ -137,6 +162,17 @@ export function RoomsRail({
               </button>
             );
           })}
+
+          {(pendingRooms as { name?: string; clientRoomId?: string }[]).map((room) => (
+            <span
+              key={room.clientRoomId}
+              role="status"
+              aria-busy="true"
+              className={`${SEGMENT} text-[var(--color-quiet-ink)] opacity-60`}
+            >
+              {room.name} · Adding…
+            </span>
+          ))}
 
           {adding ? (
             <>

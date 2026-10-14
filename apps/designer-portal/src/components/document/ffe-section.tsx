@@ -784,10 +784,12 @@ function RoomHeading({
   heldRoomId,
   toggleRoom,
   oneVoice = false,
+  pending = false,
 }: {
   name: string;
   roomId?: string;
   budgetCents: number;
+  pending?: boolean;
   rows: LineRow[];
   showAuthorization: boolean;
   selecting: boolean;
@@ -867,13 +869,15 @@ function RoomHeading({
       <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
         {meta}
       </span>
+      {pending && <span role="status" className="font-mono text-[11px] text-[var(--text-muted)]">Adding…</span>}
     </>
   );
 
   return (
     <div
       id={roomId ? `doc-room-${roomId}` : undefined}
-      className="mt-[12px] scroll-mt-16"
+      aria-busy={pending || undefined}
+      className={`mt-[12px] scroll-mt-16 ${pending ? 'opacity-60' : ''}`}
     >
       {pressable ? (
         <button
@@ -907,8 +911,13 @@ function RoomHeading({
   );
 }
 
-function AddRoomInline({ projectId }: { projectId: string }) {
-  const addRoom = useAddDocumentRoom(projectId);
+function AddRoomInline({
+  projectId,
+  addRoom,
+}: {
+  projectId: string;
+  addRoom: ReturnType<typeof useAddDocumentRoom>;
+}) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [budget, setBudget] = useState('');
@@ -1276,6 +1285,12 @@ function FFESectionBody({
   const { data: rooms } = useDocumentRooms(
     mode === 'project' ? projectId : null,
   );
+  const optimisticInk = useFeatureFlag('optimistic-ink').value === true;
+  const addRoom = useAddDocumentRoom(
+    mode === 'project' ? projectId : null,
+    { optimistic: optimisticInk },
+  );
+  const pendingRoomIds = new Set((addRoom.pending ?? []).map((room) => room.id));
   const { data: projectBoards = [] } = useProjectOwnedBoards(
     mode === 'project' ? projectId : null,
   );
@@ -2545,6 +2560,20 @@ function FFESectionBody({
         </p>
       )}
 
+      {overview && (addRoom.pending ?? []).map((pendingRoom) => (
+        <div
+          key={pendingRoom.id}
+          aria-busy="true"
+          className="mt-2 border-b border-dashed border-[var(--color-pearl)] py-2 opacity-60"
+        >
+          <span className="font-heading text-[13.5px] italic text-[var(--color-charcoal)]">
+            {pendingRoom.name}
+          </span>
+          <span role="status" className="ml-2 font-mono text-[11px] text-[var(--text-muted)]">
+            Adding…
+          </span>
+        </div>
+      ))}
       {overview ? (
         // US-21 Q14 (a1): the room overview. A room row unfolds to its lines;
         // a line unfolds as it always has (a released one to the buyer's
@@ -2589,7 +2618,7 @@ function FFESectionBody({
           }}
           lead={choosePiecePrompt}
         >
-          <AddRoomInline projectId={projectId} />
+          <AddRoomInline projectId={projectId} addRoom={addRoom} />
         </PiecesOverview>
       ) : (
         <>
@@ -2605,6 +2634,7 @@ function FFESectionBody({
                 name={room.name}
                 roomId={room.id}
                 budgetCents={room.budget_cents}
+                pending={pendingRoomIds.has(room.id)}
                 rows={roomRows}
                 onAddLine={() =>
                   setAddLineRoom({ id: room.id, name: room.name, scope: 'room' })
@@ -2619,6 +2649,21 @@ function FFESectionBody({
               </ul>
             </div>
           ))}
+          {(addRoom.pending ?? [])
+            .filter((pendingRoom) => !(rooms ?? []).some((room) => room.id === pendingRoom.id))
+            .map((pendingRoom) => (
+              <div key={pendingRoom.id} aria-busy="true">
+                <RoomHeading
+                  name={pendingRoom.name}
+                  roomId={pendingRoom.id}
+                  budgetCents={pendingRoom.budgetCents ?? 0}
+                  rows={[]}
+                  pending
+                  {...roomHeadingProps([])}
+                />
+                <ul />
+              </div>
+            ))}
           {throughout.length > 0 && (
             <div>
               <RoomHeading

@@ -14,6 +14,18 @@ import { proposalEvents } from '@/lib/analytics';
 let mockRoomsResult: { data: Array<{ id: string; name: string }>; isLoading: boolean };
 const mockMutate = jest.fn();
 let mockAddPending = false;
+let mockOptimisticInk = false;
+let mockPendingRooms: { proposalId: string; name: string; clientRoomId: string }[] = [];
+
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQueryClient: () => ({ setQueryData: jest.fn() }),
+  useMutationState: () => mockPendingRooms,
+}));
+
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: mockOptimisticInk }),
+}));
 
 jest.mock('@patina/supabase', () => ({
   useProposalScopeRooms: () => mockRoomsResult,
@@ -39,6 +51,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockRoomsResult = { data: ROOMS, isLoading: false };
   mockAddPending = false;
+  mockOptimisticInk = false;
+  mockPendingRooms = [];
 });
 
 describe('RoomsRail', () => {
@@ -54,6 +68,18 @@ describe('RoomsRail', () => {
       'Primary Bedroom',
       '+ Add a room',
     ]);
+  });
+
+  it('prints each concurrent optimistic room as its own ghost', () => {
+    mockOptimisticInk = true;
+    mockPendingRooms = [
+      { proposalId: 'proposal-1', name: 'Library', clientRoomId: 'client-1' },
+      { proposalId: 'proposal-1', name: 'Dining', clientRoomId: 'client-2' },
+    ];
+    rail();
+
+    expect(screen.getByText('Library · Adding…')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByText('Dining · Adding…')).toHaveAttribute('aria-busy', 'true');
   });
 
   it('prints nothing while the read is still loading', () => {
