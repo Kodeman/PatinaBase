@@ -32,12 +32,35 @@ async function userHasDesignerPortalRole(userId: string): Promise<boolean> {
   }
 }
 
+// Returns the verified `sub` of the cookie session, or null when signed out.
+// getClaims() refreshes an expired session through the same cookie adapter as
+// getUser() did, then verifies the ES256 access token locally, so a valid
+// session costs no Auth round-trip. Key freshness is bounded by auth-js's own
+// JWKS cache (JWKS_TTL = 10 min, @supabase/auth-js 2.98.0
+// dist/main/lib/constants.js:30; GoTrueClient.js:2754-2759): a key revoked at
+// Strata stays trusted for at most that window, then the refetched set drops
+// it. Never pass a `jwks`/`keys` option here: a supplied set is consulted
+// before the cache and never refreshes (GoTrueClient.js:2748-2752). An unknown
+// kid refetches the set; HS* or kid-less tokens fall back to getUser().
+async function getVerifiedUserId(
+  supabase: ReturnType<typeof createMiddlewareClient>,
+): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getClaims();
+    return data?.claims.sub ?? null;
+  } catch {
+    // getClaims throws plain Errors (not AuthErrors) for a cookie token that
+    // is malformed or past its own `exp`. Either way it is not a session.
+    return null;
+  }
+}
+
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
 
   // Create Supabase client for middleware (refreshes session via cookies)
   const supabase = createMiddlewareClient(req, res);
-  const { data: { user } } = await supabase.auth.getUser();
+  const userId = await getVerifiedUserId(supabase);
 
   const isAuthPage = req.nextUrl.pathname.startsWith('/auth') || req.nextUrl.pathname.startsWith('/login');
   // The landing page is the ONLY page an authenticated designer gets bounced
@@ -63,9 +86,8 @@ export async function middleware(req: NextRequest) {
     req.nextUrl.pathname === '/terms' ||
     req.nextUrl.pathname === '/pilot-terms';
   const isPublicPage = isLandingPage || isPreferencesPage || isLegalPage;
-  const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
-  const isAuthenticated = !!user;
+  const isAuthenticated = !!userId;
   // /auth/accept-invite must stay reachable for ANY authenticated user,
   // including one with no designer/admin role (e.g. a freshly-invited
   // collaborator) — the page's useAcceptInvitation hook calls the
@@ -83,11 +105,6 @@ export async function middleware(req: NextRequest) {
       req.nextUrl.searchParams.get('type') === 'recovery');
 
   const baseUrl = req.nextUrl.origin;
-
-  // API routes pass through — auth handled by api-routes middleware
-  if (isApiRoute) {
-    return res;
-  }
 
   // Helper: create a redirect that preserves Supabase auth cookies from res.
   // Use the object-set form so domain/secure/sameSite/path/httpOnly/TTL
@@ -136,7 +153,7 @@ export async function middleware(req: NextRequest) {
   // to `/unauthorized` from a deeper protected route — the round trip causes
   // the QR signin page to re-render mid-flight and looks like a reload loop.
   if (isAuthenticated && isAuthPage && !isAcceptInvitePage && !isPasswordRecoveryPage) {
-    if (!(await userHasDesignerPortalRole(user!.id))) {
+    if (!(await userHasDesignerPortalRole(userId!))) {
       return redirectWithCookies(new URL('/unauthorized', baseUrl));
     }
     const callbackUrl = safeCallbackUrl(
@@ -152,7 +169,7 @@ export async function middleware(req: NextRequest) {
   // Mirror the auth-page role gate so a user without a designer/admin role
   // doesn't bounce `/` -> `/desk` -> `/unauthorized` (one redirect, not two).
   if (isAuthenticated && isLandingPage) {
-    if (!(await userHasDesignerPortalRole(user!.id))) {
+    if (!(await userHasDesignerPortalRole(userId!))) {
       return redirectWithCookies(new URL('/unauthorized', baseUrl));
     }
     return redirectWithCookies(new URL('/desk', baseUrl));
@@ -177,7 +194,7 @@ export async function middleware(req: NextRequest) {
   // With SSO cookie carry across .patina.cloud, a manufacturer or pure-client user
   // could otherwise land on the designer shell.
   if (isAuthenticated && !isAuthPage && !isPublicPage && !isUnauthorizedPage) {
-    if (!(await userHasDesignerPortalRole(user!.id))) {
+    if (!(await userHasDesignerPortalRole(userId!))) {
       return redirectWithCookies(new URL('/unauthorized', baseUrl));
     }
   }
@@ -185,8 +202,18 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
+// Middleware is a shell gate, not an authority: it never runs for /api (every
+// route handler authenticates its own request) or for router prefetches. A
+// client navigation served from the prefetch cache therefore skips the gate
+// too; that is safe only while no page or layout reads data on the server
+// (RLS and the route handlers are the authorities). Hard loads and
+// non-prefetch RSC requests still pass through.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|auth/error|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    {
+      source:
+        '/((?!api(?:/|$)|_next/static|_next/image|_next/webpack-hmr|favicon.ico|auth/error|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+      missing: [{ type: 'header', key: 'next-router-prefetch' }],
+    },
   ],
 };
