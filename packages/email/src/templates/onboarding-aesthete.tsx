@@ -14,7 +14,7 @@ export const OnboardingAesthete: React.FC = () => (
 
     <Text style={paragraph}>
       By now Patina has watched you work a little — the pieces you clip, the ones you scroll past, the rooms you
-      build. Aesthete is where that turns into something useful to you.
+      build. Your eye, taught once, shows up everywhere.
     </Text>
 
     <Text style={paragraph}>
@@ -28,10 +28,10 @@ export const OnboardingAesthete: React.FC = () => (
       feel sorted by you instead of by everyone.
     </Text>
 
-    <Text style={paragraph}>Give Aesthete ten minutes with your least favorite trend.</Text>
+    <Text style={paragraph}>Spend ten minutes teaching Patina what your eye notices.</Text>
 
     <div style={buttonContainer}>
-      <Button href="{{app_url}}/library">Sit with Aesthete</Button>
+      <Button href="{{app_url}}/library">Teach your eye</Button>
     </div>
 
     <Text style={signature}>— Kody</Text>
