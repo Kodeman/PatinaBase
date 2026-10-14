@@ -67,6 +67,14 @@ export function isAnalyticsPossible(): boolean {
   return true;
 }
 
+export function captureAnalyticsEvent(
+  event: string,
+  properties: Record<string, string | number>,
+): void {
+  if (!isAnalyticsPossible()) return;
+  onAnalyticsInit(() => posthog.capture(event, properties));
+}
+
 // /field tokens are either a 64-hex field_link_tokens value OR an
 // `sr_`-prefixed site-request token — a broader URL-safe alphabet than plain
 // hex, so it stays its own pattern rather than folding into the generic one.

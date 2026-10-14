@@ -5,6 +5,7 @@ import './globals.css';
 import { Providers } from '@/providers/providers';
 import { DebugPanel } from '@/components/DebugPanel';
 import { TesterWidget } from '@/components/tester/tester-widget';
+import { WebVitals } from '@/components/analytics/web-vitals';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -76,6 +77,7 @@ export default function RootLayout({
         </Script>
         <Providers>
           {children}
+          <WebVitals />
           <DebugPanel />
           <TesterWidget />
         </Providers>
