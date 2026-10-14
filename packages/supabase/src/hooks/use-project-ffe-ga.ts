@@ -251,11 +251,17 @@ export function useCreateNamedProjectNeed(options: { optimistic?: boolean } = {}
     invert: (current) => current,
     onSuccess: async (_result, request) => {
       invalidateProjectFfe(queryClient, request.projectId, request.boardId);
-      // Joins the re-read just started above; it never starts a second one.
-      await queryClient.refetchQueries(
-        { queryKey: ['project-ffe-items', request.projectId], type: 'active' },
-        { cancelRefetch: false },
-      );
+      // The receipt names the line but is not the line, so the ghost stays
+      // until the lines have re-read. A failed or offline read is read again;
+      // the create never runs twice.
+      const lines = { queryKey: ['project-ffe-items', request.projectId], type: 'active' } as const;
+      for (let attempt = 0; ; attempt += 1) {
+        // Joins the re-read just started above; it never starts a second one.
+        await queryClient.refetchQueries(lines, { cancelRefetch: false });
+        const stale = queryClient.getQueryCache().findAll(lines).some((query) => query.state.isInvalidated);
+        if (!stale) return;
+        await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 30_000)));
+      }
     },
   });
   return options.optimistic ? ink : { ...plain, pending: NO_NEEDS };

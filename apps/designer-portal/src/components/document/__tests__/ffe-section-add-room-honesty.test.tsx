@@ -48,8 +48,10 @@ jest.mock('../schedule/add-to-project-sheet', () => ({
   openAddToProject: jest.fn(),
 }));
 
+let mockRooms: { id: string; project_id: string; name: string; budget_cents: number; sort_order: number }[] = [];
+
 jest.mock('@/hooks/use-document-rooms', () => ({
-  useDocumentRooms: () => ({ data: [] }),
+  useDocumentRooms: () => ({ data: mockRooms }),
   useAddDocumentRoom: () => mockAddRoom,
 }));
 
@@ -111,6 +113,7 @@ beforeEach(() => {
   mockAddRoom.mutate.mockReset();
   mockAddRoom.isPending = false;
   mockAddRoom.pending = [];
+  mockRooms = [];
 });
 afterEach(() => {
   __setDensityForTest(undefined);
@@ -137,6 +140,37 @@ describe('F15a — adding a room never loses the typed words', () => {
     expect(screen.getByText('Library')).toBeInTheDocument();
     expect(screen.getByText('Dining')).toBeInTheDocument();
     expect(screen.getAllByRole('status').some((node) => node.textContent === 'Adding…')).toBe(true);
+  });
+
+  it('a slow create shows one "Adding…" row with no acts, then one normal row after the receipt (SQ-1001 #6)', () => {
+    const library = { id: 'client-room-1', name: 'Library', budgetCents: 0, sortOrder: 0 };
+    const written = { id: library.id, project_id: 'project-1', name: 'Library', budget_cents: 0, sort_order: 0 };
+    const addingStatuses = () =>
+      screen.queryAllByRole('status').filter((node) => node.textContent === 'Adding…');
+    const expectOnlyTheGhost = () => {
+      expect(screen.getAllByText('Library')).toHaveLength(1);
+      expect(addingStatuses()).toHaveLength(1);
+      expect(screen.getByText('Library').closest('[aria-busy="true"]')).not.toBeNull();
+      expect(screen.queryByRole('button', { name: 'Library' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Add room selection' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Edit room selections')).not.toBeInTheDocument();
+    };
+
+    mockAddRoom.pending = [library];
+    const view = render(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
+    expectOnlyTheGhost();
+
+    // The list can read the written room before its receipt arrives: still one row.
+    mockRooms = [written];
+    view.rerender(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
+    expectOnlyTheGhost();
+
+    mockAddRoom.pending = [];
+    view.rerender(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);
+    expect(screen.getAllByText('Library')).toHaveLength(1);
+    expect(addingStatuses()).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Library' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Add room selection' })).toBeEnabled();
   });
 
   it('keeps the typed name and budget after a forced failure and says so inline', () => {

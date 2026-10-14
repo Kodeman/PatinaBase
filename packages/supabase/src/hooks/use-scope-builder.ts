@@ -109,6 +109,7 @@ export function useAddScopeRoom() {
       budgetCents,
       ffeCategories,
       notes,
+      clientRoomId,
     }: {
       proposalId: string;
       name: string;
@@ -119,22 +120,33 @@ export function useAddScopeRoom() {
       budgetCents?: number;
       ffeCategories?: string[];
       notes?: string;
+      /** The pending ghost's id (US-34 N4): written as the row id, in one round trip. */
+      clientRoomId?: string;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data: existing } = await supabase
-        .from('proposal_scope_rooms')
-        .select('sort_order')
-        .eq('proposal_id', proposalId)
-        .order('sort_order', { ascending: false })
-        .limit(1);
+      // With a client id the order comes from the rooms on screen, or the
+      // column default when none are cached, so nothing is read first.
+      let nextOrder: number | undefined;
+      if (clientRoomId) {
+        const cached = queryClient.getQueryData<ProposalScopeRoom[]>(['proposal-scope-rooms', proposalId]);
+        if (cached) nextOrder = Math.max(-1, ...cached.map((room) => room.sort_order)) + 1;
+      } else {
+        const { data: existing } = await supabase
+          .from('proposal_scope_rooms')
+          .select('sort_order')
+          .eq('proposal_id', proposalId)
+          .order('sort_order', { ascending: false })
+          .limit(1);
 
-      const nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
+        nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
+      }
 
       const { data, error } = await supabase
         .from('proposal_scope_rooms')
         .insert({
+          ...(clientRoomId ? { id: clientRoomId } : {}),
           proposal_id: proposalId,
           room_id: roomId || null,
           name,
@@ -144,7 +156,7 @@ export function useAddScopeRoom() {
           budget_cents: budgetCents || 0,
           ffe_categories: ffeCategories || [],
           notes: notes || null,
-          sort_order: nextOrder,
+          ...(nextOrder === undefined ? {} : { sort_order: nextOrder }),
         })
         .select()
         .single();

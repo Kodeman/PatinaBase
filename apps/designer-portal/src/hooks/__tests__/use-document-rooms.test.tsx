@@ -51,7 +51,7 @@ beforeEach(() => {
 });
 
 describe("useAddDocumentRoom optimistic create", () => {
-  it("shows the generated room immediately and merges the receipt before pending ends", async () => {
+  it("shows the generated room only as pending and merges the receipt before pending ends", async () => {
     const client = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
     });
@@ -86,29 +86,31 @@ describe("useAddDocumentRoom optimistic create", () => {
     );
 
     act(() => result.current.mutate({ name: "Library", budgetCents: 120000 }));
-    await waitFor(() =>
-      expect(client.getQueryData<DocumentRoom[]>(key)).toHaveLength(2),
-    );
-    const optimistic = client.getQueryData<DocumentRoom[]>(key) ?? [];
-    expect(optimistic[1]).toMatchObject({ name: "Library", sort_order: 3 });
-    expect(optimistic[1].id).toEqual(expect.any(String));
-    expect(result.current.pending).toHaveLength(1);
+    await waitFor(() => expect(result.current.pending).toHaveLength(1));
+    const ghost = result.current.pending[0];
+    expect(ghost).toMatchObject({ name: "Library", sortOrder: 3 });
+    expect(ghost.id).toEqual(expect.any(String));
+    // SQ-1001 #6: the unconfirmed room is never a row in the list.
+    expect(client.getQueryData<DocumentRoom[]>(key)).toEqual([existing]);
 
     await waitFor(() => expect(mockSingle).toHaveBeenCalledTimes(1));
     expect(mockInsert).toHaveBeenCalledTimes(1);
     expect(mockInsert.mock.calls[0][0]).toMatchObject({
-      id: optimistic[1].id,
+      id: ghost.id,
       name: "Library",
       sort_order: 3,
     });
+    const receipt: DocumentRoom = {
+      id: ghost.id,
+      project_id: projectId,
+      name: "Library",
+      budget_cents: 120000,
+      sort_order: 3,
+    };
     await act(async () => {
-      resolveWrite({
-        data: { ...optimistic[1], name: "Library", budget_cents: 120000 },
-        error: null,
-      });
+      resolveWrite({ data: receipt, error: null });
     });
     await waitFor(() => expect(result.current.pending).toHaveLength(0));
-    const receipt = { ...optimistic[1], name: "Library", budget_cents: 120000 };
     await waitFor(() => expect(resolveRefetch).toBeDefined());
     expect(client.getQueryData<DocumentRoom[]>(key)).toEqual([
       existing,
@@ -145,12 +147,14 @@ describe("useAddDocumentRoom optimistic create", () => {
       result.current.mutate({ name: "Dining" });
     });
     await waitFor(() => expect(result.current.pending).toHaveLength(2));
-    expect(
-      client.getQueryData<DocumentRoom[]>(key)?.map((room) => room.name),
-    ).toEqual(["Library", "Dining"]);
-    expect(
-      client.getQueryData<DocumentRoom[]>(key)?.map((room) => room.sort_order),
-    ).toEqual([0, 1]);
+    expect(result.current.pending.map((room) => room.name)).toEqual([
+      "Library",
+      "Dining",
+    ]);
+    expect(result.current.pending.map((room) => room.sortOrder)).toEqual([
+      0, 1,
+    ]);
+    expect(client.getQueryData<DocumentRoom[]>(key)).toEqual([]);
     expect(new Set(result.current.pending.map((room) => room.id)).size).toBe(2);
 
     await waitFor(() => expect(writes).toHaveLength(1));

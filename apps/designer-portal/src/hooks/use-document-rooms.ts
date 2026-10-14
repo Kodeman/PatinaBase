@@ -21,6 +21,7 @@ type AddRoomCache = DocumentRoom[];
 const getSupabase = () => createBrowserClient() as any;
 const roomKey = (projectId: string | null) =>
   ["document-rooms", projectId] as const;
+const NO_ROOMS: AddRoomVariables[] = [];
 
 export interface DocumentRoom {
   id: string;
@@ -105,20 +106,11 @@ export function useAddDocumentRoom(
       if (error) throw error;
       return data as DocumentRoom;
     },
-    apply: (rooms, input) =>
-      rooms.some((room) => room.id === input.id)
-        ? rooms
-        : [
-            ...rooms,
-            {
-              id: input.id,
-              project_id: projectId ?? "",
-              name: input.name,
-              budget_cents: input.budgetCents ?? 0,
-              sort_order: input.sortOrder,
-            },
-          ].sort((a, b) => a.sort_order - b.sort_order),
-    invert: (rooms, input) => rooms.filter((room) => room.id !== input.id),
+    // A room being added has one face, the caller's "Adding…" ghost drawn from
+    // `pending`. The list holds written rooms only, so nothing can act on a
+    // room before its receipt, which `merge` adds before pending ends.
+    apply: (rooms) => rooms,
+    invert: (rooms) => rooms,
     merge: (rooms, receipt) =>
       rooms.some((room) => room.id === receipt.id)
         ? rooms.map((room) =>
@@ -171,7 +163,7 @@ export function useAddDocumentRoom(
   const selected = options.optimistic ? ink : plain;
   return {
     ...selected,
-    pending: options.optimistic ? ink.pending : [],
+    pending: options.optimistic ? ink.pending : NO_ROOMS,
     mutate,
   } as Omit<typeof plain, "mutate"> & {
     pending: AddRoomVariables[];

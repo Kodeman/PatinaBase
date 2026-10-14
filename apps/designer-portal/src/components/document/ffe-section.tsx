@@ -1290,7 +1290,10 @@ function FFESectionBody({
     mode === 'project' ? projectId : null,
     { optimistic: optimisticInk },
   );
-  const pendingRoomIds = new Set((addRoom.pending ?? []).map((room) => room.id));
+  const pendingRoomIds = useMemo(
+    () => new Set((addRoom.pending ?? []).map((room) => room.id)),
+    [addRoom.pending],
+  );
   const { data: projectBoards = [] } = useProjectOwnedBoards(
     mode === 'project' ? projectId : null,
   );
@@ -1929,9 +1932,14 @@ function FFESectionBody({
     () => (items ?? []).map((item) => ({ ...item, id: String(item.id) })),
     [items],
   );
+  // A room still being added is only its "Adding…" ghost; it joins the
+  // overview, with its acts, once its write has answered.
   const overviewRooms = useMemo(
-    () => (rooms ?? []).map((room) => ({ id: room.id, name: room.name })),
-    [rooms],
+    () =>
+      (rooms ?? [])
+        .filter((room) => !pendingRoomIds.has(room.id))
+        .map((room) => ({ id: room.id, name: room.name })),
+    [rooms, pendingRoomIds],
   );
   const overviewJob = useMemo(() => deriveOverviewJob(overviewLines), [overviewLines]);
   const ffeStatus = overviewHeadStatus(overviewRooms.length, overviewJob);
