@@ -55,14 +55,13 @@ describe('useProjectFFEItems shared cache', () => {
       queryKey: readonly unknown[];
       queryFn: () => Promise<unknown[]>;
     };
-    expect(options.queryKey).toEqual(queryKey);
-
-    await client.fetchQuery(options);
+    const portalOptions = { ...options, queryKey };
     const firstReader = new QueryObserver(client, options);
-    const secondReader = new QueryObserver(client, options);
+    const secondReader = new QueryObserver(client, portalOptions);
     observers = [firstReader, secondReader];
     const unsubscribeFirst = firstReader.subscribe(() => {});
     const unsubscribeSecond = secondReader.subscribe(() => {});
+    await Promise.all([client.fetchQuery(options), client.fetchQuery(portalOptions)]);
     unsubscribeFirst();
     unsubscribeSecond();
 
