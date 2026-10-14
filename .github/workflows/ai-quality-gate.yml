@@ -63,7 +63,14 @@ jobs:
 
       - name: Check designer portal bundle budgets
         if: steps.bundle-paths.outputs.changed == 'true'
+        # A measuring build only, never deployed: local placeholders keep the
+        # inlined Supabase env from failing prerender.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-bundle-budget-placeholder
+          NEXT_PUBLIC_POSTHOG_ENABLE_IN_DEV: 'false'
         run: |
+          pnpm exec turbo run build --filter=@patina/designer-portal^...
           ANALYZE=true pnpm --filter @patina/designer-portal analyze
           node scripts/bundle-budget.mjs apps/designer-portal/.next
 
