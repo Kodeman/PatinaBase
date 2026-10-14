@@ -11387,8 +11387,10 @@ export type Database = {
           applied_at: string
           before: Json | null
           effect_type: string
+          fingerprint: Json | null
           id: string
           inserted: boolean
+          owner_user_id: string | null
           project_id: string | null
           revert_outcome: string | null
           reverted_at: string | null
@@ -11405,8 +11407,10 @@ export type Database = {
           applied_at?: string
           before?: Json | null
           effect_type: string
+          fingerprint?: Json | null
           id?: string
           inserted?: boolean
+          owner_user_id?: string | null
           project_id?: string | null
           revert_outcome?: string | null
           reverted_at?: string | null
@@ -11423,8 +11427,10 @@ export type Database = {
           applied_at?: string
           before?: Json | null
           effect_type?: string
+          fingerprint?: Json | null
           id?: string
           inserted?: boolean
+          owner_user_id?: string | null
           project_id?: string | null
           revert_outcome?: string | null
           reverted_at?: string | null

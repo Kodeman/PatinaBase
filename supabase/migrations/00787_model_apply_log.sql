@@ -29,12 +29,25 @@
 --   A resolve (mark_done on a coordination item) also unblocks tasks and FF&E
 --   lines that waited on the item; each of those is its own row, so the whole
 --   SMS can be put back together (revert_model_apply_group).
+--   Every row is locked by the read that takes its `before` and stays locked
+--   through the write, so before/after hold that change and nothing else.
 --
 -- Revert never guesses. It writes `before` back only while every `after`
 --   value is still what the model wrote; otherwise it reports 'conflict' and
 --   writes nothing, so it can be tried again later. An inserted decision is
---   never deleted: while still untouched it is withdrawn to 'expired', the
---   closed status expire_client_decision (pending → expired) uses.
+--   never deleted: while untouched (its `fingerprint` — every column a
+--   designer can edit and the work waiting on it — unchanged) it is withdrawn
+--   to 'expired', the closed status expire_client_decision (pending → expired)
+--   uses.
+--
+-- Who may read and put back a row: an active member of its studio, or, for a
+--   row with no studio (a private capture), its owner_user_id — the designer
+--   who owns the capture or project. Never a guessed studio.
+--
+-- Lock order, everywhere here: the SMS message, the log rows, then targets —
+--   client_decisions, project_ffe_items, project_tasks, field_captures, each
+--   by id. update_coordination_item and the resolve cascade lock in the same
+--   decision → FF&E → task order.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -59,8 +72,14 @@ CREATE TABLE IF NOT EXISTS public.model_applies (
   reverted_at    timestamptz,
   reverted_by    uuid,
   revert_outcome text CHECK (revert_outcome IN ('restored', 'conflict')),
+  owner_user_id  uuid,
+  fingerprint    jsonb,
   CONSTRAINT model_applies_inserted_has_no_before CHECK (inserted = (before IS NULL))
 );
+-- Re-applying over an earlier local draft of this file, which lacked these.
+ALTER TABLE public.model_applies
+  ADD COLUMN IF NOT EXISTS owner_user_id uuid,
+  ADD COLUMN IF NOT EXISTS fingerprint jsonb;
 
 CREATE INDEX IF NOT EXISTS model_applies_project_applied_idx
   ON public.model_applies (project_id, applied_at DESC);
@@ -72,7 +91,8 @@ ALTER TABLE public.model_applies ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS model_applies_studio_select ON public.model_applies;
 CREATE POLICY model_applies_studio_select ON public.model_applies
   FOR SELECT TO authenticated
-  USING (public.is_active_org_member(studio_id));
+  USING (public.is_active_org_member(studio_id)
+         OR (studio_id IS NULL AND owner_user_id = (SELECT auth.uid())));
 
 -- Reads only. Rows are written by the DEFINER producers and revert RPCs below.
 REVOKE ALL ON TABLE public.model_applies FROM PUBLIC, anon, authenticated, service_role;
@@ -81,8 +101,10 @@ GRANT SELECT ON TABLE public.model_applies TO authenticated, service_role;
 COMMENT ON TABLE public.model_applies IS
   'One row per target row a model changed without a click (00787, V23 R2): '
   'source sms (autonomous apply_field_effect) or capture_enrichment. before/after '
-  'hold only the allowlisted columns that moved; inserted rows have before NULL. '
-  'Put back through revert_model_apply / revert_model_apply_group.';
+  'hold only the allowlisted columns that moved; inserted rows have before NULL '
+  'and a fingerprint of their designer-editable state. owner_user_id is the '
+  'designer who owns the capture or project; it alone reaches a row with no '
+  'studio. Put back through revert_model_apply / revert_model_apply_group.';
 
 -- ─── 2. Internal helpers (owner-only; reached from the DEFINER functions) ──
 
@@ -139,13 +161,44 @@ BEGIN
 END;
 $$;
 
+-- What a designer can change on a decision: every column update_client_decision
+-- and update_coordination_item may write, plus how much work waits on it
+-- (tasks and FF&E lines) and how many options it carries. An inserted
+-- decision's fingerprint is kept at insert; any change since means touched.
+CREATE OR REPLACE FUNCTION public._model_apply_fingerprint(p_decision_id uuid)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+SET TimeZone = 'UTC'
+AS $$
+  SELECT (SELECT jsonb_object_agg(k, to_jsonb(d) -> k)
+            FROM unnest(ARRAY[
+              'title', 'context', 'due_date', 'linked_phase', 'phase_id', 'room_id',
+              'section_key', 'project_id', 'decision_type', 'decision_kind',
+              'coordination_kind', 'blocking_status', 'blocks_kind',
+              'blocks_milestone_id', 'court', 'court_party_id', 'status']) AS k)
+         || jsonb_build_object(
+              'linked',
+                (SELECT count(*) FROM public.project_tasks t WHERE t.blocked_by_item_id = d.id)
+                + (SELECT count(*) FROM public.project_ffe_items f WHERE f.blocked_by_decision_id = d.id),
+              'options',
+                (SELECT count(*) FROM public.client_decision_options o WHERE o.decision_id = d.id))
+    FROM public.client_decisions AS d
+   WHERE d.id = p_decision_id;
+$$;
+
 -- Writes one log row. For a changed row only the columns that moved are kept;
 -- nothing is written when nothing moved or the row is gone.
+-- The first local draft of this file had no p_owner_user_id.
+DROP FUNCTION IF EXISTS public._record_model_apply(
+  text, uuid, uuid, uuid, text, text, uuid, boolean, jsonb, jsonb, text);
 CREATE OR REPLACE FUNCTION public._record_model_apply(
   p_source text,
   p_source_id uuid,
   p_project_id uuid,
   p_studio_id uuid,
+  p_owner_user_id uuid,
   p_effect_type text,
   p_table text,
   p_target_id uuid,
@@ -161,12 +214,16 @@ AS $$
 DECLARE
   v_before jsonb;
   v_after  jsonb;
+  v_fingerprint jsonb;
 BEGIN
   IF p_after IS NULL OR p_target_id IS NULL THEN
     RETURN;
   END IF;
   IF p_inserted THEN
     v_after := p_after;
+    IF p_table = 'client_decisions' THEN
+      v_fingerprint := public._model_apply_fingerprint(p_target_id);
+    END IF;
   ELSE
     IF p_before IS NULL THEN
       RETURN;
@@ -180,11 +237,11 @@ BEGIN
     END IF;
   END IF;
   INSERT INTO public.model_applies (
-    studio_id, project_id, source, source_id, effect_type, target_table,
-    target_id, inserted, before, after, summary
+    studio_id, owner_user_id, project_id, source, source_id, effect_type,
+    target_table, target_id, inserted, before, after, fingerprint, summary
   ) VALUES (
-    p_studio_id, p_project_id, p_source, p_source_id, p_effect_type, p_table,
-    p_target_id, p_inserted, v_before, v_after, p_summary
+    p_studio_id, p_owner_user_id, p_project_id, p_source, p_source_id, p_effect_type,
+    p_table, p_target_id, p_inserted, v_before, v_after, v_fingerprint, p_summary
   );
 END;
 $$;
@@ -193,8 +250,10 @@ REVOKE ALL ON FUNCTION public._model_apply_columns(text)
   FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public._model_apply_snapshot(text, uuid, boolean)
   FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public._model_apply_fingerprint(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public._record_model_apply(
-  text, uuid, uuid, uuid, text, text, uuid, boolean, jsonb, jsonb, text
+  text, uuid, uuid, uuid, uuid, text, text, uuid, boolean, jsonb, jsonb, text
 ) FROM PUBLIC, anon, authenticated, service_role;
 
 -- ─── 3. apply_field_effect (00653:758 verbatim + the 00787 log block) ──────
@@ -220,6 +279,7 @@ DECLARE
   v_log boolean;
   v_log_project uuid;
   v_log_studio uuid;
+  v_log_owner uuid;
   v_log_tables text[] := ARRAY[]::text[];
   v_log_ids uuid[] := ARRAY[]::uuid[];
   v_log_before jsonb[] := ARRAY[]::jsonb[];
@@ -299,7 +359,10 @@ BEGIN
       v_log_tables := array_append(v_log_tables, 'client_decisions');
       v_log_ids := array_append(v_log_ids, v_target_id);
       IF p_effect->>'type' = 'mark_done' THEN
+        -- The item is locked first, so no more work can be linked to it.
+        PERFORM 1 FROM public.client_decisions WHERE id = v_target_id FOR UPDATE;
         -- The resolve cascade (resolve_coordination_item) unblocks these.
+        -- ORDER BY puts FF&E before tasks, each by id: the lock order.
         FOR v_log_rec IN
           SELECT 'project_tasks'::text AS tbl, t.id FROM public.project_tasks t
            WHERE t.blocked_by_item_id = v_target_id AND t.status = 'blocked'
@@ -313,9 +376,12 @@ BEGIN
         END LOOP;
       END IF;
     END IF;
+    -- Lock, then read: each row is taken FOR UPDATE by the read that records
+    -- its before and stays locked through the legacy core, so a designer
+    -- edit committed meanwhile is either in before or waits for this SMS.
     FOR v_log_i IN 1 .. COALESCE(array_length(v_log_ids, 1), 0) LOOP
       v_log_before := array_append(v_log_before,
-        public._model_apply_snapshot(v_log_tables[v_log_i], v_log_ids[v_log_i]));
+        public._model_apply_snapshot(v_log_tables[v_log_i], v_log_ids[v_log_i], true));
     END LOOP;
   END IF;
 
@@ -331,14 +397,15 @@ BEGIN
   PERFORM set_config('app.client_decision_write_id', '', true);
 
   IF v_log THEN
-    SELECT pp.project_id, pr.studio_id INTO v_log_project, v_log_studio
+    SELECT pp.project_id, pr.studio_id, pr.designer_id
+      INTO v_log_project, v_log_studio, v_log_owner
       FROM public.project_parties pp
       LEFT JOIN public.projects pr ON pr.id = pp.project_id
      WHERE pp.id = p_party_id;
     IF p_effect->>'type' IN ('flag_blocker', 'punch_report')
         AND NULLIF(v_result->>'item_id', '') IS NOT NULL THEN
       PERFORM public._record_model_apply(
-        'sms', p_sms_message_id, v_log_project, v_log_studio, p_effect->>'type',
+        'sms', p_sms_message_id, v_log_project, v_log_studio, v_log_owner, p_effect->>'type',
         'client_decisions', (v_result->>'item_id')::uuid, true, NULL,
         public._model_apply_snapshot('client_decisions', (v_result->>'item_id')::uuid),
         v_result->>'summary_text'
@@ -346,7 +413,7 @@ BEGIN
     END IF;
     FOR v_log_i IN 1 .. COALESCE(array_length(v_log_ids, 1), 0) LOOP
       PERFORM public._record_model_apply(
-        'sms', p_sms_message_id, v_log_project, v_log_studio, p_effect->>'type',
+        'sms', p_sms_message_id, v_log_project, v_log_studio, v_log_owner, p_effect->>'type',
         v_log_tables[v_log_i], v_log_ids[v_log_i], false, v_log_before[v_log_i],
         public._model_apply_snapshot(v_log_tables[v_log_i], v_log_ids[v_log_i]),
         v_result->>'summary_text'
@@ -396,6 +463,7 @@ DECLARE
   v_filled    integer;
   v_project   uuid;
   v_studio    uuid;
+  v_owner     uuid;
 BEGIN
   IF p_status NOT IN ('ready', 'failed') THEN
     RAISE EXCEPTION 'record_capture_enrichment_result: p_status must be ready or failed, got %', p_status
@@ -423,10 +491,11 @@ BEGIN
      AND p_suggestions IS NOT NULL
      AND jsonb_typeof(p_suggestions) = 'object'
   THEN
-    -- 00787: the capture's values before any fill, and where it belongs.
-    v_before := public._model_apply_snapshot('field_captures', v_run.target_id);
-    SELECT fc.project_id, COALESCE(pr.studio_id, fc.organization_id)
-      INTO v_project, v_studio
+    -- 00787: the capture's values before any fill, read under the row lock
+    -- the fills below keep, and where it belongs and who owns it.
+    v_before := public._model_apply_snapshot('field_captures', v_run.target_id, true);
+    SELECT fc.project_id, COALESCE(pr.studio_id, fc.organization_id), fc.designer_id
+      INTO v_project, v_studio, v_owner
       FROM public.field_captures fc
       LEFT JOIN public.projects pr ON pr.id = fc.project_id
      WHERE fc.id = v_run.target_id;
@@ -447,7 +516,7 @@ BEGIN
         GET DIAGNOSTICS v_filled = ROW_COUNT;
         IF v_filled > 0 THEN
           PERFORM public._record_model_apply(
-            'capture_enrichment', p_run_id, v_project, v_studio, 'enrichment_fill',
+            'capture_enrichment', p_run_id, v_project, v_studio, v_owner, 'enrichment_fill',
             'field_captures', v_run.target_id, false,
             jsonb_build_object(v_key, v_before -> v_key),
             jsonb_build_object(v_key, p_suggestions -> v_key),
@@ -471,14 +540,17 @@ COMMENT ON FUNCTION public.record_capture_enrichment_result(uuid, jsonb, jsonb, 
 
 -- True while the target still holds exactly what the model wrote. Locks the
 -- target row. An inserted decision must also be untouched: still pending (its
--- after values) with no comment or revision posted against it.
+-- after values), its fingerprint unchanged, no comment or revision posted
+-- against it, and nothing waiting on it but the work this same SMS blocked.
 CREATE OR REPLACE FUNCTION public._model_apply_is_current(p_apply public.model_applies)
 RETURNS boolean
 LANGUAGE plpgsql
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_current jsonb := public._model_apply_snapshot(p_apply.target_table, p_apply.target_id, true);
+  v_current  jsonb := public._model_apply_snapshot(p_apply.target_table, p_apply.target_id, true);
+  v_now      jsonb;
+  v_released integer;
 BEGIN
   IF v_current IS NULL OR EXISTS (
     SELECT 1 FROM jsonb_object_keys(p_apply.after) AS k
@@ -486,13 +558,40 @@ BEGIN
   ) THEN
     RETURN false;
   END IF;
-  IF p_apply.inserted THEN
-    RETURN p_apply.target_table = 'client_decisions'
-      AND v_current ->> 'status' = 'pending'
-      AND NOT EXISTS (SELECT 1 FROM public.decision_comments c WHERE c.decision_id = p_apply.target_id)
-      AND NOT EXISTS (SELECT 1 FROM public.coordination_item_revisions r WHERE r.decision_id = p_apply.target_id);
+  IF NOT p_apply.inserted THEN
+    RETURN true;
   END IF;
-  RETURN true;
+  IF p_apply.target_table <> 'client_decisions' OR p_apply.fingerprint IS NULL
+     OR v_current ->> 'status' IS DISTINCT FROM 'pending'
+     OR EXISTS (SELECT 1 FROM public.decision_comments c WHERE c.decision_id = p_apply.target_id)
+     OR EXISTS (SELECT 1 FROM public.coordination_item_revisions r WHERE r.decision_id = p_apply.target_id)
+  THEN
+    RETURN false;
+  END IF;
+  -- Work this SMS blocked on the item that Undo has already released no
+  -- longer waits on it; it still counts toward the fingerprint's 'linked'.
+  SELECT count(*) INTO v_released
+    FROM public.model_applies AS g
+   WHERE g.source = p_apply.source AND g.source_id = p_apply.source_id
+     AND g.reverted_at IS NOT NULL
+     AND p_apply.target_id::text IN (g.after ->> 'blocked_by_item_id', g.after ->> 'blocked_by_decision_id');
+  v_now := public._model_apply_fingerprint(p_apply.target_id);
+  RETURN v_now || jsonb_build_object('linked', (v_now ->> 'linked')::integer + v_released)
+           = p_apply.fingerprint
+    -- Every task or FF&E line waiting on it is one this SMS blocked and Undo
+    -- has not released.
+    AND NOT EXISTS (
+      SELECT 1
+        FROM (SELECT 'project_tasks'::text AS tbl, t.id FROM public.project_tasks t
+               WHERE t.blocked_by_item_id = p_apply.target_id
+              UNION ALL
+              SELECT 'project_ffe_items'::text, f.id FROM public.project_ffe_items f
+               WHERE f.blocked_by_decision_id = p_apply.target_id) AS l
+       WHERE NOT EXISTS (
+         SELECT 1 FROM public.model_applies AS g
+          WHERE g.source = p_apply.source AND g.source_id = p_apply.source_id
+            AND g.target_table = l.tbl AND g.target_id = l.id
+            AND g.reverted_at IS NULL));
 END;
 $$;
 
@@ -540,7 +639,9 @@ BEGIN
 END;
 $$;
 
--- Once every row an SMS produced is put back, the message says so.
+-- Once every row an SMS produced is put back, the message says so. Callers
+-- hold the message lock, so two reverts of one SMS cannot both miss the last
+-- row; an 'already' call repairs a missing stamp and keeps an existing one.
 CREATE OR REPLACE FUNCTION public._model_apply_mark_source_reverted(p_source text, p_source_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -553,7 +654,8 @@ BEGIN
   ) THEN
     UPDATE public.sms_messages
        SET applied_effect = applied_effect || jsonb_build_object('reverted', true, 'reverted_at', now())
-     WHERE id = p_source_id AND applied_effect IS NOT NULL;
+     WHERE id = p_source_id AND applied_effect IS NOT NULL
+       AND (applied_effect ->> 'reverted') IS DISTINCT FROM 'true';
   END IF;
 END;
 $$;
@@ -574,12 +676,22 @@ AS $$
 DECLARE
   v_apply public.model_applies%ROWTYPE;
 BEGIN
-  SELECT * INTO v_apply FROM public.model_applies WHERE id = p_apply_id FOR UPDATE;
-  IF NOT FOUND OR auth.uid() IS NULL OR NOT public.is_active_org_member(v_apply.studio_id) THEN
+  SELECT * INTO v_apply FROM public.model_applies WHERE id = p_apply_id;
+  IF NOT FOUND OR auth.uid() IS NULL OR NOT (
+    public.is_active_org_member(v_apply.studio_id)
+    OR COALESCE(v_apply.studio_id IS NULL AND v_apply.owner_user_id = auth.uid(), false)
+  ) THEN
     RAISE EXCEPTION 'model apply % not found or access denied', p_apply_id
       USING ERRCODE = 'insufficient_privilege';
   END IF;
+  -- Lock order: the message (one SMS is put back by one caller at a time),
+  -- the log row, then the target (_model_apply_is_current).
+  IF v_apply.source = 'sms' AND v_apply.source_id IS NOT NULL THEN
+    PERFORM 1 FROM public.sms_messages WHERE id = v_apply.source_id FOR UPDATE;
+  END IF;
+  SELECT * INTO v_apply FROM public.model_applies WHERE id = p_apply_id FOR UPDATE;
   IF v_apply.reverted_at IS NOT NULL THEN
+    PERFORM public._model_apply_mark_source_reverted(v_apply.source, v_apply.source_id);
     RETURN jsonb_build_object('outcome', 'already', 'applyId', v_apply.id);
   END IF;
   IF NOT public._model_apply_is_current(v_apply) THEN
@@ -605,17 +717,34 @@ DECLARE
   v_conflicts uuid[] := ARRAY[]::uuid[];
   v_restored integer := 0;
 BEGIN
-  PERFORM 1 FROM public.model_applies
-    WHERE source_id = p_source_id ORDER BY id FOR UPDATE;
-  SELECT array_agg(ma ORDER BY ma.id) INTO v_rows
+  SELECT array_agg(ma) INTO v_rows
     FROM public.model_applies AS ma
    WHERE ma.source_id = p_source_id;
   IF v_rows IS NULL OR auth.uid() IS NULL OR EXISTS (
-    SELECT 1 FROM unnest(v_rows) AS r WHERE NOT public.is_active_org_member(r.studio_id)
+    SELECT 1 FROM unnest(v_rows) AS r
+     WHERE NOT (public.is_active_org_member(r.studio_id)
+                OR COALESCE(r.studio_id IS NULL AND r.owner_user_id = auth.uid(), false))
   ) THEN
     RAISE EXCEPTION 'model apply group % not found or access denied', p_source_id
       USING ERRCODE = 'insufficient_privilege';
   END IF;
+
+  -- Lock order: the message, the log rows, then the targets. Targets go
+  -- decisions, FF&E lines, tasks, captures, each by target_id (the order
+  -- update_coordination_item and the resolve cascade use), never by log id:
+  -- the first loop below locks each target as it checks it, in v_rows order.
+  IF v_rows[1].source = 'sms' THEN
+    PERFORM 1 FROM public.sms_messages WHERE id = p_source_id FOR UPDATE;
+  END IF;
+  PERFORM 1 FROM public.model_applies
+    WHERE source_id = p_source_id ORDER BY id FOR UPDATE;
+  SELECT array_agg(ma ORDER BY
+           array_position(ARRAY['client_decisions', 'project_ffe_items', 'project_tasks',
+                                'field_captures'], ma.target_table),
+           ma.target_id, ma.id)
+    INTO v_rows
+    FROM public.model_applies AS ma
+   WHERE ma.source_id = p_source_id;
 
   FOREACH v_apply IN ARRAY v_rows LOOP
     IF v_apply.reverted_at IS NULL AND NOT public._model_apply_is_current(v_apply) THEN
@@ -634,6 +763,7 @@ BEGIN
     END IF;
   END LOOP;
   IF v_restored = 0 THEN
+    PERFORM public._model_apply_mark_source_reverted(v_rows[1].source, p_source_id);
     RETURN jsonb_build_object('outcome', 'already', 'sourceId', p_source_id);
   END IF;
   PERFORM public._model_apply_mark_source_reverted(v_rows[1].source, p_source_id);
@@ -648,7 +778,8 @@ GRANT EXECUTE ON FUNCTION public.revert_model_apply(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.revert_model_apply_group(uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.revert_model_apply(uuid) IS
-  'Puts back one model_applies row for an active member of its studio (00787). '
+  'Puts back one model_applies row for an active member of its studio, or its '
+  'owner when it has no studio (00787). '
   'Returns {outcome: restored | conflict | already}. Conflict (the target moved '
   'since the model wrote it) writes nothing. An inserted decision is withdrawn '
   'to expired, never deleted.';

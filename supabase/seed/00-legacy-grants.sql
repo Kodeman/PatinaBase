@@ -22310,7 +22310,13 @@ END $g$;
 
 -- 00787_model_apply_log.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._record_model_apply( text, uuid, uuid, uuid, text, text, uuid, boolean, jsonb, jsonb, text ) FROM PUBLIC, anon, authenticated, service_role;
+  REVOKE ALL ON FUNCTION public._model_apply_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00787_model_apply_log.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._record_model_apply( text, uuid, uuid, uuid, uuid, text, text, uuid, boolean, jsonb, jsonb, text ) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
