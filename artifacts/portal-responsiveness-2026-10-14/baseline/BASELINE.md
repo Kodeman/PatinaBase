@@ -60,7 +60,7 @@ React Profiler commit counts were not collected.
 | P10 | Document → Desk (SPA) | 237 | 259 | 1415 | — | 33 | — | — | | `local-P10-1440.json` |
 
 The min–max range for every cell is in `data/local-summary.json`. Screenshots at 0 ms, 200 ms,
-1000 ms and settled for P1–P5 are in `shots/` (resized with `sips -Z 1600`). The request waterfalls
+1000 ms and settled for P1–P5 are in `screens/` (JPEG, resized with `sips -Z 1600`; `shots/` is gitignored). The request waterfalls
 are in `traces/local-desk-waterfall.json` and `traces/local-doc-waterfall.json`.
 
 **Why the write scenarios were not measured.** P6: the Cedar Lane document has no tasks. On the
@@ -157,7 +157,7 @@ See `bundle.md`. Hard-load client JS (gzip as transferred):
 | Blank screens on `/pieces`, `/people`, `/library` | **Confirmed for /pieces and /people**, **refuted for /library** | P3hard and P4 show no placeholder. P5 shows a placeholder at 647 |
 | Design-system `Skeleton` is unused | Not measured (code fact). No skeleton mark fired outside the Desk roster | — |
 | Arrival hold (up to 1.5 s / 8.5 s) delays content | **Confirmed, magnitude measured** | Desk usable about 7.0 s. Document hard load: usable 6.8 s, no-busy 9.4 s, LCP 10.7 s (the memory's "≈6.6 s doc first paint" reproduces) |
-| No navigation progress indicator | **Confirmed** | SPA first change 215–251 ms local and 248–608 ms prod, with nothing shown before that (`shots/P2-0ms.png`, `P4-0ms.png`) |
+| No navigation progress indicator | **Confirmed** | SPA first change 215–251 ms local and 248–608 ms prod, with nothing shown before that (`screens/P2-0ms.jpg`, `P4-0ms.png`) |
 | Only 5 optimistic mutations; clicks wait for write + refetch | **Not measured** | P6–P9 were not run (see above) |
 | Broad `['document-state']` invalidation re-runs the Desk's 18 queries | **Not measured** | No write scenario ran |
 | Realtime double subscription and echo invalidation | **Not measured** | — |
