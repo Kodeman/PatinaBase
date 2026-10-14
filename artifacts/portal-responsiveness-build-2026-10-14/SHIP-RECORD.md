@@ -1,8 +1,8 @@
-# US-34 ship record: designer portal responsiveness (built, NOT shipped)
+# US-34 ship record: designer portal responsiveness (SHIPPED 2026-10-14)
 
 Story US-34 builds the US-33 plan (`artifacts/portal-responsiveness-2026-10-14/synthesis/plan.md` §6).
 Kody accepted every recommendation on 2026-10-14 ("Lets go with all your recommendations"), which ratified
-PQ1–PQ20 and B1–B4 (V24). It is integrated on `main` and pushed. **Nothing is deployed.**
+PQ1–PQ20 and B1–B4 (V24). It is integrated on `main` and pushed, and Kody said "ship it" on 2026-10-14. See **Shipped** below.
 
 - Integrated range: `e0c3ad1a4..a968ff0d0` (code) plus this record`.
 - Perf gate: `perf/after/REPORT.md` (SQ-1002, on `2c9bc94ac`), then the gap wave SQ-1010–1013.
@@ -28,7 +28,34 @@ PQ1–PQ20 and B1–B4 (V24). It is integrated on `main` and pushed. **Nothing i
 used to hold, and hard loads regress (P1hard 8.1 → 19.2 s). With both on, P1 is 23.7 → 4.9 s, P2 19.3 → 4.2 s
 and P10 16.6 → 0.9 s, and React commits drop from 9.6k to 68.
 
-## Ship steps (each needs Kody's explicit "ship")
+## Shipped (2026-10-14; Kody: "ship it")
+
+1. **Migrations.** `supabase db push --linked --include-all` applied 00791, 00792 and 00793 to Strata.
+   `--include-all` is needed because remote `20260910152111` sorts after them. No other migration was
+   pending. Probe: `desk_read(p_engagement_id)`, `document_open(p_id)` and
+   `restore_product_image(p_product_id, p_src, p_index)` are all SECURITY INVOKER with `search_path=""`,
+   EXECUTE for `authenticated`, and none for `anon`.
+2. **Portal.** `./infra/deploy-portal.sh designer` from main `bc1324a34`, with the Supabase trio exported
+   from `wrangler.jsonc`. Worker version **554da9dd** went live at 23:45:26Z (handler 20.3 MB, startup 17 ms).
+   **The rollback target is 8f2ec2d2.**
+3. **Probes.**
+   - `/api/version` returns 200.
+   - Signed-out `/desk` returns 307 to `/auth/signin?callbackUrl=%2Fdesk`.
+   - Fresh `/_next/static/*` assets return `cache-control: public,max-age=31536000,immutable` (F7).
+     One chunk whose name didn't change between deploys still came from the zone cache with the old
+     `max-age=0` and will age out.
+4. **PostHog** (project 326191). `optimistic-ink` (961135) and `loading-register` (961146) were created
+   active and target `distinct_id` exactly equal to Middle West Studio's three members (Leah, Kody,
+   Ashley) at 100%. `/flags?v=2` probe with a real Chrome UA:
+   - a random UUID and a garbage id both get **false** (`no_condition_match`);
+   - each of the three ids gets **true** (`condition_match`) for both flags.
+5. **Flags-off exposure.** Middle West Studio is the only organization with a sign-in in the last 30
+   days, so no active user is on the flags-off configuration that regresses hard loads. **Widen both
+   flags together**, before any other studio signs in.
+
+Not verified: a signed-in prod walk (it needs Kody's or Leah's session) and the prod middleware time (N13).
+
+## Ship steps (as planned)
 
 1. `supabase db push` for 00791 `desk_read`, 00792 `document_open` and 00793 `restore_product_image`
    (SECURITY INVOKER, `search_path ''`, `authenticated` only). This must come before the portal deploy,
