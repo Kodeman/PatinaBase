@@ -2,6 +2,12 @@
  * Desk data hook — reads the `document_state` view (00188) and derives the
  * two Desk populations. Portal-local like use-time-tracking.ts.
  *
+ * US-34 N8: every feed arrives in one `desk_read` RPC (00791, SECURITY
+ * INVOKER, so each row is one the member's RLS already admits). It returns
+ * the rows in the shape the old per-table PostgREST reads did, one key per
+ * feed, and a feed that failed inside the read answers `{error}` instead of
+ * rows. The buildDesk* folds below read those rows unchanged.
+ *
  * 60s refetch = the Desk "re-sorts in the background" (D2) without any
  * push/toast machinery. The view is not in the generated database.types.ts
  * yet, so the client is cast like the other portal hooks.
@@ -29,13 +35,11 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import {
   createBrowserClient,
   docKeys,
-  fetchHeldPurchaseOrders,
   type HeldPurchaseOrder,
   type Invoice,
 } from '@patina/supabase';
 import {
   partitionDesk,
-  RETURN_BY_LEAD_DAYS,
   type DeskClaimWindowSignal,
   type DeskHeldReleaseSignal,
   type DeskSampleSignal,
@@ -48,7 +52,6 @@ import {
   type DeskLeadSignal,
   type DeskProposalOutcomeSignal,
   type DeskPurchaseOrderSignal,
-  LANDED_PAYMENT_DAYS,
   type DeskFolder,
   type DocumentStateRow,
   type MotionChip,
@@ -143,27 +146,16 @@ export function selectOperationalNeedsForDocument(
   );
 }
 
-/** Conflict window: today → +120d covers any configured install horizon. */
-const CONFLICT_WINDOW_DAYS = 120;
-
 /**
  * Caps on the desk-wide schedule reads (risk R1). Sized with headroom over any
  * plausible studio: the single composing designer on prod carries 59 chained
  * phases across 14 projects. A read that comes back FULL is treated as no
  * answer at all rather than a partial one — see the truncation branch below.
+ * desk_read (00791) applies the same LIMITs; the hook test fails if they drift.
+ * The read windows and the other caps live only in desk_read.
  */
 export const DESK_PHASE_LIMIT = 2000;
-const DESK_MILESTONE_LIMIT = 500;
-const DESK_PROPOSAL_LIMIT = 500;
-/** C-20: claim_window_closing notices are written once per (PO, recipient)
- *  and never deleted, so the read looks back a bounded stretch. */
-const DESK_CLAIM_NOTICE_LIMIT = 200;
-const DESK_CLAIM_NOTICE_DAYS = 60;
-/** C-22: due and failed payment notices, read only while their payment row is
- *  still open (pending or due) — a covered row drops out of the read itself,
- *  so no lookback window is needed. */
-const DESK_PAYMENT_NOTICE_LIMIT = 200;
-const PAYMENT_NOTICE_KINDS = ['deposit_due', 'balance_due', 'milestone_due', 'payment_failed'];
+export const DESK_PROPOSAL_LIMIT = 500;
 
 /**
  * C-22: the due / failed payment notices folded to one signal per
@@ -209,10 +201,6 @@ export function buildDeskPayments(notices: any): Map<string, DeskPaymentSignal[]
   return map;
 }
 
-/** C-25: live purchases whose return window is near. The read takes a day of
- *  slack each side (UTC vs local dates); returnWindowOpen decides exactly. */
-const DESK_RETURN_LIMIT = 200;
-
 /**
  * C-25: live studio purchases with a return-by date, folded to one signal per
  * purchase and keyed by project_id. Studio overhead (no project) has no
@@ -241,9 +229,6 @@ export function buildDeskReturns(rows: any): Map<string, DeskReturnSignal[]> | u
   }
   return map;
 }
-
-/** C-28: the drafts read's cap — letters awaiting review are few. */
-const DESK_DRAFT_LIMIT = 200;
 
 /**
  * C-28: procurement drafts awaiting review (or sending), keyed by project_id. A studio-level
@@ -325,10 +310,6 @@ export function buildDeskStudioDrafts(rows: any, organizationId?: string | null)
     }));
 }
 
-/** C-29: live quotes whose valid-until is near. The read takes a day of slack
- *  each side (UTC vs local dates); quoteExpiring decides exactly. */
-const DESK_QUOTE_LIMIT = 200;
-
 /**
  * C-29: live (not superseded) vendor quotes with a valid-until date, one signal
  * per quote keyed by project_id, counting the lines it prices that are live and
@@ -361,9 +342,6 @@ export function buildDeskQuotes(rows: any): Map<string, DeskQuoteSignal[]> | und
   return map;
 }
 
-/** C-30: open exceptions in the member's read. */
-const DESK_EXCEPTION_LIMIT = 200;
-
 /**
  * C-30: procurement exceptions still `open`, one signal per row keyed by
  * project_id, with the line or PO it names; exceptionNeedsPath decides which
@@ -393,9 +371,6 @@ export function buildDeskExceptions(rows: any): Map<string, DeskExceptionSignal[
   }
   return map;
 }
-
-/** C-35: live samples in the member's read. */
-const DESK_SAMPLE_LIMIT = 200;
 
 /**
  * C-35: samples requested or received (not yet returned or cancelled) with a
@@ -453,15 +428,17 @@ export function buildDeskHeldReleases(
  * writes one the day before the vendor deadline) folded to one signal per PO,
  * keyed by project_id, each carrying its deadline from
  * procurement_claim_deadline. Only POs whose drafted claim has not reached the
- * vendor ask for a deadline; the derivation decides the rest. Any failure
- * degrades to no answer, never takes the Desk down.
+ * vendor ask for a deadline; the derivation decides the rest. desk_read
+ * answers those deadlines as one set (`claim_deadlines`, the old per-PO N+1).
+ * A failed deadline read degrades to no answer only when a live PO needed it,
+ * never takes the Desk down.
  */
-async function loadDeskClaimWindows(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+export function buildDeskClaimWindows(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   notices: any,
-): Promise<Map<string, DeskClaimWindowSignal[]> | undefined> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  deadlines: any,
+): Map<string, DeskClaimWindowSignal[]> | undefined {
   if (!Array.isArray(notices)) return undefined;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const one = (v: any) => (Array.isArray(v) ? v[0] : v);
@@ -488,34 +465,24 @@ async function loadDeskClaimWindows(
   const live = [...byPo.values()].filter(
     (w) => w.claimStates.includes('drafted') && w.latestOutcome !== 'clean',
   );
-  try {
-    const deadlines = await Promise.all(
-      live.map(async (w) => {
-        const { data, error } = await supabase.rpc('procurement_claim_deadline', {
-          p_po_id: w.purchaseOrderId,
-        });
-        if (error) throw error;
-        return (Array.isArray(data) ? data[0] : data)?.vendor_deadline ?? null;
-      }),
-    );
-    const map = new Map<string, DeskClaimWindowSignal[]>();
-    live.forEach(({ projectId, ...w }, i) => {
-      const deadline = deadlines[i] as string | null;
-      if (!deadline) return;
-      map.set(projectId, [...(map.get(projectId) ?? []), { ...w, deadline }]);
-    });
-    return map;
-  } catch {
-    return undefined;
+  if (live.length > 0 && !Array.isArray(deadlines)) return undefined;
+  const deadlineByPo = new Map<string, string | null>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((deadlines ?? []) as any[]).map((d) => [String(d?.purchase_order_id), d?.vendor_deadline ?? null]),
+  );
+  const map = new Map<string, DeskClaimWindowSignal[]>();
+  for (const { projectId, ...w } of live) {
+    const deadline = deadlineByPo.get(w.purchaseOrderId) ?? null;
+    if (!deadline) continue;
+    map.set(projectId, [...(map.get(projectId) ?? []), { ...w, deadline }]);
   }
+  return map;
 }
 
 /** N3: caps on the live-job reads. A proposals or purchase-order page that
  *  comes back FULL is no answer (a missing job would read as "nothing open"). */
-const DESK_LIVE_PROPOSAL_LIMIT = 500;
-const DESK_SENT_PO_LIMIT = 500;
-const DESK_LANDED_LIMIT = 200;
-const DESK_LEAD_LIMIT = 500;
+export const DESK_LIVE_PROPOSAL_LIMIT = 500;
+export const DESK_SENT_PO_LIMIT = 500;
 
 /**
  * N3: proposals on live jobs, folded to the signed and declined outcomes that
@@ -684,6 +651,24 @@ function flattenBoardFlaggedRows(rows: any): FlaggedLineRow[] {
     .filter((r) => !!r.proposalId);
 }
 
+/**
+ * N8: one desk_read feed as the { data, error } pair the per-table reads used
+ * to return. A feed is its rows (an array). Anything else is a failed read:
+ * the `{error, code}` a feed answers when it failed inside the RPC, or a key
+ * the RPC did not carry.
+ */
+function deskFeed(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  read: any,
+  key: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): { data: any; error: Error | null } {
+  const value = read?.[key];
+  if (Array.isArray(value)) return { data: value, error: null };
+  const message = typeof value?.error === 'string' ? value.error : `desk_read did not answer ${key}`;
+  return { data: null, error: Object.assign(new Error(message), { code: value?.code ?? null }) };
+}
+
 export function useDeskEngagements(options: { enabled?: boolean; organizationId?: string | null } = {}) {
   // Arrival Arc Phase 0 (I64): tracks the last successfully computed Desk so
   // the zero-row breadcrumb can tell "went quiet after real work" apart from
@@ -703,268 +688,39 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
     queryFn: async () => {
       const supabase = getSupabase();
       const today = new Date().toISOString().slice(0, 10);
-      const horizon = new Date(Date.now() + CONFLICT_WINDOW_DAYS * 86_400_000)
-        .toISOString()
-        .slice(0, 10);
-      // Existing drafts remain reviewable regardless of the UI feature flag;
-      // the database rollout gates composition, not visibility of stored rows.
-      const outboundRead: Promise<{ data: unknown; error: unknown }> = Promise.resolve(
-        supabase
-          .from('outbound_drafts')
-          .select(
-            'id, organization_id, project_id, kind, channel, recipient_kind, status, to_address, subject, body, created_at, updated_at, claimed_at',
-          )
-          .in('status', ['awaiting_review', 'sending'])
-          .order('created_at')
-          .limit(DESK_DRAFT_LIMIT),
-      ).catch((outboundError) => ({ data: null, error: outboundError }));
-      const [
-        { data, error },
-        { data: events, error: eventsError },
-        { data: invoices, error: invoicesError },
-        { data: flaggedFeedback, error: flaggedError },
-        { data: boardFlagged, error: boardFlaggedError },
-        { data: ceremonies, error: ceremoniesError },
-        { data: deskPhases, error: deskPhasesError },
-        { data: deskMilestones, error: deskMilestonesError },
-        { data: deskProjectStarts, error: deskProjectStartsError },
-        { data: deskProposals, error: deskProposalsError },
-        { data: claimNotices, error: claimNoticesError },
-        { data: paymentNotices, error: paymentNoticesError },
-        { data: returnRows, error: returnRowsError },
-        { data: draftRows, error: draftRowsError },
-        { data: quoteRows, error: quoteRowsError },
-        { data: exceptionRows, error: exceptionRowsError },
-        { data: heldRows, error: heldRowsError },
-        { data: sampleRows, error: sampleRowsError },
-        { data: liveProposalRows, error: liveProposalsError },
-        { data: paidInvoices, error: paidInvoicesError },
-        { data: paidPoPayments, error: paidPoPaymentsError },
-        { data: sentPoRows, error: sentPoRowsError },
-        { data: leadRows, error: leadRowsError },
-      ] = await Promise.all([
-        supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
-        supabase
-          .from('delivery_events')
-          .select('*')
-          .gte('event_date', today)
-          .lte('event_date', horizon),
-        // R36: open receivables for the overdue → Desk need line. Just the
-        // columns the classifier needs (RLS scopes to the designer's invoices).
-        supabase
-          .from('invoices')
-          .select(
-            'id, project_id, status, due_date, total_cents, amount_paid_cents, invoice_number, ar_last_chased_at',
-          )
-          .in('status', ['sent', 'partially_paid']),
-        // C4: unresolved per-line client rejections → the "N lines flagged" need.
-        // RLS scopes item_feedback to the designer's own proposals; the inner
-        // join carries the proposal id + title for the need line. (Same join the
-        // proposal-feedback hook uses, so the relationship names are proven.)
-        supabase
-          .from('item_feedback')
-          .select('proposal_items!inner(proposal_id, proposals!inner(title))')
-          .eq('verdict', 'rejected')
-          .is('resolved_at', null),
-        // B4: unresolved board-PIN rejections → the same "N lines flagged" need.
-        // proposal_board_items → proposal_boards → proposals(title). Project-owned
-        // boards (proposal_id NULL) never carry verdicts, so the inner join to
-        // proposals scopes this to proposal-stage boards automatically.
-        supabase
-          .from('item_feedback')
-          .select('proposal_board_items!inner(proposal_boards!inner(proposal_id, proposals!inner(title)))')
-          .eq('verdict', 'rejected')
-          .is('resolved_at', null),
-        // R106 (the Arrival Arc): the designer's own match_ceremonies rows —
-        // the parked-card need (draft, keyed by lead_id) and the in-motion
-        // chip states (sent/picked, keyed by designer_client_id). RLS already
-        // scopes this to the designer's own rows (match_ceremonies_designer_all);
-        // a flag-off designer simply has none, so this feed is empty and every
-        // ceremony-derived branch downstream never fires.
-        supabase
-          .from('match_ceremonies')
-          .select(
-            'id, lead_id, designer_client_id, state, intro_text, offered_slots, offered_at, picked_slot_starts_at, timezone, thread_id, created_at',
-          ),
-        // R108: the schedule feed. Chain columns only, never `*` — this read is
-        // desk-wide (R1 perf). It cannot filter on the project ids the
-        // document_state read returns, because that read is in this same batch;
-        // RLS already scopes project_phases to the designer's own projects.
-        supabase
-          .from('project_phases')
-          .select(
-            'id, project_id, name, phase_key, status, sort_order, lane, duration_days, duration_weeks, follows_phase_id, anchor_date, start_date, target_end_date',
-          )
-          .order('project_id')
-          .limit(DESK_PHASE_LIMIT),
-        // schedule_milestones has no project_id of its own — every milestone
-        // hangs off a phase, so the phase id carries the grouping key.
-        supabase
-          .from('schedule_milestones')
-          .select('id, phase_id, name, kind, offset_days, anchor_date, status, sort_order')
-          .order('phase_id')
-          .limit(DESK_MILESTONE_LIMIT),
-        // R100's forward-compute origin, per project. Without it an unanchored
-        // chain can only ever resolve as legacy dates, never as a Frame.
-        supabase.from('projects').select('id, start_date').limit(DESK_PHASE_LIMIT),
-        // R109/R110 (00475): live schedule proposals, newest first. Bounded and
-        // ordered like every other desk read; it degrades on its own — a failed
-        // proposals read leaves the need silent, never invents one.
-        supabase
-          .from('schedule_proposals')
-          .select('id, project_id, source_event, conflicts_with_committed, created_at')
-          .eq('state', 'proposed')
-          .order('created_at', { ascending: false })
-          .limit(DESK_PROPOSAL_LIMIT),
-        // C-20: claim_window_closing notices. 00700's studio read policy lets
-        // a co-member see a colleague's notice, so this is not filtered to
-        // the viewer; the loader dedupes per PO.
-        supabase
-          .from('procurement_notifications')
-          .select(
-            'purchase_order:purchase_orders!procurement_notifications_subject_purchase_order_id_fkey(id, project_id, po_number, vendor_po_number, sidemark, vendor:vendors!purchase_orders_vendor_id_fkey(name), inspections:receiving_inspections!receiving_inspections_purchase_order_id_fkey(outcome, inspected_at, claims:damage_claims!damage_claims_receiving_inspection_id_fkey(state)))',
-          )
-          .eq('kind', 'claim_window_closing')
-          .gte(
-            'created_at',
-            new Date(Date.now() - DESK_CLAIM_NOTICE_DAYS * 86_400_000).toISOString(),
-          )
-          .order('created_at', { ascending: false })
-          .limit(DESK_CLAIM_NOTICE_LIMIT),
-        // C-22: due and failed payment notices whose payment row is still
-        // open. The inner join drops a covered (paid) or refunded row from
-        // the read, so the need clears with the act.
-        supabase
-          .from('procurement_notifications')
-          .select(
-            'kind, payment:po_payments!procurement_notifications_subject_payment_id_fkey!inner(id, kind, state, due_date, amount_cents, stripe_checkout_session_id, stripe_payment_intent_id), purchase_order:purchase_orders!procurement_notifications_subject_purchase_order_id_fkey(id, project_id, po_number, vendor_po_number, sidemark, is_patina_catalog, vendor:vendors!purchase_orders_vendor_id_fkey(name))',
-          )
-          .in('kind', PAYMENT_NOTICE_KINDS)
-          .in('payment.state', ['pending', 'due'])
-          .order('created_at', { ascending: false })
-          .limit(DESK_PAYMENT_NOTICE_LIMIT),
-        // C-25: live, returnable project purchases whose return-by date is
-        // near. A returned or void purchase drops out of the read itself.
-        supabase
-          .from('studio_purchases')
-          .select(
-            'id, project_id, description, payee_name, return_by, ffe_item:project_ffe_items!studio_purchases_ffe_item_id_fkey(status, received_quantity)',
-          )
-          .in('status', ['recorded', 'billed'])
-          .eq('returnable', true)
-          .is('returned_on', null)
-          .gte('return_by', new Date(Date.now() - 86_400_000).toISOString().slice(0, 10))
-          .lte(
-            'return_by',
-            new Date(Date.now() + (RETURN_BY_LEAD_DAYS + 1) * 86_400_000).toISOString().slice(0, 10),
-          )
-          .order('return_by')
-          .limit(DESK_RETURN_LIMIT),
-        // C-28: composed letters awaiting a member's review, or claimed by a
-        // send (00720: a stalled one offers Send again). A sent or discarded
-        // draft drops out of the read, so the need clears with the act.
-        // buildDeskDrafts drops a studio-level draft (no project).
-        supabase
-          .from('procurement_drafts')
-          .select(
-            'id, project_id, purchase_order_id, kind, status, to_email, subject, body, created_at, updated_at, ffe_item:project_ffe_items!procurement_drafts_ffe_item_id_fkey(id, vendor_id, vendor_name, product:products!product_id(brand), purchase_order:purchase_orders!purchase_order_id(vendor_id, po_number, vendor_po_number, vendor:vendors!purchase_orders_vendor_id_fkey(name)))',
-          )
-          .in('status', ['awaiting_review', 'sending'])
-          .order('created_at')
-          .limit(DESK_DRAFT_LIMIT),
-        // C-29: live quotes whose valid-until is near (R6: the date is all
-        // the need reads). A superseded quote drops out of the read itself.
-        supabase
-          .from('vendor_quotes')
-          .select(
-            'id, project_id, quote_ref, valid_until, vendor:vendors!vendor_quotes_vendor_id_fkey(name), lines:vendor_quote_lines(ffe_item:project_ffe_items!vendor_quote_lines_ffe_item_id_fkey(purchase_order_id, removed_at))',
-          )
-          .is('superseded_by', null)
-          .gte('valid_until', new Date(Date.now() - 86_400_000).toISOString().slice(0, 10))
-          .lte('valid_until', new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10))
-          .order('valid_until')
-          .limit(DESK_QUOTE_LIMIT),
-        // C-30: exceptions waiting for a path. An ack discrepancy is the
-        // acknowledgment check's (SQ-426), not this need's.
-        supabase
-          .from('procurement_exceptions')
-          .select(
-            'id, project_id, type, status, clock_due_on, purchase_order:purchase_orders!procurement_exceptions_purchase_order_id_fkey(po_number, vendor_po_number, sidemark, is_patina_catalog), ffe_item:project_ffe_items!procurement_exceptions_ffe_item_id_fkey(name)',
-          )
-          .eq('status', 'open')
-          .neq('type', 'ack_discrepancy')
-          .order('opened_at')
-          .limit(DESK_EXCEPTION_LIMIT),
-        // C-32: orders held for an owner/admin release, with the viewer's seat.
-        // A failed read (or seat check) degrades to no answer.
-        (async () => {
-          try {
-            return { data: await fetchHeldPurchaseOrders(supabase), error: null };
-          } catch (heldError) {
-            return { data: null, error: heldError };
-          }
-        })(),
-        // C-35: samples still out with a return-by date; the need decides the
-        // window (memoReturnDue), so a returned or cancelled one drops out here.
-        supabase
-          .from('sample_requests')
-          .select('id, project_id, kind, return_by, vendor:vendors!sample_requests_vendor_id_fkey(name)')
-          .in('status', ['requested', 'received'])
-          .not('return_by', 'is', null)
-          .order('return_by')
-          .limit(DESK_SAMPLE_LIMIT),
-        // N3: proposals on live jobs, every status, so a revision proves its
-        // parent answered; each line's FF&E rows say whether it was ordered.
-        supabase
-          .from('proposals')
-          .select(
-            'id, project_id, status, title, version, parent_proposal_id, created_at, signed_at, accepted_at, declined_at, decline_reason, client_feedback, superseded_at, replacement_proposal_id, items:proposal_items!proposal_items_proposal_id_fkey(ffe:project_ffe_items!project_ffe_items_source_proposal_item_id_fkey(purchase_order_id, removed_at))',
-          )
-          .not('project_id', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(DESK_LIVE_PROPOSAL_LIMIT),
-        // N3: client invoices paid inside the landed window (a day of slack).
-        supabase
-          .from('invoices')
-          .select('id, project_id, invoice_number, title, total_cents, amount_paid_cents, paid_at')
-          .eq('status', 'paid')
-          .gte(
-            'paid_at',
-            new Date(Date.now() - (LANDED_PAYMENT_DAYS + 1) * 86_400_000).toISOString(),
-          )
-          .order('paid_at', { ascending: false })
-          .limit(DESK_LANDED_LIMIT),
-        // N3: maker payments recorded paid inside the same window.
-        supabase
-          .from('po_payments')
-          .select(
-            'id, kind, amount_cents, paid_date, purchase_order:purchase_orders!po_payments_purchase_order_id_fkey(project_id, po_number, vendor_po_number, sidemark, vendor:vendors!purchase_orders_vendor_id_fkey(name))',
-          )
-          .eq('state', 'paid')
-          .gte(
-            'paid_date',
-            new Date(Date.now() - (LANDED_PAYMENT_DAYS + 1) * 86_400_000).toISOString().slice(0, 10),
-          )
-          .order('paid_date', { ascending: false })
-          .limit(DESK_LANDED_LIMIT),
-        // N3: sent POs still in play, acknowledged or not, so a chase names
-        // its PO and an acknowledgment clears it.
-        supabase
-          .from('purchase_orders')
-          .select('id, project_id, po_number, vendor_po_number, sidemark, sent_at, acknowledged_at')
-          .not('sent_at', 'is', null)
-          .not('status', 'in', '(delivered,cancelled)')
-          .order('sent_at')
-          .limit(DESK_SENT_PO_LIMIT),
-        // N6: open leads' arrival times and contact names.
-        supabase
-          .from('leads')
-          .select('id, created_at, contact_name')
-          .in('status', ['new', 'viewed', 'contacted'])
-          .order('created_at')
-          .limit(DESK_LEAD_LIMIT),
-      ]);
-      const { data: outboundRows, error: outboundRowsError } = await outboundRead;
+      // N8: every feed in one read (00791). Existing outbound drafts stay
+      // reviewable regardless of the UI feature flag; the database rollout
+      // gates composition, not visibility of stored rows.
+      // desk_read is granted to `authenticated` only, so a sessionless call is
+      // refused here as an error; the 0-row guard below still covers the rest.
+      const { data: read, error: readError } = await supabase.rpc('desk_read');
+      if (readError) throw readError;
+      const feed = (key: string) => deskFeed(read, key);
+      const { data, error } = feed('engagements');
+      const { data: events, error: eventsError } = feed('delivery_events');
+      const { data: invoices, error: invoicesError } = feed('receivables');
+      const { data: flaggedFeedback, error: flaggedError } = feed('flagged_lines');
+      const { data: boardFlagged, error: boardFlaggedError } = feed('flagged_board_pins');
+      const { data: ceremonies, error: ceremoniesError } = feed('ceremonies');
+      const { data: deskPhases, error: deskPhasesError } = feed('phases');
+      const { data: deskMilestones, error: deskMilestonesError } = feed('milestones');
+      const { data: deskProjectStarts, error: deskProjectStartsError } = feed('project_starts');
+      const { data: deskProposals, error: deskProposalsError } = feed('schedule_proposals');
+      const { data: claimNotices, error: claimNoticesError } = feed('claim_notices');
+      const { data: claimDeadlines, error: claimDeadlinesError } = feed('claim_deadlines');
+      const { data: paymentNotices, error: paymentNoticesError } = feed('payment_notices');
+      const { data: returnRows, error: returnRowsError } = feed('returns');
+      const { data: draftRows, error: draftRowsError } = feed('drafts');
+      const { data: outboundRows, error: outboundRowsError } = feed('outbound_drafts');
+      const { data: quoteRows, error: quoteRowsError } = feed('quotes');
+      const { data: exceptionRows, error: exceptionRowsError } = feed('exceptions');
+      const { data: heldRows, error: heldRowsError } = feed('held');
+      const { data: sampleRows, error: sampleRowsError } = feed('samples');
+      const { data: liveProposalRows, error: liveProposalsError } = feed('live_proposals');
+      const { data: paidInvoices, error: paidInvoicesError } = feed('paid_invoices');
+      const { data: paidPoPayments, error: paidPoPaymentsError } = feed('paid_po_payments');
+      const { data: sentPoRows, error: sentPoRowsError } = feed('sent_purchase_orders');
+      const { data: leadRows, error: leadRowsError } = feed('leads');
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
 
@@ -1067,7 +823,7 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
             );
       const claimWindows = claimNoticesError
         ? undefined
-        : await loadDeskClaimWindows(supabase, claimNotices);
+        : buildDeskClaimWindows(claimNotices, claimDeadlinesError ? null : claimDeadlines);
       const payments = paymentNoticesError ? undefined : buildDeskPayments(paymentNotices);
       const returns = returnRowsError ? undefined : buildDeskReturns(returnRows);
       const drafts =
@@ -1076,7 +832,9 @@ export function useDeskEngagements(options: { enabled?: boolean; organizationId?
           : buildDeskDrafts(draftRowsError ? [] : draftRows, outboundRowsError ? [] : outboundRows);
       const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
       const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
-      const heldReleases = heldRowsError ? undefined : buildDeskHeldReleases(heldRows);
+      const heldReleases = heldRowsError
+        ? undefined
+        : buildDeskHeldReleases(heldRows as HeldPurchaseOrder[]);
       const samples = sampleRowsError ? undefined : buildDeskSamples(sampleRows);
       const liveProposalsTruncated =
         Array.isArray(liveProposalRows) && liveProposalRows.length >= DESK_LIVE_PROPOSAL_LIMIT;

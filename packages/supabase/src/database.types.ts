@@ -11447,6 +11447,13 @@ export type Database = {
             foreignKeyName: "model_applies_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "model_applies_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
@@ -11454,7 +11461,21 @@ export type Database = {
             foreignKeyName: "model_applies_studio_id_fkey"
             columns: ["studio_id"]
             isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_applies_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "model_applies_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
             referencedColumns: ["id"]
           },
         ]
@@ -11937,6 +11958,7 @@ export type Database = {
           require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
+          share_teaching: boolean
           slug: string
           status: Database["public"]["Enums"]["organization_status"]
           subscription_expires_at: string | null
@@ -11962,6 +11984,7 @@ export type Database = {
           require_release_per_order?: boolean
           rolodex_seed_skipped_at?: string | null
           settings?: Json
+          share_teaching?: boolean
           slug: string
           status?: Database["public"]["Enums"]["organization_status"]
           subscription_expires_at?: string | null
@@ -11987,6 +12010,7 @@ export type Database = {
           require_release_per_order?: boolean
           rolodex_seed_skipped_at?: string | null
           settings?: Json
+          share_teaching?: boolean
           slug?: string
           status?: Database["public"]["Enums"]["organization_status"]
           subscription_expires_at?: string | null
@@ -35924,13 +35948,16 @@ export type Database = {
         }
         Returns: number
       }
-      _aesthete_phi: { Args: { p_product_id: string }; Returns: number[] }
+      _aesthete_phi: {
+        Args: { p_product_id: string; p_reader?: string }
+        Returns: number[]
+      }
       _aesthete_primary_archetype: {
-        Args: { p_product_id: string }
+        Args: { p_product_id: string; p_reader?: string }
         Returns: string
       }
       _aesthete_product_spectrum: {
-        Args: { p_product_id: string }
+        Args: { p_product_id: string; p_reader?: string }
         Returns: {
           conf: Json
           origin: string
@@ -35954,7 +35981,7 @@ export type Database = {
         Returns: number
       }
       _aesthete_taste_term: {
-        Args: { p_product_id: string; p_theta: number[] }
+        Args: { p_product_id: string; p_reader?: string; p_theta: number[] }
         Returns: number
       }
       _aesthete_theta_blend: {
@@ -37154,6 +37181,7 @@ export type Database = {
           require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
+          share_teaching: boolean
           slug: string
           status: Database["public"]["Enums"]["organization_status"]
           subscription_expires_at: string | null
@@ -37252,6 +37280,34 @@ export type Database = {
       _materialize_schedule_dates_impl: {
         Args: { p_phases: Json; p_project_id: string }
         Returns: number
+      }
+      _model_apply_columns: { Args: { p_table: string }; Returns: string[] }
+      _model_apply_fingerprint: {
+        Args: { p_decision_id: string }
+        Returns: Json
+      }
+      _model_apply_is_current: {
+        Args: {
+          p_apply: Database["public"]["Tables"]["model_applies"]["Row"]
+          p_group: boolean
+        }
+        Returns: boolean
+      }
+      _model_apply_mark_source_reverted: {
+        Args: { p_source: string; p_source_id: string }
+        Returns: undefined
+      }
+      _model_apply_may_write: {
+        Args: { p_id: string; p_table: string }
+        Returns: boolean
+      }
+      _model_apply_restore: {
+        Args: { p_apply: Database["public"]["Tables"]["model_applies"]["Row"] }
+        Returns: undefined
+      }
+      _model_apply_snapshot: {
+        Args: { p_id: string; p_lock?: boolean; p_table: string }
+        Returns: Json
       }
       _paper_signature_metadata: {
         Args: {
@@ -37462,6 +37518,7 @@ export type Database = {
           require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
+          share_teaching: boolean
           slug: string
           status: Database["public"]["Enums"]["organization_status"]
           subscription_expires_at: string | null
@@ -37532,6 +37589,23 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _record_model_apply: {
+        Args: {
+          p_after: Json
+          p_before: Json
+          p_effect_type: string
+          p_inserted: boolean
+          p_owner_user_id: string
+          p_project_id: string
+          p_source: string
+          p_source_id: string
+          p_studio_id: string
+          p_summary: string
+          p_table: string
+          p_target_id: string
+        }
+        Returns: undefined
       }
       _record_paper_client_signature_impl: {
         Args: {
@@ -37935,6 +38009,11 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      _teaching_shareable: { Args: { p_user: string }; Returns: boolean }
+      _teaching_visible_to: {
+        Args: { p_reader: string; p_teacher: string }
+        Returns: boolean
+      }
       _trade_agreement_fingerprint: {
         Args: { p_agreement_id: string }
         Returns: string
@@ -38200,6 +38279,7 @@ export type Database = {
           require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
+          share_teaching: boolean
           slug: string
           status: Database["public"]["Enums"]["organization_status"]
           subscription_expires_at: string | null
@@ -38279,6 +38359,7 @@ export type Database = {
           require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
+          share_teaching: boolean
           slug: string
           status: Database["public"]["Enums"]["organization_status"]
           subscription_expires_at: string | null
@@ -40373,6 +40454,7 @@ export type Database = {
           require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
+          share_teaching: boolean
           slug: string
           status: Database["public"]["Enums"]["organization_status"]
           subscription_expires_at: string | null
@@ -40487,6 +40569,7 @@ export type Database = {
           tier: string
         }[]
       }
+      desk_read: { Args: { p_engagement_id?: string }; Returns: Json }
       discard_agreement_parts: {
         Args: { p_proposal_id: string }
         Returns: Json
@@ -40615,6 +40698,13 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      emergence_shareable_product_styles: {
+        Args: { p_product_ids: string[] }
+        Returns: {
+          product_id: string
+          style_name: string
+        }[]
       }
       engage_trade_scope: {
         Args: { p_disclosed_impact?: Json; p_proposal_id: string }
@@ -44957,10 +45047,7 @@ export type Database = {
         Returns: Json
       }
       revert_model_apply: { Args: { p_apply_id: string }; Returns: Json }
-      revert_model_apply_group: {
-        Args: { p_source_id: string }
-        Returns: Json
-      }
+      revert_model_apply_group: { Args: { p_source_id: string }; Returns: Json }
       review_agent_task: {
         Args: {
           p_decision: string
@@ -46195,6 +46282,7 @@ export type Database = {
           require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
+          share_teaching: boolean
           slug: string
           status: Database["public"]["Enums"]["organization_status"]
           subscription_expires_at: string | null
@@ -46210,6 +46298,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_studio_teaching_sharing: {
+        Args: { p_share: boolean; p_studio_id: string }
+        Returns: boolean
       }
       set_trade_scope_party: {
         Args: { p_party_id: string; p_proposal_id: string }
@@ -47047,6 +47139,7 @@ export type Database = {
         Args: { p_path: string[]; p_value: Json }
         Returns: Json
       }
+      teaching_row_visible: { Args: { p_teacher: string }; Returns: boolean }
       teaching_signals: { Args: never; Returns: Json }
       toggle_concierge_checklist_item: {
         Args: {

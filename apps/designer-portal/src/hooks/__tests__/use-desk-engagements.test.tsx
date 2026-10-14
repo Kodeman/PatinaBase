@@ -16,19 +16,21 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, useQuery, keepPreviousData } from '@tanstack/react-query';
 
 // ---- @patina/supabase -------------------------------------------------
-// `from` and `auth.getSession` are jest.fn()s configured per-test; the
+// `rpc`, `from` and `auth.getSession` are jest.fn()s configured per-test; the
 // factory only wires them up (prefixed `mock*` so babel-plugin-jest-hoist
-// allows referencing them from inside jest.mock's factory).
+// allows referencing them from inside jest.mock's factory). N8: the Desk reads
+// every feed through one `rpc('desk_read')`; `from` stays wired only so a
+// test can prove no table is read directly any more.
 const mockFrom = jest.fn();
+const mockRpc = jest.fn();
 const mockGetSession = jest.fn();
 
-const mockFetchHeld = jest.fn(async () => [] as unknown[]);
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: jest.fn(() => ({
     from: (...args: unknown[]) => mockFrom(...args),
+    rpc: (...args: unknown[]) => mockRpc(...args),
     auth: { getSession: (...args: unknown[]) => mockGetSession(...args) },
   })),
-  fetchHeldPurchaseOrders: (...args: unknown[]) => mockFetchHeld(...(args as [])),
   docKeys: {
     all: ['document-state'],
     desk: (organizationId?: string) => ['document-state', 'desk', ...(organizationId ? [organizationId] : [])],
@@ -64,7 +66,10 @@ import { replaceEqualDeep } from '@tanstack/react-query';
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => ({ value: false, isLoading: false }),
 }));
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { buildDeskStudioDrafts,
+  buildDeskClaimWindows,
   buildDeskExceptions,
   buildDeskLandedPayments,
   buildDeskLeads,
@@ -72,25 +77,33 @@ import { buildDeskStudioDrafts,
   buildDeskPurchaseOrders,
   buildDeskQuotes,
   buildDeskSamples,
+  DESK_LIVE_PROPOSAL_LIMIT,
   DESK_PHASE_LIMIT,
+  DESK_PROPOSAL_LIMIT,
+  DESK_SENT_PO_LIMIT,
   selectOperationalNeedForDocument,
   useDeskEngagements,
 } from '../use-desk-engagements';
 import { partitionDesk, type DocumentStateRow } from '@/lib/document/desk-derivation';
 import { deriveDeskRoster } from '@/lib/document/desk-roster-derivation';
 
-/** A chainable PostgrestFilterBuilder stand-in — every filter method returns
- *  itself, and `.then` resolves it as the Promise.all in the hook expects. */
-function chainResult(result: { data: unknown; error: unknown }) {
-  const builder: Record<string, unknown> = {};
-  for (const m of ['select', 'order', 'gte', 'lte', 'in', 'eq', 'neq', 'is', 'not', 'limit']) {
-    builder[m] = jest.fn(() => builder);
-  }
-  builder.then = (
-    resolve: (v: typeof result) => void,
-    reject?: (e: unknown) => void,
-  ) => Promise.resolve(result).then(resolve, reject);
-  return builder;
+/** Every feed desk_read (00791) answers, each an empty answer by default. */
+const DESK_READ_FEEDS = [
+  'engagements', 'delivery_events', 'receivables', 'flagged_lines', 'flagged_board_pins',
+  'ceremonies', 'phases', 'milestones', 'project_starts', 'schedule_proposals',
+  'claim_notices', 'claim_deadlines', 'payment_notices', 'returns', 'drafts',
+  'outbound_drafts', 'quotes', 'exceptions', 'held', 'samples', 'live_proposals',
+  'paid_invoices', 'paid_po_payments', 'sent_purchase_orders', 'leads',
+] as const;
+type DeskFeedKey = (typeof DESK_READ_FEEDS)[number];
+
+/** A feed that failed inside the RPC answers its error, not rows. */
+const FAILED_FEED = { error: 'boom', code: 'XX000' };
+
+/** Answers one desk_read: every feed empty unless overridden. */
+function mockDeskRead(feeds: Partial<Record<DeskFeedKey, unknown>> = {}) {
+  const read = Object.fromEntries(DESK_READ_FEEDS.map((key) => [key, [] as unknown]));
+  mockRpc.mockImplementation(async () => ({ data: { ...read, ...feeds }, error: null }));
 }
 
 /** A minimal `document_state` row that resolves to exactly one "new lead"
@@ -121,12 +134,13 @@ function createWrapper() {
 describe('useDeskEngagements', () => {
   beforeEach(() => {
     mockFrom.mockReset();
+    mockRpc.mockReset();
     mockGetSession.mockReset();
     mockDeskZeroRowRead.mockReset();
   });
 
   it('throws when document_state returns 0 rows and there is no valid session', async () => {
-    mockFrom.mockImplementation(() => chainResult({ data: [], error: null }));
+    mockDeskRead();
     mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
 
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
@@ -140,7 +154,7 @@ describe('useDeskEngagements', () => {
   });
 
   it('resolves an empty desk when document_state returns 0 rows and the session is valid', async () => {
-    mockFrom.mockImplementation(() => chainResult({ data: [], error: null }));
+    mockDeskRead();
     mockGetSession.mockResolvedValue({
       data: { session: { access_token: 'tok' } },
       error: null,
@@ -157,7 +171,7 @@ describe('useDeskEngagements', () => {
   });
 
   it('wires placeholderData to keepPreviousData', async () => {
-    mockFrom.mockImplementation(() => chainResult({ data: [], error: null }));
+    mockDeskRead();
     mockGetSession.mockResolvedValue({
       data: { session: { access_token: 'tok' } },
       error: null,
@@ -175,6 +189,7 @@ describe('useDeskEngagements', () => {
     const passedOptions = (useQuery as jest.Mock).mock.calls.at(-1)[0];
     expect(passedOptions.queryKey).toEqual(['document-state', 'desk']);
     expect(passedOptions.enabled).toBe(false);
+    expect(mockRpc).not.toHaveBeenCalled();
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
@@ -183,18 +198,14 @@ describe('useDeskEngagements', () => {
       data: { session: { access_token: 'tok' } },
       error: null,
     });
-    mockFrom.mockImplementation((table: string) =>
-      chainResult(
-        table === 'document_state' ? { data: [NEW_LEAD_ROW], error: null } : { data: [], error: null },
-      ),
-    );
+    mockDeskRead({ engagements: [NEW_LEAD_ROW] });
 
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.data?.folders.length).toBe(1));
 
     // Flip document_state empty and force a refetch on the same hook instance
     // — the previous-result ref lives inside this render, not the cache.
-    mockFrom.mockImplementation(() => chainResult({ data: [], error: null }));
+    mockDeskRead();
     await act(async () => {
       await result.current.refetch();
     });
@@ -209,6 +220,74 @@ describe('useDeskEngagements', () => {
       previous_chip_count: 0,
       session_valid: true,
     });
+  });
+
+  // ── N8: one desk_read answers every feed ───────────────────────────────
+
+  it('reads every Desk feed through one desk_read call and no table read', async () => {
+    mockDeskRead({ engagements: [NEW_LEAD_ROW] });
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'tok' } }, error: null });
+
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockRpc).toHaveBeenCalledWith('desk_read');
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(result.current.data!.folders).toHaveLength(1);
+  });
+
+  it('a refused desk_read takes the Desk to its error state, never a false-empty desk', async () => {
+    mockRpc.mockImplementation(async () => ({
+      data: null,
+      error: { message: 'permission denied for function desk_read', code: '42501' },
+    }));
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'tok' } }, error: null });
+
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+  });
+
+  it('a failed engagements feed is the one feed that takes the Desk down', async () => {
+    mockDeskRead({ engagements: FAILED_FEED });
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'tok' } }, error: null });
+
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect((result.current.error as Error).message).toBe('boom');
+  });
+
+  it('a feed key desk_read did not carry is unanswered, not empty', async () => {
+    mockRpc.mockImplementation(async () => ({
+      data: Object.fromEntries(
+        DESK_READ_FEEDS.filter((key) => key !== 'quotes').map((key) => [key, [] as unknown]),
+      ),
+      error: null,
+    }));
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'tok' } }, error: null });
+
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.unreadFeeds).toEqual(['quotes']);
+  });
+
+  it('caps in desk_read match the TS full-page sentinels', () => {
+    // A full page is no answer only if the RPC caps each feed at exactly the
+    // limit the hook compares against. Read the caps out of 00791 itself.
+    const sql = readFileSync(
+      resolve(__dirname, '../../../../../supabase/migrations/00791_desk_read_rpc.sql'),
+      'utf8',
+    );
+    const capOf = (feed: string) => {
+      const block = sql.split(`-- ── ${feed}`)[1]?.split('-- ── ')[0] ?? '';
+      const caps = [...block.matchAll(/LIMIT (\d+)/g)].map((m) => Number(m[1]));
+      return caps.at(-1);
+    };
+    expect(capOf('phases')).toBe(DESK_PHASE_LIMIT);
+    expect(capOf('schedule_proposals')).toBe(DESK_PROPOSAL_LIMIT);
+    expect(capOf('live_proposals')).toBe(DESK_LIVE_PROPOSAL_LIMIT);
+    expect(capOf('sent_purchase_orders')).toBe(DESK_SENT_PO_LIMIT);
   });
 
   // ── R108: the desk-wide schedule feed is bounded, and a full page is no
@@ -242,11 +321,9 @@ describe('useDeskEngagements', () => {
     title: 'Whitfield Residence',
   };
 
-  /** Routes each table to its own canned result. */
-  function routeTables(byTable: Record<string, { data: unknown; error: unknown }>) {
-    mockFrom.mockImplementation((table: string) =>
-      chainResult(byTable[table] ?? { data: [], error: null }),
-    );
+  /** Answers each feed from its own canned rows, with a valid session. */
+  function routeFeeds(feeds: Partial<Record<DeskFeedKey, unknown>>) {
+    mockDeskRead(feeds);
     mockGetSession.mockResolvedValue({
       data: { session: { access_token: 'tok' } },
       error: null,
@@ -271,9 +348,9 @@ describe('useDeskEngagements', () => {
       start_date: null,
       target_end_date: null,
     }));
-    routeTables({
-      document_state: { data: [PROJECT_ROW], error: null },
-      project_phases: { data: truncated, error: null },
+    routeFeeds({
+      engagements: [PROJECT_ROW],
+      phases: truncated,
     });
 
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
@@ -286,9 +363,9 @@ describe('useDeskEngagements', () => {
   });
 
   it('a SHORT phase read is a real answer — an absent project genuinely has no phases', async () => {
-    routeTables({
-      document_state: { data: [PROJECT_ROW], error: null },
-      project_phases: { data: [], error: null },
+    routeFeeds({
+      engagements: [PROJECT_ROW],
+      phases: [],
     });
 
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
@@ -300,41 +377,15 @@ describe('useDeskEngagements', () => {
   });
 
   it('a phases-query error also degrades to no answer', async () => {
-    routeTables({
-      document_state: { data: [PROJECT_ROW], error: null },
-      project_phases: { data: null, error: { message: 'boom' } },
+    routeFeeds({
+      engagements: [PROJECT_ROW],
+      phases: FAILED_FEED,
     });
 
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data!.folders).toHaveLength(0);
-  });
-
-  it('bounds both schedule reads explicitly', async () => {
-    const limits: number[] = [];
-    mockGetSession.mockResolvedValue({
-      data: { session: { access_token: 'tok' } },
-      error: null,
-    });
-    mockFrom.mockImplementation((table: string) => {
-      const builder = chainResult({
-        data: table === 'document_state' ? [PROJECT_ROW] : [],
-        error: null,
-      }) as Record<string, jest.Mock>;
-      const originalLimit = builder.limit;
-      builder.limit = jest.fn((n: number) => {
-        if (table === 'project_phases' || table === 'schedule_milestones') limits.push(n);
-        return originalLimit(n);
-      });
-      return builder;
-    });
-
-    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(limits).toHaveLength(2);
-    for (const n of limits) expect(n).toBeGreaterThan(0);
   });
 
   it('shares one Desk fetch across observers while selecting studio drafts per observer', async () => {
@@ -347,14 +398,7 @@ describe('useDeskEngagements', () => {
     const otherStudioDraft = {
       ...studioDraft, id: 'studio-2-draft', organization_id: 'studio-2',
     };
-    mockFrom.mockImplementation((table: string) =>
-      chainResult({
-        data: table === 'document_state' ? [NEW_LEAD_ROW]
-          : table === 'outbound_drafts' ? [studioDraft, otherStudioDraft]
-            : [],
-        error: null,
-      }),
-    );
+    mockDeskRead({ engagements: [NEW_LEAD_ROW], outbound_drafts: [studioDraft, otherStudioDraft] });
     const wrapper = createWrapper();
     const desk = renderHook(() => useDeskEngagements({ organizationId: 'studio-1' }), { wrapper });
     const commandBar = renderHook(() => useDeskEngagements({ organizationId: 'studio-2' }), { wrapper });
@@ -363,7 +407,7 @@ describe('useDeskEngagements', () => {
       expect(desk.result.current.isSuccess).toBe(true);
       expect(commandBar.result.current.isSuccess).toBe(true);
     });
-    expect(mockFrom.mock.calls.filter(([table]) => table === 'document_state')).toHaveLength(1);
+    expect(mockRpc).toHaveBeenCalledTimes(1);
     expect(desk.result.current.data?.studioDrafts?.map((draft) => draft.id)).toEqual(['studio-1-draft']);
     expect(commandBar.result.current.data?.studioDrafts?.map((draft) => draft.id)).toEqual(['studio-2-draft']);
   });
@@ -384,21 +428,11 @@ describe('useDeskEngagements', () => {
       claimed_at: null,
     };
     const otherStudioDraft = { ...studioDraft, id: 'other-studio-draft', organization_id: 'studio-2' };
-    mockFrom.mockImplementation((table: string) =>
-      chainResult({
-        data:
-          table === 'document_state'
-            ? [NEW_LEAD_ROW]
-            : table === 'outbound_drafts'
-              ? [studioDraft, otherStudioDraft]
-              : [],
-        error: null,
-      }),
-    );
+    mockDeskRead({ engagements: [NEW_LEAD_ROW], outbound_drafts: [studioDraft, otherStudioDraft] });
     const { result } = renderHook(() => useDeskEngagements({ organizationId: 'studio-1' }), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(mockFrom).toHaveBeenCalledWith('outbound_drafts');
+    expect(mockRpc).toHaveBeenCalledWith('desk_read');
     expect(result.current.data?.studioDrafts?.map((draft) => draft.id)).toEqual(['studio-draft']);
     expect(buildDeskStudioDrafts([studioDraft], 'studio-1')).toHaveLength(1);
   });
@@ -659,9 +693,23 @@ const QUIET_PROJECT_ROW = {
   updated_at: new Date().toISOString(),
 };
 
+/** A delivered PO with a drafted damage claim the vendor has not seen yet. */
+const LIVE_CLAIM_PO = {
+  id: 'po-claim',
+  project_id: 'p-quiet',
+  po_number: 'PO-7',
+  vendor_po_number: null,
+  sidemark: null,
+  vendor: { name: 'Hollis Upholstery' },
+  inspections: [
+    { inspected_at: '2026-10-10T09:00:00Z', outcome: 'damaged', claims: [{ state: 'drafted' }] },
+  ],
+};
+
 describe('useDeskEngagements — fix-now 6: at rest only when every feed answered', () => {
   beforeEach(() => {
     mockFrom.mockReset();
+    mockRpc.mockReset();
     mockGetSession.mockReset();
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'tok' } }, error: null });
   });
@@ -674,15 +722,7 @@ describe('useDeskEngagements — fix-now 6: at rest only when every feed answere
     );
 
   it('an unanswered invoices read never prints at rest — it names what went unchecked', async () => {
-    mockFrom.mockImplementation((table: string) =>
-      chainResult(
-        table === 'document_state'
-          ? { data: [QUIET_PROJECT_ROW], error: null }
-          : table === 'invoices'
-            ? { data: null, error: { message: 'boom' } }
-            : { data: [], error: null },
-      ),
-    );
+    mockDeskRead({ engagements: [QUIET_PROJECT_ROW], receivables: FAILED_FEED });
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data!.unreadFeeds).toEqual(['invoices']);
@@ -694,34 +734,17 @@ describe('useDeskEngagements — fix-now 6: at rest only when every feed answere
   });
 
   it('one failed flag read leaves flagged lines unread, though the board read answered empty (SQ-751 F4)', async () => {
-    let feedbackReads = 0;
-    mockFrom.mockImplementation((table: string) => {
-      if (table === 'document_state') return chainResult({ data: [QUIET_PROJECT_ROW], error: null });
-      // The first item_feedback read is the line flags; the second, board pins.
-      if (table === 'item_feedback') {
-        feedbackReads += 1;
-        return chainResult(feedbackReads === 1 ? { data: null, error: { message: 'boom' } } : { data: [], error: null });
-      }
-      return chainResult({ data: [], error: null });
-    });
+    mockDeskRead({ engagements: [QUIET_PROJECT_ROW], flagged_lines: FAILED_FEED, flagged_board_pins: [] });
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data!.unreadFeeds).toEqual(['flagged lines']);
     expect(rosterOf(result.current.data as never).notChecked).toBe('Not checked: flagged lines.');
   });
 
-  it.each(['schedule_milestones', 'projects'])(
-    'a failed %s read leaves schedules unread (SQ-751 F4)',
+  it.each(['milestones', 'project_starts'] as const)(
+    'a failed %s feed leaves schedules unread (SQ-751 F4)',
     async (failing) => {
-      mockFrom.mockImplementation((table: string) =>
-        chainResult(
-          table === 'document_state'
-            ? { data: [QUIET_PROJECT_ROW], error: null }
-            : table === failing
-              ? { data: null, error: { message: 'boom' } }
-              : { data: [], error: null },
-        ),
-      );
+      mockDeskRead({ engagements: [QUIET_PROJECT_ROW], [failing]: FAILED_FEED });
       const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data!.unreadFeeds).toEqual(['schedules']);
@@ -729,9 +752,7 @@ describe('useDeskEngagements — fix-now 6: at rest only when every feed answere
   );
 
   it('an empty invoices answer (an empty map) is the one state that prints at rest', async () => {
-    mockFrom.mockImplementation((table: string) =>
-      chainResult(table === 'document_state' ? { data: [QUIET_PROJECT_ROW], error: null } : { data: [], error: null }),
-    );
+    mockDeskRead({ engagements: [QUIET_PROJECT_ROW] });
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data!.unreadFeeds).toEqual([]);
@@ -742,56 +763,84 @@ describe('useDeskEngagements — fix-now 6: at rest only when every feed answere
     expect(line.custody).toBe('No current alert');
   });
 
-  it('reads the live-job feeds desk-wide, once each, however many jobs there are (no N+1)', async () => {
-    mockFrom.mockImplementation((table: string) =>
-      chainResult(
-        table === 'document_state'
-          ? {
-              data: [
-                QUIET_PROJECT_ROW,
-                { ...QUIET_PROJECT_ROW, engagement_id: 'job-2', project_id: 'p-2' },
-                { ...QUIET_PROJECT_ROW, engagement_id: 'job-3', project_id: 'p-3' },
-              ],
-              error: null,
-            }
-          : { data: [], error: null },
-      ),
-    );
+  it('reads the live-job feeds desk-wide in one read, however many jobs there are (no N+1)', async () => {
+    mockDeskRead({
+      engagements: [
+        QUIET_PROJECT_ROW,
+        { ...QUIET_PROJECT_ROW, engagement_id: 'job-2', project_id: 'p-2' },
+        { ...QUIET_PROJECT_ROW, engagement_id: 'job-3', project_id: 'p-3' },
+      ],
+    });
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    const calls = mockFrom.mock.calls.map((c) => c[0]);
-    for (const table of ['proposals', 'po_payments', 'purchase_orders', 'leads']) {
-      expect(calls.filter((t) => t === table)).toHaveLength(1);
-    }
-    // The receivables read and the paid-invoices read.
-    expect(calls.filter((t) => t === 'invoices')).toHaveLength(2);
+    expect(mockRpc.mock.calls).toEqual([['desk_read']]);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('a live claim window whose deadlines went unread leaves claim windows unread (E2-4)', async () => {
+    mockDeskRead({
+      engagements: [QUIET_PROJECT_ROW],
+      claim_notices: [{ purchase_order: LIVE_CLAIM_PO }],
+      claim_deadlines: FAILED_FEED,
+    });
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.unreadFeeds).toEqual(['claim windows']);
   });
 
   it('a signed proposal on a live job rises through the hook as its own need', async () => {
-    mockFrom.mockImplementation((table: string) =>
-      chainResult(
-        table === 'document_state'
-          ? { data: [QUIET_PROJECT_ROW], error: null }
-          : table === 'proposals'
-            ? {
-                data: [
-                  {
-                    id: 'prop-1',
-                    project_id: 'p-quiet',
-                    status: 'accepted',
-                    title: 'Living room',
-                    signed_at: new Date().toISOString(),
-                    items: [{ ffe: [{ purchase_order_id: null, removed_at: null }] }],
-                  },
-                ],
-                error: null,
-              }
-            : { data: [], error: null },
-      ),
-    );
+    mockDeskRead({
+      engagements: [QUIET_PROJECT_ROW],
+      live_proposals: [
+        {
+          id: 'prop-1',
+          project_id: 'p-quiet',
+          status: 'accepted',
+          title: 'Living room',
+          signed_at: new Date().toISOString(),
+          items: [{ ffe: [{ purchase_order_id: null, removed_at: null }] }],
+        },
+      ],
+    });
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data!.folders.map((f) => f.need.key)).toEqual(['proposal_signed:prop-1']);
+  });
+});
+
+describe('buildDeskClaimWindows (E2-4: deadlines answered as one set)', () => {
+  it('folds each live PO to one signal carrying its deadline, keyed by project', () => {
+    const map = buildDeskClaimWindows(
+      [{ purchase_order: LIVE_CLAIM_PO }, { purchase_order: LIVE_CLAIM_PO }],
+      [{ purchase_order_id: 'po-claim', vendor_deadline: '2026-10-15' }],
+    );
+    expect(map?.get('p-quiet')).toEqual([
+      {
+        purchaseOrderId: 'po-claim',
+        poLabel: 'PO-7',
+        vendorName: 'Hollis Upholstery',
+        claimStates: ['drafted'],
+        latestOutcome: 'damaged',
+        deadline: '2026-10-15',
+      },
+    ]);
+  });
+
+  it('drops a live PO with no computable deadline', () => {
+    expect(buildDeskClaimWindows([{ purchase_order: LIVE_CLAIM_PO }], [])?.size).toBe(0);
+  });
+
+  it('unread deadlines are no answer only when a live PO needed one', () => {
+    expect(buildDeskClaimWindows([{ purchase_order: LIVE_CLAIM_PO }], null)).toBeUndefined();
+    const settled = {
+      ...LIVE_CLAIM_PO,
+      inspections: [{ ...LIVE_CLAIM_PO.inspections[0], claims: [{ state: 'vendor_notified' }] }],
+    };
+    expect(buildDeskClaimWindows([{ purchase_order: settled }], null)?.size).toBe(0);
+  });
+
+  it('unread notices are no answer', () => {
+    expect(buildDeskClaimWindows(null, [])).toBeUndefined();
   });
 });
 
